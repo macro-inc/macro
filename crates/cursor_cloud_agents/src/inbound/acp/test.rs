@@ -636,7 +636,7 @@ async fn session_load_answers_for_restored_sessions_only() {
             AcpSessionId::new("cursor-acp-3"),
             Some(crate::domain::model::CursorAgentId::new("bc-restored")),
             None,
-            Vec::new(),
+            None,
         );
     });
 
@@ -855,3 +855,170 @@ async fn setting_an_unoffered_model_is_refused() {
         "expected an error, got {response}"
     );
 }
+
+/// A restored session's next run asks for the model it was using before the
+/// restart, params re-resolved from the live model table.
+///
+/// The regression this pins: the wrapper's model selection was in-memory only,
+/// so after a resume the UI kept showing the picked model while the runs went
+/// to whatever Cursor resolved — a silent divergence.
+#[tokio::test]
+async fn a_restored_session_keeps_its_model() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
+        service.restore_session(
+            AcpSessionId::new("cursor-acp-3"),
+            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+            None,
+            Some("gpt-5.5".to_owned()),
+        );
+    });
+
+    // The picker is repopulated at load, current value included — this is the
+    // other half of the regression, where the options came back empty.
+    let loaded = client
+        .call(
+            1,
+            "session/load",
+            serde_json::json!({"sessionId": "cursor-acp-3", "cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&loaded);
+    assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&AcpSessionId::new("cursor-acp-3"), "go")
+        .await
+        .expect("prompt runs");
+
+    let asked = cursor
+        .calls()
+        .into_iter()
+        .find_map(|call| match call {
+            CursorCall::CreateRun(_, _, model) => Some(model),
+            _ => None,
+        })
+        .expect("the restored agent got a follow-up run");
+    let asked = asked.expect("the run named the restored model");
+    assert_eq!(asked.id, "gpt-5.5");
+    assert_eq!(
+        asked.params,
+        vec![ModelParam {
+            id: "reasoning".to_owned(),
+            value: "medium".to_owned(),
+        }],
+        "params come from the live table's default variant, not from persistence"
+    );
+}
+
+/// A restored id that is not a Cursor model resolves to "no opinion", not an
+/// error. This is the common case, not a corner: the harness seeds its
+/// session records with a deployment slug like `claude`, and every session
+/// where nobody ever picked presents that slug at resume.
+#[tokio::test]
+async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (service, _client) = serve_over_channel(cursor.clone(), |service| {
+        service.restore_session(
+            AcpSessionId::new("cursor-acp-3"),
+            Some(crate::domain::model::CursorAgentId::new("bc-restored")),
+            None,
+            Some("claude".to_owned()),
+        );
+    });
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&AcpSessionId::new("cursor-acp-3"), "go")
+        .await
+        .expect("a prompt with an unresolvable restored model still runs");
+
+    let asked = cursor
+        .calls()
+        .into_iter()
+        .find_map(|call| match call {
+            CursorCall::CreateRun(_, _, model) => Some(model),
+            _ => None,
+        })
+        .expect("the restored agent got a follow-up run");
+    assert_eq!(asked, None, "no opinion: Cursor resolves its own default");
+}
+
+/// `session/load` restates the client's MCP servers, and a restored session
+/// whose agent was never minted applies them when the first prompt creates it.
+///
+/// The host cannot pass these at restore because it never had them — the list
+/// is the client's, and the protocol carries it on load. Before this the
+/// restore path pinned the list to empty.
+#[tokio::test]
+async fn session_load_restores_the_clients_mcp_servers() {
+    let cursor = FakeCursor::new();
+    let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
+        // Restored with *no* agent: the session opened, never prompted, died.
+        service.restore_session(AcpSessionId::new("cursor-acp-3"), None, None, None);
+    });
+
+    let loaded = client
+        .call(
+            1,
+            "session/load",
+            serde_json::json!({
+                "sessionId": "cursor-acp-3",
+                "cwd": "/workspace",
+                "mcpServers": [
+                    {
+                        "type": "http",
+                        "name": "remote",
+                        "url": "https://mcp.example.com",
+                        "headers": [],
+                    },
+                ],
+            }),
+        )
+        .await;
+    expect_result(&loaded);
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&AcpSessionId::new("cursor-acp-3"), "go")
+        .await
+        .expect("prompt runs");
+
+    let calls = cursor.calls();
+    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
+        panic!("expected one agent creation, got {calls:?}");
+    };
+    assert_eq!(servers.len(), 1);
+    assert_eq!(servers[0].name, "remote");
+}
+

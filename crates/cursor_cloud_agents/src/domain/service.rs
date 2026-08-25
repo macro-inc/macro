@@ -111,6 +111,11 @@ struct SessionState {
     /// Cursor falls back user default, then team, then system — which is the
     /// right answer until a client says otherwise.
     model: Option<ModelChoice>,
+    /// MCP servers the client named, applied when the first prompt creates
+    /// the agent. Mutable because they re-enter over the protocol: a
+    /// `session/load` carries the client's current list, which is the truth a
+    /// restored process has no other way to learn.
+    mcp_servers: Vec<McpServer>,
     /// Carried across turns so tool-call ids stay deduplicated for the whole
     /// session.
     translator: TranslateMachine,
@@ -122,9 +127,15 @@ struct Session {
     /// Resolved when the session opened; used when the first prompt creates
     /// the agent.
     repo: Option<RepoUrl>,
-    /// MCP servers the client named at `session/new`. Applied when the first
-    /// prompt creates the agent, since Cursor fixes MCP configuration then.
-    mcp_servers: Vec<McpServer>,
+    /// The model id this session was using before the process restarted, when
+    /// it was restored and had one. An id rather than a [`ModelChoice`]: only
+    /// the id is persisted, and its params must be re-resolved against the
+    /// live model table anyway, which can have drifted across the restart.
+    ///
+    /// May also be a value that was never a Cursor id at all — the harness
+    /// seeds its session records with a deployment slug like `claude` — so
+    /// resolution tolerates a miss instead of trusting this.
+    restored_model_id: Option<String>,
     /// Serializes turns against background foreign-run syncs, so a mirror of
     /// cursor.com activity never interleaves its frames with a live turn's.
     /// A prompt waits on it; a sync skips its tick instead. Never held by
@@ -196,9 +207,12 @@ where
         }
         let session = Arc::new(Session {
             repo,
-            mcp_servers,
+            restored_model_id: None,
             turn_gate: tokio::sync::Mutex::new(()),
-            state: Mutex::new(SessionState::default()),
+            state: Mutex::new(SessionState {
+                mcp_servers,
+                ..SessionState::default()
+            }),
         });
         let mut sessions = self.sessions.lock().expect("session map poisoned");
         // Counter-minted ids restart at 1 each process, but restored sessions
@@ -298,23 +312,73 @@ where
         {
             return Ok(Some(model));
         }
-        let Some(default_id) = self.default_model_id.as_deref() else {
+        // The restored id outranks the deployment default: it is what this
+        // session was actually using before the restart, and the default is
+        // what a session gets when nobody ever said otherwise.
+        let fallback_id = session
+            .restored_model_id
+            .as_deref()
+            .or(self.default_model_id.as_deref());
+        let Some(fallback_id) = fallback_id else {
             return Ok(None);
         };
+        // A failure to *fetch* the model table degrades like a failed lookup
+        // in it: the fallback is a preference, and Cursor being unreachable
+        // for `GET /v1/models` must cost the preference, never the prompt —
+        // the run itself may well still work.
+        let choice = match self.resolve_model_id(fallback_id).await {
+            Ok(choice) => choice,
+            Err(error) => {
+                tracing::warn!(
+                    fallback_id,
+                    %error,
+                    "could not resolve the fallback model; using Cursor's default"
+                );
+                None
+            }
+        };
+        let Some(choice) = choice else {
+            return Ok(None);
+        };
+        session.state.lock().expect("session state poisoned").model = Some(choice.clone());
+        Ok(Some(choice))
+    }
+
+    /// The id resolved to a choice Cursor will accept, or `None` for an id
+    /// this account is not offered.
+    ///
+    /// The miss is tolerated by design, not defensively. Both fallback ids
+    /// come from places that can legitimately hold non-Cursor values: the
+    /// deployment default is operator configuration, and the restored id is a
+    /// persisted column the harness seeds with its own deployment slug
+    /// (`claude`) before any real choice overwrites it. For either, "not a
+    /// Cursor model" means "no opinion" — Cursor's own default resolution is a
+    /// working answer — never a failed prompt.
+    async fn resolve_model_id(&self, model_id: &str) -> Result<Option<ModelChoice>, SessionError> {
         let models = self.models().await?;
-        let Some(model) = models.iter().find(|model| model.id == default_id) else {
-            // Configuration naming a model this account cannot use is worth
-            // saying out loud, but not worth failing a prompt over: Cursor's
-            // own default resolution is a working answer.
+        let Some(model) = models.iter().find(|model| model.id == model_id) else {
             tracing::warn!(
-                default_id,
-                "the configured cursor model is not offered to this account; using Cursor's default"
+                model_id,
+                "not a cursor model this account is offered; using Cursor's default"
             );
             return Ok(None);
         };
-        let choice = model.default_choice();
-        session.state.lock().expect("session state poisoned").model = Some(choice.clone());
-        Ok(Some(choice))
+        Ok(Some(model.default_choice()))
+    }
+
+    /// Replace the session's MCP servers with the client's current list.
+    ///
+    /// Driven by `session/load`: the list belongs to the client and the
+    /// protocol restates it there, which is how a restored process — whose
+    /// host never persisted it — learns it again.
+    pub fn set_mcp_servers(&self, session_id: &AcpSessionId, mcp_servers: Vec<McpServer>) {
+        if let Ok(session) = self.session(session_id) {
+            session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .mcp_servers = mcp_servers;
+        }
     }
 
     /// Run one prompt to completion, delivering updates as they stream.
@@ -388,13 +452,16 @@ where
                 (agent, run)
             }
             None => {
+                // Snapshotted out of the lock: `create_agent` is a network
+                // call, and the state mutex must never be held across an await.
+                let mcp_servers = session
+                    .state
+                    .lock()
+                    .expect("session state poisoned")
+                    .mcp_servers
+                    .clone();
                 self.cursor
-                    .create_agent(
-                        prompt,
-                        session.repo.as_ref(),
-                        &session.mcp_servers,
-                        model.as_ref(),
-                    )
+                    .create_agent(prompt, session.repo.as_ref(), &mcp_servers, model.as_ref())
                     .await?
             }
         };
@@ -478,11 +545,14 @@ where
         id: AcpSessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
-        mcp_servers: Vec<McpServer>,
+        model_id: Option<String>,
     ) {
+        // No MCP servers here on purpose: the host never had the truth to
+        // hand over — the list belongs to the ACP client, and the client
+        // restates it on `session/load`, which is where it re-enters.
         let session = Arc::new(Session {
             repo,
-            mcp_servers,
+            restored_model_id: model_id,
             turn_gate: tokio::sync::Mutex::new(()),
             state: Mutex::new(SessionState {
                 agent,

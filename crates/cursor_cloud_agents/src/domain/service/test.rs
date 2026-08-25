@@ -525,7 +525,7 @@ async fn a_restored_session_prompts_its_existing_agent() {
         AcpSessionId::new("cursor-acp-7"),
         Some(CursorAgentId::new("bc-restored")),
         None,
-        Vec::new(),
+        None,
     );
     assert!(service.has_session(&AcpSessionId::new("cursor-acp-7")));
 
@@ -555,7 +555,7 @@ async fn new_sessions_never_collide_with_restored_ids() {
         AcpSessionId::new("cursor-acp-1"),
         Some(CursorAgentId::new("bc-restored")),
         None,
-        Vec::new(),
+        None,
     );
 
     let fresh = service.new_session(Path::new("/workspace"), Vec::new());
@@ -571,7 +571,7 @@ async fn new_sessions_never_collide_with_restored_ids() {
 #[tokio::test]
 async fn a_session_restored_without_an_agent_mints_one_on_the_next_prompt() {
     let (service, cursor, _notifier) = service(None);
-    service.restore_session(AcpSessionId::new("cursor-acp-9"), None, None, Vec::new());
+    service.restore_session(AcpSessionId::new("cursor-acp-9"), None, None, None);
     assert!(service.has_session(&AcpSessionId::new("cursor-acp-9")));
 
     let events = cursor.script_stream();

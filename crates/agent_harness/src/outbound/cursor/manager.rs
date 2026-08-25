@@ -123,6 +123,20 @@ pub struct CursorContainerManager<Sessions, Keys> {
     sessions: Sessions,
 }
 
+/// What a resumed session gets back at restore time.
+///
+/// The identity halves land in Postgres at different moments — the ACP session
+/// id when `session/new` answers, the Cursor agent when the first prompt mints
+/// it — so each is optional on its own; see [`CursorContainerManager::resume`].
+struct RestoredCursorSession {
+    /// The ACP session id the harness will name in `session/load`.
+    acp_session: AcpSessionId,
+    /// The Cursor agent, when one was ever minted.
+    agent: Option<CursorAgentId>,
+    /// The model id the session last reported, from the projected column.
+    model_id: Option<String>,
+}
+
 impl<Sessions, Keys> CursorContainerManager<Sessions, Keys>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
@@ -167,14 +181,13 @@ where
 
     /// Wire up one session's in-process agent and return our end of its pipe.
     ///
-    /// `restore` carries the identity a resumed session gets back: the ACP
-    /// session id the harness will name in `session/load`, and the Cursor
-    /// agent when one was ever minted. A fresh spawn passes `None`.
+    /// `restore` carries what a resumed session gets back; a fresh spawn
+    /// passes `None`.
     fn serve_session(
         &self,
         client: CursorClient,
         session_id: AgentSessionId,
-        restore: Option<(AcpSessionId, Option<CursorAgentId>)>,
+        restore: Option<RestoredCursorSession>,
     ) -> PipeTransport {
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
@@ -189,8 +202,13 @@ where
             notifier.clone(),
             FixedRepo(self.repo.clone()),
         ));
-        if let Some((acp_session, agent)) = restore {
-            service.restore_session(acp_session, agent, Some(self.repo.clone()), Vec::new());
+        if let Some(restored) = restore {
+            service.restore_session(
+                restored.acp_session,
+                restored.agent,
+                Some(self.repo.clone()),
+                restored.model_id,
+            );
         }
         let pipe_closed = tokio_util::sync::CancellationToken::new();
         let shutdown = tokio_util::sync::CancellationToken::new();
@@ -270,12 +288,21 @@ where
         // session never opened; serve it fresh, exactly like `spawn`.
         let stored = AgentSessionRepo::get(&self.sessions, session).await?;
         let client = self.client_for(&stored).await?;
-        let restore = match stored.acp_session_id {
+        let restore = match &stored.acp_session_id {
             Some(acp) => {
                 let agent = ExternalSessionRepo::get(&self.sessions, session)
                     .await?
                     .map(|external| CursorAgentId::new(external.external_id));
-                Some((AcpSessionId::new(acp.0.as_ref()), agent))
+                Some(RestoredCursorSession {
+                    acp_session: AcpSessionId::new(acp.0.as_ref()),
+                    agent,
+                    // The projected model column. It round-trips a picked
+                    // model back into the wrapper — and for a session that
+                    // never picked, it still holds the deployment slug the
+                    // harness seeded it with, which the wrapper resolves to
+                    // "no opinion" rather than trusting.
+                    model_id: Some(stored.model.clone()),
+                })
             }
             None => None,
         };

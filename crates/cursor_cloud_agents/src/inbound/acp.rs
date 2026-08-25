@@ -57,6 +57,7 @@ use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt 
 /// the harness uses the same literal for the same reason.
 const MODEL_CONFIG_ID: &str = "model";
 
+
 /// Delivers session updates as `session/update` notifications on the ACP
 /// connection.
 ///
@@ -357,6 +358,13 @@ where
                     // a replay would tell the client what it already knows.
                     let session = AcpSessionId::new(request.session_id.0.as_ref());
                     if service.has_session(&session) {
+                        // The MCP list is the client's, and a load restates
+                        // it — the one way a restored process, whose host
+                        // never persisted the list, learns it again.
+                        service.set_mcp_servers(
+                            &session,
+                            forwardable_mcp_servers(request.mcp_servers),
+                        );
                         let options = session_config_options(&service, &session).await;
                         responder.respond(LoadSessionResponse::new().config_options(options))
                     } else {
