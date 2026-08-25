@@ -261,7 +261,7 @@ function createTableCell(cellContent: string): TableCellNode {
 	// Export escapes cell newlines as `\n` so rows stay on one line; restore
 	// them so multi-line content (lists, multiple blocks) survives the trip.
 	$convertFromMarkdownString(
-		cellContent.replace(/\\n/g, "\n"),
+		cellContent.replace(/\\n/g, "\n").trim(),
 		externalTransformersWithinTables,
 		cellNode,
 		true,

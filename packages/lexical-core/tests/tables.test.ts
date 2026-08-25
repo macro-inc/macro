@@ -19,6 +19,7 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $isElementNode,
   createEditor,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
@@ -299,7 +300,15 @@ describe('images inside table cells', () => {
     const table = $getFirstTable();
     const [row] = table.getChildren().filter($isTableRowNode);
     const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
-    const image = cell.getChildren().find($isImageNode);
+    const image = cell
+      .getChildren()
+      .flatMap((child) =>
+        $isImageNode(child)
+          ? [child]
+          : $isElementNode(child)
+            ? child.getChildren().filter($isImageNode)
+            : []
+      )[0];
     expect(image).toBeDefined();
     return image!;
   }
