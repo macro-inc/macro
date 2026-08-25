@@ -9,16 +9,10 @@ import {
   getGraphqlSoupCacheHost,
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import * as Effect from 'effect/Effect';
+import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
+import { createEffect, onCleanup } from 'solid-js';
 
 // Bump when a default backfill input changes so persisted opaque cursors
 // cannot retain the previous server-side filters.
@@ -374,75 +368,26 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
 });
 
 /**
- * Slowly fills the browser GraphQL cache through independently checkpointed
- * lanes, serialized on the elected tab.
+ * Runs the checkpointed backfill Effect while this tab owns leadership.
+ * Interrupting the fiber cancels the active fetch or inter-page sleep.
  */
-export function useSoupBackfills(userId: Accessor<string | undefined>) {
-  const queryClient = useQueryClient();
+export function useSoupBackfills(userId: string): void {
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
   );
-  const initialLeadershipController = new AbortController();
-  const initiallyLeader = isLeader();
-  if (!initiallyLeader) initialLeadershipController.abort();
-  const [leadership, setLeadership] = createSignal({
-    isLeader: initiallyLeader,
-    controller: initialLeadershipController,
-  });
 
-  createEffect(
-    on(
-      isLeader,
-      (leader) => {
-        setLeadership((current) => {
-          current.controller.abort();
-          const controller = new AbortController();
-          if (!leader) {
-            controller.abort();
-            void queryClient.cancelQueries({
-              queryKey: ['graphql-soup-backfill', BACKFILL_VERSION],
-            });
-          }
-          return { isLeader: leader, controller };
-        });
-      },
-      { defer: true }
-    )
-  );
+  createEffect(() => {
+    if (
+      !ENABLE_GRAPHQL_BACKFILL ||
+      getGraphqlSoupCacheHost() === undefined ||
+      !isLeader()
+    ) {
+      return;
+    }
 
-  onCleanup(() => leadership().controller.abort());
-
-  return useQuery(() => {
-    const currentUserId = userId();
-    const currentLeadership = leadership();
-    const backfillEnabled =
-      ENABLE_GRAPHQL_BACKFILL &&
-      currentUserId !== undefined &&
-      getGraphqlSoupCacheHost() !== undefined &&
-      currentLeadership.isLeader;
-
-    return {
-      queryKey: [
-        'graphql-soup-backfill',
-        BACKFILL_VERSION,
-        currentUserId,
-      ] as const,
-      enabled: backfillEnabled,
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        Effect.runPromise(runSoupBackfills(currentUserId!), {
-          signal: AbortSignal.any([
-            signal,
-            currentLeadership.controller.signal,
-          ]),
-        }),
-      networkMode: 'online' as const,
-      // Each lane owns its retry policy so a later lane failure does not rerun
-      // an already-completed lane's next incremental pass.
-      retry: false,
-      // A completed serialized pass stays fresh for this QueryClient lifetime.
-      // A new session starts another watermark-based pass from its checkpoints.
-      staleTime: Infinity,
-      refetchOnWindowFocus: false,
-    };
+    const fiber = Effect.runFork(runSoupBackfills(userId));
+    onCleanup(() => {
+      Effect.runFork(Fiber.interrupt(fiber));
+    });
   });
 }
