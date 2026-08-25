@@ -1,6 +1,10 @@
 import { $isHeadingNode } from '@lexical/rich-text';
 import { $isTableNode } from '@lexical/table';
-import { $findMatchingParent, mergeRegister } from '@lexical/utils';
+import {
+  $findMatchingParent,
+  $insertNodeToNearestRoot,
+  mergeRegister,
+} from '@lexical/utils';
 import {
   $canHostTable,
   $createCollapsibleContainerNode,
@@ -18,7 +22,6 @@ import {
 import {
   $createParagraphNode,
   $getSelection,
-  $insertNodes,
   $isParagraphNode,
   $isRangeSelection,
   COMMAND_PRIORITY_LOW,
@@ -32,7 +35,6 @@ import {
   type LexicalEditor,
   type LexicalNode,
 } from 'lexical';
-import { $insertNodesAndSplitList } from '../../utils';
 
 export const INSERT_COLLAPSIBLE_COMMAND: LexicalCommand<CollapsibleHeading> =
   createCommand('INSERT_COLLAPSIBLE_COMMAND');
@@ -138,10 +140,7 @@ function $insertCollapsible(heading: CollapsibleHeading): boolean {
   const content = $createCollapsibleContentNode();
   content.append($createParagraphNode());
   container.append(title, content);
-  $insertNodesAndSplitList([container]);
-  if (!container.isAttached()) {
-    $insertNodes([container]);
-  }
+  $insertNodeToNearestRoot(container);
   title.selectEnd();
   return true;
 }
