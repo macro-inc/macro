@@ -252,7 +252,6 @@ impl IntoResponse for AgentSessionApiError {
                 if let AgentSessionError::InvalidName(message) = error {
                     return (StatusCode::BAD_REQUEST, Json(message)).into_response();
                 }
-                tracing::error!(error = ?error, "agent session request failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
             }
         }
@@ -471,7 +470,11 @@ pub async fn rename_agent_session_handler<
 /// Perform a control operation on a live agent session.
 #[tracing::instrument(
     skip_all,
-    fields(actor = %caller.acting_entity(), session_id = %session_id),
+    fields(
+        actor = %caller.acting_entity(),
+        session_id = %session_id,
+        agent.action.name = req.action.as_ref(),
+    ),
     err(Debug)
 )]
 pub async fn control_agent_session_handler<

@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+use axum::extract::MatchedPath;
 use http::{HeaderValue, Request, Response};
 use opentelemetry::trace::TraceContextExt;
 use tokio::time::MissedTickBehavior;
@@ -78,7 +79,7 @@ impl MakeRequestId for RequestIdBuilder {
 /// Records response telemetry on the request span.
 ///
 /// Successful requests only emit an event when their latency meets or exceeds the warning
-/// threshold. Failed requests are logged by [`CustomOnFailure`].
+/// threshold. Failed requests may be logged by [`CustomOnFailure`].
 #[derive(Clone)]
 pub struct CustomOnResponse {
     warning_threshold: Duration,
@@ -107,19 +108,23 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
             .get("x-request-id")
             .and_then(|value| value.to_str().ok())
             .unwrap_or_default();
-
-        tracing::info_span!(
+        let span = tracing::info_span!(
             target: HTTP_REQUEST_SPAN_TARGET,
             "http.request",
             otel.kind = "server",
             "http.request.method" = %request.method(),
+            "http.route" = tracing::field::Empty,
             "url.path" = request.uri().path(),
             "request.id" = request_id,
             "http.response.status_code" = tracing::field::Empty,
             latency_ms = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
-        )
+        );
+        if let Some(route) = request.extensions().get::<MatchedPath>() {
+            span.record("http.route", route.as_str());
+        }
+        span
     }
 }
 
@@ -146,9 +151,11 @@ impl<B> OnResponse<B> for CustomOnResponse {
     }
 }
 
-/// Emits failed-request logs with the request span as the parent so logs include route context.
+/// Marks failed request spans and optionally emits a log with route context.
 #[derive(Clone)]
-pub struct CustomOnFailure;
+pub struct CustomOnFailure {
+    emit_event: bool,
+}
 
 impl<FailureClass> OnFailure<FailureClass> for CustomOnFailure
 where
@@ -163,12 +170,14 @@ where
             tracing::field::display(&failure_classification),
         );
 
-        tracing::error!(
-            parent: span,
-            error = %failure_classification,
-            latency_ms,
-            "http request failed"
-        );
+        if self.emit_event {
+            tracing::error!(
+                parent: span,
+                error = %failure_classification,
+                latency_ms,
+                "http request failed"
+            );
+        }
     }
 }
 
@@ -229,6 +238,18 @@ impl MacroRequestIdAndTracingLayer {
     /// Also spawns a background [starvation detector](spawn_starvation_detector) that
     /// warns when the tokio runtime is not polling tasks promptly.
     pub fn new(warning_threshold: Duration) -> Self {
+        Self::build(warning_threshold, true)
+    }
+
+    /// Construct request tracing that records failed spans without emitting a failure event.
+    ///
+    /// Use this when handlers already emit detailed error events and another request-level event
+    /// would double-count the same failure in logs.
+    pub fn new_without_failure_events(warning_threshold: Duration) -> Self {
+        Self::build(warning_threshold, false)
+    }
+
+    fn build(warning_threshold: Duration, emit_failure_events: bool) -> Self {
         spawn_starvation_detector(Duration::from_millis(250));
 
         let svc_builder = ServiceBuilder::new()
@@ -238,7 +259,9 @@ impl MacroRequestIdAndTracingLayer {
                     .make_span_with(MakeSpanWithRemoteParent)
                     .on_request(())
                     .on_response(CustomOnResponse::new_with_threshold(warning_threshold))
-                    .on_failure(CustomOnFailure),
+                    .on_failure(CustomOnFailure {
+                        emit_event: emit_failure_events,
+                    }),
             )
             .propagate_x_request_id();
 

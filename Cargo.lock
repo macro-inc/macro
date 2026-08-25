@@ -270,6 +270,7 @@ dependencies = [
  "macro_event_broker",
  "macro_queues",
  "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "notification",
@@ -9565,6 +9566,7 @@ dependencies = [
 name = "macro_tower_layers"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "http 1.4.0",
  "opentelemetry",
  "opentelemetry-http",
