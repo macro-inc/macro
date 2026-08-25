@@ -33,7 +33,7 @@ export function CopySubjectButton(props: { subject: string; class?: string }) {
           type="button"
           aria-label="Copy subject"
           class={cn(
-            'inline-flex align-middle size-6 items-center justify-center rounded-md text-ink-muted hover:bg-ink/5 hover:text-ink',
+            'inline-flex align-middle size-6 items-center justify-center rounded-md select-none text-ink-muted hover:bg-ink/5 hover:text-ink',
             props.class
           )}
           onClick={handleCopy}

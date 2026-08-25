@@ -41,8 +41,8 @@ import { isPersonalMessage } from '../util/isPersonalMessage';
 import type { ReplyType } from '../util/replyType';
 import { scrollToMessage } from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
-import { CopySubjectButton } from './CopySubjectButton';
 import { EmailFormContextProvider } from './EmailFormContext';
+import { EmailThreadTitle } from './EmailThreadTitle';
 import { EmailParticipants } from './EmailParticipants';
 import { openEmailReplyComposerForMessage } from './emailReplyActions';
 import { MessageList } from './MessageList';
@@ -753,13 +753,11 @@ function EmailContent(props: EmailViewProps) {
                         }}
                       >
                         <div class="h-12" />
-                        <h1 class="ph-no-capture group/subject text-2xl font-semibold text-ink pb-1.5 tracking-tight text-balance">
-                          {props.title}
-                          <CopySubjectButton
-                            subject={props.title}
-                            class="ml-2 opacity-0 group-hover/subject:opacity-100 focus-visible:opacity-100"
-                          />
-                        </h1>
+                        <EmailThreadTitle
+                          title={props.title}
+                          copyReveal="hover"
+                          class="text-2xl pb-1.5"
+                        />
                         <div class="pb-2.5">
                           <EmailParticipants />
                         </div>
