@@ -544,11 +544,19 @@ fn validate_reminders(reminders: &EventReminders) -> Result<(), CalendarMutation
 }
 
 fn ensure_organizer_attendee(attendees: &mut Vec<CalendarAttendeeInput>, organizer_email: &str) {
-    if let Some(existing) = attendees
-        .iter_mut()
-        .find(|attendee| attendee.email.eq_ignore_ascii_case(organizer_email))
-    {
-        existing.response_status = Some(AttendeeResponseStatus::Accepted);
+    let mut kept = false;
+    attendees.retain_mut(|attendee| {
+        if !attendee.email.eq_ignore_ascii_case(organizer_email) {
+            return true;
+        }
+        if kept {
+            return false;
+        }
+        attendee.response_status = Some(AttendeeResponseStatus::Accepted);
+        kept = true;
+        true
+    });
+    if kept {
         return;
     }
     attendees.insert(

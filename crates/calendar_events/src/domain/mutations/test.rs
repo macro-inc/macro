@@ -931,6 +931,53 @@ async fn create_does_not_duplicate_an_organizer_already_on_the_guest_list() {
 }
 
 #[tokio::test]
+async fn create_collapses_duplicate_organizer_rows() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let drafts = provider.created_drafts.clone();
+    let mut listed = draft();
+    listed.attendees.push(CalendarAttendeeInput {
+        email: "Self@example.com".to_string(),
+        is_optional: true,
+        response_status: None,
+    });
+    listed.attendees.push(CalendarAttendeeInput {
+        email: "self@EXAMPLE.com".to_string(),
+        is_optional: false,
+        response_status: Some(AttendeeResponseStatus::NeedsAction),
+    });
+    service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            persisted_event_id: Some(Uuid::now_v7()),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .create_event("macro|user", None, None, listed)
+    .await
+    .unwrap();
+
+    let sent = drafts.lock().unwrap();
+    let organizers: Vec<_> = sent[0]
+        .attendees
+        .iter()
+        .filter(|attendee| attendee.email.eq_ignore_ascii_case("self@example.com"))
+        .collect();
+    assert_eq!(organizers.len(), 1);
+    assert_eq!(
+        organizers[0].response_status,
+        Some(AttendeeResponseStatus::Accepted)
+    );
+    assert!(
+        sent[0]
+            .attendees
+            .iter()
+            .any(|attendee| attendee.email == "guest@example.com")
+    );
+}
+
+#[tokio::test]
 async fn create_rejects_invalid_input_before_reaching_the_provider() {
     let provider = FakeProvider::new(FakeProviderBehavior::Echo);
     let calls = provider.calls.clone();
