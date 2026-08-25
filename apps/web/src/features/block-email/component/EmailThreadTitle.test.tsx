@@ -38,7 +38,8 @@ describe('EmailThreadTitle', () => {
 
     expect(cluster?.className).toContain('whitespace-nowrap');
     expect(cluster?.contains(copy)).toBe(true);
-    expect(copy.className).toContain('text-ink');
+    expect(copy.className).toContain('text-inherit');
+    expect(copy.className).not.toContain('opacity-0');
     expect(copy.className).not.toContain('text-ink-muted');
   });
 

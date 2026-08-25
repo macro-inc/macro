@@ -9,7 +9,7 @@ function lastWordCluster(title: string): { lead: string; last: string } {
 
 export function EmailThreadTitle(props: {
   title: string;
-  copyReveal: 'hover' | 'always';
+  copyReveal?: 'hover' | 'always';
   class?: string;
 }) {
   const cluster = () => lastWordCluster(props.title);
@@ -27,9 +27,9 @@ export function EmailThreadTitle(props: {
         <CopySubjectButton
           subject={props.title}
           class={cn(
-            'ml-1.5 select-none',
+            'ml-1.5 select-none text-inherit',
             props.copyReveal === 'hover' &&
-              'opacity-0 transition-opacity group-hover/subject:opacity-100 hover:opacity-100 focus-visible:opacity-100'
+              'opacity-70 transition-opacity hover:opacity-100 group-hover/subject:opacity-100 focus-visible:opacity-100'
           )}
         />
       </span>
