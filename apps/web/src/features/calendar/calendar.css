@@ -386,6 +386,11 @@
 	display: none;
 }
 
+.calendar-view .fc .fc-event:has([data-response-status="accepted"]) {
+	--fc-event-bg-color: var(--event-calendar-color, var(--color-calendar));
+	--fc-event-text-color: var(--color-surface);
+}
+
 .calendar-view
 	.fc
 	.fc-event:has(.calendar-event-content[data-response-status="tentative"]) {
