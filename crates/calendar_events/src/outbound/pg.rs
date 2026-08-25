@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        AppliedGoogleGrant, AttendeeResponseStatus, CalendarActingIdentity, CalendarAttendee,
+        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
         CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
         CalendarBackfillJob, CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget,
         CalendarEvent, CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
@@ -1526,8 +1526,7 @@ impl CalendarRepository for PgCalendarRepository {
                 account.email_link_id,
                 link.fusionauth_user_id,
                 link.email_address,
-                link.provider::text AS "provider!",
-                (link.macro_id = $2) AS "requester_owns_inbox!"
+                link.provider::text AS "provider!"
             FROM calendar_events event
             JOIN calendar_event_sources source
                 ON source.event_id = event.id
@@ -1563,16 +1562,11 @@ impl CalendarRepository for PgCalendarRepository {
         let Some(row) = row else {
             return Ok(None);
         };
-        let owned = self.owned_inbox_emails(requester_id).await?;
-        let account = CalendarLinkTokenIdentity {
+        let actor = ActorInboxes::from_owned(self.owned_inbox_emails(requester_id).await?);
+        let token_identity = CalendarLinkTokenIdentity {
             fusionauth_user_id: row.fusionauth_user_id,
             email_address: row.email_address,
             provider: row.provider,
-        };
-        let acting = if row.requester_owns_inbox {
-            CalendarActingIdentity::as_self(account, owned)
-        } else {
-            CalendarActingIdentity::on_behalf_of(account, owned)
         };
         Ok(Some(CalendarEventMutationTarget {
             event_id: row.event_id,
@@ -1584,7 +1578,8 @@ impl CalendarRepository for PgCalendarRepository {
             account_id: row.account_id,
             calendar_id: row.calendar_id,
             provider_calendar_id: row.provider_calendar_id,
-            acting,
+            token_identity,
+            actor,
         }))
     }
 
@@ -1606,8 +1601,7 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.access_role,
                 link.fusionauth_user_id,
                 link.email_address,
-                link.provider::text AS "provider!",
-                (link.macro_id = $1) AS "requester_owns_inbox!"
+                link.provider::text AS "provider!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -1643,16 +1637,11 @@ impl CalendarRepository for PgCalendarRepository {
         let Some(row) = row else {
             return Ok(None);
         };
-        let owned = self.owned_inbox_emails(requester_id).await?;
-        let account = CalendarLinkTokenIdentity {
+        let actor = ActorInboxes::from_owned(self.owned_inbox_emails(requester_id).await?);
+        let token_identity = CalendarLinkTokenIdentity {
             fusionauth_user_id: row.fusionauth_user_id,
             email_address: row.email_address,
             provider: row.provider,
-        };
-        let acting = if row.requester_owns_inbox {
-            CalendarActingIdentity::as_self(account, owned)
-        } else {
-            CalendarActingIdentity::on_behalf_of(account, owned)
         };
         Ok(Some(CalendarCreationTarget {
             owner_id: row.owner_id,
@@ -1661,7 +1650,8 @@ impl CalendarRepository for PgCalendarRepository {
             calendar_id: row.calendar_id,
             provider_calendar_id: row.provider_calendar_id,
             is_read_only: !matches!(row.access_role.as_deref(), Some("owner" | "writer")),
-            acting,
+            token_identity,
+            actor,
         }))
     }
 

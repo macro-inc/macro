@@ -181,11 +181,8 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
-        ensure_organizer_attendee(
-            &mut draft.attendees,
-            &target.acting.token_identity().email_address,
-        );
-        let access_token = self.fetch_token(target.acting.token_identity()).await?;
+        ensure_organizer_attendee(&mut draft.attendees, &target.token_identity.email_address);
+        let access_token = self.fetch_token(&target.token_identity).await?;
         let upsert = self
             .provider
             .create_event(
@@ -195,7 +192,7 @@ where
             )
             .await
             .map_err(provider_error)?;
-        self.persist_echo(target.acting.actor(), upsert).await
+        self.persist_echo(target.actor.as_ref(), upsert).await
     }
 
     #[tracing::instrument(skip(self, requester_id, patch), err)]
@@ -233,7 +230,7 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
-        let access_token = self.fetch_token(target.acting.token_identity()).await?;
+        let access_token = self.fetch_token(&target.token_identity).await?;
         let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
         match scope {
             CalendarUpdateScope::All => {
@@ -253,7 +250,7 @@ where
                     self.retire_gone_source(&target).await;
                     return Err(CalendarMutationError::NotFound);
                 };
-                self.persist_echo(target.acting.actor(), upsert).await
+                self.persist_echo(target.actor.as_ref(), upsert).await
             }
             CalendarUpdateScope::ThisEvent { recurrence_id } => {
                 let outcome = self
@@ -269,13 +266,13 @@ where
                     .map_err(provider_error)?;
                 match outcome {
                     GoogleInstanceUpdateOutcome::Applied(upsert) => {
-                        self.persist_echo(target.acting.actor(), *upsert).await
+                        self.persist_echo(target.actor.as_ref(), *upsert).await
                     }
                     GoogleInstanceUpdateOutcome::OccurrenceGone(upsert) => {
                         // Nothing was written, but the provider's view of the
                         // series is fresher than whatever listed this
                         // occurrence — persist it so the phantom disappears.
-                        self.persist_echo(target.acting.actor(), *upsert)
+                        self.persist_echo(target.actor.as_ref(), *upsert)
                             .await
                             .inspect_err(|error| {
                                 tracing::warn!(
@@ -307,7 +304,7 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
-        let access_token = self.fetch_token(target.acting.token_identity()).await?;
+        let access_token = self.fetch_token(&target.token_identity).await?;
         let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
         let outcome = match &scope {
             CalendarDeletionScope::All => {
@@ -344,7 +341,7 @@ where
         };
         match outcome {
             GoogleSeriesMutationOutcome::Applied(upsert) => self
-                .persist_echo(target.acting.actor(), *upsert)
+                .persist_echo(target.actor.as_ref(), *upsert)
                 .await
                 .map(|_| ()),
             // Either the deletion removed the series or it was already
@@ -380,10 +377,10 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
-        let Some(actor) = target.acting.actor() else {
+        let Some(actor) = target.actor.as_ref() else {
             return Err(CalendarMutationError::NotAttendee);
         };
-        let access_token = self.fetch_token(target.acting.token_identity()).await?;
+        let access_token = self.fetch_token(&target.token_identity).await?;
         let outcome = self
             .provider
             .rsvp_event(
@@ -398,7 +395,7 @@ where
             .map_err(provider_error)?;
         match outcome {
             GoogleRsvpOutcome::Applied(upsert) => {
-                self.persist_echo(target.acting.actor(), *upsert).await
+                self.persist_echo(target.actor.as_ref(), *upsert).await
             }
             GoogleRsvpOutcome::NotAttendee => Err(CalendarMutationError::NotAttendee),
             GoogleRsvpOutcome::Gone => {

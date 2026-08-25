@@ -1,11 +1,11 @@
 use super::*;
 use crate::domain::models::{
-    ActorInboxes, AppliedGoogleGrant, CalendarActingIdentity, CalendarAttendee,
-    CalendarAttendeeInput, CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventSource,
-    CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
-    CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar, EventStatus,
-    EventTransparency, EventVisibility, GoogleCalendarSyncSnapshot, GoogleCalendarTarget,
-    GoogleEventSource, GoogleWatchChannel, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
+    CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventSource, CalendarLinkTokenIdentity,
+    CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease,
+    ConferenceChange, DisconnectedGoogleCalendar, EventStatus, EventTransparency, EventVisibility,
+    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel,
+    ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -30,7 +30,8 @@ fn mutation_target(is_read_only: bool) -> CalendarEventMutationTarget {
         account_id: Uuid::now_v7(),
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
-        acting: CalendarActingIdentity::as_self(token_identity(), Vec::new()),
+        token_identity: token_identity(),
+        actor: Some(ActorInboxes::sole("self@example.com")),
     }
 }
 
@@ -54,7 +55,8 @@ fn creation_target(is_read_only: bool) -> CalendarCreationTarget {
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
         is_read_only,
-        acting: CalendarActingIdentity::as_self(token_identity(), Vec::new()),
+        token_identity: token_identity(),
+        actor: Some(ActorInboxes::sole("self@example.com")),
     }
 }
 
@@ -732,10 +734,7 @@ async fn create_returned_echo_marks_requester_inboxes_as_self() {
     let created = service(
         FakeRepo {
             creation_target: Some(CalendarCreationTarget {
-                acting: CalendarActingIdentity::as_self(
-                    token_identity(),
-                    vec!["jackson@example.com".to_string()],
-                ),
+                actor: ActorInboxes::from_owned(vec!["jackson@example.com".to_string()]),
                 ..creation_target(false)
             }),
             ..FakeRepo::default()
@@ -1437,10 +1436,7 @@ async fn rsvp_addresses_the_requester_inbox_not_the_source_calendar() {
     let provider = FakeProvider::new(FakeProviderBehavior::Echo);
     let emails = provider.rsvp_self_emails.clone();
     let mut target = mutation_target(false);
-    target.acting = CalendarActingIdentity::on_behalf_of(
-        token_identity(),
-        vec!["jackson@example.com".to_string()],
-    );
+    target.actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()]);
     service(
         FakeRepo {
             mutation_target: Some(target),
@@ -1469,14 +1465,12 @@ async fn rsvp_through_a_delegated_inbox_never_hands_the_subject_email_to_the_pro
     let provider = FakeProvider::new(FakeProviderBehavior::Echo);
     let emails = provider.rsvp_self_emails.clone();
     let mut target = mutation_target(false);
-    target.acting = CalendarActingIdentity::on_behalf_of(
-        CalendarLinkTokenIdentity {
-            fusionauth_user_id: "fusion-jacob".to_string(),
-            email_address: "jacob@example.com".to_string(),
-            provider: "GMAIL".to_string(),
-        },
-        vec!["jackson@example.com".to_string()],
-    );
+    target.token_identity = CalendarLinkTokenIdentity {
+        fusionauth_user_id: "fusion-jacob".to_string(),
+        email_address: "jacob@example.com".to_string(),
+        provider: "GMAIL".to_string(),
+    };
+    target.actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()]);
     service(
         FakeRepo {
             mutation_target: Some(target),
@@ -1510,7 +1504,7 @@ async fn rsvp_through_a_delegated_inbox_without_an_own_inbox_is_not_attendee_bef
     let provider = FakeProvider::new(FakeProviderBehavior::Echo);
     let calls = provider.calls.clone();
     let mut target = mutation_target(false);
-    target.acting = CalendarActingIdentity::on_behalf_of(token_identity(), Vec::new());
+    target.actor = None;
     let error = service(
         FakeRepo {
             mutation_target: Some(target),
@@ -1533,7 +1527,7 @@ async fn rsvp_through_a_delegated_inbox_without_an_own_inbox_is_not_attendee_bef
 }
 
 #[tokio::test]
-async fn rsvp_fallback_email_remaps_self_on_the_echo() {
+async fn rsvp_echo_marks_actor_inboxes_as_self() {
     let mut provider = FakeProvider::new(FakeProviderBehavior::Echo);
     provider.echo_attendees = vec![
         echo_attendee("jacob@example.com", true),

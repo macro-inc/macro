@@ -6,7 +6,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub use super::acting::{ActorInboxes, CalendarActingIdentity};
+pub use super::acting::ActorInboxes;
 
 /// Read and write events on every calendar the user can access. Covers the
 /// event list, get, instances, insert, patch, and watch calls.
@@ -904,8 +904,10 @@ pub struct CalendarEventMutationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
-    /// Who the mutation acts as, and through whose grant it writes.
-    pub acting: CalendarActingIdentity,
+    /// Grant of the connected inbox this calendar belongs to.
+    pub token_identity: CalendarLinkTokenIdentity,
+    /// The clicker's owned inboxes. `None` when they own none.
+    pub actor: Option<ActorInboxes>,
 }
 
 impl CalendarEventMutationTarget {
@@ -969,8 +971,10 @@ pub struct CalendarCreationTarget {
     pub provider_calendar_id: String,
     /// Whether the provider role prohibits event creation.
     pub is_read_only: bool,
-    /// Who the creation acts as, and through whose grant it writes.
-    pub acting: CalendarActingIdentity,
+    /// Grant of the connected inbox this calendar belongs to.
+    pub token_identity: CalendarLinkTokenIdentity,
+    /// The clicker's owned inboxes. `None` when they own none.
+    pub actor: Option<ActorInboxes>,
 }
 
 impl CalendarCreationTarget {

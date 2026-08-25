@@ -1,14 +1,6 @@
 use super::*;
 use crate::domain::models::{AttendeeResponseStatus, CalendarAttendee};
 
-fn token(email: &str) -> CalendarLinkTokenIdentity {
-    CalendarLinkTokenIdentity {
-        fusionauth_user_id: "fusion-user".to_string(),
-        email_address: email.to_string(),
-        provider: "GMAIL".to_string(),
-    }
-}
-
 fn attendee(email: &str, is_self: bool) -> CalendarAttendee {
     CalendarAttendee {
         email: email.to_string(),
@@ -22,40 +14,16 @@ fn attendee(email: &str, is_self: bool) -> CalendarAttendee {
 }
 
 #[test]
-fn as_self_actor_always_contains_the_account_address() {
-    let acting = CalendarActingIdentity::as_self(
-        token("self@example.com"),
-        vec!["jackson@example.com".to_string()],
-    );
-    let actor = acting.actor().expect("AsSelf always has an actor");
-    assert!(actor.matches("self@example.com"));
-    assert!(actor.matches("jackson@example.com"));
+fn from_owned_empty_is_none() {
+    assert!(ActorInboxes::from_owned(Vec::new()).is_none());
 }
 
 #[test]
-fn as_self_with_no_owned_inboxes_falls_back_to_the_account_address() {
-    let acting = CalendarActingIdentity::as_self(token("self@example.com"), Vec::new());
-    let actor = acting.actor().expect("AsSelf always has an actor");
-    assert!(actor.matches("self@example.com"));
-    assert_eq!(actor.iter().collect::<Vec<_>>(), ["self@example.com"]);
-}
-
-#[test]
-fn on_behalf_actor_never_contains_the_subject_address() {
-    let acting = CalendarActingIdentity::on_behalf_of(
-        token("jacob@example.com"),
-        vec!["jackson@example.com".to_string()],
-    );
-    let actor = acting.actor().expect("the requester owns an inbox");
+fn from_owned_does_not_add_addresses_that_were_not_supplied() {
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
     assert!(actor.matches("jackson@example.com"));
     assert!(!actor.matches("jacob@example.com"));
-    assert_eq!(acting.token_identity().email_address, "jacob@example.com");
-}
-
-#[test]
-fn on_behalf_with_no_owned_inboxes_has_no_actor() {
-    let acting = CalendarActingIdentity::on_behalf_of(token("jacob@example.com"), Vec::new());
-    assert!(acting.actor().is_none());
 }
 
 #[test]
