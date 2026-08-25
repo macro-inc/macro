@@ -17,10 +17,13 @@ describe('mergeListChannel', () => {
       ...over,
     }) as ApiChannelWithLatest;
 
-  it('does not invent a list when the query has never loaded', () => {
-    expect(
-      mergeListChannel(undefined, { id: 'channel-new', name: 'New' })
-    ).toBeUndefined();
+  it('treats a missing list as empty so a create can seed the first row', () => {
+    const next = mergeListChannel(undefined, {
+      id: 'channel-new',
+      name: 'New',
+    });
+    expect(next).toHaveLength(1);
+    expect(next[0]).toMatchObject({ id: 'channel-new', name: 'New' });
   });
 
   it('prepends a stub when the channel is missing', () => {

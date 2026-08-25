@@ -10,30 +10,39 @@ export type ListChannelUpsert = {
 /**
  * Insert or patch one row in a `GET /comms/channels` list.
  *
- * Returns the same array when nothing changed. Returns `undefined` when the
- * list has never been fetched — callers must not invent a one-item list that
- * a later fetch would replace.
+ * Returns the same array when nothing changed. Treats a missing list as
+ * empty so a just-created channel can land before the first fetch returns.
  */
 export function mergeListChannel(
   channels: ApiChannelWithLatest[] | undefined,
   update: ListChannelUpsert
-): ApiChannelWithLatest[] | undefined {
-  if (!channels) return channels;
+): ApiChannelWithLatest[] {
+  const list = channels ?? [];
 
-  const index = channels.findIndex((channel) => channel.id === update.id);
+  const index = list.findIndex((channel) => channel.id === update.id);
   if (index === -1) {
-    return [stubListChannel(update), ...channels];
+    return [stubListChannel(update), ...list];
   }
 
-  const existing = channels[index];
-  if (!existing) return channels;
+  const existing = list[index];
+  if (!existing) return list;
 
   const next = applyListChannelUpdate(existing, update);
-  if (next === existing) return channels;
+  if (next === existing) return list;
 
-  const copy = channels.slice();
+  const copy = list.slice();
   copy[index] = next;
   return copy;
+}
+
+/** Merge one update onto an existing list row, or build a stub. */
+export function overlayListChannel(
+  existing: ApiChannelWithLatest | undefined,
+  update: ListChannelUpsert
+): ApiChannelWithLatest {
+  return existing
+    ? applyListChannelUpdate(existing, update)
+    : stubListChannel(update);
 }
 
 function applyListChannelUpdate(
