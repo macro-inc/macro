@@ -57,7 +57,7 @@ function MessageContentSlot(props: {
           />
         )}
       </Match>
-      <Match when={true}>
+      <Match when={message().content.trim() !== ''}>
         <Message.Content class={props.class} />
       </Match>
     </Switch>
@@ -117,7 +117,7 @@ function RegularMessageLayout(props: {
         <Message.SenderIcon />
       </Message.Slot>
       <Message.Slot placement="header" class="flex flex-col gap-0.5 min-w-0">
-        <div class="flex items-baseline gap-1.5 min-w-0">
+        <div class="flex items-baseline gap-1 min-w-0">
           <Message.SenderName />
           <Message.AgentBadge />
           <Message.Timestamp class="shrink-0" format="time" />

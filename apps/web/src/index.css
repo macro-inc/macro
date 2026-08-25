@@ -94,6 +94,10 @@
   --thread-padding-y: .5rem;
   --user-icon-width: 32px;
   --thread-shift: 32px;
+  --channel-rail-width: 1px;
+  --channel-rail-clearance: .5rem;
+  --left-of-channel-rail: calc(var(--left-of-connector) - var(--channel-rail-width) / 2);
+  --channel-rail-center: calc(var(--left-of-channel-rail) + var(--channel-rail-width) / 2);
 
   /* accent - active, hover states, high chroma */
   --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
@@ -902,6 +906,16 @@ a {
   }
 }
 
+@utility channel-rail-left {
+  border-left-style: solid;
+  border-left-width: var(--channel-rail-width);
+}
+
+@utility channel-rail-bottom {
+  border-bottom-style: solid;
+  border-bottom-width: var(--channel-rail-width);
+}
+
 @utility macro-message-padding {
   @container (width < 936px) { padding-inline: calc(var(--spacing) * 4); }
   @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
@@ -969,9 +983,16 @@ a {
 /* Channel message hover + selection-cursor highlight */
 /* Suppressed on touch devices */
 /* Background-only — borders/rings are reserved for structural UI edges. */
-[data-message][data-selected],
-html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-ink/5 rounded-md;
+/* Hover reads as the lighter neutral tint; the selection cursor reads as the
+   heavier neutral tint so the two states are visually distinct. Hover is
+   suppressed on the selected message so its selection tint always shows
+   through. */
+html:not([data-touch-device="true"]) [data-message]:not([data-selected]):hover {
+  @apply bg-hover rounded-md;
+}
+
+[data-message][data-selected] {
+  @apply bg-active rounded-md;
 }
 
 [data-message][data-targeted] {
@@ -989,7 +1010,7 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
 }
 
 /* A selected message keeps its selection after release, so its fade starts
-   from the selected accent and lands on the selection gray. */
+   from the targeted accent and lands on the selection tint. */
 [data-message][data-selected][data-targeted-fading] {
   animation-name: targeted-message-accent-fade-out-selected;
 }
@@ -1011,7 +1032,7 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
     border-radius: var(--radius-sm);
   }
   to {
-    background-color: oklch(from var(--color-ink) l c h / 5%);
+    background-color: var(--color-active);
     border-radius: var(--radius-sm);
   }
 }

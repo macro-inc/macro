@@ -27,6 +27,8 @@ type ThreadReplyInputProps = {
    * (standalone threads, discussions); channels have no inner rail.
    */
   connector?: boolean;
+  /** Optional layout-specific horizontal anchor for the composer. */
+  offsetX?: string;
 };
 
 /**
@@ -54,7 +56,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
   return (
     <div
       class="relative pt-2"
-      style={{ 'margin-left': replyInputOffsetX }}
+      style={{ 'margin-left': props.offsetX ?? replyInputOffsetX }}
       ref={(el) => props.setReplyInputEl?.(el)}
       data-reply-input
     >

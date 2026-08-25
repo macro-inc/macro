@@ -25,6 +25,7 @@ import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadProps } from './types';
+import { channelReplyInputOffsetX } from './utils/thread-rail-geometry';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
@@ -39,6 +40,9 @@ export function ChannelThread(props: ThreadProps) {
   const displayName = () => getDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
+  const threadHasNewMessages = () =>
+    props.listMeta?.isNewMessage === true ||
+    activeReplies().some((reply) => props.isNewMessage?.(reply) === true);
   const fetchRepliesEnabled = createThreadRepliesFetchGate({
     threadId: () => props.data().id,
     replyCount: () => thread().reply_count,
@@ -298,30 +302,11 @@ export function ChannelThread(props: ThreadProps) {
               the spine marks which message the thread replies to. Plain
               messages carry no rail. */}
           <div class="relative">
-            <Show when={hasReplies() || isReplyingToThread()}>
-              <div
-                class={cn(
-                  'pointer-events-none absolute border-l border-rail -z-1 left-(--left-of-connector) bottom-0',
-                  props.listMeta?.isNewMessage && 'border-accent'
-                )}
-                style={{
-                  top: props.listMeta?.isGroupedWithPrevious
-                    ? '0'
-                    : 'calc(var(--regular-message-padding-t) + var(--user-icon-width) / 2)',
-                }}
-              />
-              {/* Fork node: sized/positioned on whole pixels (8px circle,
-                  centered on the 26px spine) so the circle rasterizes round;
-                  the surface ring floats it off the spine. Vertical center =
-                  the first text line's middle: the channel markdown's 2px
-                  first-paragraph margin + half a 20px text-sm line = 12px. */}
-              <Show when={props.listMeta?.isGroupedWithPrevious}>
-                <div
-                  class="pointer-events-none absolute top-2 size-2 rounded-full border border-rail bg-surface ring-2 ring-surface left-(--left-of-connector) -translate-x-1/2"
-                  data-thread-fork-node
-                />
-              </Show>
-            </Show>
+            <Thread.RootRail
+              visible={hasReplies() || isReplyingToThread()}
+              grouped={props.listMeta?.isGroupedWithPrevious}
+              newMessage={threadHasNewMessages()}
+            />
             <MarkMessageNotifications
               messageId={props.data().id}
               channelId={props.channelId()}
@@ -352,7 +337,12 @@ export function ChannelThread(props: ThreadProps) {
               {/* Spine bridge: spans the replies container's top padding,
                   connecting the root segment to the reply rows' own spine
                   segments below. */}
-              <div class="pointer-events-none absolute top-0 -z-1 border-l border-rail left-(--left-of-connector) h-(--thread-padding-y)" />
+              <div
+                class={cn(
+                  'pointer-events-none absolute top-0 -z-1 channel-rail-left border-rail left-(--left-of-channel-rail) h-(--thread-padding-y)',
+                  threadHasNewMessages() && 'border-accent'
+                )}
+              />
               {/* Terminal branch: the spine's final curve into the footer
                   button's left edge. Its vertical part starts exactly at the
                   last reply row's bottom (button h-8 + mb-2 + container pb). */}
@@ -360,11 +350,14 @@ export function ChannelThread(props: ThreadProps) {
                 when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
               >
                 <div
-                  class="pointer-events-none absolute -z-1 border-l border-b border-rail rounded-bl-[14px] left-(--left-of-connector) h-4"
+                  class={cn(
+                    'pointer-events-none absolute -z-1 channel-rail-left channel-rail-bottom border-rail rounded-bl-[14px] left-(--left-of-channel-rail) h-8',
+                    threadHasNewMessages() && 'border-accent'
+                  )}
                   style={{
                     bottom: 'calc(var(--thread-padding-y) + 1.5rem)',
                     width:
-                      'calc(var(--thread-shift) - var(--user-icon-width) / 2)',
+                      'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
                   }}
                 />
               </Show>
@@ -379,6 +372,7 @@ export function ChannelThread(props: ThreadProps) {
                       messageEditor={props.messageEditor}
                       participants={props.participants}
                       isNewMessage={props.isNewMessage}
+                      hasNewMessages={threadHasNewMessages()}
                       onReady={setReplyListHandle}
                       positionTarget={props.targetNavigation?.positionTarget}
                       selectedReplyId={replySelection.selectedId}
@@ -399,16 +393,25 @@ export function ChannelThread(props: ThreadProps) {
                       }}
                       class="ph-no-capture relative"
                     >
-                      {/* Terminal branch: the spine's final curve into the
-                          reply input's left edge, at roughly the input's
-                          vertical center. */}
+                      {/* The first reply has an author avatar before its
+                          composer, so this branch turns at the avatar's
+                          center. Once replies exist, it instead joins the
+                          composer at its vertical center. */}
                       <div
-                        class="pointer-events-none absolute top-0 -z-1 border-l border-b border-rail rounded-bl-[14px]"
+                        class={cn(
+                          'pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-rail rounded-bl-[14px]',
+                          threadHasNewMessages() && 'border-accent'
+                        )}
                         style={{
-                          left: 'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift))',
+                          left: 'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)',
                           width:
-                            'calc(var(--thread-shift) + var(--user-icon-width) / 2)',
-                          bottom: '50%',
+                            'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
+                          ...(hasReplies()
+                            ? { bottom: '50%' }
+                            : {
+                                height:
+                                  'calc(var(--message-padding-x) + var(--user-icon-width) / 2)',
+                              }),
                         }}
                       />
                       <Show when={!hasReplies()}>
@@ -419,6 +422,7 @@ export function ChannelThread(props: ThreadProps) {
                       </Show>
                       <Thread.ReplyInput
                         connector={false}
+                        offsetX={channelReplyInputOffsetX}
                         channelId={props.channelId()}
                         messageId={props.data().id}
                         replyInputState={props.replyInputState}

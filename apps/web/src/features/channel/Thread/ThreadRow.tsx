@@ -13,6 +13,8 @@ type ThreadRowProps = ParentProps & {
   channelId?: string;
   message: ApiChannelMessage;
   listMeta?: ChannelMessageListMeta;
+  /** Discussions reuse the channel thread geometry without channel dividers. */
+  showDividers?: boolean;
   onDismissNewMessages?: () => void;
 };
 
@@ -29,17 +31,19 @@ export function ThreadRow(props: ThreadRowProps) {
       class="w-full flex justify-center"
     >
       <div class="macro-message-width relative">
-        <Show when={channelCreatedId()}>
-          {(id) => <ChannelCreatedIndicator channelId={id()} />}
+        <Show when={props.showDividers !== false}>
+          <Show when={channelCreatedId()}>
+            {(id) => <ChannelCreatedIndicator channelId={id()} />}
+          </Show>
+          <NewDivider
+            listMeta={props.listMeta}
+            onDismiss={props.onDismissNewMessages}
+          />
+          <DateDivider
+            createdAt={props.message.created_at}
+            listMeta={props.listMeta}
+          />
         </Show>
-        <NewDivider
-          listMeta={props.listMeta}
-          onDismiss={props.onDismissNewMessages}
-        />
-        <DateDivider
-          createdAt={props.message.created_at}
-          listMeta={props.listMeta}
-        />
         <div class="relative isolate">
           {/* Pass-through rail: a later message in this sender run owns a
               thread; the spine runs through this row to reach it — from the
@@ -47,11 +51,11 @@ export function ThreadRow(props: ThreadRowProps) {
               rows. */}
           <Show when={props.listMeta?.threadRailBelow}>
             <div
-              class="pointer-events-none absolute -z-1 border-l border-rail left-(--left-of-connector) bottom-0"
+              class="pointer-events-none absolute -z-1 channel-rail-left border-rail left-(--left-of-channel-rail) bottom-0"
               style={{
                 top: props.listMeta?.isGroupedWithPrevious
                   ? '0'
-                  : 'calc(var(--regular-message-padding-t) + var(--user-icon-width) / 2)',
+                  : 'calc(var(--regular-message-padding-t) + var(--user-icon-width) + var(--channel-rail-clearance))',
               }}
             />
           </Show>

@@ -10,13 +10,11 @@ type ThreadReplyRailProps = {
 export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
   return (
     <>
-      {/* Branch elbow: continues the root message's rail segment from the
-          top of the replies section and curves under the first reply's
-          avatar. Border-drawn (not an SVG stroke) so it rasterizes at the
-          same 1px weight as the straight rail segments. */}
+      {/* Branch elbow: continues the root message's rail segment and stops
+          short of the first reply's avatar by the shared rail clearance. */}
       <div
         class={cn(
-          'pointer-events-none absolute top-0 -z-1 border-l border-b border-rail rounded-bl-[14px]',
+          'pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-rail rounded-bl-[14px]',
           props.firstThreadReplyNewMessage && 'border-accent'
         )}
         style={{

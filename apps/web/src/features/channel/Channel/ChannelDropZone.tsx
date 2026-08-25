@@ -15,7 +15,7 @@ export function ChannelDropZone(props: ChannelDropZoneProps) {
 
   return (
     <div
-      class="relative h-full flex flex-col px-8 pb-2 mobile:px-0 mobile:pb-0"
+      class="relative h-full flex flex-col mobile:px-0 mobile:pb-0"
       use:fileFolderDrop={{
         onDrop: (files, folders) => {
           handleFileFolderDrop(files, folders, (entries) => {
