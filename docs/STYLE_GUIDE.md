@@ -161,7 +161,8 @@ TypeScript · `[ui]` UI / UX conventions
 
 - **FE-01** `[data]` Never call a service client outside the `queries` package — UI code
   calling an endpoint directly is usually re-fetching data an existing query already
-  caches. (#3750, #3961 · also: AGENTS.md)
+  caches. (#3750, #3961 · enforced: ast-grep `ts-no-service-client-outside-queries` +
+  `tsx-no-service-client-outside-queries`, warning · also: AGENTS.md)
 - **FE-02** `[data]` Every query module has a `keys.ts` structured like the existing
   ones. (#3710)
 - **FE-03** `[data]` Conditional fetching uses a debounced signal passed to TanStack
