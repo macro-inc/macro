@@ -174,7 +174,9 @@ async fn create_and_get_round_trips(pool: PgPool) {
 
     let created = create_session(&repo, params).await;
 
-    let session = repo.get(id).await.expect("get agent session");
+    let session = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get agent session");
     assert_eq!(created.id, id);
     assert_eq!(created.created_at, session.created_at);
     assert_eq!(created.modified_at, session.modified_at);
@@ -203,7 +205,9 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
         .await
         .expect("persist ACP session id");
 
-    let updated = repo.get(id).await.expect("get updated agent session");
+    let updated = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get updated agent session");
     assert_eq!(
         updated.acp_session_id,
         Some(SessionId::from("acp-session-1"))
@@ -223,13 +227,25 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
         .id;
 
     repo.set_model(id, "opus").await.expect("persist model");
-    assert_eq!(repo.get(id).await.expect("get session").model, "opus");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .model,
+        "opus"
+    );
 
     // Idempotent: restating the same model succeeds and changes nothing.
-    let modified_at = repo.get(id).await.expect("get session").modified_at;
+    let modified_at = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get session")
+        .modified_at;
     repo.set_model(id, "opus").await.expect("restate model");
     assert_eq!(
-        repo.get(id).await.expect("get session").modified_at,
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .modified_at,
         modified_at
     );
 }
@@ -344,7 +360,7 @@ async fn get_missing_session_errors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool);
     let missing = AgentSessionId::new();
 
-    assert!(repo.get(missing).await.is_err());
+    assert!(AgentSessionRepo::get(&repo, missing).await.is_err());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -354,9 +370,11 @@ async fn delete_removes_session(pool: PgPool) {
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let id = session.id;
 
-    repo.delete(id).await.expect("delete agent session");
+    AgentSessionRepo::delete(&repo, id)
+        .await
+        .expect("delete agent session");
 
-    assert!(repo.get(id).await.is_err());
+    assert!(AgentSessionRepo::get(&repo, id).await.is_err());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -382,8 +400,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     .await
     .expect("create first log entry");
 
-    let session = repo
-        .get(session_id)
+    let session = AgentSessionRepo::get(&repo, session_id)
         .await
         .expect("get session after system event");
     assert!(matches!(
@@ -646,4 +663,108 @@ async fn delete_removes_the_session_grants(pool: PgPool) {
     .expect("count the session's grants");
 
     assert_eq!(remaining, 0);
+}
+
+fn cursor_external(agent: &str) -> ExternalSession {
+    ExternalSession {
+        provider: "cursor".to_string(),
+        external_id: agent.to_string(),
+        external_name: Some("Add README".to_string()),
+        external_url: Some(format!("https://cursor.com/agents/{agent}")),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn external_session_round_trips_and_upsert_replaces(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    insert_user(&pool, OWNER).await;
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get"),
+        None
+    );
+
+    ExternalSessionRepo::upsert(&repo, session.id, cursor_external("bc-1"))
+        .await
+        .expect("first upsert");
+    // Re-learning the identity must replace, not fail: the manager writes on
+    // every agent creation and a retried turn writes the same row again.
+    let renamed = ExternalSession {
+        external_name: Some("Add README and tests".to_string()),
+        ..cursor_external("bc-1")
+    };
+    ExternalSessionRepo::upsert(&repo, session.id, renamed.clone())
+        .await
+        .expect("second upsert");
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get"),
+        Some(renamed.clone())
+    );
+    // The identity rides along on the session read itself, which is what the
+    // HTTP response is built from.
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get session")
+            .external,
+        Some(renamed)
+    );
+
+    ExternalSessionRepo::delete(&repo, session.id)
+        .await
+        .expect("delete");
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get"),
+        None
+    );
+    // Deleting a session that has no external row is already the asked-for
+    // state.
+    ExternalSessionRepo::delete(&repo, session.id)
+        .await
+        .expect("idempotent delete");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn two_sessions_cannot_claim_the_same_external_agent(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    insert_user(&pool, OWNER).await;
+    let bot_id = create_test_bot(&pool).await;
+    let (_channel, thread, message) = insert_originating_thread_fixture(&pool).await;
+    let first = create_session(&repo, new_session(bot_id, None, None)).await;
+    let second = create_session(&repo, new_session(bot_id, Some(thread), Some(message))).await;
+
+    ExternalSessionRepo::upsert(&repo, first.id, cursor_external("bc-1"))
+        .await
+        .expect("first claim");
+    let conflict = ExternalSessionRepo::upsert(&repo, second.id, cursor_external("bc-1")).await;
+    assert!(conflict.is_err(), "second claim of bc-1 must be refused");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_a_session_cascades_its_external_row(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    insert_user(&pool, OWNER).await;
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    ExternalSessionRepo::upsert(&repo, session.id, cursor_external("bc-1"))
+        .await
+        .expect("upsert");
+
+    AgentSessionRepo::delete(&repo, session.id)
+        .await
+        .expect("delete session");
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get"),
+        None
+    );
 }

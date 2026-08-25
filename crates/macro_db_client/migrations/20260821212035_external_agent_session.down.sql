@@ -1,0 +1,2 @@
+DELETE FROM bots WHERE id = '00000000-0000-0000-0000-00000000c5c5';
+DROP TABLE external_agent_session;

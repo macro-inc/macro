@@ -80,6 +80,7 @@ impl SessionOpener for RecordingOpener {
             workspace: request.workspace.clone(),
             sandbox_size: crate::domain::model::SandboxSize::Default,
             acp_session_id: None,
+            external: None,
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
