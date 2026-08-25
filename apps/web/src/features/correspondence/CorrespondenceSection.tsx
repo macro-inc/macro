@@ -2,7 +2,8 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { UserIcon } from '@core/component/UserIcon';
+import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
+import { emailToMacroId } from '@core/user';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   ListEntity,
@@ -110,7 +111,11 @@ function CorrespondenceRow(props: {
       classList={{
         'cursor-pointer hover:bg-ink-muted/6': isInteractive(),
       }}
-      onMouseDown={navHandlers.onMouseDown}
+      // Inert rows keep native text selection; only openable rows suppress
+      // mousedown to avoid the source split flashing active mid-navigation.
+      onMouseDown={(event) => {
+        if (isInteractive()) navHandlers.onMouseDown(event);
+      }}
       onClick={(event) => {
         if (isInteractive()) navHandlers.onClick(event);
       }}
@@ -233,18 +238,31 @@ function ContactRow(props: {
   const label = () =>
     props.contact?.name ?? props.party.name ?? props.party.email;
 
+  // An external party can still be a Macro user elsewhere; prefer their
+  // profile picture over initials when the address resolves to one.
+  const iconProps = createMemo<UserIconProps>(() => {
+    const macroId = emailToMacroId(props.party.email);
+    return macroId ? { id: macroId } : { email: props.party.email };
+  });
+
   return (
     <CorrespondenceRow
-      icon={<UserIcon email={props.party.email} size="sm" suppressClick />}
+      icon={
+        <UserIcon
+          {...iconProps()}
+          size="sm"
+          suppressClick
+          showTooltip={false}
+        />
+      }
       primary={label()}
       secondary={label() === props.party.email ? undefined : props.party.email}
       onOpen={
         props.contact
-          ? () =>
-              replaceOrInsertSplit({
-                type: 'contact',
-                id: props.contact?.id ?? '',
-              })
+          ? () => {
+              const id = props.contact?.id;
+              if (id) replaceOrInsertSplit({ type: 'contact', id });
+            }
           : undefined
       }
     />
@@ -280,7 +298,9 @@ function RecentThreads(props: { addresses: string[] }) {
             <SidePanel.Card>
               <div class="max-h-64 overflow-y-auto">
                 <ListEntityMetadataQueryProvider>
-                  <ListLayoutProvider ref={listRef}>
+                  {/* One line per thread: the panel is narrow and this is a
+                      history list, not the inbox. */}
+                  <ListLayoutProvider ref={listRef} narrowLayout="single-line">
                     <div ref={setListRef} class="flex flex-col">
                       <For each={threads()}>
                         {(entity) => (
