@@ -34,6 +34,10 @@ export function Notifications() {
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
 
+  const preferencesBusy = () =>
+    preferencesQuery.isLoading ||
+    (preferencesQuery.isPlaceholderData && preferencesQuery.isFetching);
+
   const toggleType = async (type: string, enabled: boolean) => {
     try {
       await setTypeEnabled.mutateAsync({ type, enabled });
@@ -101,7 +105,7 @@ export function Notifications() {
             <ToggleSwitch
               size="md"
               checked={isTypeEnabled(EMAIL_DIGEST_NOTIFICATION_TYPE)}
-              disabled={preferencesQuery.isLoading}
+              disabled={preferencesBusy()}
               onChange={(enabled) =>
                 toggleType(EMAIL_DIGEST_NOTIFICATION_TYPE, enabled)
               }
@@ -123,7 +127,7 @@ export function Notifications() {
                     <ToggleSwitch
                       size="md"
                       checked={isTypeEnabled(event.type)}
-                      disabled={preferencesQuery.isLoading}
+                      disabled={preferencesBusy()}
                       onChange={(enabled) => toggleType(event.type, enabled)}
                     />
                   </SettingsRow>

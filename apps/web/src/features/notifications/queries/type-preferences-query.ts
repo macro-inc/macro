@@ -1,5 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { applyPreferenceToggle } from '@notifications/apply-preference-toggle';
+import { notificationTypePreferencesPlaceholder } from '@notifications/notification-preferences-placeholder';
 import { queryClient } from '@queries/client';
 import { notificationKeys } from '@queries/notification/keys';
 import { notificationServiceClient } from '@service-notification/client';
@@ -21,6 +22,7 @@ export function createNotificationTypePreferencesQuery() {
     queryFn: fetchNotificationTypePreferences,
     staleTime: PREFERENCES_STALE_TIME,
     gcTime: PREFERENCES_GC_TIME,
+    placeholderData: notificationTypePreferencesPlaceholder,
   }));
 }
 

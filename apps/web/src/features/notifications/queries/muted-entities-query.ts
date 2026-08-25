@@ -1,5 +1,8 @@
 import { notificationServiceClient } from '@service-notification/client';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { useQuery } from '@tanstack/solid-query';
+
+const EMPTY_MUTED_ENTITIES: UserUnsubscribe[] = [];
 
 const fetchUnsubscriptions = async () => {
   const response = await notificationServiceClient.getUnsubscribes();
@@ -21,5 +24,7 @@ export function createMutedEntitiesQuery(args?: { limit?: number }) {
     initialPageParam: { limit },
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes
+    // Same createResource / empty Suspense trap as type preferences.
+    placeholderData: (previous) => previous ?? EMPTY_MUTED_ENTITIES,
   }));
 }
