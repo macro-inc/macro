@@ -987,11 +987,6 @@ export type PipedreamCatalogEntryResponse = {
      * URL of the app's icon, when available.
      */
     icon_url?: string | null;
-    /**
-     * Curated priority connectors rank first and may be rendered as their
-     * own featured section.
-     */
-    priority: boolean;
 };
 
 /**
@@ -1003,7 +998,7 @@ export type PipedreamCatalogResponse = {
      */
     next_cursor?: string | null;
     /**
-     * Catalog entries in display order (priority connectors first).
+     * Catalog entries in display order (most popular first).
      */
     servers: Array<PipedreamCatalogEntryResponse>;
 };

@@ -1,5 +1,4 @@
 import {
-  FEATURED_MCP_SERVERS,
   PIPEDREAM_ICON_MAP,
   pipedreamAppAvailableInEnv,
 } from '@core/component/AI/constant/mcpServers';
@@ -189,24 +188,9 @@ function CatalogIcon(props: { entry: PipedreamCatalogEntryResponse }) {
 }
 
 /**
- * Featured connectors as catalog entries, for when the catalog API hasn't
- * answered yet (or is unavailable): the same curated list the backend pins,
- * derived from the bundled presets so the section never renders empty.
- */
-const FALLBACK_FEATURED: PipedreamCatalogEntryResponse[] =
-  FEATURED_MCP_SERVERS.map((server) => ({
-    app_slug: server.app_slug,
-    display_name: server.server_name,
-    description: server.tagline,
-    icon_url: null,
-    priority: true,
-  }));
-
-/**
  * The "MCP integrations" section of the Connections page: apps the user has
- * connected, then the curated featured connectors they haven't, then a
- * searchable catalog of every connectable app — all connecting through
- * Pipedream, the single connect path.
+ * connected, then a searchable catalog of every connectable app, ranked by
+ * popularity — all connecting through Pipedream, the single connect path.
  */
 export function PipedreamIntegrationsSection() {
   const serversQuery = usePipedreamConnectionsQuery();
@@ -222,10 +206,6 @@ export function PipedreamIntegrationsSection() {
   onCleanup(() => clearTimeout(debounceTimer));
 
   const catalogQuery = usePipedreamCatalogQuery(search);
-  // Separate un-searched instance backing the featured section, so it stays
-  // put while the user types in the catalog search below. Same cache entry
-  // as browsing with an empty search, so this costs no extra request.
-  const featuredQuery = usePipedreamCatalogQuery(() => '');
 
   const servers = () => serversQuery.data ?? [];
   const connectedSlugs = () => new Set(servers().map((s) => s.app_slug));
@@ -234,29 +214,10 @@ export function PipedreamIntegrationsSection() {
     pipedreamAppAvailableInEnv(entry.app_slug) &&
     !connectedSlugs().has(entry.app_slug);
 
-  const catalogEntries = () =>
+  const browseResults = () =>
     (catalogQuery.data?.pages ?? [])
       .flatMap((page) => page.servers)
       .filter(offered);
-
-  // The featured section always shows the full curated list, served from
-  // the presets bundled with the app until the catalog answers — the
-  // backend pins the same list, so nothing jumps when it does.
-  const featured = () => {
-    const entries = (featuredQuery.data?.pages ?? [])
-      .flatMap((page) => page.servers)
-      .filter((entry) => entry.priority)
-      .filter(offered);
-    return entries.length > 0 ? entries : FALLBACK_FEATURED.filter(offered);
-  };
-
-  // Searching shows every match, with featured connectors ranked first by
-  // the backend (flagged `priority`); browsing shows only organic directory
-  // results, since the full featured list already sits above.
-  const browseResults = () =>
-    search().trim()
-      ? catalogEntries()
-      : catalogEntries().filter((entry) => !entry.priority);
 
   return (
     <SettingsSection
@@ -280,12 +241,11 @@ export function PipedreamIntegrationsSection() {
         </SettingsCard>
       </Show>
 
-      <Show when={!serversQuery.isError}>
+      <Show when={!serversQuery.isError && servers().length > 0}>
         <SettingsCard>
           <For each={servers()}>
             {(server) => <ServerRow server={server} />}
           </For>
-          <For each={featured()}>{(entry) => <CatalogRow entry={entry} />}</For>
         </SettingsCard>
       </Show>
 

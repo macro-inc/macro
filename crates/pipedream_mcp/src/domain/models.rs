@@ -74,9 +74,6 @@ pub struct CatalogEntry {
     pub description: Option<String>,
     /// URL of the app's icon, when the directory provides one.
     pub icon_url: Option<String>,
-    /// Whether this is a curated priority connector, ranked above organic
-    /// directory results (and renderable as its own section).
-    pub priority: bool,
 }
 
 /// One page of catalog results.

@@ -230,9 +230,6 @@ pub struct PipedreamCatalogEntryResponse {
     description: Option<String>,
     /// URL of the app's icon, when available.
     icon_url: Option<String>,
-    /// Curated priority connectors rank first and may be rendered as their
-    /// own featured section.
-    priority: bool,
 }
 
 impl From<CatalogEntry> for PipedreamCatalogEntryResponse {
@@ -242,7 +239,6 @@ impl From<CatalogEntry> for PipedreamCatalogEntryResponse {
             display_name: entry.display_name,
             description: entry.description,
             icon_url: entry.icon_url,
-            priority: entry.priority,
         }
     }
 }
@@ -250,7 +246,7 @@ impl From<CatalogEntry> for PipedreamCatalogEntryResponse {
 /// A page of the connector catalog.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PipedreamCatalogResponse {
-    /// Catalog entries in display order (priority connectors first).
+    /// Catalog entries in display order (most popular first).
     servers: Vec<PipedreamCatalogEntryResponse>,
     /// Cursor for the next page. Absent on the last page.
     next_cursor: Option<String>,
@@ -527,8 +523,7 @@ where
 )]
 /// Browse or search the catalog of connectable apps.
 ///
-/// Curated priority connectors come first (flagged `priority`), followed by
-/// results from Pipedream's app directory.
+/// Results come from Pipedream's app directory, most popular first.
 #[tracing::instrument(skip_all, err)]
 pub async fn browse_catalog_handler<S, P, Auth>(
     State(state): State<PipedreamRouterState<S, P, Auth>>,
