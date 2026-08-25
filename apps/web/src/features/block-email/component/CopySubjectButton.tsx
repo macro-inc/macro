@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import WideCopy from '@icon/wide-copy.svg';
 import IconCheck from '@phosphor/check.svg';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { createSignal, Show } from 'solid-js';
 import { isPlaceholderSubject } from '../util/subjectText';
 

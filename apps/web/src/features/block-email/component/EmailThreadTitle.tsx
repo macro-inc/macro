@@ -1,4 +1,4 @@
-import { cn } from '@ui';
+import { cn } from '@ui/utils/classname';
 import { createSignal } from 'solid-js';
 import { CopySubjectButton } from './CopySubjectButton';
 
