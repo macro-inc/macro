@@ -9,6 +9,7 @@ import {
 import { Tooltip } from '@ui';
 import Quill, { type Parchment } from 'quill';
 import { createEffect, For, onCleanup, onMount } from 'solid-js';
+import { pastedHyperlinkHref } from './pastedHyperlinkHref';
 import { setupImageResizer } from './signatureImageResizer';
 
 // Quill's built-in font/size formats ship with hard whitelists (font:
@@ -202,6 +203,23 @@ export default function SignatureEditor(props: {
     quill.on('text-change', () => props.onInput(currentHtml()));
     teardownResizer = setupImageResizer(quill);
     props.onReady?.({ setContent: (html) => setHtml(html) });
+
+    // Capture before Quill replaces the selection. A protocol URL on a range
+    // becomes a hyperlink on those words.
+    const onPaste = (event: ClipboardEvent) => {
+      if (!quill) return;
+      const range = quill.getSelection();
+      const href = pastedHyperlinkHref({
+        clipboardPlainText: event.clipboardData?.getData('text/plain') ?? '',
+        selectionCollapsed: range == null || range.length === 0,
+      });
+      if (href == null || range == null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      quill.formatText(range.index, range.length, 'link', href, 'user');
+    };
+    quill.root.addEventListener('paste', onPaste, true);
+    onCleanup(() => quill?.root.removeEventListener('paste', onPaste, true));
   });
 
   // Reseed the editor when `props.value` changes. The draft store keeps
