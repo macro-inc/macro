@@ -105,6 +105,7 @@ fn draft() -> CalendarEventDraft {
         attendees: vec![CalendarAttendeeInput {
             email: "guest@example.com".to_string(),
             is_optional: false,
+            response_status: None,
         }],
         recurrence_lines: Vec::new(),
         visibility: None,
@@ -319,6 +320,7 @@ enum FakeProviderBehavior {
 struct FakeProvider {
     behavior: FakeProviderBehavior,
     calls: Arc<Mutex<Vec<String>>>,
+    created_drafts: Arc<Mutex<Vec<CalendarEventDraft>>>,
 }
 
 impl FakeProvider {
@@ -326,6 +328,7 @@ impl FakeProvider {
         Self {
             behavior,
             calls: Arc::new(Mutex::new(Vec::new())),
+            created_drafts: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -344,9 +347,10 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         &self,
         _access_token: &str,
         target: &GoogleCalendarTarget,
-        _draft: &CalendarEventDraft,
+        draft: &CalendarEventDraft,
     ) -> Result<CalendarEventUpsert, GoogleProviderError> {
         self.calls.lock().unwrap().push("create".to_string());
+        self.created_drafts.lock().unwrap().push(draft.clone());
         if let Some(error) = self.fail() {
             return Err(error);
         }
@@ -849,6 +853,127 @@ async fn a_rejected_mutation_publishes_nothing() {
     assert!(
         broker.published().is_empty(),
         "nothing persisted, so nothing to announce"
+    );
+}
+
+#[tokio::test]
+async fn create_includes_the_calendar_inbox_as_an_accepted_guest() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let drafts = provider.created_drafts.clone();
+    service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            persisted_event_id: Some(Uuid::now_v7()),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .create_event("macro|user", None, None, draft())
+    .await
+    .unwrap();
+
+    let sent = drafts.lock().unwrap();
+    assert_eq!(sent.len(), 1);
+    let organizer = sent[0]
+        .attendees
+        .iter()
+        .find(|attendee| attendee.email.eq_ignore_ascii_case("self@example.com"))
+        .expect("the creation-target inbox must be on the guest list");
+    assert_eq!(
+        organizer.response_status,
+        Some(AttendeeResponseStatus::Accepted)
+    );
+    assert!(!organizer.is_optional);
+    assert!(
+        sent[0]
+            .attendees
+            .iter()
+            .any(|attendee| attendee.email == "guest@example.com"),
+        "invited guests must still be sent"
+    );
+}
+
+#[tokio::test]
+async fn create_does_not_duplicate_an_organizer_already_on_the_guest_list() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let drafts = provider.created_drafts.clone();
+    let mut already_listed = draft();
+    already_listed.attendees.push(CalendarAttendeeInput {
+        email: "Self@example.com".to_string(),
+        is_optional: true,
+        response_status: None,
+    });
+    service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            persisted_event_id: Some(Uuid::now_v7()),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .create_event("macro|user", None, None, already_listed)
+    .await
+    .unwrap();
+
+    let sent = drafts.lock().unwrap();
+    let organizers: Vec<_> = sent[0]
+        .attendees
+        .iter()
+        .filter(|attendee| attendee.email.eq_ignore_ascii_case("self@example.com"))
+        .collect();
+    assert_eq!(organizers.len(), 1);
+    assert_eq!(
+        organizers[0].response_status,
+        Some(AttendeeResponseStatus::Accepted)
+    );
+}
+
+#[tokio::test]
+async fn create_collapses_duplicate_organizer_rows() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let drafts = provider.created_drafts.clone();
+    let mut listed = draft();
+    listed.attendees.push(CalendarAttendeeInput {
+        email: "Self@example.com".to_string(),
+        is_optional: true,
+        response_status: None,
+    });
+    listed.attendees.push(CalendarAttendeeInput {
+        email: "self@EXAMPLE.com".to_string(),
+        is_optional: false,
+        response_status: Some(AttendeeResponseStatus::NeedsAction),
+    });
+    service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            persisted_event_id: Some(Uuid::now_v7()),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .create_event("macro|user", None, None, listed)
+    .await
+    .unwrap();
+
+    let sent = drafts.lock().unwrap();
+    let organizers: Vec<_> = sent[0]
+        .attendees
+        .iter()
+        .filter(|attendee| attendee.email.eq_ignore_ascii_case("self@example.com"))
+        .collect();
+    assert_eq!(organizers.len(), 1);
+    assert_eq!(
+        organizers[0].response_status,
+        Some(AttendeeResponseStatus::Accepted)
+    );
+    assert!(
+        sent[0]
+            .attendees
+            .iter()
+            .any(|attendee| attendee.email == "guest@example.com")
     );
 }
 

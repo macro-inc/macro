@@ -2553,6 +2553,38 @@ export type ChatFilters = {
 
 export type CloudStorageItemType = 'document' | 'chat' | 'project';
 
+/**
+ * A collab surface, as returned by the API.
+ */
+export type CollabSurfaceResponse = {
+    /**
+     * The surface id — also the sync-service session key.
+     */
+    id: string;
+    /**
+     * Id of the parent entity.
+     */
+    parentEntityId: string;
+    /**
+     * Type of the parent entity.
+     */
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+    /**
+     * Lifecycle state (`ready` for every surface visible via the API).
+     */
+    state: SurfaceState;
+};
+
+/**
+ * Response carrying a freshly minted sync-service connection token.
+ */
+export type CollabSurfaceTokenResponse = {
+    /**
+     * The signed JWT to pass to the sync-service websocket connect.
+     */
+    token: string;
+};
+
 export type Comment = {
     commentId: number;
     createdAt?: string | null;
@@ -4496,6 +4528,26 @@ export type EmailFilters = {
  */
 export type EmptyResponse = {
     [key: string]: unknown;
+};
+
+/**
+ * Request body for ensuring a collab surface.
+ */
+export type EnsureCollabSurfaceRequest = {
+    /**
+     * Markdown to seed the surface with when this ensure creates it. Empty
+     * (or omitted) seeds the canonical blank document. Ignored when the
+     * surface already exists and is ready.
+     */
+    initialMarkdown?: string;
+    /**
+     * Id of the parent entity (a uuid).
+     */
+    parentEntityId: string;
+    /**
+     * Type of the parent entity access derives from.
+     */
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
 };
 
 /**
@@ -7944,6 +7996,18 @@ export type SuccessResponse = {
     error: boolean;
 };
 
+/**
+ * Lifecycle state of a collab surface.
+ *
+ * `Pending` means the row exists but the sync-service session may not: the
+ * row is inserted before the durable object is initialized and flipped to
+ * `Ready` once the initial snapshot is stored. A persisted `Pending` row is
+ * an ensure that died or failed mid-init; the next ensure for the same id
+ * retries initialization (the initializer tolerates an already-initialized
+ * session), so `Pending` is self-healing rather than terminal.
+ */
+export type SurfaceState = 'pending' | 'ready';
+
 export type SyncServiceVersionId = {
     counter: number;
     peer: string;
@@ -10103,6 +10167,144 @@ export type PostChannelBotWebhookResponses = {
 };
 
 export type PostChannelBotWebhookResponse = PostChannelBotWebhookResponses[keyof PostChannelBotWebhookResponses];
+
+export type DeleteCollabSurfaceData = {
+    body?: never;
+    path: {
+        /**
+         * The surface id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/collab_surfaces/{id}';
+};
+
+export type DeleteCollabSurfaceErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteCollabSurfaceError = DeleteCollabSurfaceErrors[keyof DeleteCollabSurfaceErrors];
+
+export type DeleteCollabSurfaceResponses = {
+    /**
+     * Deleted
+     */
+    204: void;
+};
+
+export type DeleteCollabSurfaceResponse = DeleteCollabSurfaceResponses[keyof DeleteCollabSurfaceResponses];
+
+export type GetCollabSurfaceData = {
+    body?: never;
+    path: {
+        /**
+         * The surface id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/collab_surfaces/{id}';
+};
+
+export type GetCollabSurfaceErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCollabSurfaceError = GetCollabSurfaceErrors[keyof GetCollabSurfaceErrors];
+
+export type GetCollabSurfaceResponses = {
+    200: CollabSurfaceResponse;
+};
+
+export type GetCollabSurfaceResponse = GetCollabSurfaceResponses[keyof GetCollabSurfaceResponses];
+
+export type EnsureCollabSurfaceData = {
+    body: EnsureCollabSurfaceRequest;
+    path: {
+        /**
+         * The surface id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/collab_surfaces/{id}';
+};
+
+export type EnsureCollabSurfaceErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the parent entity
+     */
+    403: ErrorResponse;
+    /**
+     * The parent entity does not exist
+     */
+    404: ErrorResponse;
+    /**
+     * The surface id was deleted and cannot be reused
+     */
+    410: ErrorResponse;
+    /**
+     * Malformed request body (plain text)
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type EnsureCollabSurfaceError = EnsureCollabSurfaceErrors[keyof EnsureCollabSurfaceErrors];
+
+export type EnsureCollabSurfaceResponses = {
+    200: CollabSurfaceResponse;
+};
+
+export type EnsureCollabSurfaceResponse = EnsureCollabSurfaceResponses[keyof EnsureCollabSurfaceResponses];
+
+export type CreateCollabSurfaceTokenData = {
+    body?: never;
+    path: {
+        /**
+         * The surface id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/collab_surfaces/{id}/token';
+};
+
+export type CreateCollabSurfaceTokenErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateCollabSurfaceTokenError = CreateCollabSurfaceTokenErrors[keyof CreateCollabSurfaceTokenErrors];
+
+export type CreateCollabSurfaceTokenResponses = {
+    200: CollabSurfaceTokenResponse;
+};
+
+export type CreateCollabSurfaceTokenResponse = CreateCollabSurfaceTokenResponses[keyof CreateCollabSurfaceTokenResponses];
 
 export type GetChannelsData = {
     body?: never;

@@ -26,6 +26,7 @@ fn sample_draft() -> CalendarEventDraft {
         attendees: vec![CalendarAttendeeInput {
             email: "guest@example.com".to_string(),
             is_optional: true,
+            response_status: None,
         }],
         recurrence_lines: vec!["RRULE:FREQ=WEEKLY".to_string()],
         visibility: None,
@@ -64,6 +65,7 @@ fn update_body_matches_the_router_request() {
         attendees: Some(vec![CalendarAttendeeInput {
             email: "guest@example.com".to_string(),
             is_optional: false,
+            response_status: None,
         }]),
         conference: Some(crate::domain::models::ConferenceChange::Removed),
         ..Default::default()

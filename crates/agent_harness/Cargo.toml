@@ -23,6 +23,7 @@ kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
 macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 reqwest = { workspace = true }

@@ -119,7 +119,7 @@ fn harness() -> (
 }
 
 /// Play the agent's half of the ACP handshake.
-async fn complete_handshake(container: &ContainerMock) {
+async fn complete_session_handshake(container: &ContainerMock) {
     let agent = container.agent();
     let already = agent.received_requests().len();
     container.sends_ready();
@@ -127,6 +127,12 @@ async fn complete_handshake(container: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(already + 2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+}
+
+async fn complete_handshake(container: &ContainerMock) {
+    complete_session_handshake(container).await;
+    let agent = container.agent();
+    agent.completes_prompt().await;
 }
 
 async fn complete_resume(container: &ContainerMock) {
@@ -146,6 +152,7 @@ async fn complete_resume(container: &ContainerMock) {
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
     ));
     agent.resumes_session(ResumeSessionResponse::new());
+    agent.completes_prompt().await;
 }
 
 fn prompts(agent: &FakeAgent) -> Vec<Vec<ContentBlock>> {
@@ -333,13 +340,13 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("open should succeed");
 
-    service
-        .execute(
-            id,
-            HarnessCommand::Deliver(forward_message("and add a regression test")),
-        )
-        .await
-        .expect("forward to a live session should succeed");
+    let forward = service.execute(
+        id,
+        HarnessCommand::Deliver(forward_message("and add a regression test")),
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(forward, agent.completes_prompt());
+    result.expect("forward to a live session should succeed");
 
     assert_eq!(containers.spawned(), 1, "no second container");
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
@@ -460,6 +467,7 @@ async fn concurrent_forwards_share_one_session_recovery() {
             .expect("the resumed container is findable");
         complete_resume(&resumed).await;
         resumed.agent().wait_for_requests(4).await;
+        resumed.agent().completes_prompt().await;
         resumed
     };
 
@@ -673,16 +681,16 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
     let container = live_session(&service, &containers, id).await;
     let announced_before = announcer.announced().len();
 
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::prompt("and now the docs"),
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("prompting through control should succeed");
+    let prompted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::prompt("and now the docs"),
+            actor: Some(sender()),
+        },
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+    result.expect("prompting through control should succeed");
 
     assert_eq!(
         prompts(&container.agent()).len(),
@@ -702,16 +710,16 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
 
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::Compact,
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("compaction should reach the running agent");
+    let compacted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::Compact,
+            actor: Some(sender()),
+        },
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(compacted, agent.completes_prompt());
+    result.expect("compaction should reach the running agent");
 
     assert_eq!(
         prompts(&container.agent()),
@@ -784,6 +792,7 @@ async fn complete_bound_handshake(runtime: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+    agent.completes_prompt().await;
 }
 
 /// As [`complete_bound_handshake`], for a session the runtime is restoring.
@@ -806,6 +815,7 @@ async fn complete_bound_resume(runtime: &ContainerMock) {
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
     ));
     agent.resumes_session(ResumeSessionResponse::new());
+    agent.completes_prompt().await;
 }
 
 /// Wait until a session has noticed that its transport ended.
@@ -918,9 +928,10 @@ async fn a_bound_session_stays_on_its_connection_until_it_drops() {
 
     // Already bound: a second prompt goes straight down the same connection,
     // with no second handshake to drive.
-    prompt(&service, session.id, "and now the docs")
-        .await
-        .expect("a bound session needs no rebinding");
+    let prompted = prompt(&service, session.id, "and now the docs");
+    let agent = first.agent();
+    let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+    result.expect("a bound session needs no rebinding");
     assert_eq!(
         prompts(&first.agent()),
         ["fix the failing test", "and now the docs"]
@@ -1200,7 +1211,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         let container = containers
             .container(session_of(&containers))
             .expect("the spawned container is findable");
-        complete_handshake(&container).await;
+        complete_session_handshake(&container).await;
     };
     let (opened, _) = tokio::join!(open, drive);
     let session = opened.expect("open should succeed");

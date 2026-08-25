@@ -37,7 +37,9 @@ use dashmap::mapref::entry::Entry;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot, watch};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::instrument::WithSubscriber as _;
 
 use bots::domain::models::BotId;
 
@@ -53,11 +55,65 @@ use super::ports::{
     AgentSessionRealtime, AgentSessionRepo, NoOpAgentSessionNameGenerator,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
+use super::session::{CloseReason, Input};
 
 /// Buffered not-yet-accepted commands per session actor.
 const COMMAND_BUFFER: usize = 1028;
+/// Persistence may delay lifecycle teardown, but never indefinitely.
+const SESSION_PERSIST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+/// How long a command may sit queued behind the ACP handshake
+/// (`Booting`/`Initializing`/`Opening`) before the caller gives up on it.
+/// The runtime never completes a queued command on its own until it reaches
+/// `Live` - see [`super::session::session::SessionMachine::on_command`] - so
+/// without this bound a stalled handshake (e.g. the runtime process never
+/// sends `AcpReady`, or never answers `initialize`/`session/new`) hangs the
+/// caller forever.
+#[cfg(not(test))]
+const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+#[cfg(test)]
+const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(50);
 
-type ActiveSessions = DashMap<AgentSessionId, mpsc::Sender<SessionCommand>>;
+struct ActiveSession {
+    commands: Option<mpsc::Sender<SessionCommand>>,
+    stopped: watch::Receiver<bool>,
+    marker: Arc<()>,
+    deleting: bool,
+    stopping: bool,
+}
+
+type ActiveSessions = DashMap<AgentSessionId, ActiveSession>;
+
+struct AttachReservation {
+    active: Arc<ActiveSessions>,
+    id: AgentSessionId,
+    marker: Arc<()>,
+    stopped: Option<watch::Sender<bool>>,
+    committed: bool,
+}
+
+impl AttachReservation {
+    fn commit(mut self) -> (Arc<()>, watch::Sender<bool>) {
+        self.committed = true;
+        (
+            self.marker.clone(),
+            self.stopped.take().expect("reservation owns stop signal"),
+        )
+    }
+}
+
+impl Drop for AttachReservation {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        if let Some(stopped) = self.stopped.take() {
+            let _ = stopped.send(true);
+        }
+        self.active.remove_if(&self.id, |_, active| {
+            Arc::ptr_eq(&active.marker, &self.marker) && !active.stopping
+        });
+    }
+}
 
 /// Durable and live use cases for agent sessions.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
@@ -167,12 +223,16 @@ pub trait AgentSessionService: Send + Sync + 'static {
 /// `Folds` answers "what messages does this session's log derive" -
 /// `agent_fold` folding the log on read - and `Rt` streams each frame to
 /// whoever is watching the session's channel right now.
+#[derive(Clone)]
 pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGenerator> {
     repo: R,
     folds: Folds,
     realtime: Rt,
     name_generator: Namer,
     active: Arc<ActiveSessions>,
+    tasks: TaskTracker,
+    cancellation: CancellationToken,
+    lifecycle: Arc<Mutex<()>>,
 }
 
 impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
@@ -189,6 +249,9 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             realtime,
             name_generator: NoOpAgentSessionNameGenerator,
             active: Arc::new(DashMap::new()),
+            tasks: TaskTracker::new(),
+            cancellation: CancellationToken::new(),
+            lifecycle: Arc::new(Mutex::new(())),
         }
     }
 }
@@ -206,29 +269,80 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             realtime: self.realtime,
             name_generator,
             active: self.active,
+            tasks: self.tasks,
+            cancellation: self.cancellation,
+            lifecycle: self.lifecycle,
         }
     }
 
-    fn register_transport<Connector>(
+    /// Stop active actors and wait for their tasks to release their transports.
+    pub async fn shutdown(&self) {
+        let lifecycle = self.lifecycle.lock().await;
+        self.cancellation.cancel();
+        for mut session in self.active.iter_mut() {
+            session.commands.take();
+            session.stopping = true;
+        }
+        self.tasks.close();
+        drop(lifecycle);
+        self.tasks.wait().await;
+        self.active.clear();
+    }
+
+    async fn reserve_attach(&self, id: AgentSessionId) -> Result<AttachReservation> {
+        let _lifecycle = self.lifecycle.lock().await;
+        if self.cancellation.is_cancelled() {
+            return Err(AgentSessionError::Disconnected(id));
+        }
+        let (stopped_tx, stopped) = watch::channel(false);
+        let marker = Arc::new(());
+        match self.active.entry(id) {
+            Entry::Occupied(_) => Err(AgentSessionError::AlreadyConnected(id)),
+            Entry::Vacant(entry) => {
+                entry.insert(ActiveSession {
+                    commands: None,
+                    stopped,
+                    marker: marker.clone(),
+                    deleting: false,
+                    stopping: false,
+                });
+                Ok(AttachReservation {
+                    active: self.active.clone(),
+                    id,
+                    marker,
+                    stopped: Some(stopped_tx),
+                    committed: false,
+                })
+            }
+        }
+    }
+
+    async fn activate_reserved<Connector>(
         &self,
-        id: AgentSessionId,
-        acp_session_id: Option<SessionId>,
-        workspace: String,
+        session: AgentSession,
         attachment: RuntimeAttachment<Connector>,
+        reservation: AttachReservation,
     ) -> Result<()>
     where
         R: AgentSessionRepo + AgentSessionLogRepo + Clone,
         Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
         Connector: AgentConnector,
     {
-        let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
-
-        match self.active.entry(id) {
-            Entry::Occupied(_) => return Err(AgentSessionError::AlreadyConnected(id)),
-            Entry::Vacant(entry) => {
-                entry.insert(commands.clone());
-            }
+        let _lifecycle = self.lifecycle.lock().await;
+        let id = session.id;
+        if self.cancellation.is_cancelled() {
+            return Err(AgentSessionError::Disconnected(id));
         }
+        let (commands, command_rx) = mpsc::channel(COMMAND_BUFFER);
+        let Some(mut active) = self.active.get_mut(&id) else {
+            return Err(AgentSessionError::Disconnected(id));
+        };
+        if !Arc::ptr_eq(&active.marker, &reservation.marker) || active.stopping {
+            return Err(AgentSessionError::Disconnected(id));
+        }
+        active.commands = Some(commands.clone());
+        drop(active);
+        let (marker, stopped_tx) = reservation.commit();
 
         // The actor owns this session's log writes, so it gets the live writer
         // rather than the bare repository - see module docs. Its fold starts
@@ -238,14 +352,23 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         let logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
         let actor = SessionActor::new(
             id,
-            acp_session_id,
-            workspace,
+            session.acp_session_id,
+            session.workspace,
             attachment.connector,
             logs,
             command_rx,
             attachment.handshake,
         );
-        tokio::spawn(run_session(actor, Arc::downgrade(&self.active), commands));
+        self.tasks.spawn(
+            run_session(
+                actor,
+                Arc::downgrade(&self.active),
+                marker,
+                stopped_tx,
+                self.cancellation.clone(),
+            )
+            .with_current_subscriber(),
+        );
         Ok(())
     }
 
@@ -259,31 +382,90 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         let commands = self
             .active
             .get(&id)
-            .map(|entry| entry.value().clone())
+            .and_then(|entry| entry.commands.clone())
             .ok_or(AgentSessionError::Disconnected(id))?;
 
         let (completed, result) = oneshot::channel();
+        let span = tracing::info_span!(
+            "agent.session.command",
+            agent.session.id = %id,
+            agent.action.name = action.as_ref(),
+            otel.status_code = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
         if commands
             .send(SessionCommand {
                 user_id,
                 action,
                 action_id,
                 completed,
+                span,
             })
             .await
             .is_err()
         {
-            self.active
-                .remove_if(&id, |_, active| active.same_channel(&commands));
             return Err(AgentSessionError::Disconnected(id));
         }
-        match result.await {
-            Ok(result) => result,
-            Err(_) => {
-                self.active
-                    .remove_if(&id, |_, active| active.same_channel(&commands));
+        // Not needed past this point, and holding it would be exactly the bug
+        // `begin_stop` exists to avoid: a live sender clone keeping the
+        // channel open no matter how many others get dropped, so the actor
+        // can only notice by hitting its own much longer internal deadline
+        // instead of promptly.
+        drop(commands);
+        match tokio::time::timeout(HANDSHAKE_TIMEOUT, result).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(AgentSessionError::Disconnected(id)),
+            Err(_elapsed) => {
+                // The actor is presumably still stuck in the handshake, so it
+                // is stopped directly - the same "drop the sender, the actor
+                // notices and tears itself down" mechanism `close_session`
+                // uses - rather than left to queue behind the same stall
+                // forever.
+                let (stopped, marker) = self.begin_stop(id, false);
+                Self::wait_stopped(stopped).await;
+                self.active.remove_if(&id, |_, active| {
+                    Arc::ptr_eq(&active.marker, &marker) && !active.deleting
+                });
+                tracing::warn!(%id, "agent session command timed out waiting for the ACP handshake");
                 Err(AgentSessionError::Disconnected(id))
             }
+        }
+    }
+
+    fn begin_stop(&self, id: AgentSessionId, deleting: bool) -> (watch::Receiver<bool>, Arc<()>) {
+        match self.active.entry(id) {
+            Entry::Occupied(mut entry) => {
+                let active = entry.get_mut();
+                let attaching = active.commands.is_none() && !active.stopping;
+                active.commands.take();
+                active.deleting |= deleting;
+                active.stopping = true;
+                let stopped = if attaching {
+                    let (_stopped_tx, stopped) = watch::channel(true);
+                    stopped
+                } else {
+                    active.stopped.clone()
+                };
+                (stopped, active.marker.clone())
+            }
+            Entry::Vacant(entry) => {
+                let (_stopped_tx, stopped) = watch::channel(true);
+                let marker = Arc::new(());
+                entry.insert(ActiveSession {
+                    commands: None,
+                    stopped: stopped.clone(),
+                    marker: marker.clone(),
+                    deleting,
+                    stopping: true,
+                });
+                (stopped, marker)
+            }
+        }
+    }
+
+    async fn wait_stopped(mut stopped: watch::Receiver<bool>) {
+        if !*stopped.borrow() {
+            let _ = stopped.wait_for(|value| *value).await;
         }
     }
 }
@@ -341,27 +523,40 @@ where
     }
 
     async fn delete_session(&self, id: AgentSessionId) -> Result<()> {
-        self.repo.delete(id).await
+        let (stopped, marker) = self.begin_stop(id, true);
+        Self::wait_stopped(stopped).await;
+        let result = self.repo.delete(id).await;
+        self.active
+            .remove_if(&id, |_, active| Arc::ptr_eq(&active.marker, &marker));
+        result
     }
 
     async fn close_session(&self, id: AgentSessionId) -> Result<()> {
         // Dropping the sender is the whole operation: the actor's next step
         // reads `None` from its command channel, treats it as `Abandoned`, and
         // tears the transport down on its way out.
-        self.active.remove(&id);
+        let (stopped, marker) = self.begin_stop(id, false);
+        Self::wait_stopped(stopped).await;
+        self.active.remove_if(&id, |_, active| {
+            Arc::ptr_eq(&active.marker, &marker) && !active.deleting
+        });
         Ok(())
     }
 
     async fn mark_disconnected(&self, id: AgentSessionId) -> Result<()> {
         let mut logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
-        logs.append(AgentSessionLog {
-            agent_session_id: id,
-            user_id: None,
-            content: Message::ToServer(ToServerMessage::Event {
-                event: SystemEvent::Disconnected,
+        tokio::time::timeout(
+            SESSION_PERSIST_TIMEOUT,
+            logs.append(AgentSessionLog {
+                agent_session_id: id,
+                user_id: None,
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected,
+                }),
             }),
-        })
+        )
         .await
+        .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
     }
 
     async fn attach_session<Connector>(
@@ -372,13 +567,10 @@ where
     where
         Connector: AgentConnector,
     {
+        let reservation = self.reserve_attach(id).await?;
         let session = self.repo.get(id).await?;
-        self.register_transport(
-            session.id,
-            session.acp_session_id,
-            session.workspace,
-            attachment,
-        )
+        self.activate_reserved(session, attachment, reservation)
+            .await
     }
 
     async fn send_action(
@@ -758,12 +950,24 @@ where
 async fn run_session<Connector, Logs>(
     mut actor: SessionActor<Connector, Logs>,
     active: std::sync::Weak<ActiveSessions>,
-    commands: mpsc::Sender<SessionCommand>,
+    marker: Arc<()>,
+    stopped: watch::Sender<bool>,
+    cancellation: CancellationToken,
 ) where
     Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
 {
-    while actor.step().await == Stepped::Continue {}
+    loop {
+        let input = tokio::select! {
+            biased;
+            () = cancellation.cancelled() => Input::Closed(CloseReason::Abandoned),
+            input = actor.next_input() => input,
+        };
+        let stepped = actor.dispatch(input).await;
+        if stepped == Stepped::Stopped {
+            break;
+        }
+    }
 
     // Refuse late commands before releasing the registry entry, so a caller
     // cannot enqueue into an actor that will never step again.
@@ -772,7 +976,10 @@ async fn run_session<Connector, Logs>(
 
     // Tear down the old transport before allowing another actor to attach.
     drop(actor);
+    let _ = stopped.send(true);
     if let Some(active) = active.upgrade() {
-        active.remove_if(&id, |_, current| current.same_channel(&commands));
+        active.remove_if(&id, |_, current| {
+            current.commands.is_some() && Arc::ptr_eq(&current.marker, &marker)
+        });
     }
 }

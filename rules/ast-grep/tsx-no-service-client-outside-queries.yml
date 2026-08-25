@@ -1,0 +1,48 @@
+id: tsx-no-service-client-outside-queries
+language: tsx
+# Twin of ts-no-service-client-outside-queries — ast-grep rules are
+# single-language, and `typescript` only scans .ts files.
+severity: warning
+message: Don't import a service client outside the queries package — wrap the call in a query/mutation under queries/ and import that instead.
+note: |-
+  Rule FE-01 in docs/STYLE_GUIDE.md (also apps/web/AGENTS.md, General). UI code
+  calling an endpoint directly is usually re-fetching data an existing query
+  already caches, and it bypasses the cache seeding / invalidation the query
+  layer owns. Add (or reuse) a query or mutation in src/lib/queries (shared)
+  or the owning feature's queries/ dir (or queries.ts), and import from there.
+  Importing generated schema *types* from @service-*/generated is fine — this
+  rule only covers the runtime client modules. `import type` from a client is
+  also allowed. ~110 legacy files exist — don't add new ones.
+files:
+  - apps/web/src/**
+ignores:
+  - '**/queries/**'
+  - '**/queries.ts'
+  - '**/service-clients/**'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/browser-test/**'
+rule:
+  kind: string
+  regex: ^['"](@service-[a-z-]+/client|(\.{1,2}/)+(.+/)?service-clients/[^'"]+/client)(\.ts)?['"]$
+  any:
+    # import { x } from '…/client'  (but not `import type`)
+    - inside:
+        kind: import_statement
+        field: source
+        not:
+          regex: ^import\s+type\b
+    # export { x } from '…/client'
+    - inside:
+        kind: export_statement
+        field: source
+    # await import('…/client')
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: import

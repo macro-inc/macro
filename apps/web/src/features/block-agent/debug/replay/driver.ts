@@ -167,8 +167,10 @@ export function createReplayDriver(options: ReplayDriverOptions): ReplayDriver {
         }, PROMPT_ECHO_DELAY_MS);
       }
       // Every other action — stop, permissions — acks and does nothing:
-      // their observable effects come from frames, which playback owns.
-      return ok(undefined);
+      // their observable effects come from frames, which playback owns. The
+      // id is what the real endpoint returns; replay frames never carry it,
+      // so nothing correlates against it.
+      return ok(`replay-action-${cursor()}`);
     },
   };
 

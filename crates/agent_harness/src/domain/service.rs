@@ -16,6 +16,8 @@ use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::{mpsc, oneshot};
+use tracing::Instrument as _;
+use tracing::instrument::WithSubscriber as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
@@ -30,6 +32,9 @@ type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedComman
 struct QueuedCommand {
     command: HarnessCommand,
     completed: oneshot::Sender<Result<()>>,
+    /// The caller's span, carried across the queue so the work the worker does
+    /// on its own task still hangs off whatever triggered it.
+    span: tracing::Span,
 }
 
 struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
@@ -77,16 +82,23 @@ where
     /// Queue one command behind any work already running for its session.
     ///
     /// Queue admission happens synchronously so callers can spawn the returned
-    /// completion future without reordering commands.
+    /// completion future without reordering commands. It is also where the
+    /// caller's span is captured: the returned future only awaits a oneshot, so
+    /// the span has to travel with the command to reach the work itself.
     pub fn execute(
         &self,
         session_id: AgentSessionId,
         mut command: HarnessCommand,
     ) -> impl Future<Output = Result<()>> + Send + 'static {
+        let caller = tracing::Span::current();
         let result = loop {
             let commands = self.commands(session_id);
             let (completed, result) = oneshot::channel();
-            let queued = QueuedCommand { command, completed };
+            let queued = QueuedCommand {
+                command,
+                completed,
+                span: caller.clone(),
+            };
 
             match commands.send(queued) {
                 Ok(()) => break result,
@@ -122,7 +134,10 @@ where
         session_id: AgentSessionId,
         receiver: mpsc::UnboundedReceiver<QueuedCommand>,
     ) {
-        tokio::spawn(run_session_worker(session_id, self.inner.clone(), receiver));
+        // The worker outlives the call that created it, so it has to carry the
+        // subscriber forward itself or every command it runs traces nowhere.
+        let inner = self.inner.clone();
+        tokio::spawn(run_session_worker(session_id, inner, receiver).with_current_subscriber());
     }
 
     /// Post the announcement for a prompt an external runtime delivers.
@@ -458,9 +473,14 @@ where
         %session_id,
         bot_id = %command.bot_id,
         message_id = %command.origin.message_id,
+        channel_id = %command.origin.channel_id,
+        thread_id = %command.origin.thread_id,
+        agent.trigger.kind = "mention",
+        agent.session.id = tracing::field::Empty,
     ))]
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
         let OpenSession { bot_id, origin } = command;
+        tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
         let repo_url = self.defaults.repo_url.clone();
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
@@ -537,7 +557,7 @@ where
     /// Three steps, in this order: persist whatever the action changes about
     /// the session, work out whether anyone needs telling, then deliver it.
     /// Announcing last means nothing is announced that was never sent.
-    #[tracing::instrument(err, skip(self, command), fields(%session_id))]
+    #[tracing::instrument(err, skip(self, command), fields(agent.session.id = %session_id))]
     async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
         let DeliverAction {
             id,
@@ -641,8 +661,12 @@ async fn run_session_worker<Sessions, Containers, Announcer, Runtimes>(
     Runtimes: RuntimeConnections,
 {
     while let Some(queued) = receiver.recv().await {
-        let QueuedCommand { command, completed } = queued;
-        let result = inner.execute(session_id, command).await;
+        let QueuedCommand {
+            command,
+            completed,
+            span,
+        } = queued;
+        let result = inner.execute(session_id, command).instrument(span).await;
         let _ = completed.send(result);
     }
 }

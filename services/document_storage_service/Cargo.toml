@@ -69,6 +69,10 @@ chat = { path = "../../crates/chat", default-features = false, features = [
 ] }
 chrono = { workspace = true }
 clap = { workspace = true }
+collab_surface = { path = "../../crates/collab_surface", features = [
+  "inbound",
+  "postgres",
+] }
 cloudfront_sign = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 complete_graph = { path = "../../crates/complete_graph" }

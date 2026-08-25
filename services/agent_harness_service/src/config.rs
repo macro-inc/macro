@@ -41,6 +41,13 @@ pub struct Config {
     /// unaffected.
     #[macro_config_default(String::new())]
     pub github_token: String,
+    /// API key sandboxes run Anthropic models with. Injected into the
+    /// sandbox environment at creation, where it activates opencode's
+    /// `anthropic` provider — the only provider
+    /// `crates/agent_harness/container/opencode.json` enables. Empty means
+    /// sandboxes advertise no models and managed sessions cannot prompt.
+    #[macro_config_default(String::new())]
+    pub anthropic_api_key: String,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this

@@ -290,6 +290,37 @@ const PermissionsTokensSvc = new Svc('Permissions Tokens Service')
     throws: withFetchErrors(),
   });
 
+const CollabSurfacesSvc = new Svc('Collab Surfaces Service')
+  .use('fetchErrors', fetchErrorsSvc)
+  .fn('ensure', {
+    description:
+      'idempotently ensures a collab surface exists (load-or-create) attached to a parent entity, with its sync-service session initialized',
+    args: schemas.ensureCollabSurfaceBody.extend(
+      schemas.ensureCollabSurfaceParams.shape
+    ).shape,
+    result: schemas.ensureCollabSurfaceResponse.shape,
+    modifies: true,
+    throws: withFetchErrors(),
+  })
+  .fn('get', {
+    description: 'fetches a collab surface',
+    args: schemas.getCollabSurfaceParams.shape,
+    result: schemas.getCollabSurfaceResponse.shape,
+    throws: withFetchErrors(),
+  })
+  .fn('createToken', {
+    description: 'mints a sync-service connection token for a collab surface',
+    args: schemas.createCollabSurfaceTokenParams.shape,
+    result: schemas.createCollabSurfaceTokenResponse.shape,
+    throws: withFetchErrors(),
+  })
+  .fn('delete', {
+    description: 'soft-deletes a collab surface',
+    args: schemas.deleteCollabSurfaceParams.shape,
+    modifies: true,
+    throws: withFetchErrors(),
+  });
+
 const InstructionsSvc = new Svc('Instructions Service')
   .use('fetchErrors', fetchErrorsSvc)
   .fn('create', {
@@ -311,6 +342,12 @@ export type GetDocumentPermissionsTokenResponse = z.infer<
 >;
 export type ValidateDocumentPermissionsTokenResponse = z.infer<
   typeof schemas.validateDocumentPermissionsTokenResponse
+>;
+export type CollabSurfaceResponse = z.infer<
+  typeof schemas.getCollabSurfaceResponse
+>;
+export type CollabSurfaceTokenResponse = z.infer<
+  typeof schemas.createCollabSurfaceTokenResponse
 >;
 
 export const StorageService = new Svc('Document++ Storage Service API')
@@ -725,6 +762,7 @@ export const StorageService = new Svc('Document++ Storage Service API')
   .use('annotations', AnnotationsSvc)
   .use('projects', ProjectsSvc)
   .use('permissionsTokens', PermissionsTokensSvc)
+  .use('collabSurfaces', CollabSurfacesSvc)
   .use('instructions', InstructionsSvc)
   .use('views', ViewsSvc)
   .use('favorites', FavoritesSvc);

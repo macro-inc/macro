@@ -8,6 +8,7 @@
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
 import { Button, SendButton, Surface } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 
@@ -17,6 +18,11 @@ export interface AgentInputProps {
   busy?: boolean;
   disabled?: boolean;
   autofocus?: boolean;
+  /**
+   * Slash commands the harness advertises (ACP `available_commands_update`);
+   * typing `/` opens a typeahead over them. `/` stays plain text while empty.
+   */
+  commands?: () => AgentCommandItem[];
   /** Receives the composed markdown. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
@@ -57,6 +63,7 @@ export function AgentInput(props: AgentInputProps) {
     .withHistory({ timeGap: 400 })
     .withCode()
     .withRestoreFocus()
+    .withAgentCommands({ commands: () => props.commands?.() ?? [] })
     .onEnter(() => {
       send();
       return true;

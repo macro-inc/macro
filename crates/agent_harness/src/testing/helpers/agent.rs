@@ -1,10 +1,11 @@
 //! A fake agent process, speaking only raw ACP.
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::schema::v1::{
-    ClientNotification, ClientRequest, InitializeResponse, NewSessionResponse, RequestId,
-    ResumeSessionResponse,
+    ClientNotification, ClientRequest, InitializeResponse, NewSessionResponse, PromptResponse,
+    RequestId, ResumeSessionResponse, StopReason,
 };
 use agent_client_protocol::{
     Error as AcpError, JsonRpcMessage, JsonRpcNotification, JsonRpcResponse, RawJsonRpcMessage,
@@ -32,6 +33,7 @@ struct Progress {
     /// Requests received and not yet answered.
     initializing: Option<RequestId>,
     opening: Option<RequestId>,
+    prompts: VecDeque<RequestId>,
 }
 
 /// Parse a frame into whichever ACP message enum the caller asked for.
@@ -117,6 +119,21 @@ impl FakeAgent {
             .clone()
             .expect("the harness has not sent session/resume");
         self.sends_reply(id, response);
+    }
+
+    /// Wait for and complete the next `session/prompt` request.
+    pub async fn completes_prompt(&self) {
+        let mut received = self.received.subscribe();
+        let id = loop {
+            if let Some(id) = self.lock_progress().prompts.pop_front() {
+                break id;
+            }
+            received
+                .changed()
+                .await
+                .expect("fake agent frame history should remain open");
+        };
+        self.sends_reply(id, PromptResponse::new(StopReason::EndTurn));
     }
 
     /// Refuse the `session/new` this agent received.
@@ -247,6 +264,15 @@ impl FakeAgent {
                             request.method
                         );
                         progress.opening = Some(request.id.clone());
+                    }
+                    ClientRequest::PromptRequest(_) => {
+                        assert_eq!(
+                            progress.stage,
+                            Stage::SessionOpen,
+                            "harness sent {} before its ACP session existed",
+                            request.method
+                        );
+                        progress.prompts.push_back(request.id.clone());
                     }
                     other => assert_eq!(
                         progress.stage,

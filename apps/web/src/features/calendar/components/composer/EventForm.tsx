@@ -37,11 +37,20 @@ export function EventForm(props: EventFormProps) {
   const formId = createUniqueId();
 
   const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
+  const pastEventWarningId = `event-composer-past-event-warning-${formId}`;
 
   const controller = props.controller;
   const state = controller.state;
   const isEdit = () => props.isEdit ?? false;
   const formIsDisabled = () => props.pending || props.disabled === true;
+
+  // An invalid range already speaks for itself; only one line shows at a time.
+  const pastEventWarning = () =>
+    controller.dateRangeError() ? undefined : controller.pastEventWarning();
+  const dateRangeDescribedBy = () => {
+    if (controller.dateRangeError()) return dateRangeErrorId;
+    return pastEventWarning() ? pastEventWarningId : undefined;
+  };
 
   const fieldIsReadOnly = (field: keyof EventEditorDisabledFields) =>
     props.disabledFields?.[field] === true;
@@ -86,9 +95,7 @@ export function EventForm(props: EventFormProps) {
                 endDisabled={fieldIsDisabled('end')}
                 allDayDisabled={fieldIsDisabled('allDay')}
                 invalid={controller.dateRangeError() !== undefined}
-                describedBy={
-                  controller.dateRangeError() ? dateRangeErrorId : undefined
-                }
+                describedBy={dateRangeDescribedBy()}
               />
               <Show when={controller.dateRangeError()}>
                 {(error) => (
@@ -98,6 +105,17 @@ export function EventForm(props: EventFormProps) {
                     class="text-xs text-failure"
                   >
                     {error()}
+                  </p>
+                )}
+              </Show>
+              <Show when={pastEventWarning()}>
+                {(warning) => (
+                  <p
+                    id={pastEventWarningId}
+                    role="status"
+                    class="text-xs text-warning"
+                  >
+                    {warning()}
                   </p>
                 )}
               </Show>
