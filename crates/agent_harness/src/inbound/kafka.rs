@@ -62,10 +62,10 @@ pub fn route_agent_trigger(
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-            // TODO: lift for the coder bot once the beta gate opens. For the
-            // Cursor bot the restriction is permanent until per-user Cursor
-            // keys exist: its sessions run on Macro's own Cursor account, so
-            // only Macro staff may open them.
+            // TODO: remove once the beta gate opens. Both managed bots are
+            // staff-only for the same reason — neither is finished — and a
+            // Cursor session now runs on the mentioner's own Cursor account,
+            // so nothing about the credential keeps it restricted.
             if mentioned
                 .message
                 .sender
@@ -121,10 +121,11 @@ pub fn route_agent_trigger(
                 }
                 // The open gate alone is not enough: the mentioning channel
                 // holds editor access to the session, so anyone in the
-                // thread can prompt it. A Cursor session runs on Macro's
-                // Cursor account, and a prompt is spend on it - staff only,
-                // and a sender that is not a user at all is refused rather
-                // than waved through.
+                // thread can prompt it. A prompt to a Cursor session is spend
+                // on its *owner's* Cursor account, by someone who is not
+                // necessarily the owner - staff only while that is true, and
+                // a sender that is not a user at all is refused rather than
+                // waved through.
                 if kind == AgentKind::Cursor
                     && !message
                         .sender

@@ -289,10 +289,9 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
     // Present so `GITHUB_TOKEN=... just run_local` overlays, but empty in a
     // no-Doppler stack. Doppler would supply a real token above this stub.
     assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
-    // Same overlay contract for the `@cursor` bot's key: the process-env
-    // layer only touches keys already in the map, so this stub is what makes
-    // `CURSOR_API_KEY=... just run_local` reach the harness at all.
-    assert_eq!(env.get("CURSOR_API_KEY").map(String::as_str), Some(""));
+    // No `CURSOR_API_KEY`: `@cursor` sessions run on the key each user
+    // registers in settings, so there is no deployment-wide one to stub.
+    assert!(!env.contains_key("CURSOR_API_KEY"));
 }
 
 /// Sandboxes and the harness are both containers, so they reach each other on a

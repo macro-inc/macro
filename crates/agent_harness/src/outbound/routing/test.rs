@@ -182,7 +182,7 @@ async fn the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox() {
     let cursor = TaggedManager::new("cursor");
     let router = RoutedContainerManager::new(
         sandbox.clone(),
-        Some(cursor.clone()),
+        cursor.clone(),
         FixedBotSessions(bot_id::CURSOR_BOT_ID),
     );
 
@@ -208,7 +208,7 @@ async fn resume_and_teardown_route_by_the_stored_bot() {
     let cursor = TaggedManager::new("cursor");
     let router = RoutedContainerManager::new(
         sandbox.clone(),
-        Some(cursor.clone()),
+        cursor.clone(),
         FixedBotSessions(bot_id::CURSOR_BOT_ID),
     );
 
@@ -217,25 +217,4 @@ async fn resume_and_teardown_route_by_the_stored_bot() {
     router.teardown(session).await.expect("teardown");
     assert_eq!(cursor.calls(), ["cursor:resume", "cursor:teardown"]);
     assert!(sandbox.calls().is_empty());
-}
-
-/// An unarmed deployment refuses cursor sessions with a message instead of
-/// silently sandboxing them.
-#[tokio::test]
-async fn an_unarmed_deployment_refuses_cursor_sessions() {
-    let sandbox = TaggedManager::new("sandbox");
-    let router = RoutedContainerManager::<_, TaggedManager, _>::new(
-        sandbox.clone(),
-        None,
-        FixedBotSessions(bot_id::CURSOR_BOT_ID),
-    );
-
-    let refused = router.spawn(spawn_for(AgentKind::Cursor)).await;
-    assert!(matches!(refused, Err(HarnessError::Container(_))));
-    // The coder bot is untouched by the missing key.
-    router
-        .spawn(spawn_for(AgentKind::SandboxedCoder))
-        .await
-        .expect("sandbox spawn still works");
-    assert_eq!(sandbox.calls(), ["sandbox:spawn"]);
 }

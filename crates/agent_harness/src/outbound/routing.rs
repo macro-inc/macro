@@ -30,35 +30,18 @@ mod test;
 #[derive(Clone)]
 pub struct RoutedContainerManager<Sandbox, Cursor, Sessions> {
     sandbox: Sandbox,
-    /// `None` when this deployment has no Cursor API key. The `@cursor` bot
-    /// still exists in the database everywhere; an unarmed deployment refuses
-    /// its sessions with a message instead of silently sandboxing them.
-    cursor: Option<Cursor>,
+    cursor: Cursor,
     sessions: Sessions,
 }
 
 impl<Sandbox, Cursor, Sessions> RoutedContainerManager<Sandbox, Cursor, Sessions> {
     /// Wire the router over its providers.
-    pub fn new(sandbox: Sandbox, cursor: Option<Cursor>, sessions: Sessions) -> Self {
+    pub fn new(sandbox: Sandbox, cursor: Cursor, sessions: Sessions) -> Self {
         Self {
             sandbox,
             cursor,
             sessions,
         }
-    }
-}
-
-impl<Sandbox, Cursor, Sessions> RoutedContainerManager<Sandbox, Cursor, Sessions>
-where
-    Cursor: ContainerManager,
-{
-    fn cursor(&self) -> Result<&Cursor> {
-        self.cursor.as_ref().ok_or_else(|| {
-            HarnessError::Container(
-                "this deployment has no Cursor API key configured, so it cannot serve @cursor sessions"
-                    .to_owned(),
-            )
-        })
     }
 }
 
@@ -73,9 +56,7 @@ where
 
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         match command.kind {
-            AgentKind::Cursor => Ok(RoutedTransport::Cursor(
-                self.cursor()?.spawn(command).await?,
-            )),
+            AgentKind::Cursor => Ok(RoutedTransport::Cursor(self.cursor.spawn(command).await?)),
             AgentKind::SandboxedCoder => {
                 Ok(RoutedTransport::Sandbox(self.sandbox.spawn(command).await?))
             }
@@ -85,9 +66,7 @@ where
 
     async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
         match AgentKind::of(self.sessions.get(session).await?.bot_id) {
-            AgentKind::Cursor => Ok(RoutedTransport::Cursor(
-                self.cursor()?.resume(session).await?,
-            )),
+            AgentKind::Cursor => Ok(RoutedTransport::Cursor(self.cursor.resume(session).await?)),
             AgentKind::SandboxedCoder => Ok(RoutedTransport::Sandbox(
                 self.sandbox.resume(session).await?,
             )),
@@ -97,7 +76,7 @@ where
 
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
         match AgentKind::of(self.sessions.get(session).await?.bot_id) {
-            AgentKind::Cursor => self.cursor()?.teardown(session).await,
+            AgentKind::Cursor => self.cursor.teardown(session).await,
             AgentKind::SandboxedCoder => self.sandbox.teardown(session).await,
             AgentKind::External => Err(external_is_unroutable()),
         }

@@ -174,9 +174,11 @@ impl InfraEnv {
         );
         // The alias LocalStack provisions for the Cursor API key CMK. Named by
         // alias rather than key id because `CreateKey` mints a random id every
-        // run, and KMS accepts an alias anywhere a key id goes. Unset would
-        // disable Cursor key registration entirely, so local matches deployed
-        // behaviour instead of being a special case.
+        // run, and KMS accepts an alias anywhere a key id goes. Required by
+        // both the authentication service (which encrypts users' keys) and the
+        // harness (which decrypts them per session), so neither starts without
+        // it — local matches deployed behaviour instead of being a special
+        // case.
         env.insert(
             "CURSOR_API_KEY_KMS_KEY_ID".into(),
             resources::CURSOR_API_KEY_KMS_ALIAS.into(),
@@ -503,12 +505,6 @@ impl BootStubEnv {
         // a real token when present. Not in `to_env`, so a local stack does
         // not wipe Doppler's value the way it wipes `DAYTONA_API_KEY`.
         env.insert("GITHUB_TOKEN".into(), String::new());
-        // Key for `@cursor` sessions (Cursor cloud agents). Empty means the
-        // harness boots with the @cursor bot unserved; seeded here because
-        // the process-env layer only overlays keys already in the map, so
-        // without this stub `CURSOR_API_KEY=... just run_local` would be
-        // silently ignored. Doppler overlays a real key when present.
-        env.insert("CURSOR_API_KEY".into(), String::new());
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(
