@@ -3,14 +3,15 @@ import { queryClient } from '@queries/client';
 import { authServiceClient } from '@service-auth/client';
 import type { CursorApiKeyStatus } from '@service-auth/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
 
 import { authKeys } from './keys';
 
 /**
- * Stable placeholder for `neverSuspend` consumers (see below). Reads as "no
- * key", so a surface that renders before the answer arrives hides `@cursor`
- * rather than offering one that cannot run.
+ * What the query reads as before its answer arrives. Placeholder rather than
+ * pending, so reading `data` never suspends the surface asking — the message
+ * composer must paint on first render, and blocking the input on one optional
+ * mention entry is not a trade it would ever make. A caller that needs to
+ * tell "not yet" from "no key" has `isPlaceholderData`.
  */
 const NOT_CONNECTED: CursorApiKeyStatus = {
   registered: false,
@@ -24,29 +25,12 @@ const NOT_CONNECTED: CursorApiKeyStatus = {
  * enough to render "connected" or "not connected" — which is all the settings
  * surface needs.
  */
-export function useCursorApiKeyStatusQuery(options?: {
-  /**
-   * Serve the placeholder instead of suspending on first load. For the message
-   * composer, which decides whether to offer `@cursor` in the mention
-   * typeahead: suspending there would block the input on a request that only
-   * affects one optional entry.
-   */
-  neverSuspend?: boolean;
-  /**
-   * Skip the request entirely. The composer passes its feature-flag and staff
-   * access gate, so users without access never pay for this query.
-   */
-  enabled?: boolean | Accessor<boolean>;
-}) {
+export function useCursorApiKeyStatusQuery() {
   return useQuery(() => ({
     queryKey: authKeys.cursorApiKeyStatus.queryKey,
     queryFn: async () =>
       throwOnErr(async () => await authServiceClient.getCursorApiKeyStatus()),
-    enabled:
-      typeof options?.enabled === 'function'
-        ? options.enabled()
-        : (options?.enabled ?? true),
-    placeholderData: options?.neverSuspend ? NOT_CONNECTED : undefined,
+    placeholderData: NOT_CONNECTED,
   }));
 }
 

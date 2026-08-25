@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { ThrownResultError } from '@core/util/result';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,
@@ -13,14 +14,14 @@ import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 const CURSOR_KEY_PREFIX = 'crsr_';
 
 /**
- * The message a failed request carried, when it carried one.
+ * The server's own words for a failure, or `fallback` when it sent none.
  *
- * `ThrownResultError` joins its errors' messages, and for these endpoints those
- * are the server's own text.
+ * Worth the deviation from the fixed-message pattern the other cards use: the
+ * server distinguishes a key it rejected on shape from a caller it will not
+ * accept keys from at all, and only it knows which happened.
  */
-function errorMessage(error: unknown): string | undefined {
-  const message = error instanceof Error ? error.message.trim() : '';
-  return message.length > 0 ? message : undefined;
+function failureMessage(error: unknown, fallback: string): string {
+  return (error instanceof ThrownResultError && error.message) || fallback;
 }
 
 /**
@@ -47,11 +48,8 @@ export function CursorCard() {
       setApiKey('');
       toast.success('Cursor connected');
     } catch (error) {
-      // The server's message, not a generic one: it distinguishes a key we
-      // rejected from a deployment that cannot accept keys at all, and both
-      // are written to be shown.
       toast.failure(
-        errorMessage(error) ?? 'Failed to save your Cursor API key'
+        failureMessage(error, 'Failed to save your Cursor API key')
       );
     }
   };
@@ -61,7 +59,7 @@ export function CursorCard() {
       await disconnect.mutateAsync();
       toast.success('Cursor disconnected');
     } catch (error) {
-      toast.failure(errorMessage(error) ?? 'Failed to disconnect Cursor');
+      toast.failure(failureMessage(error, 'Failed to disconnect Cursor'));
     }
   };
 
@@ -89,15 +87,15 @@ export function CursorCard() {
         }
       >
         <Show
-          when={!status.isLoading}
+          // The placeholder reads as "no key", which for this card would flash
+          // the paste-a-key input at someone who has one already.
+          when={!status.isPlaceholderData}
           fallback={<span class="text-xs text-ink-muted">Loading…</span>}
         >
           <Switch
             fallback={
               <div class="flex items-center gap-2">
                 <input
-                  // `password` so the browser masks it and the value stays out
-                  // of screen shares while it is being pasted.
                   type="password"
                   autocomplete="off"
                   class="settings-input ph-no-capture w-56"

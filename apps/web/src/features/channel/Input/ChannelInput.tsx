@@ -256,14 +256,8 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  // `@cursor` is an internal beta that runs on the mentioning user's own API
-  // key. Never suspend the composer or fetch key status unless both rollout
-  // gates permit this user.
   const canUseCursor = useCursorAgentsAccess();
-  const cursorApiKey = useCursorApiKeyStatusQuery({
-    neverSuspend: true,
-    enabled: canUseCursor,
-  });
+  const cursorApiKey = useCursorApiKeyStatusQuery();
 
   // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
   // and any bot added to the channel is mentionable too. All are surfaced
