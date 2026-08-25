@@ -181,6 +181,7 @@ pub enum CursorApiKeyCipherError {
 }
 
 /// The direct-KMS cipher.
+#[derive(Clone)]
 pub struct KmsCursorApiKeyCipher<Kms> {
     kms: Kms,
 }
@@ -277,20 +278,40 @@ impl KeyOwner {
 }
 
 /// [`KmsCiphertexts`] over a real AWS KMS client.
+#[derive(Clone)]
 pub struct AwsKmsCiphertexts {
     client: aws_sdk_kms::Client,
-    kms_key_id: String,
+    /// The key to encrypt under. `None` for a reader: decryption names the key
+    /// the row recorded, so a service that only ever decrypts has no key id to
+    /// configure and should not be made to invent one.
+    kms_key_id: Option<String>,
 }
 
 impl AwsKmsCiphertexts {
-    /// Encrypt under `kms_key_id`.
+    /// Encrypt under `kms_key_id`, and decrypt.
     ///
     /// This must be a key separate from the one protecting Microsoft refresh
     /// tokens. The argument is IAM rather than rotation: sharing it would grant
     /// whatever decrypts Cursor keys — the agent harness, which runs agent code
     /// — decrypt permission on everyone's mailbox credentials.
     pub fn new(client: aws_sdk_kms::Client, kms_key_id: String) -> Self {
-        Self { client, kms_key_id }
+        Self {
+            client,
+            kms_key_id: Some(kms_key_id),
+        }
+    }
+
+    /// Decrypt only.
+    ///
+    /// For the agent harness, which reads users' keys to run their sessions and
+    /// never writes one. Registering keys is the authentication service's job,
+    /// so a harness that could encrypt would only be a harness whose IAM role
+    /// grants more than it uses.
+    pub fn decrypting(client: aws_sdk_kms::Client) -> Self {
+        Self {
+            client,
+            kms_key_id: None,
+        }
     }
 }
 
@@ -301,10 +322,13 @@ impl KmsCiphertexts for AwsKmsCiphertexts {
         encryption_context: HashMap<String, String>,
         plaintext: &[u8],
     ) -> Result<(Vec<u8>, String), KmsCiphertextsError> {
+        // A decrypt-only cipher asked to encrypt is a wiring mistake, not a
+        // runtime condition: fail rather than pick a key.
+        let kms_key_id = self.kms_key_id.as_ref().ok_or(KmsCiphertextsError)?;
         let response = self
             .client
             .encrypt()
-            .key_id(&self.kms_key_id)
+            .key_id(kms_key_id)
             .plaintext(Blob::new(plaintext))
             .set_encryption_context(Some(encryption_context))
             .send()
@@ -313,7 +337,7 @@ impl KmsCiphertexts for AwsKmsCiphertexts {
         let ciphertext = response.ciphertext_blob.ok_or(KmsCiphertextsError)?;
         // The response's key id is the fully qualified ARN even when the
         // request used an alias, which is what a row should record.
-        let kms_key_id = response.key_id.unwrap_or_else(|| self.kms_key_id.clone());
+        let kms_key_id = response.key_id.unwrap_or_else(|| kms_key_id.clone());
         Ok((ciphertext.into_inner(), kms_key_id))
     }
 

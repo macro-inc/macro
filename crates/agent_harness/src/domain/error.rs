@@ -15,6 +15,13 @@ pub enum HarnessError {
     /// A container could not be spawned or reattached.
     #[error("container unavailable: {0}")]
     Container(String),
+    /// The session's owner has no Cursor API key registered.
+    ///
+    /// Its own variant because it is the one provisioning failure that is the
+    /// user's to fix, and the most likely first run of `@cursor` there is. The
+    /// message is written to be read in a channel, not in a log.
+    #[error("connect your Cursor account in Settings → Connections to use @cursor")]
+    CursorNotConnected,
     /// The agent would not open an ACP session.
     #[error("acp handshake failed: {0}")]
     Handshake(String),

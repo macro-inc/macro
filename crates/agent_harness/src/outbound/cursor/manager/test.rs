@@ -9,7 +9,7 @@ use agent_session::domain::model::{
     SandboxSize, SessionBot, SessionStatus,
 };
 use bot_id::BotId;
-use cursor_cloud_agents::api::{ApiKey, CursorConfig};
+use cursor_api_key::cipher::CursorApiKey;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -241,17 +241,33 @@ async fn fake_cursor_api() -> (String, Arc<Mutex<Vec<String>>>) {
     (base_url, archive_log)
 }
 
-fn manager(base_url: String, sessions: StubSessions) -> CursorContainerManager<StubSessions> {
-    let client = CursorClient::new(CursorConfig {
-        api_key: ApiKey::new("crsr_test"),
-        base_url,
-        model: None,
-        starting_ref: "main".to_owned(),
-        record_dir: None,
-    })
-    .expect("client builds");
+/// A key source: `Some` for an owner who has connected Cursor, `None` for one
+/// who has not — the state every user starts in.
+#[derive(Clone, Copy)]
+struct StubKeys(Option<&'static str>);
+
+impl CursorApiKeys for StubKeys {
+    async fn resolve(&self, _owner: &MacroUserIdStr<'_>) -> Result<CursorApiKey> {
+        self.0
+            .map(|key| CursorApiKey::parse(key).expect("a well-formed stub key"))
+            .ok_or(HarnessError::CursorNotConnected)
+    }
+}
+
+fn manager(
+    base_url: String,
+    sessions: StubSessions,
+) -> CursorContainerManager<StubSessions, StubKeys> {
+    manager_with_keys(base_url, sessions, StubKeys(Some("crsr_test")))
+}
+
+fn manager_with_keys(
+    base_url: String,
+    sessions: StubSessions,
+    keys: StubKeys,
+) -> CursorContainerManager<StubSessions, StubKeys> {
     let repo = CursorRepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
-    CursorContainerManager::new(client, repo, sessions)
+    CursorContainerManager::new(keys, base_url, repo, sessions)
 }
 
 async fn next_acp(
@@ -510,5 +526,71 @@ async fn teardown_archives_and_forgets() {
             .await
             .expect("get"),
         None
+    );
+}
+
+/// An owner who has not connected Cursor gets a sentence they can act on, not
+/// a generic provisioning failure — this is the first run of `@cursor` for
+/// everyone, so it is the error most users will ever see.
+#[tokio::test]
+async fn spawning_without_a_registered_key_says_so() {
+    let (base_url, _) = fake_cursor_api().await;
+    let sessions = StubSessions::default();
+    let manager = manager_with_keys(base_url, sessions, StubKeys(None));
+
+    let refused = manager
+        .spawn(SpawnContainer {
+            session_id: AgentSessionId::new(),
+            kind: AgentKind::Cursor,
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            size: SandboxSize::Default,
+        })
+        .await
+        // `err()` rather than `expect_err`: the success type is a live
+        // transport, which has no `Debug` to print.
+        .err()
+        .expect("a session with no key must not open");
+
+    assert!(
+        matches!(refused, HarnessError::CursorNotConnected),
+        "expected a connect-your-account error, got {refused:?}"
+    );
+}
+
+/// Disconnecting Cursor and then tearing down a session it owns: the agent
+/// cannot be archived without the key, but the session must still clean up.
+/// The alternative is a Macro session nothing can ever remove.
+#[tokio::test]
+async fn teardown_forgets_the_session_even_when_the_key_is_gone() {
+    let (base_url, archived) = fake_cursor_api().await;
+    let sessions = StubSessions::default();
+    let session_id = AgentSessionId::new();
+    let manager = manager_with_keys(base_url, sessions.clone(), StubKeys(None));
+
+    ExternalSessionRepo::upsert(
+        &sessions,
+        session_id,
+        ExternalSession {
+            provider: CURSOR_PROVIDER.to_owned(),
+            external_id: "bc-orphaned".to_owned(),
+            external_name: None,
+            external_url: None,
+        },
+    )
+    .await
+    .expect("seed row");
+
+    manager.teardown(session_id).await.expect("teardown");
+
+    assert!(
+        archived.lock().expect("log poisoned").is_empty(),
+        "archiving is impossible without the owner's key"
+    );
+    assert_eq!(
+        ExternalSessionRepo::get(&sessions, session_id)
+            .await
+            .expect("get"),
+        None,
+        "the row is ours to forget even when the agent is not ours to archive"
     );
 }

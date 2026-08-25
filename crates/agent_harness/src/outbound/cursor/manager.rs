@@ -13,13 +13,18 @@
 //! written the moment an agent is minted (by [`RecordingCursor`], before the
 //! create call returns), read back by `resume` to pre-seed the served session
 //! with `restore_session`, and deleted on teardown.
+//!
+//! There is no deployment-wide Cursor client here, because there is no
+//! deployment-wide Cursor key: a session runs on *its owner's* account, so
+//! every entry point resolves the owner's key and mints a client for that one
+//! session. The manager holds only what a client is built from.
 
 use std::path::Path;
 use std::sync::Arc;
 
-use agent_session::domain::model::{AgentSessionId, ExternalSession};
+use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession};
 use agent_session::domain::ports::{AgentSessionRepo, ExternalSessionRepo};
-use cursor_cloud_agents::api::CursorClient;
+use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use cursor_cloud_agents::domain::model::{AcpSessionId, CursorAgentId, CursorRunId, McpServer};
 use cursor_cloud_agents::domain::ports::{CursorAgents, RepoResolver, RunStream};
@@ -27,6 +32,7 @@ use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
 use futures::Stream;
 
+use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
@@ -60,6 +66,9 @@ const FOREIGN_SYNC_INTERVAL: std::time::Duration = std::time::Duration::from_sec
 /// is none — but the pipe's tasks and its per-second cursor.com poll.
 const CURSOR_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
 
+/// The ref new agents start their work from.
+const DEFAULT_STARTING_REF: &str = "main";
+
 /// Every session this deployment opens works on the one configured
 /// repository, resolved without looking at the workspace path — the path
 /// names a directory inside a sandbox that does not exist here.
@@ -74,24 +83,53 @@ impl RepoResolver for FixedRepo {
 
 /// Hands out Cursor cloud agents.
 #[derive(Clone)]
-pub struct CursorContainerManager<Sessions> {
-    client: CursorClient,
+pub struct CursorContainerManager<Sessions, Keys> {
+    keys: Keys,
+    base_url: String,
     repo: CursorRepoUrl,
     sessions: Sessions,
 }
 
-impl<Sessions> CursorContainerManager<Sessions>
+impl<Sessions, Keys> CursorContainerManager<Sessions, Keys>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
+    Keys: CursorApiKeys,
 {
-    /// Build the manager over a configured client and the repository every
-    /// session works on.
-    pub fn new(client: CursorClient, repo: CursorRepoUrl, sessions: Sessions) -> Self {
+    /// Build the manager over the key source, the API it talks to, and the
+    /// repository every session works on.
+    pub fn new(keys: Keys, base_url: String, repo: CursorRepoUrl, sessions: Sessions) -> Self {
         Self {
-            client,
+            keys,
+            base_url,
             repo,
             sessions,
         }
+    }
+
+    /// A client authenticated as `session`'s owner.
+    ///
+    /// Built per session and dropped with it, rather than held on the manager:
+    /// the key belongs to one user, and the sessions of two users must not be
+    /// able to reach each other's Cursor accounts through a shared client.
+    async fn client_for(&self, session: &AgentSession) -> Result<CursorClient> {
+        let api_key = self.keys.resolve(&session.owner_id).await?;
+        CursorClient::new(CursorConfig {
+            api_key: ApiKey::new(api_key.expose()),
+            base_url: self.base_url.clone(),
+            // Whatever the user already chose in their own Cursor settings:
+            // Cursor resolves user default -> team default -> system default
+            // when the field is absent, which is what "normal" means here.
+            model: None,
+            starting_ref: DEFAULT_STARTING_REF.to_owned(),
+            record_dir: None,
+        })
+        .map_err(|error| {
+            // The key came out of KMS, so a shape complaint here means a
+            // corrupt row rather than a bad paste — the user cannot fix it by
+            // retyping, and the fix is to register the key again.
+            tracing::error!(error = %error, session_id = %session.id, "a stored cursor api key is unusable");
+            HarnessError::Container("the stored cursor api key is unusable".to_owned())
+        })
     }
 
     /// Wire up one session's in-process agent and return our end of its pipe.
@@ -101,13 +139,14 @@ where
     /// agent when one was ever minted. A fresh spawn passes `None`.
     fn serve_session(
         &self,
+        client: CursorClient,
         session_id: AgentSessionId,
         restore: Option<(AcpSessionId, Option<CursorAgentId>)>,
     ) -> PipeTransport {
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
         let cursor = RecordingCursor {
-            client: self.client.clone(),
+            client,
             session_id,
             sessions: self.sessions.clone(),
         };
@@ -168,14 +207,21 @@ where
     }
 }
 
-impl<Sessions> ContainerManager for CursorContainerManager<Sessions>
+impl<Sessions, Keys> ContainerManager for CursorContainerManager<Sessions, Keys>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
+    Keys: CursorApiKeys,
 {
     type Transport = PipeTransport;
 
     async fn spawn(&self, command: SpawnContainer) -> Result<PipeTransport> {
-        Ok(self.serve_session(command.session_id, None))
+        // The session row is read for its owner alone: spawning is the first
+        // moment we can tell whether the person who mentioned @cursor has
+        // connected an account, and refusing here is what turns "the bot
+        // ignored me" into a sentence they can act on.
+        let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
+        let client = self.client_for(&session).await?;
+        Ok(self.serve_session(client, command.session_id, None))
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
@@ -187,10 +233,9 @@ where
         // acp id, and a load must find its session even when there is no
         // agent yet (the next prompt mints one). No acp id at all means the
         // session never opened; serve it fresh, exactly like `spawn`.
-        let acp_session_id = AgentSessionRepo::get(&self.sessions, session)
-            .await?
-            .acp_session_id;
-        let restore = match acp_session_id {
+        let stored = AgentSessionRepo::get(&self.sessions, session).await?;
+        let client = self.client_for(&stored).await?;
+        let restore = match stored.acp_session_id {
             Some(acp) => {
                 let agent = ExternalSessionRepo::get(&self.sessions, session)
                     .await?
@@ -199,7 +244,7 @@ where
             }
             None => None,
         };
-        Ok(self.serve_session(session, restore))
+        Ok(self.serve_session(client, session, restore))
     }
 
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
@@ -210,10 +255,26 @@ where
         let Some(external) = ExternalSessionRepo::get(&self.sessions, session).await? else {
             return Ok(());
         };
-        self.client
-            .archive_agent(&CursorAgentId::new(external.external_id))
-            .await
-            .map_err(|error| HarnessError::Container(error.to_string()))?;
+        // Archiving needs the owner's key, and teardown is exactly when it may
+        // be gone — a user who disconnects Cursor still has sessions to clean
+        // up. The row is ours and the agent is theirs, so a key we no longer
+        // hold costs them an unarchived agent on cursor.com, which they can
+        // see and archive; refusing the teardown instead would leave a Macro
+        // session that can never be cleaned up at all.
+        let stored = AgentSessionRepo::get(&self.sessions, session).await?;
+        let agent = CursorAgentId::new(external.external_id);
+        match self.client_for(&stored).await {
+            Ok(client) => client
+                .archive_agent(&agent)
+                .await
+                .map_err(|error| HarnessError::Container(error.to_string()))?,
+            Err(error) => tracing::warn!(
+                %session,
+                %agent,
+                error = %error,
+                "tearing down a cursor session without archiving its agent",
+            ),
+        }
         ExternalSessionRepo::delete(&self.sessions, session).await?;
         Ok(())
     }
