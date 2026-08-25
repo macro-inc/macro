@@ -1,7 +1,4 @@
 import { analytics } from '@app/lib/analytics';
-import { defaultOnboardingV4Override } from './onboardingV4Override';
-
-export { defaultOnboardingV4Override };
 
 /**
  * This constant reflects whether the app is running locally with hot reload enabled
@@ -584,12 +581,12 @@ export const BOT_MANAGEMENT_OVERRIDE =
 // `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
 // callers can wait instead of treating "flags not loaded yet" as "off").
 export const ENABLE_ONBOARDING_V4_FLAG = 'enable-onboarding-v4';
-
-// Honor an explicit VITE_ENABLE_ONBOARDING_V4 either way (don't coerce false
-// to undefined).
+// Honor an explicit VITE_ENABLE_ONBOARDING_V4=false (don't coerce it to
+// undefined), else default on in dev and defer to PostHog in prod.
+// `just run_local` sets the env to false unless `--enable-onboarding`.
 export const ENABLE_ONBOARDING_V4_OVERRIDE =
   getFeatureFlagOverride('ENABLE_ONBOARDING_V4') ??
-  defaultOnboardingV4Override(LOCAL_ONLY, DEV_MODE_ENV);
+  (DEV_MODE_ENV ? true : undefined);
 
 // Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
 // that re-runs Google consent for inboxes connected before the calendar
