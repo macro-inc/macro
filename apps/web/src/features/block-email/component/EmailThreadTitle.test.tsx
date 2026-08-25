@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EmailThreadTitle } from './EmailThreadTitle';
 
@@ -20,8 +20,25 @@ describe('EmailThreadTitle', () => {
 
     const heading = screen.getByRole('heading', { level: 1 });
     expect(heading.className).toContain('select-text');
-    expect(heading.className).toContain('inline-block');
     expect(heading.className).toContain('cursor-text');
+  });
+
+  it('hides the copy icon until the title is hovered', () => {
+    render(() => (
+      <EmailThreadTitle title="Q3 contract review" copyReveal="hover" />
+    ));
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    const copy = screen.getByRole('button', { name: 'Copy subject' });
+
+    expect(copy.className).toContain('opacity-0');
+
+    fireEvent.mouseEnter(heading);
+    expect(copy.className).toContain('opacity-100');
+    expect(copy.className).not.toContain('opacity-0');
+
+    fireEvent.mouseLeave(heading);
+    expect(copy.className).toContain('opacity-0');
   });
 
   it('keeps the last word and copy button on one line', () => {
@@ -40,7 +57,6 @@ describe('EmailThreadTitle', () => {
     expect(cluster?.contains(copy)).toBe(true);
     expect(copy.className).toContain('text-inherit');
     expect(copy.className).not.toContain('opacity-0');
-    expect(copy.className).not.toContain('text-ink-muted');
   });
 
   it('does not force a single unspaced subject onto one line', () => {

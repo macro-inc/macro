@@ -1,4 +1,5 @@
 import { cn } from '@ui';
+import { createSignal } from 'solid-js';
 import { CopySubjectButton } from './CopySubjectButton';
 
 function lastWordCluster(title: string): { lead: string; last: string } {
@@ -12,14 +13,18 @@ export function EmailThreadTitle(props: {
   copyReveal?: 'hover' | 'always';
   class?: string;
 }) {
+  const [titleHovered, setTitleHovered] = createSignal(false);
   const cluster = () => lastWordCluster(props.title);
+  const copyHidden = () => props.copyReveal === 'hover' && !titleHovered();
 
   return (
     <h1
       class={cn(
-        'ph-no-capture group/subject inline-block max-w-full min-w-0 text-pretty font-semibold tracking-tight text-ink select-text cursor-text wrap-break-word leading-snug',
+        'ph-no-capture block w-full max-w-full min-w-0 text-pretty font-semibold tracking-tight text-ink select-text cursor-text wrap-break-word leading-snug',
         props.class
       )}
+      onMouseEnter={() => setTitleHovered(true)}
+      onMouseLeave={() => setTitleHovered(false)}
     >
       {cluster().lead}
       <span class={cluster().lead ? 'whitespace-nowrap' : undefined}>
@@ -27,9 +32,8 @@ export function EmailThreadTitle(props: {
         <CopySubjectButton
           subject={props.title}
           class={cn(
-            'ml-1.5 select-none text-inherit',
-            props.copyReveal === 'hover' &&
-              'opacity-70 transition-opacity hover:opacity-100 group-hover/subject:opacity-100 focus-visible:opacity-100'
+            'ml-1.5 select-none text-inherit transition-opacity',
+            copyHidden() ? 'opacity-0' : 'opacity-100'
           )}
         />
       </span>
