@@ -239,50 +239,99 @@ impl CursorEvent {
 
 impl InteractionUpdate {
     /// Decode the envelope's payload by its `type` tag.
+    ///
+    /// The tag is *in* the payload here — unlike an SSE record, whose event
+    /// name arrives as separate framing — so the dispatch is serde's
+    /// [`KnownInteraction`] rather than a hand-written match on strings.
+    ///
+    /// The fallback stays hand-written for one reason: `#[serde(other)]`
+    /// accepts only unit variants, and [`InteractionUpdate::Other`] keeps the
+    /// tag it did not recognize, which is the whole point of it.
     fn from_payload(data: &Value) -> Self {
-        let kind = data
-            .get("type")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .to_owned();
-        match kind.as_str() {
-            "user-message-appended" => {
-                let text = data
-                    .pointer("/userMessage/text")
+        match KnownInteraction::deserialize(data) {
+            Ok(known) => known.into(),
+            Err(_) => Self::Other {
+                kind: data
+                    .get("type")
                     .and_then(Value::as_str)
                     .unwrap_or_default()
-                    .to_owned();
-                Self::UserMessage { text }
-            }
-            // `partial-tool-call` carries exactly what `tool-call-started`
-            // does — a call id and Cursor's typed descriptor — for a call
-            // whose arguments are still streaming. Nothing on it is unique
-            // (the `tool_call` event repeats the arguments in full, and every
-            // recorded call that sends a partial also sends a started), but it
-            // reaches the same conclusion by the same route, so it takes that
-            // route rather than being dropped as unrecognized.
-            "tool-call-started" | "tool-call-completed" | "partial-tool-call" => {
-                let call_id = data
-                    .get("callId")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned();
-                let tool_type = data
-                    .pointer("/toolCall/type")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned);
-                if kind == "tool-call-completed" {
-                    Self::ToolCallCompleted { call_id, tool_type }
-                } else {
-                    Self::ToolCallStarted { call_id, tool_type }
-                }
-            }
-            "token-delta" => Self::TokenDelta {
-                tokens: data.get("tokens").and_then(Value::as_u64).unwrap_or(0),
+                    .to_owned(),
             },
-            _ => Self::Other { kind },
         }
     }
+}
+
+/// The `interaction_update` subtypes this crate reads, as serde sees them.
+///
+/// Separate from [`InteractionUpdate`] because the wire shape and the domain
+/// shape disagree on purpose: the wire nests the text under `userMessage` and
+/// the tool type under `toolCall`, and the domain wants neither wrapper.
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+enum KnownInteraction {
+    #[serde(rename_all = "camelCase")]
+    UserMessageAppended {
+        #[serde(default)]
+        user_message: MessageText,
+    },
+    /// `partial-tool-call` carries exactly what `tool-call-started` does — a
+    /// call id and Cursor's typed descriptor — for a call whose arguments are
+    /// still streaming. Nothing on it is unique (the `tool_call` event repeats
+    /// the arguments in full, and every recorded call that sends a partial
+    /// also sends a started), so it aliases onto the same variant rather than
+    /// being dropped as unrecognized.
+    #[serde(rename_all = "camelCase", alias = "partial-tool-call")]
+    ToolCallStarted {
+        #[serde(default)]
+        call_id: String,
+        #[serde(default)]
+        tool_call: ToolDescriptor,
+    },
+    #[serde(rename_all = "camelCase")]
+    ToolCallCompleted {
+        #[serde(default)]
+        call_id: String,
+        #[serde(default)]
+        tool_call: ToolDescriptor,
+    },
+    TokenDelta {
+        #[serde(default)]
+        tokens: u64,
+    },
+}
+
+impl From<KnownInteraction> for InteractionUpdate {
+    fn from(known: KnownInteraction) -> Self {
+        match known {
+            KnownInteraction::UserMessageAppended { user_message } => Self::UserMessage {
+                text: user_message.text,
+            },
+            KnownInteraction::ToolCallStarted { call_id, tool_call } => Self::ToolCallStarted {
+                call_id,
+                tool_type: tool_call.kind,
+            },
+            KnownInteraction::ToolCallCompleted { call_id, tool_call } => Self::ToolCallCompleted {
+                call_id,
+                tool_type: tool_call.kind,
+            },
+            KnownInteraction::TokenDelta { tokens } => Self::TokenDelta { tokens },
+        }
+    }
+}
+
+/// The `userMessage` wrapper, whose only interesting field is the text.
+#[derive(Deserialize, Default)]
+struct MessageText {
+    #[serde(default)]
+    text: String,
+}
+
+/// The `toolCall` wrapper. `type` is Cursor's typed tool descriptor, richer
+/// than the `tool_call` event's bare name; absent on shapes that predate it.
+#[derive(Deserialize, Default)]
+struct ToolDescriptor {
+    #[serde(default, rename = "type")]
+    kind: Option<String>,
 }
 
 #[derive(Deserialize)]
