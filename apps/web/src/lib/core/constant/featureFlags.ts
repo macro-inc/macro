@@ -13,7 +13,11 @@ export const LOCAL_ONLY = !!import.meta.hot;
 
 type FeatureFlagValue = 'true' | 'false' | undefined;
 
-function getFeatureFlagOverride(flagName: string): boolean | undefined {
+/**
+ * Reads a `VITE_<flagName>` env override. Returns `undefined` when unset, so
+ * callers can fall through to PostHog rather than forcing the flag off.
+ */
+export function getFeatureFlagOverride(flagName: string): boolean | undefined {
   const envKey = `VITE_${flagName}` as const;
   const value = import.meta.env[envKey] as FeatureFlagValue;
 

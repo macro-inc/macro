@@ -1566,7 +1566,7 @@
       "get": {
         "tags": ["pipedream-mcp"],
         "summary": "Browse or search the catalog of connectable apps.",
-        "description": "Curated priority connectors come first (flagged `priority`), followed by\nresults from Pipedream's app directory.",
+        "description": "Results come from Pipedream's app directory, most popular first.",
         "operationId": "browse_pipedream_mcp_catalog",
         "parameters": [
           {
@@ -3971,7 +3971,7 @@
       "PipedreamCatalogEntryResponse": {
         "type": "object",
         "description": "One connectable app in the catalog.",
-        "required": ["app_slug", "display_name", "priority"],
+        "required": ["app_slug", "display_name"],
         "properties": {
           "app_slug": {
             "type": "string",
@@ -3988,10 +3988,6 @@
           "icon_url": {
             "type": ["string", "null"],
             "description": "URL of the app's icon, when available."
-          },
-          "priority": {
-            "type": "boolean",
-            "description": "Curated priority connectors rank first and may be rendered as their\nown featured section."
           }
         }
       },
@@ -4009,7 +4005,7 @@
             "items": {
               "$ref": "#/components/schemas/PipedreamCatalogEntryResponse"
             },
-            "description": "Catalog entries in display order (priority connectors first)."
+            "description": "Catalog entries in display order (most popular first)."
           }
         }
       },
