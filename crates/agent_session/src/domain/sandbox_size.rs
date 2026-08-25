@@ -8,18 +8,17 @@ mod test;
 
 /// Named compute tier for a managed sandbox.
 ///
-/// Small is 2 vCPU / 4 GiB / 24 GiB disk, default is 4 / 8 / 96, large is
-/// 8 / 16 / 128. The API and database store the name, never raw resource
-/// integers.
+/// The API and database store the name. CPU, RAM, and disk live in
+/// `crates/agent_harness/sandbox_sizes.json`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum SandboxSize {
-    /// 2 vCPU / 4 GiB RAM / 24 GiB disk.
+    /// Smallest named tier.
     Small,
-    /// 4 vCPU / 8 GiB RAM / 96 GiB disk.
+    /// Default named tier.
     #[default]
     Default,
-    /// 8 vCPU / 16 GiB RAM / 128 GiB disk.
+    /// Largest named tier.
     Large,
 }
 

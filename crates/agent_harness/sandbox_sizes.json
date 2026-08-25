@@ -1,0 +1,6 @@
+{
+  "small": { "cpu": 2, "memoryGib": 4, "diskGib": 24 },
+  "default": { "cpu": 4, "memoryGib": 8, "diskGib": 96 },
+  "large": { "cpu": 8, "memoryGib": 16, "diskGib": 128 },
+  "snapshot": { "cpu": 4, "memoryGib": 8, "diskGib": 10 }
+}

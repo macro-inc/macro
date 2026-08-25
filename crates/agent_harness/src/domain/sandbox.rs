@@ -1,14 +1,53 @@
 //! Compute resources for a [`SandboxSize`].
+//!
+//! Named-tier CPU, RAM, and disk come from [`SANDBOX_SIZES_JSON`]. Daytona
+//! snapshot creates inherit [`snapshot`] until the org quota can take the
+//! product default disk.
+
+use std::sync::OnceLock;
 
 use agent_session::domain::model::SandboxSize;
+use serde::Deserialize;
 
 #[cfg(test)]
 mod test;
 
+/// Checked-in size table. UI, justfile, and CI read the same file.
+pub(crate) const SANDBOX_SIZES_JSON: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/sandbox_sizes.json"));
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Quota {
+    cpu: u32,
+    memory_gib: u32,
+    disk_gib: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct SizeTable {
+    small: Quota,
+    default: Quota,
+    large: Quota,
+    snapshot: Quota,
+}
+
+fn table() -> &'static SizeTable {
+    static TABLE: OnceLock<SizeTable> = OnceLock::new();
+    TABLE.get_or_init(|| {
+        serde_json::from_str(SANDBOX_SIZES_JSON).expect("sandbox_sizes.json should parse")
+    })
+}
+
+fn resources_from(quota: &Quota) -> SandboxResources {
+    SandboxResources {
+        cpu: quota.cpu,
+        memory_gib: quota.memory_gib,
+        disk_gib: quota.disk_gib,
+    }
+}
+
 /// CPU, RAM, and disk for one sandbox size.
-///
-/// Disk grows with the named tier. Daytona snapshot creates inherit snapshot
-/// disk; live CPU/RAM resize does not send disk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SandboxResources {
     /// vCPU cores.
@@ -37,28 +76,21 @@ pub enum SandboxResizeEffect {
     Unsupported,
 }
 
-/// Resources for `size`.
-///
-/// Small is 2 vCPU / 4 GiB / 24 GiB, default is 4 / 8 / 96, large is 8 / 16 / 128.
+/// Resources for `size` from [`SANDBOX_SIZES_JSON`].
 #[must_use]
 pub fn resources(size: SandboxSize) -> SandboxResources {
-    match size {
-        SandboxSize::Small => SandboxResources {
-            cpu: 2,
-            memory_gib: 4,
-            disk_gib: 24,
-        },
-        SandboxSize::Default => SandboxResources {
-            cpu: 4,
-            memory_gib: 8,
-            disk_gib: 96,
-        },
-        SandboxSize::Large => SandboxResources {
-            cpu: 8,
-            memory_gib: 16,
-            disk_gib: 128,
-        },
-    }
+    let table = table();
+    resources_from(match size {
+        SandboxSize::Small => &table.small,
+        SandboxSize::Default => &table.default,
+        SandboxSize::Large => &table.large,
+    })
+}
+
+/// Daytona snapshot bake size from [`SANDBOX_SIZES_JSON`].
+#[must_use]
+pub fn snapshot() -> SandboxResources {
+    resources_from(&table().snapshot)
 }
 
 /// CPU/RAM comparison used by managers that can resize a live container.

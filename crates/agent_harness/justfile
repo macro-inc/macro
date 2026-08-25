@@ -23,14 +23,10 @@ set dotenv-load := true
 # repository in Namespace's nscr.io workspace registry.
 image_name := env_var_or_default("AGENT_HARNESS_IMAGE", "macro-agent-harness")
 
-# Snapshot resources Daytona will accept today. Product `default` is 4/8/96
-# (see domain/sandbox.rs); POST /snapshots 400s above the live per-sandbox
-# cap of 4 vCPU / 8 GiB / 10 GiB. Keep these aligned with the existing
-# `macro-agent-harness` snapshot until support@daytona.io raises disk;
-# then bump CI + these defaults and `just rebuild-daytona`.
-snapshot_cpu := env_var_or_default("DAYTONA_SNAPSHOT_CPU", "4")
-snapshot_memory := env_var_or_default("DAYTONA_SNAPSHOT_MEMORY", "8")
-snapshot_disk := env_var_or_default("DAYTONA_SNAPSHOT_DISK", "10")
+# Snapshot bake size from sandbox_sizes.json. Override with DAYTONA_SNAPSHOT_*.
+snapshot_cpu := env_var_or_default("DAYTONA_SNAPSHOT_CPU", `jq -r .snapshot.cpu sandbox_sizes.json`)
+snapshot_memory := env_var_or_default("DAYTONA_SNAPSHOT_MEMORY", `jq -r .snapshot.memoryGib sandbox_sizes.json`)
+snapshot_disk := env_var_or_default("DAYTONA_SNAPSHOT_DISK", `jq -r .snapshot.diskGib sandbox_sizes.json`)
 
 # Cheap for the agent to answer, and it proves the repo actually cloned.
 default_prompt := "list the files in the repo root, then stop"

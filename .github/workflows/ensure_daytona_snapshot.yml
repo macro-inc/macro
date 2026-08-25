@@ -12,6 +12,7 @@ name: Ensure Daytona Snapshot
     paths:
     - crates/agent_harness/container/**
     - crates/agent_harness/justfile
+    - crates/agent_harness/sandbox_sizes.json
     - nix/cloud-storage.nix
     - tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs
     - '.github/workflows/ensure_daytona_snapshot.yml'
@@ -21,6 +22,7 @@ name: Ensure Daytona Snapshot
     paths:
     - crates/agent_harness/container/**
     - crates/agent_harness/justfile
+    - crates/agent_harness/sandbox_sizes.json
     - nix/cloud-storage.nix
     - tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs
     - '.github/workflows/ensure_daytona_snapshot.yml'

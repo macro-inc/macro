@@ -8,9 +8,8 @@
 /**
  * Named compute tier for a managed sandbox.
 
-Small is 2 vCPU / 4 GiB / 24 GiB disk, default is 4 / 8 / 96, large is
-8 / 16 / 128. The API and database store the name, never raw resource
-integers.
+The API and database store the name. CPU, RAM, and disk live in
+`crates/agent_harness/sandbox_sizes.json`.
  */
 export type SandboxSize = (typeof SandboxSize)[keyof typeof SandboxSize];
 

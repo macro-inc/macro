@@ -913,7 +913,7 @@
       },
       "SandboxSize": {
         "type": "string",
-        "description": "Named compute tier for a managed sandbox.\n\nSmall is 2 vCPU / 4 GiB / 24 GiB disk, default is 4 / 8 / 96, large is\n8 / 16 / 128. The API and database store the name, never raw resource\nintegers.",
+        "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agent_harness/sandbox_sizes.json`.",
         "enum": ["small", "default", "large"]
       },
       "SandboxSizeBody": {
