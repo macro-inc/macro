@@ -105,9 +105,7 @@ async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
             text: "working".to_owned(),
         })
         .expect("stream open");
-    while notifier.updates().is_empty() {
-        tokio::task::yield_now().await;
-    }
+    notifier.wait_for_updates(1).await;
 
     service.cancel(&session).await.expect("cancel works");
     drop(events); // the server closes the stream after a cancel
@@ -119,6 +117,78 @@ async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
             .calls()
             .iter()
             .any(|call| matches!(call, CursorCall::CancelRun(..)))
+    );
+}
+
+/// The turn ends on the client's cancel alone, with the run's stream still
+/// wide open and still delivering.
+///
+/// This is the shape seen live: Cursor accepts the cancel and keeps streaming
+/// anyway, so a turn that waits for the stream to end waits for the agent to
+/// finish of its own accord — which is the whole bug. Note what this test does
+/// *not* do: drop `events`.
+#[tokio::test]
+async fn cancel_ends_the_turn_while_the_stream_stays_open() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    events
+        .send(CursorEvent::Assistant {
+            text: "working".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    // The stream is live and mid-turn at the moment the cancel lands: no
+    // terminal event has been sent, and none ever will be.
+    assert!(!events.is_closed());
+    service.cancel(&session).await.expect("cancel works");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    // Only the one chunk from before the cancel: nothing arrived to end the
+    // turn, so the turn ended itself. The sender reads as closed from here on
+    // precisely because the turn dropped the stream rather than draining it.
+    assert_eq!(notifier.updates().len(), 1);
+}
+
+/// A cancel while the prompt is still queued behind someone else's run ends the
+/// wait, rather than sitting out the full busy timeout.
+#[tokio::test]
+async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // First turn mints the agent, so the second takes the follow-up path.
+    let events = cursor.script_stream();
+    events.send(finished("run-1")).expect("stream open");
+    drop(events);
+    service.prompt(&session, "first").await.expect("first turn");
+
+    // Busy for longer than the test will take, so the wait is what ends it.
+    cursor.script_create_run_errors(8, "409 Conflict: {\"error\":{\"code\":\"agent_busy\"}}");
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "second").await }
+    });
+    cursor
+        .wait_for_calls(1, |call| matches!(call, CursorCall::CreateRun(..)))
+        .await;
+
+    service.cancel(&session).await.expect("cancel works");
+
+    let outcome = turn.await.expect("task joins");
+    assert!(
+        outcome.is_err(),
+        "a cancelled wait is an error, not a silent success: {outcome:?}"
     );
 }
 

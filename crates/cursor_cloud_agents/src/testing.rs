@@ -56,6 +56,7 @@ pub enum CursorCall {
 #[derive(Debug, Clone, Default)]
 pub struct FakeCursor {
     inner: Arc<Mutex<FakeCursorState>>,
+    called: Arc<tokio::sync::Notify>,
 }
 
 #[derive(Debug, Default)]
@@ -130,6 +131,34 @@ impl FakeCursor {
             .calls
             .clone()
     }
+
+    /// Resolve once at least `at_least` calls match `predicate`.
+    ///
+    /// How a test waits for the service to have reached a particular API call
+    /// before acting — a cancel that has to land while a prompt is mid-retry,
+    /// say. A real primitive rather than a spin on [`Self::calls`]: polling
+    /// makes the pass depend on scheduler luck and turns a hang into a spin.
+    pub async fn wait_for_calls(&self, at_least: usize, predicate: impl Fn(&CursorCall) -> bool) {
+        loop {
+            // Registered before the count is read, so a call landing between
+            // the two is a wake-up rather than a lost one.
+            let called = self.called.notified();
+            if self.calls().iter().filter(|call| predicate(call)).count() >= at_least {
+                return;
+            }
+            called.await;
+        }
+    }
+
+    /// Record a call and wake anything waiting on one.
+    fn record(&self, call: CursorCall) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .calls
+            .push(call);
+        self.called.notify_waiters();
+    }
 }
 
 impl CursorAgents for FakeCursor {
@@ -139,12 +168,12 @@ impl CursorAgents for FakeCursor {
         repo: Option<&RepoUrl>,
         mcp_servers: &[McpServer],
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
-        let mut state = self.inner.lock().expect("fake cursor poisoned");
-        state.calls.push(CursorCall::CreateAgent(
+        self.record(CursorCall::CreateAgent(
             prompt.to_owned(),
             repo.cloned(),
             mcp_servers.to_vec(),
         ));
+        let mut state = self.inner.lock().expect("fake cursor poisoned");
         state.next_run += 1;
         Ok((
             CursorAgentId::new("bc-fake"),
@@ -157,10 +186,8 @@ impl CursorAgents for FakeCursor {
         agent: &CursorAgentId,
         prompt: &str,
     ) -> Result<CursorRunId, rootcause::Report> {
+        self.record(CursorCall::CreateRun(agent.clone(), prompt.to_owned()));
         let mut state = self.inner.lock().expect("fake cursor poisoned");
-        state
-            .calls
-            .push(CursorCall::CreateRun(agent.clone(), prompt.to_owned()));
         if !state.create_run_errors.is_empty() {
             let message = state.create_run_errors.remove(0);
             return Err(rootcause::report!("{message}"));
@@ -174,11 +201,7 @@ impl CursorAgents for FakeCursor {
         agent: &CursorAgentId,
         run: &CursorRunId,
     ) -> Result<(), rootcause::Report> {
-        self.inner
-            .lock()
-            .expect("fake cursor poisoned")
-            .calls
-            .push(CursorCall::CancelRun(agent.clone(), run.clone()));
+        self.record(CursorCall::CancelRun(agent.clone(), run.clone()));
         Ok(())
     }
 
@@ -187,10 +210,8 @@ impl CursorAgents for FakeCursor {
         agent: &CursorAgentId,
         run: &CursorRunId,
     ) -> Result<RunOutcome, rootcause::Report> {
+        self.record(CursorCall::RunResult(agent.clone(), run.clone()));
         let mut state = self.inner.lock().expect("fake cursor poisoned");
-        state
-            .calls
-            .push(CursorCall::RunResult(agent.clone(), run.clone()));
         if state.run_results.is_empty() {
             return Err(rootcause::report!("no scripted run result queued"));
         }
@@ -234,6 +255,7 @@ impl RunStream for FakeCursor {
 #[derive(Debug, Clone, Default)]
 pub struct RecordingNotifier {
     updates: Arc<Mutex<Vec<(AcpSessionId, SessionUpdate)>>>,
+    delivered: Arc<tokio::sync::Notify>,
 }
 
 impl RecordingNotifier {
@@ -248,6 +270,24 @@ impl RecordingNotifier {
     pub fn updates(&self) -> Vec<(AcpSessionId, SessionUpdate)> {
         self.updates.lock().expect("notifier poisoned").clone()
     }
+
+    /// Resolve once `at_least` updates have been delivered.
+    ///
+    /// The way a test waits for a turn to have actually reached its stream.
+    /// A real primitive rather than a spin on [`Self::updates`]: polling makes
+    /// the pass depend on scheduler luck, and hides a hang behind a spin that
+    /// never ends.
+    pub async fn wait_for_updates(&self, at_least: usize) {
+        loop {
+            // Registered before the count is read, so an update delivered
+            // between the two is a wake-up rather than a lost one.
+            let delivered = self.delivered.notified();
+            if self.updates().len() >= at_least {
+                return;
+            }
+            delivered.await;
+        }
+    }
 }
 
 impl SessionNotifier for RecordingNotifier {
@@ -260,6 +300,7 @@ impl SessionNotifier for RecordingNotifier {
             .lock()
             .expect("notifier poisoned")
             .push((session.clone(), update));
+        self.delivered.notify_waiters();
         Ok(())
     }
 }
