@@ -470,6 +470,7 @@ export function operationCategoryForRequest(
     .with('init', () => 'initialization' as const)
     .with(
       'read',
+      'current-revision',
       'read-records-by-keys',
       'search',
       'entity-filter',

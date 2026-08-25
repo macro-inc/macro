@@ -10,6 +10,7 @@ import {
   type CachedQueryInstanceWire,
   type CachedQueryVariantWire,
   type CacheRequest,
+  type CacheRevision,
   type CacheResponseErrorCode,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
@@ -22,10 +23,11 @@ import {
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
   type ReadRecordsByKeysArgs,
+  type ReadRecordsByKeysResult,
   type ReadResult,
   type SearchCacheArgs,
   type SearchCachePage,
-  type SelectedRecordByKeyWire,
+  type AffectedOperationsResult,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
   type WorkerMessage,
@@ -189,7 +191,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const lostRegisteredOpKeys = new Set<number>();
   const replacementReadOpKeys = new Set<number>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<() => void>();
+  const cacheChangeSubscribers = new Set<
+    (revision: CacheRevision) => void
+  >();
+  const generationChangeSubscribers = new Set<() => void>();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
@@ -247,7 +252,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const msg = event.data;
     if (isCachePush(msg)) {
       if (msg.kind === 'cache-changed') {
-        for (const cb of cacheChangeSubscribers) cb();
+        for (const cb of cacheChangeSubscribers) cb(msg.revision);
         return;
       }
       if (msg.kind === 'mutation-settled') {
@@ -331,6 +336,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     latestReplacementEpoch = ownerEpoch;
     // Initial readiness completes the already-running first handshake.
     if (state === 'initializing' && !recoveryInProgress) return;
+    for (const cb of generationChangeSubscribers) cb();
     if (state === 'ready') {
       beginRecoveryGeneration();
       // No old response put this host into recovery. Requests still pending at
@@ -457,6 +463,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   function clearSubscribers(): void {
     affectedSubscribers.clear();
     cacheChangeSubscribers.clear();
+    generationChangeSubscribers.clear();
     settlementSubscribers.clear();
   }
 
@@ -804,6 +811,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   return {
     clientId,
 
+    async currentRevision(): Promise<CacheRevision> {
+      await ensureInitialized();
+      return (await request({ kind: 'current-revision' })) as CacheRevision;
+    },
+
     async readQuery(args: CacheReadArgs): Promise<ReadResult> {
       if (args.opKey !== undefined) {
         activeOpKeys.add(args.opKey);
@@ -826,7 +838,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
     async readRecordsByKeys(
       args: ReadRecordsByKeysArgs
-    ): Promise<SelectedRecordByKeyWire[]> {
+    ): Promise<ReadRecordsByKeysResult> {
       const keys = validateRecordSelectionKeys(args.keys);
       await ensureInitialized();
       return (await request({
@@ -834,7 +846,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         document: args.document,
         fragmentName: args.fragmentName,
         keys,
-      })) as SelectedRecordByKeyWire[];
+      })) as ReadRecordsByKeysResult;
     },
 
     async search(args: SearchCacheArgs): Promise<SearchCachePage> {
@@ -1007,14 +1019,17 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as WriteResult;
     },
 
-    async invalidate(keys: string[]): Promise<string[]> {
+    async invalidate(keys: string[]): Promise<AffectedOperationsResult> {
       await ensureInitialized();
-      return (await request({ kind: 'invalidate', keys })) as string[];
+      return (await request({ kind: 'invalidate', keys })) as AffectedOperationsResult;
     },
 
-    async deleteRecords(keys: string[]): Promise<string[]> {
+    async deleteRecords(keys: string[]): Promise<AffectedOperationsResult> {
       await ensureInitialized();
-      return (await request({ kind: 'delete-records', keys })) as string[];
+      return (await request({
+        kind: 'delete-records',
+        keys,
+      })) as AffectedOperationsResult;
     },
 
     async teardown(opKey: number): Promise<void> {
@@ -1038,9 +1053,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       await request({ kind: 'teardown', opId: opId(opKey) });
     },
 
-    async clear(): Promise<void> {
+    async clear(): Promise<CacheRevision> {
       await ensureInitialized();
-      await request({ kind: 'clear' });
+      const revision = (await request({ kind: 'clear' })) as CacheRevision;
       telemetry?.record({
         name: 'graphql_cache.logical_reset',
         operationCategory: 'lifecycle',
@@ -1048,6 +1063,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         errorCode: 'none',
         resetReason: 'explicit-clear',
       });
+      return revision;
     },
 
     onOpsAffected(cb: (opKeys: number[]) => void): () => void {
@@ -1055,9 +1071,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
-    onCacheChanged(cb: () => void): () => void {
+    onCacheChanged(cb: (revision: CacheRevision) => void): () => void {
       cacheChangeSubscribers.add(cb);
       return () => cacheChangeSubscribers.delete(cb);
+    },
+
+    onCacheGenerationChanged(cb: () => void): () => void {
+      generationChangeSubscribers.add(cb);
+      return () => generationChangeSubscribers.delete(cb);
     },
 
     onMutationSettled(

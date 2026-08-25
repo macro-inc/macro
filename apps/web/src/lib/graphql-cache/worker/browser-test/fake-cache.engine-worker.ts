@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { INITIAL_CACHE_REVISION } from '../../protocol';
 import type { CacheRequest, CacheResponse } from '../../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
@@ -240,7 +241,10 @@ async function activate(
                     withVersion<EngineToCoordinatorEnvelope>({
                       kind: 'engine-push',
                       ownerEpoch: activation.ownerEpoch,
-                      push: { kind: 'cache-changed' },
+                      push: {
+                        kind: 'cache-changed',
+                        revision: INITIAL_CACHE_REVISION,
+                      },
                     })
                   );
                 }

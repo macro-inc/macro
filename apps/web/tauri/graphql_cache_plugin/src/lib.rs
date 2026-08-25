@@ -23,8 +23,9 @@ pub mod commands;
 mod engine;
 
 pub use engine::{
-    ClaimedMutationWire, EngineHandle, EnqueueOptimisticMutationResultWire,
-    InitialMutationClaimWire, ReadResultWire, WriteResultWire,
+    AffectedOperationsResultWire, ClaimedMutationWire, EngineHandle,
+    EnqueueOptimisticMutationResultWire, InitialMutationClaimWire, ReadResultWire,
+    RecordSelectionResultWire, WriteResultWire,
 };
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose
@@ -53,7 +54,10 @@ pub struct OpsAffectedEvent {
 /// Payload of [`CACHE_CHANGED_EVENT`].
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CacheChangedEvent {}
+pub struct CacheChangedEvent {
+    /// Effective-view revision installed by the logical mutation.
+    pub revision: String,
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,8 +105,13 @@ fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[
     .ok();
 }
 
-fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>) {
-    app.emit(CACHE_CHANGED_EVENT, CacheChangedEvent {})
+fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str) {
+    app.emit(
+        CACHE_CHANGED_EVENT,
+        CacheChangedEvent {
+            revision: revision.to_owned(),
+        },
+    )
         .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
         .ok();
 }

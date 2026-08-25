@@ -1,3 +1,4 @@
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import type {
   EnqueueOptimisticMutationResult,
   ReadResult,
@@ -6,6 +7,7 @@ import type {
 import type { CacheHost } from './types';
 
 const emptyWriteResult = (): WriteResult => ({
+  revision: INITIAL_CACHE_REVISION,
   changed: [],
   affectedOps: [],
   reset: false,
@@ -22,11 +24,14 @@ export function createNoopCacheHost(reason: string): CacheHost {
   return {
     clientId: 'noop',
     disabled: true,
+    async currentRevision() {
+      return INITIAL_CACHE_REVISION;
+    },
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
     async readRecordsByKeys() {
-      return [];
+      return { revision: INITIAL_CACHE_REVISION, records: [] };
     },
     async search() {
       return { documents: [], nextCursor: null };
@@ -59,18 +64,23 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async rollbackOptimisticWrite(): Promise<WriteResult> {
       return emptyWriteResult();
     },
-    async invalidate(): Promise<string[]> {
-      return [];
+    async invalidate() {
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     },
-    async deleteRecords(): Promise<string[]> {
-      return [];
+    async deleteRecords() {
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     },
     async teardown(): Promise<void> {},
-    async clear(): Promise<void> {},
+    async clear() {
+      return INITIAL_CACHE_REVISION;
+    },
     onOpsAffected() {
       return () => undefined;
     },
     onCacheChanged() {
+      return () => undefined;
+    },
+    onCacheGenerationChanged() {
       return () => undefined;
     },
     onMutationSettled() {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import type {
   CacheRequest,
   CacheResponseErrorCode,
@@ -21,6 +22,7 @@ import { createWorkerCacheHost } from './worker-host';
 
 const CLIENT_ID = '00000000-0000-4000-8000-000000000007';
 const EMPTY_WRITE: WriteResult = {
+  revision: INITIAL_CACHE_REVISION,
   changed: [],
   affectedOps: [],
   reset: false,
@@ -28,14 +30,20 @@ const EMPTY_WRITE: WriteResult = {
 
 function responseFor(request: CacheRequest): unknown {
   switch (request.kind) {
+    case 'current-revision':
+      return INITIAL_CACHE_REVISION;
     case 'read':
       return { kind: 'miss' };
     case 'read-records-by-keys':
-      return [];
+      return { revision: INITIAL_CACHE_REVISION, records: [] };
     case 'search':
       return { documents: [], nextCursor: null };
     case 'hydrate':
-      return { kind: 'data', data: { cursor: 'next' } };
+      return {
+        kind: 'data',
+        data: { cursor: 'next' },
+        revision: INITIAL_CACHE_REVISION,
+      };
     case 'write':
     case 'commit-optimistic-write':
     case 'rollback-optimistic-write':
@@ -53,12 +61,13 @@ function responseFor(request: CacheRequest): unknown {
       return undefined;
     case 'invalidate':
     case 'delete-records':
-      return request.keys;
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: request.keys };
     case 'init':
     case 'defer-optimistic-write':
     case 'teardown':
-    case 'clear':
       return null;
+    case 'clear':
+      return INITIAL_CACHE_REVISION;
   }
 }
 
@@ -208,7 +217,11 @@ describe('createWorkerCacheHost', () => {
         data: { items: [{ id: '1' }], cursor: 'next' },
         identity: 'user-1',
       })
-    ).resolves.toEqual({ kind: 'data', data: { cursor: 'next' } });
+    ).resolves.toEqual({
+      kind: 'data',
+      data: { cursor: 'next' },
+      revision: INITIAL_CACHE_REVISION,
+    });
 
     expect(requireAdapter().requests).toContainEqual(
       expect.objectContaining({
@@ -852,7 +865,10 @@ describe('createWorkerCacheHost', () => {
       keys: ['User:1'],
     });
     adapter.push({ kind: 'ops-affected', opIds: [7], keys: [] });
-    adapter.push({ kind: 'cache-changed' });
+    adapter.push({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
     adapter.push({
       kind: 'mutation-settled',
       settlement: { transactionId: '3', status: 'committed' },

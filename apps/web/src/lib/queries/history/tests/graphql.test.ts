@@ -1,3 +1,4 @@
+import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type {
   CacheHost,
   ReadRecordsByKeysArgs,
@@ -13,7 +14,13 @@ function cacheHost(
     args: ReadRecordsByKeysArgs
   ) => Promise<Array<{ recordKey: string; record: unknown }>>
 ): Pick<CacheHost, 'search' | 'readRecordsByKeys'> {
-  return { search, readRecordsByKeys };
+  return {
+    search,
+    readRecordsByKeys: async (args) => ({
+      revision: INITIAL_CACHE_REVISION,
+      records: await readRecordsByKeys(args),
+    }),
+  };
 }
 
 describe('cached GraphQL history', () => {

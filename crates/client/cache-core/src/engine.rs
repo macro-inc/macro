@@ -1710,6 +1710,15 @@ impl<S: Storage> Engine<S> {
         keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let affected = self.invalidate_keys_inner(keys);
+        self.advance_revision()?;
+        Ok(self.revisioned(affected))
+    }
+
+    fn invalidate_keys_inner<'k>(
+        &mut self,
+        keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
+    ) -> BTreeSet<OpId> {
         let mut affected = BTreeSet::new();
         for key in keys {
             self.hot.pop(key);
@@ -1718,8 +1727,7 @@ impl<S: Storage> Engine<S> {
         // The durable projection was updated by the writing context. Reload
         // only the compact catalog on the next text search.
         self.search_catalogs.clear();
-        self.advance_revision()?;
-        Ok(self.revisioned(affected))
+        affected
     }
 
     /// Deletes locally stale records from both durable and hot tiers and
@@ -1843,6 +1851,23 @@ impl<S: PredicateIndexStorage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
         self.advance_revision()
+    }
+
+    /// Marks generic projections incomplete and invalidates normalized hot-tier records
+    /// as one externally observed logical view mutation.
+    pub async fn invalidate_keys_with_projections(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
+        self.storage
+            .put_batch_with_projections(Vec::new(), projections)
+            .await
+            .map_err(EngineError::Storage)?;
+        let affected = self.invalidate_keys_inner(keys.iter());
+        self.advance_revision()?;
+        Ok(self.revisioned(affected))
     }
 
     /// Delete normalized records and generic projections in one storage transaction.

@@ -55,6 +55,7 @@ export type {
   CachePush,
   CacheReadPriority,
   CacheRequest,
+  CacheRevision,
   CacheResponse,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
@@ -64,6 +65,7 @@ export type {
   OptimisticWriteResult,
   QueryVariableFilter,
   ReadRecordsByKeysArgs,
+  ReadRecordsByKeysResult,
   ReadResult,
   SearchCacheArgs,
   SearchCachePage,
@@ -74,6 +76,7 @@ export type {
   WriteResult,
 } from './protocol';
 export {
+  INITIAL_CACHE_REVISION,
   MAX_CACHE_SEARCH_QUERY_BYTES,
   MAX_RECORD_SELECTION_PAGE_SIZE,
   validateCacheSearchArgs,

@@ -1,3 +1,4 @@
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import { describe, expect, it } from 'vitest';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
@@ -114,7 +115,12 @@ describe('coordinator runtime protocol', () => {
       })
     ).toBe(false);
     expect(isCacheResponse({ id: 3, ok: false, error: 4 })).toBe(false);
-    expect(isCachePush({ kind: 'cache-changed' })).toBe(true);
+    expect(
+      isCachePush({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      })
+    ).toBe(true);
     expect(
       isCachePush({
         kind: 'mutation-settled',

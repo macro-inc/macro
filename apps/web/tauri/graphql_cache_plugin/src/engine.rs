@@ -20,7 +20,8 @@ use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
 use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
-use cache_core::record_selection::RecordSelection;
+use cache_core::record_selection::{RecordSelection, SelectedRecord};
+use cache_core::revision::CacheRevision;
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
@@ -46,6 +47,8 @@ pub enum ReadResultWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResultWire {
+    /// Effective-view revision installed by this logical mutation.
+    pub revision: String,
     /// Entity keys whose records changed.
     pub changed: Vec<String>,
     /// Registered operation ids affected by the change (origin excluded).
@@ -64,6 +67,26 @@ pub struct HydrationWriteResultWire {
     pub write_result: WriteResultWire,
     /// Fields not marked `@cacheOnly`, or `None` when there are none.
     pub data: Option<serde_json::Value>,
+}
+
+/// Revision-qualified normalized record selection result.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordSelectionResultWire {
+    /// Revision observed by record selection.
+    pub revision: String,
+    /// Selected normalized records.
+    pub records: Vec<SelectedRecord>,
+}
+
+/// Revision-qualified affected operation ids.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AffectedOperationsResultWire {
+    /// Revision installed by the invalidation or deletion.
+    pub revision: String,
+    /// Registered operation ids affected by the change.
+    pub affected_ops: Vec<String>,
 }
 
 /// Result of durably enqueueing an optimistic mutation and attempting to
@@ -213,6 +236,7 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
+        revision: result.revision.to_string(),
         changed: result
             .changed
             .into_iter()
@@ -267,6 +291,11 @@ impl EngineHandle {
         }
     }
 
+    /// Returns the current in-memory cache revision.
+    pub async fn current_revision(&self) -> CacheRevision {
+        self.inner.lock().await.engine.current_revision()
+    }
+
     /// Cache read; registers `op_id` as active when given.
     pub async fn read(
         &self,
@@ -301,7 +330,7 @@ impl EngineHandle {
         document: String,
         fragment_name: String,
         keys: Vec<String>,
-    ) -> Result<Vec<cache_core::record_selection::SelectedRecord>, String> {
+    ) -> Result<RecordSelectionResultWire, String> {
         let selection =
             RecordSelection::parse(&document, &fragment_name).map_err(|error| error.to_string())?;
         let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
@@ -311,6 +340,10 @@ impl EngineHandle {
             .engine
             .read_records_by_keys(&selection, &keys)
             .await
+            .map(|result| RecordSelectionResultWire {
+                revision: result.revision.to_string(),
+                records: result.value,
+            })
             .map_err(|error| error.to_string())
     }
 
@@ -590,24 +623,38 @@ impl EngineHandle {
     }
 
     /// Evicts records by entity key; returns the affected registered op ids.
-    pub async fn invalidate(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
+    pub async fn invalidate(
+        &self,
+        keys: Vec<String>,
+    ) -> Result<AffectedOperationsResultWire, String> {
         let keys: Vec<EntityKey<'static>> =
             keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
-        let affected = engine.invalidate_keys(keys.iter());
-        Ok(ops.names(affected))
+        let affected = engine
+            .invalidate_keys(keys.iter())
+            .map_err(|error| error.to_string())?;
+        Ok(AffectedOperationsResultWire {
+            revision: affected.revision.to_string(),
+            affected_ops: ops.names(affected.value),
+        })
     }
 
     /// Deletes stale records from durable and hot storage and returns the
     /// registered operations that traversed them.
-    pub async fn delete_records(&self, keys: Vec<String>) -> Result<Vec<String>, String> {
+    pub async fn delete_records(
+        &self,
+        keys: Vec<String>,
+    ) -> Result<AffectedOperationsResultWire, String> {
         let keys: Vec<EntityKey<'static>> =
             keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let affected = engine.delete_keys(&keys).await.map_err(|e| e.to_string())?;
-        Ok(ops.names(affected))
+        Ok(AffectedOperationsResultWire {
+            revision: affected.revision.to_string(),
+            affected_ops: ops.names(affected.value),
+        })
     }
 
     /// Unregisters an operation (urql teardown).
@@ -621,7 +668,7 @@ impl EngineHandle {
     }
 
     /// Drops all cached state (logout).
-    pub async fn clear(&self) -> Result<(), String> {
+    pub async fn clear(&self) -> Result<CacheRevision, String> {
         let mut state = self.inner.lock().await;
         state.engine.clear().await.map_err(|e| e.to_string())
     }

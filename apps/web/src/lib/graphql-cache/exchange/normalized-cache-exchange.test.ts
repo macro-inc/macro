@@ -20,6 +20,7 @@ import {
 import type { CacheHost } from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+  INITIAL_CACHE_REVISION,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
   type MutationClaim,
@@ -251,6 +252,9 @@ function makeFakeHost(): FakeHost {
     pushAffected: (opKeys) => {
       for (const cb of subscribers) cb(opKeys);
     },
+    async currentRevision() {
+      return INITIAL_CACHE_REVISION;
+    },
     async readQuery(args) {
       host.reads.push({
         opKey: args.opKey,
@@ -262,7 +266,7 @@ function makeFakeHost(): FakeHost {
       return readResult;
     },
     async readRecordsByKeys() {
-      return [];
+      return { revision: INITIAL_CACHE_REVISION, records: [] };
     },
     async search() {
       return { documents: [], nextCursor: null };
@@ -279,12 +283,21 @@ function makeFakeHost(): FakeHost {
         entityResolvers: args.entityResolvers,
       });
       host.cacheActions.push({ kind: 'write', value: args.data });
-      return { changed: [], affectedOps: [], reset: false };
+      return {
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
     },
     async hydrateQuery(args) {
       host.writes.push({ data: args.data, identity: args.identity });
       host.cacheActions.push({ kind: 'write', value: args.data });
-      return { kind: 'data', data: args.data };
+      return {
+        kind: 'data',
+        data: args.data,
+        revision: INITIAL_CACHE_REVISION,
+      };
     },
     async enqueueOptimisticMutation(
       args,
@@ -300,6 +313,7 @@ function makeFakeHost(): FakeHost {
       const mutation = claimQueueHead(claim.nowMs);
       return {
         transactionId,
+        revision: INITIAL_CACHE_REVISION,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -340,30 +354,45 @@ function makeFakeHost(): FakeHost {
     ): Promise<WriteResult> {
       host.commits.push({ transactionId, query: args.query, data: args.data });
       if (queue[0]?.transactionId === transactionId) queue.shift();
-      return { changed: [], affectedOps: [], reset: false };
+      return {
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
     },
     async rollbackOptimisticWrite(transactionId, _claim): Promise<WriteResult> {
       host.rollbacks.push(transactionId);
       if (queue[0]?.transactionId === transactionId) queue.shift();
-      return { changed: [], affectedOps: [], reset: false };
+      return {
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
     },
     async invalidate() {
-      return [];
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     },
     async deleteRecords(keys) {
       host.invalidations.push(keys);
       host.cacheActions.push({ kind: 'delete', value: keys });
-      return [];
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     },
     async teardown(opKey) {
       host.teardowns.push(opKey);
     },
-    async clear() {},
+    async clear() {
+      return INITIAL_CACHE_REVISION;
+    },
     onOpsAffected(cb) {
       subscribers.add(cb);
       return () => subscribers.delete(cb);
     },
     onCacheChanged() {
+      return () => undefined;
+    },
+    onCacheGenerationChanged() {
       return () => undefined;
     },
     onMutationSettled() {
@@ -677,11 +706,16 @@ describe('normalizedCacheExchange', () => {
       markWriteStarted();
       await writeCanFinish;
       cacheContainsDocument = true;
-      return { changed: [], affectedOps: [], reset: false };
+      return {
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
     });
     vi.spyOn(host, 'deleteRecords').mockImplementation(async () => {
       cacheContainsDocument = false;
-      return [];
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     });
 
     const ops = makeSubject<Operation>();
@@ -910,6 +944,7 @@ describe('normalizedCacheExchange', () => {
       return {
         kind: 'data' as const,
         data: { soup: { nextCursor: 'cursor-2' } },
+        revision: INITIAL_CACHE_REVISION,
       };
     });
     const { ops, network, forwarded, results } = controlledQueryHarness(host);
@@ -1170,7 +1205,12 @@ describe('normalizedCacheExchange', () => {
       .mockRejectedValueOnce(new Error('replacement init not ready'))
       .mockImplementationOnce(async (args) => {
         cached = args.data;
-        return { changed: [], affectedOps: [], reset: false };
+        return {
+          revision: INITIAL_CACHE_REVISION,
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        };
       });
     const { ops, network, forwarded, results, client } = controlledQueryHarness(
       host,
@@ -1235,7 +1275,12 @@ describe('normalizedCacheExchange', () => {
       .fn()
       .mockImplementationOnce(async () => await initialWrite)
       .mockRejectedValueOnce(new Error('replacement failed while writing'))
-      .mockResolvedValueOnce({ changed: [], affectedOps: [], reset: false });
+      .mockResolvedValueOnce({
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      });
     const { ops, network, forwarded, client } = controlledQueryHarness(host);
     ops.next(makeOp(43));
     await tick();
@@ -1290,7 +1335,12 @@ describe('normalizedCacheExchange', () => {
       if (writeCount === 1) throw new Error('initial A write failed');
       if (writeCount === 2) throw new Error('replacement A write failed');
       cached = args.data;
-      return { changed: [], affectedOps: [], reset: false };
+      return {
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+      };
     });
     const { ops, network, forwarded, client } = controlledQueryHarness(
       host,

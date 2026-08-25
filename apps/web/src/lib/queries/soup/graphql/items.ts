@@ -129,10 +129,10 @@ export function createGraphqlSoupAstItemsQuery(
         );
         if (
           requestId !== localRequest ||
-          selected.length !== result.keys.length
+          selected.records.length !== result.keys.length
         )
           return;
-        const items = selected.flatMap(({ record }) => {
+        const items = selected.records.flatMap(({ record }) => {
           const item = mapGraphqlSoupItem(record);
           return item ? [item] : [];
         });
