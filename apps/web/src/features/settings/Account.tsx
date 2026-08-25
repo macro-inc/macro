@@ -11,6 +11,8 @@ import {
 import {
   DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
+  ENABLE_NOTIFICATION_SETTINGS_FLAG,
+  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
 } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
@@ -24,6 +26,10 @@ import {
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
 import { type BundleUpdateStatus, useTauri } from '@macro/tauri';
+import {
+  type SupportedNotificationSettings,
+  useNotificationSettings,
+} from '@notifications';
 import CheckIcon from '@phosphor/check.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
@@ -37,7 +43,7 @@ import {
 } from '@queries/auth/user-name-self';
 import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
-import { Button, Dialog, Dropdown, Panel, Tooltip } from '@ui';
+import { Button, Dialog, Dropdown, Panel, ToggleSwitch, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -314,6 +320,12 @@ export function Account() {
   const autoUpdateUIEnabled = createMemo(
     () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
   );
+  const notificationSettingsFlag = useFeatureFlag(
+    ENABLE_NOTIFICATION_SETTINGS_FLAG,
+    {
+      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+    }
+  );
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
     createSignal<boolean>(false);
@@ -448,6 +460,10 @@ export function Account() {
           <Show when={autoUpdateUIEnabled()}>
             <BundleVersionRow />
             <BundleUpdateRow />
+          </Show>
+
+          <Show when={!notificationSettingsFlag().enabled}>
+            <NotificationToggle />
           </Show>
         </SettingsCard>
       </SettingsSection>
@@ -641,6 +657,48 @@ function Row(props: { label: string; children?: any }) {
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
     </div>
+  );
+}
+
+function NotificationToggle() {
+  const settings = useNotificationSettings();
+
+  return (
+    <Show
+      when={settings.isSupported && settings}
+      fallback={<NotificationNotSupported />}
+    >
+      {(s) => <NotificationSettings settings={s()} />}
+    </Show>
+  );
+}
+
+function NotificationSettings(props: {
+  settings: SupportedNotificationSettings;
+}) {
+  const analytics = useAnalytics();
+
+  const handleToggle = (checked: boolean) => {
+    analytics.track('notifications_toggled');
+    props.settings.toggle(checked);
+  };
+
+  return (
+    <Row label="Notifications">
+      <ToggleSwitch
+        size="md"
+        checked={props.settings.isEnabled()}
+        onChange={handleToggle}
+      />
+    </Row>
+  );
+}
+
+function NotificationNotSupported() {
+  return (
+    <Row label="Notifications">
+      <span class="text-sm text-ink-muted">Not supported on this device</span>
+    </Row>
   );
 }
 

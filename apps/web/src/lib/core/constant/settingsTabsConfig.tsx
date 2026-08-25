@@ -23,6 +23,8 @@ import {
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
+  ENABLE_NOTIFICATION_SETTINGS_FLAG,
+  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -150,15 +152,22 @@ export const useSettingsTabAvailable = () => {
   const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
     enabledOverride: ENABLE_CRM_OVERRIDE,
   });
+  const notificationSettingsFlag = useFeatureFlag(
+    ENABLE_NOTIFICATION_SETTINGS_FLAG,
+    {
+      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+    }
+  );
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
-      case 'Notifications':
       case 'Billing':
         return true;
+      case 'Notifications':
+        return notificationSettingsFlag().enabled;
       case 'Team':
       case 'Tags':
         return true;
