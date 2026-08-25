@@ -547,8 +547,12 @@ body.tauri-ios {
    touch geometry tokens (see the `--glass-*` block in :root for why). */
 @utility glass {
   position: relative;
+  /* Standard property only — Lightning CSS adds `-webkit-backdrop-filter`
+     itself when it minifies. Writing the prefix by hand *after* the standard
+     one makes it collapse the pair down to just the prefixed declaration,
+     which Chrome ignores: the glass loses its blur in production builds while
+     still looking right in dev. */
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow:
     inset 0 1px 0
       color-mix(in oklch, var(--glass-tint) calc(var(--glass-highlight-base) * var(--glass-scale)), transparent),
@@ -620,7 +624,6 @@ body.tauri-ios {
    after plain ones, so `@max-2xl/u-list:glass-none` beats a plain `glass-sm`. */
 @utility glass-none {
   backdrop-filter: none;
-  -webkit-backdrop-filter: none;
   box-shadow: none;
   &::after {
     content: none;
