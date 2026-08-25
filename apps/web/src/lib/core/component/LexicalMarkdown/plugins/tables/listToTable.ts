@@ -27,13 +27,13 @@ import {
   type TableCellNode,
   type TableNode,
 } from '@lexical/table';
+import { $canHostTable } from '@macro-inc/lexical-core';
 import {
   $createParagraphNode,
   $getNodeByKey,
   $getSelection,
   $isElementNode,
   $isRangeSelection,
-  $isRootNode,
   COMMAND_PRIORITY_EDITOR,
   createCommand,
   type LexicalCommand,
@@ -150,7 +150,7 @@ export function $listToGrid(list: ListNode): ListGridColumn[] | null {
  * shape.
  */
 export function $canConvertListToTable(list: ListNode): boolean {
-  return $isRootNode(list.getParent()) && $listToGrid(list) !== null;
+  return $canHostTable(list.getParent()) && $listToGrid(list) !== null;
 }
 
 /**
@@ -234,7 +234,7 @@ export function registerListToTableCommand(editor: LexicalEditor): () => void {
     LIST_TO_TABLE_COMMAND,
     (listKey) => {
       const list = $getNodeByKey(listKey);
-      if (!$isListNode(list) || !$isRootNode(list.getParent())) return false;
+      if (!$isListNode(list) || !$canHostTable(list.getParent())) return false;
       const columns = $listToGrid(list);
       if (!columns) return false;
       const table = $gridToTable(columns, list.getListType());

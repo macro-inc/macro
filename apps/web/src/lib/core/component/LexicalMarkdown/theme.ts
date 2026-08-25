@@ -103,6 +103,11 @@ export const theme: EditorThemeClasses = {
   // Note: In an active editor, HRs are rendered as decorators by HoritzontalRule
   // component so this class only applies to static md
   hr: 'my-7 h-px bg-edge',
+  collapsible: {
+    container: 'md-collapsible my-4 first:mt-1.5 last:mb-1.5',
+    title: 'md-collapsible-title',
+    content: 'md-collapsible-content',
+  },
 };
 
 /**

@@ -118,6 +118,23 @@ export type ClassedBlockNode = EleBase & {
   attributes?: Record<string, string>;
 };
 
+export type CollapsibleContainerNode = EleBase & {
+  type: 'collapsible-container';
+  children: SerNode[];
+  open: boolean;
+};
+
+export type CollapsibleTitleNode = EleBase & {
+  type: 'collapsible-title';
+  children: SerNode[];
+  heading: 'p' | 'h1' | 'h2' | 'h3';
+};
+
+export type CollapsibleContentNode = EleBase & {
+  type: 'collapsible-content';
+  children: SerNode[];
+};
+
 /** A code block whose children are per-token `code-highlight` leaves (flattened
  *  back into raw source on serialize). `language` comes from the `CodeNode` base. */
 export type CustomCodeNode = EleBase & {
@@ -236,6 +253,9 @@ export type KnownNode =
   | MarkNode
   | TabNode
   | ClassedBlockNode
+  | CollapsibleContainerNode
+  | CollapsibleTitleNode
+  | CollapsibleContentNode
   | CustomCodeNode
   | EquationNode
   | ImageNode

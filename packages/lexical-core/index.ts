@@ -8,6 +8,7 @@ export * from './nodes/CommentNode';
 export * from './nodes/CompletionNode';
 export * from './nodes/ContactMentionNode';
 export * from './nodes/CustomCodeNode';
+export * from './nodes/collapsible';
 export * from './nodes/DateMentionNode';
 export * from './nodes/DecoratorBlockNode';
 export * from './nodes/DiffDeleteNode';

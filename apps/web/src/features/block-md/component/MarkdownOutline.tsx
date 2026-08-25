@@ -1,6 +1,12 @@
 import { HoverCard } from '@core/component/HoverCard';
 import { $isHeadingNode } from '@lexical/rich-text';
-import { $getRoot, type LexicalEditor } from 'lexical';
+import { $isTableNode } from '@lexical/table';
+import { $dfsIterator, $findMatchingParent } from '@lexical/utils';
+import {
+  $isCollapsibleTitleNode,
+  type CollapsibleHeading,
+} from '@macro-inc/lexical-core';
+import { $getRoot, type LexicalEditor, type LexicalNode } from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -52,6 +58,43 @@ function headingsEqual(a: OutlineHeading[], b: OutlineHeading[]) {
   );
 }
 
+function headingLevel(tag: string): number {
+  return Number(tag.slice(1));
+}
+
+function $isInsideTable(node: LexicalNode): boolean {
+  return $findMatchingParent(node, $isTableNode) !== null;
+}
+
+function $outlineHeadings(): OutlineHeading[] {
+  const headings: OutlineHeading[] = [];
+  for (const { node } of $dfsIterator($getRoot())) {
+    if ($isInsideTable(node)) continue;
+    if ($isHeadingNode(node)) {
+      const text = node.getTextContent().trim();
+      if (text.length === 0) continue;
+      headings.push({
+        key: node.getKey(),
+        level: headingLevel(node.getTag()),
+        text,
+      });
+      continue;
+    }
+    if ($isCollapsibleTitleNode(node)) {
+      const heading = node.getHeading();
+      if (heading === 'p') continue;
+      const text = node.getTextContent().trim();
+      if (text.length === 0) continue;
+      headings.push({
+        key: node.getKey(),
+        level: headingLevel(heading satisfies CollapsibleHeading),
+        text,
+      });
+    }
+  }
+  return headings;
+}
+
 export function useMarkdownOutline(props: {
   editor: Accessor<LexicalEditor | undefined>;
   enabled: Accessor<boolean>;
@@ -66,17 +109,7 @@ export function useMarkdownOutline(props: {
     }
 
     const refreshHeadings = () => {
-      const nextHeadings = editor.getEditorState().read(() =>
-        $getRoot()
-          .getChildren()
-          .filter($isHeadingNode)
-          .map((node) => ({
-            key: node.getKey(),
-            level: Number(node.getTag().slice(1)),
-            text: node.getTextContent().trim(),
-          }))
-          .filter((heading) => heading.text.length > 0)
-      );
+      const nextHeadings = editor.getEditorState().read($outlineHeadings);
 
       setHeadings((current) =>
         headingsEqual(current, nextHeadings) ? current : nextHeadings

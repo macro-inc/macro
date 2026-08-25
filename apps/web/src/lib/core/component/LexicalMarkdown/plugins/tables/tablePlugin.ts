@@ -63,7 +63,8 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
     })(),
 
     // Restrict table cells to block content that renders sanely inside them
-    // (notably: no nested tables).
+    // (notably: no nested tables, and no collapsible sections that could
+    // wrap a table).
     (() => {
       const allowedNodesInTableCellNode = [
         'paragraph',
@@ -73,6 +74,8 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
         'code',
         'custom-code',
       ];
+      // Collapsible sections are omitted on purpose: a toggle in a cell
+      // could host a table in its body, which is nested-table-by-another-name.
       return editor.registerNodeTransform(TableCellNode, (node) => {
         const children = node.getChildren();
 

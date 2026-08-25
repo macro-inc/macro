@@ -26,6 +26,41 @@
   min-height: 1.5em;
 }
 
+.md-collapsible {
+  border: none;
+}
+
+.md-collapsible-title {
+  cursor: default;
+  list-style: none;
+}
+
+.md-collapsible-title::-webkit-details-marker {
+  display: none;
+}
+
+.md-collapsible-title::before {
+  content: '';
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-right: 0.45em;
+  border-right: 1.5px solid currentcolor;
+  border-bottom: 1.5px solid currentcolor;
+  transform: rotate(-45deg);
+  opacity: 0.55;
+  vertical-align: 0.15em;
+}
+
+.md-collapsible[open] > .md-collapsible-title::before {
+  transform: rotate(45deg);
+  vertical-align: 0.25em;
+}
+
+.md-collapsible-content {
+  padding-top: 0.25rem;
+}
+
 .md-list {
   margin-left: 1.5em;
 }

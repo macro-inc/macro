@@ -8,6 +8,7 @@ import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
 import {
   $createDocumentMentionNode,
   AwaitNode,
+  CollapsibleContainerNode,
   CustomCodeNode,
   DocumentMentionNode,
   EquationNode,
@@ -15,6 +16,7 @@ import {
   ImageNode,
   VideoNode,
 } from '@macro-inc/lexical-core';
+import CaretDown from '@phosphor/caret-down.svg';
 import CheckSquare from '@phosphor/check-square.svg';
 import CodeBlock from '@phosphor/code-block.svg';
 import VideoIcon from '@phosphor/file-video.svg';
@@ -38,6 +40,7 @@ import {
   INSERT_AWAIT_NODE_COMMAND,
   REPLACE_AWAIT_NODE_COMMAND,
 } from '../await';
+import { INSERT_COLLAPSIBLE_COMMAND } from '../collapsible';
 import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
 import { TRY_INSERT_LINK_COMMAND } from '../links';
 import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
@@ -108,6 +111,58 @@ export const ACTIONS: Action[] = [
       editor.dispatchCommand(NODE_TRANSFORM, 'heading3');
     },
     dependencies: [HeadingNode],
+  },
+  {
+    id: 'collapsible',
+    name: 'Toggle',
+    keywords: [
+      'toggle',
+      'collapse',
+      'collapsible',
+      'details',
+      'summary',
+      'fold',
+      'accordion',
+    ],
+    category: ActionCategory.ELEMENT,
+    icon: CaretDown,
+    action: (editor: LexicalEditor) => {
+      editor.dispatchCommand(INSERT_COLLAPSIBLE_COMMAND, 'p');
+    },
+    dependencies: [CollapsibleContainerNode],
+  },
+  {
+    id: 'collapsible-h1',
+    name: 'Toggle Heading 1',
+    keywords: ['toggle', 'collapse', 'h1', 'heading'],
+    category: ActionCategory.FORMAT,
+    icon: TextH1,
+    action: (editor: LexicalEditor) => {
+      editor.dispatchCommand(INSERT_COLLAPSIBLE_COMMAND, 'h1');
+    },
+    dependencies: [CollapsibleContainerNode],
+  },
+  {
+    id: 'collapsible-h2',
+    name: 'Toggle Heading 2',
+    keywords: ['toggle', 'collapse', 'h2', 'heading'],
+    category: ActionCategory.FORMAT,
+    icon: TextH2,
+    action: (editor: LexicalEditor) => {
+      editor.dispatchCommand(INSERT_COLLAPSIBLE_COMMAND, 'h2');
+    },
+    dependencies: [CollapsibleContainerNode],
+  },
+  {
+    id: 'collapsible-h3',
+    name: 'Toggle Heading 3',
+    keywords: ['toggle', 'collapse', 'h3', 'heading'],
+    category: ActionCategory.FORMAT,
+    icon: TextH3,
+    action: (editor: LexicalEditor) => {
+      editor.dispatchCommand(INSERT_COLLAPSIBLE_COMMAND, 'h3');
+    },
+    dependencies: [CollapsibleContainerNode],
   },
   {
     id: 'quote',
