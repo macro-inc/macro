@@ -7,6 +7,8 @@ import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
+const eventModeAvailable = vi.hoisted(() => ({ value: true }));
+
 vi.hoisted(() => {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -89,6 +91,18 @@ vi.mock(
 
 vi.mock('@phosphor/spinner-gap.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
+}));
+
+vi.mock('@phosphor/check-square.svg', () => ({
+  default: () => <span data-testid="task-icon" />,
+}));
+
+vi.mock('@phosphor/chat-text.svg', () => ({
+  default: () => <span data-testid="chat-icon" />,
+}));
+
+vi.mock('@phosphor/calendar-blank.svg', () => ({
+  default: () => <span data-testid="calendar-icon" />,
 }));
 
 vi.mock('@core/component/EntityIcon', () => ({
@@ -228,9 +242,37 @@ vi.mock('../TaskComposer', () => ({
   ),
 }));
 
+// The real composer drags in the calendar block's form and query stack;
+// these tests only exercise the mode switch wiring around it.
+vi.mock('../EventComposer', () => ({
+  EventComposer: (props: {
+    active: boolean;
+    onSend: (event: { eventId: string; title: string }) => void;
+    modeSwitch?: JSX.Element;
+  }) => (
+    <div data-testid="event-composer">
+      {props.modeSwitch}
+      <button
+        type="button"
+        data-testid="event-composer-send"
+        onClick={() => props.onSend({ eventId: 'event-1', title: 'An event' })}
+      >
+        send event
+      </button>
+    </div>
+  ),
+}));
+
+// The real availability check queries the calendar UI flag and the viewer's
+// calendars; tests drive it through a mutable flag.
+vi.mock('../event-mode-availability', () => ({
+  createEventModeAvailability: () => () => eventModeAvailable.value,
+}));
+
 import { ChannelInput } from '../ChannelInput';
-import { TaskModeChannelInput } from '../TaskModeChannelInput';
+import { ComposeModeChannelInput } from '../ComposeModeChannelInput';
 import type { InputData } from '../types';
+import { makeComposePersistence } from '../utils/persistence';
 
 const baseInput: InputData = {
   mode: 'channel',
@@ -242,34 +284,82 @@ const baseInput: InputData = {
   attachments: [],
 };
 
-describe('Channel input task mode', () => {
+const eventMode = (onSendEvent: (event: unknown) => void = () => {}) => ({
+  channelId: 'channel-1',
+  onSendEvent,
+});
+
+describe('Channel input compose modes', () => {
   it('keeps the base channel input message-only', () => {
     render(() => <ChannelInput input={baseInput} />);
 
-    expect(screen.queryByRole('switch', { name: 'Task' })).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Task' })).toBeNull();
     expect(screen.queryByTestId('task-composer')).toBeNull();
+    expect(screen.queryByTestId('event-composer')).toBeNull();
   });
 
-  it('shows an unchecked task mode switch at the normal input width', () => {
+  it('shows the mode toggle with the chat tab selected at the normal input width', () => {
     const { container } = render(() => (
-      <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
+      <ComposeModeChannelInput
+        input={baseInput}
+        onSendTask={() => {}}
+        eventMode={eventMode()}
+      />
     ));
 
     expect(container.firstElementChild?.classList).toContain(
       'macro-message-width'
     );
-    const modeSwitch = screen.getByRole('switch', { name: 'Task' });
-    expect(modeSwitch).toHaveProperty('checked', false);
+    expect(screen.getByRole('radio', { name: 'Chat' })).toHaveProperty(
+      'checked',
+      true
+    );
+    expect(screen.getByRole('radio', { name: 'Task' })).toHaveProperty(
+      'checked',
+      false
+    );
+    expect(screen.getByRole('radio', { name: 'Event' })).toHaveProperty(
+      'checked',
+      false
+    );
     expect(screen.queryByTestId('task-composer')).toBeNull();
+    expect(screen.queryByTestId('event-composer')).toBeNull();
+  });
+
+  it('hides the event tab without an event mode config', () => {
+    render(() => (
+      <ComposeModeChannelInput input={baseInput} onSendTask={() => {}} />
+    ));
+
+    expect(screen.getByRole('radio', { name: 'Task' })).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: 'Event' })).toBeNull();
+  });
+
+  it('hides the event tab while the calendar UI is unavailable', () => {
+    eventModeAvailable.value = false;
+    try {
+      render(() => (
+        <ComposeModeChannelInput
+          input={baseInput}
+          onSendTask={() => {}}
+          eventMode={eventMode()}
+        />
+      ));
+
+      expect(screen.getByRole('radio', { name: 'Task' })).toBeTruthy();
+      expect(screen.queryByRole('radio', { name: 'Event' })).toBeNull();
+    } finally {
+      eventModeAvailable.value = true;
+    }
   });
 
   it('swaps the input faces when toggling task mode on and off', async () => {
     const user = userEvent.setup();
     const { container } = render(() => (
-      <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
+      <ComposeModeChannelInput input={baseInput} onSendTask={() => {}} />
     ));
 
-    await user.click(screen.getByRole('switch', { name: 'Task' }));
+    await user.click(screen.getByRole('radio', { name: 'Task' }));
 
     expect(screen.getByTestId('task-composer')).toBeTruthy();
     const messageFace = container.querySelector('[data-input-face="message"]');
@@ -277,49 +367,90 @@ describe('Channel input task mode', () => {
     expect(messageFace?.classList.contains('hidden')).toBe(true);
     expect(taskFace?.classList.contains('hidden')).toBe(false);
 
-    // The switch rendered inside the composer footer is checked; toggling it
-    // returns to message mode but keeps the composer mounted for its draft.
-    const composerSwitch = within(taskFace as HTMLElement).getByRole('switch', {
-      name: 'Task',
-    });
-    expect(composerSwitch).toHaveProperty('checked', true);
-    await user.click(composerSwitch);
+    // The toggle in the composer footer has the task tab raised; picking
+    // the chat tab returns to message mode but keeps the composer mounted
+    // for its draft.
+    const composerFace = within(taskFace as HTMLElement);
+    expect(composerFace.getByRole('radio', { name: 'Task' })).toHaveProperty(
+      'checked',
+      true
+    );
+    await user.click(composerFace.getByRole('radio', { name: 'Chat' }));
 
     expect(messageFace?.classList.contains('hidden')).toBe(false);
     expect(taskFace?.classList.contains('hidden')).toBe(true);
     expect(screen.getByTestId('task-composer')).toBeTruthy();
   });
 
-  it('enters task mode from clicks on the switch pill itself, not just the control', async () => {
+  it('swaps the input faces when toggling event mode on and off', async () => {
     const user = userEvent.setup();
-    render(() => (
-      <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
+    const { container } = render(() => (
+      <ComposeModeChannelInput
+        input={baseInput}
+        onSendTask={() => {}}
+        eventMode={eventMode()}
+      />
     ));
 
-    // The pill (Kobalte switch root) is the label's parent; clicking its
-    // padding must toggle just like clicking the control or label.
-    const pill = screen.getByText('Task').parentElement as HTMLElement;
-    await user.click(pill);
+    await user.click(screen.getByRole('radio', { name: 'Event' }));
 
-    expect(screen.getByTestId('task-composer')).toBeTruthy();
+    expect(screen.getByTestId('event-composer')).toBeTruthy();
+    const messageFace = container.querySelector('[data-input-face="message"]');
+    const eventFace = container.querySelector('[data-input-face="event"]');
+    expect(messageFace?.classList.contains('hidden')).toBe(true);
+    expect(eventFace?.classList.contains('hidden')).toBe(false);
+
+    const composerFace = within(eventFace as HTMLElement);
+    expect(composerFace.getByRole('radio', { name: 'Event' })).toHaveProperty(
+      'checked',
+      true
+    );
+    await user.click(composerFace.getByRole('radio', { name: 'Chat' }));
+
+    expect(messageFace?.classList.contains('hidden')).toBe(false);
+    expect(eventFace?.classList.contains('hidden')).toBe(true);
+    expect(screen.getByTestId('event-composer')).toBeTruthy();
+  });
+
+  it('switches straight between the task and event faces', async () => {
+    const user = userEvent.setup();
+    const { container } = render(() => (
+      <ComposeModeChannelInput
+        input={baseInput}
+        onSendTask={() => {}}
+        eventMode={eventMode()}
+      />
+    ));
+
+    await user.click(screen.getByRole('radio', { name: 'Task' }));
+    const taskFace = container.querySelector('[data-input-face="task"]');
+    await user.click(
+      within(taskFace as HTMLElement).getByRole('radio', { name: 'Event' })
+    );
+
+    const eventFace = container.querySelector('[data-input-face="event"]');
+    expect(taskFace?.classList.contains('hidden')).toBe(true);
+    expect(eventFace?.classList.contains('hidden')).toBe(false);
+    expect(
+      container
+        .querySelector('[data-input-face="message"]')
+        ?.classList.contains('hidden')
+    ).toBe(true);
   });
 
   it('restores a persisted task mode on remount', async () => {
     const user = userEvent.setup();
-    const taskPersistence = {
-      draftKey: 'task-composer-draft-channel:c1-persist-v0' as const,
-      modeKey: 'input-task-mode-channel:c1-persist-v0' as const,
-    };
-    localStorage.removeItem(taskPersistence.modeKey);
+    const composePersistence = makeComposePersistence({ channelId: 'c1' });
+    localStorage.removeItem(composePersistence.modeKey);
 
     const first = render(() => (
-      <TaskModeChannelInput
+      <ComposeModeChannelInput
         input={baseInput}
         onSendTask={() => {}}
-        taskPersistence={taskPersistence}
+        composePersistence={composePersistence}
       />
     ));
-    await user.click(screen.getByRole('switch', { name: 'Task' }));
+    await user.click(screen.getByRole('radio', { name: 'Task' }));
     expect(
       first.container
         .querySelector('[data-input-face="task"]')
@@ -328,10 +459,10 @@ describe('Channel input task mode', () => {
     first.unmount();
 
     const second = render(() => (
-      <TaskModeChannelInput
+      <ComposeModeChannelInput
         input={baseInput}
         onSendTask={() => {}}
-        taskPersistence={taskPersistence}
+        composePersistence={composePersistence}
       />
     ));
     const taskFace = second.container.querySelector('[data-input-face="task"]');
@@ -342,17 +473,41 @@ describe('Channel input task mode', () => {
         .querySelector('[data-input-face="message"]')
         ?.classList.contains('hidden')
     ).toBe(true);
-    localStorage.removeItem(taskPersistence.modeKey);
+    localStorage.removeItem(composePersistence.modeKey);
+  });
+
+  it('migrates the legacy boolean task-mode key into the compose-mode key', () => {
+    const legacyKey = 'input-task-mode-channel:c2-persist-v0';
+    localStorage.setItem(legacyKey, 'true');
+
+    const composePersistence = makeComposePersistence({ channelId: 'c2' });
+
+    expect(localStorage.getItem(legacyKey)).toBeNull();
+    expect(localStorage.getItem(composePersistence.modeKey)).toBe('"task"');
+
+    const { container } = render(() => (
+      <ComposeModeChannelInput
+        input={baseInput}
+        onSendTask={() => {}}
+        composePersistence={composePersistence}
+      />
+    ));
+    expect(
+      container
+        .querySelector('[data-input-face="task"]')
+        ?.classList.contains('hidden')
+    ).toBe(false);
+    localStorage.removeItem(composePersistence.modeKey);
   });
 
   it('forwards the created task and returns to message mode on send', async () => {
     const user = userEvent.setup();
     const onSendTask = vi.fn();
     const { container } = render(() => (
-      <TaskModeChannelInput input={baseInput} onSendTask={onSendTask} />
+      <ComposeModeChannelInput input={baseInput} onSendTask={onSendTask} />
     ));
 
-    await user.click(screen.getByRole('switch', { name: 'Task' }));
+    await user.click(screen.getByRole('radio', { name: 'Task' }));
     await user.click(screen.getByTestId('task-composer-send'));
 
     expect(onSendTask).toHaveBeenCalledOnce();
@@ -360,6 +515,29 @@ describe('Channel input task mode', () => {
       documentId: 'task-1',
       title: 'A task',
       content: '',
+    });
+    const messageFace = container.querySelector('[data-input-face="message"]');
+    expect(messageFace?.classList.contains('hidden')).toBe(false);
+  });
+
+  it('forwards the created event and returns to message mode on send', async () => {
+    const user = userEvent.setup();
+    const onSendEvent = vi.fn();
+    const { container } = render(() => (
+      <ComposeModeChannelInput
+        input={baseInput}
+        onSendTask={() => {}}
+        eventMode={eventMode(onSendEvent)}
+      />
+    ));
+
+    await user.click(screen.getByRole('radio', { name: 'Event' }));
+    await user.click(screen.getByTestId('event-composer-send'));
+
+    expect(onSendEvent).toHaveBeenCalledOnce();
+    expect(onSendEvent.mock.calls[0]?.[0]).toEqual({
+      eventId: 'event-1',
+      title: 'An event',
     });
     const messageFace = container.querySelector('[data-input-face="message"]');
     expect(messageFace?.classList.contains('hidden')).toBe(false);
