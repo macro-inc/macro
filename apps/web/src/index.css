@@ -119,6 +119,20 @@
   /* scuffed: defualt 0.15, used for transition jamming, currently disabled */
   --transition: 0s;
 
+  /* Glass chrome, ported from the marketing site's hero CTA ring
+     (solid-site `.home-hero-cta-bar`). The look is four things layered on a
+     translucent surface: a backdrop blur, a bright inner top edge, a dark
+     inner bottom edge, and a 135deg specular rim. The site is dark-only, so
+     the strengths live in tokens here and get a light-mode pass below — in a
+     light theme the lift comes from white, not from the ink color. */
+  --glass-blur: 6px;
+  --glass-saturate: 1.25;
+  --glass-highlight: color-mix(in oklch, var(--color-content-1) 6%, transparent);
+  --glass-shade: color-mix(in oklch, var(--color-surface-0) 40%, transparent);
+  --glass-shadow: 0 14px 32px -22px oklch(0 0 0 / 0.55);
+  --glass-rim-strong: color-mix(in oklch, var(--color-content-1) 18%, transparent);
+  --glass-rim-soft: color-mix(in oklch, var(--color-content-1) 12%, transparent);
+
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
   --layer-inset: var(--color-surface-0);
@@ -128,6 +142,17 @@
     background-color: oklch(from var(--color-accent) l c h / 0.5);
   }
 
+}
+
+/* Light themes invert where the glass gets its lift: the bright edge is white
+   rather than the (dark) ink color, and the surrounding shadow is softer so
+   the pill reads as raised instead of cut out. */
+html[data-theme-light='true'] {
+  --glass-highlight: color-mix(in oklch, white 55%, transparent);
+  --glass-shade: color-mix(in oklch, var(--color-content-0) 8%, transparent);
+  --glass-shadow: 0 10px 24px -18px oklch(0 0 0 / 0.28);
+  --glass-rim-strong: color-mix(in oklch, white 70%, transparent);
+  --glass-rim-soft: color-mix(in oklch, white 40%, transparent);
 }
 
 html[data-platform='ios'],
@@ -495,6 +520,46 @@ body.tauri-ios {
    hand-prefixing each part. */
 @utility island {
   @apply min-h-[40px] min-w-[40px] bg-chrome text-ink ring dark-mode:ring-edge light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+}
+
+/* Apple-style glass chrome: backdrop blur, a bright inner top edge, a dark
+   inner bottom edge, a soft drop shadow, and a specular rim drawn as a 1px
+   gradient masked to the border box (a plain `border` can't fade along its
+   length). Shape and background come from the consumer, so this composes with
+   any radius — the rim inherits it — and with variants (`hover:glass`).
+   Strengths come from the `--glass-*` tokens, which are theme-aware. */
+@utility glass {
+  position: relative;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 var(--glass-shade),
+    var(--glass-shadow);
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      var(--glass-rim-strong) 0%,
+      transparent 24%,
+      transparent 76%,
+      var(--glass-rim-soft) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+  }
 }
 
 [data-press-pulse] {
