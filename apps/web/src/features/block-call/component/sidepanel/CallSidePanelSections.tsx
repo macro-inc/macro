@@ -3,7 +3,7 @@ import { EntityPropertiesSection } from '@app/features/property/side-panel/prope
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
-import { References } from '@core/component/References';
+import { EntityReferencesSection } from '@core/component/EntityReferencesSection';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
@@ -12,10 +12,9 @@ import {
   useSetCallRecordShareWithTeamMutation,
   useToggleShareWithTeamMutation,
 } from '@queries/call/call';
-import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { cn, InlineCheckbox } from '@ui';
-import { type Accessor, Show, Suspense } from 'solid-js';
+import { type Accessor, Show } from 'solid-js';
 import { formatCallDuration } from '../../utils';
 
 interface CallSidePanelSectionsProps {
@@ -46,7 +45,11 @@ export function CallSidePanelSections(props: CallSidePanelSectionsProps) {
         entityType="CALL_RECORD"
         order={40}
       />
-      <ReferencesSectionConditional callId={blockId} />
+      <EntityReferencesSection
+        entityId={blockId}
+        entityType="call"
+        order={50}
+      />
     </>
   );
 }
@@ -197,34 +200,5 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
         summary.
       </p>
     </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// References Section (conditional)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ReferencesSectionConditional(props: { callId: string }) {
-  const references = useAttachmentReferencesQuery(
-    () => props.callId,
-    () => 'call'
-  );
-
-  const count = () => references.data?.length ?? 0;
-
-  return (
-    <Show when={count() > 0}>
-      <SidePanel.Section
-        id="references"
-        title={<SidePanel.CountTitle label="References" count={count()} />}
-        order={50}
-      >
-        <Suspense fallback={<SidePanel.Loading />}>
-          <div class="text-xs">
-            <References documentId={props.callId} entityType="call" />
-          </div>
-        </Suspense>
-      </SidePanel.Section>
-    </Show>
   );
 }
