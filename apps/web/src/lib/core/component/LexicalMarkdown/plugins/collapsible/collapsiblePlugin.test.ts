@@ -4,6 +4,7 @@ import {
   $createTableRowNode,
   $isTableCellNode,
   $isTableNode,
+  $isTableRowNode,
   TableCellHeaderStates,
 } from '@lexical/table';
 import {
@@ -80,9 +81,12 @@ describe('collapsible sections vs tables', () => {
 
     editor.getEditorState().read(() => {
       const table = $getRoot().getFirstChild();
-      const row =
-        table && 'getFirstChild' in table ? table.getFirstChild() : null;
-      const cell = row && 'getFirstChild' in row ? row.getFirstChild() : null;
+      expect($isTableNode(table)).toBe(true);
+      if (!$isTableNode(table)) return;
+      const row = table.getFirstChild();
+      expect($isTableRowNode(row)).toBe(true);
+      if (!$isTableRowNode(row)) return;
+      const cell = row.getFirstChild();
       expect($isTableCellNode(cell)).toBe(true);
       if (!$isTableCellNode(cell)) return;
       expect(cell.getChildren().some($isCollapsibleContainerNode)).toBe(false);
