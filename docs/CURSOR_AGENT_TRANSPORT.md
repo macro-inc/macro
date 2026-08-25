@@ -1,6 +1,8 @@
 # Cursor-managed agents as a third session transport
 
-Status: design draft. Nothing here is implemented yet.
+Status: implemented. This is the design as built; where the shipped code
+diverged from the original draft the text says so rather than describing a plan
+that no longer exists.
 
 ## Goal
 
@@ -331,19 +333,23 @@ resume, and then lives in `CursorConfig.api_key` as a plain `String` for the
 whole life of the session — hours, one copy per concurrent session, in a
 long-lived process, eligible for any core dump.
 
-Worse, `CursorConfig` derives `Debug` over a `pub api_key: String`
-(`crates/cursor_acp/src/cursor/mod.rs:36`), and `CursorClient` derives `Debug`
-and holds one. A single `tracing::debug!(?config)` prints a live user key into
-logs. **This is a bug today, before any of this feature ships**, and it is being
-fixed as part of the `cursor_acp` generalization rather than waiting for storage.
+Worse, `CursorConfig` originally derived `Debug` over a `pub api_key: String`,
+and `CursorClient` derives `Debug` and holds one. A single
+`tracing::debug!(?config)` would print a live user key into logs.
 
-Required:
+Done:
 
-- A redacting newtype for the key with a hand-written `Debug`; the plaintext must
-  never reach a log, span field, error message, or API response. Reads of the
-  settings endpoint return `{ registered: bool }` and nothing more.
-- Build the `Authorization` header once at client construction and drop the
-  plaintext `String`, rather than holding it for the session's lifetime.
+- `ApiKey` is a newtype with a hand-written `Debug` that redacts, over a
+  `Zeroizing<String>` so the plaintext does not linger in freed memory when a
+  session's client is dropped. The plaintext leaves only through `expose()`,
+  which feeds the Basic-auth header and nothing else. Reads of the settings
+  endpoint return `{ registered, updatedAt }` and nothing more.
+
+Still open:
+
+- Building the `Authorization` header once at client construction and dropping
+  the plaintext, rather than holding it for the session's lifetime. `Zeroizing`
+  bounds the damage; it does not shorten the residency.
 
 ### Revocation is not ours
 
@@ -352,7 +358,7 @@ mid-session. That needs a distinct "reconnect your Cursor account" state rather
 than a generic session failure. And deleting our row does not revoke anything at
 Cursor — the settings UI must say so rather than implying we have.
 
-### The alternative that removes the problem: sub-tokens
+### The alternative that was considered and rejected: sub-tokens
 
 `POST /v1/sub-tokens` takes a team service-account key and mints 1-hour
 user-scoped tokens by `forUserEmail`. The agent runs *as* that teammate, with
@@ -369,8 +375,11 @@ Cost: tokens last an hour and cannot self-refresh, so they must be minted per
 API call rather than per session — a session outliving its token is the failure
 mode to design against.
 
-This is open question 1. Choosing it deletes this entire section from the
-critical path.
+**Not taken.** It deletes the secret-at-rest problem by deleting the property
+the feature is for: the agent would run as a service account acting *for* a
+teammate rather than as the teammate, and the repo scope would be Macro's
+rather than theirs. The per-user key is the whole point, so the residency
+discipline above is the cost of admission.
 
 ---
 
@@ -563,33 +572,33 @@ Steps 1 and 2 are independent and can go in parallel.
 - Repos: standard live-Postgres tests. Include the `UNIQUE (provider,
   external_id)` conflict and the `ON DELETE CASCADE`.
 
-## Open questions
+## Resolved questions
 
 Resolved in review: the external table alone (no `agent_session` column), one
 global seeded `@cursor` system bot, channel-bots server-side filtering for the
-mention gate, hardcoded `macro-inc/macro` repo, and omitted model. What is left:
+mention gate, hardcoded `macro-inc/macro` repo, and omitted model.
 
-1. **Do we store user keys at all in v1?** See "Credential storage" below — the
-   repo is hardcoded to `macro-inc/macro`, which means the only users who can
-   use `@cursor` are already on our Cursor team, and for them sub-tokens remove
-   the secret-at-rest problem entirely. Unresolved, and it changes step 2.
-2. **Lazy or eager agent creation?** Should `spawn` create the Cursor agent up
-   front instead of waiting for the first prompt? Eager gives us the
-   `external_id` to persist immediately and deletes the observer port
-   (`cursor_acp` change #3) entirely, at the cost of fighting the service's lazy
-   design and burning an agent if the session is abandoned. Lazy is cleaner
-   architecturally; eager is meaningfully less code. Leaning lazy, since the
-   observer port is small and the laziness is load-bearing in `cursor_acp`'s
-   existing tests.
+1. **Do we store user keys at all in v1?** **Yes.** Sub-tokens were the
+   alternative, and they lose the property that makes this feature legible: the
+   agent runs as *the user*, on their own Cursor account, with their attribution
+   and their repo access. There is no deployment-wide `CURSOR_API_KEY` — the
+   manager resolves the session owner's key from `cursor_api_keys` at every
+   spawn, resume, and teardown, and a user who has not connected Cursor gets
+   `HarnessError::CursorNotConnected` in the channel rather than a silent skip.
+2. **Lazy or eager agent creation?** **Lazy**, as leaned. `RecordingCursor`
+   decorates `CursorAgents` and writes the `external_agent_session` row inside
+   `create_agent`, before it returns — so no prompt can be answered by an agent
+   the database does not know about, and the laziness stays load-bearing in the
+   service's own tests.
 3. ~~Is `ContainerManager::resume` exercised today?~~ **Resolved: yes, and it is
-   a primary path.** `domain/service.rs:416` calls it whenever an action is sent
-   to a session with nothing attached (`AgentSessionError::Disconnected`), gated
-   on `is_managed_bot`. So it fires on every follow-up mention after a service
+   a primary path.** `domain/service.rs` calls it whenever an action is sent to
+   a session with nothing attached (`AgentSessionError::Disconnected`), gated on
+   the bot being managed. So it fires on every follow-up mention after a service
    restart. The resume work — capability advertisement, `session/load`, service
    pre-seeding — is mandatory, not a follow-up. A `@cursor` session that cannot
    resume is one that stops answering after any deploy.
 
-   Note the gate is `is_managed_bot(session.bot_id)`, which is another reason
-   `CURSOR_BOT_ID` has to join that set: without it, a disconnected Cursor
-   session takes the external-runtime branch and waits forever for an operator
-   to dial in that will never come.
+   That gate is why `CURSOR_BOT_ID` had to join the managed set (now
+   `AgentKind::is_managed`): without it, a disconnected Cursor session takes the
+   external-runtime branch and waits forever for an operator to dial in that
+   will never come.
