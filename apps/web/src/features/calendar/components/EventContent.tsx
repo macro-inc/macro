@@ -22,6 +22,7 @@ export function EventContent(props: EventContentProps) {
   const isRenderedAllDay = () => props.renderProps.event.allDay;
   const isMonthView = () => props.renderProps.view.type === 'dayGridMonth';
   const showsMonthDot = () => isMonthView() && !isRenderedAllDay();
+  const showsColorBar = () => !isMonthView() || isRenderedAllDay();
   const isCompact = () => isRenderedAllDay() || isMonthView();
   const showLocation = () =>
     !isRenderedAllDay() && props.renderProps.view.type === 'timeGridDay';
@@ -58,10 +59,14 @@ export function EventContent(props: EventContentProps) {
       class={cn(
         'calendar-event-content w-full min-w-0 overflow-hidden',
         !isCompact() && 'h-full min-h-0',
+        showsColorBar() && 'calendar-event-content-with-color-bar',
         props.isSelected && 'calendar-event-content-selected'
       )}
       data-response-status={selfResponseStatus()}
     >
+      <Show when={showsColorBar()}>
+        <span class="calendar-event-color-bar" aria-hidden="true" />
+      </Show>
       <div
         class={cn(
           'calendar-event-content-layout flex w-full min-h-0 flex-col overflow-hidden',
