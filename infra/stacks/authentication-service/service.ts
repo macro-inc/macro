@@ -293,22 +293,18 @@ export class AuthenticationService extends pulumi.ComponentResource {
           actions: CURSOR_API_KEY_KMS_WRITE_ACTIONS,
           resources: ['*'],
         },
-        // The agent harness decrypts a user's key at session spawn and resume.
-        // Granted by role ARN passed in rather than by this stack reaching into
-        // another, so the dependency stays one-directional.
-        ...(cursorApiKeyReaderRoleArns.length > 0
-          ? [
-              {
-                sid: 'AllowAgentHarnessCursorKeyDecryption',
-                effect: 'Allow',
-                principals: [
-                  { type: 'AWS', identifiers: cursorApiKeyReaderRoleArns },
-                ],
-                actions: CURSOR_API_KEY_KMS_READ_ACTIONS,
-                resources: ['*'],
-              },
-            ]
-          : []),
+        // The agent harness decrypts a session owner's key at every spawn and
+        // resume. Granted by role ARN passed in rather than by this stack
+        // reaching into another, so the dependency stays one-directional.
+        {
+          sid: 'AllowAgentHarnessCursorKeyDecryption',
+          effect: 'Allow',
+          principals: [
+            { type: 'AWS', identifiers: cursorApiKeyReaderRoleArns },
+          ],
+          actions: CURSOR_API_KEY_KMS_READ_ACTIONS,
+          resources: ['*'],
+        },
       ],
     });
 

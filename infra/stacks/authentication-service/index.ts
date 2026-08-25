@@ -38,15 +38,19 @@ const MICROSOFT_TOKEN_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
 const CURSOR_API_KEY_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
   'cursor_api_key_kms_deletion_window_days'
 );
-// Role ARNs allowed to decrypt Cursor API keys. Empty until the agent harness
-// stack publishes its task role; the key is still created, so registering a key
-// works before any session can read one.
-const CURSOR_API_KEY_READER_ROLE_ARNS =
-  config
-    .get('cursor_api_key_reader_role_arns')
-    ?.split(',')
-    .map((arn: string) => arn.trim())
-    .filter((arn: string) => arn.length > 0) ?? [];
+// Role ARNs allowed to decrypt Cursor API keys. The agent harness is the one
+// reader there is: it decrypts a session owner's key on every spawn and
+// resume, so without this grant every `@cursor` session fails at KMS. Taken
+// from the harness stack's own export rather than a hand-copied ARN, so a
+// re-created role cannot silently leave the policy pointing at a dead one.
+const agentHarnessStack = new pulumi.StackReference('agent-harness-stack', {
+  name: `macro-inc/agent-harness-service/${stack}`,
+});
+const CURSOR_API_KEY_READER_ROLE_ARNS = [
+  agentHarnessStack
+    .getOutput('agentHarnessServiceRoleArn')
+    .apply((value) => value as string),
+];
 
 const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
   `fusionauth_client_secret_key`

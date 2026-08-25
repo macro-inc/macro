@@ -33,7 +33,6 @@ pub struct PutCursorApiKeyRequest {
         (status = 400, body = model::response::ErrorResponse),
         (status = 401, body = String),
         (status = 403, body = model::response::ErrorResponse),
-        (status = 503, body = model::response::ErrorResponse),
     )
 )]
 // `req` is skipped: it is the key itself, and an instrumented span field would
@@ -47,10 +46,7 @@ pub async fn handler(
     let user_id = &user_context.authorization.macro_user_id;
     require_macro_staff(user_id)?;
 
-    let cipher = ctx
-        .cursor_api_key_cipher
-        .as_ref()
-        .ok_or(CursorApiKeyError::Unavailable)?;
+    let cipher = &ctx.cursor_api_key_cipher;
 
     // Parsed before anything else, so a malformed key never reaches KMS.
     let key = CursorApiKey::parse(&req.api_key).map_err(|_| CursorApiKeyError::MalformedKey)?;

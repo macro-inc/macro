@@ -154,11 +154,6 @@ export type putCursorApiKeyResponse403 = {
   status: 403;
 };
 
-export type putCursorApiKeyResponse503 = {
-  data: ErrorResponse;
-  status: 503;
-};
-
 export type putCursorApiKeyResponseSuccess = putCursorApiKeyResponse200 & {
   headers: Headers;
 };
@@ -166,7 +161,6 @@ export type putCursorApiKeyResponseError = (
   | putCursorApiKeyResponse400
   | putCursorApiKeyResponse401
   | putCursorApiKeyResponse403
-  | putCursorApiKeyResponse503
 ) & {
   headers: Headers;
 };

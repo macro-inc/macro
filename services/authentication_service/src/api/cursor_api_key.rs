@@ -46,10 +46,9 @@ fn require_macro_staff(user_id: &MacroUserIdStr<'_>) -> Result<(), CursorApiKeyE
 /// when the key was last replaced, which is the only thing a user can check
 /// against their own memory when a session starts failing.
 ///
-/// Deliberately *not* reporting whether the deployment is configured to accept
-/// keys. That is operator information: a user who sees it cannot act on it, and
-/// the operator already learns it from the startup log. A misconfigured
-/// deployment fails the save, which is the honest signal.
+/// Deliberately *not* reporting anything about the deployment itself. That is
+/// operator information: a user who sees it cannot act on it, and a service
+/// that cannot reach KMS does not start.
 #[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CursorApiKeyStatus {
@@ -65,9 +64,6 @@ pub enum CursorApiKeyError {
     /// The supplied value does not look like a Cursor API key.
     #[error("value does not look like a Cursor API key")]
     MalformedKey,
-    /// This deployment has no KMS key configured for Cursor keys.
-    #[error("this deployment does not accept Cursor API keys")]
-    Unavailable,
     /// Cursor agents are currently restricted to Macro staff.
     #[error("Cursor agents are only available to Macro staff")]
     NotMacroStaff,
@@ -82,8 +78,6 @@ impl axum::response::IntoResponse for CursorApiKeyError {
         let status = match self {
             // A shape this service cannot use is the client's mistake.
             Self::MalformedKey => StatusCode::BAD_REQUEST,
-            // Not "forbidden": the caller is allowed, the deployment cannot.
-            Self::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
             Self::NotMacroStaff => StatusCode::FORBIDDEN,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };

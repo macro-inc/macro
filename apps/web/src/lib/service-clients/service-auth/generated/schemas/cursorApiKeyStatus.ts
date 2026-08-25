@@ -13,10 +13,9 @@ Deliberately thin. `registered` drives the whole UI; `updatedAt` lets it say
 when the key was last replaced, which is the only thing a user can check
 against their own memory when a session starts failing.
 
-Deliberately *not* reporting whether the deployment is configured to accept
-keys. That is operator information: a user who sees it cannot act on it, and
-the operator already learns it from the startup log. A misconfigured
-deployment fails the save, which is the honest signal.
+Deliberately *not* reporting anything about the deployment itself. That is
+operator information: a user who sees it cannot act on it, and a service
+that cannot reach KMS does not start.
  */
 export interface CursorApiKeyStatus {
   /** Whether this user has a key stored. */

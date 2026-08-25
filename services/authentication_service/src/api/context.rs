@@ -115,10 +115,8 @@ pub(crate) struct ApiContext {
     pub github_link_service: Arc<GithubLinkServiceType>,
     pub auth_client: Arc<fusionauth::FusionAuthClient>,
     pub microsoft_token_cipher: Option<Arc<dyn MicrosoftTokenCipher>>,
-    /// Encrypts users' Cursor API keys. `None` when this deployment has no KMS
-    /// key configured for them, which the settings endpoints report as
-    /// unavailable rather than failing on save.
-    pub cursor_api_key_cipher: Option<Arc<dyn CursorApiKeyCipher>>,
+    /// Encrypts users' Cursor API keys.
+    pub cursor_api_key_cipher: Arc<dyn CursorApiKeyCipher>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub document_storage_service_client:

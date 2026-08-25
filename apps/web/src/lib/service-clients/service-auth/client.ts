@@ -160,9 +160,9 @@ export type ToggleAutoJoinDomainErrorCode = 'GENERIC_DOMAIN_NOT_ALLOWED';
  *
  * These endpoints answer with a body that already says what went wrong and is
  * written to be safe to show a user — "value does not look like a Cursor API
- * key", "this deployment does not accept Cursor API keys". The default handler
- * throws that away and reports `HTTP error! status: 503`, which is how a
- * misconfigured deployment ended up indistinguishable from a real failure.
+ * key", "Cursor agents are only available to Macro staff". The default handler
+ * throws that away and reports `HTTP error! status: 403`, which tells the user
+ * nothing they can act on.
  */
 const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERROR'> =
   async function handleCursorApiKeyErrorResponse(response) {
