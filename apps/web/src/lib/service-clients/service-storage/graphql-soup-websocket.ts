@@ -1,7 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client } from '@urql/core';
-import { SoupUpdatesDocument } from './graphql/generated/graphql';
+import {
+  NotificationUpdatesDocument,
+  type NotificationUpdatesSubscription,
+  SoupUpdatesDocument,
+} from './graphql/generated/graphql';
 
 const SOUP_GRAPHQL_WEBSOCKET_PATH = '/items/soup/graphql/ws';
 
@@ -77,41 +81,86 @@ export function createGraphqlSoupWebSocketUrlResolver({
   };
 }
 
-/** Owns the one Soup update subscription for a page context. */
-export function createSoupUpdatesSubscriptionLifecycle(): {
+export type GraphqlNotificationPatch =
+  NotificationUpdatesSubscription['notificationUpdates'];
+
+type NotificationPatchListener = (patch: GraphqlNotificationPatch) => void;
+
+const notificationPatchListeners = new Set<NotificationPatchListener>();
+
+/** Subscribes to typed notification patches received from GraphQL. */
+export function subscribeToGraphqlNotificationPatches(
+  listener: NotificationPatchListener
+): () => void {
+  notificationPatchListeners.add(listener);
+  return () => notificationPatchListeners.delete(listener);
+}
+
+function publishNotificationPatch(patch: GraphqlNotificationPatch): void {
+  for (const listener of notificationPatchListeners) listener(patch);
+}
+
+const LIVE_UPDATE_SUBSCRIPTIONS = [
+  {
+    document: SoupUpdatesDocument,
+    errorMessage: 'GraphQL Soup updates subscription error',
+  },
+  {
+    document: NotificationUpdatesDocument,
+    errorMessage: 'GraphQL notification updates subscription error',
+  },
+] as const;
+
+/** Owns the realtime subscriptions served by the Soup GraphQL websocket. */
+export function createGraphqlSoupSubscriptionsLifecycle(): {
   replace(client?: Pick<Client, 'subscription'>, host?: CacheHost): void;
   dispose(): void;
 } {
-  let unsubscribe: (() => void) | undefined;
+  let unsubscribes: Array<() => void> = [];
+
+  const unsubscribeAll = () => {
+    for (const unsubscribe of unsubscribes) unsubscribe();
+    unsubscribes = [];
+  };
 
   return {
     replace(client, host) {
-      unsubscribe?.();
-      unsubscribe = undefined;
-      if (!client || !host || host.disabled) return;
+      unsubscribeAll();
+      if (!client) return;
 
-      let signaledFailure = false;
-      const subscription = client
-        .subscription(SoupUpdatesDocument, {})
-        .subscribe((result) => {
-          if (result.error) {
-            console.warn(
-              'GraphQL Soup updates subscription error',
-              result.error
+      const subscriptions =
+        host && !host.disabled
+          ? LIVE_UPDATE_SUBSCRIPTIONS
+          : LIVE_UPDATE_SUBSCRIPTIONS.filter(
+              ({ document }) => document === NotificationUpdatesDocument
             );
-            if (!signaledFailure) {
-              signaledFailure = true;
-              toast.failure('Live updates disconnected', {
-                subtext: 'Refresh the app to reconnect.',
-              });
+      let signaledFailure = false;
+      unsubscribes = subscriptions.map(({ document, errorMessage }) => {
+        const subscription = client
+          .subscription(document, {})
+          .subscribe((result) => {
+            if (
+              document === NotificationUpdatesDocument &&
+              result.data != null
+            ) {
+              publishNotificationPatch(
+                (result.data as NotificationUpdatesSubscription)
+                  .notificationUpdates
+              );
             }
-          }
-        });
-      unsubscribe = () => subscription.unsubscribe();
+            if (result.error) {
+              console.warn(errorMessage, result.error);
+              if (!signaledFailure) {
+                signaledFailure = true;
+                toast.failure('Live updates disconnected', {
+                  subtext: 'Refresh the app to reconnect.',
+                });
+              }
+            }
+          });
+        return () => subscription.unsubscribe();
+      });
     },
-    dispose() {
-      unsubscribe?.();
-      unsubscribe = undefined;
-    },
+    dispose: unsubscribeAll,
   };
 }

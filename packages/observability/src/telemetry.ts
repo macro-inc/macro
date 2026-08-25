@@ -33,16 +33,27 @@ export class Telemetry {
 		name: string,
 		operation?: SpanOperation<T>,
 	): Span | Promise<T> {
-		const span = Telemetry.#tracing.span(name);
-		if (!operation) return span;
+		return Telemetry.#runSpan(Telemetry.#tracing.span(name), operation);
+	}
 
-		return span.run(async () => {
-			try {
-				return await operation(span);
-			} finally {
-				span.end();
-			}
-		});
+	/**
+	 * Start telemetry whose complete span tree is forbidden from receiving the
+	 * runtime user-id enrichment. Use this for privacy-aggregated subsystem
+	 * metrics whose schema does not permit identity.
+	 */
+	static anonymousSpan<T>(
+		name: string,
+		operation: SpanOperation<T>,
+	): Promise<T>;
+	static anonymousSpan(name: string): Span;
+	static anonymousSpan<T>(
+		name: string,
+		operation?: SpanOperation<T>,
+	): Span | Promise<T> {
+		return Telemetry.#runSpan(
+			Telemetry.#tracing.anonymousSpan(name),
+			operation,
+		);
 	}
 
 	/** Start an HTTP client span. Callers must end the returned span. */
@@ -75,6 +86,21 @@ export class Telemetry {
 			Telemetry.#tracing.shutdown(),
 			Telemetry.#logging.shutdown(),
 		]);
+	}
+
+	static #runSpan<T>(
+		span: Span,
+		operation?: SpanOperation<T>,
+	): Span | Promise<T> {
+		if (!operation) return span;
+
+		return span.run(async () => {
+			try {
+				return await operation(span);
+			} finally {
+				span.end();
+			}
+		});
 	}
 
 	static async #initialize(config: TelemetryInitConfig): Promise<void> {

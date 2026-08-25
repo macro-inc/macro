@@ -126,6 +126,13 @@ pub struct Config {
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
 
+    /// Whether calendar events participate in search. Off by default so a
+    /// deployed environment can carry the code before its calendar index has
+    /// been created and backfilled — with this false, calendar events are
+    /// dropped from the searched set no matter what a request asks for.
+    #[macro_config_default(false)]
+    pub calendar_search_enabled: bool,
+
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]
     pub queue_max_messages: i32,

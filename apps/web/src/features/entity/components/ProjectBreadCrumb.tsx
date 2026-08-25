@@ -53,7 +53,7 @@ export function ProjectBreadCrumb(props: {
     <a
       onClick={handleClick}
       class={cn('flex gap-1 items-center min-w-0 cursor-default', {
-        'hover:text-accent': projectQuery.isSuccess,
+        'text-link hover:text-link-hover': projectQuery.isSuccess,
       })}
     >
       <FolderIcon class="size-[1em]" />

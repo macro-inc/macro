@@ -6,12 +6,28 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Top-level Google scope granting the complete calendar capability,
-/// mirroring how email requests the single broad `gmail.modify` scope.
-pub const GOOGLE_CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
+/// Read and write events on every calendar the user can access. Covers the
+/// event list, get, instances, insert, patch, and watch calls.
+pub const GOOGLE_CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
+
+/// Read the user's calendar subscriptions. Covers the `calendarList` call that
+/// discovers which calendars to sync.
+pub const GOOGLE_CALENDAR_LIST_SCOPE: &str =
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 
 /// The Google Calendar scopes Macro requests for the calendar capability.
-pub const GOOGLE_CALENDAR_SCOPES: [&str; 1] = [GOOGLE_CALENDAR_SCOPE];
+pub const GOOGLE_CALENDAR_SCOPES: [&str; 2] =
+    [GOOGLE_CALENDAR_EVENTS_SCOPE, GOOGLE_CALENDAR_LIST_SCOPE];
+
+/// The single broad scope Macro requested before narrowing to the two above.
+/// Google keeps a granted scope for the life of the grant, so inboxes connected
+/// before the narrowing still report it; it is what [`GoogleScopeSet::without_calendar`]
+/// must strip beyond the two scopes Macro requests today. It deliberately does
+/// not count towards the capability: an inbox reports it without Macro having
+/// asked for calendar in this era, so the user re-grants through the normal
+/// prompt (or drops it entirely by removing Macro's access at Google).
+pub const GOOGLE_CALENDAR_FULL_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
+
 /// Build the space-delimited calendar scope fragment for an OAuth authorization URL.
 pub fn google_calendar_scope_parameter() -> String {
     GOOGLE_CALENDAR_SCOPES.join(" ")
@@ -53,6 +69,54 @@ impl GoogleScopeSet {
             .iter()
             .all(|scope| self.contains(scope))
     }
+
+    /// Return the same grant without any Google Calendar scope, leaving the
+    /// Gmail capability untouched. Every calendar scope is dropped, not just
+    /// the two Macro requests, so a grant that carries a broader calendar
+    /// scope cannot keep the capability alive.
+    pub fn without_calendar(self) -> Self {
+        Self(
+            self.0
+                .into_iter()
+                .filter(|scope| !scope.starts_with(GOOGLE_CALENDAR_SCOPE_PREFIX))
+                .collect(),
+        )
+    }
+}
+
+/// Every Google Calendar scope shares this prefix.
+const GOOGLE_CALENDAR_SCOPE_PREFIX: &str = "https://www.googleapis.com/auth/calendar";
+
+/// Why a Google grant is being recorded, which decides how it interacts with a
+/// standing calendar opt-out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CalendarGrantIntent {
+    /// The consent flow explicitly asked for calendar access, so the user is
+    /// (re-)enabling the capability: clear any standing opt-out.
+    CalendarRequested,
+    /// Calendar scopes, if any are present, only rode along from an earlier
+    /// grant (`include_granted_scopes=true`) or a token-discovery probe. A
+    /// standing opt-out keeps calendar off and the scopes are not recorded.
+    Incidental,
+}
+
+/// A watch channel that must be closed at Google after its calendar is gone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarWatchRelease {
+    /// Channel identifier Macro opened the watch with.
+    pub channel_id: String,
+    /// Provider-assigned resource identifier for the watched calendar.
+    pub resource_id: String,
+}
+
+/// What a completed calendar disconnect leaves for the caller to finish at the
+/// provider. Local state is already gone by the time this is returned.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DisconnectedGoogleCalendar {
+    /// Token identity of the disconnected inbox, for closing its channels.
+    pub token_identity: CalendarLinkTokenIdentity,
+    /// Push channels that were open when the calendar was removed.
+    pub watch_channels: Vec<CalendarWatchRelease>,
 }
 
 /// The mutually exclusive time shape of a calendar event.
@@ -193,6 +257,51 @@ impl EventTransparency {
             Self::Transparent => "transparent",
         }
     }
+}
+
+/// The conferencing system backing an event's join URL.
+///
+/// Macro generates only Google Meet conferences, so this distinguishes one it
+/// created from a third party's — Zoom and friends arriving as `addOn`
+/// conference data, or a legacy classic Hangout. Clients use it to label the
+/// conference and to tell whether the Meet toggle reflects a Macro-managed
+/// conference.
+///
+/// It does not gate mutation. An explicit request replaces or detaches any
+/// conference, third-party included, exactly as deleting the event would;
+/// what protects a conference is that omitting the field leaves it untouched,
+/// so an unrelated edit never disturbs it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ConferenceProvider {
+    /// Google Meet.
+    GoogleMeet,
+    /// A third-party or legacy conference Macro leaves untouched.
+    Other,
+}
+
+impl ConferenceProvider {
+    /// Database representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::GoogleMeet => "google_meet",
+            Self::Other => "other",
+        }
+    }
+}
+
+/// A requested change to an event's conferencing. Omitting the field leaves
+/// the existing conference untouched; only these values change it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ConferenceChange {
+    /// Generate a new Google Meet conference and attach it.
+    GoogleMeet,
+    /// Detach whatever conference is currently attached.
+    #[serde(rename = "none")]
+    Removed,
 }
 
 /// An attendee on a calendar event.
@@ -358,6 +467,10 @@ pub struct CalendarEvent {
     pub organizer_name: Option<String>,
     /// Direct join URL when known.
     pub conference_url: Option<String>,
+    /// Which conferencing system backs `conference_url`. `None` whenever no
+    /// conference is attached.
+    #[serde(default)]
+    pub conference_provider: Option<ConferenceProvider>,
     /// Provider/iCalendar sequence number.
     pub sequence: u32,
     /// Whether the current user can edit the canonical source.
@@ -466,6 +579,62 @@ impl CalendarOccurrenceCursor {
             occurrence_key: occurrence.occurrence_key.clone(),
         }
     }
+}
+
+/// One mentioned event to resolve for a requester's mention preview.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CalendarMentionRequestItem {
+    /// Mentioned calendar event entity id, possibly another user's projection.
+    pub event_id: Uuid,
+    /// Occurrence the mention points at, when it targets one instance.
+    pub occurrence_key: Option<String>,
+}
+
+/// Resolution of one mentioned calendar event for a requester.
+///
+/// Event entities are per-owner projections of a meeting, so a mention from
+/// another attendee resolves through the shared iCalendar UID to the
+/// requester's own copy — the preview never exposes another user's row.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CalendarMentionPreview {
+    /// The requester holds a live copy of the meeting on a visible calendar.
+    Accessible(Box<CalendarMentionEvent>),
+    /// The event exists but is on no calendar the requester can see.
+    NoAccess,
+    /// No live event has this id.
+    DoesNotExist,
+}
+
+/// Meeting-level fields shown in a calendar event mention preview, taken from
+/// the requester's own projection of the meeting.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionEvent {
+    /// The requester's own event entity for the mentioned meeting. Differs
+    /// from the mentioned id when the mention came from another attendee.
+    pub viewer_event_id: Uuid,
+    /// Display title.
+    pub title: String,
+    /// Time of the previewed instance: the requested occurrence when it
+    /// exists, else the next upcoming one, else the latest past one, else the
+    /// series start.
+    pub time: EventTime,
+    /// Key of the previewed instance, absent when no occurrence is
+    /// materialized.
+    pub occurrence_key: Option<String>,
+    /// Whether the event repeats.
+    pub is_recurring: bool,
+    /// Location label, when set.
+    pub location: Option<String>,
+    /// Organizer email.
+    pub organizer_email: Option<String>,
+    /// Organizer display name.
+    pub organizer_name: Option<String>,
+    /// Number of attendees on the requester's copy.
+    pub attendee_count: usize,
+    /// Entity update time of the requester's copy.
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Inclusive/exclusive viewport range for occurrence queries.
@@ -636,6 +805,8 @@ pub struct CalendarAttendeeInput {
     pub email: String,
     /// Whether attendance is optional.
     pub is_optional: bool,
+    /// RSVP to write for this attendee. `None` leaves the provider default.
+    pub response_status: Option<AttendeeResponseStatus>,
 }
 
 /// User-supplied fields for a new provider event.
@@ -659,6 +830,8 @@ pub struct CalendarEventDraft {
     pub transparency: Option<EventTransparency>,
     /// Reminder configuration; `None` keeps the provider default.
     pub reminders: Option<EventReminders>,
+    /// Conference to attach on creation. `None` creates the event without one.
+    pub conference: Option<ConferenceChange>,
 }
 
 /// User-supplied changes to an existing provider event. `None` fields are
@@ -683,6 +856,8 @@ pub struct CalendarEventPatch {
     pub transparency: Option<EventTransparency>,
     /// Replacement reminder configuration.
     pub reminders: Option<EventReminders>,
+    /// Conference change to apply; `None` leaves the conference untouched.
+    pub conference: Option<ConferenceChange>,
 }
 
 impl CalendarEventPatch {
@@ -752,7 +927,7 @@ impl CalendarEventMutationTarget {
 }
 
 /// A calendar visible to a requester, listed for pickers and filters.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct VisibleCalendar {

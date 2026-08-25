@@ -1,11 +1,13 @@
-import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { ROUTER_BASE_CONCAT, toBaseRelative } from '@app/constants/routerBase';
 import { updateUserAuth } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { currentSettingsReturnTo } from '@core/constant/SettingsState';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { useInitGmailLink } from '@queries/auth';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import type { ConsentScopes } from '@service-auth/client';
 import {
   ALREADY_INITIALIZED_CODE,
   emailClient,
@@ -20,6 +22,7 @@ import type { UseQueryResult } from '@tanstack/solid-query';
 import { invoke } from '@tauri-apps/api/core';
 import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
+import { rememberInboxLinkReturn } from './return-layout';
 import { requestShareInboxConfirmation } from './share-conflict';
 
 const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
@@ -215,11 +218,20 @@ const TOO_MANY_PENDING_LINKS_MESSAGE =
  * navigates the browser to the OAuth consent page. The callback returns to
  * `/inbox-link-callback`, which provisions the new link.
  *
+ * `scopes` selects which permissions the consent screen asks for. Only calendar
+ * entry points may request calendar access, and they pass `calendar` for an
+ * inbox that is already connected so the user isn't shown mailbox permissions
+ * they have already granted.
+ *
  * On native iOS the OAuth runs inline in an `ASWebAuthenticationSession` via
  * the Tauri auth plugin (the app never navigates away), and the link is
  * provisioned here directly with the `link_id` from the init response. A
  * shared-inbox conflict is surfaced through `requestShareInboxConfirmation`,
  * rendered by the globally mounted dialog.
+ *
+ * Everywhere else — web and desktop — the consent screen replaces the page, so
+ * the layout the user was working in is stashed against the new link id first
+ * and the callback restores it. iOS needs no stash: its layout never unmounts.
  */
 export function useAddInboxFlow() {
   const initGmailLink = useInitGmailLink();
@@ -250,10 +262,11 @@ export function useAddInboxFlow() {
     );
   };
 
-  const startNativeFlow = async () => {
-    const result = await initGmailLink.mutateAsync(
-      'macro://inbox-link-callback'
-    );
+  const startNativeFlow = async (scopes: ConsentScopes) => {
+    const result = await initGmailLink.mutateAsync({
+      originalUrl: 'macro://inbox-link-callback',
+      scopes,
+    });
     if (result.isErr()) {
       if (isPaymentRequired(result.error)) {
         showPaywall(PaywallKey.MULTI_INBOX);
@@ -292,15 +305,26 @@ export function useAddInboxFlow() {
     await completeNativeLink(result.value.link_id, false);
   };
 
-  return async () => {
+  return async (options?: { scopes?: ConsentScopes }) => {
+    const scopes = options?.scopes ?? 'gmail';
     if (getNativeMobilePlatform() === 'ios') {
-      await startNativeFlow();
+      await startNativeFlow(scopes);
       return;
     }
 
     const callbackUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}inbox-link-callback`;
-    const result = await initGmailLink.mutateAsync(callbackUrl);
+    const result = await initGmailLink.mutateAsync({
+      originalUrl: callbackUrl,
+      scopes,
+    });
     if (result.isOk()) {
+      // Leaving for Google unloads the app, and the split layout only lives in
+      // the URL — stash it so the callback can put it back rather than landing
+      // everyone on a default layout.
+      rememberInboxLinkReturn(result.value.link_id, {
+        url: `${toBaseRelative(window.location.pathname)}${window.location.search}${window.location.hash}`,
+        settingsReturnTo: currentSettingsReturnTo(),
+      });
       window.location.href = result.value.authorization_url;
     } else if (isPaymentRequired(result.error)) {
       showPaywall(PaywallKey.MULTI_INBOX);

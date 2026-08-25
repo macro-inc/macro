@@ -1,6 +1,4 @@
 use crate::pubsub::context::PubSubContext;
-use crate::util::redis::RedisClient;
-use crate::util::redis::rate_limit::RateLimitArgs;
 use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use email::domain::events::EmailMacroEvent;
@@ -15,7 +13,6 @@ use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
 };
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::gmail::operations::GmailApiOperation;
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -52,44 +49,6 @@ pub fn build_notification_recipients(
 /// timestamp for both endpoints; the historical seed passes the
 /// contact's pre-aggregated MIN/MAX.
 pub type CrmContactRecipient = (String, Option<String>, DateTime<Utc>, DateTime<Utc>);
-
-/// Arguments for checking Gmail API rate limits
-pub struct CheckGmailRateLimitArgs<'a> {
-    pub redis_client: &'a RedisClient,
-    pub link_id: Uuid,
-    pub gmail_operation: GmailApiOperation,
-    pub retryable: bool,
-    pub is_backfill: bool,
-}
-
-// check if we are rate limited by gmail before making any requests to the api
-pub async fn check_gmail_rate_limit(
-    args: CheckGmailRateLimitArgs<'_>,
-) -> Result<(), ProcessingError> {
-    if args
-        .redis_client
-        .is_rate_limited(RateLimitArgs {
-            user_id: args.link_id,
-            operation: args.gmail_operation,
-            is_backfill: args.is_backfill,
-        })
-        .await
-    {
-        return if args.retryable {
-            Err(ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiRateLimited,
-                source: anyhow::Error::msg("Gmail API rate limit exceeded"),
-            }))
-        } else {
-            Err(ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::GmailApiRateLimited,
-                source: anyhow::Error::msg("Gmail API rate limit exceeded"),
-            }))
-        };
-    }
-
-    Ok(())
-}
 
 #[tracing::instrument(skip(tx, result), level = "debug")]
 pub async fn complete_transaction_with_processing_error<T>(

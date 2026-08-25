@@ -185,7 +185,7 @@ export function TaskComposer(props: {
     const taskProperties = structuredClone(
       Object.entries(unwrap(propertyValues))
     );
-    const documentId = await createTaskWithProperties(
+    const createdTask = await createTaskWithProperties(
       taskTitle,
       taskContent,
       taskProperties,
@@ -195,9 +195,13 @@ export function TaskComposer(props: {
     setIsCreating(false);
     // createTaskWithProperties surfaces its own failure toast; keep the
     // draft so the user can retry.
-    if (!documentId) return;
+    if (!createdTask) return;
     resetComposer();
-    props.onSend({ documentId, title: taskTitle, content: taskContent });
+    props.onSend({
+      documentId: createdTask.documentId,
+      title: taskTitle,
+      content: taskContent,
+    });
   };
 
   const [attachHotkeys, composerHotkeyScope] = useHotkeyDOMScope(

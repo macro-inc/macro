@@ -140,7 +140,7 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
 "#;
 
 const MAILPIT_ROUTE: &str = r#"    # Mailpit serves itself under /mailpit (MP_WEBROOT), so no prefix strip —
-    # this is how a headless/preview stack reads its passwordless login codes.
+    # this is how a headless stack reads its passwordless login codes.
     handle /mailpit/* {
         reverse_proxy mailpit:8025
     }

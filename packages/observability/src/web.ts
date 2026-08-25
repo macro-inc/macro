@@ -5,6 +5,7 @@ import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 import type { TelemetryInitConfig } from "./config";
 import { ATTR_USER_ID } from "./constants";
+import { userIdSuppressed } from "./privacy";
 import type { TelemetryTracingProvider } from "./provider";
 
 /** Creates the browser OpenTelemetry provider used by the web application. */
@@ -17,7 +18,8 @@ export function createWebTracingProvider(
 		resource,
 		spanProcessors: [
 			{
-				onStart: (span) => {
+				onStart: (span, parentContext) => {
+					if (userIdSuppressed(parentContext)) return;
 					const userId = getUserId();
 					if (userId !== undefined) span.setAttribute(ATTR_USER_ID, userId);
 				},

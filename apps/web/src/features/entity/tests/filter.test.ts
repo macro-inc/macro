@@ -86,6 +86,41 @@ describe('unreadFilterFn', () => {
   });
 
   describe('mixed scenarios', () => {
+    it('treats an unviewed document mention as an unread channel notification', () => {
+      const entity: WithNotification<EntityData> = {
+        type: 'channel',
+        id: 'channel-1',
+        name: 'Channel',
+        ownerId: 'owner-1',
+        channelType: 'private',
+        notifications: () => [
+          {
+            entity_type: 'channel',
+            entity_id: 'channel-1',
+            id: 'notification-1',
+            created_at: '2025-01-01T00:00:00Z',
+            updated_at: '2025-01-01T00:00:00Z',
+            viewed_at: null,
+            done: false,
+            sent: true,
+            notification_event_type: 'document_mention',
+            notification_metadata: {
+              tag: 'document_mention',
+              content: {
+                channelType: 'private',
+                documentName: 'Document',
+                messageContent: 'Message',
+                messageId: 'message-1',
+                owner: 'owner-1',
+              },
+            },
+          },
+        ],
+      };
+
+      expect(unreadFilterFn(entity)).toBe(true);
+    });
+
     it('handles entity with multiple unviewed notifications', () => {
       const entity: WithNotification<EntityData> = {
         type: 'channel',

@@ -1,4 +1,5 @@
 import type { MacroOpts } from './config';
+import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
@@ -15,6 +16,7 @@ import { PropertiesNamespace } from './entities/properties/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UserNamespace } from './entities/users/namespace';
+import type { User } from './entities/users/user';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
@@ -33,6 +35,7 @@ export {
 } from './mentions';
 
 export class Macro<T extends MacroOpts = MacroOpts> {
+  readonly agentSessions: AgentSessionNamespace;
   readonly bots: BotsNamespace;
   readonly calls: CallRecordNamespace;
   readonly channels: ChannelNamespace;
@@ -63,6 +66,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.opts = opts;
     const client = new MacroClient(opts);
     this._client = client;
+    this.agentSessions = new AgentSessionNamespace(client);
     this.bots = new BotsNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);
@@ -92,10 +96,10 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     return this._client.myPrincipalId();
   }
 
-  /** Clone of this SDK acting on behalf of `userId` (sent as
+  /** Clone of this SDK acting on behalf of `user` (sent as
    * `x-macro-bot-for-macro-user-id`). Bot auth only — throws for user auth,
    * since a user token always acts as its own user. */
-  requestedAs(userId: string): Macro<T> {
-    return new Macro({ ...this.opts, requestedAs: userId });
+  requestedAs(user: User): Macro<T> {
+    return new Macro({ ...this.opts, requestedAs: user.id });
   }
 }

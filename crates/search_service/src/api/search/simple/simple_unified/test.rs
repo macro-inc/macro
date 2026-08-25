@@ -538,3 +538,23 @@ fn enforce_term_limits_truncates_on_char_boundary() {
     let out = enforce_term_limits(vec![long]).expect("single term is under the count cap");
     assert_eq!(out[0].chars().count(), MAX_TERM_CHARS);
 }
+
+/// The flag is the only thing keeping calendar events out of a deployed
+/// environment's search results, so the override direction matters: a request
+/// that asks for them must still get nothing while the flag is off.
+#[test]
+fn the_calendar_flag_overrides_what_the_request_asked_for() {
+    assert!(
+        calendar_events_searchable(true, true),
+        "requested and enabled is the only combination that searches calendar"
+    );
+    assert!(
+        !calendar_events_searchable(true, false),
+        "an explicit request must not defeat a disabled environment"
+    );
+    assert!(
+        !calendar_events_searchable(false, true),
+        "an enabled environment must still honour a NIL-excluded request"
+    );
+    assert!(!calendar_events_searchable(false, false));
+}

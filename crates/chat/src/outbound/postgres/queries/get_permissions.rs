@@ -1,8 +1,8 @@
 //! Fetch share permissions for a chat.
 
-use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
+use models_permissions::share_permission::{LinkShare, SharePermissionV2};
 use std::str::FromStr;
 
 /// Get the [`SharePermissionV2`] for a chat.
@@ -15,8 +15,8 @@ pub(crate) async fn get_chat_share_permission(
         r#"
         SELECT
             sp.id as id,
-            sp."isPublic" as is_public,
-            sp."publicAccessLevel" as "public_access_level?",
+            sp."linkShare" as "link_share?",
+            sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
             c."userId" as owner,
             COALESCE(
                 json_agg(json_build_object(
@@ -53,14 +53,14 @@ pub(crate) async fn get_chat_share_permission(
             None
         };
 
-    let public_access_level: Option<AccessLevel> = result
-        .public_access_level
-        .map(|s| AccessLevel::from_str(&s).unwrap());
-
+    let link_share = result
+        .link_share
+        .map(|value| LinkShare::from_str(&value))
+        .transpose()?;
     Ok(SharePermissionV2 {
         id: result.id,
-        is_public: result.is_public,
-        public_access_level,
+        link_share,
+        link_share_access_level: result.link_share_access_level,
         owner: result.owner,
         channel_share_permissions,
     })

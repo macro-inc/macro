@@ -217,6 +217,209 @@
           }
         }
       },
+      "CalendarEventMetadata": {
+        "type": "object",
+        "description": "Metadata for a calendar event fetched from the database.\n\nThe index carries the master span for ranking, but the occurrence a row\nshould display depends on when the query ran, so it is resolved here\nrather than indexed.",
+        "required": [
+          "createdAt",
+          "updatedAt",
+          "status",
+          "time",
+          "isRecurring",
+          "isReadOnly"
+        ],
+        "properties": {
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Direct conference join URL when known."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the canonical source prohibits mutation."
+          },
+          "isRecurring": {
+            "type": "boolean",
+            "description": "Whether the series carries a recurrence rule. Lets a row render a\nrecurring badge without parsing the rules."
+          },
+          "occurrence": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEventSearchOccurrence",
+                "description": "The instance this row points at. `None` when the series has no\nmaterialized occurrence — occurrences exist only inside a rolling\nwindow, so a row can legitimately fall back to `time`."
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "Canonical status (`confirmed`, `tentative`, `cancelled`)."
+          },
+          "time": {
+            "$ref": "#/components/schemas/CalendarEventSearchTime",
+            "description": "The series' own span."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CalendarEventSearchOccurrence": {
+        "type": "object",
+        "description": "The instance a search row points at.\n\nA recurring series is indexed once, as its master. Which instance the row\nshould show is decided per request rather than baked into the index: the\nnext occurrence at or after now, else the most recent past one. This is\nthe same resolution a calendar mention performs, so a search row and a\nmention of the same event agree on where they land.",
+        "required": ["occurrenceKey", "time"],
+        "properties": {
+          "occurrenceKey": {
+            "type": "string",
+            "description": "Stable key of the resolved instance within its series."
+          },
+          "time": {
+            "$ref": "#/components/schemas/CalendarEventSearchTime",
+            "description": "Span of the resolved instance."
+          }
+        }
+      },
+      "CalendarEventSearchResponseItem": {
+        "type": "object",
+        "description": "A single response item, part of the CalendarEventSearchResponse object",
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "updated_at",
+          "created_at",
+          "calendar_event_search_results"
+        ],
+        "properties": {
+          "calendar_event_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarEventSearchResult"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Standardized fields that all item types will share."
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CalendarEventSearchResponseItemWithMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CalendarEventSearchResponseItem"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metadata": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CalendarEventMetadata",
+                    "description": "Metadata from the database. None if the event no longer exists."
+                  }
+                ]
+              },
+              "properties": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Entity properties (e.g. tags) on the event."
+              }
+            }
+          }
+        ],
+        "description": "CalendarEventSearchResponseItem with metadata fetched from macrodb."
+      },
+      "CalendarEventSearchResult": {
+        "type": "object",
+        "required": ["highlight"],
+        "properties": {
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          }
+        }
+      },
+      "CalendarEventSearchTime": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Absolute timed event.",
+            "required": ["startsAt", "endsAt", "kind"],
+            "properties": {
+              "endsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Exclusive end."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timed"]
+              },
+              "startsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Inclusive start."
+              },
+              "timeZone": {
+                "type": ["string", "null"],
+                "description": "Original IANA time zone."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "All-day event with an exclusive end date.",
+            "required": ["startDate", "endDate", "kind"],
+            "properties": {
+              "endDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Exclusive end date."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["allDay"]
+              },
+              "startDate": {
+                "type": "string",
+                "format": "date",
+                "description": "Inclusive start date."
+              }
+            }
+          }
+        ],
+        "description": "Timed or all-day span of a calendar event.\n\nDeliberately a local mirror of `models_soup::calendar_event::SoupCalendarEventTime`\nrather than a reuse of it: this module needs both `ToSchema` (OpenAPI) and\n`JsonSchema` (AI tool schemas), and `models_soup` carries no schemars\ndependency. The wire shape is identical and must stay that way, so a\nclient can decode a search row and a soup row with one mapping.\n\nFields are camelCased per variant rather than via `rename_all_fields`,\nwhich utoipa ignores."
+      },
       "CallFilters": {
         "type": "object",
         "description": "Filters for call records.",
@@ -2947,6 +3150,64 @@
         "description": "Controls whether shared email threads are included in results.",
         "enum": ["exclude", "include", "only"]
       },
+      "SimpleCalendarEventSearchResponseBaseItem_HumanReadableTimestamp": {
+        "type": "object",
+        "required": [
+          "calendar_event_id",
+          "updated_at",
+          "created_at",
+          "title",
+          "user_id",
+          "is_recurring",
+          "highlight"
+        ],
+        "properties": {
+          "calendar_event_id": {
+            "type": "string",
+            "description": "The calendar event id"
+          },
+          "created_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the event was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the event"
+          },
+          "is_recurring": {
+            "type": "boolean",
+            "description": "Whether the series carries a recurrence rule"
+          },
+          "occurrence_key": {
+            "type": ["string", "null"],
+            "description": "Stable key of the instance this row points at, when one resolved"
+          },
+          "title": {
+            "type": "string",
+            "description": "The event title"
+          },
+          "updated_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "description": "DateTime<Utc> ts_seconds deserialization + RFC3339 serialization"
+              }
+            ],
+            "description": "The time the event was last updated"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The owner of this event projection"
+          }
+        }
+      },
       "SimpleCallRecordSearchResponseBaseItem_HumanReadableTimestamp": {
         "type": "object",
         "required": [
@@ -3811,6 +4072,23 @@
                 }
               }
             ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleCalendarEventSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["calendarEvent"]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -3913,6 +4191,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["call"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SimpleCalendarEventSearchResponseBaseItem_HumanReadableTimestamp"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["calendarEvent"]
                   }
                 }
               }
@@ -4141,6 +4436,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["company"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CalendarEventSearchResponseItemWithMetadata"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["calendarEvent"]
                   }
                 }
               }

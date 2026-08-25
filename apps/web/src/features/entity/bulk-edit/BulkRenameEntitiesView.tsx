@@ -78,14 +78,14 @@ export const BulkRenameEntitiesView = (props: {
     let renameFn: (old?: string) => string = () => newValue;
     switch (mode()) {
       case 'prepend':
-        renameFn = (old: string) => newValue + old;
+        renameFn = (old) => newValue + (old ?? '');
         break;
       case 'append':
-        renameFn = (old: string) => old + newValue;
+        renameFn = (old) => (old ?? '') + newValue;
         break;
       case 'replace':
-        renameFn = (old: string) =>
-          old.replaceAll(replaceFind(), replaceWith());
+        renameFn = (old) =>
+          (old ?? '').replaceAll(replaceFind(), replaceWith());
         break;
       default:
     }

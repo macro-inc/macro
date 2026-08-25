@@ -1,5 +1,7 @@
 //! Inbound adapters for the chat domain.
 
+mod error_response;
+
 #[cfg(feature = "attachment")]
 pub mod attachment;
 

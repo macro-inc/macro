@@ -1,5 +1,6 @@
 //! ReadContent tool for reading document content.
 
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use std::str::FromStr;
 
 use crate::domain::{
@@ -87,6 +88,10 @@ pub struct ReadContentResponse {
 pub struct ReadContent {
     #[schemars(description = "The id of the document you want to retrieve content for.")]
     pub document_id: Uuid,
+}
+
+impl ToolAnnotated for ReadContent {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read document");
 }
 
 #[async_trait]

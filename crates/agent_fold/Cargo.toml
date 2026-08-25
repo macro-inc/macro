@@ -1,0 +1,70 @@
+[package]
+edition = "2024"
+name = "agent_fold"
+publish = false
+version = "0.1.0"
+
+[lib]
+# `cdylib` for the browser build; `rlib` so services keep linking it normally.
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["cli"]
+# The `fold_jsonl` viewer and the `export_types` codegen binary - native
+# developer tooling, neither of which the wasm build needs. `fold_jsonl` needs
+# `tokio`, which pulls in `mio`, which does not build for wasm32;
+# `export_types` needs `std::fs` to write its output, which is pointless on a
+# target with no filesystem. The library itself uses neither - the fold is
+# sync, the ports are plain futures, and the browser only wants the schema.
+cli = ["dep:clap", "dep:tokio"]
+# In-memory port implementations and recorded fixtures, for crates that test
+# against this one.
+test-utils = []
+# OpenAPI schemas for the vocabulary that reaches an HTTP boundary. Off by
+# default: `utoipa` is dead weight for the wasm fold, which serializes but
+# never documents.
+openapi = ["dep:utoipa"]
+
+# Needs an async runtime and an argument parser, which the library does not.
+[[bin]]
+name = "fold_jsonl"
+required-features = ["cli"]
+
+# Needs a filesystem to write to, which the library does not.
+[[bin]]
+name = "export_types"
+required-features = ["cli"]
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+# Schema only - the fold reads recorded frames and never opens a connection.
+# `default-features = false` drops ARP's transport (tokio, axum, tungstenite),
+# which is what lets this crate reach wasm. Native builds are unaffected:
+# whoever else needs the transport turns it back on, and cargo unifies.
+agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
+clap = { workspace = true, optional = true }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+non_empty = { path = "../non_empty" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+specta = { workspace = true, features = ["serde_json"] }
+specta-serde = { workspace = true }
+specta-typescript = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+
+# The wasm-bindgen shell in `inbound::wasm`, which only exists on wasm32. Kept
+# target-gated rather than behind a feature so a native `cargo build` never
+# compiles or resolves any of it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde-wasm-bindgen = { workspace = true }
+wasm-bindgen = { workspace = true }
+
+[dev-dependencies]
+insta = { version = "1.48.0", features = ["glob"] }
+tokio = { workspace = true }

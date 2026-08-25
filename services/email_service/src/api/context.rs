@@ -16,6 +16,7 @@ use email_service::calendar_tokens::CalendarTokenProviderAdapter;
 use email_service::pubsub::calendar_backfill_adapters::RedisCalendarRequestGate;
 
 use email_service::config::Config;
+use email_service::outbound::email_api::GmailApi;
 use email_service::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
@@ -37,6 +38,7 @@ pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
     GoogleCalendarClient<RedisCalendarRequestGate>,
     CalendarTokenProviderAdapter,
+    EmailEventBroker,
 >;
 pub(crate) type EmailEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
 pub(crate) type EmailEntityAccessManagementService =
@@ -58,7 +60,9 @@ pub(crate) type EmailSvc = EmailServiceImpl<
 pub(crate) struct ApiContext {
     pub db: sqlx::Pool<sqlx::Postgres>,
     pub auth_service_client: Arc<authentication_service_client::AuthServiceClient>,
+    // The raw client is retained only for Gmail webhook JWKS/JWT authentication.
     pub gmail_client: Arc<gmail_client::GmailClient>,
+    pub email_api: GmailApi,
     pub redis_client: Arc<RedisClient>,
     pub sqs_client: Arc<sqs_client::SQS>,
     pub s3_client: Arc<s3_client::S3>,

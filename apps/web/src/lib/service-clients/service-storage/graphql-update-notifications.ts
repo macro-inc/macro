@@ -3,9 +3,14 @@ import {
   optimisticMutationDispositionOf,
 } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
+import { match } from 'ts-pattern';
 import {
+  type NotificationEntityInput,
   type NotificationUpdateOperation,
   UpdateNotificationsDocument,
+  UpdateNotificationsForEntityDocument,
+  type UpdateNotificationsForEntityMutation,
+  type UpdateNotificationsForEntityMutationVariables,
   type UpdateNotificationsMutation,
   type UpdateNotificationsMutationVariables,
 } from './graphql/generated/graphql';
@@ -19,6 +24,26 @@ export type GraphqlUpdateNotificationsArgs = {
 /** Authoritative notification rows returned after a committed write. */
 export type GraphqlUpdateNotificationsResult =
   UpdateNotificationsMutation['updateNotifications'];
+
+/** Input for updating every notification associated with one or more entities. */
+export type GraphqlUpdateNotificationsForEntitiesArgs = {
+  entities: NotificationEntityInput[];
+  operation: Exclude<NotificationUpdateOperation, 'MARK_UNDONE'>;
+};
+
+/** Authoritative rows returned after an entity-scoped notification write. */
+export type GraphqlUpdateNotificationsForEntitiesResult =
+  UpdateNotificationsForEntityMutation['updateNotificationsForEntity'];
+
+function deduplicateEntities(
+  entities: NotificationEntityInput[]
+): NotificationEntityInput[] {
+  const unique = new Map<string, NotificationEntityInput>();
+  for (const entity of entities) {
+    unique.set(`${entity.entityType}:${entity.entityId}`, entity);
+  }
+  return [...unique.values()];
+}
 
 type OptimisticNotificationPatch = Pick<
   GraphqlUpdateNotificationsResult[number],
@@ -40,17 +65,14 @@ function createOptimisticUpdateNotificationsData({
   const updateNotifications: OptimisticNotificationPatch[] =
     notificationIds.map((id) => {
       const identity = {
-        __typename: 'GraphqlSoupNotification' as const,
+        __typename: 'GraphqlNotification' as const,
         id,
       };
-      switch (operation) {
-        case 'MARK_SEEN':
-          return { ...identity, seen: true, viewedAt };
-        case 'MARK_DONE':
-          return { ...identity, done: true };
-        case 'MARK_UNDONE':
-          return { ...identity, done: false };
-      }
+      return match(operation)
+        .with('MARK_SEEN', () => ({ ...identity, seen: true, viewedAt }))
+        .with('MARK_DONE', () => ({ ...identity, done: true }))
+        .with('MARK_UNDONE', () => ({ ...identity, done: false }))
+        .exhaustive();
     });
 
   // GraphQL result types model complete server data, while the cache
@@ -94,4 +116,32 @@ export async function executeGraphqlUpdateNotifications(
   }
 
   return result;
+}
+
+/**
+ * Execute an entity-scoped notification status write.
+ *
+ * Unlike the ID mutation, this deliberately waits for an authoritative server
+ * response: callers need the returned IDs to implement exact undo without
+ * affecting notifications created after this operation.
+ */
+export async function executeGraphqlUpdateNotificationsForEntities(
+  client: Client,
+  args: GraphqlUpdateNotificationsForEntitiesArgs
+): Promise<
+  OperationResult<
+    UpdateNotificationsForEntityMutation,
+    UpdateNotificationsForEntityMutationVariables
+  >
+> {
+  const variables: UpdateNotificationsForEntityMutationVariables = {
+    input: {
+      entities: deduplicateEntities(args.entities),
+      operation: args.operation,
+    },
+  };
+
+  return await client
+    .mutation(UpdateNotificationsForEntityDocument, variables)
+    .toPromise();
 }

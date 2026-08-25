@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { createTask } from '@core/util/create';
+import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import {
   propertyApiValuesToNormalized,
@@ -80,27 +80,27 @@ export async function createTaskWithProperties(
     return [{ propertyId: id, value: apiValue }];
   });
 
-  const documentId = await createTask({
+  const createdTask = await createTaskWithInitialSnapshot({
     title: taskTitle,
     content: taskContent,
     propertyValues: propertyValues.length > 0 ? propertyValues : undefined,
   });
 
-  if (!documentId) {
+  if (!createdTask) {
     toast.failure('Failed to create Task');
     return null;
   }
 
   // refetchSoupEntity is already called inside createTask — just upsert to history
-  refetchSoupEntity(documentId, 'document');
+  refetchSoupEntity(createdTask.documentId, 'document');
 
   // Upsert the new task to history
   upsertToHistory({
-    itemId: documentId,
+    itemId: createdTask.documentId,
     itemType: 'document',
   });
 
-  return documentId;
+  return createdTask;
 }
 
 /**

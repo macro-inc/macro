@@ -1,13 +1,13 @@
-/// A [`rig_core::agent::PromptHook`] that bridges RIG lifecycle events into
+/// A [`rig_agent::agent::AgentHook`] that bridges rig lifecycle events into
 /// [`StreamPart`] items sent through a channel.
 use crate::AgentError;
 use crate::stream::{McpInfo, StreamPart, ToolCall, ToolResponse, Usage};
 use ai_toolset::{SearchableTool, ToolInfo};
-use rig_core::agent::{
-    HookAction, InvalidToolCallContext, InvalidToolCallHookAction, PromptHook, ToolCallHookAction,
+use rig_agent::agent::hook::{
+    AgentHook, HookContext, InvalidToolCallAction, InvalidToolCallContext, ObservationAction,
+    StreamResponseFinish, TextDelta, ToolCallAction, ToolResultAction, ToolResultEvent,
 };
-use rig_core::completion::{CompletionModel, GetTokenUsage};
-use rig_core::message::Message;
+use rig_agent::tool::ToolOutput;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -102,19 +102,29 @@ impl StreamBridge {
     }
 }
 
-impl<M> PromptHook<M> for StreamBridge
-where
-    M: CompletionModel,
-    M::StreamingResponse: GetTokenUsage + Send + Sync,
-{
-    async fn on_text_delta(&self, text_delta: &str, _aggregated_text: &str) -> HookAction {
-        let _ = self.tx.send(Ok(StreamPart::Content(text_delta.to_owned())));
+/// The model-visible presentation of a tool result as a single JSON value,
+/// mirroring what the pre-0.41 string-based hook saw: our adapters return
+/// structured JSON on success, so a JSON content block yields its value and
+/// plain text is tried as JSON for compatibility.
+fn presentation_json(presentation: &ToolOutput) -> Option<serde_json::Value> {
+    if let Some(json) = presentation.as_json() {
+        return Some(json.clone());
+    }
+    presentation
+        .as_text()
+        .and_then(|text| serde_json::from_str(text).ok())
+}
+
+/// The hook bodies, as inherent methods so tests can exercise them directly:
+/// rig's [`HookContext`] has no public constructor, so the [`AgentHook`] impl
+/// below is a thin delegation layer over these.
+impl StreamBridge {
+    pub(crate) fn handle_text_delta(&self, delta: &str) -> ObservationAction {
+        let _ = self.tx.send(Ok(StreamPart::Content(delta.to_owned())));
         if self.cancel.is_cancelled() {
-            HookAction::Terminate {
-                reason: CANCELLED_REASON.into(),
-            }
+            ObservationAction::stop(CANCELLED_REASON)
         } else {
-            HookAction::Continue
+            ObservationAction::Continue
         }
     }
 
@@ -129,53 +139,49 @@ where
     /// is rebuilt from the live tool server, so the retried call is valid. For
     /// names that exist nowhere, the retry feedback points the model at
     /// `SearchTools` instead of failing the stream on a hallucinated name.
-    async fn on_invalid_tool_call(
+    pub(crate) async fn handle_invalid_tool_call(
         &self,
-        context: &InvalidToolCallContext,
-    ) -> InvalidToolCallHookAction {
+        tool_name: &str,
+    ) -> Option<InvalidToolCallAction> {
         match self
             .searchable_catalog
             .iter()
-            .find(|tool| tool.name == context.tool_name)
+            .find(|tool| tool.name == tool_name)
         {
             Some(tool) => {
                 (self.register_loaded)(vec![tool.clone()]).await;
                 tracing::info!(
-                    tool = %context.tool_name,
+                    tool = %tool_name,
                     "auto-loaded searchable tool the model called without loading"
                 );
-                InvalidToolCallHookAction::retry(format!(
-                    "The tool `{}` exists but was not loaded when you called it. \
-                     It is loaded now — call it again with the same arguments.",
-                    context.tool_name
-                ))
+                Some(InvalidToolCallAction::retry(format!(
+                    "The tool `{tool_name}` exists but was not loaded when you called it. \
+                     It is loaded now — call it again with the same arguments."
+                )))
             }
-            None => InvalidToolCallHookAction::retry(format!(
-                "Unknown tool `{}`: no tool with that name exists in this session \
+            None => Some(InvalidToolCallAction::retry(format!(
+                "Unknown tool `{tool_name}`: no tool with that name exists in this session \
                  or its connected integrations. Use `SearchTools` to find the \
-                 right tool, or continue without it.",
-                context.tool_name
-            )),
+                 right tool, or continue without it."
+            ))),
         }
     }
 
-    async fn on_tool_call(
+    pub(crate) fn handle_tool_call(
         &self,
         tool_name: &str,
-        tool_call_id: Option<String>,
+        tool_call_id: Option<&str>,
         internal_call_id: &str,
         args: &str,
-    ) -> ToolCallHookAction {
+    ) -> ToolCallAction {
         if self.cancel.is_cancelled() {
-            return ToolCallHookAction::Terminate {
-                reason: CANCELLED_REASON.into(),
-            };
+            return ToolCallAction::stop(CANCELLED_REASON);
         }
         let json = serde_json::from_str(args)
             .ok()
             .filter(serde_json::Value::is_object)
             .unwrap_or_else(|| serde_json::json!({}));
-        let id = tool_call_id.unwrap_or_else(|| internal_call_id.to_owned());
+        let id = tool_call_id.unwrap_or(internal_call_id).to_owned();
         let mcp = (self.routing)(tool_name).map(|i| match i {
             ToolInfo::ExternalTool {
                 service_name,
@@ -193,17 +199,17 @@ where
             json,
             mcp,
         })));
-        ToolCallHookAction::Continue
+        ToolCallAction::Run
     }
 
-    async fn on_tool_result(
+    pub(crate) async fn handle_tool_result(
         &self,
         tool_name: &str,
-        tool_call_id: Option<String>,
+        tool_call_id: Option<&str>,
         internal_call_id: &str,
-        _args: &str,
-        result: &str,
-    ) -> HookAction {
+        presentation: &ToolOutput,
+        is_success: bool,
+    ) -> ToolResultAction {
         // Register any tools `SearchTools` asked to load. This fires after the
         // tool executes and before the next turn's request is built, so loaded
         // tools are advertised + callable next turn. (The lock guard is dropped
@@ -216,34 +222,79 @@ where
             (self.register_loaded)(pending).await;
         }
 
-        let id = tool_call_id.unwrap_or_else(|| internal_call_id.to_owned());
-        let response = match serde_json::from_str::<serde_json::Value>(result) {
-            Ok(json) => ToolResponse::Json {
+        let id = tool_call_id.unwrap_or(internal_call_id).to_owned();
+        let response = if is_success && let Some(json) = presentation_json(presentation) {
+            ToolResponse::Json {
                 id,
                 json,
                 name: tool_name.to_owned(),
-            },
-            Err(_) => ToolResponse::Err {
+            }
+        } else {
+            ToolResponse::Err {
                 id,
                 name: tool_name.to_owned(),
-                description: result.to_owned(),
-            },
+                description: presentation.render(),
+            }
         };
         let _ = self.tx.send(Ok(StreamPart::ToolResponse(response)));
-        HookAction::Continue
+        ToolResultAction::Keep
     }
 
-    async fn on_stream_completion_response_finish(
+    pub(crate) fn handle_usage(&self, usage: rig_core::completion::Usage) -> ObservationAction {
+        let _ = self.tx.send(Ok(StreamPart::Usage(Usage {
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+        })));
+        ObservationAction::Continue
+    }
+}
+
+impl AgentHook for StreamBridge {
+    async fn on_text_delta(&self, _ctx: &HookContext, event: TextDelta<'_>) -> ObservationAction {
+        self.handle_text_delta(event.delta)
+    }
+
+    async fn on_invalid_tool_call(
         &self,
-        _prompt: &Message,
-        response: &M::StreamingResponse,
-    ) -> HookAction {
-        if let Some(usage) = response.token_usage() {
-            let _ = self.tx.send(Ok(StreamPart::Usage(Usage {
-                input_tokens: usage.input_tokens,
-                output_tokens: usage.output_tokens,
-            })));
-        }
-        HookAction::Continue
+        _ctx: &HookContext,
+        event: &InvalidToolCallContext,
+    ) -> Option<InvalidToolCallAction> {
+        self.handle_invalid_tool_call(&event.tool_name).await
+    }
+
+    async fn on_tool_call(
+        &self,
+        _ctx: &HookContext,
+        event: rig_agent::agent::hook::ToolCall<'_>,
+    ) -> ToolCallAction {
+        self.handle_tool_call(
+            event.tool_name,
+            event.tool_call_id,
+            event.internal_call_id,
+            event.args,
+        )
+    }
+
+    async fn on_tool_result(
+        &self,
+        _ctx: &HookContext,
+        event: ToolResultEvent<'_>,
+    ) -> ToolResultAction {
+        self.handle_tool_result(
+            event.tool_name,
+            event.tool_call_id,
+            event.internal_call_id,
+            event.presentation,
+            event.raw_result.is_success(),
+        )
+        .await
+    }
+
+    async fn on_stream_response_finish(
+        &self,
+        _ctx: &HookContext,
+        event: StreamResponseFinish<'_>,
+    ) -> ObservationAction {
+        self.handle_usage(event.usage)
     }
 }

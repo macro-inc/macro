@@ -5,6 +5,8 @@ import {
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { DisplayName } from '@entity/components/DisplayName';
+import PhoneIcon from '@icon/wide-call.svg';
+import { useActiveCallsQuery } from '@queries/call/call';
 import { useJoinChannelMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
@@ -44,6 +46,22 @@ export function ChannelJoinButton(props: {
   );
 }
 
+/**
+ * Accent phone icon shown on a channel row while a call is live in it. Reads
+ * the shared all-active-calls query, so every row dedupes into one request.
+ */
+export function ChannelActiveCallBadge(props: { channelId: string }) {
+  const activeCallsQuery = useActiveCallsQuery();
+  const hasActiveCall = () =>
+    (activeCallsQuery.data ?? []).some((c) => c.channelId === props.channelId);
+
+  return (
+    <Show when={hasActiveCall()}>
+      <PhoneIcon class="size-4 shrink-0 text-accent fill-accent" />
+    </Show>
+  );
+}
+
 function ChannelMessage(props: {
   message: NonNullable<ChannelEntity['latestMessage']>;
 }) {
@@ -66,6 +84,39 @@ function ChannelMessage(props: {
         </Show>
       </span>
     </>
+  );
+}
+
+/**
+ * One-line channel-message row content: channel name, sender, then the
+ * message text (or its highlighted hit). Shared by the narrow and
+ * single-line row layouts.
+ */
+export function ChannelMessageSingleLine(props: {
+  entity: ChannelMessageEntity;
+}) {
+  const hit = () => firstContentHit(props.entity);
+  return (
+    <span class="flex items-center gap-1 min-w-0 truncate">
+      <span class="shrink-0 text-ink-muted text-xs whitespace-nowrap">
+        {props.entity.channelName}
+      </span>
+      <Show when={props.entity.senderId}>
+        {(id) => <UserIcon id={id()} size="sm" />}
+      </Show>
+      <Show when={hit()}>
+        {(h) => (
+          <span class="shrink-0 text-ink-extra-muted text-xs whitespace-nowrap">
+            <SearchSender hit={h()} />
+          </span>
+        )}
+      </Show>
+      <span class="text-ink/50 font-normal truncate min-w-0">
+        <Show when={hit()} fallback={props.entity.content}>
+          {(h) => <SearchContent hit={h()} singleLine />}
+        </Show>
+      </span>
+    </span>
   );
 }
 

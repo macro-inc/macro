@@ -324,6 +324,17 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         access: &CrmContactReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// Fetch the CRM contact matching `email` in the caller's team. The team
+    /// receipt keeps the lookup scoped to an authorized team; the caller's
+    /// role decides whether hidden contacts and hidden parent companies are
+    /// visible. The email is validated and normalized before it crosses the
+    /// repository port.
+    fn get_contact_by_email(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        email: &str,
+    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
     /// Fetch the company addressed by `access`, hydrated with all
     /// domains, the primary domain's directory metadata, and the
     /// company's full contact list. The receipt's role decides whether a
@@ -885,6 +896,18 @@ where
     }
 
     #[tracing::instrument(skip(self, access), err)]
+    async fn get_contact_by_email(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        email: &str,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        let email = normalize_contact_email(email)?;
+        self.companies_repository
+            .get_contact_by_email_for_team(&access.team_id(), &email, access.include_hidden())
+            .await
+    }
+
+    #[tracing::instrument(skip(self, access), err)]
     async fn get_company_for_team(
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
@@ -1189,6 +1212,14 @@ impl CrmService for NoOpCrmService {
     async fn get_contact_for_team(
         &self,
         _access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        Ok(None)
+    }
+
+    async fn get_contact_by_email(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _email: &str,
     ) -> Result<Option<CrmContact>, CrmError> {
         Ok(None)
     }

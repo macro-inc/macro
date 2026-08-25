@@ -34,6 +34,7 @@ struct CalendarEventRow {
     organizer_email: Option<String>,
     organizer_name: Option<String>,
     conference_url: Option<String>,
+    conference_provider: Option<String>,
     is_read_only: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -187,6 +188,7 @@ fn select_sql() -> &'static str {
         event.organizer_email,
         event.organizer_name,
         event.conference_url,
+        event.conference_provider,
         event.is_read_only,
         event.created_at,
         event.updated_at
@@ -316,6 +318,7 @@ fn row_to_item(row: CalendarEventRow) -> Result<SoupItem<()>, sqlx::Error> {
         organizer_email: row.organizer_email,
         organizer_name: row.organizer_name,
         conference_url: row.conference_url,
+        conference_provider: row.conference_provider,
         is_read_only: row.is_read_only,
         created_at: row.created_at,
         updated_at: row.updated_at,

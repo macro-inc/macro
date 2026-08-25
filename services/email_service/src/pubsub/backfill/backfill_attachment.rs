@@ -10,10 +10,9 @@ use uuid::Uuid;
 /// this step is invoked by the UpdateMetadata step. it uploads the specified attachment as a
 /// Macro document for the user. first checks the attachment doesn't already exist by querying
 /// document_email table before fetching and uploading the attachment data.
-#[tracing::instrument(skip(ctx, access_token))]
+#[tracing::instrument(skip(ctx))]
 pub async fn backfill_attachment(
     ctx: &PubSubContext,
-    access_token: &str,
     link: &link::Link,
     p: &BackfillAttachmentPayload,
 ) -> Result<(), ProcessingError> {
@@ -30,12 +29,10 @@ pub async fn backfill_attachment(
 
     let ctx_upload = UploadAttachmentContext {
         db: &ctx.db,
-        redis_client: &ctx.redis_client,
-        gmail_client: &ctx.gmail_client,
+        email_api: &ctx.email_api,
         dss_client: &ctx.dss_client,
         sfs_client: &ctx.sfs_client,
         system_properties_service: &ctx.system_properties_service,
-        access_token,
         link,
     };
 
@@ -44,12 +41,10 @@ pub async fn backfill_attachment(
     upload_attachment(ctx_upload, &attachment_args)
         .await
         .map_err(|e| match e {
-            UploadAttachmentError::RateLimitCheckFailed(_) => {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::GmailApiRateLimited,
-                    source: anyhow::Error::new(e).context("Failed to upload attachment"),
-                })
-            }
+            UploadAttachmentError::RateLimited => ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::GmailApiRateLimited,
+                source: anyhow::Error::new(e).context("Failed to upload attachment"),
+            }),
             _ => ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
                 source: anyhow::Error::new(e).context("Failed to upload attachment"),

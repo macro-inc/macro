@@ -532,6 +532,19 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         include_hidden: bool,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// Fetches a single CRM contact by email, scoped to `team_id` via the
+    /// contact's company. Email matching is case-insensitive. Returns
+    /// `Ok(None)` when the contact doesn't exist, belongs to a different
+    /// team, or — for non-admin viewers (`include_hidden = false`) — the
+    /// contact or its parent company is hidden. With `include_hidden = true`
+    /// (admin/owner), every owned contact is reachable.
+    fn get_contact_by_email_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        email: &str,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
+
     /// Fetches a single CRM company by id, scoped to `team_id`,
     /// hydrated with all domains (ordered by `created_at ASC` —
     /// primary first), the primary domain's `crm_domain_directory`

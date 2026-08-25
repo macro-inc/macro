@@ -1,0 +1,19 @@
+---
+title: ConfigureBot
+description: "Configure a manageable bot's profile. Provide only fields that should change. Use avatarUrl to set a profile picture from an image already uploaded to Macro static files or another reachable image URL; pass an empty string to clear the current picture. Passing an empty string for description clears it. Confirm handle changes because integrations and mentions may rely on the stable handle."
+---
+
+# ConfigureBot
+
+Configure a manageable bot's profile. Provide only fields that should change. Use avatarUrl to set a profile picture from an image already uploaded to Macro static files or another reachable image URL; pass an empty string to clear the current picture. Passing an empty string for description clears it. Confirm handle changes because integrations and mentions may rely on the stable handle.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `botId` | string | Yes | Bot id from CreateBot or ListBots. |
+| `name` | string | No | New display name. Omit to keep the current name. |
+| `handle` | string | No | New stable handle using lowercase ASCII letters, digits, hyphens, and underscores. Omit to keep the current handle. |
+| `description` | string | No | New bot description. Omit to keep the current value; pass an empty string to clear it. |
+| `avatarUrl` | string | No | New profile-picture URL. Use a Macro static-file URL or another reachable image URL. Omit to keep the current picture; pass an empty string to clear it. |
+| `hasAgent` | boolean | No | Set true if mentioning this bot should open a sandboxed coding-agent session. Omit to leave unchanged. |

@@ -56,7 +56,7 @@ pub fn repo_root() -> PathBuf {
 /// Read the runtime repository root used by packaged xtask binaries.
 ///
 /// Environment variables are appropriate here because this tooling crate runs
-/// both inside and outside the service runtime, including in the preview VM.
+/// both inside and outside the service runtime, including packaged binaries.
 #[allow(clippy::disallowed_methods)]
 fn repo_root_override() -> Option<PathBuf> {
     std::env::var_os("MACRO_REPO_ROOT").map(PathBuf::from)

@@ -2,6 +2,7 @@
 
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use schemars::JsonSchema;
@@ -35,6 +36,10 @@ pub struct DeleteTagResponse {
     pub success: bool,
     /// Human-readable summary.
     pub message: String,
+}
+
+impl ToolAnnotated for DeleteTag {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Delete tag");
 }
 
 #[async_trait]

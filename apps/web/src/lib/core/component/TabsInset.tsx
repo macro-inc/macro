@@ -16,7 +16,7 @@ type TabsInsetProps = {
   value?: string;
   defaultValue?: string;
   class?: string;
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
 } & Omit<SegmentedControlRootProps, 'defaultValue'>;
 
 export const TabsInset = (props: TabsInsetProps) => {
@@ -33,8 +33,7 @@ export const TabsInset = (props: TabsInsetProps) => {
   // checked item is elevated two steps above it so the active pill still reads
   // as raised regardless of the panel depth.
   const trackDepth = () => local.depth ?? 0;
-  const itemDepth = () =>
-    Math.min(5, trackDepth() + 2) as 0 | 1 | 2 | 3 | 4 | 5;
+  const itemDepth = () => Math.min(4, trackDepth() + 2) as 0 | 1 | 2 | 3 | 4;
 
   return (
     <KSegmentedControl

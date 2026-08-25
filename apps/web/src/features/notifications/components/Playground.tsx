@@ -295,7 +295,7 @@ function CustomBuilder(props: {
 
         <div>
           <h3 class="text-sm font-medium text-ink mb-3">Live Preview</h3>
-          <div class="p-4 bg-surface-hover rounded-lg border border-edge-muted">
+          <div class="p-4 bg-hover rounded-lg border border-edge-muted">
             <NotificationRenderer
               notification={props.customNotification}
               mode="preview"

@@ -12,6 +12,7 @@ use crate::domain::{
     ports::BotRepo,
 };
 use anyhow::Context;
+use bot_token::{HashedBotToken, hash_token};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
@@ -55,6 +56,7 @@ struct BotRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     deleted_at: Option<DateTime<Utc>>,
+    has_agent: bool,
 }
 
 impl TryFrom<BotRow> for Bot {
@@ -83,6 +85,7 @@ impl TryFrom<BotRow> for Bot {
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
+            has_agent: row.has_agent,
         })
     }
 }
@@ -117,7 +120,7 @@ impl TryFrom<BotChannelRow> for BotChannel {
 struct BotTokenRow {
     id: Uuid,
     bot_id: Uuid,
-    token: String,
+    token_prefix: String,
     label: Option<String>,
     last_used_at: Option<DateTime<Utc>>,
     expires_at: Option<DateTime<Utc>>,
@@ -130,7 +133,7 @@ impl From<BotTokenRow> for BotToken {
         Self {
             id: row.id,
             bot_id: BotId::new_from_uuid(row.bot_id),
-            token: row.token,
+            token_prefix: row.token_prefix,
             label: row.label,
             last_used_at: row.last_used_at,
             expires_at: row.expires_at,
@@ -144,7 +147,7 @@ impl From<BotTokenRow> for BotToken {
 struct TokenCandidateRow {
     token_id: Uuid,
     bot_id: Uuid,
-    token: String,
+    token_prefix: String,
     label: Option<String>,
     last_used_at: Option<DateTime<Utc>>,
     expires_at: Option<DateTime<Utc>>,
@@ -163,7 +166,7 @@ impl TokenCandidateRow {
         let token = BotToken {
             id: self.token_id,
             bot_id,
-            token: self.token,
+            token_prefix: self.token_prefix,
             label: self.label,
             last_used_at: self.last_used_at,
             expires_at: self.expires_at,
@@ -205,9 +208,10 @@ impl BotRepo for PgBotsRepo {
             BotRow,
             r#"
             INSERT INTO bots (
-                id, kind, owner_user_id, team_id, name, handle, description, avatar_url, created_by
+                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
+                created_by, has_agent
             )
-            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))
             RETURNING
                 id,
                 kind,
@@ -220,7 +224,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             "#,
             bot_id.as_uuid(),
             owner_user_id,
@@ -230,6 +235,7 @@ impl BotRepo for PgBotsRepo {
             req.description,
             req.avatar_url,
             created_by.as_ref(),
+            req.has_agent,
         )
         .fetch_one(&self.pool)
         .await
@@ -243,7 +249,7 @@ impl BotRepo for PgBotsRepo {
         owner: BotOwner,
         created_by: MacroUserIdStr<'static>,
         channel_id: Uuid,
-        token: String,
+        token: HashedBotToken,
         req: CreateChannelScopedBotRequest,
     ) -> Result<(Bot, BotToken), Self::Err> {
         let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
@@ -259,9 +265,10 @@ impl BotRepo for PgBotsRepo {
             BotRow,
             r#"
             INSERT INTO bots (
-                id, kind, owner_user_id, team_id, name, handle, description, avatar_url, created_by
+                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
+                created_by, has_agent
             )
-            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))
             RETURNING
                 id,
                 kind,
@@ -274,7 +281,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             "#,
             bot_id.as_uuid(),
             owner_user_id,
@@ -284,6 +292,7 @@ impl BotRepo for PgBotsRepo {
             req.description,
             req.avatar_url,
             created_by.as_ref(),
+            req.has_agent,
         )
         .fetch_one(&mut *tx)
         .await
@@ -305,14 +314,15 @@ impl BotRepo for PgBotsRepo {
             BotTokenRow,
             r#"
             INSERT INTO bot_tokens (
-                id, bot_id, token, label, expires_at
+                id, bot_id, token_hash, token_prefix, label, expires_at
             )
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, bot_id, token, label, last_used_at, expires_at, revoked_at, created_at
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, bot_id, token_prefix, label, last_used_at, expires_at, revoked_at, created_at
             "#,
             token_id,
             bot_id.as_uuid(),
-            token,
+            &token.hash[..],
+            token.prefix,
             req.token_label,
             req.token_expires_at,
         )
@@ -348,7 +358,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             FROM bots
             WHERE kind = 'owned'
               AND deleted_at IS NULL
@@ -384,7 +395,8 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             FROM bots
             WHERE id = $1
               AND deleted_at IS NULL
@@ -481,6 +493,7 @@ impl BotRepo for PgBotsRepo {
                 handle = COALESCE($3, handle),
                 description = COALESCE($4, description),
                 avatar_url = COALESCE($5, avatar_url),
+                has_agent = COALESCE($6, has_agent),
                 updated_at = now()
             WHERE id = $1
               AND deleted_at IS NULL
@@ -496,13 +509,15 @@ impl BotRepo for PgBotsRepo {
                 created_by,
                 created_at,
                 updated_at,
-                deleted_at
+                deleted_at,
+                has_agent
             "#,
             bot_id.as_uuid(),
             req.name,
             req.handle,
             req.description,
             req.avatar_url,
+            req.has_agent,
         )
         .fetch_optional(&self.pool)
         .await
@@ -624,7 +639,8 @@ impl BotRepo for PgBotsRepo {
                 b.created_by,
                 b.created_at,
                 b.updated_at,
-                b.deleted_at
+                b.deleted_at,
+                b.has_agent
             FROM bots b
             JOIN comms_channel_participants cp
               ON cp.user_id = ('bot|' || b.id::text)
@@ -644,7 +660,7 @@ impl BotRepo for PgBotsRepo {
     async fn create_token(
         &self,
         bot_id: BotId,
-        token: String,
+        token: HashedBotToken,
         req: CreateBotTokenRequest,
     ) -> Result<BotToken, Self::Err> {
         let token_id = macro_uuid::generate_uuid_v7();
@@ -652,14 +668,15 @@ impl BotRepo for PgBotsRepo {
             BotTokenRow,
             r#"
             INSERT INTO bot_tokens (
-                id, bot_id, token, label, expires_at
+                id, bot_id, token_hash, token_prefix, label, expires_at
             )
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, bot_id, token, label, last_used_at, expires_at, revoked_at, created_at
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id, bot_id, token_prefix, label, last_used_at, expires_at, revoked_at, created_at
             "#,
             token_id,
             bot_id.as_uuid(),
-            token,
+            &token.hash[..],
+            token.prefix,
             req.label,
             req.expires_at,
         )
@@ -673,7 +690,7 @@ impl BotRepo for PgBotsRepo {
         let rows = sqlx::query_as!(
             BotTokenRow,
             r#"
-            SELECT id, bot_id, token, label, last_used_at, expires_at, revoked_at, created_at
+            SELECT id, bot_id, token_prefix, label, last_used_at, expires_at, revoked_at, created_at
             FROM bot_tokens
             WHERE bot_id = $1
               AND revoked_at IS NULL
@@ -706,13 +723,14 @@ impl BotRepo for PgBotsRepo {
     }
 
     async fn token_candidate(&self, token: &str) -> Result<Option<BotTokenCandidate>, Self::Err> {
+        let token_hash = hash_token(token);
         let row = sqlx::query_as!(
             TokenCandidateRow,
             r#"
             SELECT
                 bt.id AS token_id,
                 bt.bot_id,
-                bt.token,
+                bt.token_prefix,
                 bt.label,
                 bt.last_used_at,
                 bt.expires_at,
@@ -721,10 +739,10 @@ impl BotRepo for PgBotsRepo {
                 b.kind
             FROM bot_tokens bt
             JOIN bots b ON b.id = bt.bot_id
-            WHERE bt.token = $1
+            WHERE bt.token_hash = $1
               AND b.deleted_at IS NULL
             "#,
-            token,
+            &token_hash[..],
         )
         .fetch_optional(&self.pool)
         .await
@@ -738,13 +756,14 @@ impl BotRepo for PgBotsRepo {
         channel_id: Uuid,
         token: &str,
     ) -> Result<Option<BotTokenCandidate>, Self::Err> {
+        let token_hash = hash_token(token);
         let row = sqlx::query_as!(
             TokenCandidateRow,
             r#"
             SELECT
                 bt.id AS token_id,
                 bt.bot_id,
-                bt.token,
+                bt.token_prefix,
                 bt.label,
                 bt.last_used_at,
                 bt.expires_at,
@@ -757,11 +776,11 @@ impl BotRepo for PgBotsRepo {
               ON cp.channel_id = $1
              AND cp.user_id = ('bot|' || b.id::text)
              AND cp.left_at IS NULL
-            WHERE bt.token = $2
+            WHERE bt.token_hash = $2
               AND b.deleted_at IS NULL
             "#,
             channel_id,
-            token,
+            &token_hash[..],
         )
         .fetch_optional(&self.pool)
         .await

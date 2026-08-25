@@ -358,16 +358,36 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
+        activity_tool_context: ai_tools::build_activity_tool_context(
+            pool.clone(),
+            properties_service.clone(),
+            entity_access_service.clone(),
+        ),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        calendar_tool_context: ai_tools::build_calendar_tool_context(
+            pool.clone(),
+            "http://localhost:0".to_string(),
+            "test-internal-api-key".to_string(),
+        ),
         notification_tool_context: notification_tool_context.clone(),
+        reminders_tool_context: ai_tools::build_reminders_tool_context(
+            pool.clone(),
+            entity_access_service.clone(),
+        ),
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
             std::sync::Arc::new(test_lexical_client),
+        ),
+        bot_tool_context: ai_tools::build_bot_tool_context(
+            pool.clone(),
+            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            "http://localhost:8086".to_string(),
         ),
         project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
@@ -386,7 +406,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
 
-    let (import_service, onboarding_service) = {
+    let (import_service, onboarding_service, mcp_selector) = {
         let mcp_key =
             mcp_client::domain::models::AesKey::try_from(vec![0u8; 32]).expect("valid test key");
         let mcp_repo =
@@ -406,9 +426,19 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 ),
             team_repository: ai_tools::build_team_repository(pool.clone()),
         };
+        let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
+            Arc::new(mcp_select::McpToolSelector::new(
+                Arc::new(mcp_repo.clone()),
+                Arc::new(
+                    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
+                        pool.clone(),
+                    ),
+                ),
+                Arc::new(None),
+            ));
         let import_service = Arc::new(import::domain::service::ImportServiceImpl::new(
             import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()),
-            Arc::new(mcp_repo.clone()),
+            mcp_selector.clone(),
             Arc::new(creator),
             ai_usage::pg_recorder(pool.clone()),
         ));
@@ -416,13 +446,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(pool.clone()),
             Arc::new(mcp_repo),
             import_service.clone(),
+            mcp_selector.clone(),
         ));
-        (import_service, onboarding_service)
+        (import_service, onboarding_service, mcp_selector)
     };
 
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        pool.clone(),
         memory_repo,
         tool_service_context.clone(),
         all_tools,
@@ -541,6 +571,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_stream_registry: crate::service::ai_stream_registry::AiStreamRegistry::new(Arc::new(
             redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
         )),
+        pipedream_state: pipedream_mcp::inbound::PipedreamRouterState::new(
+            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
+            None,
+            authorization_state.clone(),
+        ),
+        mcp_selector,
         mcp_state: {
             let redis_client =
                 Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"));

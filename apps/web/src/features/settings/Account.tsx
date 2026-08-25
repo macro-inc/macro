@@ -15,8 +15,8 @@ import {
 } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useEmail, useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
@@ -458,7 +458,7 @@ export function Account() {
         </SettingsCard>
       </SettingsSection>
 
-      <Show when={isMobile()}>
+      <Show when={isTouchDevice()}>
         <SettingsSection>
           <SettingsCard>
             <div class="px-6 py-3.5">

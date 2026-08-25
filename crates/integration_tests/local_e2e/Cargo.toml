@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dev-dependencies]
 anyhow = { workspace = true }
+bot_token = { path = "../../bot_token" }
 futures = { workspace = true }
 local_e2e_test_support = { path = "../../local_e2e_test_support" }
 reqwest = { workspace = true }

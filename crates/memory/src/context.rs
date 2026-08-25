@@ -164,7 +164,10 @@ pub async fn build_tool_service_context(
     );
 
     // Properties tool context
-    let properties_tool_context = ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
+    let properties_tool_context = ai_tools::build_properties_tool_context(
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
 
     // Email tool context
     let email_tool_context = email::inbound::toolset::EmailToolContext::new(
@@ -233,16 +236,31 @@ pub async fn build_tool_service_context(
         email_service_client: email_ext_client,
         soup_service,
         email_service: email_service_for_tools,
+        activity_tool_context: ai_tools::build_activity_tool_context(
+            pool.clone(),
+            properties_service,
+            entity_access_service.clone(),
+        ),
         document_tool_context,
         properties_tool_context,
         email_tool_context,
         call_tool_context,
         notification_tool_context,
+        reminders_tool_context: ai_tools::build_reminders_tool_context(
+            pool.clone(),
+            entity_access_service.clone(),
+        ),
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context(
             pool.clone(),
             Arc::new(lexical_client),
+        ),
+        bot_tool_context: ai_tools::build_bot_tool_context(
+            pool.clone(),
+            ai_tools::ToolBotEventBroker::NoOp(Default::default()),
+            entity_access_service.clone(),
+            config.document_storage_service_url.clone(),
         ),
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(pool.clone()),

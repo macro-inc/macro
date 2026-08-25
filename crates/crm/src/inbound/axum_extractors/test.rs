@@ -396,6 +396,14 @@ impl CrmService for FakeCrmService {
         panic!("unexpected get_contact_for_team call")
     }
 
+    async fn get_contact_by_email(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _email: &str,
+    ) -> Result<Option<CrmContact>, CrmError> {
+        panic!("unexpected get_contact_by_email call")
+    }
+
     async fn get_company_for_team(
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,

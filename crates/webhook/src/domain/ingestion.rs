@@ -13,6 +13,7 @@ use crate::domain::{
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
+use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use chrono::Utc;
 use documents::domain::events::DocumentTopicEvent;
@@ -61,14 +62,15 @@ pub enum WebhookEventIngestionError {
 impl WebhookEventIngestionError {
     /// Whether retrying the same event could plausibly succeed.
     ///
-    /// Access resolution currently maps some PostgreSQL failures to
-    /// [`AccessError::Internal`], so that variant remains retryable alongside
-    /// explicit database, repository, workspace-resolution, and queue errors.
-    /// Invalid broker contracts are permanent and can be safely skipped.
+    /// Access resolution classifies failures at the database boundary:
+    /// [`AccessError::Unavailable`] is a connection-level or retryable
+    /// Postgres failure, while [`AccessError::Internal`] is a bug or bad
+    /// data that retrying cannot fix. Invalid broker contracts are
+    /// permanent and can be safely skipped.
     pub fn is_transient(&self) -> bool {
         matches!(
             self,
-            Self::EntityAccess(AccessError::DatabaseError(_) | AccessError::Internal)
+            Self::EntityAccess(AccessError::Unavailable(_))
                 | Self::WorkspaceResolution(_)
                 | Self::Repository(_)
                 | Self::Enqueue(_)
@@ -97,6 +99,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_webhook_event(
         &self,
         event: Event<WebhookTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.agent_sessions` event envelope.
+    fn ingest_agent_trigger_event(
+        &self,
+        event: Event<AgentTriggerTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
@@ -197,7 +205,14 @@ where
             .await
             .map_err(|error| WebhookEventIngestionError::Repository(error.into()))?;
         tracing::Span::current().record("match_count", webhooks.len());
+        self.enqueue_all(webhooks, event).await
+    }
 
+    async fn enqueue_all(
+        &self,
+        webhooks: Vec<crate::domain::models::Webhook>,
+        event: NormalizedWebhookEvent,
+    ) -> Result<(), WebhookEventIngestionError> {
         let enqueue_results = join_all(webhooks.into_iter().map(|webhook| {
             let enqueuer = self.enqueuer.clone();
             let webhook_id = webhook.id;
@@ -362,6 +377,73 @@ fn normalized_event(
     }
 }
 
+/// Whose access decides who may see one trigger event.
+///
+/// Not the bot the event names: that is what a subscriber filters on, and a
+/// bot is not an entity anyone holds access to.
+struct TriggerAudience {
+    entity_id: String,
+    entity_type: EntityType,
+}
+
+/// Normalize one agent-trigger event.
+///
+/// The entity - and the ordering key, mirroring the broker's partitioning -
+/// is the bot: a subscriber consumes a bot's whole trigger stream, in order.
+/// Returned alongside is whose access gates it, which differs by shape.
+///
+/// A mention that opens a session has no session yet, so the channel it was
+/// posted in is the only thing to ask. Once a session exists it carries its
+/// own grants - its owner, and the channel it came from - so the session is
+/// the authoritative audience, and whatever channel a later message happened
+/// to land in is incidental to it.
+fn normalized_agent_trigger_event(
+    event: &Event<AgentTriggerTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, TriggerAudience), WebhookEventIngestionError> {
+    use agent_trigger::domain::broker_events::{
+        AgentTriggerEventName, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    };
+
+    let (bot_id, audience) = match &event.event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => (
+            mentioned.bot_id,
+            TriggerAudience {
+                entity_id: mentioned.message.channel_id.to_string(),
+                entity_type: EntityType::Channel,
+            },
+        ),
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => (
+            metadata.bot_id,
+            TriggerAudience {
+                entity_id: metadata.session_id.to_string(),
+                entity_type: EntityType::AgentSession,
+            },
+        ),
+        // Both trigger enums are non-exhaustive on purpose; an unknown shape
+        // has no bot to route to. Permanent, so the consumer skips it.
+        _ => {
+            return Err(WebhookEventIngestionError::InvalidEntityId {
+                entity_type: "bot",
+                entity_id: "unrecognized agent-trigger event shape".to_owned(),
+            });
+        }
+    };
+    let event_name: &'static str = AgentTriggerEventName::from(&event.event).into();
+    let broker_envelope = serde_json::to_value(event)?;
+    let bot_id = bot_id.to_string();
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            "bot",
+            &bot_id,
+            broker_envelope,
+        ),
+        audience,
+    ))
+}
+
 impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
 where
     A: EntityAccessService,
@@ -397,5 +479,22 @@ where
     ) -> Result<(), WebhookEventIngestionError> {
         let (event, workspace_id) = normalized_webhook_event(&event)?;
         self.match_and_enqueue(event, vec![workspace_id]).await
+    }
+
+    #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
+    async fn ingest_agent_trigger_event(
+        &self,
+        event: Event<AgentTriggerTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (event, audience) = normalized_agent_trigger_event(&event)?;
+        let accessors = self
+            .users_with_access(&audience.entity_id, audience.entity_type)
+            .await?;
+        let workspace_ids = self
+            .repository
+            .resolve_workspace_ids(accessors)
+            .await
+            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
+        self.match_and_enqueue(event, workspace_ids).await
     }
 }

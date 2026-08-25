@@ -21,7 +21,7 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import { usePropertySelection } from '@property/hooks';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
-import { useDocTags } from '@property/tags';
+import { canTagEntity, useDocTags } from '@property/tags';
 import { TagDot } from '@property/tags/TagDot';
 import {
   TagEditorDialog,
@@ -201,15 +201,6 @@ function propertyEditorEntityType(entity: PropertyEditorEntity): EntityType {
   if ('entityType' in entity) return entity.entityType;
   if (isTaskEntity(entity)) return 'TASK';
   return macroEntityToPropertyEntityType(entity);
-}
-
-function canAssignTags(entity: PropertyEditorEntity): boolean {
-  try {
-    propertyEditorEntityType(entity);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function propertyEditorEntityName(entity: PropertyEditorEntity): string {
@@ -465,7 +456,7 @@ function PropertyList(props: {
 
     const query = props.searchTerm.toLowerCase().trim();
     return (
-      propertyEditorState.selectedEntities.every(canAssignTags) &&
+      propertyEditorState.selectedEntities.every(canTagEntity) &&
       (!query || 'tags'.includes(query) || 'label'.includes(query))
     );
   });

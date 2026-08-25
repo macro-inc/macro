@@ -5,13 +5,12 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { UpdateSharePermissionRequestV2ChannelSharePermissions } from './updateSharePermissionRequestV2ChannelSharePermissions';
-import type { UpdateSharePermissionRequestV2IsPublic } from './updateSharePermissionRequestV2IsPublic';
-import type { UpdateSharePermissionRequestV2PublicAccessLevel } from './updateSharePermissionRequestV2PublicAccessLevel';
+import type { UpdateSharePermissionRequestV2LinkShare } from './updateSharePermissionRequestV2LinkShare';
+import type { UpdateSharePermissionRequestV2LinkShareAccessLevel } from './updateSharePermissionRequestV2LinkShareAccessLevel';
 
 export interface UpdateSharePermissionRequestV2 {
   /** Any channel share permissions to be created/updated/removed */
   channelSharePermissions?: UpdateSharePermissionRequestV2ChannelSharePermissions;
-  /** If the item is publicly accessible */
-  isPublic?: UpdateSharePermissionRequestV2IsPublic;
-  publicAccessLevel?: UpdateSharePermissionRequestV2PublicAccessLevel;
+  linkShare?: UpdateSharePermissionRequestV2LinkShare;
+  linkShareAccessLevel?: UpdateSharePermissionRequestV2LinkShareAccessLevel;
 }

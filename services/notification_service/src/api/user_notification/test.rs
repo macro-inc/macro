@@ -300,13 +300,13 @@ fn to_typed_row_preserves_row_fields() {
 }
 
 /// Verifies that the `notification_metadata` field serializes identically between
-/// `ApiUserNotification` and `ConnGatewayInnerNotif`.
+/// `ApiUserNotification` and `RealtimeNotif`.
 /// This ensures frontend code can use the same parsing logic for both HTTP API and WebSocket delivery.
 #[test]
-fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identically() {
+fn api_user_notification_and_realtime_notif_metadata_serialize_identically() {
     use chrono::{TimeZone, Utc};
     use notification::domain::models::TaggedContent;
-    use notification::domain::models::queue_message::ConnGatewayInnerNotif;
+    use notification::domain::models::queue_message::RealtimeNotif;
 
     let created_at = Utc.with_ymd_and_hms(2025, 1, 15, 12, 0, 0).unwrap();
     let notification_id = uuid::Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
@@ -347,8 +347,8 @@ fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identic
         ),
     };
 
-    // Create ConnGatewayInnerNotif (used by WebSocket delivery)
-    let conn_gateway_notif = ConnGatewayInnerNotif {
+    // Create RealtimeNotif (used by WebSocket delivery)
+    let conn_gateway_notif = RealtimeNotif {
         notification_id,
         notification_event_type: "channel_mention".to_string(),
         entity,
@@ -378,17 +378,17 @@ fn api_user_notification_and_conn_gateway_inner_notif_metadata_serialize_identic
         conn_gateway_metadata,
         "notification_metadata should serialize identically.\n\
          ApiUserNotification (HTTP API): {}\n\
-         ConnGatewayInnerNotif (WebSocket): {}",
+         RealtimeNotif (WebSocket): {}",
         serde_json::to_string_pretty(api_metadata).unwrap(),
         serde_json::to_string_pretty(conn_gateway_metadata).unwrap(),
     );
 }
 
-/// Verifies that `TaggedContent<T>` (used by ConnGatewayInnerNotif for WebSocket delivery)
+/// Verifies that `TaggedContent<T>` (used by RealtimeNotif for WebSocket delivery)
 /// and `NotifEvent` (used by ApiUserNotification for HTTP API) serialize identically.
 /// This ensures frontend code can use the same parsing logic for both delivery methods.
 #[test]
-fn conn_gateway_inner_val_has_identical_serialization() {
+fn realtime_notif_has_identical_serialization() {
     use notification::domain::models::TaggedContent;
 
     // Create test notification metadata
@@ -405,7 +405,7 @@ fn conn_gateway_inner_val_has_identical_serialization() {
         sender_profile_picture_url: None,
     };
 
-    // TaggedContent<T> is what ConnGatewayInnerNotif uses for notification_metadata
+    // TaggedContent<T> is what RealtimeNotif uses for notification_metadata
     // when sending via WebSocket
     let tagged_content = TaggedContent::new(notif_metadata.clone());
     let tagged_content_json = serde_json::to_value(&tagged_content).unwrap();

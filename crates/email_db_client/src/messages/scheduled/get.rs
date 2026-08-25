@@ -17,7 +17,7 @@ where
     let record = sqlx::query_as!(
         service::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent, processing
+        SELECT link_id, message_id, send_time, sent, processing, actor_id
         FROM email_scheduled_messages
         WHERE link_id = $1 AND message_id = $2
         "#,
@@ -43,7 +43,7 @@ pub async fn get_and_start_processing_scheduled_message(
         service::message::ScheduledMessage,
         r#"
         WITH old AS (
-            SELECT link_id, message_id, send_time, sent, processing
+            SELECT link_id, message_id, send_time, sent, processing, actor_id
             FROM email_scheduled_messages
             WHERE link_id = $1 AND message_id = $2
         ), updated AS (
@@ -51,7 +51,7 @@ pub async fn get_and_start_processing_scheduled_message(
             SET processing = true, updated_at = NOW()
             WHERE link_id = $1 AND message_id = $2
         )
-        SELECT link_id, message_id, send_time, sent, processing
+        SELECT link_id, message_id, send_time, sent, processing, actor_id
         FROM old
         "#,
         link_id,
@@ -73,7 +73,7 @@ pub async fn get_scheduled_message_no_auth(
     let record = sqlx::query_as!(
         db::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent, processing
+        SELECT link_id, message_id, send_time, sent, processing, actor_id
         FROM email_scheduled_messages
         WHERE message_id = $1 and sent = false
         "#,
@@ -115,7 +115,7 @@ pub async fn fetch_scheduled_messages_in_bulk(
     let records = sqlx::query_as!(
         db::message::ScheduledMessage,
         r#"
-        SELECT link_id, message_id, send_time, sent, processing
+        SELECT link_id, message_id, send_time, sent, processing, actor_id
         FROM email_scheduled_messages
         WHERE message_id = ANY($1) AND sent = false
         "#,

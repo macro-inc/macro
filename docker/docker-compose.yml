@@ -296,6 +296,38 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # agent_harness_service (Port 8101)
+  # Channel messages -> agent session trigger events -> sandboxed coding agent
+  # sessions, plus the session control routes, which have to be served from the
+  # process that owns the live transports they act on.
+  # Daytona-backed sandboxes require DAYTONA_API_KEY; `just run_local` sets
+  # DEV_DANGEROUS_LOCAL_CONTAINERS and runs sandboxes on the host Docker daemon
+  # instead. Trigger processing and external sessions run without either.
+  # ============================================================================
+  agent_harness_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_harness_service"]
+    restart: on-failure
+    # No host port: everything reaches this through the proxy, and a second
+    # local instance would collide on a fixed publish.
+    environment:
+      # In-network gateway address; the local default (http://localhost:8082)
+      # would point at this container itself.
+      - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+    volumes:
+      # The local container provider drives the host's Docker daemon, so
+      # sandboxes are siblings of this container rather than children. Harmless
+      # under the Daytona provider, which never opens it.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - postgres
+      - kafka
+      - connection_gateway
+    networks:
+      - databases
+      - services
+
+  # ============================================================================
   # static_file_service (Port 8094)
   # Static file serving - DynamoDB
   # ============================================================================
@@ -417,7 +449,13 @@ services:
           - sync-service
       databases:
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:8787/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -7,7 +7,11 @@ import {
 import { isValidMacroAppHostname } from '@core/util/macroAppUrl';
 import { mergeRegister } from '@lexical/utils';
 import { $createPasteNode, PasteNode } from '@macro-inc/lexical-core';
-import { parseThemeV2Json } from '@theme/utils/themeValidation';
+import { convertThemev2v3 } from '@theme/utils/themeMigrations';
+import {
+  parseThemeV2Json,
+  parseThemeV3Json,
+} from '@theme/utils/themeValidation';
 import {
   $getSelection,
   $isRangeSelection,
@@ -120,16 +124,21 @@ function registerTextPastePlugin(editor: LexicalEditor) {
             event.clipboardData?.getData('text/plain') || '';
 
           // Check for theme JSON before checking for Macro URL
-          const themeV2 = parseThemeV2Json(pastedText);
-          if (themeV2) {
+          const themeV3 =
+            parseThemeV3Json(pastedText) ??
+            (() => {
+              const legacy = parseThemeV2Json(pastedText);
+              return legacy ? convertThemev2v3(legacy) : null;
+            })();
+          if (themeV3) {
             const selection = $getSelection();
             if ($isRangeSelection(selection) && !selection.isCollapsed())
               return false;
 
             event.preventDefault();
             editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
-              name: themeV2.name,
-              data: themeV2,
+              name: themeV3.name,
+              data: themeV3,
             });
             return true;
           }

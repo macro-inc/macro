@@ -6,6 +6,7 @@
  */
 import type { CalendarAttendee } from './calendarAttendee';
 import type { CalendarEventCalendarId } from './calendarEventCalendarId';
+import type { CalendarEventConferenceProvider } from './calendarEventConferenceProvider';
 import type { CalendarEventConferenceUrl } from './calendarEventConferenceUrl';
 import type { CalendarEventDescription } from './calendarEventDescription';
 import type { CalendarEventLocation } from './calendarEventLocation';
@@ -26,6 +27,7 @@ export interface CalendarEvent {
   /** Calendar the canonical source belongs to, when known. Absent only in
 projections stored before calendars were attributed. */
   calendarId?: CalendarEventCalendarId;
+  conferenceProvider?: CalendarEventConferenceProvider;
   /** Direct join URL when known. */
   conferenceUrl?: CalendarEventConferenceUrl;
   /** Entity creation time. */

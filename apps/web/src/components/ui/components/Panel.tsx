@@ -28,7 +28,7 @@ function PanelRoot(props: PanelProps) {
         'grid-template-rows': 'auto auto minmax(0, 1fr) auto',
         'grid-template-columns': 'minmax(0, 1fr)',
       }}
-      class={cn('grid min-h-0 min-w-0', local.class)}
+      class={cn('grid min-h-0 min-w-0 bg-panel', local.class)}
       {...surfaceProps}
     >
       {local.children}

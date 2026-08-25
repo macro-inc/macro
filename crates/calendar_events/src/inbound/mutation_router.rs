@@ -25,11 +25,12 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
-        CalendarEventPatch, EventReminders, EventTime, EventTransparency, EventVisibility,
-        VisibleCalendar,
+        CalendarEventPatch, ConferenceChange, EventReminders, EventTime, EventTransparency,
+        EventVisibility, VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
+        CalendarUpdateScope,
     },
 };
 
@@ -104,6 +105,7 @@ impl From<CalendarAttendeeInputBody> for CalendarAttendeeInput {
         Self {
             email: body.email,
             is_optional: body.is_optional,
+            response_status: None,
         }
     }
 }
@@ -138,6 +140,8 @@ pub struct CreateCalendarEventRequest {
     pub transparency: Option<EventTransparency>,
     /// Reminder configuration; omit to keep the calendar defaults.
     pub reminders: Option<EventReminders>,
+    /// Conference to attach to the new event; omit to create it without one.
+    pub conference: Option<ConferenceChange>,
 }
 
 /// Request body patching an event; omitted fields are left untouched.
@@ -162,6 +166,38 @@ pub struct UpdateCalendarEventRequest {
     pub transparency: Option<EventTransparency>,
     /// Replacement reminder configuration.
     pub reminders: Option<EventReminders>,
+    /// Conference change: `google_meet` attaches a freshly generated Meet,
+    /// `none` detaches the current conference, and omitting it leaves the
+    /// conference untouched.
+    ///
+    /// A third-party conference is replaced or detached like any other, since
+    /// the request is explicit. Omit the field to leave it alone.
+    pub conference: Option<ConferenceChange>,
+    /// How much of a recurring series the update covers. Omit to let
+    /// `recurrenceId` decide: the identified occurrence alone when one is
+    /// supplied, otherwise the whole event or series. An explicit
+    /// `this_event` scope requires `recurrenceId`, so a scoped request is
+    /// never silently widened to the series.
+    pub scope: Option<CalendarUpdateScopeParam>,
+    /// Original-start key of the occurrence the update targets.
+    pub recurrence_id: Option<String>,
+}
+
+/// How much of a recurring series an update applies to.
+///
+/// Like RSVPs there is no this-and-following variant: the provider cannot
+/// express a forward-scoped edit as one write, and emulating it (truncate
+/// the series, insert an edited clone) is non-atomic and re-invites the
+/// attendees of the clone. Compose it from a this-and-following deletion
+/// and a create when that shape is wanted.
+#[derive(Clone, Copy, Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarUpdateScopeParam {
+    /// The entire event or series. A time change here moves every
+    /// occurrence of a recurring series.
+    All,
+    /// One occurrence.
+    ThisEvent,
 }
 
 /// How much of a recurring series a deletion removes.
@@ -225,6 +261,9 @@ pub struct RsvpCalendarEventRequest {
 pub enum CalendarMutationErrorCode {
     /// The event does not exist or is not visible to the requester.
     NotFound,
+    /// The targeted occurrence does not exist on the recurring event at the
+    /// provider; the local projection was refreshed to match.
+    OccurrenceNotFound,
     /// The containing calendar prohibits mutation.
     ReadOnly,
     /// No connected calendar can accept new events.
@@ -274,6 +313,13 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
                 StatusCode::NOT_FOUND,
                 CalendarMutationErrorCode::NotFound,
                 "calendar event was not found".to_string(),
+            ),
+            CalendarMutationError::OccurrenceNotFound => (
+                StatusCode::NOT_FOUND,
+                CalendarMutationErrorCode::OccurrenceNotFound,
+                "the targeted occurrence was not found on the recurring event; the calendar \
+                 was out of date and has been refreshed"
+                    .to_string(),
             ),
             CalendarMutationError::ReadOnly => (
                 StatusCode::FORBIDDEN,
@@ -365,6 +411,7 @@ where
         visibility: request.visibility,
         transparency: request.transparency,
         reminders: request.reminders,
+        conference: request.conference,
     };
     let event = state
         .service
@@ -413,6 +460,31 @@ where
     Ok(Json(ListCalendarsResponse { calendars }))
 }
 
+/// Resolve an update's scope from its transport pair. An omitted scope
+/// defers to `recurrenceId`; contradictory pairs are rejected so a
+/// one-occurrence intent is never silently widened to the series and a
+/// series intent never carries a dangling occurrence key.
+fn update_scope(
+    scope: Option<CalendarUpdateScopeParam>,
+    recurrence_id: Option<String>,
+) -> Result<CalendarUpdateScope, CalendarMutationApiError> {
+    match (scope, recurrence_id) {
+        (Some(CalendarUpdateScopeParam::All), None) | (None, None) => Ok(CalendarUpdateScope::All),
+        (Some(CalendarUpdateScopeParam::ThisEvent), Some(recurrence_id))
+        | (None, Some(recurrence_id)) => Ok(CalendarUpdateScope::ThisEvent { recurrence_id }),
+        (Some(CalendarUpdateScopeParam::ThisEvent), None) => Err(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::InvalidInput,
+            message: "a this-event update requires recurrenceId".to_string(),
+            status: StatusCode::BAD_REQUEST,
+        }),
+        (Some(CalendarUpdateScopeParam::All), Some(_)) => Err(CalendarMutationApiError {
+            code: CalendarMutationErrorCode::InvalidInput,
+            message: "recurrenceId only applies to a this_event update".to_string(),
+            status: StatusCode::BAD_REQUEST,
+        }),
+    }
+}
+
 /// Update fields of a calendar event and return its synced entity.
 #[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
 #[utoipa::path(
@@ -426,7 +498,7 @@ where
         (status = 400, description = "Invalid event fields", body = CalendarMutationApiError),
         (status = 401, description = "Authentication required"),
         (status = 403, description = "Calendar is read-only or needs reauthorization", body = CalendarMutationApiError),
-        (status = 404, description = "Event not found", body = CalendarMutationApiError),
+        (status = 404, description = "Event or targeted occurrence not found", body = CalendarMutationApiError),
         (status = 409, description = "The provider rejected the update", body = CalendarMutationApiError),
         (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
     )
@@ -441,6 +513,7 @@ where
     S: CalendarMutationService,
     Auth: MacroAuthorizationService,
 {
+    let scope = update_scope(request.scope, request.recurrence_id)?;
     let patch = CalendarEventPatch {
         title: request.title,
         description: request.description,
@@ -453,6 +526,7 @@ where
         visibility: request.visibility,
         transparency: request.transparency,
         reminders: request.reminders,
+        conference: request.conference,
     };
     let event = state
         .service
@@ -460,6 +534,7 @@ where
             user.authorization.user.macro_user_id.as_ref(),
             event_id,
             patch,
+            scope,
         )
         .await?;
     Ok(Json(event))

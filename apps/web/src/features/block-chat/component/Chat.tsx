@@ -350,7 +350,7 @@ function ChatInner(props: {
           class="h-full min-h-0 overflow-auto scrollbar-hidden"
           ref={setScrollRef}
         >
-          <div class="mx-auto w-full max-w-3xl mobile:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] mobile:pb-(--mobile-content-inset-bottom)">
+          <div class="mx-auto w-full max-w-3xl touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] touch:pb-(--mobile-content-inset-bottom)">
             <ChatMessages
               editDisabled={disabled()}
               pendingLocationParams={pendingLocationParamsSignal.get}
@@ -361,7 +361,7 @@ function ChatInner(props: {
       </div>
       <Show when={!disabled()}>
         <FloatRegionOrInline region="accessory">
-          <div class="flex w-full justify-center pb-2 px-2 mobile:pb-0 mobile:px-(--mobile-chrome-gutter) mobile:pointer-events-auto">
+          <div class="flex w-full justify-center pb-2 px-2 touch:pb-0 touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
             <div class="w-3xl">
               <ChatInput
                 editor={editor}

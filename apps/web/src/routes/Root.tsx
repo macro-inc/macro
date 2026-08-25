@@ -32,6 +32,7 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
+import { publishLoginSuccess } from '@core/auth/login-events';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
@@ -47,6 +48,7 @@ import {
 import { initAndStartEmailSync } from '@core/email-link';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
+import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
@@ -232,15 +234,15 @@ const ROUTES: RouteDefinition[] = [
     component: LAYOUT_ROUTE.component,
   },
   {
+    path: '/recent',
+    component: LAYOUT_ROUTE.component,
+  },
+  {
     path: '/activity',
     component: LAYOUT_ROUTE.component,
   },
   {
     path: '/reminders',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/calendar',
     component: LAYOUT_ROUTE.component,
   },
   {
@@ -296,16 +298,12 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login/popup/success',
     component: () => {
-      const channel = new BroadcastChannel('auth');
-
       onMount(() => {
-        channel.postMessage({ type: 'login-success' });
-        channel.close();
+        publishLoginSuccess();
         window.close();
       });
 
       onCleanup(() => {
-        channel.close();
         window.close();
       });
 
@@ -315,8 +313,7 @@ const ROUTES: RouteDefinition[] = [
             <Button
               variant="base"
               onClick={() => {
-                channel.postMessage({ type: 'login-success' });
-                channel.close();
+                publishLoginSuccess();
                 window.close();
               }}
             >
@@ -411,6 +408,11 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   );
 }
 
+function SoupBackfillSideEffect(props: { userId: string }) {
+  useSoupBackfills(props.userId);
+  return null;
+}
+
 /** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
 function UserInfoSideEffects() {
   const analytics = useAnalytics();
@@ -420,8 +422,6 @@ function UserInfoSideEffects() {
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
-
-  useSoupBackfills(() => userInfo()?.id);
 
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();
@@ -466,7 +466,11 @@ function UserInfoSideEffects() {
     })
   );
 
-  return null;
+  return (
+    <Show when={userInfo()?.id} keyed>
+      {(userId) => <SoupBackfillSideEffect userId={userId} />}
+    </Show>
+  );
 }
 
 const clearBodyInlineStyleColor = () => {
@@ -571,6 +575,7 @@ export function Root() {
                 <EmailLinksContextProvider>
                   <BrowserNotificationModal />
                   <IosPushNotificationModal />
+                  <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />
                   <QuerySyncProviderWithUserId />
                   <UserInfoSideEffects />

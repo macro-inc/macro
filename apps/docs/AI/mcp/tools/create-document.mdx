@@ -1,11 +1,11 @@
 ---
 title: CreateDocument
-description: "Generated from the Macro Rust tool registry."
+description: "Create a plaintext document."
 ---
 
 # CreateDocument
 
-Generated from the Macro Rust tool registry.
+Create a plaintext document.
 
 ## Parameters
 
@@ -14,4 +14,5 @@ Generated from the Macro Rust tool registry.
 | `documentName` | string | Yes | The name of the document without the file extension |
 | `fileContent` | string | Yes | The string content of the document you are creating. |
 | `fileExtension` | string | Yes | The extension of the plaintext file you are creating. |
-| `isTask` | boolean | Yes | Whether this document is a task. Only applies to md documents. |
+| `isTask` | boolean | No | Whether this document is a task. Only applies to md documents. |
+| `projectId` | string | No | The id of the project (shown as a folder in the app UI) to create the document in. Requires edit access to the project. Omit to create the document at the top level of the user's files. |

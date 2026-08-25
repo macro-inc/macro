@@ -1,5 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { ROUTER_BASE } from '@app/constants/routerBase';
+import { toBaseRelative } from '@app/constants/routerBase';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
@@ -12,20 +12,6 @@ import {
   stripSettingsSplitFromUrl,
 } from './settingsSplitUrl';
 import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
-
-/**
- * Strip the router base from a `location.pathname` (which includes it, e.g.
- * `/app/settings`) so it can be compared to — and reused with — the
- * base-relative paths that `navigate()` and route definitions use.
- */
-const toBaseRelative = (pathname: string) => {
-  if (ROUTER_BASE === '/') return pathname;
-  if (pathname === ROUTER_BASE) return '/';
-  if (pathname.startsWith(`${ROUTER_BASE}/`)) {
-    return pathname.slice(ROUTER_BASE.length);
-  }
-  return pathname;
-};
 
 export type SettingsTab =
   | 'Account'
@@ -55,6 +41,20 @@ export type SettingsTab =
 // Undefined when settings was deep-linked, in which case we fall back to
 // DEFAULT_ROUTE.
 const [settingsReturnTo, setSettingsReturnTo] = createSignal<string>();
+
+/**
+ * Re-seed {@link settingsReturnTo} after a full page load has wiped it. The
+ * Gmail consent round trip tears the app down, so the add-inbox flow captures
+ * this alongside the layout it left from and the callback hands it back — the
+ * user returns to solo settings with "Back to app" still pointing at the
+ * layout they had before they opened settings.
+ */
+export const restoreSettingsReturnTo = (url: string) => {
+  setSettingsReturnTo(url);
+};
+
+/** Read-only view of {@link settingsReturnTo} for capture across a reload. */
+export const currentSettingsReturnTo = settingsReturnTo;
 
 /**
  * Extract the active settings tab from a docked-split path

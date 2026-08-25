@@ -37,7 +37,7 @@ function SearchResultRow(props: { entity: SearchEntity; onClick: () => void }) {
   return (
     <button
       type="button"
-      class="block w-full text-left hover:bg-surface-hover"
+      class="block w-full text-left hover:bg-hover"
       onClick={props.onClick}
     >
       <Tool.ListItem icon={<EntityRowIcon entity={props.entity} />}>

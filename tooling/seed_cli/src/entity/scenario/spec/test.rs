@@ -54,6 +54,14 @@ fn example_scenario_parses() {
     assert_eq!(spec.scenario, "team-perms");
     assert_eq!(spec.users.len(), 6);
     assert_eq!(spec.user_id("alice"), "macro|alice@seed.macro.local");
+
+    let handbook = &spec.documents["handbook"];
+    assert_eq!(handbook.link_share, Some(LinkShare::Public));
+    assert_eq!(handbook.link_share_access_level, Some(ShareLevel::View));
+
+    let bob_notes = &spec.documents["bob-notes"];
+    assert_eq!(bob_notes.link_share, Some(LinkShare::Team));
+    assert_eq!(bob_notes.link_share_access_level, Some(ShareLevel::View));
 }
 
 #[test]
@@ -199,6 +207,47 @@ fn rejects_unknown_fields() {
     let result = minimal(serde_json::json!({
         "scenario": "bad",
         "users": { "alice": { "email": "alice@x.local", "surprise": true } }
+    }));
+    assert!(result.unwrap_err().to_string().contains("unknown field"));
+}
+
+#[test]
+fn rejects_incomplete_link_share_policies() {
+    let missing_access_level = minimal(serde_json::json!({
+        "scenario": "bad",
+        "users": { "alice": { "email": "alice@x.local" } },
+        "documents": {
+            "doc": { "owner": "alice", "link_share": "TEAM" }
+        }
+    }));
+    let error = missing_access_level.unwrap_err().to_string();
+    assert!(
+        error.contains("sets link_share but not link_share_access_level"),
+        "{error}"
+    );
+
+    let missing_scope = minimal(serde_json::json!({
+        "scenario": "bad",
+        "users": { "alice": { "email": "alice@x.local" } },
+        "chats": {
+            "chat": { "owner": "alice", "link_share_access_level": "view" }
+        }
+    }));
+    let error = missing_scope.unwrap_err().to_string();
+    assert!(
+        error.contains("sets link_share_access_level but not link_share"),
+        "{error}"
+    );
+}
+
+#[test]
+fn rejects_legacy_public_link_field() {
+    let result = minimal(serde_json::json!({
+        "scenario": "bad",
+        "users": { "alice": { "email": "alice@x.local" } },
+        "projects": {
+            "project": { "owner": "alice", "public": "view" }
+        }
     }));
     assert!(result.unwrap_err().to_string().contains("unknown field"));
 }

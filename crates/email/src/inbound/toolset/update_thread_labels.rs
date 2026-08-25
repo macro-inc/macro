@@ -2,6 +2,7 @@
 
 use crate::domain::ports::{EmailService, GmailTokenProvider};
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -59,6 +60,10 @@ pub struct UpdateThreadLabelsResponse {
     pub failed_count: usize,
     /// A human-readable summary of the operation.
     pub summary: String,
+}
+
+impl ToolAnnotated for UpdateThreadLabels {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Update thread labels");
 }
 
 #[async_trait]

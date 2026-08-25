@@ -71,6 +71,7 @@ pub async fn resync_link_handler(
         link.id,
         link.fusionauth_user_id.as_str(),
         None,
+        false,
     )
     .await
     .context("failed to create backfill job")?

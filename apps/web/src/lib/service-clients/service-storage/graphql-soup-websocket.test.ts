@@ -6,11 +6,16 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import {
+  NotificationUpdatesDocument,
+  SoupUpdatesDocument,
+} from './graphql/generated/graphql';
+import {
   buildGraphqlSoupWebSocketUrl,
+  createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
-  createSoupUpdatesSubscriptionLifecycle,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
   shouldRetryGraphqlSoupWebSocket,
+  subscribeToGraphqlNotificationPatches,
 } from './graphql-soup-websocket';
 
 describe('GraphQL Soup websocket auth', () => {
@@ -79,53 +84,121 @@ describe('GraphQL Soup websocket retry policy', () => {
   });
 });
 
-describe('Soup updates subscription lifecycle', () => {
-  it('keeps one subscription, cleans up replacements, and skips disabled hosts', () => {
-    const firstUnsubscribe = vi.fn();
-    const secondUnsubscribe = vi.fn();
+describe('GraphQL Soup subscription lifecycle', () => {
+  it('keeps notification patches active without a cache host and cleans up replacements', () => {
+    const firstSoupUnsubscribe = vi.fn();
+    const firstNotificationUnsubscribe = vi.fn();
+    const uncachedNotificationUnsubscribe = vi.fn();
+    const secondSoupUnsubscribe = vi.fn();
+    const secondNotificationUnsubscribe = vi.fn();
     const firstClient = {
-      subscription: vi.fn(() => ({
-        subscribe: vi.fn(() => ({ unsubscribe: firstUnsubscribe })),
-      })),
+      subscription: vi
+        .fn()
+        .mockReturnValueOnce({
+          subscribe: vi.fn(() => ({ unsubscribe: firstSoupUnsubscribe })),
+        })
+        .mockReturnValueOnce({
+          subscribe: vi.fn(() => ({
+            unsubscribe: firstNotificationUnsubscribe,
+          })),
+        })
+        .mockReturnValueOnce({
+          subscribe: vi.fn(() => ({
+            unsubscribe: uncachedNotificationUnsubscribe,
+          })),
+        }),
     };
     const secondClient = {
-      subscription: vi.fn(() => ({
-        subscribe: vi.fn(() => ({ unsubscribe: secondUnsubscribe })),
-      })),
+      subscription: vi
+        .fn()
+        .mockReturnValueOnce({
+          subscribe: vi.fn(() => ({ unsubscribe: secondSoupUnsubscribe })),
+        })
+        .mockReturnValueOnce({
+          subscribe: vi.fn(() => ({
+            unsubscribe: secondNotificationUnsubscribe,
+          })),
+        }),
     };
-    const lifecycle = createSoupUpdatesSubscriptionLifecycle();
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
 
     lifecycle.replace(firstClient as never, { disabled: false } as never);
-    expect(firstClient.subscription).toHaveBeenCalledOnce();
+    expect(firstClient.subscription).toHaveBeenNthCalledWith(
+      1,
+      SoupUpdatesDocument,
+      {}
+    );
+    expect(firstClient.subscription).toHaveBeenNthCalledWith(
+      2,
+      NotificationUpdatesDocument,
+      {}
+    );
 
     lifecycle.replace(secondClient as never, { disabled: false } as never);
-    expect(firstUnsubscribe).toHaveBeenCalledOnce();
-    expect(secondClient.subscription).toHaveBeenCalledOnce();
+    expect(firstSoupUnsubscribe).toHaveBeenCalledOnce();
+    expect(firstNotificationUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondClient.subscription).toHaveBeenCalledTimes(2);
 
     lifecycle.replace(firstClient as never, { disabled: true } as never);
-    expect(secondUnsubscribe).toHaveBeenCalledOnce();
-    expect(firstClient.subscription).toHaveBeenCalledOnce();
+    expect(secondSoupUnsubscribe).toHaveBeenCalledOnce();
+    expect(secondNotificationUnsubscribe).toHaveBeenCalledOnce();
+    expect(firstClient.subscription).toHaveBeenCalledTimes(3);
+    expect(firstClient.subscription).toHaveBeenNthCalledWith(
+      3,
+      NotificationUpdatesDocument,
+      {}
+    );
 
     lifecycle.dispose();
-    expect(secondUnsubscribe).toHaveBeenCalledOnce();
+    expect(uncachedNotificationUnsubscribe).toHaveBeenCalledOnce();
   });
 
-  it('signals a terminal subscription failure once', () => {
-    toastFailure.mockClear();
-    let receive: ((result: { error?: unknown }) => void) | undefined;
+  it('publishes typed notification patches to frontend listeners', () => {
+    const receive: Array<(result: { data?: unknown }) => void> = [];
     const client = {
       subscription: vi.fn(() => ({
         subscribe: vi.fn((next) => {
-          receive = next;
+          receive.push(next);
           return { unsubscribe: vi.fn() };
         }),
       })),
     };
-    const lifecycle = createSoupUpdatesSubscriptionLifecycle();
+    const listener = vi.fn();
+    const unsubscribe = subscribeToGraphqlNotificationPatches(listener);
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
     lifecycle.replace(client as never, { disabled: false } as never);
 
-    receive?.({ error: new Error('retry budget exhausted') });
-    receive?.({ error: new Error('duplicate terminal result') });
+    receive[0]?.({ data: { soupUpdates: [] } });
+    expect(listener).not.toHaveBeenCalled();
+
+    const patch = {
+      __typename: 'GraphqlNewNotification',
+      notification: { id: 'notification-id' },
+    };
+    receive[1]?.({ data: { notificationUpdates: patch } });
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledWith(patch);
+
+    unsubscribe();
+    lifecycle.dispose();
+  });
+
+  it('signals a terminal subscription failure once across both subscriptions', () => {
+    toastFailure.mockClear();
+    const receive: Array<(result: { error?: unknown }) => void> = [];
+    const client = {
+      subscription: vi.fn(() => ({
+        subscribe: vi.fn((next) => {
+          receive.push(next);
+          return { unsubscribe: vi.fn() };
+        }),
+      })),
+    };
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    lifecycle.replace(client as never, { disabled: false } as never);
+
+    receive[0]?.({ error: new Error('retry budget exhausted') });
+    receive[1]?.({ error: new Error('duplicate terminal result') });
 
     expect(toastFailure).toHaveBeenCalledOnce();
     expect(toastFailure).toHaveBeenCalledWith('Live updates disconnected', {

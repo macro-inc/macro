@@ -1,6 +1,8 @@
-use macro_event_broker::{EventBrokerError, MacroEventCollection as _, MessageParts};
+use macro_event_broker::{
+    EventBrokerError, MacroEventCollection as _, MessageParts, MessageWrapper,
+};
 
-use super::{DeclaredMacroEvent, validate_soup_schema};
+use super::DeclaredMacroEvent;
 
 struct TestMessage {
     payload: Vec<u8>,
@@ -26,19 +28,25 @@ fn assigns_only_the_typed_soup_topic() {
 }
 
 #[test]
-fn classifies_v1_soup_events_as_unsupported_before_decoding_the_old_payload() {
-    let message = TestMessage {
+fn declared_topic_decoder_rejects_unsupported_schema_versions() {
+    let message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
         payload: serde_json::to_vec(&serde_json::json!({
             "event_id": "00000000-0000-0000-0000-000000000001",
             "schema_version": 1,
-            "event_type": "soup.item.updated",
-            "metadata": {}
+            "event_type": "soup.updated",
+            "metadata": [
+                "macro|user@example.com",
+                {
+                    "entity_type": "document",
+                    "entity_id": "00000000-0000-0000-0000-000000000001"
+                }
+            ]
         }))
         .expect("serializable event"),
-    };
+    });
 
     assert!(matches!(
-        validate_soup_schema(&message),
+        message.decode_payload(),
         Err(EventBrokerError::UnsupportedSchemaVersion {
             expected: 2,
             actual: 1,

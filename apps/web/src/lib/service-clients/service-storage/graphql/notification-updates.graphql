@@ -1,0 +1,19 @@
+subscription NotificationUpdates {
+	notificationUpdates {
+		__typename
+		... on GraphqlNewNotification {
+			notification {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlUpdatedNotification {
+			notification {
+				...SoupNotificationFields
+			}
+		}
+		... on GraphqlCacheDeletion {
+			graphqlTypeName
+			entityId
+		}
+	}
+}

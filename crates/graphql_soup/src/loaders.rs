@@ -16,18 +16,21 @@ use email::domain::{
 };
 use filter_ast::Expr;
 use futures::{future::BoxFuture, future::try_join_all};
-use item_filters::ast::{
-    EmailFilterAst, EntityFilterAst,
-    calendar_event::CalendarEventLiteral,
-    call::CallLiteral,
-    channel::{ChannelLiteral, ChannelThreadLiteral},
-    chat::ChatLiteral,
-    crm_company::CrmCompanyLiteral,
-    document::DocumentLiteral,
-    email::EmailLiteral,
-    foreign_entity::ForeignEntityLiteral,
-    project::ProjectLiteral,
-    reminder::ReminderLiteral,
+use item_filters::{
+    SharedEmailFilter,
+    ast::{
+        EmailFilterAst, EntityFilterAst,
+        calendar_event::CalendarEventLiteral,
+        call::CallLiteral,
+        channel::{ChannelLiteral, ChannelThreadLiteral},
+        chat::ChatLiteral,
+        crm_company::CrmCompanyLiteral,
+        document::DocumentLiteral,
+        email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral,
+        project::ProjectLiteral,
+        reminder::ReminderLiteral,
+    },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -148,7 +151,7 @@ where
             .get_user_soup(request, None)
             .await
             .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())?
-            .either(|page| page.items, |page| page.items);
+            .into_items();
 
         let mut loaded = HashMap::with_capacity(items.len());
         for item in items {
@@ -369,7 +372,8 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::Team
             | EntityType::StaticFile
             | EntityType::CrmContact
-            | EntityType::Skill => {
+            | EntityType::Skill
+            | EntityType::AgentSession => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type
@@ -386,7 +390,12 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
         project_filter: Some(literal_tree(projects, ProjectLiteral::ProjectIdSelf(nil))),
         chat_filter: Some(literal_tree(chats, ChatLiteral::ChatId(nil))),
         email_filter: EmailFilterAst {
-            tree: Some(literal_tree(email_threads, EmailLiteral::ThreadId(nil))),
+            tree: Some(Arc::new(Expr::and(
+                literal_tree(email_threads, EmailLiteral::ThreadId(nil))
+                    .as_ref()
+                    .clone(),
+                Expr::val(EmailLiteral::Shared(SharedEmailFilter::Include)),
+            ))),
             crm_scope: None,
         },
         channel_filter: Some(literal_tree(channels, ChannelLiteral::ChannelId(nil))),

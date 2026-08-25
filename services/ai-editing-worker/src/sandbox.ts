@@ -6,6 +6,7 @@ import {
   newVariant,
 } from 'quickjs-emscripten-core';
 import type { DocumentOp } from './ai-editing/editor';
+import { sandboxInit } from './ai-editing/editor/sandbox-init';
 import { SANDBOX_CODE } from './editor-sandbox-code';
 
 /** Upper bound on inserts per snippet. The host mints the ids (QuickJS has no
@@ -38,7 +39,7 @@ export async function runInSandbox(
     const refs = Array.from({ length: REF_POOL_SIZE }, () => nanoid());
     const init = ctx.unwrapResult(
       ctx.evalCode(
-        `${SANDBOX_CODE}\nconst editor = new DocumentEditor({ validIds: ${JSON.stringify([...validIds])}, refs: ${JSON.stringify(refs)} });\nconst snippets = ${JSON.stringify(snippets ?? {})};`
+        `${SANDBOX_CODE}\n${sandboxInit(validIds, refs, snippets)}`
       )
     );
     init.dispose();

@@ -114,7 +114,7 @@ impl<'a> EmailNotification<'a> {
 /// the value of the inner payload inside [ConnGatewayNotification]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ConnGatewayInnerNotif<T> {
+pub struct RealtimeNotif<T> {
     /// The notification ID.
     pub notification_id: uuid::Uuid,
     /// The notification event type string (e.g. "channel_mention").
@@ -136,26 +136,26 @@ pub struct ConnGatewayInnerNotif<T> {
     /// When the notification was deleted.
     pub deleted_at: Option<DateTime<Utc>>,
     /// Deserialized notification metadata.
-    pub notification_metadata: TaggedContent<T>,
+    pub notification_metadata: T,
     /// The user who triggered the notification.
     pub sender_id: Option<MacroUserIdStr<'static>>,
 }
 
-/// Concrete schema type for [`ConnGatewayInnerNotif`] with `serde_json::Value` metadata.
+/// Concrete schema type for [`RealtimeNotif`] with `serde_json::Value` metadata.
 ///
 /// Used for OpenAPI schema generation — serializes identically to
-/// `ConnGatewayInnerNotif<serde_json::Value>`.
+/// `RealtimeNotif<serde_json::Value>`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ConnGatewayNotificationPayload(pub ConnGatewayInnerNotif<serde_json::Value>);
+pub struct ConnGatewayNotificationPayload(pub RealtimeNotif<TaggedContent<serde_json::Value>>);
 
 /// Connection gateway (WebSocket) notification payload.
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub(crate) struct ConnGatewayNotification<'a, T> {
     /// The notification payload to send.
-    pub(crate) notif: ConnGatewayInnerNotif<T>,
+    pub(crate) notif: RealtimeNotif<TaggedContent<T>>,
     /// The recipients to deliver to.
     pub(crate) recipients: Vec<MacroUserIdStr<'a>>,
 }
@@ -163,7 +163,7 @@ pub(crate) struct ConnGatewayNotification<'a, T> {
 impl<'a, T: Clone> ConnGatewayNotification<'a, T> {
     pub(crate) fn clone_from_request<U>(id: Uuid, req: &SendNotificationRequest<'a, T, U>) -> Self {
         ConnGatewayNotification {
-            notif: ConnGatewayInnerNotif {
+            notif: RealtimeNotif {
                 notification_id: id,
                 notification_event_type: req.req.notification.tag.as_ref().to_string(),
                 entity: req.req.notification_entity.clone().into_owned(),
@@ -187,7 +187,7 @@ impl<'a, T: Notification> ConnGatewayNotification<'a, T> {
     pub fn testing_to_value(self) -> ConnGatewayNotification<'a, serde_json::Value> {
         let ConnGatewayNotification {
             notif:
-                ConnGatewayInnerNotif {
+                RealtimeNotif {
                     notification_id,
                     notification_event_type,
                     entity,
@@ -204,7 +204,7 @@ impl<'a, T: Notification> ConnGatewayNotification<'a, T> {
         } = self;
 
         ConnGatewayNotification {
-            notif: ConnGatewayInnerNotif {
+            notif: RealtimeNotif {
                 notification_id,
                 notification_event_type,
                 entity,
@@ -245,7 +245,7 @@ impl<'a, T, U> NotificationChannel<'a, T, U> {
             }
             NotificationChannel::ConnGateway(ConnGatewayNotification {
                 notif:
-                    ConnGatewayInnerNotif {
+                    RealtimeNotif {
                         notification_id,
                         notification_event_type,
                         entity,
@@ -260,7 +260,7 @@ impl<'a, T, U> NotificationChannel<'a, T, U> {
                     },
                 recipients,
             }) => NotificationChannel::ConnGateway(ConnGatewayNotification {
-                notif: ConnGatewayInnerNotif {
+                notif: RealtimeNotif {
                     notification_id,
                     notification_event_type,
                     entity,

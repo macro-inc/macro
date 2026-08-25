@@ -1,4 +1,4 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cn, Layer } from '@ui';
 import { type ComponentProps, Show, splitProps } from 'solid-js';
 
@@ -19,7 +19,7 @@ export function HeaderIsland(props: ComponentProps<'div'>) {
   const [local, rest] = splitProps(props, ['class', 'children']);
 
   return (
-    <Show when={isMobile()} fallback={local.children}>
+    <Show when={isTouchDevice()} fallback={local.children}>
       <Layer depth={3}>
         <div
           {...rest}

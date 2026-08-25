@@ -505,25 +505,25 @@ mark {
 }
 
 .md-mark.comment {
-  background: oklch(from var(--color-comment) l c h / 0.1);
-  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.3);
+  background: oklch(from var(--color-yellow) l c h / 0.1);
+  border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.3);
   padding-bottom: 2px;
 }
 
 .md-mark-overlap.comment {
-  background: oklch(from var(--color-comment) l c h / 0.2);
-  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.4);
+  background: oklch(from var(--color-yellow) l c h / 0.2);
+  border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.4);
 }
 
 .md-mark.selected.comment {
-  background: oklch(from var(--color-comment) l c h / 0.3);
-  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.5);
-  color: var(--color-comment-ink);
+  background: oklch(from var(--color-yellow) l c h / 0.3);
+  border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.5);
+  color: var(--color-ink);
 }
 
 .md-mark-overlap.selected.comment {
-  background: oklch(from var(--color-comment) l c h / 0.4);
-  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.6);
+  background: oklch(from var(--color-yellow) l c h / 0.4);
+  border-bottom: 2px solid oklch(from var(--color-yellow) l c h / 0.6);
 }
 
 .md-mark.draft.comment:not(.local) {

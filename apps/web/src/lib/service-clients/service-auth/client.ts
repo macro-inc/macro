@@ -55,6 +55,12 @@ import type { UserTokensResponse } from './generated/schemas/userTokensResponse'
 
 const authHost = SERVER_HOSTS['auth-service'];
 
+/**
+ * Which permissions a Google consent screen asks for. `calendar` covers an
+ * inbox that is already connected, so the screen lists calendar access alone.
+ */
+export type ConsentScopes = 'gmail' | 'gmail_and_calendar' | 'calendar';
+
 const authApiFetch = <T extends ObjectLike>(
   input: string,
   init?: SafeFetchInit
@@ -125,7 +131,9 @@ async function getAccessToken(): Promise<string | null> {
           return null;
         }
       } catch (error) {
-        Telemetry.error('Error refreshing access token', { error });
+        Telemetry.error('Error refreshing access token', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         return null;
       } finally {
         // Clear the ongoing refresh promise so future calls can start a new refresh
@@ -554,10 +562,26 @@ export const authServiceClient = {
    * Returns the OAuth authorization URL to redirect the browser to.
    * After Google consent, the user is redirected back to `originalUrl` with `?link_id=<uuid>`
    * appended; the frontend then calls `emailClient.init({ linkId })` to provision the inbox.
+   *
+   * `scopes` selects which permissions the consent screen asks for. Only
+   * calendar entry points may request calendar access, and an inbox that is
+   * already connected should ask for `calendar` alone so the user isn't
+   * re-consenting to mailbox access they have already granted.
    */
-  async initGmailLink(originalUrl?: string) {
-    const url = originalUrl
-      ? `${authHost}/link/gmail?original_url=${encodeURIComponent(originalUrl)}`
+  async initGmailLink(
+    originalUrl?: string,
+    options?: { scopes?: ConsentScopes }
+  ) {
+    const params = new URLSearchParams();
+    if (originalUrl) {
+      params.set('original_url', encodeURIComponent(originalUrl));
+    }
+    if (options?.scopes) {
+      params.set('scopes', options.scopes);
+    }
+    const query = params.toString();
+    const url = query
+      ? `${authHost}/link/gmail?${query}`
       : `${authHost}/link/gmail`;
     return (
       await fetchWithAuth<

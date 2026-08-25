@@ -11,6 +11,7 @@ use macro_authorization::{
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use model_user::UserContext;
 use models_pagination::{CreatedAt, Paginated, Query};
 use reqwest::StatusCode;
@@ -25,7 +26,7 @@ use crate::domain::{
         DisabledNotificationType, UserNotificationRow,
         device::DeviceType,
         request::{
-            GetNotificationsByEventItemIdsRequest, NotificationEntityRef,
+            GetNotificationsByEventItemIdsRequest, UpdateNotificationsForEntitiesRequest,
             UpdateNotificationsRequest,
         },
         signing::SignedUrl,
@@ -91,11 +92,17 @@ impl NotificationReader for AuthenticationTestService {
         async { unreachable!("should not be called") }
     }
 
-    fn update_notifications_and_return(
+    fn update_notifications_and_return<T: DeserializeOwned + Send>(
         &self,
         _req: UpdateNotificationsRequest,
-    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send
-    {
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send {
+        async { unreachable!("should not be called") }
+    }
+
+    fn update_notifications_for_entities<T: DeserializeOwned + Send>(
+        &self,
+        _req: UpdateNotificationsForEntitiesRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send {
         async { unreachable!("should not be called") }
     }
 
@@ -118,16 +125,12 @@ impl NotificationReader for AuthenticationTestService {
         async { unreachable!("should not be called") }
     }
 
-    fn get_entity_notifications_batch(
+    fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         _user_id: MacroUserIdStr<'_>,
-        _entity_refs: Vec<NotificationEntityRef>,
-    ) -> impl Future<
-        Output = Result<
-            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
-            Report,
-        >,
-    > + Send {
+        _entity_refs: Vec<Entity<'static>>,
+    ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send
+    {
         async { unreachable!("should not be called") }
     }
 
@@ -573,11 +576,17 @@ impl NotificationReader for PresignedTestService {
         async { unreachable!() }
     }
 
-    fn update_notifications_and_return(
+    fn update_notifications_and_return<T: DeserializeOwned + Send>(
         &self,
         _req: UpdateNotificationsRequest,
-    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send
-    {
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send {
+        async { unreachable!() }
+    }
+
+    fn update_notifications_for_entities<T: DeserializeOwned + Send>(
+        &self,
+        _req: UpdateNotificationsForEntitiesRequest,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send {
         async { unreachable!() }
     }
 
@@ -600,16 +609,12 @@ impl NotificationReader for PresignedTestService {
         async { unreachable!() }
     }
 
-    fn get_entity_notifications_batch(
+    fn get_entity_notifications_batch<T: DeserializeOwned + Send>(
         &self,
         _user_id: MacroUserIdStr<'_>,
-        _entity_refs: Vec<NotificationEntityRef>,
-    ) -> impl Future<
-        Output = Result<
-            HashMap<NotificationEntityRef, Vec<UserNotificationRow<serde_json::Value>>>,
-            Report,
-        >,
-    > + Send {
+        _entity_refs: Vec<Entity<'static>>,
+    ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<UserNotificationRow<T>>>, Report>> + Send
+    {
         async { unreachable!() }
     }
 

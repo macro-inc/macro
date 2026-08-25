@@ -78,7 +78,6 @@ struct MemoryJudgement {
 }
 
 pub struct MemoryServiceImpl<Rpo> {
-    db: sqlx::PgPool,
     memory_repo: Rpo,
     tool_context: ToolServiceContext,
     tools: ToolSetWithPrompt,
@@ -86,13 +85,11 @@ pub struct MemoryServiceImpl<Rpo> {
 
 impl<Rpo> MemoryServiceImpl<Rpo> {
     pub fn new(
-        db: sqlx::PgPool,
         memory_repo: Rpo,
         tool_context: ToolServiceContext,
         tools: ToolSetWithPrompt,
     ) -> Self {
         Self {
-            db,
             memory_repo,
             tool_context,
             tools,
@@ -105,7 +102,7 @@ const MAX_AGE: std::time::Duration = std::time::Duration::from_hours(24);
 
 impl<Rpo> MemoryService for MemoryServiceImpl<Rpo>
 where
-    Rpo: MemoryRepo,
+    Rpo: MemoryRepo + Clone,
 {
     #[tracing::instrument(skip(self), err)]
     async fn get_or_generate_memory(
@@ -125,15 +122,14 @@ where
         let env = Environment::new_or_prod();
         if needs_generation && !matches!(env, Environment::Local) {
             let previous_memory = record.as_ref().map(|r| r.memory.clone());
-            let pool = self.db.clone();
+            let repo = self.memory_repo.clone();
             let tool_context = self.tool_context.clone();
             let toolset = self.tools.toolset.clone();
             let prompt: Box<dyn std::fmt::Display + Send + Sync> =
                 Box::new(self.tools.prompt.to_string());
             tokio::spawn(async move {
-                let repo = crate::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
                 let tools = ToolSetWithPrompt { toolset, prompt };
-                let svc = MemoryServiceImpl::new(pool, repo, tool_context, tools);
+                let svc = MemoryServiceImpl::new(repo, tool_context, tools);
                 match svc.generate_memory(user.clone(), previous_memory).await {
                     Ok(_) => tracing::info!(%user, "memory generated"),
                     Err(MemoryError::Rejected(reason)) => {

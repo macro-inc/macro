@@ -51,6 +51,12 @@ export class Team extends MacroEntity<TeamRecord> {
   /** The team's slug (its URL identifier). */
   readonly slug = this.field('slug');
 
+  /**
+   * The team's default link-share scope for newly shared items, or null when
+   * link sharing is off by default.
+   */
+  readonly defaultLinkShare = this.field('default_link_share');
+
   /** The user who owns the team. */
   readonly owner = this.mappedField('owner_id', (id) =>
     User.byId(this.client, id),
