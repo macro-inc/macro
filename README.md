@@ -15,6 +15,8 @@
     ·
     <a href="https://macro.com">Website</a>
     ·
+    <a href="https://github.com/macro-inc/macro">GitHub</a>
+    ·
     <a href="mailto:contact@macro.com">Feature requests</a>
     ·
     <a href="CONTRIBUTING.md">Contribute</a>
