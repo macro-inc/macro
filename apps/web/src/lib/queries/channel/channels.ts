@@ -20,6 +20,10 @@ import {
   readCachedGraphqlChannels,
 } from './graphql';
 import { channelKeys } from './keys';
+import { type ListChannelUpsert, mergeListChannel } from './list-cache';
+
+export type { ListChannelUpsert } from './list-cache';
+export { mergeListChannel } from './list-cache';
 
 const CHANNEL_LIST_PAGE_SIZE = 100;
 
@@ -75,13 +79,6 @@ export function invalidateListChannels() {
   });
 }
 
-/** Fields a cache writer can seed into the REST channel list. */
-export type ListChannelUpsert = {
-  id: string;
-  name?: string;
-  channel_type?: ChannelType;
-};
-
 /**
  * Insert or patch one row in the cached `GET /comms/channels` list.
  * Used when a mutation (AI tools) does not go through the HTTP create/patch
@@ -95,65 +92,6 @@ export function upsertListChannel(update: ListChannelUpsert): void {
     channelKeys.listChannels.queryKey,
     (channels) => mergeListChannel(channels, update)
   );
-}
-
-/** Pure list merge used by `upsertListChannel` and its tests. */
-export function mergeListChannel(
-  channels: ApiChannelWithLatest[] | undefined,
-  update: ListChannelUpsert
-): ApiChannelWithLatest[] | undefined {
-  if (!channels) return channels;
-
-  const index = channels.findIndex((channel) => channel.id === update.id);
-  if (index === -1) {
-    return [stubListChannel(update), ...channels];
-  }
-
-  const existing = channels[index];
-  if (!existing) return channels;
-
-  const next = applyListChannelUpdate(existing, update);
-  if (next === existing) return channels;
-
-  const copy = channels.slice();
-  copy[index] = next;
-  return copy;
-}
-
-function applyListChannelUpdate(
-  existing: ApiChannelWithLatest,
-  update: ListChannelUpsert
-): ApiChannelWithLatest {
-  const name =
-    update.name !== undefined && update.name !== existing.name
-      ? update.name
-      : existing.name;
-  const channel_type =
-    update.channel_type !== undefined &&
-    update.channel_type !== existing.channel_type
-      ? update.channel_type
-      : existing.channel_type;
-
-  if (name === existing.name && channel_type === existing.channel_type) {
-    return existing;
-  }
-
-  return { ...existing, name, channel_type };
-}
-
-function stubListChannel(update: ListChannelUpsert): ApiChannelWithLatest {
-  const now = new Date().toISOString();
-  return {
-    id: update.id,
-    name: update.name,
-    channel_type: update.channel_type ?? ChannelType.private,
-    owner_id: '',
-    created_at: now,
-    updated_at: now,
-    auto_join_team: false,
-    is_participant: true,
-    participants: [],
-  };
 }
 
 /**
