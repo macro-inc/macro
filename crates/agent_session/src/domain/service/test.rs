@@ -568,6 +568,42 @@ async fn close_does_not_remove_a_concurrent_delete_guard() {
     });
 }
 
+/// A command sent while the handshake never completes cannot hang its caller
+/// forever - see [`HANDSHAKE_TIMEOUT`]. Without that bound, this test would
+/// simply never finish. The actor it was stuck in cannot linger afterwards
+/// either: its `commands` sender is gone from `active`, the same signal
+/// `close_session` relies on to mean the actor tore itself down.
+#[tokio::test]
+async fn a_command_stuck_behind_a_stalled_handshake_times_out_as_disconnected() {
+    let fx = fixture();
+    fx.service
+        .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("attach succeeds");
+
+    let result = fx
+        .service
+        .send_action(
+            fx.session,
+            None,
+            AgentAction::prompt("hello"),
+            AgentActionId::mint(),
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(AgentSessionError::Disconnected(id)) if id == fx.session),
+        "a stalled handshake times out rather than hanging forever, got {result:?}"
+    );
+    assert!(
+        fx.service
+            .active
+            .get(&fx.session)
+            .is_none_or(|active| active.commands.is_none()),
+        "the stuck actor's connector is released, not left running"
+    );
+}
+
 #[tokio::test]
 async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
     let repo = InMemoryAgentSessionRepo::new();

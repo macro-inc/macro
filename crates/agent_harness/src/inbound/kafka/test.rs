@@ -55,7 +55,7 @@ fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
 fn a_mention_for_our_bot_opens_a_session() {
     let routed = route_agent_trigger(
         mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
-        BotId::TEST_A,
+        &[BotId::TEST_A],
     )
     .expect("a mention for our bot should yield work");
 
@@ -83,7 +83,7 @@ fn a_threaded_mention_answers_into_its_thread() {
     ));
 
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
-        route_agent_trigger(event, BotId::TEST_A).expect("the mention should yield work")
+        route_agent_trigger(event, &[BotId::TEST_A]).expect("the mention should yield work")
     else {
         panic!("a new-session event should open");
     };
@@ -95,7 +95,7 @@ fn a_foreign_bots_open_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
-            BotId::TEST_B,
+            &[BotId::TEST_B],
         )
         .unwrap_err(),
         Skipped::ForeignBot
@@ -105,7 +105,7 @@ fn a_foreign_bots_open_is_skipped() {
 #[test]
 fn another_deployments_managed_traffic_is_skipped() {
     assert_eq!(
-        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), BotId::TEST_B).unwrap_err(),
+        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), &[BotId::TEST_B]).unwrap_err(),
         Skipped::ForeignBot
     );
 }
@@ -115,7 +115,7 @@ fn a_bot_authored_mention_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_bot(BotId::TEST_B)),
-            BotId::TEST_A,
+            &[BotId::TEST_A],
         )
         .unwrap_err(),
         Skipped::NotFromUser
@@ -129,7 +129,7 @@ fn a_non_staff_mention_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user)),
-            BotId::TEST_A,
+            &[BotId::TEST_A],
         )
         .unwrap_err(),
         Skipped::NotMacroStaff
@@ -138,7 +138,7 @@ fn a_non_staff_mention_is_skipped() {
 
 #[test]
 fn a_managed_channel_message_forwards_to_its_session() {
-    let routed = route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), MACRO_CODER_BOT_ID)
+    let routed = route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), &[MACRO_CODER_BOT_ID])
         .expect("a channel event for our bot should yield work");
 
     let RoutedTrigger::Command(session_id, HarnessCommand::Deliver(deliver)) = routed else {
@@ -162,7 +162,7 @@ fn a_managed_channel_message_forwards_to_its_session() {
 fn an_external_channel_message_announces_only() {
     // The external bot's own runtime delivers the prompt; this deployment
     // only posts the chip, whichever bot it manages itself.
-    let routed = route_agent_trigger(channel_message(BotId::TEST_A), MACRO_CODER_BOT_ID)
+    let routed = route_agent_trigger(channel_message(BotId::TEST_A), &[MACRO_CODER_BOT_ID])
         .expect("an external existing-session event should yield work");
 
     let RoutedTrigger::Announce(session_id, prompt) = routed else {
@@ -186,7 +186,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
         },
     ));
     assert_eq!(
-        route_agent_trigger(event, MACRO_CODER_BOT_ID).unwrap_err(),
+        route_agent_trigger(event, &[MACRO_CODER_BOT_ID]).unwrap_err(),
         Skipped::NotFromUser
     );
 }

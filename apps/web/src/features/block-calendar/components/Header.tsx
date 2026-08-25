@@ -1,3 +1,4 @@
+import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import {
   type CalendarPageId,
   useCalendarPager,
@@ -103,9 +104,12 @@ export function Header() {
           <Show
             when={isMobile()}
             fallback={
-              <span class="min-w-0 truncate text-base font-semibold text-ink">
-                {dateTitle()}
-              </span>
+              <>
+                <span class="min-w-0 truncate text-base font-semibold text-ink">
+                  {dateTitle()}
+                </span>
+                <CopyAvailabilityButton class="ml-2" />
+              </>
             }
           >
             <MonthDrawer month={currentDate()} />

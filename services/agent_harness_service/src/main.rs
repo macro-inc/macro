@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! Composition root for the agent harness service.
 //!
 //! The hexagon lives in `crates/agent_harness`; this binary is the shell
@@ -9,12 +10,13 @@
 mod api;
 mod bots_directory;
 mod config;
+mod containers;
 mod trigger;
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_fold::domain::service::FoldedMessageService;
-use agent_harness::domain::model::{HarnessCommand, SessionDefaults};
+use agent_harness::domain::model::{HarnessCommand, HarnessDefaults, SessionDefaults};
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
@@ -26,6 +28,10 @@ use agent_harness::outbound::daytona::{
 };
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
+use agent_inmem::outbound::log_frames::LogFrameSource;
+use agent_inmem::outbound::manager::InMemAgentManager;
+use agent_inmem::outbound::rig_engine::RigTurnEngine;
+use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
@@ -47,6 +53,7 @@ use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
+use containers::{InMemRuntime, RoutedContainers};
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -110,6 +117,8 @@ async fn run() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     let config = Config::from_env()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
+    let inmem_bot = config.inmem_bot_id.map(BotId::new_from_uuid);
+    let our_bots: Vec<BotId> = std::iter::once(bot_id).chain(inmem_bot).collect();
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -154,7 +163,7 @@ async fn run() -> anyhow::Result<()> {
         );
     }
     let anthropic_api_key = AnthropicApiKeySecret::new(config.anthropic_api_key.clone());
-    let containers = if config.dev_dangerous_local_containers {
+    let sandbox = if config.dev_dangerous_local_containers {
         if !matches!(config.environment, Environment::Local) {
             anyhow::bail!("DEV_DANGEROUS_LOCAL_CONTAINERS is only allowed when ENVIRONMENT=local");
         }
@@ -192,7 +201,41 @@ async fn run() -> anyhow::Result<()> {
             anthropic_api_key,
         }))
     };
-    let container_shutdown = containers.clone();
+    let container_shutdown = sandbox.clone();
+
+    // Tracks event publishes the in-memory agent's tool context starts;
+    // closed and drained on shutdown so nothing is dropped mid-publish.
+    let event_broker_tracker = tokio_util::task::TaskTracker::new();
+    let inmem = match inmem_bot {
+        Some(bot) => {
+            let tool_context = ai_tools::build_tool_service_context_from_env(
+                pool.clone(),
+                event_broker_tracker.clone(),
+            )
+            .await
+            .context("failed to build the in-memory agent tool context")?;
+            let engine = Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
+            // Cold attaches (fresh spawns and post-restart resumes) rebuild
+            // their model context from the same log every frame lands in.
+            let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
+            Some(InMemRuntime {
+                bot,
+                manager: InMemAgentManager::new(engine, frames),
+            })
+        }
+        None => None,
+    };
+    // The sandbox provider serves every bot but the in-memory one, which the
+    // router pulls out by bot id before the provider ever sees it.
+    let containers = RoutedContainers::new(
+        sandbox,
+        inmem,
+        AgentSessionServiceImpl::new(
+            session_repo.clone(),
+            FoldedMessageService::new(session_repo.clone()),
+            NoOpRealtime,
+        ),
+    );
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
@@ -236,17 +279,35 @@ async fn run() -> anyhow::Result<()> {
     // here because the gateway puts dialed-in sockets into it and the harness
     // takes sessions out of it.
     let runtimes = RuntimeRegistry::new();
+    let mut defaults = HarnessDefaults::new(SessionDefaults {
+        bot_id,
+        model: config.harness_model.clone(),
+        harness: config.harness_slug.clone(),
+        repo_url: config.harness_repo_url.clone(),
+    });
+    if let Some(bot) = inmem_bot {
+        defaults = defaults
+            .with_bot(
+                bot,
+                SessionDefaults {
+                    bot_id: bot,
+                    model: config.inmem_model.clone(),
+                    harness: config.inmem_harness_slug.clone(),
+                    // Stamped but unused: the in-process agent has no
+                    // workspace to clone anything into.
+                    repo_url: config.harness_repo_url.clone(),
+                },
+            )
+            // Sessions nothing names a bot for (the create menu's) run
+            // in-process too; only mentioning the coder bot gets a sandbox.
+            .with_managed_bot(bot);
+    }
     let harness = Arc::new(AgentHarnessService::new(
         sessions,
         containers,
         announcer,
         Arc::clone(&runtimes),
-        SessionDefaults {
-            bot_id,
-            model: config.harness_model.clone(),
-            harness: config.harness_slug.clone(),
-            repo_url: config.harness_repo_url.clone(),
-        },
+        defaults,
     ));
 
     // The complete session API is served from this process because it owns the
@@ -383,7 +444,7 @@ async fn run() -> anyhow::Result<()> {
                     tracing::Span::current()
                         .record("macro.event.id", tracing::field::display(event.event().event_id));
 
-                    let routed = match route_agent_trigger(event.event().event.clone(), bot_id) {
+                    let routed = match route_agent_trigger(event.event().event.clone(), &our_bots) {
                         Ok(routed) => routed,
                         Err(skipped) => {
                             tracing::debug!(?skipped, "skipped an agent session event");
@@ -493,6 +554,17 @@ async fn run() -> anyhow::Result<()> {
         if let Err(error) = result {
             tracing::error!(error = ?error, "agent harness task failed during shutdown");
         }
+    }
+
+    event_broker_tracker.close();
+    if tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        event_broker_tracker.wait(),
+    )
+    .await
+    .is_err()
+    {
+        tracing::warn!("timed out draining in-memory agent event publishes");
     }
 
     match run_error {

@@ -261,6 +261,10 @@ impl MailEnv {
 /// `DAYTONA_API_KEY=... DEV_DANGEROUS_LOCAL_CONTAINERS=false just run_local`.
 /// `GITHUB_TOKEN` is left to Doppler / process env so a local sandbox can
 /// still clone.
+///
+/// Two managed bots: `@coder` (`HARNESS_BOT_ID`) gets a sandbox from the
+/// local Docker provider, and `@macro` (`INMEM_BOT_ID`) runs in-process on
+/// the in-memory ACP runtime.
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
@@ -286,6 +290,12 @@ impl AgentHarnessEnv {
 
     fn write(&self, env: &mut BTreeMap<String, String>) {
         env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
+        // bot_id::MACRO_AI_BOT_ID: @macro's sessions run on the in-process
+        // ACP runtime, while @coder's get sandboxes from the local provider.
+        env.insert(
+            "INMEM_BOT_ID".into(),
+            "00000000-0000-0000-0000-00000000a1a1".into(),
+        );
         env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
         env.insert("DAYTONA_API_KEY".into(), String::new());
         env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());

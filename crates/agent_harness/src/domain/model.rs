@@ -37,14 +37,15 @@ pub struct OpenSession {
     pub origin: MentionOrigin,
 }
 
-/// Whether this deployment provisions a sandbox for `bot`'s sessions.
+/// Whether this deployment provisions a runtime for `bot`'s sessions.
 ///
-/// Only the dedicated Macro coder bot is managed; every other agent bot hosts
-/// its own runtime and dials the gateway. This becomes a bot attribute the
-/// day managed bots stop being a closed set of one.
+/// The Macro coder bot's sessions run in a provisioned sandbox and the Macro
+/// bot's run in-process; every other agent bot hosts its own runtime and
+/// dials the gateway. This becomes a bot attribute the day managed bots stop
+/// being a closed set.
 #[must_use]
 pub fn is_managed_bot(bot: BotId) -> bool {
-    bot == bot_id::MACRO_CODER_BOT_ID
+    bot == bot_id::MACRO_CODER_BOT_ID || bot == bot_id::MACRO_AI_BOT_ID
 }
 
 /// Where a prompt came from, when it came from somewhere the session should
@@ -190,4 +191,69 @@ pub struct SessionDefaults {
     pub harness: String,
     /// Repository sessions run against.
     pub repo_url: String,
+}
+
+/// Session defaults for every bot a deployment answers for.
+///
+/// One deployment can serve more than one managed bot (the sandboxed coder
+/// bot and the in-process Macro bot), and each stamps different defaults onto
+/// the sessions it opens.
+#[derive(Debug, Clone)]
+pub struct HarnessDefaults {
+    default: SessionDefaults,
+    per_bot: Vec<(BotId, SessionDefaults)>,
+    managed_bot: Option<BotId>,
+}
+
+impl HarnessDefaults {
+    /// Defaults every bot shares until one is given its own.
+    #[must_use]
+    pub fn new(default: SessionDefaults) -> Self {
+        Self {
+            default,
+            per_bot: Vec::new(),
+            managed_bot: None,
+        }
+    }
+
+    /// Stamp `bot`'s sessions with `defaults` instead of the shared ones.
+    #[must_use]
+    pub fn with_bot(mut self, bot: BotId, defaults: SessionDefaults) -> Self {
+        self.per_bot.push((bot, defaults));
+        self
+    }
+
+    /// Open managed sessions - the ones nothing names a bot for, like the
+    /// create menu's - as `bot` instead of the deployment's own.
+    #[must_use]
+    pub fn with_managed_bot(mut self, bot: BotId) -> Self {
+        self.managed_bot = Some(bot);
+        self
+    }
+
+    /// The defaults a session opens with when no particular bot is named -
+    /// the `with_managed_bot` override when one is set, the deployment's own
+    /// bot otherwise.
+    #[must_use]
+    pub fn managed(&self) -> &SessionDefaults {
+        match self.managed_bot {
+            Some(bot) => self.for_bot(bot),
+            None => &self.default,
+        }
+    }
+
+    /// The defaults `bot`'s sessions are stamped with.
+    #[must_use]
+    pub fn for_bot(&self, bot: BotId) -> &SessionDefaults {
+        self.per_bot
+            .iter()
+            .find(|(candidate, _)| *candidate == bot)
+            .map_or(&self.default, |(_, defaults)| defaults)
+    }
+}
+
+impl From<SessionDefaults> for HarnessDefaults {
+    fn from(default: SessionDefaults) -> Self {
+        Self::new(default)
+    }
 }

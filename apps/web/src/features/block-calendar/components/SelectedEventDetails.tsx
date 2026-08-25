@@ -1,3 +1,4 @@
+import { hasEveryoneElseDeclined } from '@app/features/calendar/components/EventContent';
 import {
   EventAttendeesSection,
   EventDetails,
@@ -14,6 +15,7 @@ import LinkIcon from '@lucide/link.svg';
 import PencilSimpleIcon from '@lucide/pencil.svg';
 import TrashIcon from '@lucide/trash.svg';
 import CloseIcon from '@lucide/x.svg';
+import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useDeleteCalendarEventMutation } from '@queries/calendar/mutations';
 import type { CalendarDeletionScope } from '@service-email/client';
@@ -117,6 +119,51 @@ interface EventDetailsOverlayProps {
   onOpenChange: (open: boolean) => void;
 }
 
+function EveryoneElseDeclinedNotice(props: {
+  event: CalendarEvent;
+  canModify: boolean;
+  onDelete: () => void;
+  onReschedule: () => void;
+}) {
+  return (
+    <Show when={hasEveryoneElseDeclined(props.event)}>
+      <div class="border-edge-muted mx-3 mb-3 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 rounded-lg border bg-active p-3 text-sm text-ink-muted sm:mt-2 sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:text-xs">
+        <span
+          aria-hidden="true"
+          class="flex size-5 shrink-0 items-center justify-center rounded bg-ink/10 text-ink-muted sm:size-4"
+        >
+          <ExclamationIcon class="size-3" />
+        </span>
+        <div class="flex min-w-0 flex-col gap-4">
+          <div role="status" class="font-medium text-ink">
+            Everyone else declined this event
+          </div>
+          <Show when={props.canModify}>
+            <div class="flex justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="rounded-lg"
+                onClick={props.onDelete}
+              >
+                Delete
+              </Button>
+              <Button
+                variant="cta"
+                size="sm"
+                class="rounded-lg"
+                onClick={props.onReschedule}
+              >
+                Reschedule
+              </Button>
+            </div>
+          </Show>
+        </div>
+      </div>
+    </Show>
+  );
+}
+
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
@@ -194,6 +241,12 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
             </div>
           </div>
           <MobileDrawer.ScrollBody>
+            <EveryoneElseDeclinedNotice
+              event={props.event}
+              canModify={canModify()}
+              onDelete={deleteDialog.open}
+              onReschedule={openEditor}
+            />
             <div class="px-3">
               <EventDetails
                 event={props.event}
@@ -425,6 +478,12 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                   <CloseIcon />
                 </Popover.CloseButton>
               </div>
+              <EveryoneElseDeclinedNotice
+                event={props.event}
+                canModify={canModify()}
+                onDelete={deleteDialog.open}
+                onReschedule={openEditor}
+              />
               <div>
                 <div class="px-3 pb-3">
                   <EventDetails

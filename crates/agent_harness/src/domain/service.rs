@@ -21,8 +21,8 @@ use tracing::instrument::WithSubscriber as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, OpenSession,
-    SessionAnnouncement, SessionDefaults, SpawnContainer, is_managed_bot,
+    AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults, OpenSession,
+    SessionAnnouncement, SpawnContainer, is_managed_bot,
 };
 use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -42,7 +42,7 @@ struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
-    defaults: SessionDefaults,
+    defaults: HarnessDefaults,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
@@ -65,7 +65,7 @@ where
         containers: Containers,
         announcer: Announcer,
         runtimes: Runtimes,
-        defaults: SessionDefaults,
+        defaults: impl Into<HarnessDefaults>,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -73,7 +73,7 @@ where
                 containers,
                 announcer,
                 runtimes,
-                defaults,
+                defaults: defaults.into(),
             }),
             workers: Arc::new(DashMap::new()),
         }
@@ -251,6 +251,7 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
+        let defaults = self.inner.defaults.for_bot(request.bot_id);
         let session = self
             .inner
             .sessions
@@ -260,8 +261,8 @@ where
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
                 originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
-                model: self.inner.defaults.model.clone(),
-                harness: self.inner.defaults.harness.clone(),
+                model: defaults.model.clone(),
+                harness: defaults.harness.clone(),
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
@@ -292,18 +293,18 @@ where
         Ok(session)
     }
 
-    /// Provision a sandbox, open a session on it, and deliver the first
-    /// prompt if one came with the request.
+    /// Provision the managed-default bot's runtime, open a session on it,
+    /// and deliver the first prompt if one came with the request.
     ///
     /// Nothing is announced: a managed session opened this way has no
-    /// originating mention and no thread to answer back into. The sandbox is
+    /// originating mention and no thread to answer back into. The runtime is
     /// spawned before the session is attached because there is nothing to
     /// attach to until it exists.
     async fn open_managed_session(
         &self,
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
-        let defaults = &self.inner.defaults;
+        let defaults = self.inner.defaults.managed();
         let sandbox_size = self
             .inner
             .sessions
@@ -481,7 +482,8 @@ where
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
         let OpenSession { bot_id, origin } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
-        let repo_url = self.defaults.repo_url.clone();
+        let defaults = self.defaults.for_bot(bot_id);
+        let repo_url = defaults.repo_url.clone();
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
         self.sessions
@@ -491,8 +493,8 @@ where
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
-                model: self.defaults.model.clone(),
-                harness: self.defaults.harness.clone(),
+                model: defaults.model.clone(),
+                harness: defaults.harness.clone(),
                 repo_url: Some(repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),

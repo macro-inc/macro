@@ -15,6 +15,8 @@ path = "src/openapi.rs"
 [dependencies]
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
+agent_inmem = { path = "../../crates/agent_inmem" }
+ai_tools = { path = "../../crates/ai_tools" }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
 agent_session = { path = "../../crates/agent_session" }
 agent_trigger = { path = "../../crates/agent_trigger" }
@@ -58,5 +60,6 @@ macro_uuid = { path = "../../crates/macro_uuid" }
 serde = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

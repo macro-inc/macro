@@ -32,8 +32,8 @@ use macro_uuid::Uuid;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AnnounceOrigin, DeliverAction, HarnessCommand, MentionOrigin, OpenSession, SessionDefaults,
-    SpawnContainer,
+    AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin, OpenSession,
+    SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
 use crate::outbound::runtime_registry::RuntimeRegistry;
@@ -977,6 +977,54 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
     // Still an operator-hosted session: reconnecting never provisions.
     assert_eq!(containers.spawned(), 0);
     assert_eq!(containers.resumed(), 0);
+}
+
+/// The create menu names no bot, so its sessions open as the deployment's
+/// managed default - the in-process bot when one is configured - with that
+/// bot's own defaults stamped on.
+#[tokio::test]
+async fn a_managed_session_opens_as_the_managed_default_bot() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let containers = MockContainerManager::new();
+    let inmem_bot = BotId::TEST_B;
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        containers.clone(),
+        AnnouncerMock::new(),
+        RuntimeRegistry::<ContainerSender>::new(),
+        HarnessDefaults::new(SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        })
+        .with_bot(
+            inmem_bot,
+            SessionDefaults {
+                bot_id: inmem_bot,
+                model: "fast-model".to_owned(),
+                harness: "macro-inmem".to_owned(),
+                repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            },
+        )
+        .with_managed_bot(inmem_bot),
+    );
+
+    let session = service
+        .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            owner: sender(),
+            prompt: None,
+        })
+        .await
+        .expect("the managed session should open");
+
+    assert_eq!(session.bot_id, inmem_bot);
+    assert_eq!(session.model, "fast-model");
+    assert_eq!(session.harness, "macro-inmem");
 }
 
 #[tokio::test]
