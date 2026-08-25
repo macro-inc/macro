@@ -40,7 +40,11 @@ export function Notifications() {
       : [];
 
   const disabledTypes = () =>
-    new Set(prefsReady() ? preferencesQuery.data.disabled_types : []);
+    new Set(
+      !preferencesQuery.isError && queryReadyGate(preferencesQuery)
+        ? preferencesQuery.data.disabled_types
+        : []
+    );
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
 
