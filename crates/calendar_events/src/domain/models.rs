@@ -325,6 +325,10 @@ pub struct CalendarAttendee {
     pub comment: Option<String>,
 }
 
+/// Mark attendees whose email matches a viewing requester inbox as `is_self`.
+///
+/// An empty list leaves the provider's flags untouched so a missing inbox
+/// catalog cannot silently erase the calendar-copy identity.
 pub(crate) fn mark_attendees_self_for_inboxes(
     attendees: &mut [CalendarAttendee],
     inbox_emails: &[String],
@@ -339,12 +343,13 @@ pub(crate) fn mark_attendees_self_for_inboxes(
     }
 }
 
+/// Unique inbox addresses from the requester's visible calendars.
 pub(crate) fn inbox_emails(calendars: &[VisibleCalendar]) -> Vec<String> {
     let mut emails: Vec<String> = calendars
         .iter()
         .map(|calendar| calendar.email_address.clone())
         .collect();
-    emails.sort_by(|left, right| left.to_ascii_lowercase().cmp(&right.to_ascii_lowercase()));
+    emails.sort_by_key(|email| email.to_ascii_lowercase());
     emails.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
     emails
 }

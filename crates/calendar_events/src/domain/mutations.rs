@@ -135,7 +135,7 @@ where
     /// applied entity id.
     async fn persist_echo(
         &self,
-        requester_id: &str,
+        inbox_emails: &[String],
         upsert: CalendarEventUpsert,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let mut event = upsert.event.clone();
@@ -146,10 +146,7 @@ where
             .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
         event.id = outcome.event_id;
         self.publish_write_outcome(&outcome);
-        mark_attendees_self_for_inboxes(
-            &mut event.attendees,
-            &self.requester_inbox_emails(requester_id).await?,
-        );
+        mark_attendees_self_for_inboxes(&mut event.attendees, inbox_emails);
         Ok(event)
     }
 
@@ -195,6 +192,7 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        let inbox_emails = self.requester_inbox_emails(requester_id).await?;
         let access_token = self.fetch_token(&target.token_identity).await?;
         let upsert = self
             .provider
@@ -205,7 +203,7 @@ where
             )
             .await
             .map_err(provider_error)?;
-        self.persist_echo(requester_id, upsert).await
+        self.persist_echo(&inbox_emails, upsert).await
     }
 
     #[tracing::instrument(skip(self, requester_id, patch), err)]
@@ -243,6 +241,7 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        let inbox_emails = self.requester_inbox_emails(requester_id).await?;
         let access_token = self.fetch_token(&target.token_identity).await?;
         let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
         match scope {
@@ -263,7 +262,7 @@ where
                     self.retire_gone_source(&target).await;
                     return Err(CalendarMutationError::NotFound);
                 };
-                self.persist_echo(requester_id, upsert).await
+                self.persist_echo(&inbox_emails, upsert).await
             }
             CalendarUpdateScope::ThisEvent { recurrence_id } => {
                 let outcome = self
@@ -279,13 +278,13 @@ where
                     .map_err(provider_error)?;
                 match outcome {
                     GoogleInstanceUpdateOutcome::Applied(upsert) => {
-                        self.persist_echo(requester_id, *upsert).await
+                        self.persist_echo(&inbox_emails, *upsert).await
                     }
                     GoogleInstanceUpdateOutcome::OccurrenceGone(upsert) => {
                         // Nothing was written, but the provider's view of the
                         // series is fresher than whatever listed this
                         // occurrence — persist it so the phantom disappears.
-                        self.persist_echo(requester_id, *upsert)
+                        self.persist_echo(&inbox_emails, *upsert)
                             .await
                             .inspect_err(|error| {
                                 tracing::warn!(
@@ -317,6 +316,7 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        let inbox_emails = self.requester_inbox_emails(requester_id).await?;
         let access_token = self.fetch_token(&target.token_identity).await?;
         let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
         let outcome = match &scope {
@@ -354,7 +354,7 @@ where
         };
         match outcome {
             GoogleSeriesMutationOutcome::Applied(upsert) => {
-                self.persist_echo(requester_id, *upsert).await.map(|_| ())
+                self.persist_echo(&inbox_emails, *upsert).await.map(|_| ())
             }
             // Either the deletion removed the series or it was already
             // gone; retiring the local source converges both.
@@ -389,11 +389,11 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
-        let access_token = self.fetch_token(&target.token_identity).await?;
         let mut self_emails = self.requester_inbox_emails(requester_id).await?;
         if self_emails.is_empty() {
             self_emails.push(target.token_identity.email_address.clone());
         }
+        let access_token = self.fetch_token(&target.token_identity).await?;
         let outcome = self
             .provider
             .rsvp_event(
@@ -407,7 +407,7 @@ where
             .await
             .map_err(provider_error)?;
         match outcome {
-            GoogleRsvpOutcome::Applied(upsert) => self.persist_echo(requester_id, *upsert).await,
+            GoogleRsvpOutcome::Applied(upsert) => self.persist_echo(&self_emails, *upsert).await,
             GoogleRsvpOutcome::NotAttendee => Err(CalendarMutationError::NotAttendee),
             GoogleRsvpOutcome::Gone => {
                 self.retire_gone_source(&target).await;

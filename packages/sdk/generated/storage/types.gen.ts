@@ -1224,7 +1224,7 @@ export type CalendarAttendee = {
      */
     isOrganizer: boolean;
     /**
-     * Whether this attendee represents the connected account.
+     * Whether this attendee is one of the viewing requester's inboxes.
      */
     isSelf: boolean;
     /**
