@@ -197,6 +197,7 @@ fn channel_message_from(bot: BotId, sender: ChannelSender<'static>) -> AgentTrig
     AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
+        kind: ChannelKind::MentionThread,
         message: message(sender),
     }))
 }
