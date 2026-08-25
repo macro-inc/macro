@@ -110,7 +110,7 @@ export function EventContent(props: EventContentProps) {
           </Show>
           <span
             class={cn(
-              'calendar-event-title min-w-0 max-w-full shrink font-semibold leading-tight',
+              'calendar-event-title min-w-0 max-w-full shrink font-medium leading-tight',
               props.isNarrow ? 'whitespace-nowrap' : 'truncate'
             )}
           >
