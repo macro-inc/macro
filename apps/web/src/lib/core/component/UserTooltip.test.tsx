@@ -99,9 +99,9 @@ describe('UserTooltip CRM contact action', () => {
     const user = userEvent.setup({ skipHover: true });
     render(() => (
       <UserTooltip
-        displayName="Panat Taranat"
-        email="panat@pync.com"
-        id="macro|panat@pync.com"
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
+        id="macro|jane.doe@example.com"
         onClose={mocks.onClose}
       />
     ));
@@ -121,7 +121,7 @@ describe('UserTooltip CRM contact action', () => {
     mocks.crmFlagEnabled = false;
 
     render(() => (
-      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
@@ -131,7 +131,7 @@ describe('UserTooltip CRM contact action', () => {
     mocks.teamCrmEnabled = false;
 
     render(() => (
-      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
@@ -141,7 +141,7 @@ describe('UserTooltip CRM contact action', () => {
     mocks.teamCrmEnabled = null;
 
     render(() => (
-      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
@@ -151,7 +151,7 @@ describe('UserTooltip CRM contact action', () => {
     mocks.contact = null;
 
     render(() => (
-      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
@@ -162,13 +162,13 @@ describe('UserTooltip CRM contact action', () => {
 
     render(() => (
       <UserTooltip
-        displayName="Panat Taranat"
-        email="panat@pync.com"
-        id="macro|panat@pync.com"
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
+        id="macro|jane.doe@example.com"
       />
     ));
 
-    expect(screen.getByText('Panat Taranat')).toBeTruthy();
+    expect(screen.getByText('Jane Doe')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
   });
@@ -178,15 +178,15 @@ describe('UserTooltip copy actions', () => {
   it('copies the displayed name, toasts Name copied, and does not close', () => {
     render(() => (
       <UserTooltip
-        displayName="Panat Taranat"
-        email="panat@pync.com"
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
         onClose={mocks.onClose}
       />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy name' }));
 
-    expect(writeText).toHaveBeenCalledWith('Panat Taranat');
+    expect(writeText).toHaveBeenCalledWith('Jane Doe');
     expect(toast.success).toHaveBeenCalledWith('Name copied');
     expect(mocks.onClose).not.toHaveBeenCalled();
   });
@@ -194,16 +194,16 @@ describe('UserTooltip copy actions', () => {
   it('copies email only, toasts Email copied, and does not close', () => {
     render(() => (
       <UserTooltip
-        displayName="Panat Taranat"
-        email="panat@pync.com"
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
         onClose={mocks.onClose}
       />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy email' }));
 
-    expect(writeText).toHaveBeenCalledWith('panat@pync.com');
-    expect(writeText).not.toHaveBeenCalledWith('Panat Taranat');
+    expect(writeText).toHaveBeenCalledWith('jane.doe@example.com');
+    expect(writeText).not.toHaveBeenCalledWith('Jane Doe');
     expect(toast.success).toHaveBeenCalledWith('Email copied');
     expect(mocks.onClose).not.toHaveBeenCalled();
   });
@@ -221,7 +221,7 @@ describe('UserTooltip copy actions', () => {
 
   it('hides Copy name when displayName equals email', () => {
     render(() => (
-      <UserTooltip displayName="panat@pync.com" email="panat@pync.com" />
+      <UserTooltip displayName="jane.doe@example.com" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
@@ -229,21 +229,23 @@ describe('UserTooltip copy actions', () => {
   });
 
   it('hides Copy name when displayName equals the email local-part', () => {
-    render(() => <UserTooltip displayName="panat" email="panat@pync.com" />);
+    render(() => (
+      <UserTooltip displayName="jane.doe" email="jane.doe@example.com" />
+    ));
 
     expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
   });
 
   it('hides Copy name when displayName is blank', () => {
-    render(() => <UserTooltip displayName="   " email="panat@pync.com" />);
+    render(() => <UserTooltip displayName="   " email="jane.doe@example.com" />);
 
     expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
   });
 
   it('shows Copy name when there is a real name and no email', () => {
-    render(() => <UserTooltip displayName="Panat Taranat" />);
+    render(() => <UserTooltip displayName="Jane Doe" />);
 
     expect(screen.getByRole('button', { name: 'Copy name' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Copy email' })).toBeNull();
