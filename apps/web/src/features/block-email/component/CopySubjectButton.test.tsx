@@ -3,8 +3,8 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { displaySubject } from '../util/subjectText';
 import { CopySubjectButton } from './CopySubjectButton';
 
@@ -13,6 +13,8 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 const writeText = vi.fn();
+
+afterEach(cleanup);
 
 beforeEach(() => {
   Object.defineProperty(navigator, 'clipboard', {

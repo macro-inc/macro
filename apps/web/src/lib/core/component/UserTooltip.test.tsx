@@ -3,10 +3,10 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserTooltip } from './UserTooltip';
 
 const mocks = vi.hoisted(() => ({
@@ -77,6 +77,8 @@ vi.mock('./UserIcon', () => ({
 }));
 
 const writeText = vi.fn();
+
+afterEach(cleanup);
 
 beforeEach(() => {
   mocks.crmFlagEnabled = true;
