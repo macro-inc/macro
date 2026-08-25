@@ -57,6 +57,11 @@ pub(crate) const MAX_SSE_PAYLOAD: NonZeroUsize = match NonZeroUsize::new(16 * 10
     None => panic!("the payload limit is a non-zero literal"),
 };
 
+/// The one real base url. A [`CursorConfig`] still names its own, because a
+/// test points at a stand-in server, but there is nothing for a deployment to
+/// choose between.
+pub const CURSOR_API_BASE_URL: &str = "https://api.cursor.com";
+
 /// A Cursor API key that never prints itself and does not outlive its client.
 ///
 /// The key used to be a bare `String` in a `Debug`-deriving config, so a

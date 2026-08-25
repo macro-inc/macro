@@ -109,7 +109,7 @@ async fn main() -> ExitCode {
         api_key: ApiKey::new(api_key.as_ref()),
         base_url: CursorApiBase::new()
             .and_then(|base| base.value().map(str::to_owned))
-            .unwrap_or_else(|| "https://api.cursor.com".to_owned()),
+            .unwrap_or_else(|| cursor_cloud_agents::api::CURSOR_API_BASE_URL.to_owned()),
         model: CursorModel::new().and_then(|model| model.value().map(str::to_owned)),
         starting_ref: CursorRef::new()
             .and_then(|reference| reference.value().map(str::to_owned))

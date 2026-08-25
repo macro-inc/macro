@@ -539,6 +539,14 @@ reported as bugs:
   without a frame in either direction closes the pipe, reclaiming its tasks
   and its poll; the session parks on a clean disconnect and the next prompt
   resumes it. A parked session mirrors nothing until then.
+- **A provisioning failure does not reach the thread.** The open path
+  announces the session before it spawns, so when spawn fails — most often
+  because the mentioning user has not registered a Cursor key — the session
+  is marked disconnected and the reason goes to a log. What the user sees is
+  a session chip that never answers. `SessionAnnouncer` announces sessions
+  and nothing else, so closing this needs a way to post a failure back to
+  the originating thread. `HarnessError::CursorNotConnected` already carries
+  the sentence to post; it has nowhere to go yet.
 - **One run at a time per agent.** Cursor returns `409 agent_busy`. Already
   matched by the service's sequential-turn rule, so this surfaces as a clean
   error rather than a race.

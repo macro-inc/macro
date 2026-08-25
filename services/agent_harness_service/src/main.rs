@@ -57,6 +57,7 @@ use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
+use cursor_cloud_agents::api::CURSOR_API_BASE_URL;
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
@@ -256,7 +257,7 @@ async fn run() -> anyhow::Result<()> {
                 &aws_config,
             ))),
         ),
-        config.cursor_base_url.clone(),
+        CURSOR_API_BASE_URL.to_owned(),
         CursorRepoUrl::parse(&config.cursor_repo_url)
             .context("CURSOR_REPO_URL is not a valid repository url")?,
         session_repo.clone(),
