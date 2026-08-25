@@ -66,11 +66,15 @@ fn daytona_job_stays_on_the_small_runner_and_skips_prs() {
 }
 
 #[test]
-fn daytona_job_requests_the_default_snapshot_size() {
+fn daytona_job_requests_the_live_quota_snapshot_size() {
     let yaml = rendered();
-    assert!(yaml.contains("DAYTONA_SNAPSHOT_CPU: '8'"), "{yaml}");
-    assert!(yaml.contains("DAYTONA_SNAPSHOT_MEMORY: '16'"), "{yaml}");
-    assert!(yaml.contains("DAYTONA_SNAPSHOT_DISK: '96'"), "{yaml}");
+    assert!(yaml.contains("DAYTONA_SNAPSHOT_CPU: '4'"), "{yaml}");
+    assert!(yaml.contains("DAYTONA_SNAPSHOT_MEMORY: '8'"), "{yaml}");
+    assert!(yaml.contains("DAYTONA_SNAPSHOT_DISK: '10'"), "{yaml}");
+    assert!(
+        !yaml.contains("DAYTONA_SNAPSHOT_CPU: '8'"),
+        "8/16/96 exceeds the live Daytona per-sandbox cap: {yaml}"
+    );
     assert!(
         yaml.contains("--cpu ${DAYTONA_SNAPSHOT_CPU} --memory ${DAYTONA_SNAPSHOT_MEMORY} --disk ${DAYTONA_SNAPSHOT_DISK}"),
         "{yaml}"

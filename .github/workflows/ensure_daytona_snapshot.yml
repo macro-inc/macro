@@ -61,9 +61,9 @@ jobs:
       shell: bash
       env:
         DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
-        DAYTONA_SNAPSHOT_CPU: '8'
-        DAYTONA_SNAPSHOT_MEMORY: '16'
-        DAYTONA_SNAPSHOT_DISK: '96'
+        DAYTONA_SNAPSHOT_CPU: '4'
+        DAYTONA_SNAPSHOT_MEMORY: '8'
+        DAYTONA_SNAPSHOT_DISK: '10'
   publish-image:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     name: Publish sandbox image to GHCR

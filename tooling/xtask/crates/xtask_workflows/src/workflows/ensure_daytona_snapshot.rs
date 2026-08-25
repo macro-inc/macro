@@ -92,9 +92,12 @@ fn ensure_snapshot() -> Job {
                 "#})
                 .shell("bash")
                 .add_env(("DAYTONA_API_KEY", vars::DAYTONA_API_KEY))
-                .add_env(("DAYTONA_SNAPSHOT_CPU", "8"))
-                .add_env(("DAYTONA_SNAPSHOT_MEMORY", "16"))
-                .add_env(("DAYTONA_SNAPSHOT_DISK", "96")),
+                // Live Daytona per-sandbox cap is 4/8/10. 8/16/96 is the
+                // product default but snapshot create 400s until the org
+                // quota is raised; keep this in lockstep with the justfile.
+                .add_env(("DAYTONA_SNAPSHOT_CPU", "4"))
+                .add_env(("DAYTONA_SNAPSHOT_MEMORY", "8"))
+                .add_env(("DAYTONA_SNAPSHOT_DISK", "10")),
         )
 }
 
