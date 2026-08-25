@@ -68,6 +68,7 @@ impl SessionOpener for RecordingOpener {
     ) -> crate::domain::error::Result<AgentSession> {
         let session = AgentSession {
             id: AgentSessionId::TEST_A,
+            name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
             thread_channel_id: request.thread.as_ref().map(|thread| thread.channel_id),
@@ -77,6 +78,7 @@ impl SessionOpener for RecordingOpener {
             harness: "opencode".to_owned(),
             repo_url: request.repo_url.clone(),
             workspace: request.workspace.clone(),
+            sandbox_size: crate::domain::model::SandboxSize::Default,
             acp_session_id: None,
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
@@ -92,6 +94,7 @@ impl SessionOpener for RecordingOpener {
     ) -> crate::domain::error::Result<AgentSession> {
         let session = AgentSession {
             id: AgentSessionId::TEST_A,
+            name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
             thread_id: None,
             thread_channel_id: None,
@@ -101,6 +104,7 @@ impl SessionOpener for RecordingOpener {
             harness: "opencode".to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: crate::MANAGED_CONTAINER_WORKSPACE.to_owned(),
+            sandbox_size: crate::domain::model::SandboxSize::Default,
             acp_session_id: None,
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),

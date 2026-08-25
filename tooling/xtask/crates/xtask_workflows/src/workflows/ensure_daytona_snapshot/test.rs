@@ -66,6 +66,28 @@ fn daytona_job_stays_on_the_small_runner_and_skips_prs() {
 }
 
 #[test]
+fn daytona_job_requests_the_json_snapshot_size() {
+    let yaml = rendered();
+    let (cpu, memory, disk) = super::snapshot_quota();
+    assert!(
+        yaml.contains(&format!("DAYTONA_SNAPSHOT_CPU: '{cpu}'")),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains(&format!("DAYTONA_SNAPSHOT_MEMORY: '{memory}'")),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains(&format!("DAYTONA_SNAPSHOT_DISK: '{disk}'")),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains("--cpu ${DAYTONA_SNAPSHOT_CPU} --memory ${DAYTONA_SNAPSHOT_MEMORY} --disk ${DAYTONA_SNAPSHOT_DISK}"),
+        "{yaml}"
+    );
+}
+
+#[test]
 fn publish_runs_on_same_repo_pull_requests() {
     let yaml = rendered();
     assert!(yaml.contains("pull_request:"), "{yaml}");

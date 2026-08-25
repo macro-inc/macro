@@ -11,7 +11,8 @@ use crate::domain::broker_events::{
 };
 
 /// Why evaluating a message did not produce an agent-session event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum NoEventReason {
     /// No existing session and no mentioned bot identified the target agent.
     MissingBotContext,

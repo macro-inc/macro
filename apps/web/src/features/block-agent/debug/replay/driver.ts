@@ -77,8 +77,10 @@ function sessionFixture(id: string): AgentSessionResponse {
     id,
     model: 'replay',
     modifiedAt: now,
+    name: 'Agent Session',
     ownerId: REPLAY_OWNER,
     repoUrl: 'https://example.com/replay.git',
+    sandboxSize: 'default',
     status: { kind: 'no_messages' },
     workspace: '/workspace',
   };

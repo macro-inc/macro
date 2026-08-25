@@ -16,7 +16,9 @@ use agent_runtime_protocol::domain::{
     schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
-use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams, Message};
+use agent_session::domain::model::{
+    AgentSessionId, CreateAgentSessionParams, Message, SandboxSize,
+};
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
     ControlEvent, NoOpRealtime,
@@ -39,7 +41,9 @@ use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::ports::{OpenExternalAgentSession, SessionOpener as _};
+use agent_session::domain::ports::{
+    OpenExternalAgentSession, OpenManagedSession, SessionOpener as _,
+};
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
@@ -115,7 +119,7 @@ fn harness() -> (
 }
 
 /// Play the agent's half of the ACP handshake.
-async fn complete_handshake(container: &ContainerMock) {
+async fn complete_session_handshake(container: &ContainerMock) {
     let agent = container.agent();
     let already = agent.received_requests().len();
     container.sends_ready();
@@ -123,6 +127,12 @@ async fn complete_handshake(container: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(already + 2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+}
+
+async fn complete_handshake(container: &ContainerMock) {
+    complete_session_handshake(container).await;
+    let agent = container.agent();
+    agent.completes_prompt().await;
 }
 
 async fn complete_resume(container: &ContainerMock) {
@@ -142,6 +152,7 @@ async fn complete_resume(container: &ContainerMock) {
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
     ));
     agent.resumes_session(ResumeSessionResponse::new());
+    agent.completes_prompt().await;
 }
 
 fn prompts(agent: &FakeAgent) -> Vec<Vec<ContentBlock>> {
@@ -175,6 +186,7 @@ async fn disconnected_session(
             harness: "opencode".to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
         },
     )
     .await
@@ -186,6 +198,7 @@ async fn disconnected_session(
         .spawn(SpawnContainer {
             session_id: id,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            size: agent_session::domain::model::SandboxSize::Default,
         })
         .await
         .expect("the original sandbox should exist");
@@ -327,13 +340,13 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("open should succeed");
 
-    service
-        .execute(
-            id,
-            HarnessCommand::Deliver(forward_message("and add a regression test")),
-        )
-        .await
-        .expect("forward to a live session should succeed");
+    let forward = service.execute(
+        id,
+        HarnessCommand::Deliver(forward_message("and add a regression test")),
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(forward, agent.completes_prompt());
+    result.expect("forward to a live session should succeed");
 
     assert_eq!(containers.spawned(), 1, "no second container");
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
@@ -454,6 +467,7 @@ async fn concurrent_forwards_share_one_session_recovery() {
             .expect("the resumed container is findable");
         complete_resume(&resumed).await;
         resumed.agent().wait_for_requests(4).await;
+        resumed.agent().completes_prompt().await;
         resumed
     };
 
@@ -667,16 +681,16 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
     let container = live_session(&service, &containers, id).await;
     let announced_before = announcer.announced().len();
 
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::prompt("and now the docs"),
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("prompting through control should succeed");
+    let prompted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::prompt("and now the docs"),
+            actor: Some(sender()),
+        },
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+    result.expect("prompting through control should succeed");
 
     assert_eq!(
         prompts(&container.agent()).len(),
@@ -696,16 +710,16 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
 
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::Compact,
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("compaction should reach the running agent");
+    let compacted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::Compact,
+            actor: Some(sender()),
+        },
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(compacted, agent.completes_prompt());
+    result.expect("compaction should reach the running agent");
 
     assert_eq!(
         prompts(&container.agent()),
@@ -778,6 +792,7 @@ async fn complete_bound_handshake(runtime: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+    agent.completes_prompt().await;
 }
 
 /// As [`complete_bound_handshake`], for a session the runtime is restoring.
@@ -800,6 +815,7 @@ async fn complete_bound_resume(runtime: &ContainerMock) {
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
     ));
     agent.resumes_session(ResumeSessionResponse::new());
+    agent.completes_prompt().await;
 }
 
 /// Wait until a session has noticed that its transport ended.
@@ -912,9 +928,10 @@ async fn a_bound_session_stays_on_its_connection_until_it_drops() {
 
     // Already bound: a second prompt goes straight down the same connection,
     // with no second handshake to drive.
-    prompt(&service, session.id, "and now the docs")
-        .await
-        .expect("a bound session needs no rebinding");
+    let prompted = prompt(&service, session.id, "and now the docs");
+    let agent = first.agent();
+    let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+    result.expect("a bound session needs no rebinding");
     assert_eq!(
         prompts(&first.agent()),
         ["fix the failing test", "and now the docs"]
@@ -1136,4 +1153,157 @@ async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
         .expect("a foreign announce is dropped, not an error");
 
     assert_eq!(announcer.announced().len(), 0);
+}
+
+#[tokio::test]
+async fn open_spawns_at_the_users_default_size() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    repo.set_user_sandbox_size(&sender(), SandboxSize::Small)
+        .await
+        .expect("the user default should persist");
+    let command = open_command();
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+
+    assert_eq!(containers.spawn_sizes(), [SandboxSize::Small]);
+    assert_eq!(
+        repo.get(id)
+            .await
+            .expect("the session row exists")
+            .sandbox_size,
+        SandboxSize::Small
+    );
+}
+
+#[tokio::test]
+async fn open_managed_session_spawns_at_the_users_default_size() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    repo.set_user_sandbox_size(&sender(), SandboxSize::Small)
+        .await
+        .expect("the user default should persist");
+
+    let open = service.open_managed_session(OpenManagedSession {
+        owner: sender(),
+        prompt: None,
+    });
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = opened.expect("open should succeed");
+
+    assert_eq!(containers.spawn_sizes(), [SandboxSize::Small]);
+    assert_eq!(session.sandbox_size, SandboxSize::Small);
+    assert_eq!(
+        repo.get(session.id)
+            .await
+            .expect("the session row exists")
+            .sandbox_size,
+        SandboxSize::Small
+    );
+}
+
+#[tokio::test]
+async fn set_sandbox_size_hot_resizes_and_updates_the_user_default() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    service
+        .set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect("hot resize should succeed");
+
+    assert_eq!(containers.resizes(), [(id, SandboxSize::Large)]);
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Large
+    );
+    assert_eq!(
+        repo.user_sandbox_size(&sender())
+            .await
+            .expect("user default"),
+        SandboxSize::Large
+    );
+    assert_eq!(containers.resumed(), 0);
+}
+
+#[tokio::test]
+async fn set_sandbox_size_restart_closes_resizes_and_resumes() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    service
+        .set_sandbox_size(id, SandboxSize::Small)
+        .await
+        .expect("restart resize should succeed");
+
+    assert_eq!(containers.resizes(), [(id, SandboxSize::Small)]);
+    assert_eq!(containers.resumed(), 1);
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Small
+    );
+}
+
+#[tokio::test]
+async fn set_sandbox_size_same_tier_does_not_resize() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    service
+        .set_sandbox_size(id, SandboxSize::Default)
+        .await
+        .expect("no-op size should succeed");
+
+    assert!(containers.resizes().is_empty());
+    assert_eq!(containers.resumed(), 0);
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Default
+    );
+}
+
+#[tokio::test]
+async fn set_sandbox_size_unsupported_does_not_persist() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+    containers.refuse_resize();
+
+    let error = service
+        .set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect_err("unsupported resize should fail");
+    assert!(
+        error.to_string().contains("cannot resize"),
+        "unexpected error: {error}"
+    );
+    assert_eq!(
+        repo.get(id).await.expect("session").sandbox_size,
+        SandboxSize::Default
+    );
+    assert_eq!(containers.resumed(), 0);
 }

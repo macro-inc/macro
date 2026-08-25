@@ -1,7 +1,8 @@
 {
   "include": [
     "./src/**/*",
-    "./src/lib/core/component/Emoji/cldr-tags.json"
+    "./src/lib/core/component/Emoji/cldr-tags.json",
+    "../../crates/agent_harness/sandbox_sizes.json"
   ],
   "exclude": [
     "./tests/**/*",
@@ -43,6 +44,9 @@
       "@types/facebook-pixel"
     ],
     "paths": {
+      "@sandbox-sizes": [
+        "../../crates/agent_harness/sandbox_sizes.json"
+      ],
       "loro-crdt": [
         "../../node_modules/loro-crdt"
       ],

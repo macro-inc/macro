@@ -10,6 +10,7 @@ import {
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
+import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
@@ -48,6 +49,9 @@ export function StaticSplitLabel(props: {
   badges?: JSX.Element;
   class?: string;
   colorIcon?: boolean;
+  /** Enables in-place editing while retaining the split title/menu chrome. */
+  onRename?: (name: string) => void;
+  renameAriaLabel?: string;
 }) {
   const panel = useSplitPanelOrThrow();
   createEffect(() => {
@@ -86,9 +90,26 @@ export function StaticSplitLabel(props: {
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <span class="inline-flex min-w-0 items-center gap-1">
-            <span class="inline-block truncate text-sm font-semibold">
-              {props.label}
-            </span>
+            <Show
+              when={props.onRename}
+              fallback={
+                <span class="inline-block truncate text-sm font-semibold">
+                  {props.label}
+                </span>
+              }
+            >
+              {(onRename) => (
+                <span onClick={(event) => event.stopPropagation()}>
+                  <InlineTitleEditor
+                    value={props.label}
+                    placeholder="Untitled"
+                    ariaLabel={props.renameAriaLabel ?? 'Rename'}
+                    onRename={onRename()}
+                    class="text-sm"
+                  />
+                </span>
+              )}
+            </Show>
             <Show when={panel.titleFileMenuTrigger()}>
               <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted touch:block" />
             </Show>

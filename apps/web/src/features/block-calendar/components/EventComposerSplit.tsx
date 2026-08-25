@@ -28,16 +28,17 @@ export function EventComposerSplit(props: {
       close();
     },
   });
+  const isEdit = () => props.event !== undefined;
+
   const controller = createCalendarEventFormController({
     initialValue:
       editor.initialValues() ??
       props.initialValues ??
       defaultEditorInitialValues(),
+    isEdit: isEdit(),
     calendarOptions: editor.calendarOptions,
     guestOptions: editor.guestOptions,
   });
-
-  const isEdit = () => props.event !== undefined;
 
   onMount(() =>
     panel.handle.setDisplayName(isEdit() ? 'Edit event' : 'New event')

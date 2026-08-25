@@ -1,9 +1,12 @@
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import {
   AGENT_SESSION_LOG_EVENT,
+  AGENT_SESSION_RENAMED_EVENT,
   type AgentSessionLogEvent,
+  type AgentSessionRenamedEvent,
 } from '@queries/agent-session/realtime-protocol';
 import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
+import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import {
   handleCommsAttachment,
   handleCommsMessage,
@@ -64,6 +67,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           data.type,
           data.data,
           handleAgentSessionLog
+        );
+      })
+      .with({ type: AGENT_SESSION_RENAMED_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionRenamedEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionRenamed
         );
       })
       .with({ type: 'comms_reaction' }, () => {

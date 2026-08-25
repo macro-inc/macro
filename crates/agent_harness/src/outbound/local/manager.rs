@@ -1,12 +1,13 @@
 use std::time::Duration;
 
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 
 use super::docker::{ContainerRef, Docker, RunSpec};
 use super::errors::LocalError;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect};
 use crate::outbound::daytona::GithubToken;
 use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
@@ -195,6 +196,7 @@ impl ContainerManager for LocalContainerManager {
         let SpawnContainer {
             session_id,
             repo_url,
+            size: _,
         } = command;
 
         if !self
@@ -237,6 +239,16 @@ impl ContainerManager for LocalContainerManager {
                 Err(error)
             }
         }
+    }
+
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
+        create_only_resize_effect(from, to)
+    }
+
+    async fn resize(&self, _session: AgentSessionId, _size: SandboxSize) -> Result<()> {
+        Err(HarnessError::Container(
+            "Local Docker containers cannot be resized in place".to_owned(),
+        ))
     }
 
     #[tracing::instrument(err, skip(self))]

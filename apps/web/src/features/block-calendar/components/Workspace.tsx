@@ -127,7 +127,7 @@ function CalendarPagerWorkspace() {
 
   return (
     <Pager.Root controller={calendarPager.pager}>
-      <SidePanel.Layout>
+      <SidePanel.Layout persistKey="calendar">
         <WorkspaceContent />
       </SidePanel.Layout>
     </Pager.Root>

@@ -6,7 +6,11 @@ import type {
   ControlRequest,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  SandboxSize,
+  SandboxSizeBody,
 } from './generated/schemas';
+
+export type { SandboxSize, SandboxSizeBody };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
@@ -37,6 +41,17 @@ export const agentHarnessServiceClient = {
     );
   },
 
+  rename(sessionId: string, name: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/name`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
   control(sessionId: string, request: ControlRequest) {
     return fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/control`,
@@ -53,5 +68,36 @@ export const agentHarnessServiceClient = {
       `${agentHarnessHost}/agent-sessions/${sessionId}`,
       { method: 'DELETE' }
     ).then((result) => result.map(() => undefined));
+  },
+
+  getSandboxSize() {
+    return fetchWithToken<SandboxSizeBody>(
+      `${agentHarnessHost}/agent-sandbox-size`,
+      {
+        method: 'GET',
+      }
+    );
+  },
+
+  setSandboxSize(size: SandboxSize) {
+    return fetchWithToken<SandboxSizeBody>(
+      `${agentHarnessHost}/agent-sandbox-size`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ size }),
+      }
+    );
+  },
+
+  setSessionSandboxSize(sessionId: string, size: SandboxSize) {
+    return fetchWithToken<SandboxSizeBody>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/sandbox-size`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ size }),
+      }
+    );
   },
 };

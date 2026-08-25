@@ -810,6 +810,8 @@ pub struct CalendarAttendeeInput {
     pub email: String,
     /// Whether attendance is optional.
     pub is_optional: bool,
+    /// RSVP to write for this attendee. `None` leaves the provider default.
+    pub response_status: Option<AttendeeResponseStatus>,
 }
 
 /// User-supplied fields for a new provider event.
