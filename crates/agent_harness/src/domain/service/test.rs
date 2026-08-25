@@ -32,8 +32,8 @@ use macro_uuid::Uuid;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin, OpenSession,
-    SessionDefaults, SpawnContainer,
+    AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
+    OpenSession, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
 use crate::outbound::runtime_registry::RuntimeRegistry;
@@ -47,6 +47,10 @@ use agent_session::domain::ports::{
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
+}
+
+fn staff_sender() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid staff user id")
 }
 
 fn open_command() -> OpenSession {
@@ -197,6 +201,7 @@ async fn disconnected_session(
     containers
         .spawn(SpawnContainer {
             session_id: id,
+            kind: AgentKind::SandboxedCoder,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: agent_session::domain::model::SandboxSize::Default,
         })
@@ -623,6 +628,51 @@ async fn live_session(
     container
 }
 
+async fn live_cursor_session(
+    service: &TestHarness,
+    containers: &MockContainerManager,
+    id: AgentSessionId,
+) -> ContainerMock {
+    let mut command = open_command();
+    command.bot_id = bot_id::CURSOR_BOT_ID;
+    command.origin.sender = staff_sender();
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("cursor session should open");
+    container
+}
+
+#[tokio::test]
+async fn a_non_staff_sender_cannot_open_a_cursor_session() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let mut command = open_command();
+    command.bot_id = bot_id::CURSOR_BOT_ID;
+
+    let error = service
+        .execute(AgentSessionId::new(), HarnessCommand::Open(command))
+        .await
+        .expect_err("non-staff must not open cursor sessions");
+
+    assert!(matches!(
+        error,
+        HarnessError::Session(AgentSessionError::Forbidden)
+    ));
+    assert_eq!(containers.spawned(), 0);
+}
+
 #[tokio::test]
 async fn changing_the_model_persists_it_and_tells_the_running_agent() {
     let (service, repo, containers, _announcer, _runtimes) = harness();
@@ -702,6 +752,47 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
         announced_before,
         "a control prompt names no origin, so there is nowhere to announce"
     );
+}
+
+#[tokio::test]
+async fn a_non_staff_control_event_cannot_drive_a_cursor_session() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_cursor_session(&service, &containers, id).await;
+
+    let error = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("spend cursor credits"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect_err("non-staff must not control cursor sessions");
+
+    assert!(matches!(error, AgentSessionError::Forbidden));
+    assert_eq!(prompts(&container.agent()).len(), 1);
+}
+
+#[tokio::test]
+async fn a_staff_control_event_can_drive_a_cursor_session() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_cursor_session(&service, &containers, id).await;
+
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("continue"),
+                actor: Some(staff_sender()),
+            },
+        )
+        .await
+        .expect("staff may control cursor sessions");
+
+    assert_eq!(prompts(&container.agent()).len(), 2);
 }
 
 #[tokio::test]

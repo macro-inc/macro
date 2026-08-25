@@ -14,6 +14,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
+import ArrowSquareOut from '@lucide/external-link.svg';
 import GitBranch from '@lucide/git-branch.svg';
 import LinkIcon from '@lucide/link.svg';
 import TreeStructure from '@lucide/network.svg';
@@ -88,6 +89,19 @@ export function AgentSplitHeader(props: {
       action: originThreadDrawer.toggle,
       isActive: originThreadDrawer.isOpen,
       condition: () => sessionOriginThread(props.session) !== undefined,
+    },
+    {
+      label: () => {
+        const provider = props.session?.external?.provider;
+        if (!provider) return 'Open externally';
+        return `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
+      },
+      icon: ArrowSquareOut,
+      action: () => {
+        const url = props.session?.external?.url;
+        if (url) openExternalUrl(url);
+      },
+      condition: () => Boolean(props.session?.external?.url),
     },
     {
       label: 'Copy link',

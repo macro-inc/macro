@@ -220,13 +220,9 @@
 }
 
 .calendar-view .fc .fc-event {
-	--fc-event-bg-color: color-mix(
-		in oklch,
-		var(--event-calendar-color, var(--color-calendar)) 5%,
-		var(--color-surface)
-	);
+	--fc-event-bg-color: var(--color-panel);
 	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
-	--fc-event-text-color: var(--event-calendar-color, var(--color-calendar));
+	--fc-event-text-color: var(--color-ink-muted);
 	border-color: var(--fc-event-border-color);
 	background-color: var(--fc-event-bg-color);
 	color: var(--fc-event-text-color);
@@ -332,6 +328,7 @@
 }
 
 .calendar-view .fc .fc-event .calendar-event-content {
+	position: relative;
 	container-type: inline-size;
 	border-radius: inherit;
 	transition: background-color 120ms ease-out;
@@ -409,14 +406,68 @@
 	display: none;
 }
 
+.calendar-view .fc .calendar-event-color-bar {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	z-index: 1;
+	width: 4px;
+	height: min(2rem, 70%);
+	border-radius: 9999px;
+	background: var(--event-calendar-color, var(--color-calendar));
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content-with-color-bar
+	.calendar-event-content-layout {
+	padding-left: 10px;
+}
+
+/* Single-day timed events use a compact dot treatment in the month grid. */
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event {
+	border: 0;
+	background-color: transparent;
+	color: var(--color-ink-muted);
+}
+
+.calendar-view
+	.fc
+	.fc-dayGridMonth-view
+	.fc-daygrid-dot-event
+	.calendar-event-title {
+	min-width: 0;
+	flex-shrink: 1;
+}
+
+.calendar-view .fc .calendar-event-response-dot {
+	width: 0.5rem;
+	height: 0.5rem;
+	flex: none;
+	border: 1px solid var(--event-calendar-color, var(--color-calendar));
+	border-radius: 9999px;
+	background: var(--event-calendar-color, var(--color-calendar));
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content[data-response-status="tentative"]
+	.calendar-event-response-dot {
+	border-style: dashed;
+	background: transparent;
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content[data-response-status="needs_action"]
+	.calendar-event-response-dot {
+	background: transparent;
+}
+
 .calendar-view
 	.fc
 	.fc-event:has(.calendar-event-content[data-response-status="tentative"]) {
-	--fc-event-bg-color: color-mix(
-		in oklch,
-		var(--event-calendar-color, var(--color-calendar)) 2%,
-		var(--color-surface)
-	);
+	--fc-event-bg-color: var(--color-panel);
 	border-style: dashed;
 }
 
@@ -437,11 +488,7 @@
 	.fc
 	.fc-event:has(.calendar-event-content[data-response-status="needs_action"]) {
 	--fc-event-bg-color: transparent;
-	--fc-event-text-color: color-mix(
-		in oklch,
-		var(--event-calendar-color, var(--color-calendar)) 65%,
-		var(--color-ink-muted)
-	);
+	--fc-event-text-color: var(--color-ink-muted);
 }
 
 .calendar-view .fc .fc-event:hover {
@@ -450,12 +497,20 @@
 
 .calendar-view .fc .fc-event:focus-visible {
 	z-index: 4;
-	box-shadow: 0 0 0 1px currentColor;
+	outline: none;
+	box-shadow: 0 0 0 1px var(--color-ink-muted);
 }
 
-.calendar-view .fc .fc-event:hover .calendar-event-content,
+.calendar-view .fc .fc-event:focus-visible::after {
+	background: transparent;
+}
+
+.calendar-view .fc .fc-event:hover .calendar-event-content {
+	background-color: var(--color-hover);
+}
+
 .calendar-view .fc .fc-event:focus-visible .calendar-event-content {
-	background-color: color-mix(in oklch, var(--color-accent) 10%, transparent);
+	background-color: var(--color-active);
 }
 
 .calendar-view .fc .fc-event:has(.calendar-event-content-selected) {
@@ -472,6 +527,14 @@
 	.calendar-event-content-selected {
 	background-color: var(--color-accent);
 	color: var(--color-surface);
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content.calendar-event-content-selected
+	.calendar-event-response-dot {
+	border-color: currentColor;
+	background: currentColor;
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-frame {

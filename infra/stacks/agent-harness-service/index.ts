@@ -1,6 +1,10 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { getMacroApiToken, stack } from '../../packages/shared';
+import {
+  getAiToolsInfra,
+  getMacroApiToken,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { AgentHarnessService } from './agent_harness_service';
 
@@ -13,19 +17,24 @@ const tags = {
 };
 
 // ── Secrets ──────────────────────────────────────────────────────────────────
-// Config (DATABASE_URL, DAYTONA_API_KEY, KAFKA_BROKERS, ...) arrives through
-// the Doppler-synced APP_SECRETS_JSON. Doppler's JWT_SECRET_KEY and
-// MACRO_API_TOKEN_PUBLIC_KEY hold Secrets Manager secret *names* that
-// `JwtValidationArgs::new_with_secret_manager` resolves at runtime
-// (crates/remote_env_var), so the task role needs read access to those two
-// secrets - the same code path as agent-schedule-service and
-// connection-gateway.
+// Config (DATABASE_URL, DAYTONA_API_KEY, KAFKA_BROKERS, AI tool config, ...)
+// arrives through the Doppler-synced APP_SECRETS_JSON. Some values hold
+// Secrets Manager secret *names* that the service resolves at runtime, so the
+// task role needs access to both its auth secrets and the shared AI tool
+// secrets.
 
 const jwtSecretKeyArn = aws.secretsmanager
   .getSecretVersionOutput({ secretId: `fusionauth-jwt-secret-${stack}` })
   .apply((secret) => secret.arn);
 
 const MACRO_API_TOKENS = getMacroApiToken();
+
+// ── AI tools infra ───────────────────────────────────────────────────────────
+
+const aiTools =
+  stack === 'dev'
+    ? getAiToolsInfra()
+    : { secretArns: [], queueArns: [], bucketArns: [] };
 
 // ── Stack references ─────────────────────────────────────────────────────────
 
@@ -42,7 +51,8 @@ const cloudStorageClusterName = cloudStorageStack
   .apply((value) => value as string);
 
 // ── Queues ───────────────────────────────────────────────────────────────────
-// Channel side effects fan out over these; names match `macro_queues`.
+// Channel side effects use these in every environment. Dev's AI tool bundle
+// includes both plus the additional tool queues.
 
 const notificationIngressQueueArn = aws.sqs
   .getQueueOutput({ name: `notification-ingress-queue-${stack}` })
@@ -65,13 +75,30 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
   isPrivate: false,
   ecsClusterArn: cloudStorageClusterArn,
   cloudStorageClusterName,
-  secretKeyArns: [jwtSecretKeyArn, MACRO_API_TOKENS.macroApiTokenPublicKeyArn],
-  sendQueueArns: [notificationIngressQueueArn, contactsQueueArn],
+  secretKeyArns: [
+    jwtSecretKeyArn,
+    MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+    ...aiTools.secretArns,
+  ],
+  queueArns:
+    stack === 'dev'
+      ? [...aiTools.queueArns]
+      : [notificationIngressQueueArn, contactsQueueArn],
+  bucketArns: [...aiTools.bucketArns],
   containerEnvVars: [
     {
       name: 'ENVIRONMENT',
       value: stack,
     },
+    ...(stack === 'dev'
+      ? [
+          {
+            // bot_id::MACRO_AI_BOT_ID: @macro runs on the in-process runtime.
+            name: 'INMEM_BOT_ID',
+            value: '00000000-0000-0000-0000-00000000a1a1',
+          },
+        ]
+      : []),
     // Datadog
     {
       name: 'DD_SERVICE',

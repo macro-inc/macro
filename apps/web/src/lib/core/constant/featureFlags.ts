@@ -682,6 +682,22 @@ export function ENABLE_CHAT_V3_AGENTS(): boolean {
   );
 }
 
+// The `@cursor` mention entry: agent sessions served by Cursor cloud agents
+// on Macro's Cursor account. PostHog-gated per user; the backend additionally
+// restricts these sessions to @macro.com senders. Override with
+// VITE_ENABLE_CURSOR_AGENTS.
+export const ENABLE_CURSOR_AGENTS_FLAG = 'enable-cursor-agents';
+export const ENABLE_CURSOR_AGENTS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CURSOR_AGENTS') ??
+  (DEV_MODE_ENV ? true : undefined);
+export function ENABLE_CURSOR_AGENTS(): boolean {
+  if (ENABLE_CURSOR_AGENTS_OVERRIDE !== undefined) {
+    return ENABLE_CURSOR_AGENTS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_CURSOR_AGENTS_FLAG) ?? false;
+}
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;

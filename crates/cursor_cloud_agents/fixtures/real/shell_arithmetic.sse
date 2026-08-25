@@ -1,0 +1,386 @@
+event: status
+data: {"runId":"run-901caea1-82e0-4cf9-9618-cfb09c1565e4","status":"RUNNING"}
+
+id: 1787331019619-0
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+id: 1787331019631-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-901caea1-82e0-4cf9-9618-cfb09c1565e4","text":"Compute 5 + 5 by running a single shell command, then tell me the answer. Do not modify any files."}}
+
+id: 1787331022294-0
+event: thinking
+data: {"text":"Running a single shell"}
+
+id: 1787331022294-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Running a single shell"}
+
+id: 1787331022324-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331022327-0
+event: thinking
+data: {"text":" command to compute "}
+
+id: 1787331022327-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" command to compute "}
+
+id: 1787331022331-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331022336-0
+event: thinking
+data: {"text":"5 + 5."}
+
+id: 1787331022336-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"5 + 5."}
+
+id: 1787331022462-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331022468-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":176}
+
+id: 1787331022485-0
+event: assistant
+data: {"text":"I'll"}
+
+id: 1787331022485-0
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+id: 1787331022495-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331022531-0
+event: assistant
+data: {"text":" compute"}
+
+id: 1787331022531-0
+event: interaction_update
+data: {"type":"text-delta","text":" compute"}
+
+id: 1787331022533-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331022538-0
+event: assistant
+data: {"text":" "}
+
+id: 1787331022538-0
+event: interaction_update
+data: {"type":"text-delta","text":" "}
+
+id: 1787331022542-0
+event: assistant
+data: {"text":"5"}
+
+id: 1787331022542-0
+event: interaction_update
+data: {"type":"text-delta","text":"5"}
+
+id: 1787331022549-0
+event: assistant
+data: {"text":" +"}
+
+id: 1787331022549-0
+event: interaction_update
+data: {"type":"text-delta","text":" +"}
+
+id: 1787331022553-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331022558-0
+event: assistant
+data: {"text":" "}
+
+id: 1787331022558-0
+event: interaction_update
+data: {"type":"text-delta","text":" "}
+
+id: 1787331022562-0
+event: assistant
+data: {"text":"5"}
+
+id: 1787331022562-0
+event: interaction_update
+data: {"type":"text-delta","text":"5"}
+
+id: 1787331022565-0
+event: assistant
+data: {"text":" with"}
+
+id: 1787331022565-0
+event: interaction_update
+data: {"type":"text-delta","text":" with"}
+
+id: 1787331022568-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331022571-0
+event: assistant
+data: {"text":" one"}
+
+id: 1787331022571-0
+event: interaction_update
+data: {"type":"text-delta","text":" one"}
+
+id: 1787331022579-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331022582-0
+event: assistant
+data: {"text":" shell"}
+
+id: 1787331022582-0
+event: interaction_update
+data: {"type":"text-delta","text":" shell"}
+
+id: 1787331022595-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331022656-0
+event: assistant
+data: {"text":" command"}
+
+id: 1787331022656-0
+event: interaction_update
+data: {"type":"text-delta","text":" command"}
+
+id: 1787331022676-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331022683-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787331022683-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787331022686-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331022692-0
+event: assistant
+data: {"text":" report"}
+
+id: 1787331022692-0
+event: interaction_update
+data: {"type":"text-delta","text":" report"}
+
+id: 1787331022695-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331022700-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787331022700-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787331022707-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331022714-0
+event: assistant
+data: {"text":" result"}
+
+id: 1787331022714-0
+event: interaction_update
+data: {"type":"text-delta","text":" result"}
+
+id: 1787331022724-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331022730-0
+event: assistant
+data: {"text":"."}
+
+id: 1787331022730-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787331022733-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331022738-0
+event: interaction_update
+data: {"type":"token-delta","tokens":17}
+
+id: 1787331025265-0
+event: tool_call
+data: {"callId":"call-8be7fce4-493c-4301-9473-949fda2ad369-0\nfc_14f7b514-b183-98c1-8188-98fada187431_0","name":"run_terminal_cmd","status":"running","args":{"command":"echo $((5 + 5))","timeout":600000,"toolCallId":"call-8be7fce4-493c-4301-9473-949fda2ad369-0\nfc_14f7b514-b183-98c1-8188-98fada187431_0","simpleCommands":["echo"],"parsingResult":{"executableCommands":[{"name":"echo","args":[{"type":"arithmetic_expansion","value":"$((5 + 5))"}],"fullText":"echo $((5 + 5))"}]},"fileOutputThresholdBytes":"40000","timeoutBehavior":"TIMEOUT_BEHAVIOR_BACKGROUND","hardTimeout":86400000,"description":"Compute 5 plus 5 in shell","closeStdin":true,"conversationId":"bc-30a98094-3301-4c4b-8b6e-30720b7d9a87"}}
+
+id: 1787331025265-0
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-8be7fce4-493c-4301-9473-949fda2ad369-0\nfc_14f7b514-b183-98c1-8188-98fada187431_0","toolCall":{"type":"shell","args":{"command":"echo $((5 + 5))","timeout":600000}},"modelCallId":"serverGenReqId_dc7ad146-e008-4978-8c87-e5024123e434-1-gget"}
+
+id: 1787331025552-0
+event: tool_call
+data: {"callId":"call-8be7fce4-493c-4301-9473-949fda2ad369-0\nfc_14f7b514-b183-98c1-8188-98fada187431_0","name":"run_terminal_cmd","status":"completed","args":{"command":"echo $((5 + 5))","timeout":600000,"toolCallId":"call-8be7fce4-493c-4301-9473-949fda2ad369-0\nfc_14f7b514-b183-98c1-8188-98fada187431_0","simpleCommands":["echo"],"parsingResult":{"executableCommands":[{"name":"echo","args":[{"type":"arithmetic_expansion","value":"$((5 + 5))"}],"fullText":"echo $((5 + 5))"}]},"fileOutputThresholdBytes":"40000","timeoutBehavior":"TIMEOUT_BEHAVIOR_BACKGROUND","hardTimeout":86400000,"description":"Compute 5 plus 5 in shell","closeStdin":true,"conversationId":"bc-30a98094-3301-4c4b-8b6e-30720b7d9a87"},"result":{"success":{"command":"echo $((5 + 5))","stdout":"10\n","executionTime":292,"interleavedOutput":"10\n","localExecutionTimeMs":69},"isBackground":false}}
+
+id: 1787331025552-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-8be7fce4-493c-4301-9473-949fda2ad369-0\nfc_14f7b514-b183-98c1-8188-98fada187431_0","toolCall":{"type":"shell","args":{"command":"echo $((5 + 5))","timeout":600000},"result":{"status":"success","value":{"exitCode":0,"signal":"","stdout":"10\n","stderr":"","executionTime":292}}},"modelCallId":"serverGenReqId_dc7ad146-e008-4978-8c87-e5024123e434-1-gget"}
+
+id: 1787331025558-0
+event: interaction_update
+data: {"type":"token-delta","tokens":32}
+
+id: 1787331025645-0
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":6026}
+
+id: 1787331026229-0
+event: interaction_update
+data: {"type":"step-started","stepId":43}
+
+id: 1787331027623-0
+event: thinking
+data: {"text":"The shell command returned"}
+
+id: 1787331027623-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"The shell command returned"}
+
+id: 1787331027629-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331027633-0
+event: thinking
+data: {"text":" 10."}
+
+id: 1787331027633-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" 10."}
+
+id: 1787331027641-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331027645-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":22}
+
+id: 1787331027650-0
+event: assistant
+data: {"text":"5"}
+
+id: 1787331027650-0
+event: interaction_update
+data: {"type":"text-delta","text":"5"}
+
+id: 1787331027654-0
+event: assistant
+data: {"text":" +"}
+
+id: 1787331027654-0
+event: interaction_update
+data: {"type":"text-delta","text":" +"}
+
+id: 1787331027657-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331027661-0
+event: assistant
+data: {"text":" "}
+
+id: 1787331027661-0
+event: interaction_update
+data: {"type":"text-delta","text":" "}
+
+id: 1787331027664-0
+event: assistant
+data: {"text":"5"}
+
+id: 1787331027664-0
+event: interaction_update
+data: {"type":"text-delta","text":"5"}
+
+id: 1787331027668-0
+event: assistant
+data: {"text":" is"}
+
+id: 1787331027668-0
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+id: 1787331027671-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331027675-0
+event: assistant
+data: {"text":" **"}
+
+id: 1787331027675-0
+event: interaction_update
+data: {"type":"text-delta","text":" **"}
+
+id: 1787331027681-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331027684-0
+event: assistant
+data: {"text":"10"}
+
+id: 1787331027684-0
+event: interaction_update
+data: {"type":"text-delta","text":"10"}
+
+id: 1787331027689-0
+event: assistant
+data: {"text":"**."}
+
+id: 1787331027689-0
+event: interaction_update
+data: {"type":"text-delta","text":"**."}
+
+id: 1787331027692-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331027798-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787331027802-0
+event: interaction_update
+data: {"type":"step-completed","stepId":43,"stepDurationMs":1572}
+
+event: status
+data: {"runId":"run-901caea1-82e0-4cf9-9618-cfb09c1565e4","status":"FINISHED"}
+
+id: 1787331029189-0
+event: result
+data: {"runId":"run-901caea1-82e0-4cf9-9618-cfb09c1565e4","status":"FINISHED","text":"5 + 5 is **10**.","durationMs":9971,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/basic-shell-calculation-bf43"}]}}
+
+id: 1787331029189-0
+event: done
+data: {}
+

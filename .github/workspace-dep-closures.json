@@ -72,6 +72,8 @@
       "crates/contacts",
       "crates/cowlike",
       "crates/crm",
+      "crates/cursor_api_key",
+      "crates/cursor_cloud_agents",
       "crates/document_sub_type",
       "crates/email",
       "crates/email_utils",
@@ -159,6 +161,8 @@
       "crates/contacts",
       "crates/cowlike",
       "crates/crm",
+      "crates/cursor_api_key",
+      "crates/cursor_cloud_agents",
       "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/documents",
@@ -943,6 +947,7 @@
       "crates/contacts",
       "crates/cowlike",
       "crates/crm",
+      "crates/cursor_api_key",
       "crates/database_env_vars",
       "crates/decode_jwt",
       "crates/document_storage_service_client",
@@ -2186,6 +2191,15 @@
       "crates/remote_env_var",
       "crates/system_properties",
       "crates/unfurl",
+      "crates/workspace-hack"
+    ],
+    "cursor_api_key": [
+      "crates/cursor_api_key",
+      "crates/workspace-hack"
+    ],
+    "cursor_cloud_agents": [
+      "crates/cursor_cloud_agents",
+      "crates/macro_env_var",
       "crates/workspace-hack"
     ],
     "database_env_vars": [

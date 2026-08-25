@@ -57,6 +57,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         workspace: "/workspace".to_owned(),
         sandbox_size: agent_session::domain::model::SandboxSize::Default,
         acp_session_id: None,
+        external: None,
         status: SessionStatus::NoMessages,
         created_at: Utc::now(),
         modified_at: Utc::now(),

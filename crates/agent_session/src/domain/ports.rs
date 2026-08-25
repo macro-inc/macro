@@ -209,6 +209,37 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// The durable record of which provider-side agent an externally-served
+/// session runs on.
+///
+/// Written by the provider's container manager when the agent is minted, read
+/// back to resume after a restart, and joined into session reads so a client
+/// can link out to the provider. Providers have no queryable label space
+/// (Cursor's API cannot answer "which agent belongs to this session"), so
+/// this repo is the mapping's single source of truth.
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait ExternalSessionRepo: Send + Sync + 'static {
+    /// Record (or refresh) a session's provider-side identity.
+    ///
+    /// Upsert on the session: a session has at most one external backing, and
+    /// re-learning the same agent's name or url must not fail the write.
+    fn upsert(
+        &self,
+        id: AgentSessionId,
+        external: ExternalSession,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session's provider-side identity, if it has one.
+    fn get(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<ExternalSession>>> + Send;
+
+    /// Forget a session's provider-side identity. A session that never had
+    /// one is already in the asked-for state, so this succeeds.
+    fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+}
+
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionLogRepo: Send + Sync + 'static {
     /// Append a log entry and project any system event onto the session status.
