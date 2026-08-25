@@ -5,15 +5,18 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use item_filters::ast::{
-    call::CallLiteral,
-    channel::{ChannelLiteral, ChannelThreadLiteral},
-    chat::ChatLiteral,
-    crm_company::CrmCompanyLiteral,
-    document::DocumentLiteral,
-    email::EmailLiteral,
-    foreign_entity::ForeignEntityLiteral,
-    project::ProjectLiteral,
+use item_filters::{
+    SharedEmailFilter,
+    ast::{
+        call::CallLiteral,
+        channel::{ChannelLiteral, ChannelThreadLiteral},
+        chat::ChatLiteral,
+        crm_company::CrmCompanyLiteral,
+        document::DocumentLiteral,
+        email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral,
+        project::ProjectLiteral,
+    },
 };
 use models_pagination::{Paginated, PaginatedCursor};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -210,6 +213,40 @@ fn collect_ids<T>(expr: &Expr<T>, literal_id: impl Copy + Fn(&T) -> Option<Uuid>
     }
 }
 
+/// Collect thread IDs from an expression that contains only positive thread-ID literals.
+fn positive_email_thread_ids(expr: &Expr<EmailLiteral>) -> Option<HashSet<Uuid>> {
+    match expr {
+        Expr::And(left, right) | Expr::Or(left, right) => {
+            let mut ids = positive_email_thread_ids(left)?;
+            ids.extend(positive_email_thread_ids(right)?);
+            Some(ids)
+        }
+        Expr::Not(_) => None,
+        Expr::Literal(EmailLiteral::ThreadId(id)) => Some(HashSet::from([*id])),
+        Expr::Literal(_) => None,
+    }
+}
+
+/// Return whether positive thread IDs are combined with shared-thread inclusion via `And`.
+fn includes_shared_threads(expr: &Expr<EmailLiteral>, expected_ids: &HashSet<Uuid>) -> bool {
+    let is_shared_include = |expr: &Expr<EmailLiteral>| {
+        matches!(
+            expr,
+            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Include))
+        )
+    };
+    let has_expected_ids =
+        |expr: &Expr<EmailLiteral>| positive_email_thread_ids(expr).as_ref() == Some(expected_ids);
+
+    match expr {
+        Expr::And(left, right) => {
+            (has_expected_ids(left) && is_shared_include(right))
+                || (is_shared_include(left) && has_expected_ids(right))
+        }
+        Expr::Or(_, _) | Expr::Not(_) | Expr::Literal(_) => false,
+    }
+}
+
 #[tokio::test]
 async fn batches_all_keys_for_one_user_into_one_soup_request() {
     let user_id = user("macro|one@example.com");
@@ -367,6 +404,20 @@ async fn context_loader_returns_none_for_a_missing_item() {
 }
 
 #[test]
+fn email_entity_filter_includes_shared_threads() {
+    let thread_id = Uuid::from_u128(20);
+    let entities = vec![EntityType::EmailThread.with_entity_string(thread_id.to_string())];
+
+    let ast = entity_filter_ast(&entities).expect("valid AST");
+    let email_filter = ast.email_filter.tree.as_deref().expect("email filter");
+
+    assert!(includes_shared_threads(
+        email_filter,
+        &HashSet::from([thread_id])
+    ));
+}
+
+#[test]
 fn encodes_requested_ids_and_disables_unrequested_entity_branches() {
     let first_document = Uuid::from_u128(21);
     let second_document = Uuid::from_u128(22);
@@ -424,16 +475,10 @@ fn encodes_requested_ids_and_disables_unrequested_entity_branches() {
         ),
         HashSet::from([nil])
     );
-    assert_eq!(
-        collect_ids(
-            ast.email_filter.tree.as_deref().expect("email filter"),
-            |literal| match literal {
-                EmailLiteral::ThreadId(id) => Some(*id),
-                _ => None,
-            }
-        ),
-        HashSet::from([nil])
-    );
+    assert!(includes_shared_threads(
+        ast.email_filter.tree.as_deref().expect("email filter"),
+        &HashSet::from([nil])
+    ));
     assert_eq!(
         collect_ids(
             ast.channel_thread_filter

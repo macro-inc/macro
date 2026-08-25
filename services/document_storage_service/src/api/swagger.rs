@@ -67,6 +67,10 @@ use channels::inbound::axum_router::{
     DeleteEntityMentionResponse, GetAttachmentReferencesResponse, GetMessageWithContextResponse,
     PostActivityRequest,
 };
+use collab_surface::domain::models::SurfaceState;
+use collab_surface::inbound::axum_router::{
+    CollabSurfaceResponse, CollabSurfaceTokenResponse, EnsureCollabSurfaceRequest,
+};
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
@@ -312,6 +316,11 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::get_reminder_handler,
         reminders::inbound::axum_router::update_reminder_handler,
         reminders::inbound::axum_router::delete_reminder_handler,
+        // collab surfaces
+        collab_surface::inbound::axum_router::ensure_surface_handler,
+        collab_surface::inbound::axum_router::get_surface_handler,
+        collab_surface::inbound::axum_router::mint_token_handler,
+        collab_surface::inbound::axum_router::delete_surface_handler,
 
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
@@ -455,6 +464,10 @@ use utoipa::OpenApi;
             ReminderSchedule,
             CreateReminderRequest,
             UpdateReminderRequest,
+            CollabSurfaceResponse,
+            CollabSurfaceTokenResponse,
+            EnsureCollabSurfaceRequest,
+            SurfaceState,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview<SoupPropertiesField>,

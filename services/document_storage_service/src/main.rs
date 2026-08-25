@@ -51,6 +51,11 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
+use collab_surface::{
+    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
+    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
+    outbound::surface_init::LexicalSyncSurfaceInitializer,
+};
 use config::{Config, Environment};
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -997,6 +1002,15 @@ async fn run() -> anyhow::Result<()> {
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
 
+    let collab_surface_service = CollabSurfaceServiceImpl::new(
+        Arc::new(PgCollabSurfaceRepo::new(db.clone())),
+        Arc::new(LexicalSyncSurfaceInitializer::new(
+            lexical_client.as_ref().clone(),
+            sync_service_client.as_ref().clone(),
+        )),
+        config.document_permission_jwt.as_ref().to_string(),
+    );
+
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
         frecency_service,
@@ -1253,6 +1267,11 @@ async fn run() -> anyhow::Result<()> {
         favorites_service,
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        collab_surface_state: CollabSurfaceRouterState::new(
+            Arc::new(collab_surface_service),
             entity_access_service.clone(),
             authorization_state.clone(),
         ),

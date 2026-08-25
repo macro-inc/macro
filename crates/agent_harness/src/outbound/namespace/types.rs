@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::outbound::daytona::GithubToken;
+use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
 
 /// Namespace instance identifier.
 #[derive(Debug, Clone)]
@@ -99,4 +99,6 @@ pub struct NamespaceSettings {
     pub lifetime: Duration,
     /// Token with read access to the repository cloned into instances.
     pub github_token: GithubToken,
+    /// Key instances run Anthropic models with.
+    pub anthropic_api_key: AnthropicApiKey,
 }

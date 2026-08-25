@@ -24,6 +24,7 @@ import {
   type ParentProps,
   useContext,
 } from 'solid-js';
+import { controlOutcome } from '../state/control-message';
 import { createAgentSessionFeed } from './create-agent-session-feed';
 import {
   type ComposerController,
@@ -107,6 +108,7 @@ export function AgentSessionProvider(
     sessionId,
     working,
     model: () => feed.metadata()?.model,
+    controlOutcome: (requestId) => controlOutcome(feed.messages(), requestId),
   });
 
   // Anything the service can only deliver over a live transport: a prompt on

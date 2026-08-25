@@ -3468,6 +3468,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "collab_surface"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "entity_access",
+ "lexical_client",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_sync_service_jwt",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "model",
+ "model-entity",
+ "model-error-response",
+ "models_permissions",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "sync_service_client",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-retry",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4908,6 +4940,7 @@ dependencies = [
  "chrono",
  "clap",
  "cloudfront_sign",
+ "collab_surface",
  "comms_db_client",
  "complete_graph",
  "connection",

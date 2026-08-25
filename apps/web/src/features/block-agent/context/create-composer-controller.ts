@@ -24,6 +24,7 @@ import {
   type PostPhase,
   type QueuedPrompt,
 } from '../state/composer-state';
+import type { ControlOutcome } from '../state/control-message';
 
 export type ComposerController = {
   /** Prompts waiting to be sent, oldest first. The head sends next. */
@@ -75,16 +76,31 @@ export function createComposerController(options: {
   sessionId: Accessor<string | undefined>;
   /** The block's one working signal — see `AgentSessionContext`. */
   working: Accessor<boolean>;
+  /**
+   * The fold's outcome for the control action `requestId` — the id the
+   * control POST returned, which the fold stamps on the folded message the
+   * action derives. A rejection is the other way a pending model change
+   * resolves — the fold's `model` never moves for one — so without this a
+   * refused switch would shimmer forever.
+   */
+  controlOutcome?: (requestId: string) => ControlOutcome | undefined;
 }): ComposerController {
   const [state, setState] = createStore<{
     queue: QueuedPrompt[];
     post: PostPhase;
     /** The model a `setModel` is currently asking for. */
     requestedModel: string | undefined;
+    /**
+     * The id the control POST returned for the in-flight change — the exact
+     * handle for its outcome in the fold, so no other action's rejection
+     * (nor an older refusal of the same model) can answer this request.
+     */
+    requestedActionId: string | undefined;
   }>({
     queue: [],
     post: { type: 'idle' },
     requestedModel: undefined,
+    requestedActionId: undefined,
   });
 
   const postHead = async (sessionId: string, prompt: QueuedPrompt) => {
@@ -112,13 +128,21 @@ export function createComposerController(options: {
       .control(sessionId, { type: 'setModel', model })
       .catch(() => undefined);
     if (result === undefined || result.isErr()) {
-      setState('requestedModel', undefined);
+      batch(() => {
+        setState('requestedModel', undefined);
+        setState('requestedActionId', undefined);
+      });
       toast.failure('The model could not be changed');
+      return;
     }
-    // Success is observed through the fold: the runtime acks the config
-    // change and the session metadata's `model` moves. The POST returning is
-    // not the end of the wait — it only means the service accepted it — so
-    // `requestedModel` is cleared by the effect below, not here.
+    // The POST returning only means the service accepted it; resolution is
+    // observed through the fold. The returned action id is the fold's
+    // `requestId` for this change: an accepted change moves the metadata's
+    // `model`, a rejected one resolves this id's control outcome, and the
+    // effects below watch for whichever comes.
+    if (state.requestedModel === model) {
+      setState('requestedActionId', result.value);
+    }
   };
 
   const postStop = async (sessionId: string) => {
@@ -158,7 +182,30 @@ export function createComposerController(options: {
     if (requested === undefined) return;
     const current = options.model?.();
     if (current == null) return;
-    if (current === requested) setState('requestedModel', undefined);
+    if (current === requested) {
+      batch(() => {
+        setState('requestedModel', undefined);
+        setState('requestedActionId', undefined);
+      });
+    }
+  });
+
+  // The other resolution: the runtime refused the change. The fold resolves
+  // this exact action's control outcome (`ControlOutcome::Rejected`) on the
+  // message carrying its id, and the transcript renders the refusal; here it
+  // just has to release the pending state, and say so — a refused switch
+  // otherwise looks like one that never registered.
+  createEffect(() => {
+    const requested = state.requestedModel;
+    const actionId = state.requestedActionId;
+    if (requested === undefined || actionId === undefined) return;
+    const outcome = options.controlOutcome?.(actionId);
+    if (outcome?.kind !== 'rejected') return;
+    batch(() => {
+      setState('requestedModel', undefined);
+      setState('requestedActionId', undefined);
+    });
+    toast.failure(`Couldn't switch to ${requested}`);
   });
 
   // `awaiting_turn` resolves on whichever comes first: the fold reports the
@@ -198,6 +245,7 @@ export function createComposerController(options: {
       queue: [],
       post: { type: 'idle' },
       requestedModel: undefined,
+      requestedActionId: undefined,
     });
   });
 

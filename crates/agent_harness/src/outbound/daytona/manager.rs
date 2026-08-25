@@ -12,7 +12,9 @@ use tracing::Instrument as _;
 
 use super::client::DaytonaClient;
 use super::errors::DaytonaError;
-use super::types::{DaytonaSettings, Env, GithubToken, Labels, PortPreview, Snapshot};
+use super::types::{
+    AnthropicApiKey, DaytonaSettings, Env, GithubToken, Labels, PortPreview, Snapshot,
+};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
@@ -85,6 +87,7 @@ pub struct DaytonaContainerManager {
     client: DaytonaClient,
     snapshot: Snapshot,
     github_token: GithubToken,
+    anthropic_api_key: AnthropicApiKey,
     managed: Arc<DaytonaContainerManagerState>,
 }
 
@@ -97,6 +100,7 @@ impl DaytonaContainerManager {
             api_key,
             snapshot,
             github_token,
+            anthropic_api_key,
         } = settings;
         let client = DaytonaClient::new(api_url, api_key);
         let managed = Arc::new(DaytonaContainerManagerState::new());
@@ -107,6 +111,7 @@ impl DaytonaContainerManager {
             client,
             snapshot,
             github_token,
+            anthropic_api_key,
             managed,
         }
     }
@@ -366,11 +371,18 @@ impl ContainerManager for DaytonaContainerManager {
         // one fails at prompt time with "Authorization header is badly
         // formatted". `container/opencode.json` pins `enabled_providers` to
         // keep that list honest; do not drop that pin while this var is set.
+        // `ANTHROPIC_API_KEY` is what activates opencode's `anthropic`
+        // provider — with `enabled_providers` pinned in
+        // `container/opencode.json`, it is the sandbox's only model source.
         let env = Env::from(HashMap::from([
             ("REPO_URL".to_owned(), repo_url),
             (
                 "GITHUB_TOKEN".to_owned(),
                 self.github_token.expose().to_owned(),
+            ),
+            (
+                "ANTHROPIC_API_KEY".to_owned(),
+                self.anthropic_api_key.expose().to_owned(),
             ),
         ]));
         let labels = Labels::from(HashMap::from([(

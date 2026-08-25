@@ -21,8 +21,8 @@ use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::containers::HarnessContainers;
 use agent_harness::outbound::daytona::{
-    DaytonaApiKey as DaytonaApiKeySecret, DaytonaContainerManager, DaytonaSettings,
-    GithubToken as GithubTokenSecret, Snapshot,
+    AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
+    DaytonaContainerManager, DaytonaSettings, GithubToken as GithubTokenSecret, Snapshot,
 };
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
@@ -144,6 +144,16 @@ async fn run() -> anyhow::Result<()> {
     )));
 
     // Containers: local Docker when a developer has opted in, Daytona otherwise.
+    // The key rides into every sandbox's environment; without it the runtime
+    // has no model provider at all (`container/opencode.json` enables only
+    // `anthropic`), so managed sessions would advertise no models and fail
+    // every prompt.
+    if config.anthropic_api_key.trim().is_empty() {
+        tracing::warn!(
+            "ANTHROPIC_API_KEY is unset: managed sandboxes have no model provider; external agent sessions are unaffected"
+        );
+    }
+    let anthropic_api_key = AnthropicApiKeySecret::new(config.anthropic_api_key.clone());
     let containers = if config.dev_dangerous_local_containers {
         if !matches!(config.environment, Environment::Local) {
             anyhow::bail!("DEV_DANGEROUS_LOCAL_CONTAINERS is only allowed when ENVIRONMENT=local");
@@ -164,6 +174,7 @@ async fn run() -> anyhow::Result<()> {
             image: config.local_container_image.clone(),
             network: network.to_owned(),
             github_token: GithubTokenSecret::new(config.github_token.clone()),
+            anthropic_api_key: anthropic_api_key.clone(),
         }))
     } else {
         // Credential-less boot is deliberate: external sessions need neither.
@@ -178,6 +189,7 @@ async fn run() -> anyhow::Result<()> {
             api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
             snapshot: Snapshot::new(config.daytona_snapshot.clone()),
             github_token: GithubTokenSecret::new(config.github_token.clone()),
+            anthropic_api_key,
         }))
     };
     let container_shutdown = containers.clone();

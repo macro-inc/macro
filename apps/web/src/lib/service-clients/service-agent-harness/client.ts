@@ -1,6 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type {
+  AgentActionId,
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlRequest,
@@ -52,7 +53,15 @@ export const agentHarnessServiceClient = {
     ).then((result) => result.map(() => undefined));
   },
 
+  /**
+   * Returns the accepted action's id, which the fold stamps as `requestId`
+   * on the folded message the action derives — the correlation handle for
+   * watching that action's outcome.
+   */
   control(sessionId: string, request: ControlRequest) {
+    // The endpoint answers with a bare JSON string (`AgentActionId`), which
+    // `fetchWithToken`'s object-or-bytes constraint cannot name; the cast is
+    // the whole accommodation.
     return fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/control`,
       {
@@ -60,7 +69,7 @@ export const agentHarnessServiceClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       }
-    ).then((result) => result.map(() => undefined));
+    ).then((result) => result.map((id) => id as unknown as AgentActionId));
   },
 
   delete(sessionId: string) {

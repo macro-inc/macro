@@ -12,6 +12,7 @@ import {
   addDays,
   addHours,
   differenceInCalendarDays,
+  endOfDay,
   format,
   parseISO,
   startOfHour,
@@ -243,6 +244,29 @@ export function buildEventTime(
     endsAt: end.toISOString(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
+}
+
+/** Copy shown when guests would be invited to an event that already ended. */
+export const PAST_EVENT_GUESTS_WARNING =
+  'This event has already ended — guests will still be invited.';
+
+/** When the edited range ends, or `undefined` while the range does not parse. */
+export function eventEndsAt(state: EventEditorInitialValues): Date | undefined {
+  if (state.allDay) {
+    const end = parseLocalDate(state.end);
+    return end ? endOfDay(end) : undefined;
+  }
+  const end = new Date(state.end);
+  return Number.isNaN(end.getTime()) ? undefined : end;
+}
+
+/** Whether the edited range finished before `now`. In-progress events do not. */
+export function eventHasEnded(
+  state: EventEditorInitialValues,
+  now = new Date()
+) {
+  const endsAt = eventEndsAt(state);
+  return endsAt !== undefined && endsAt.getTime() < now.getTime();
 }
 
 function parseGuestEmails(value: string) {

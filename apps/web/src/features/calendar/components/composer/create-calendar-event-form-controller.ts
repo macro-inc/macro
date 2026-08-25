@@ -18,9 +18,11 @@ import {
   type EventEditorGuestOption,
   type EventEditorInitialValues,
   type EventEditorSubmitValues,
+  eventHasEnded,
   guestEmail,
   initialGuestOptions,
   moveAllDayRange,
+  PAST_EVENT_GUESTS_WARNING,
   type SelectedEventEditorGuest,
 } from './event-form-model';
 
@@ -88,6 +90,8 @@ function isEventComposerFormDirty(
 
 export interface CreateCalendarEventFormControllerOptions {
   initialValue: EventEditorInitialValues;
+  /** Editing a saved event, whose initial guests already hold an invitation. */
+  isEdit?: boolean;
   calendarOptions: Accessor<EventEditorCalendarOption[]>;
   guestOptions: Accessor<EventEditorGuestOption[]>;
   recurrenceTimeZone?: string;
@@ -240,6 +244,31 @@ export function createCalendarEventFormController(
     isEventComposerFormDirty(initialSnapshot(), snapshot())
   );
 
+  const invitesNewGuests = () => {
+    // An unsaved event has invited nobody yet, no matter how its guest list
+    // was seeded: a calendar drag, or an event the assistant proposed.
+    if (options.isEdit !== true) return selectedGuests().length > 0;
+    const alreadyInvited = new Set(normalizedGuestEmails(initialGuestEmails()));
+    return normalizedGuestEmails(selectedGuests().map(guestEmail)).some(
+      (email) => !alreadyInvited.has(email)
+    );
+  };
+
+  const timeChanged = () =>
+    initialValue().allDay !== state().allDay ||
+    initialValue().start !== state().start ||
+    initialValue().end !== state().end;
+
+  // Inviting people to an event that already happened is nearly always a
+  // mistake, so the composer says so without blocking the save. Simply
+  // reopening a finished event stays quiet: only a new guest or a moved time
+  // sends anyone a fresh invitation.
+  const pastEventWarning = createMemo(() => {
+    if (selectedGuests().length === 0) return undefined;
+    if (!invitesNewGuests() && !timeChanged()) return undefined;
+    return eventHasEnded(state()) ? PAST_EVENT_GUESTS_WARNING : undefined;
+  });
+
   const notifyChange = () => options.onChange?.(value());
 
   const setReminderMinutes = (minutes: number[]) => {
@@ -351,6 +380,7 @@ export function createCalendarEventFormController(
     changeRecurrenceChoice,
     recurrenceLines: recurrence.recurrenceLines,
     dateRangeError: recurrence.dateRangeError,
+    pastEventWarning,
     eventTime: recurrence.eventTime,
     canSave: recurrence.canSave,
     snapshot,

@@ -11,10 +11,10 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-        CalendarEventPatch, CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders,
-        EventTime, OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
-        REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
+        AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
+        CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert,
+        DisconnectedGoogleCalendar, EventReminders, EventTime, OccurrenceRange,
+        REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
@@ -161,7 +161,7 @@ where
         requester_id: &str,
         email_link_id: Option<Uuid>,
         calendar_id: Option<Uuid>,
-        draft: CalendarEventDraft,
+        mut draft: CalendarEventDraft,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         validate_time(&draft.time)?;
         validate_attendee_emails(draft.attendees.iter().map(|attendee| &attendee.email))?;
@@ -177,6 +177,7 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        ensure_organizer_attendee(&mut draft.attendees, &target.token_identity.email_address);
         let access_token = self.fetch_token(&target.token_identity).await?;
         let upsert = self
             .provider
@@ -540,6 +541,32 @@ fn validate_reminders(reminders: &EventReminders) -> Result<(), CalendarMutation
         }
     }
     Ok(())
+}
+
+fn ensure_organizer_attendee(attendees: &mut Vec<CalendarAttendeeInput>, organizer_email: &str) {
+    let mut kept = false;
+    attendees.retain_mut(|attendee| {
+        if !attendee.email.eq_ignore_ascii_case(organizer_email) {
+            return true;
+        }
+        if kept {
+            return false;
+        }
+        attendee.response_status = Some(AttendeeResponseStatus::Accepted);
+        kept = true;
+        true
+    });
+    if kept {
+        return;
+    }
+    attendees.insert(
+        0,
+        CalendarAttendeeInput {
+            email: organizer_email.to_string(),
+            is_optional: false,
+            response_status: Some(AttendeeResponseStatus::Accepted),
+        },
+    );
 }
 
 fn validate_attendee_emails<'a>(
