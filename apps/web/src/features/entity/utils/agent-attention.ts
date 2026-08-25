@@ -1,3 +1,4 @@
+import type { AgentSessionLiveState } from '@queries/agent-session/live-list-state';
 import type { AgentSessionEntity } from '../types/entity';
 
 /**
@@ -27,31 +28,43 @@ export const AGENT_ATTENTION_LABELS: Record<AgentAttentionState, string> = {
 };
 
 /**
- * Runtime events that mean the session is actively standing something up or
- * working. Deliberately conservative: `acp_ready` is a live-but-idle agent
- * awaiting input, and unknown event names are not claimed as running rather
- * than pinning stale sessions to the top of the list.
+ * Whether the session's container is up. Live state (followed off the
+ * session's log stream) wins over the entity's snapshot columns, which only
+ * move on refetch. Absence of any status yet means the runtime is still
+ * being provisioned — the most alive a session gets.
  */
-const RUNNING_EVENTS = new Set(['booting', 'worktree_ready']);
-
-const isRunning = (entity: AgentSessionEntity): boolean => {
-  // A session with no status yet was just opened — its runtime is being
-  // provisioned, which is the most "running" a session gets.
-  if (entity.statusKind === 'no_messages') return true;
+const isAlive = (
+  entity: AgentSessionEntity,
+  live: AgentSessionLiveState | undefined
+): boolean => {
+  if (live) return live.statusEvent !== 'disconnected';
   if (entity.statusKind === 'disconnected') return false;
-  return entity.statusEventName
-    ? RUNNING_EVENTS.has(entity.statusEventName)
-    : false;
+  return entity.statusEventName !== 'disconnected';
 };
 
-/** The attention bucket a session row belongs to. Pure. */
+/**
+ * The attention bucket a session row belongs to. Pure over its inputs; pass
+ * the session's `agentSessionLiveState` where one is being followed so the
+ * bucket moves with the stream instead of waiting on a refetch.
+ *
+ * An alive container is running unless the fold says its last turn finished
+ * — snapshot columns cannot tell a working session from an idle one (both
+ * sit at `acp_ready`), so without live state alive errs toward running.
+ */
 export const agentAttentionState = (
-  entity: AgentSessionEntity
+  entity: AgentSessionEntity,
+  live?: AgentSessionLiveState
 ): AgentAttentionState => {
-  if (entity.pendingPermissionCount > 0) return 'needs_approval';
-  if (isRunning(entity)) return 'running';
-  if (entity.prUrl) return 'pr_ready';
-  return 'past';
+  if (!isAlive(entity, live)) return entity.prUrl ? 'pr_ready' : 'past';
+
+  const pending = live
+    ? live.pendingPermissionCount
+    : entity.pendingPermissionCount;
+  if (pending > 0) return 'needs_approval';
+
+  // Idle with a PR out: the deliverable is what wants the user now.
+  if (live && !live.working && entity.prUrl) return 'pr_ready';
+  return 'running';
 };
 
 /** Grouping id the agents view preset selects (client-side bucketing). */

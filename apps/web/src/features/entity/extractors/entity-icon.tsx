@@ -7,6 +7,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
+import { agentSessionLiveState } from '@queries/agent-session/live-list-state';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -187,7 +188,12 @@ export function EntityIcon(props: EntityIconProps) {
         {(entity) => (
           <PulsingStar
             kind="listIcon"
-            animate={agentAttentionState(entity()) === 'running'}
+            animate={
+              agentAttentionState(
+                entity(),
+                agentSessionLiveState(entity().id)
+              ) === 'running'
+            }
             class={props.class}
           />
         )}

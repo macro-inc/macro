@@ -1,5 +1,6 @@
 import {
   type SessionStatusLike,
+  type SessionStatusPresentation,
   sessionStatusPresentation,
 } from '@app/features/block-agent/ui/SessionStatusPill';
 import { harnessTitle, repoNameFromUrl } from '@core/util/agent-session';
@@ -12,6 +13,10 @@ import {
 } from '@entity';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import GitBranch from '@phosphor/git-branch.svg';
+import {
+  type AgentSessionLiveState,
+  agentSessionLiveState,
+} from '@queries/agent-session/live-list-state';
 import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import {
@@ -28,9 +33,27 @@ const sessionStatus = (entity: AgentSessionEntity): SessionStatusLike => {
   return { kind: entity.statusKind };
 };
 
-/** The session's status as a quiet dot + label, mirroring the block's pill. */
-const StatusCell = (props: { entity: AgentSessionEntity }) => {
-  const current = () => sessionStatusPresentation(sessionStatus(props.entity));
+/**
+ * The session's status as a quiet dot + label, mirroring the block's pill.
+ * Followed live where the view watches the session's stream; a working
+ * session says so rather than sitting on the runtime's last system event.
+ */
+const StatusCell = (props: {
+  entity: AgentSessionEntity;
+  live: AgentSessionLiveState | undefined;
+}) => {
+  const current = (): SessionStatusPresentation => {
+    const live = props.live;
+    if (!live) return sessionStatusPresentation(sessionStatus(props.entity));
+    if (live.working && live.statusEvent !== 'disconnected') {
+      return { label: 'Working', tone: 'positive' };
+    }
+    return sessionStatusPresentation(
+      live.statusEvent
+        ? { kind: 'event', event: live.statusEvent }
+        : { kind: 'no_messages' }
+    );
+  };
   return (
     <span class="inline-flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
       <span
@@ -57,6 +80,15 @@ export function AgentGridLayout(props: LayoutProps) {
   const session = () =>
     isAgentSessionEntity(props.entity) ? props.entity : undefined;
   const repoName = () => repoNameFromUrl(session()?.repoUrl);
+  // Live fold state where the agents view watches this session's stream;
+  // undefined elsewhere (and until the fold's snapshot lands), in which case
+  // every cell falls back to the entity's snapshot columns.
+  const live = () => {
+    const id = session()?.id;
+    return id ? agentSessionLiveState(id) : undefined;
+  };
+  const pendingPermissionCount = () =>
+    live()?.pendingPermissionCount ?? session()?.pendingPermissionCount ?? 0;
 
   return (
     <Entity.Layout
@@ -102,11 +134,16 @@ export function AgentGridLayout(props: LayoutProps) {
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
         <span class="truncate min-w-0">
-          <Entity.Title entity={props.entity} />
+          <Show
+            when={live()?.title}
+            fallback={<Entity.Title entity={props.entity} />}
+          >
+            {(title) => title()}
+          </Show>
         </span>
-        <Show when={(session()?.pendingPermissionCount ?? 0) > 0}>
+        <Show when={pendingPermissionCount() > 0}>
           <span class="shrink-0 text-xs font-medium text-alert border border-alert/20 bg-alert/10 px-2 rounded-sm py-0.5">
-            Needs approval ({session()?.pendingPermissionCount})
+            Needs approval ({pendingPermissionCount()})
           </span>
         </Show>
         <Show when={session()?.prUrl}>
@@ -124,7 +161,7 @@ export function AgentGridLayout(props: LayoutProps) {
         </Show>
         <Show when={repoName()}>
           {(name) => (
-            <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5 inline-flex items-center gap-1">
+            <span class="ph-no-capture text-ink-muted text-xs shrink-0 truncate inline-flex items-center gap-1">
               <GitBranch class="size-3 shrink-0" />
               {name()}
             </span>
@@ -137,7 +174,7 @@ export function AgentGridLayout(props: LayoutProps) {
         class="flex items-center min-w-0 text-xs ph-no-capture"
       >
         <Show when={session()}>
-          {(entity) => <StatusCell entity={entity()} />}
+          {(entity) => <StatusCell entity={entity()} live={live()} />}
         </Show>
       </Entity.Slot>
 

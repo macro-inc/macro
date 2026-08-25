@@ -76,6 +76,10 @@ import {
 } from '@entity/utils/agent-attention';
 import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import {
+  agentSessionLiveState,
+  watchAgentSessionLive,
+} from '@queries/agent-session/live-list-state';
 import { useQueryClient } from '@queries/client';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import type {
@@ -1215,6 +1219,37 @@ export const SoupViewContextProvider: FlowComponent<
     return '';
   };
 
+  // Follow the log stream of every listed session whose container is still
+  // up: the fold behind `agentSessionLiveState` is what moves rows between
+  // attention buckets without a refetch. Releases are keyed so a list
+  // refetch neither reopens held folds nor leaks departed ones.
+  {
+    const held = new Map<string, () => void>();
+    createEffect(() => {
+      const wanted = new Set<string>();
+      if (enabled() && isClientAgentGroup()) {
+        for (const entity of entities()) {
+          if (entity.type !== 'agent_session') continue;
+          if (entity.statusKind === 'disconnected') continue;
+          if (entity.statusEventName === 'disconnected') continue;
+          wanted.add(entity.id);
+        }
+      }
+      for (const [id, release] of held) {
+        if (wanted.has(id)) continue;
+        release();
+        held.delete(id);
+      }
+      for (const id of wanted) {
+        if (!held.has(id)) held.set(id, watchAgentSessionLive(id));
+      }
+    });
+    onCleanup(() => {
+      for (const release of held.values()) release();
+      held.clear();
+    });
+  }
+
   const builtRows = createMemo((): SoupRow[] => {
     const field = groupByField();
     const groups = itemsSource.data()?.groups;
@@ -1227,7 +1262,7 @@ export const SoupViewContextProvider: FlowComponent<
       for (const entity of entities()) {
         const key =
           entity.type === 'agent_session'
-            ? agentAttentionState(entity)
+            ? agentAttentionState(entity, agentSessionLiveState(entity.id))
             : 'past';
         const bucket = buckets.get(key);
         if (bucket) {
