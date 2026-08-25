@@ -3,6 +3,5 @@
 pub enum SenderPolicy {
     Signal,
     Noise,
-    /// Trash all future mail from the sender.
     Block,
 }
