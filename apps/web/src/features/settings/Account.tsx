@@ -24,10 +24,6 @@ import {
 import { createStaticFile } from '@core/util/create';
 import { openFilePicker } from '@core/util/upload';
 import { type BundleUpdateStatus, useTauri } from '@macro/tauri';
-import {
-  type SupportedNotificationSettings,
-  useNotificationSettings,
-} from '@notifications';
 import CheckIcon from '@phosphor/check.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
@@ -41,7 +37,7 @@ import {
 } from '@queries/auth/user-name-self';
 import { authServiceClient } from '@service-auth/client';
 import { invoke } from '@tauri-apps/api/core';
-import { Button, Dialog, Dropdown, Panel, ToggleSwitch, Tooltip } from '@ui';
+import { Button, Dialog, Dropdown, Panel, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -453,8 +449,6 @@ export function Account() {
             <BundleVersionRow />
             <BundleUpdateRow />
           </Show>
-
-          <NotificationToggle />
         </SettingsCard>
       </SettingsSection>
 
@@ -747,48 +741,6 @@ function NameInput(props: {
         </Transition>
       </div>
     </div>
-  );
-}
-
-function NotificationToggle() {
-  const settings = useNotificationSettings();
-
-  return (
-    <Show
-      when={settings.isSupported && settings}
-      fallback={<NotificationNotSupported />}
-    >
-      {(s) => <NotificationSettings settings={s()} />}
-    </Show>
-  );
-}
-
-function NotificationSettings(props: {
-  settings: SupportedNotificationSettings;
-}) {
-  const analytics = useAnalytics();
-
-  const handleToggle = (checked: boolean) => {
-    analytics.track('notifications_toggled');
-    props.settings.toggle(checked);
-  };
-
-  return (
-    <Row label="Notifications">
-      <ToggleSwitch
-        size="md"
-        checked={props.settings.isEnabled()}
-        onChange={handleToggle}
-      />
-    </Row>
-  );
-}
-
-function NotificationNotSupported() {
-  return (
-    <Row label="Notifications">
-      <span class="text-sm text-ink-muted">Not supported on this device</span>
-    </Row>
   );
 }
 

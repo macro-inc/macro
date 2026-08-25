@@ -1,5 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BotIcon from '@icon/wide-bot.svg';
+import BellIcon from '@phosphor/bell-simple.svg';
 import BugIcon from '@phosphor/bug.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
@@ -50,6 +51,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'General',
     items: [
       { tab: 'Account', label: 'Account', icon: UserIconPhosphor },
+      { tab: 'Notifications', label: 'Notifications', icon: BellIcon },
       { tab: 'Billing', label: 'Billing', icon: CreditCardIcon },
       { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
       { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
@@ -88,6 +90,7 @@ const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
  */
 const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',
+  Notifications: 'notifications',
   Billing: 'billing',
   Subscription: 'subscription',
   Organization: 'organization',
@@ -153,6 +156,7 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
+      case 'Notifications':
       case 'Billing':
         return true;
       case 'Team':
