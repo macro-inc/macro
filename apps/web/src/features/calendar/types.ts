@@ -146,7 +146,7 @@ export function mapCalendarEventToFullCalendar(
     start: allDayRange?.start ?? event.start,
     end: allDayRange?.end ?? event.end,
     allDay: isRenderedAllDay,
-    display: 'block',
+    display: 'auto',
     startEditable: interactionEditable,
     durationEditable: interactionEditable,
     extendedProps: {

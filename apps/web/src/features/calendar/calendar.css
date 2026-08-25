@@ -386,6 +386,46 @@
 	display: none;
 }
 
+/* Single-day timed events use a compact dot treatment in the month grid. */
+.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event {
+	border: 0;
+	background-color: transparent;
+	color: var(--color-ink);
+}
+
+.calendar-view
+	.fc
+	.fc-dayGridMonth-view
+	.fc-daygrid-dot-event
+	.calendar-event-title {
+	min-width: 0;
+	flex-shrink: 1;
+}
+
+.calendar-view .fc .calendar-event-response-dot {
+	width: 0.5rem;
+	height: 0.5rem;
+	flex: none;
+	border: 1px solid var(--event-calendar-color, var(--color-calendar));
+	border-radius: 9999px;
+	background: var(--event-calendar-color, var(--color-calendar));
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content[data-response-status="tentative"]
+	.calendar-event-response-dot {
+	border-style: dashed;
+	background: transparent;
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content[data-response-status="needs_action"]
+	.calendar-event-response-dot {
+	background: transparent;
+}
+
 .calendar-view .fc .fc-event:has([data-response-status="accepted"]) {
 	--fc-event-bg-color: var(--event-calendar-color, var(--color-calendar));
 	--fc-event-text-color: var(--color-surface);
@@ -454,6 +494,14 @@
 	.calendar-event-content-selected {
 	background-color: var(--color-accent);
 	color: var(--color-surface);
+}
+
+.calendar-view
+	.fc
+	.calendar-event-content.calendar-event-content-selected
+	.calendar-event-response-dot {
+	border-color: currentColor;
+	background: currentColor;
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-frame {

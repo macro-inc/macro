@@ -20,8 +20,9 @@ const SINGLE_LINE_EVENT_DURATION_MS = 15 * 60 * 1000;
 /** Renders responsive event content for FullCalendar. */
 export function EventContent(props: EventContentProps) {
   const isRenderedAllDay = () => props.renderProps.event.allDay;
-  const isCompact = () =>
-    isRenderedAllDay() || props.renderProps.view.type === 'dayGridMonth';
+  const isMonthView = () => props.renderProps.view.type === 'dayGridMonth';
+  const showsMonthDot = () => isMonthView() && !isRenderedAllDay();
+  const isCompact = () => isRenderedAllDay() || isMonthView();
   const showLocation = () =>
     !isRenderedAllDay() && props.renderProps.view.type === 'timeGridDay';
   const selfResponseStatus = () =>
@@ -70,6 +71,9 @@ export function EventContent(props: EventContentProps) {
             'calendar-event-content-layout-single-line'
         )}
       >
+        <Show when={showsMonthDot()}>
+          <span class="calendar-event-response-dot" aria-hidden="true" />
+        </Show>
         <span
           class={cn(
             'calendar-event-title max-w-full shrink-0 font-semibold leading-tight',
