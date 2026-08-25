@@ -745,6 +745,11 @@ export type ToolEntityType =
   | 'user'
   | 'company';
 /**
+ * How the agent expresses the policy on the wire. Parsed into the domain
+ * `SenderPolicy` at this boundary.
+ */
+export type ToolSenderPolicy = 'signal' | 'noise' | 'block';
+/**
  * Content of a text editor code execution response - either a result or an error
  */
 export type TextEditorCodeExecutionContent =
@@ -4919,6 +4924,52 @@ export interface ToolEntityRef {
 export interface SetEntityPropertyResponse {
   success: boolean;
   message: string;
+}
+/**
+ * Set where future mail from a sender lands in one of the user's inboxes. This is the same control a human has in the inbox menus: Sender to Signal, Sender to Noise, and Block Sender.
+ *
+ * Policies:
+ * - `signal`: the sender's future mail shows in the Signal view. Use for senders the user says are important.
+ * - `noise`: the sender's future mail shows in the Noise view. Mail still arrives and stays searchable. Use for newsletters, promos, and other low-value senders.
+ * - `block`: ALL future mail from the sender is sent straight to trash and never reaches the inbox. This is much stronger than noise. Only use it when the user explicitly asks to block a sender; when they just call mail unwanted or spammy, prefer `noise`.
+ *
+ * Policies are per inbox. When acting on a specific thread (e.g. after GetThread), pass `thread_id` so the policy applies to the inbox that owns that thread, which matters for delegated or secondary inboxes. Otherwise pass `inbox` (an inbox email address from ListInboxes) to name one, or omit both to use the primary inbox.
+ *
+ * Get `sender_email` from GetThread (`from.email`) or ListEntities (`sender_email`); do not guess addresses. Calling again with a different policy overwrites the previous one. Repeating a call with the same arguments is safe.
+ */
+export interface SetSenderPolicy {
+  /**
+   * The sender's email address, e.g. `from.email` on a GetThread message or
+   * `sender_email` on a ListEntities email row. Exact address, not a domain.
+   */
+  sender_email: string;
+  policy: ToolSenderPolicy;
+  /**
+   * Apply the policy to the inbox that owns this thread (same UUID returned
+   * by ListEntities, search, or GetThread). Takes precedence over `inbox`.
+   */
+  thread_id?: string | null;
+  /**
+   * Apply the policy to a specific inbox by its email address (from
+   * ListInboxes). Ignored when `thread_id` is set. Omit both to use the
+   * primary inbox.
+   */
+  inbox?: string | null;
+}
+export interface SetSenderPolicyResponse {
+  /**
+   * The sender the policy now applies to.
+   */
+  senderEmail: string;
+  policy: ToolSenderPolicy;
+  /**
+   * The email address of the inbox the policy was applied to.
+   */
+  inbox: string;
+  /**
+   * A human-readable summary of the change.
+   */
+  summary: string;
 }
 /**
  * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.

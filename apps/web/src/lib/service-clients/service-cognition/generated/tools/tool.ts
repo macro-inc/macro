@@ -192,6 +192,10 @@ type ToolParserMap = {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
   };
+  SetSenderPolicy: {
+    call: types.SetSenderPolicy;
+    response: types.SetSenderPolicyResponse;
+  };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {
     call: types.TextEditorCodeExecution;
@@ -422,6 +426,10 @@ const toolParserMap = {
     call: schemas.SetEntityProperty,
     response: schemas.SetEntityPropertyResponse,
   },
+  SetSenderPolicy: {
+    call: schemas.SetSenderPolicy,
+    response: schemas.SetSenderPolicyResponse,
+  },
   Subagent: { call: schemas.Subagent, response: schemas.SubagentResponse },
   TextEditorCodeExecution: {
     call: schemas.TextEditorCodeExecution,
@@ -635,6 +643,10 @@ type ToolDataMap = {
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
+  };
+  SetSenderPolicy: {
+    call: types.SetSenderPolicy;
+    response: types.SetSenderPolicyResponse;
   };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {

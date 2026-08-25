@@ -78,6 +78,7 @@ import { searchToolsHandler } from './SearchTools';
 import { selfKnowledgeHandler } from './SelfKnowledge';
 import { sendChannelMessageHandler } from './SendChannelMessage';
 import { sendEmailHandler } from './SendEmail';
+import { setSenderPolicyHandler } from './SetSenderPolicy';
 import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import {
@@ -152,6 +153,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   SelfKnowledge: selfKnowledgeHandler,
   SendChannelMessage: sendChannelMessageHandler,
   SendEmail: sendEmailHandler,
+  SetSenderPolicy: setSenderPolicyHandler,
   SetEntityProperty: setEntityPropertyHandler,
   BulkSetEntityPropertyOptions: bulkSetEntityPropertyOptionsHandler,
   Subagent: subagentHandler,

@@ -4085,6 +4085,62 @@ export const SetEntityPropertyResponse = z.object({
   message: z.string(),
 });
 
+export const SetSenderPolicy = z.object({
+  sender_email: z.string(),
+  policy: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('signal'),
+      z.literal('noise'),
+      z.literal('block'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  thread_id: z.union([z.string().uuid(), z.null()]).optional(),
+  inbox: z.union([z.string(), z.null()]).optional(),
+});
+
+export const SetSenderPolicyResponse = z.object({
+  senderEmail: z.string(),
+  policy: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('signal'),
+      z.literal('noise'),
+      z.literal('block'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  inbox: z.string(),
+  summary: z.string(),
+});
+
 export const Subagent = z.object({ task: z.string() });
 
 export const SubagentResponse = z.object({ result: z.string() });
