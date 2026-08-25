@@ -194,6 +194,25 @@ fn tail_str(s: &str, n: usize) -> String {
     lines[start..].join("\n")
 }
 
+/// Build the frontend's WASM packages (`cache-wasm`, `agent-fold`) as an
+/// explicit, unbounded step before the port-readiness poll below starts.
+///
+/// `bun run dev` builds these itself via a `predev`-style chain
+/// (`ensure-cache-wasm && ensure-agent-fold-wasm && vite`), but on a cache
+/// miss that means compiling wasm-bindgen's own toolchain from scratch —
+/// several minutes, far past the fixed 36s poll in `start()`. Running the
+/// same `just` recipes here first keeps that one-time cost off that timeout;
+/// they no-op on a warm cache, so this stays cheap on every later run.
+fn ensure_wasm_packages(stage: &Stage) -> Result<()> {
+    let mut cmd = Command::new("just");
+    cmd.current_dir(app_dir()).arg("ensure-cache-wasm");
+    stage.run("Preparing cache-wasm package", &mut cmd)?;
+
+    let mut cmd = Command::new("just");
+    cmd.current_dir(app_dir()).arg("ensure-agent-fold-wasm");
+    stage.run("Preparing agent-fold wasm package", &mut cmd)
+}
+
 /// Start the frontend dev server and wait until *our* child is serving. Output
 /// is captured (suppressed — the vite banner would duplicate the summary's URL)
 /// but retained so an unexpected exit can be diagnosed. Returns `None` in
@@ -231,6 +250,18 @@ pub fn start(
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
+    // Without node_modules, `bun run dev` never binds the port and never exits
+    // within the poll window below — it just times out with an opaque "did not
+    // become ready", giving no hint that a dependency install is missing. This
+    // is a Bun workspace: `bun install` hoists deps into the repo-root
+    // node_modules, not a per-package one under apps/web.
+    if !repo_root().join("node_modules").exists() {
+        anyhow::bail!(
+            "{}/node_modules is missing — run `bun install` from the repo root first.",
+            repo_root().display()
+        );
+    }
+    ensure_wasm_packages(stage)?;
     let mut cmd = Command::new("bun");
     cmd.current_dir(app_dir())
         .args(["run", "--bun", "dev"])
