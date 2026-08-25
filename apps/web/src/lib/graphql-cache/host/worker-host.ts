@@ -7,11 +7,12 @@
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+  type AffectedOperationsResult,
   type CachedQueryInstanceWire,
   type CachedQueryVariantWire,
   type CacheRequest,
-  type CacheRevision,
   type CacheResponseErrorCode,
+  type CacheRevision,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
   type EntityFilterCacheArgs,
@@ -27,7 +28,6 @@ import {
   type ReadResult,
   type SearchCacheArgs,
   type SearchCachePage,
-  type AffectedOperationsResult,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
   type WorkerMessage,
@@ -191,9 +191,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const lostRegisteredOpKeys = new Set<number>();
   const replacementReadOpKeys = new Set<number>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<
-    (revision: CacheRevision) => void
-  >();
+  const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
   const generationChangeSubscribers = new Set<() => void>();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
@@ -1021,7 +1019,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
     async invalidate(keys: string[]): Promise<AffectedOperationsResult> {
       await ensureInitialized();
-      return (await request({ kind: 'invalidate', keys })) as AffectedOperationsResult;
+      return (await request({
+        kind: 'invalidate',
+        keys,
+      })) as AffectedOperationsResult;
     },
 
     async deleteRecords(keys: string[]): Promise<AffectedOperationsResult> {

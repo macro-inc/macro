@@ -4,10 +4,6 @@
  */
 
 export {
-  normalizedCacheResultMetadata,
-  type NormalizedCacheResultMetadata,
-} from './exchange/normalized-cache-exchange';
-export {
   compileEntityResolvers,
   type EntityFromArgumentDescriptor,
   type EntityResolverConfig,
@@ -22,6 +18,10 @@ export {
   inspectVariants,
   selectAll,
 } from './exchange/inspection';
+export {
+  type NormalizedCacheResultMetadata,
+  normalizedCacheResultMetadata,
+} from './exchange/normalized-cache-exchange';
 export {
   executeOptimisticMutation,
   type LinkDiff,
@@ -59,8 +59,8 @@ export type {
   CachePush,
   CacheReadPriority,
   CacheRequest,
-  CacheRevision,
   CacheResponse,
+  CacheRevision,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,

@@ -20,9 +20,9 @@ import {
 import type { CacheHost } from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
-  INITIAL_CACHE_REVISION,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
+  INITIAL_CACHE_REVISION,
   type MutationClaim,
   type ReadResult,
   type WriteResult,

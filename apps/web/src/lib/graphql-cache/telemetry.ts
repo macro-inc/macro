@@ -85,8 +85,7 @@ export const CACHE_REVISION_CATEGORIES = [
   'deletion',
   'clear',
 ] as const;
-export type CacheRevisionCategory =
-  (typeof CACHE_REVISION_CATEGORIES)[number];
+export type CacheRevisionCategory = (typeof CACHE_REVISION_CATEGORIES)[number];
 
 /** Payload-free, bounded error classes shared by all cache layers. */
 export const CACHE_ERROR_CODES = [

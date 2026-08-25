@@ -1,5 +1,5 @@
-import { INITIAL_CACHE_REVISION } from '../protocol';
 import { describe, expect, it } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import { type CoordinatorAction, CoordinatorCore } from './coordinator-core';
 import type { DatabaseActionProof } from './coordinator-protocol';
 

@@ -4,7 +4,6 @@
  */
 
 import { match } from 'ts-pattern';
-import { parseCacheRevision } from '../protocol';
 import type {
   AffectedOperationsResult,
   CachePush,
@@ -19,6 +18,7 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
+import { parseCacheRevision } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,

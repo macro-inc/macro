@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { INITIAL_CACHE_REVISION } from '../protocol';
 import type {
   CacheRequest,
   CacheResponseErrorCode,
   WorkerMessage,
   WriteResult,
 } from '../protocol';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import type {
   CacheCoordinatorPageAdapter,
   CacheCoordinatorPageAdapterOptions,

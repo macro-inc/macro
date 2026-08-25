@@ -1,5 +1,5 @@
-import { INITIAL_CACHE_REVISION } from '../protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   databaseOwnerLockName,

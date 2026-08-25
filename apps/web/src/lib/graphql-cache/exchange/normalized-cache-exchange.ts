@@ -120,9 +120,7 @@ export function normalizedCacheResultMetadata(
   }
   if (source !== 'live-network') return;
   const revision = (metadata as { revision?: unknown }).revision;
-  return isCacheRevision(revision)
-    ? { source, revision }
-    : { source };
+  return isCacheRevision(revision) ? { source, revision } : { source };
 }
 
 function withResultMetadata(

@@ -9,11 +9,6 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import {
-  parseCacheRevision,
-  validateCacheSearchArgs,
-  validateRecordSelectionKeys,
-} from '../protocol';
 import type {
   AffectedOperationsResult,
   CachedQueryInstanceWire,
@@ -30,6 +25,11 @@ import type {
   SearchCacheArgs,
   SearchCachePage,
   WriteResult,
+} from '../protocol';
+import {
+  parseCacheRevision,
+  validateCacheSearchArgs,
+  validateRecordSelectionKeys,
 } from '../protocol';
 import type {
   CacheHost,
@@ -74,9 +74,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<
-    (revision: CacheRevision) => void
-  >();
+  const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();

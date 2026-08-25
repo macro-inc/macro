@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { INITIAL_CACHE_REVISION } from '../protocol';
 import type { CacheRequest } from '../protocol';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   type CacheEngineRuntimeOptions,
   installCacheEngineWorker,

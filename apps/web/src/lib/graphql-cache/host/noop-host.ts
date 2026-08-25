@@ -1,9 +1,9 @@
-import { INITIAL_CACHE_REVISION } from '../protocol';
 import type {
   EnqueueOptimisticMutationResult,
   ReadResult,
   WriteResult,
 } from '../protocol';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import type { CacheHost } from './types';
 
 const emptyWriteResult = (): WriteResult => ({

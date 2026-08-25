@@ -1,5 +1,5 @@
-import { INITIAL_CACHE_REVISION } from '../protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 

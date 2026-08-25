@@ -153,9 +153,7 @@ export function createGraphqlSoupAstItemsQuery(
         networkAuthorityRevision() !== revision &&
         staleFallbackSpan === undefined
       ) {
-        staleFallbackSpan = Telemetry.span(
-          'graphql_cache.soup_stale_fallback'
-        );
+        staleFallbackSpan = Telemetry.span('graphql_cache.soup_stale_fallback');
         recordAuthority('stale-fallback');
       }
       setCurrentCacheRevision(revision);
@@ -365,7 +363,8 @@ export function createGraphqlSoupAstItemsQuery(
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
-    isLoading: () => query.isLoading && authoritativeLocalProjection() === undefined,
+    isLoading: () =>
+      query.isLoading && authoritativeLocalProjection() === undefined,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => query.isFetchingNextPage,
     isPlaceholderData: () =>

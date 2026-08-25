@@ -1,10 +1,10 @@
-import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type {
   CacheHost,
   ReadRecordsByKeysArgs,
   SearchCacheArgs,
   SearchCachePage,
 } from '@graphql-cache/index';
+import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import { describe, expect, it, vi } from 'vitest';
 import { readCachedGraphqlHistoryItems } from '../graphql';
 

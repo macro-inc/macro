@@ -28,7 +28,6 @@ import type {
   ReadResult,
   SearchCacheArgs,
   SearchCachePage,
-  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 
@@ -90,7 +89,9 @@ export interface CacheHost {
   currentRevision(): Promise<CacheRevision>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   /** Projects a bounded explicit set of normalized entity keys. */
-  readRecordsByKeys(args: ReadRecordsByKeysArgs): Promise<ReadRecordsByKeysResult>;
+  readRecordsByKeys(
+    args: ReadRecordsByKeysArgs
+  ): Promise<ReadRecordsByKeysResult>;
   /** Searches the compact write-through materialized projection. */
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
