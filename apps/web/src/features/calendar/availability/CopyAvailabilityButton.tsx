@@ -71,16 +71,11 @@ function TimeRadioGroup(props: {
 
 /**
  * Split control for sharing availability: the labeled half opens a range
- * menu ("Today" … "Next 14 days") that copies — or, in the email composer,
- * inserts — the viewer's free slots as text; the gear half opens the
- * feature's settings (workday start/end, exclude weekends).
+ * menu ("Today" … "Next 14 days") that copies the viewer's free slots as
+ * text; the gear half opens the feature's settings (workday start/end,
+ * exclude weekends).
  */
-export function CopyAvailabilityButton(props: {
-  /** With `onInsert` the text is handed off instead of copied. */
-  onInsert?: (text: string) => void;
-  disabled?: boolean;
-  class?: string;
-}) {
+export function CopyAvailabilityButton(props: { class?: string }) {
   const getAvailabilityText = useAvailabilityText();
   const { settings, setStartTime, setEndTime, setExcludeWeekends } =
     useAvailabilitySettings();
@@ -88,22 +83,16 @@ export function CopyAvailabilityButton(props: {
   // free, so the control offers nothing useful and stays hidden.
   const connectedInboxes = useCalendarConnectedInboxes();
 
-  const label = () =>
-    props.onInsert ? 'Insert availability' : 'Copy availability';
   const startTimeLabel = () =>
     timeOptionLabel(START_TIME_OPTIONS, settings().startTime);
   const endTimeLabel = () =>
     timeOptionLabel(END_TIME_OPTIONS, settings().endTime);
 
-  const shareRange = async (rangeKey: AvailabilityRangeKey) => {
+  const copyRange = async (rangeKey: AvailabilityRangeKey) => {
     try {
       const text = await getAvailabilityText(rangeKey);
       if (!text) {
         toast.alert('No free time in that range');
-        return;
-      }
-      if (props.onInsert) {
-        props.onInsert(text);
         return;
       }
       if (await writeClipboardData({ 'text/plain': text })) {
@@ -124,12 +113,9 @@ export function CopyAvailabilityButton(props: {
         class={cn('shrink-0 rounded-lg border border-edge-muted', props.class)}
       >
         <Dropdown placement="bottom-start">
-          <Dropdown.Trigger
-            class="gap-1.5 bg-transparent px-2 hover:bg-ink/[0.04]"
-            disabled={props.disabled}
-          >
+          <Dropdown.Trigger class="gap-1.5 bg-transparent px-2 hover:bg-ink/[0.04]">
             <CalendarCheckIcon class="size-3.5 shrink-0" />
-            <span class="truncate text-xs font-medium">{label()}</span>
+            <span class="truncate text-xs font-medium">Copy availability</span>
           </Dropdown.Trigger>
           <Dropdown.Content class="min-w-40">
             <Dropdown.Group>
@@ -137,7 +123,7 @@ export function CopyAvailabilityButton(props: {
                 {(option) => (
                   <Dropdown.Item
                     closeOnSelect
-                    onSelect={() => void shareRange(option.key)}
+                    onSelect={() => void copyRange(option.key)}
                   >
                     <span class="flex-1 truncate">{option.label}</span>
                   </Dropdown.Item>
@@ -153,7 +139,6 @@ export function CopyAvailabilityButton(props: {
           <Dropdown.Trigger
             class="bg-transparent p-1 hover:bg-ink/[0.04]"
             label="Availability settings"
-            disabled={props.disabled}
           >
             <GearIcon class="size-3.5" />
           </Dropdown.Trigger>

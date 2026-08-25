@@ -1,4 +1,3 @@
-import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EmailAttachmentPill } from '@block-email/component/AttachmentPill';
 import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
@@ -8,7 +7,6 @@ import {
   MACRO_EMAIL_SIGNATURE,
   MAX_ATTACHMENTS_BYTES_SIZE,
 } from '@block-email/constants';
-import { insertPlainTextAtCursor } from '@block-email/util/insertPlainTextAtCursor';
 import { addUserMentionToCc } from '@block-email/util/mentionToCc';
 import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
@@ -2153,14 +2151,6 @@ export function BaseInput(props: {
               >
                 <Trash />
               </Button>
-
-              <CopyAvailabilityButton
-                disabled={sendMutation.isPending}
-                onInsert={(text) => {
-                  const editor_ = editor();
-                  if (editor_) insertPlainTextAtCursor(editor_, text);
-                }}
-              />
             </div>
 
             <div class="flex flex-row items-center gap-1">
