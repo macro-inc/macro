@@ -32,6 +32,7 @@ import {
   HYDRATE_ONLY_CONTEXT_KEY,
   type NormalizedCacheExchangeOptions,
   normalizedCacheExchange,
+  normalizedCacheResultMetadata,
 } from './normalized-cache-exchange';
 import { optimisticMutationDispositionOf } from './optimistic';
 
@@ -913,6 +914,10 @@ describe('normalizedCacheExchange', () => {
       [{ from: 'cache' }, true],
       [{ from: 'network' }, false],
     ]);
+    expect(results.map(normalizedCacheResultMetadata)).toEqual([
+      { source: 'normalized-cache-hit' },
+      { source: 'live-network', revision: INITIAL_CACHE_REVISION },
+    ]);
     expect(forwarded.map((op) => op.key)).toEqual([1]);
     expect(host.writes).toHaveLength(1);
     expect(host.reads).toHaveLength(1);
@@ -969,6 +974,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.reads).toHaveLength(0);
     expect(results[0]?.data).toEqual({
       soup: { nextCursor: 'cursor-2' },
+    });
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      revision: INITIAL_CACHE_REVISION,
     });
   });
 
@@ -1141,6 +1150,9 @@ describe('normalizedCacheExchange', () => {
       [{ status: 'In Review' }, true],
       [{ status: 'Completed' }, true],
     ]);
+    expect(normalizedCacheResultMetadata(results.at(-1)!)).toEqual({
+      source: 'affected-cache-reread',
+    });
   });
 
   it('registers a slow fallback write without a replacement reread', async () => {

@@ -4,6 +4,10 @@
  */
 
 export {
+  normalizedCacheResultMetadata,
+  type NormalizedCacheResultMetadata,
+} from './exchange/normalized-cache-exchange';
+export {
   compileEntityResolvers,
   type EntityFromArgumentDescriptor,
   type EntityResolverConfig,
