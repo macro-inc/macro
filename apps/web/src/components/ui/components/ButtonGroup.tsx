@@ -6,7 +6,6 @@ import { Layer } from './Layer';
 type ButtonGroupOrientation = 'horizontal' | 'vertical';
 
 type ButtonGroupContextValue = {
-  depth?: 0 | 1 | 2 | 3 | 4;
   variant?: ButtonVariant;
   size?: ButtonSize;
   orientation: ButtonGroupOrientation;
@@ -29,8 +28,8 @@ type ButtonGroupProps = {
 
 const groupVariantStyles: Record<ButtonVariant, string> = {
   danger: 'border border-failure/50  ',
-  base: 'border border-edge-muted  ',
-  active: 'border border-accent  ',
+  outline: 'border border-edge-muted  ',
+  selected: 'border border-accent  ',
   success: 'border border-success  ',
   ghost: '                          ',
   contrast: 'border border-transparent',
@@ -39,8 +38,8 @@ const groupVariantStyles: Record<ButtonVariant, string> = {
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
   danger: 'bg-failure/50',
-  base: 'bg-edge-muted',
-  active: 'bg-accent',
+  outline: 'bg-edge-muted',
+  selected: 'bg-accent',
   success: 'bg-success',
   ghost: 'bg-edge-muted',
   contrast: 'bg-surface/50',
@@ -82,9 +81,6 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
   };
 
   const ctx: ButtonGroupContextValue = {
-    get depth() {
-      return props.depth;
-    },
     get variant() {
       return props.variant;
     },
@@ -100,6 +96,7 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
     <ButtonGroupContext.Provider value={ctx}>
       <Layer depth={props.depth ?? 0}>
         <div
+          data-slot="button-group"
           data-orientation={orientation()}
           class={cn(
             'data-[orientation=horizontal]:flex-row items-center',
@@ -126,7 +123,7 @@ type DividerProps = { class?: string };
 const Divider = (props: DividerProps) => {
   const group = useButtonGroupContext();
   const orientation = () => group?.orientation ?? 'horizontal';
-  const variant = () => group?.variant ?? 'base';
+  const variant = () => group?.variant ?? 'outline';
   return (
     <div
       role="separator"

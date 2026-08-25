@@ -169,7 +169,7 @@ const PaywallComponent = (props: PaywallProps) => {
             when={upgradeDisabled()}
             fallback={
               <Button
-                variant={hasPaid() ? 'base' : 'cta'}
+                variant={hasPaid() ? 'outline' : 'cta'}
                 class="rounded-full sm:w-auto px-3 py-1.5"
                 onClick={handleContinue}
               >
@@ -183,7 +183,7 @@ const PaywallComponent = (props: PaywallProps) => {
             >
               <span>
                 <Button
-                  variant={hasPaid() ? 'base' : 'cta'}
+                  variant={hasPaid() ? 'outline' : 'cta'}
                   class="rounded-full sm:w-auto px-3 py-1.5"
                   disabled
                 >

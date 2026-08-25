@@ -8,8 +8,14 @@ export type {
   AvatarSize,
 } from './components/Avatar';
 export { Avatar, AvatarGroup } from './components/Avatar';
-export type { ButtonProps } from './components/Button';
-export { Button } from './components/Button';
+export type {
+  ButtonClassOptions,
+  ButtonProps,
+  ButtonSize,
+  ButtonVariant,
+  ButtonVariantProps,
+} from './components/Button';
+export { Button, buttonClasses, buttonVariants } from './components/Button';
 export { ButtonGroup } from './components/ButtonGroup';
 export type {
   CalendarMonthMenuProps,
@@ -114,3 +120,5 @@ export {
   highlightFirstMenuItemOnOpen,
   wrapIndex,
 } from './utils/menuKeyboardNavigation';
+export type { VariantProps } from './utils/variants';
+export { createVariants } from './utils/variants';

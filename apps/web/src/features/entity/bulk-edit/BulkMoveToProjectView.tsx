@@ -615,7 +615,7 @@ export const BulkMoveToProjectView = (props: {
                 />
                 <Button
                   size="sm"
-                  variant="base"
+                  variant="outline"
                   class="rounded-xs shrink-0"
                   disabled={!newFolderName().trim() || isSavingFolder()}
                   onClick={submitNewFolder}
@@ -642,7 +642,7 @@ export const BulkMoveToProjectView = (props: {
           </Button>
           <Button
             type="button"
-            variant="base"
+            variant="outline"
             class="rounded-xs"
             onClick={finishEditing}
             disabled={!selectedProject()}

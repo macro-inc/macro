@@ -662,7 +662,7 @@ export const SoupView = (props: SoupViewProps) => {
                       fallback={
                         <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                           <Button
-                            variant="base"
+                            variant="outline"
                             class="p-1 size-7 rounded-lg ml-2 bg-surface"
                             onClick={() => setNarrowSearchExpanded(true)}
                             depth={2}
@@ -1415,7 +1415,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                           fallback={
                                             <Button
-                                              variant="base"
+                                              variant="outline"
                                               size="sm"
                                               depth={2}
                                               class={cn({
@@ -1431,7 +1431,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                         >
                                           <Button
-                                            variant="base"
+                                            variant="outline"
                                             size="sm"
                                             depth={2}
                                             class={cn({

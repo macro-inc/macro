@@ -69,7 +69,7 @@ export function Reactions(props: ReactionsProps) {
             triggerProps={{
               size: 'icon-sm',
               tooltip: 'Add reaction',
-              variant: 'base',
+              variant: 'outline',
               'aria-label': 'Add reaction',
               onClick: (e: MouseEvent) => e.stopPropagation(),
             }}

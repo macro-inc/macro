@@ -49,12 +49,12 @@ export function OldOverlay() {
           You are viewing history. Press{' '}
           <Hotkey shortcut="escape" theme="current" /> to exit.
         </span>
-        <Button variant="base" size="sm" onClick={history.exit}>
+        <Button variant="outline" size="sm" onClick={history.exit}>
           <XIcon />
           Exit
         </Button>
         <Button
-          variant="active"
+          variant="selected"
           size="sm"
           onClick={handleFork}
           disabled={

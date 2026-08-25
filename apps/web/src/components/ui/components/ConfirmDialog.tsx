@@ -60,7 +60,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
           </Button>
           <Button
             type="button"
-            variant={props.tone === 'danger' ? 'danger' : 'active'}
+            variant={props.tone === 'danger' ? 'danger' : 'selected'}
             depth={2}
             class="rounded-lg"
             onClick={props.onConfirm}

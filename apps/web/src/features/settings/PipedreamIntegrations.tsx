@@ -90,7 +90,7 @@ function ServerRow(props: { server: PipedreamConnectionResponse }) {
               {deleteMutation.isPending ? 'Removing...' : 'Confirm'}
             </Button>
             <Button
-              variant="base"
+              variant="outline"
               size="sm"
               depth={3}
               onClick={() => setConfirmDelete(false)}
@@ -101,7 +101,7 @@ function ServerRow(props: { server: PipedreamConnectionResponse }) {
         }
       >
         <Button
-          variant="base"
+          variant="outline"
           size="sm"
           depth={3}
           tooltip="Remove"
@@ -268,7 +268,7 @@ export function PipedreamIntegrationsSection() {
           <div class="px-6 py-8 text-center text-sm text-ink-muted">
             Failed to load integrations.
             <Button
-              variant="base"
+              variant="outline"
               size="sm"
               depth={3}
               onClick={() => serversQuery.refetch()}
@@ -304,7 +304,7 @@ export function PipedreamIntegrationsSection() {
           <div class="px-6 py-6 text-center text-sm text-ink-muted">
             Couldn't load the connector catalog.
             <Button
-              variant="base"
+              variant="outline"
               size="sm"
               depth={3}
               onClick={() => catalogQuery.refetch()}
@@ -341,7 +341,7 @@ export function PipedreamIntegrationsSection() {
           <Show when={catalogQuery.hasNextPage}>
             <div class="px-4 py-3 text-center">
               <Button
-                variant="base"
+                variant="outline"
                 size="sm"
                 depth={3}
                 disabled={catalogQuery.isFetchingNextPage}

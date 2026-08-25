@@ -311,7 +311,7 @@ const ROUTES: RouteDefinition[] = [
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
             <Button
-              variant="base"
+              variant="outline"
               onClick={() => {
                 publishLoginSuccess();
                 window.close();

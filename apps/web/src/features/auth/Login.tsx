@@ -133,7 +133,7 @@ function LoginPicker(props: {
 
       <Show when={showApple}>
         <Button
-          variant="base"
+          variant="outline"
           class="bg-surface"
           onClick={() => startSsoLogin('Apple')}
         >
@@ -142,7 +142,7 @@ function LoginPicker(props: {
         </Button>
       </Show>
 
-      <Button variant="base" class="bg-surface" onClick={continueWithEmail}>
+      <Button variant="outline" class="bg-surface" onClick={continueWithEmail}>
         Continue with email
       </Button>
     </div>
@@ -268,7 +268,7 @@ function EmailFormNew(props: {
         Continue
         <ArrowRight class="size-4" />
       </Button>
-      <Button variant="base" class="bg-surface" onClick={props.onBack}>
+      <Button variant="outline" class="bg-surface" onClick={props.onBack}>
         <ArrowLeft class="size-4" />
         Back to sign in
       </Button>
@@ -443,7 +443,7 @@ function VerifyFormNew(props: {
         Verify
         <ArrowRight class="size-4" />
       </Button>
-      <Button variant="base" class="bg-surface" onClick={props.onBack}>
+      <Button variant="outline" class="bg-surface" onClick={props.onBack}>
         <ArrowLeft class="size-4" />
         Change email
       </Button>
