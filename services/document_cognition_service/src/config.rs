@@ -23,6 +23,13 @@ env_vars!(
     pub struct DocumentPermissionJwt;
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
+    /// Absolute URL Pipedream posts connect-flow outcomes to, minted into
+    /// every Connect token. Must carry the shared secret as a `secret` query
+    /// parameter, matching `PIPEDREAM_WEBHOOK_SECRET`.
+    pub struct PipedreamWebhookUri;
+    /// Shared secret guarding the public Pipedream webhook route, which is
+    /// unauthenticated because Pipedream is the caller.
+    pub struct PipedreamWebhookSecret;
 );
 
 maybe_env_vars!(
@@ -102,6 +109,10 @@ pub struct Config {
     pub pipedream_mcp_url: PipedreamMcpUrl,
     /// Browser origins allowed to embed Pipedream's hosted Connect UI.
     pub pipedream_allowed_origins: PipedreamAllowedOrigins,
+    /// URL Pipedream posts connect-flow outcomes to.
+    pub pipedream_webhook_uri: PipedreamWebhookUri,
+    /// Shared secret guarding the public Pipedream webhook route.
+    pub pipedream_webhook_secret: PipedreamWebhookSecret,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// AI editing worker URL
@@ -163,6 +174,8 @@ impl Config {
             pipedream_api_url: PipedreamApiUrl::Unset,
             pipedream_mcp_url: PipedreamMcpUrl::Unset,
             pipedream_allowed_origins: PipedreamAllowedOrigins::Unset,
+            pipedream_webhook_uri: PipedreamWebhookUri::Comptime("PIPEDREAM_WEBHOOK_URI"),
+            pipedream_webhook_secret: PipedreamWebhookSecret::Comptime("PIPEDREAM_WEBHOOK_SECRET"),
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),

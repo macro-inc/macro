@@ -451,6 +451,15 @@ impl BootStubEnv {
         );
         // search_processing_service; the local cluster has the security plugin
         // disabled so these are accepted but ignored (same as opensearch.rs).
+        // document_cognition_service requires both Pipedream webhook values
+        // at startup. Nothing local can receive Pipedream's callbacks, so
+        // these only need to be well-formed: the URI must carry the same
+        // secret the route checks against.
+        env.insert(
+            "PIPEDREAM_WEBHOOK_URI".into(),
+            "http://localhost:8080/pipedream/mcp/webhook?secret=local".into(),
+        );
+        env.insert("PIPEDREAM_WEBHOOK_SECRET".into(), "local".into());
         env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
         env.insert("OPENSEARCH_PASSWORD".into(), "local".into());
         // document_storage_service's presigned-URL config. Locally the
