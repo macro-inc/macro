@@ -2,6 +2,9 @@
 //! and dependency tracking together behind the API the hosts (wasm worker /
 //! Tauri) expose over RPC.
 
+#[cfg(test)]
+mod test;
+
 use crate::denormalize::{
     DenormalizeError, ReadOutcome, RecordSource, denormalize_record,
     denormalize_with_entity_resolvers,
@@ -31,6 +34,7 @@ use crate::queue::{
 use crate::record_selection::{
     MAX_RECORD_SELECTION_KEYS, RecordSelection, RecordSelectionError, SelectedRecord,
 };
+use crate::revision::{CacheRevision, Revisioned};
 use crate::search::{
     SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile, SearchRequest,
     compare_recent, fuzzy_freshness_score, project_search_documents, validate_search_request,
@@ -78,6 +82,8 @@ pub enum EngineError<S: std::error::Error + 'static> {
     InvalidOptimisticProjection(String),
     #[error("storage: {0}")]
     Storage(#[source] S),
+    #[error("cache revision overflow")]
+    RevisionOverflow,
 }
 
 /// Result of a cache read.
@@ -116,6 +122,8 @@ pub struct QueryRegistration<'a> {
 /// Result of writing a network response.
 #[derive(Debug)]
 pub struct WriteResult {
+    /// Revision installed after this logical cache mutation.
+    pub revision: CacheRevision,
     /// Records whose contents changed.
     pub changed: BTreeSet<EntityKey<'static>>,
     /// Active operations depending on changed records (host re-executes
@@ -222,6 +230,7 @@ pub const DEFAULT_HOT_CAPACITY: usize = 10_000;
 
 pub struct Engine<S: Storage> {
     storage: S,
+    revision: CacheRevision,
     hot: LruCache<EntityKey<'static>, Record>,
     docs: HashMap<String, Document>,
     deps: DepIndex,
@@ -242,6 +251,7 @@ impl<S: Storage> Engine<S> {
     pub fn with_capacity(storage: S, hot_capacity: usize) -> Self {
         Engine {
             storage,
+            revision: CacheRevision::ZERO,
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
             docs: HashMap::new(),
             deps: DepIndex::new(),
@@ -249,6 +259,34 @@ impl<S: Storage> Engine<S> {
             optimistic: Vec::new(),
             optimistic_hydrated: false,
             search_catalogs: HashMap::new(),
+        }
+    }
+
+    /// Returns the current effective-view revision of this engine generation.
+    pub fn current_revision(&self) -> CacheRevision {
+        self.revision
+    }
+
+    fn ensure_revision_can_advance(&self) -> Result<(), EngineError<S::Error>> {
+        self.revision
+            .checked_successor()
+            .map(|_| ())
+            .ok_or(EngineError::RevisionOverflow)
+    }
+
+    fn advance_revision(&mut self) -> Result<CacheRevision, EngineError<S::Error>> {
+        let next = self
+            .revision
+            .checked_successor()
+            .ok_or(EngineError::RevisionOverflow)?;
+        self.revision = next;
+        Ok(next)
+    }
+
+    fn revisioned<T>(&self, value: T) -> Revisioned<T> {
+        Revisioned {
+            revision: self.revision,
+            value,
         }
     }
 
@@ -273,6 +311,7 @@ impl<S: Storage> Engine<S> {
     /// storage changes the queue. Returns operations whose effective view
     /// changed.
     pub async fn refresh_optimistic_queue(&mut self) -> Result<WriteResult, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         let queued = self
             .storage
             .load_mutation_queue()
@@ -295,7 +334,9 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before_all.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(changed.iter());
+        let revision = self.advance_revision()?;
         Ok(WriteResult {
+            revision,
             changed,
             affected_ops,
             reset: false,
@@ -549,7 +590,7 @@ impl<S: Storage> Engine<S> {
         &mut self,
         selection: &RecordSelection,
         keys: &[EntityKey<'static>],
-    ) -> Result<Vec<SelectedRecord>, EngineError<S::Error>> {
+    ) -> Result<Revisioned<Vec<SelectedRecord>>, EngineError<S::Error>> {
         if keys.len() > MAX_RECORD_SELECTION_KEYS {
             return Err(RecordSelectionError::TooManyKeys {
                 count: keys.len(),
@@ -571,7 +612,7 @@ impl<S: Storage> Engine<S> {
             return Err(RecordSelectionError::InvalidKey.into());
         }
         if keys.is_empty() {
-            return Ok(Vec::new());
+            return Ok(self.revisioned(Vec::new()));
         }
         self.hydrate_optimistic().await?;
 
@@ -601,14 +642,15 @@ impl<S: Storage> Engine<S> {
             .project_record_batch(selection, candidates, &optimistic)
             .await?;
         let mut projected: HashMap<_, _> = projected.into_iter().collect();
-        Ok(ordered_keys
+        let records = ordered_keys
             .into_iter()
             .filter_map(|record_key| {
                 projected
                     .remove(&record_key)
                     .map(|record| SelectedRecord { record_key, record })
             })
-            .collect())
+            .collect();
+        Ok(self.revisioned(records))
     }
 
     async fn project_record_batch(
@@ -935,6 +977,7 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         let NetworkWrite {
             query,
             operation_name,
@@ -1020,7 +1063,9 @@ impl<S: Storage> Engine<S> {
                 self.deps.set_op_broad(registration.op_id);
             }
         }
+        let revision = self.advance_revision()?;
         Ok(WriteResult {
+            revision,
             changed,
             affected_ops,
             reset,
@@ -1179,6 +1224,7 @@ impl<S: Storage> Engine<S> {
         input: BeginOptimisticWrite<'_>,
         projection_mutations: Vec<OptimisticProjectionMutation>,
     ) -> Result<(OptimisticTransactionId, WriteResult), EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         let BeginOptimisticWrite {
             query,
             operation_name,
@@ -1263,9 +1309,11 @@ impl<S: Storage> Engine<S> {
         if let Some(origin) = origin_op {
             affected_ops.remove(&origin);
         }
+        let revision = self.advance_revision()?;
         Ok((
             id,
             WriteResult {
+                revision,
                 changed,
                 affected_ops,
                 reset: false,
@@ -1380,6 +1428,7 @@ impl<S: Storage> Engine<S> {
         data: &Json,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         self.hydrate_optimistic().await?;
         let index = self
             .optimistic
@@ -1437,7 +1486,9 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        let revision = self.advance_revision()?;
         Ok(WriteResult {
+            revision,
             changed: durable_changed,
             affected_ops,
             reset: false,
@@ -1452,6 +1503,7 @@ impl<S: Storage> Engine<S> {
         transaction: OptimisticTransactionId,
         claim: MutationClaimToken,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         self.hydrate_optimistic().await?;
         self.optimistic
             .iter()
@@ -1483,7 +1535,9 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
+        let revision = self.advance_revision()?;
         Ok(WriteResult {
+            revision,
             changed: BTreeSet::new(),
             affected_ops,
             reset: false,
@@ -1627,7 +1681,8 @@ impl<S: Storage> Engine<S> {
     /// Reacts to a reset performed by *another* engine instance sharing the
     /// same storage (cross-tab broadcast): drops all local in-memory state
     /// and returns every local active operation for re-execution.
-    pub fn external_reset(&mut self) -> BTreeSet<OpId> {
+    pub fn external_reset(&mut self) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         self.hot.clear();
         self.docs.clear();
         self.optimistic.clear();
@@ -1636,7 +1691,9 @@ impl<S: Storage> Engine<S> {
         // durable queue, so both identity and optimism must re-hydrate.
         self.optimistic_hydrated = false;
         self.identity = IdentityState::NotHydrated;
-        self.deps.all_ops()
+        let affected = self.deps.all_ops();
+        self.advance_revision()?;
+        Ok(self.revisioned(affected))
     }
 
     /// Unregisters an active operation (urql teardown).
@@ -1651,7 +1708,8 @@ impl<S: Storage> Engine<S> {
     pub fn invalidate_keys<'k>(
         &mut self,
         keys: impl IntoIterator<Item = &'k EntityKey<'static>>,
-    ) -> BTreeSet<OpId> {
+    ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         let mut affected = BTreeSet::new();
         for key in keys {
             self.hot.pop(key);
@@ -1660,7 +1718,8 @@ impl<S: Storage> Engine<S> {
         // The durable projection was updated by the writing context. Reload
         // only the compact catalog on the next text search.
         self.search_catalogs.clear();
-        affected
+        self.advance_revision()?;
+        Ok(self.revisioned(affected))
     }
 
     /// Deletes locally stale records from both durable and hot tiers and
@@ -1673,7 +1732,8 @@ impl<S: Storage> Engine<S> {
     pub async fn delete_keys(
         &mut self,
         keys: &[EntityKey<'static>],
-    ) -> Result<BTreeSet<OpId>, EngineError<S::Error>> {
+    ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
             .delete_batch(keys)
@@ -1685,12 +1745,14 @@ impl<S: Storage> Engine<S> {
                 catalog.remove(key);
             }
         }
-        Ok(affected)
+        self.advance_revision()?;
+        Ok(self.revisioned(affected))
     }
 
     /// Drops all cached state (for example, on logout), including any pending
     /// optimistic layers.
-    pub async fn clear(&mut self) -> Result<(), EngineError<S::Error>> {
+    pub async fn clear(&mut self) -> Result<CacheRevision, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         self.hot.clear();
         self.optimistic.clear();
         self.optimistic_hydrated = true;
@@ -1698,7 +1760,8 @@ impl<S: Storage> Engine<S> {
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
-        self.storage.clear().await.map_err(EngineError::Storage)
+        self.storage.clear().await.map_err(EngineError::Storage)?;
+        self.advance_revision()
     }
 
     pub fn active_ops(&self) -> usize {
@@ -1749,6 +1812,7 @@ impl<S: PredicateIndexStorage> Engine<S> {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         let mut updates = RecordUpdates::new();
         for (key, record) in entries {
             updates.entry(key).or_default().merge(record);
@@ -1758,7 +1822,9 @@ impl<S: PredicateIndexStorage> Engine<S> {
         if let Some(origin_op) = origin_op {
             affected_ops.remove(&origin_op);
         }
+        let revision = self.advance_revision()?;
         Ok(WriteResult {
+            revision,
             changed,
             affected_ops,
             reset: false,
@@ -1770,11 +1836,13 @@ impl<S: PredicateIndexStorage> Engine<S> {
     pub async fn mark_projections_incomplete(
         &mut self,
         projections: Vec<ProjectionMutation>,
-    ) -> Result<(), EngineError<S::Error>> {
+    ) -> Result<CacheRevision, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         self.storage
             .put_batch_with_projections(Vec::new(), projections)
             .await
-            .map_err(EngineError::Storage)
+            .map_err(EngineError::Storage)?;
+        self.advance_revision()
     }
 
     /// Delete normalized records and generic projections in one storage transaction.
@@ -1782,7 +1850,8 @@ impl<S: PredicateIndexStorage> Engine<S> {
         &mut self,
         keys: &[EntityKey<'static>],
         projection_keys: &[PredicateRecordKey],
-    ) -> Result<BTreeSet<OpId>, EngineError<S::Error>> {
+    ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
+        self.ensure_revision_can_advance()?;
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
             .delete_batch_with_projections(keys, projection_keys)
@@ -1794,11 +1863,20 @@ impl<S: PredicateIndexStorage> Engine<S> {
                 catalog.remove(key);
             }
         }
-        Ok(affected)
+        self.advance_revision()?;
+        Ok(self.revisioned(affected))
     }
 
     /// Execute a complete generic exact-index query over authoritative and optimistic projections.
     pub async fn query_predicate_index(
+        &mut self,
+        query: &ValidatedIndexQuery,
+    ) -> Result<Revisioned<PredicateQueryResult>, EngineError<S::Error>> {
+        let value = self.query_predicate_index_value(query).await?;
+        Ok(self.revisioned(value))
+    }
+
+    async fn query_predicate_index_value(
         &mut self,
         query: &ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, EngineError<S::Error>> {

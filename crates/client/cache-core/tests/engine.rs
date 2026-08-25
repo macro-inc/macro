@@ -2,6 +2,7 @@
 //! storage, dependency-driven re-execution, teardown, clear.
 
 use cache_core::engine::{Engine, NetworkWrite, QueryRegistration, ReadResult};
+use cache_core::revision::CacheRevision;
 use cache_core::store::InMemoryStorage;
 use pollster::block_on;
 use serde_json::{Value as Json, json};
@@ -128,6 +129,72 @@ fn consuming_engine_returns_exclusively_owned_storage() {
     let engine = Engine::new(InMemoryStorage::new());
     let storage: InMemoryStorage = engine.into_storage();
     assert!(storage.is_empty());
+}
+
+#[test]
+fn revision_tracks_logical_mutations_only_within_one_engine_generation() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        assert_eq!(engine.current_revision(), CacheRevision::ZERO);
+
+        let data = page(&[("doc-1", "A")]);
+        let first = engine
+            .write_query(None, QUERY, Some("Soup"), &vars(10), &data, None)
+            .await
+            .unwrap();
+        assert_eq!(first.revision.to_string(), "1");
+        assert_eq!(engine.current_revision(), first.revision);
+
+        engine
+            .read_query(None, QUERY, Some("Soup"), &vars(10))
+            .await
+            .unwrap();
+        assert_eq!(engine.current_revision(), first.revision);
+
+        // Conservative advancement: an idempotent logical write still makes
+        // older observations stale.
+        let second = engine
+            .write_query(None, QUERY, Some("Soup"), &vars(10), &data, None)
+            .await
+            .unwrap();
+        assert!(second.changed.is_empty());
+        assert_eq!(second.revision.to_string(), "2");
+
+        let storage = engine.storage().clone();
+        let mut replacement = Engine::new(storage);
+        assert_eq!(replacement.current_revision(), CacheRevision::ZERO);
+        assert!(matches!(
+            replacement
+                .read_query(None, QUERY, Some("Soup"), &vars(10))
+                .await
+                .unwrap(),
+            ReadResult::Hit { .. }
+        ));
+        assert_eq!(replacement.current_revision(), CacheRevision::ZERO);
+
+        let cleared = replacement.clear().await.unwrap();
+        assert_eq!(cleared.to_string(), "1");
+        assert_eq!(replacement.current_revision(), cleared);
+    });
+}
+
+#[test]
+fn failed_commands_do_not_advance_revision() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let result = engine
+            .write_query(
+                None,
+                "query Broken {",
+                Some("Broken"),
+                &serde_json::Map::new(),
+                &json!({}),
+                None,
+            )
+            .await;
+        assert!(result.is_err());
+        assert_eq!(engine.current_revision(), CacheRevision::ZERO);
+    });
 }
 
 #[test]
@@ -658,7 +725,7 @@ fn identity_witness_wipes_on_user_change() {
         assert_eq!(data["user"]["id"], serde_json::json!("user-2"));
 
         // external_reset drops local state and reports all local ops.
-        let ops = engine.external_reset();
+        let ops = engine.external_reset().unwrap();
         assert!(ops.contains(&1) && ops.contains(&2));
     });
 }
