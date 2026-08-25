@@ -31,6 +31,8 @@ use super::pipe::PipeTransport;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::SandboxResizeEffect;
+use agent_session::domain::model::SandboxSize;
 
 #[cfg(test)]
 mod test;
@@ -214,6 +216,19 @@ where
             .map_err(|error| HarnessError::Container(error.to_string()))?;
         ExternalSessionRepo::delete(&self.sessions, session).await?;
         Ok(())
+    }
+
+    // A Cursor session's compute is Cursor's: there is no sandbox here whose
+    // size this manager could change, so every resize is unsupported and the
+    // domain persists the preference without touching anything.
+    fn resize_effect(&self, _from: SandboxSize, _to: SandboxSize) -> SandboxResizeEffect {
+        SandboxResizeEffect::Unsupported
+    }
+
+    async fn resize(&self, _session: AgentSessionId, _size: SandboxSize) -> Result<()> {
+        Err(HarnessError::Container(
+            "a cursor session has no sandbox to resize".to_owned(),
+        ))
     }
 }
 

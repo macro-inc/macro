@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::model::DEFAULT_AGENT_SESSION_NAME;
+use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
@@ -262,16 +263,25 @@ async fn set_name_updates_only_the_name(pool: PgPool) {
         .await
         .expect("persist name");
     assert_eq!(
-        repo.get(id).await.expect("get session").name,
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .name,
         "Fix Flaky Tests"
     );
 
-    let modified_at = repo.get(id).await.expect("get session").modified_at;
+    let modified_at = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get session")
+        .modified_at;
     repo.set_name(id, "Fix Flaky Tests")
         .await
         .expect("restate name");
     assert_eq!(
-        repo.get(id).await.expect("get session").modified_at,
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .modified_at,
         modified_at
     );
 }
@@ -309,7 +319,13 @@ async fn generated_name_only_replaces_the_default(pool: PgPool) {
             .await
             .expect("skip generated name")
     );
-    assert_eq!(repo.get(id).await.expect("get session").name, "Manual Name");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .name,
+        "Manual Name"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -332,7 +348,10 @@ async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
         .await
         .expect("persist session size");
     assert_eq!(
-        repo.get(id).await.expect("get session").sandbox_size,
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .sandbox_size,
         SandboxSize::Large
     );
 

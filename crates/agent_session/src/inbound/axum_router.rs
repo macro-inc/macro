@@ -42,8 +42,8 @@ use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, ExternalSession, Message, SandboxSize, SessionBot,
-    SessionStatus, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, ExternalSession, Message, SandboxSize, SessionBot, SessionStatus,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent,

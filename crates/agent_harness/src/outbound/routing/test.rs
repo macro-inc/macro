@@ -1,8 +1,10 @@
 use super::*;
+use crate::domain::sandbox::SandboxResizeEffect;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, ChannelSession, CreateAgentSessionParams, SessionBot, SessionStatus,
+    AgentSession, ChannelSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
+    SandboxSize, SessionBot, SessionStatus,
 };
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -67,6 +69,14 @@ impl ContainerManager for TaggedManager {
         self.record("teardown");
         Ok(())
     }
+
+    fn resize_effect(&self, _from: SandboxSize, _to: SandboxSize) -> SandboxResizeEffect {
+        unimplemented!("these tests never resize")
+    }
+
+    async fn resize(&self, _session: AgentSessionId, _size: SandboxSize) -> Result<()> {
+        unimplemented!("these tests never resize")
+    }
 }
 
 /// Answers every session lookup with a fixed bot.
@@ -91,6 +101,8 @@ impl AgentSessionRepo for FixedBotSessions {
             harness: "cursor".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
+            name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            sandbox_size: SandboxSize::Default,
             acp_session_id: None,
             external: None,
             status: SessionStatus::NoMessages,
@@ -126,6 +138,33 @@ impl AgentSessionRepo for FixedBotSessions {
     async fn delete(&self, _id: AgentSessionId) -> SessionResult<()> {
         unimplemented!("the router never deletes sessions")
     }
+
+    async fn set_name(&self, _id: AgentSessionId, _name: &str) -> SessionResult<()> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn set_sandbox_size(&self, _id: AgentSessionId, _size: SandboxSize) -> SessionResult<()> {
+        unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn user_sandbox_size(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> SessionResult<SandboxSize> {
+        unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _size: SandboxSize,
+    ) -> SessionResult<()> {
+        unimplemented!("resizing is the harness service's job")
+    }
 }
 
 fn spawn_for(kind: AgentKind) -> SpawnContainer {
@@ -133,6 +172,7 @@ fn spawn_for(kind: AgentKind) -> SpawnContainer {
         session_id: AgentSessionId::new(),
         kind,
         repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        size: SandboxSize::Default,
     }
 }
 

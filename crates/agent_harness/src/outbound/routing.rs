@@ -20,6 +20,8 @@ use agent_session::domain::ports::AgentSessionRepo;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{AgentKind, SpawnContainer};
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::SandboxResizeEffect;
+use agent_session::domain::model::SandboxSize;
 
 #[cfg(test)]
 mod test;
@@ -97,6 +99,23 @@ where
         match AgentKind::of(self.sessions.get(session).await?.bot_id) {
             AgentKind::Cursor => self.cursor()?.teardown(session).await,
             AgentKind::SandboxedCoder => self.sandbox.teardown(session).await,
+            AgentKind::External => Err(external_is_unroutable()),
+        }
+    }
+
+    // Sized sandboxes are a sandboxed-coder concept: the effect table is the
+    // sandbox manager's, and a resize routed to a Cursor session is refused
+    // rather than pretended at — its compute is Cursor's, not ours.
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
+        self.sandbox.resize_effect(from, to)
+    }
+
+    async fn resize(&self, session: AgentSessionId, size: SandboxSize) -> Result<()> {
+        match AgentKind::of(self.sessions.get(session).await?.bot_id) {
+            AgentKind::SandboxedCoder => self.sandbox.resize(session, size).await,
+            AgentKind::Cursor => Err(HarnessError::Container(
+                "a cursor session has no sandbox to resize".to_owned(),
+            )),
             AgentKind::External => Err(external_is_unroutable()),
         }
     }

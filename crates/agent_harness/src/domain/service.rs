@@ -472,7 +472,13 @@ where
     ) -> Result<()> {
         let session = self.sessions.get_session(session_id).await?;
         let effect = self.containers.resize_effect(session.sandbox_size, size);
-        if AgentKind::of(session.bot_id).is_managed() && effect != SandboxResizeEffect::NoOp {
+        // Only a sandboxed coder has a sandbox to act on: a Cursor session
+        // runs in Cursor's cloud, the in-memory bot has no sandbox, and an
+        // external bot provisions its own. For all three, the size is only
+        // recorded below as a preference.
+        if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
+            && effect != SandboxResizeEffect::NoOp
+        {
             if effect == SandboxResizeEffect::Restart {
                 self.sessions.close_session(session_id).await?;
             }

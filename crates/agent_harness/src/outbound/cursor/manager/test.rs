@@ -5,7 +5,8 @@ use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, ChannelSession, CreateAgentSessionParams, SessionBot, SessionStatus,
+    AgentSession, ChannelSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
+    SandboxSize, SessionBot, SessionStatus,
 };
 use bot_id::BotId;
 use cursor_cloud_agents::api::{ApiKey, CursorConfig};
@@ -64,6 +65,8 @@ impl AgentSessionRepo for StubSessions {
             harness: "cursor".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
+            name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            sandbox_size: SandboxSize::Default,
             acp_session_id: self
                 .acp_session_id
                 .lock()
@@ -103,6 +106,33 @@ impl AgentSessionRepo for StubSessions {
 
     async fn delete(&self, _id: AgentSessionId) -> SessionResult<()> {
         unimplemented!("deleting sessions is the harness service's job")
+    }
+
+    async fn set_name(&self, _id: AgentSessionId, _name: &str) -> SessionResult<()> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
+        unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn set_sandbox_size(&self, _id: AgentSessionId, _size: SandboxSize) -> SessionResult<()> {
+        unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn user_sandbox_size(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> SessionResult<SandboxSize> {
+        unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _size: SandboxSize,
+    ) -> SessionResult<()> {
+        unimplemented!("resizing is the harness service's job")
     }
 }
 
@@ -261,6 +291,7 @@ async fn spawning_and_prompting_records_the_minted_agent() {
             session_id,
             kind: AgentKind::Cursor,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            size: SandboxSize::Default,
         })
         .await
         .expect("spawn");
@@ -428,6 +459,7 @@ async fn an_idle_pipe_is_shut_down() {
             session_id: AgentSessionId::new(),
             kind: AgentKind::Cursor,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            size: SandboxSize::Default,
         })
         .await
         .expect("spawn");
