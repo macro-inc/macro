@@ -60,6 +60,9 @@ export interface CacheWorkerCoreOptions {
   queueDiagnosticsTimeoutMs?: number;
 }
 
+// Backfill hydration is cache warming; foreground reads and authoritative
+// writes must be able to overtake it while it is queued.
+const BACKGROUND_HYDRATION_PRIORITY = -1;
 const NORMAL_READ_PRIORITY = 0;
 const USER_VISIBLE_READ_PRIORITY = 1;
 const CACHE_WRITE_PRIORITY = 2;
@@ -74,6 +77,7 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 }
 
 function requestPriority(request: CacheRequest): number {
+  if (request.kind === 'hydrate') return BACKGROUND_HYDRATION_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
       ? USER_VISIBLE_READ_PRIORITY
@@ -81,7 +85,6 @@ function requestPriority(request: CacheRequest): number {
   }
   if (
     request.kind === 'write' ||
-    request.kind === 'hydrate' ||
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
