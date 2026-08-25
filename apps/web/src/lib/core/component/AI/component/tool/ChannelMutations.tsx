@@ -3,23 +3,64 @@ import Hash from '@phosphor-icons/core/regular/hash.svg';
 import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
 import Users from '@phosphor-icons/core/regular/users.svg';
 import { invalidateChannelParticipants } from '@queries/channel/channel-participants';
-import { invalidateListChannels } from '@queries/channel/channels';
-import { invalidateSoupEntity } from '@queries/soup/cache';
+import { upsertListChannel } from '@queries/channel/channels';
+import { setPreviewName } from '@queries/preview';
+import { setPreviewOnCreate } from '@queries/preview/preview';
+import {
+  getSoupEntityById,
+  optimisticUpdateSoupEntity,
+} from '@queries/soup/cache';
+import type {
+  CreateChannelResponse,
+  RenameChannelResponse,
+} from '@service-cognition/generated/tools/types';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { createEffect, createSignal, For, on, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
 
-function refreshChannelViews(channelId: string) {
-  invalidateListChannels();
-  invalidateSoupEntity(channelId);
-  void invalidateChannelParticipants(channelId);
+function applyCreatedChannel(data: CreateChannelResponse) {
+  upsertListChannel({
+    id: data.channelId,
+    name: data.name,
+    channel_type:
+      data.channelType === 'team' ? ChannelType.team : ChannelType.private,
+  });
+  setPreviewOnCreate({
+    itemId: data.channelId,
+    itemType: 'channel',
+    name: data.name,
+  });
 }
 
-function useRefreshChannelViews(channelId: () => string | undefined) {
+function applyRenamedChannel(data: RenameChannelResponse) {
+  upsertListChannel({
+    id: data.channelId,
+    name: data.name,
+  });
+  setPreviewName({
+    itemId: data.channelId,
+    name: data.name,
+    itemType: 'channel',
+  });
+  const soup = getSoupEntityById(data.channelId);
+  if (soup?.tag === 'channel') {
+    optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: data.channelId, name: data.name } },
+      frecency_score: soup.frecency_score,
+    });
+  }
+}
+
+function useWhenPresent<T>(
+  value: () => T | undefined,
+  apply: (value: T) => void
+) {
   createEffect(
-    on(channelId, (id) => {
-      if (id) refreshChannelViews(id);
+    on(value, (next) => {
+      if (next) apply(next);
     })
   );
 }
@@ -70,13 +111,13 @@ function displayParticipant(id: string) {
 const createChannelHandler = createToolRenderer({
   name: 'CreateChannel',
   handleResponse: (ctx) => {
-    refreshChannelViews(ctx.tool.data.channelId);
+    applyCreatedChannel(ctx.tool.data);
   },
   render: (ctx) => {
     const [expanded, setExpanded] = createSignal(false);
     const response = () => ctx.response?.data;
     const participants = () => response()?.participants ?? [];
-    useRefreshChannelViews(() => response()?.channelId);
+    useWhenPresent(response, applyCreatedChannel);
 
     return (
       <BaseTool
@@ -134,12 +175,12 @@ const createChannelHandler = createToolRenderer({
 const renameChannelHandler = createToolRenderer({
   name: 'RenameChannel',
   handleResponse: (ctx) => {
-    refreshChannelViews(ctx.tool.data.channelId);
+    applyRenamedChannel(ctx.tool.data);
   },
   render: (ctx) => {
     const [expanded, setExpanded] = createSignal(false);
     const response = () => ctx.response?.data;
-    useRefreshChannelViews(() => response()?.channelId);
+    useWhenPresent(response, applyRenamedChannel);
 
     return (
       <BaseTool
@@ -179,7 +220,7 @@ const renameChannelHandler = createToolRenderer({
 const manageChannelParticipantsHandler = createToolRenderer({
   name: 'ManageChannelParticipants',
   handleResponse: (ctx) => {
-    refreshChannelViews(ctx.tool.data.channelId);
+    void invalidateChannelParticipants(ctx.tool.data.channelId);
   },
   render: (ctx) => {
     const [expanded, setExpanded] = createSignal(false);
@@ -187,7 +228,9 @@ const manageChannelParticipantsHandler = createToolRenderer({
     const adding = () => ctx.tool.data.action === 'add';
     const participants = () =>
       response()?.participants ?? ctx.tool.data.participants;
-    useRefreshChannelViews(() => response()?.channelId);
+    useWhenPresent(response, (data) => {
+      void invalidateChannelParticipants(data.channelId);
+    });
 
     return (
       <BaseTool
