@@ -120,7 +120,7 @@ function CommandMenuShellRoot(props: SurfaceProps) {
 
   return (
     <Panel
-      class={cn('max-h-[75vh] rounded-xl bg-dialog', local.class)}
+      class={cn('max-h-[75vh] rounded-xl bg-transparent', local.class)}
       {...rest}
     >
       {local.children}

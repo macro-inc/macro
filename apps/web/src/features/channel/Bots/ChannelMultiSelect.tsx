@@ -102,7 +102,7 @@ export function ChannelMultiSelect(props: {
         <Combobox.Content
           as={Surface}
           depth={3}
-          class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-64 rounded-xl p-1.5 shadow-menu bg-menu"
+          class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-64 rounded-xl p-1.5 glass-lg bg-menu-glass"
         >
           <Show
             when={options().length > 0}

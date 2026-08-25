@@ -204,7 +204,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
         >
           <Surface
             depth={2}
-            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-xl"
+            class="pt-2 pb-1.5 glass-lg bg-menu-glass rounded-xl"
           >
             <div class="px-3.5 pb-1 text-xs font-medium text-ink-muted">
               Snippets

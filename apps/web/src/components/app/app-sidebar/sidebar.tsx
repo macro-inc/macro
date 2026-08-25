@@ -576,7 +576,7 @@ const SidebarSectionMenu = (props: {
     >
       <DotsThreeIcon />
     </Dropdown.Trigger>
-    <Dropdown.Content class="w-56 shadow-menu">
+    <Dropdown.Content class="w-56">
       <Dropdown.Group>
         <Dropdown.GroupLabel>Customize</Dropdown.GroupLabel>
         <For each={props.options}>
@@ -902,7 +902,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         The menu is shrink-to-fit, so without a cap a long name or email
         stretches it instead of engaging the `truncate` below.
       */}
-      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))] shadow-menu">
+      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))]">
         <Dropdown.Group class="p-1.5 gap-0">
           <div class="flex items-center gap-3 px-1 py-1">
             <Show
