@@ -3,6 +3,7 @@ import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
+import { neverSuspendQuery } from '../never-suspend';
 import { notificationKeys } from './keys';
 
 /** Stable empty list so this query never suspends. See type-preferences. */
@@ -20,14 +21,18 @@ export function useMutedEntitiesQuery(args?: { limit?: number }) {
   const limit =
     args?.limit && args.limit > 0 && args.limit <= 500 ? args.limit : 20;
 
-  return useQuery(() => ({
-    queryKey: notificationKeys.unsubscribes.queryKey,
-    queryFn: fetchUnsubscribes,
-    initialPageParam: { limit },
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 10,
-    placeholderData: (previous) => previous ?? NO_MUTED_ENTITIES,
-  }));
+  return neverSuspendQuery(
+    useQuery(() => ({
+      queryKey: notificationKeys.unsubscribes.queryKey,
+      queryFn: fetchUnsubscribes,
+      initialPageParam: { limit },
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 10,
+      placeholderData: NO_MUTED_ENTITIES,
+    })),
+    notificationKeys.unsubscribes.queryKey,
+    NO_MUTED_ENTITIES
+  );
 }
 
 /** @deprecated Use `useMutedEntitiesQuery`. */

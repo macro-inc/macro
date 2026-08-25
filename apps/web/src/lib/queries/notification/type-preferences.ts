@@ -4,18 +4,13 @@ import { notificationServiceClient } from '@service-notification/client';
 import type { GetNotificationTypePreferencesResponse } from '@service-notification/generated/schemas/getNotificationTypePreferencesResponse';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
+import { neverSuspendQuery } from '../never-suspend';
 import { notificationKeys } from './keys';
 
 const PREFERENCES_STALE_TIME = 5 * 60 * 1000;
 const PREFERENCES_GC_TIME = 10 * 60 * 1000;
 
-/**
- * Stable empty prefs (all types on — the API default) so this query never
- * suspends. Solid Query's `useQuery` is a `createResource`; reading `.data`
- * throws into Suspense while `state.data` is undefined. A defined
- * placeholder keeps the observer on `.latest` instead. `suspense: false`
- * is a no-op in `@tanstack/solid-query`.
- */
+/** All types on — the API default, and the fallback while the cache is empty. */
 const EMPTY_TYPE_PREFERENCES: GetNotificationTypePreferencesResponse = {
   disabled_types: [],
 };
@@ -27,13 +22,18 @@ async function fetchNotificationTypePreferences() {
 }
 
 export function useNotificationTypePreferencesQuery() {
-  return useQuery(() => ({
+  const query = useQuery(() => ({
     queryKey: notificationKeys.preferences.queryKey,
     queryFn: fetchNotificationTypePreferences,
     staleTime: PREFERENCES_STALE_TIME,
     gcTime: PREFERENCES_GC_TIME,
-    placeholderData: (previous) => previous ?? EMPTY_TYPE_PREFERENCES,
+    placeholderData: EMPTY_TYPE_PREFERENCES,
   }));
+  return neverSuspendQuery(
+    query,
+    notificationKeys.preferences.queryKey,
+    EMPTY_TYPE_PREFERENCES
+  );
 }
 
 export function useSetNotificationTypeEnabledMutation() {
@@ -64,9 +64,10 @@ export function useSetNotificationTypeEnabledMutation() {
       return { previous };
     },
     onError: (_error, _vars, context) => {
+      if (context?.previous === undefined) return;
       queryClient.setQueryData(
         notificationKeys.preferences.queryKey,
-        context?.previous
+        context.previous
       );
     },
     onSettled: () => {
