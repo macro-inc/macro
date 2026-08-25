@@ -18,6 +18,22 @@ interface EventContentProps {
 
 const SINGLE_LINE_EVENT_DURATION_MS = 15 * 60 * 1000;
 
+/** Whether the viewer is the only attendee who has not declined the event. */
+export function hasEveryoneElseDeclined(
+  event: Pick<CalendarEvent, 'attendees' | 'isCancelled'>
+) {
+  if (event.isCancelled) return false;
+
+  const self = event.attendees.find((attendee) => attendee.isSelf);
+  if (!self || self.responseStatus === 'declined') return false;
+
+  const otherAttendees = event.attendees.filter((attendee) => !attendee.isSelf);
+  return (
+    otherAttendees.length > 0 &&
+    otherAttendees.every((attendee) => attendee.responseStatus === 'declined')
+  );
+}
+
 /** Renders responsive event content for FullCalendar. */
 export function EventContent(props: EventContentProps) {
   const isRenderedAllDay = () => props.renderProps.event.allDay;
@@ -27,20 +43,7 @@ export function EventContent(props: EventContentProps) {
     !isRenderedAllDay() && props.renderProps.view.type === 'timeGridDay';
   const selfResponseStatus = () =>
     props.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
-  const everyoneElseDeclined = () => {
-    if (props.event.isCancelled) return false;
-
-    const self = props.event.attendees.find((attendee) => attendee.isSelf);
-    if (!self || self.responseStatus === 'declined') return false;
-
-    const otherAttendees = props.event.attendees.filter(
-      (attendee) => !attendee.isSelf
-    );
-    return (
-      otherAttendees.length > 0 &&
-      otherAttendees.every((attendee) => attendee.responseStatus === 'declined')
-    );
-  };
+  const everyoneElseDeclined = () => hasEveryoneElseDeclined(props.event);
   const usesSingleLineLayout = () => {
     const duration =
       new Date(props.event.end).getTime() -
