@@ -73,8 +73,10 @@ type ChannelTopLeftProps = TopProps & {
 export function ChannelTopLeft(props: ChannelTopLeftProps) {
   const panel = useSplitPanelOrThrow();
   const blockId = useBlockId();
-  const listedName = useChannelName(blockId);
-  const channelName = () => listedName() ?? props.channelName ?? 'New Channel';
+  const channelName = useChannelName(
+    blockId,
+    props.channelName ?? 'New Channel'
+  );
 
   const iconTabList = () =>
     (props.tabs ?? []).map((tab) => {

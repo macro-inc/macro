@@ -1,9 +1,6 @@
 import type { DateValue } from '@core/util/date';
 import { useChannelsActivityQuery } from '@queries/channel/activity';
-import {
-  getListChannelOverlay,
-  useListChannelsQuery,
-} from '@queries/channel/channels';
+import { useListChannelsQuery } from '@queries/channel/channels';
 import { queryReadyGate } from '@queries/gate';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
@@ -65,28 +62,17 @@ export const [ChannelsContextProvider, useChannelsContext] =
 
 export function useChannel(channelId: string) {
   const ctx = useChannelsContext();
-  return createMemo(
-    () => ctx.channelsById()[channelId] ?? getListChannelOverlay(channelId)
-  );
+  return createMemo(() => ctx.channelsById()[channelId]);
 }
 
 export function useChannelName(channelId: string, fallback?: string) {
   const ctx = useChannelsContext();
-  return createMemo(
-    () =>
-      ctx.channelsById()[channelId]?.name ??
-      getListChannelOverlay(channelId)?.name ??
-      fallback
-  );
+  return createMemo(() => ctx.channelsById()[channelId]?.name ?? fallback);
 }
 
 export function useChannelType(channelId: string) {
   const ctx = useChannelsContext();
-  return createMemo(
-    () =>
-      ctx.channelsById()[channelId]?.channel_type ??
-      getListChannelOverlay(channelId)?.channel_type
-  );
+  return createMemo(() => ctx.channelsById()[channelId]?.channel_type);
 }
 
 export function useChannelActivity(channelId: string) {

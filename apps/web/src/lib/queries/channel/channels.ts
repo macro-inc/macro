@@ -14,32 +14,12 @@ import type { CreateChannelRequest } from '@service-storage/generated/schemas/cr
 import type { CreateChannelResponse } from '@service-storage/generated/schemas/createChannelResponse';
 import type { PatchChannelRequest } from '@service-storage/generated/schemas/patchChannelRequest';
 import { useMutation, useQuery } from '@tanstack/solid-query';
-import { createStore } from 'solid-js/store';
 import { invalidateChannelParticipants } from './channel-participants';
 import {
   type CachedGraphqlChannel,
   readCachedGraphqlChannels,
 } from './graphql';
 import { channelKeys } from './keys';
-import {
-  type ListChannelUpsert,
-  mergeListChannel,
-  overlayListChannel,
-} from './list-cache';
-
-export type { ListChannelUpsert } from './list-cache';
-export { mergeListChannel } from './list-cache';
-
-const [listChannelOverlays, setListChannelOverlays] = createStore<
-  Record<string, ApiChannelWithLatest>
->({});
-
-/** Reactive overlay for channels seeded before the REST list observes them. */
-export function getListChannelOverlay(
-  channelId: string
-): ApiChannelWithLatest | undefined {
-  return listChannelOverlays[channelId];
-}
 
 const CHANNEL_LIST_PAGE_SIZE = 100;
 
@@ -93,25 +73,6 @@ export function invalidateListChannels() {
   return queryClient.invalidateQueries({
     queryKey: channelKeys.listChannels.queryKey,
   });
-}
-
-/**
- * Insert or patch one row in the cached `GET /comms/channels` list.
- * Used when a mutation (AI tools) does not go through the HTTP create/patch
- * hooks that would otherwise refresh this cache.
- *
- * No-ops when the list has never been fetched — do not invent a one-item list
- * that a later fetch would replace.
- */
-export function upsertListChannel(update: ListChannelUpsert): void {
-  setListChannelOverlays(update.id, (prev) => overlayListChannel(prev, update));
-  void queryClient.cancelQueries({
-    queryKey: channelKeys.listChannels.queryKey,
-  });
-  queryClient.setQueryData<ApiChannelWithLatest[]>(
-    channelKeys.listChannels.queryKey,
-    (channels) => mergeListChannel(channels, update)
-  );
 }
 
 /**
