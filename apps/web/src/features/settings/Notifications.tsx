@@ -7,6 +7,7 @@ import {
   NOTIFICATION_EVENT_GROUPS,
 } from '@notifications/notification-event-catalog';
 import { useNotificationSettings } from '@notifications/notification-settings';
+import { queryReadyGate } from '@queries/gate';
 import {
   useNotificationTypePreferencesQuery,
   useSetNotificationTypeEnabledMutation,
@@ -31,11 +32,15 @@ export function Notifications() {
   const setTypeEnabled = useSetNotificationTypeEnabledMutation();
   const mutedEntitiesQuery = useMutedEntitiesQuery({ limit: 100 });
   const unmuteItem = useUnmuteItemMutation();
-  const prefsPending = () =>
-    preferencesQuery.isPlaceholderData && preferencesQuery.isFetching;
+  const prefsReady = () =>
+    !preferencesQuery.isError && queryReadyGate(preferencesQuery);
+  const mutedEntities = () =>
+    !mutedEntitiesQuery.isError && queryReadyGate(mutedEntitiesQuery)
+      ? mutedEntitiesQuery.data
+      : [];
 
   const disabledTypes = () =>
-    new Set(preferencesQuery.data?.disabled_types ?? []);
+    new Set(prefsReady() ? preferencesQuery.data.disabled_types : []);
 
   const isTypeEnabled = (type: string) => !disabledTypes().has(type);
 
@@ -105,7 +110,7 @@ export function Notifications() {
             <ToggleSwitch
               size="md"
               checked={isTypeEnabled(EMAIL_DIGEST_NOTIFICATION_TYPE)}
-              disabled={prefsPending()}
+              disabled={!prefsReady()}
               onChange={(enabled) =>
                 toggleType(EMAIL_DIGEST_NOTIFICATION_TYPE, enabled)
               }
@@ -127,7 +132,7 @@ export function Notifications() {
                     <ToggleSwitch
                       size="md"
                       checked={isTypeEnabled(event.type)}
-                      disabled={prefsPending()}
+                      disabled={!prefsReady()}
                       onChange={(enabled) => toggleType(event.type, enabled)}
                     />
                   </SettingsRow>
@@ -144,7 +149,7 @@ export function Notifications() {
       >
         <SettingsCard>
           <Show
-            when={(mutedEntitiesQuery.data ?? []).length > 0}
+            when={mutedEntities().length > 0}
             fallback={
               <SettingsRow
                 label="Nothing muted"
@@ -152,7 +157,7 @@ export function Notifications() {
               />
             }
           >
-            <For each={mutedEntitiesQuery.data ?? []}>
+            <For each={mutedEntities()}>
               {(item) => (
                 <SettingsRow
                   label={mutedEntityTypeLabel(item.item_type)}

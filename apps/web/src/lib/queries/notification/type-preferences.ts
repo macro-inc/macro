@@ -4,16 +4,10 @@ import { notificationServiceClient } from '@service-notification/client';
 import type { GetNotificationTypePreferencesResponse } from '@service-notification/generated/schemas/getNotificationTypePreferencesResponse';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
-import { neverSuspendQuery } from '../never-suspend';
 import { notificationKeys } from './keys';
 
 const PREFERENCES_STALE_TIME = 5 * 60 * 1000;
 const PREFERENCES_GC_TIME = 10 * 60 * 1000;
-
-/** All types on — the API default, and the fallback while the cache is empty. */
-const EMPTY_TYPE_PREFERENCES: GetNotificationTypePreferencesResponse = {
-  disabled_types: [],
-};
 
 async function fetchNotificationTypePreferences() {
   return throwOnErr(() =>
@@ -22,18 +16,12 @@ async function fetchNotificationTypePreferences() {
 }
 
 export function useNotificationTypePreferencesQuery() {
-  const query = useQuery(() => ({
+  return useQuery(() => ({
     queryKey: notificationKeys.preferences.queryKey,
     queryFn: fetchNotificationTypePreferences,
     staleTime: PREFERENCES_STALE_TIME,
     gcTime: PREFERENCES_GC_TIME,
-    placeholderData: EMPTY_TYPE_PREFERENCES,
   }));
-  return neverSuspendQuery(
-    query,
-    notificationKeys.preferences.queryKey,
-    EMPTY_TYPE_PREFERENCES
-  );
 }
 
 export function useSetNotificationTypeEnabledMutation() {
