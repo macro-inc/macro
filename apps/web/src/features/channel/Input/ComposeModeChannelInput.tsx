@@ -11,7 +11,7 @@ import {
   splitProps,
 } from 'solid-js';
 import { ChannelInput, type ChannelInputProps } from './ChannelInput';
-import { ComposeModePicker } from './ComposeModePicker';
+import { ComposeModeActions } from './ComposeModeActions';
 import { type ChannelComposeMode, coerceComposeMode } from './compose-mode';
 import { EventComposer, type EventComposerSendPayload } from './EventComposer';
 import { createEventModeAvailability } from './event-mode-availability';
@@ -37,15 +37,15 @@ export type ComposeModeChannelInputProps = Omit<
   onSendTask: (task: TaskComposerSendPayload) => void;
   /**
    * Event compose mode configuration. Presence is read once at mount;
-   * without it the mode picker never offers an Event segment. Even with it,
-   * the segment only shows while the calendar UI is available to the viewer.
+   * without it the event action button never shows. Even with it, the
+   * button only shows while the calendar UI is available to the viewer.
    */
   eventMode?: ChannelInputEventMode;
   /** Persistence keys for the composer drafts and selected input mode. */
   composePersistence?: InputComposePersistence;
 };
 
-function MessageModeActions(props: { modePicker: JSX.Element }) {
+function MessageModeActions(props: { modeActions: JSX.Element }) {
   return (
     <Show
       when={isPlatform('ios')}
@@ -54,7 +54,7 @@ function MessageModeActions(props: { modePicker: JSX.Element }) {
           <Input.Actions.Left>
             <Input.AttachFilesAction />
             <Input.ToggleFormatAction />
-            {props.modePicker}
+            {props.modeActions}
           </Input.Actions.Left>
           <Input.Actions.Right>
             <Input.SendAction />
@@ -153,11 +153,12 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
     });
   };
 
-  // Each face's footer shows the same mode picker (its own segment
-  // selected), so any face can switch straight into any other.
-  const modePicker = (current: ChannelComposeMode) => (
+  // Each face's footer shows the same mode action buttons (its own lit),
+  // so any face can toggle back to the message or switch straight into
+  // any other.
+  const modeActions = (current: ChannelComposeMode) => (
     <Show when={canUseTaskMode()}>
-      <ComposeModePicker
+      <ComposeModeActions
         mode={current}
         showEvent={canUseEventMode()}
         onModeChange={setMode}
@@ -229,7 +230,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
                     restoredMode === 'task' ? (local.autofocus ?? true) : true
                   }
                   draftPersistenceKey={local.composePersistence?.taskDraftKey}
-                  modeSwitch={modePicker('task')}
+                  modeSwitch={modeActions('task')}
                   onSend={handleTaskSend}
                 />
               </div>
@@ -255,7 +256,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
                     draftPersistenceKey={
                       local.composePersistence?.eventDraftKey
                     }
-                    modeSwitch={modePicker('event')}
+                    modeSwitch={modeActions('event')}
                     onSend={handleEventSend}
                   />
                 </div>
@@ -265,7 +266,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
         </div>
       )}
     >
-      <MessageModeActions modePicker={modePicker('message')} />
+      <MessageModeActions modeActions={modeActions('message')} />
     </ChannelInput>
   );
 }
