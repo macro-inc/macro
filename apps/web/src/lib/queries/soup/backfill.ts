@@ -9,7 +9,9 @@ import {
   getGraphqlSoupCacheHost,
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
-import { useQueries, useQueryClient } from '@tanstack/solid-query';
+import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import * as Effect from 'effect/Effect';
+import * as Schedule from 'effect/Schedule';
 import {
   type Accessor,
   createEffect,
@@ -25,8 +27,8 @@ const PAGE_LIMIT = 250;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
-const INITIAL_RETRY_DELAY_MS = 1_000;
-const MAX_RETRY_DELAY_MS = 30_000;
+const BACKFILL_RETRY_COUNT = 5;
+const BACKFILL_RETRY_SCHEDULE = Schedule.exponential('1 second');
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
 type SoupBackfillFetchPage = (
@@ -118,7 +120,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   },
 };
 
-/** Independently checkpointed backfills started together by the coordinator. */
+/** Independently checkpointed backfills run serially in priority order. */
 export const DEFAULT_SOUP_BACKFILL_LANES = [
   CORE_SOUP_BACKFILL_LANE,
   EMAIL_SOUP_BACKFILL_LANE,
@@ -238,32 +240,6 @@ export function resetSoupBackfillCheckpoint(
   }
 }
 
-function abortReason(signal: AbortSignal): unknown {
-  return signal.reason ?? new DOMException('Aborted', 'AbortError');
-}
-
-function delay(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.reject(abortReason(signal));
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(resolve, ms);
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timeout);
-        reject(abortReason(signal));
-      },
-      { once: true }
-    );
-  });
-}
-
-/** Retry after 1s, 2s, 4s, 8s, and so on, capped at 30s. */
-function backfillRetryDelay(attempt: number): number {
-  const exponentialDelay = INITIAL_RETRY_DELAY_MS * 2 ** attempt;
-  return Math.min(exponentialDelay, MAX_RETRY_DELAY_MS);
-}
-
 function and<T>(left: T | null | undefined, right: T): T {
   return left ? ({ and: { left, right } } as T) : right;
 }
@@ -310,12 +286,13 @@ export function withUpdatedSince(
   };
 }
 
-export async function runSoupBackfill(
+export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   userId: string,
-  params: SoupBackfillParams,
-  signal: AbortSignal
-): Promise<void> {
-  let checkpoint = loadSoupBackfillCheckpoint(userId, params.checkpointId);
+  params: SoupBackfillParams
+) {
+  let checkpoint = yield* Effect.sync(() =>
+    loadSoupBackfillCheckpoint(userId, params.checkpointId)
+  );
 
   // `completed` only marks the end of one pass. A later invocation resets
   // pagination so it can run another pass narrowed by the stored updatedSince.
@@ -328,12 +305,15 @@ export async function runSoupBackfill(
       completed: false,
       scanStartedAt: new Date().toISOString(),
     };
-    saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+    yield* Effect.sync(() =>
+      saveSoupBackfillCheckpoint(checkpoint, params.checkpointId)
+    );
   }
 
   const passInput = withUpdatedSince(params.input, checkpoint.updatedSince);
+  const fetchPage = params.fetchPage ?? fetchSoupPage;
 
-  while (!signal.aborted) {
+  while (true) {
     const input: GraphqlSoupInput = checkpoint.nextCursor
       ? {
           continuation: {
@@ -345,8 +325,9 @@ export async function runSoupBackfill(
       : { initial: passInput };
     // Hydration returns only the cursor projection. Cache-only entity payloads
     // are persisted without being materialized back into this page.
-    const fetchPage = params.fetchPage ?? fetchSoupPage;
-    const page = await fetchPage(input, { signal });
+    const page = yield* Effect.tryPromise((signal) =>
+      fetchPage(input, { signal })
+    );
 
     const completed = page.nextCursor == null;
     checkpoint = {
@@ -364,19 +345,37 @@ export async function runSoupBackfill(
           }
         : {}),
     };
-    saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+    yield* Effect.sync(() =>
+      saveSoupBackfillCheckpoint(checkpoint, params.checkpointId)
+    );
 
     if (checkpoint.completed) return;
 
-    await delay(params.pageDelayMs ?? PAGE_DELAY_MS, signal);
+    yield* Effect.sleep(params.pageDelayMs ?? PAGE_DELAY_MS);
   }
+});
 
-  throw abortReason(signal);
-}
+/** Runs each backfill lane to completion before starting the next lane. */
+export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
+  userId: string,
+  lanes: readonly SoupBackfillParams[] = DEFAULT_SOUP_BACKFILL_LANES
+) {
+  yield* Effect.forEach(
+    lanes,
+    (lane) =>
+      runSoupBackfill(userId, lane).pipe(
+        Effect.retry({
+          times: BACKFILL_RETRY_COUNT,
+          schedule: BACKFILL_RETRY_SCHEDULE,
+        })
+      ),
+    { concurrency: 1, discard: true }
+  );
+});
 
 /**
  * Slowly fills the browser GraphQL cache through independently checkpointed
- * lanes. Every lane starts together on the elected tab.
+ * lanes, serialized on the elected tab.
  */
 export function useSoupBackfills(userId: Accessor<string | undefined>) {
   const queryClient = useQueryClient();
@@ -413,7 +412,7 @@ export function useSoupBackfills(userId: Accessor<string | undefined>) {
 
   onCleanup(() => leadership().controller.abort());
 
-  return useQueries(() => {
+  return useQuery(() => {
     const currentUserId = userId();
     const currentLeadership = leadership();
     const backfillEnabled =
@@ -423,28 +422,27 @@ export function useSoupBackfills(userId: Accessor<string | undefined>) {
       currentLeadership.isLeader;
 
     return {
-      queries: DEFAULT_SOUP_BACKFILL_LANES.map((lane) => ({
-        queryKey: [
-          'graphql-soup-backfill',
-          BACKFILL_VERSION,
-          currentUserId,
-          lane.checkpointId,
-        ] as const,
-        enabled: backfillEnabled,
-        queryFn: ({ signal }: { signal: AbortSignal }) =>
-          runSoupBackfill(
-            currentUserId!,
-            lane,
-            AbortSignal.any([signal, currentLeadership.controller.signal])
-          ),
-        networkMode: 'online' as const,
-        retry: 5,
-        retryDelay: backfillRetryDelay,
-        // A completed lane stays fresh for this QueryClient lifetime. A new
-        // session starts another watermark-based pass from its checkpoint.
-        staleTime: Infinity,
-        refetchOnWindowFocus: false,
-      })),
+      queryKey: [
+        'graphql-soup-backfill',
+        BACKFILL_VERSION,
+        currentUserId,
+      ] as const,
+      enabled: backfillEnabled,
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        Effect.runPromise(runSoupBackfills(currentUserId!), {
+          signal: AbortSignal.any([
+            signal,
+            currentLeadership.controller.signal,
+          ]),
+        }),
+      networkMode: 'online' as const,
+      // Each lane owns its retry policy so a later lane failure does not rerun
+      // an already-completed lane's next incremental pass.
+      retry: false,
+      // A completed serialized pass stays fresh for this QueryClient lifetime.
+      // A new session starts another watermark-based pass from its checkpoints.
+      staleTime: Infinity,
+      refetchOnWindowFocus: false,
     };
   });
 }
