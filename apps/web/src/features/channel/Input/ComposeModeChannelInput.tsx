@@ -11,7 +11,7 @@ import {
   splitProps,
 } from 'solid-js';
 import { ChannelInput, type ChannelInputProps } from './ChannelInput';
-import { ComposeModeSwitch } from './ComposeModeSwitch';
+import { ComposeModePicker } from './ComposeModePicker';
 import { type ChannelComposeMode, coerceComposeMode } from './compose-mode';
 import { EventComposer, type EventComposerSendPayload } from './EventComposer';
 import { createEventModeAvailability } from './event-mode-availability';
@@ -37,15 +37,15 @@ export type ComposeModeChannelInputProps = Omit<
   onSendTask: (task: TaskComposerSendPayload) => void;
   /**
    * Event compose mode configuration. Presence is read once at mount;
-   * without it the Event switch never shows. Even with it, the switch only
-   * shows while the calendar UI is available to the viewer.
+   * without it the mode picker never offers an Event segment. Even with it,
+   * the segment only shows while the calendar UI is available to the viewer.
    */
   eventMode?: ChannelInputEventMode;
   /** Persistence keys for the composer drafts and selected input mode. */
   composePersistence?: InputComposePersistence;
 };
 
-function MessageModeActions(props: { modeSwitches: JSX.Element }) {
+function MessageModeActions(props: { modePicker: JSX.Element }) {
   return (
     <Show
       when={isPlatform('ios')}
@@ -54,7 +54,7 @@ function MessageModeActions(props: { modeSwitches: JSX.Element }) {
           <Input.Actions.Left>
             <Input.AttachFilesAction />
             <Input.ToggleFormatAction />
-            {props.modeSwitches}
+            {props.modePicker}
           </Input.Actions.Left>
           <Input.Actions.Right>
             <Input.SendAction />
@@ -153,25 +153,16 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
     });
   };
 
-  // Each face's footer shows every available mode pill (its own checked),
-  // so any face can switch straight into any other.
-  const modeSwitches = (current: ChannelComposeMode) => (
-    <>
-      <Show when={canUseTaskMode()}>
-        <ComposeModeSwitch
-          label="Task"
-          checked={current === 'task'}
-          onChange={(checked) => setMode(checked ? 'task' : 'message')}
-        />
-      </Show>
-      <Show when={canUseEventMode()}>
-        <ComposeModeSwitch
-          label="Event"
-          checked={current === 'event'}
-          onChange={(checked) => setMode(checked ? 'event' : 'message')}
-        />
-      </Show>
-    </>
+  // Each face's footer shows the same mode picker (its own segment
+  // selected), so any face can switch straight into any other.
+  const modePicker = (current: ChannelComposeMode) => (
+    <Show when={canUseTaskMode()}>
+      <ComposeModePicker
+        mode={current}
+        showEvent={canUseEventMode()}
+        onModeChange={setMode}
+      />
+    </Show>
   );
 
   const handleTaskSend = (task: TaskComposerSendPayload) => {
@@ -238,7 +229,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
                     restoredMode === 'task' ? (local.autofocus ?? true) : true
                   }
                   draftPersistenceKey={local.composePersistence?.taskDraftKey}
-                  modeSwitch={modeSwitches('task')}
+                  modeSwitch={modePicker('task')}
                   onSend={handleTaskSend}
                 />
               </div>
@@ -264,7 +255,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
                     draftPersistenceKey={
                       local.composePersistence?.eventDraftKey
                     }
-                    modeSwitch={modeSwitches('event')}
+                    modeSwitch={modePicker('event')}
                     onSend={handleEventSend}
                   />
                 </div>
@@ -274,7 +265,7 @@ export function ComposeModeChannelInput(props: ComposeModeChannelInputProps) {
         </div>
       )}
     >
-      <MessageModeActions modeSwitches={modeSwitches('message')} />
+      <MessageModeActions modePicker={modePicker('message')} />
     </ChannelInput>
   );
 }
