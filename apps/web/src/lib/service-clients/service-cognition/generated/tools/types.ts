@@ -744,6 +744,9 @@ export type ToolEntityType =
   | 'call'
   | 'user'
   | 'company';
+/**
+ * Where future mail from this sender lands: `signal`, `noise`, or `block`.
+ */
 export type ToolSenderPolicy = 'signal' | 'noise' | 'block';
 /**
  * Content of a text editor code execution response - either a result or an error
@@ -4922,7 +4925,7 @@ export interface SetEntityPropertyResponse {
   message: string;
 }
 /**
- * Set where future mail from a sender lands in one of the user's inboxes. This is the same control a human has in the inbox menus: Sender to Signal, Sender to Noise, and Block Sender.
+ * Set where future mail from a sender lands in one of the user's inboxes. This is the same control a human has in the inbox menus: Sender → Signal, Sender → Noise, and Block Sender.
  *
  * Policies:
  * - `signal`: the sender's future mail shows in the Signal view. Use for senders the user says are important.

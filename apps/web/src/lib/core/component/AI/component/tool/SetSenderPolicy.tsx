@@ -6,8 +6,8 @@ import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
 
 const POLICY_LABEL: Record<ToolSenderPolicy, string> = {
-  signal: 'Sender to Signal',
-  noise: 'Sender to Noise',
+  signal: 'Sender → Signal',
+  noise: 'Sender → Noise',
   block: 'Block Sender',
 };
 

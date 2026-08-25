@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use super::EmailToolContext;
 
+/// Where future mail from this sender lands: `signal`, `noise`, or `block`.
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolSenderPolicy {
@@ -29,7 +30,7 @@ pub enum ToolSenderPolicy {
     title = "SetSenderPolicy",
     description = "\
 Set where future mail from a sender lands in one of the user's inboxes. This is the \
-same control a human has in the inbox menus: Sender to Signal, Sender to Noise, \
+same control a human has in the inbox menus: Sender → Signal, Sender → Noise, \
 and Block Sender.\n\
 \n\
 Policies:\n\
