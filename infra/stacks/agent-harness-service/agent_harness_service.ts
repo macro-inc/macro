@@ -40,7 +40,10 @@ type Args = {
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
   secretKeyArns: (pulumi.Output<string> | string)[];
-  sendQueueArns: pulumi.Output<string>[];
+  /** SQS queues the service is allowed to send messages to. */
+  queueArns: (pulumi.Output<string> | string)[];
+  /** S3 buckets the service needs access to. */
+  bucketArns: (pulumi.Output<string> | string)[];
 };
 
 /**
@@ -81,7 +84,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       cloudStorageClusterName,
       containerEnvVars,
       secretKeyArns,
-      sendQueueArns,
+      queueArns,
+      bucketArns,
     } = args;
 
     this.domain = `https://${SERVICE_DOMAIN_NAME}`;
@@ -110,8 +114,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // The harness fans channel side effects out over SQS (notification
-    // ingress and contacts) when it announces a session in a channel.
+    // The harness fans channel side effects and in-memory AI tool work out
+    // over the same queues as the other AI tool hosts.
     const queuePolicy = new aws.iam.Policy(
       `${BASE_NAME}-queue-policy`,
       {
@@ -125,7 +129,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                 'sqs:GetQueueUrl',
                 'sqs:GetQueueAttributes',
               ],
-              Resource: sendQueueArns,
+              Resource: queueArns,
               Effect: 'Allow',
             },
           ],
@@ -134,6 +138,36 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+
+    const s3Policy =
+      bucketArns.length > 0
+        ? new aws.iam.Policy(
+            `${BASE_NAME}-s3-policy`,
+            {
+              name: `${BASE_NAME}-s3-policy-${stack}`,
+              policy: pulumi.output({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Effect: 'Allow',
+                    Action: [
+                      's3:ListBucket',
+                      's3:GetObject',
+                      's3:PutObject',
+                      's3:DeleteObject',
+                    ],
+                    Resource: bucketArns.flatMap((arn) => [
+                      arn,
+                      pulumi.interpolate`${arn}/*`,
+                    ]),
+                  },
+                ],
+              }),
+              tags,
+            },
+            { parent: this }
+          )
+        : undefined;
 
     this.role = new aws.iam.Role(
       `${BASE_NAME}-role`,
@@ -151,7 +185,11 @@ export class AgentHarnessService extends pulumi.ComponentResource {
             },
           ],
         },
-        managedPolicyArns: [secretsManagerPolicy.arn, queuePolicy.arn],
+        managedPolicyArns: [
+          secretsManagerPolicy.arn,
+          queuePolicy.arn,
+          ...(s3Policy ? [s3Policy.arn] : []),
+        ],
         tags,
       },
       { parent: this }
