@@ -1,59 +1,17 @@
 use anyhow::Result;
-use opentelemetry::propagation::{Extractor, Injector};
 use opentelemetry::trace::TraceContextExt as _;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use stream::domain::StreamEvent;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
-
-#[cfg(test)]
-mod test;
-
-/// W3C trace context carried across the gateway's asynchronous fanout paths.
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-pub struct TraceCarrier {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub traceparent: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tracestate: Option<String>,
-}
-
-impl Extractor for TraceCarrier {
-    fn get(&self, key: &str) -> Option<&str> {
-        match key {
-            "traceparent" => self.traceparent.as_deref(),
-            "tracestate" => self.tracestate.as_deref(),
-            _ => None,
-        }
-    }
-
-    fn keys(&self) -> Vec<&str> {
-        [
-            self.traceparent.as_ref().map(|_| "traceparent"),
-            self.tracestate.as_ref().map(|_| "tracestate"),
-        ]
-        .into_iter()
-        .flatten()
-        .collect()
-    }
-}
-
-impl Injector for TraceCarrier {
-    fn set(&mut self, key: &str, value: String) {
-        match key {
-            "traceparent" => self.traceparent = Some(value),
-            "tracestate" => self.tracestate = Some(value),
-            _ => {}
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Message {
     #[serde(rename = "type")]
     pub message_type: String,
     pub data: String,
-    #[serde(flatten)]
-    pub trace: TraceCarrier,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub(crate) trace: HashMap<String, String>,
 }
 
 impl Message {
@@ -61,13 +19,13 @@ impl Message {
         Self {
             message_type,
             data,
-            trace: TraceCarrier::default(),
+            trace: HashMap::new(),
         }
         .with_current_trace_context()
     }
 
     pub fn with_current_trace_context(mut self) -> Self {
-        self.trace = TraceCarrier::default();
+        self.trace.clear();
         let context = tracing::Span::current().context();
         opentelemetry::global::get_text_map_propagator(|propagator| {
             propagator.inject_context(&context, &mut self.trace);

@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::constants::DEFAULT_TIMEOUT_THRESHOLD;
 use crate::context::ApiContext;
 use crate::model::connection::StoredConnectionEntity;
-use crate::model::message::{Message, record_span_error};
+use crate::model::message::Message;
 use crate::model::sender::MessageReceipt;
 use crate::service::redis::MessageWithConnection;
 use anyhow::Result;
@@ -11,20 +11,14 @@ use futures::future::try_join_all;
 use model_entity::Entity;
 use redis::aio::MultiplexedConnection;
 use std::collections::HashMap;
-use std::future::Future;
 use std::time::Instant;
-use tracing::Instrument as _;
 
 pub struct Delivery {
     pub user_id: String,
     pub active: bool,
 }
 
-#[tracing::instrument(
-    skip_all,
-    fields(message_type = %message.message_type, recipient_count = 1),
-    err
-)]
+#[tracing::instrument(skip(ctx, redis_connection), err)]
 pub async fn send_message_to_entity<Ctx>(
     ctx: Ctx,
     entity: &Entity<'_>,
@@ -98,13 +92,11 @@ async fn send_messages_to_connections(
 
         async move {
             let instant = Instant::now();
-            let active = dispatch_local_message(message, |message| {
-                api_context
-                    .connection_manager
-                    .send_message(connection.connection_id.as_str(), message)
-            })
-            .await
-            .is_ok()
+            let active = api_context
+                .connection_manager
+                .send_message(connection.connection_id.as_str(), message.clone())
+                .await
+                .is_ok()
                 && connection.is_active_in_threshold(Some(DEFAULT_TIMEOUT_THRESHOLD));
 
             tracing::trace!(
@@ -176,25 +168,4 @@ async fn send_messages_to_connections(
     }
 
     receipts.into_values().collect()
-}
-
-async fn dispatch_local_message<T, F, Fut>(message: Message, dispatch: F) -> Result<T>
-where
-    F: FnOnce(Message) -> Fut,
-    Fut: Future<Output = Result<T>>,
-{
-    let span = tracing::info_span!(
-        "connection_gateway.local_dispatch",
-        otel.kind = "producer",
-        message_type = %message.message_type,
-        otel.status_code = tracing::field::Empty,
-        otel.status_description = tracing::field::Empty,
-    );
-    let result = async move { dispatch(message.with_current_trace_context()).await }
-        .instrument(span.clone())
-        .await;
-    if let Err(error) = &result {
-        record_span_error(&span, error);
-    }
-    result
 }

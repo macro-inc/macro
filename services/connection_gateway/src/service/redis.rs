@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use redis::{AsyncCommands, FromRedisValue, ParsingError, Value, aio::MultiplexedConnection};
-use std::future::Future;
 use tracing::Instrument as _;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
@@ -9,9 +8,6 @@ use crate::{
     context::ApiContext,
     model::message::{Message, record_span_error},
 };
-
-#[cfg(test)]
-mod test;
 
 pub const REDIS_CHANNEL: &str = "connection_gateway.messages";
 
@@ -27,27 +23,9 @@ pub struct MessageWithConnection {
 /// The instance of the connection gateway that holds a handle to the connection
 /// will handle sending the message to the client correctly.
 pub async fn post_message(
-    connection: MultiplexedConnection,
-    message: MessageWithConnection,
+    mut connection: MultiplexedConnection,
+    mut message: MessageWithConnection,
 ) -> Result<()> {
-    publish_with_trace(message, |message| async move {
-        let mut connection = connection;
-        let message_json =
-            serde_json::to_string(&message).context("Failed to serialize message")?;
-
-        connection
-            .publish::<&str, &str, ()>(REDIS_CHANNEL, message_json.as_str())
-            .await
-            .context("Failed to publish message")
-    })
-    .await
-}
-
-async fn publish_with_trace<T, F, Fut>(mut message: MessageWithConnection, publish: F) -> Result<T>
-where
-    F: FnOnce(MessageWithConnection) -> Fut,
-    Fut: Future<Output = Result<T>>,
-{
     let span = tracing::info_span!(
         "connection_gateway.redis_publish",
         otel.kind = "producer",
@@ -55,40 +33,15 @@ where
         otel.status_code = tracing::field::Empty,
         otel.status_description = tracing::field::Empty,
     );
-    let result = async move {
+    let result = async {
         message.message = message.message.with_current_trace_context();
-        publish(message).await
-    }
-    .instrument(span.clone())
-    .await;
-    if let Err(error) = &result {
-        record_span_error(&span, error);
-    }
-    result
-}
+        let message_json =
+            serde_json::to_string(&message).context("Failed to serialize message")?;
 
-async fn dispatch_with_trace<T, F, Fut>(
-    mut message: MessageWithConnection,
-    dispatch: F,
-) -> Result<T>
-where
-    F: FnOnce(MessageWithConnection) -> Fut,
-    Fut: Future<Output = Result<T>>,
-{
-    let span = tracing::info_span!(
-        "connection_gateway.redis_dispatch",
-        otel.kind = "consumer",
-        message_type = %message.message.message_type,
-        otel.status_code = tracing::field::Empty,
-        otel.status_description = tracing::field::Empty,
-    );
-    if let Some(parent) = message.message.remote_trace_context() {
-        let _ = span.set_parent(parent);
-    }
-
-    let result = async move {
-        message.message = message.message.with_current_trace_context();
-        dispatch(message).await
+        connection
+            .publish::<&str, &str, ()>(REDIS_CHANNEL, message_json.as_str())
+            .await
+            .context("Failed to publish message")
     }
     .instrument(span.clone())
     .await;
@@ -122,7 +75,7 @@ pub async fn poll_messages(ctx: ApiContext) -> Result<()> {
         .context("Failed to subscribe to reddis channel")?;
 
     while let Some(maybe_message) = stream.next().await {
-        let message: MessageWithConnection =
+        let mut message: MessageWithConnection =
             match maybe_message.get_payload::<MessageWithConnection>() {
                 Ok(msg) => msg,
                 Err(err) => {
@@ -135,20 +88,37 @@ pub async fn poll_messages(ctx: ApiContext) -> Result<()> {
             .connection_manager
             .has_connection(&message.connection_id)
         {
-            tracing::debug!("connection not found on this gateway instance, skipping message");
+            tracing::debug!(
+                "connection id {} not found, skipping message",
+                message.connection_id
+            );
             continue;
         }
 
-        tracing::trace!("received message from redis, sending to connection");
-        let connection_manager = ctx.connection_manager.clone();
-
-        if let Err(err) = dispatch_with_trace(message, |message| async move {
-            connection_manager
+        tracing::trace!(
+            connection_id = message.connection_id,
+            "received message from redis, sending to connection"
+        );
+        let span = tracing::info_span!(
+            "connection_gateway.redis_dispatch",
+            otel.kind = "consumer",
+            message_type = %message.message.message_type,
+            otel.status_code = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
+        if let Some(parent) = message.message.remote_trace_context() {
+            let _ = span.set_parent(parent);
+        }
+        let result = async {
+            message.message = message.message.with_current_trace_context();
+            ctx.connection_manager
                 .send_message(message.connection_id.as_str(), message.message)
                 .await
-        })
-        .await
-        {
+        }
+        .instrument(span.clone())
+        .await;
+        if let Err(err) = result {
+            record_span_error(&span, &err);
             tracing::error!(error=?err, "failed to send message");
         }
     }

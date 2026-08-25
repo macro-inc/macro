@@ -45,7 +45,8 @@ use tower_http::cors::CorsLayer;
 #[tokio::main]
 #[tracing::instrument(ret, err)]
 async fn main() -> Result<()> {
-    let entrypoint = MacroEntrypoint::default().init();
+    MacroEntrypoint::default().init();
+
     let aws_config = macro_aws_config::get_macro_aws_config().await;
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
@@ -153,9 +154,9 @@ async fn main() -> Result<()> {
         .await
         .context("failed to bind to port")?;
 
-    let result = axum::serve(listener, app.into_make_service())
+    axum::serve(listener, app.into_make_service())
         .await
-        .context("failed to serve");
-    entrypoint.shutdown();
-    result
+        .context("failed to serve")?;
+
+    Ok(())
 }

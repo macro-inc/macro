@@ -18,7 +18,7 @@ use axum::{
     routing::get,
 };
 use futures::{
-    FutureExt, Sink,
+    FutureExt,
     sink::SinkExt,
     stream::{SplitSink, StreamExt},
 };
@@ -140,56 +140,39 @@ pub async fn forwarder(
     mut sink: SplitSink<WebSocket, AxumWebsocketMessage>,
     mut receiver: Receiver<OutgoingMessage>,
 ) -> Result<()> {
-    while let Some(message) = receiver.recv().await {
-        if let Err(err) = send_outgoing_message(&mut sink, message).await {
-            tracing::warn!(
-                error=?err,
-                "Failed to send message to WebSocket, client likely disconnected"
-            );
-            break;
+    while let Some(mut message) = receiver.recv().await {
+        let span = match &message {
+            OutgoingMessage::Message(message) => {
+                let span = tracing::info_span!(
+                    "connection_gateway.websocket_send",
+                    otel.kind = "producer",
+                    message_type = %message.message_type,
+                    otel.status_code = tracing::field::Empty,
+                    otel.status_description = tracing::field::Empty,
+                );
+                if let Some(parent) = message.remote_trace_context() {
+                    let _ = span.set_parent(parent);
+                }
+                span
+            }
+            OutgoingMessage::Pong => tracing::Span::none(),
+        };
+        if let OutgoingMessage::Message(message) = &mut message {
+            message.trace.clear();
+        }
+
+        if let Ok(msg) = message.try_into() {
+            let result = sink.send(msg).instrument(span.clone()).await;
+            if let Err(err) = result {
+                record_span_error(&span, &err);
+                tracing::warn!(
+                    error=?err,
+                    "Failed to send message to WebSocket, client likely disconnected"
+                );
+                break;
+            }
         }
     }
 
     Ok(())
-}
-
-pub(crate) async fn send_outgoing_message<S, E>(
-    sink: &mut S,
-    message: OutgoingMessage,
-) -> Result<()>
-where
-    S: Sink<AxumWebsocketMessage, Error = E> + Unpin,
-    E: std::error::Error + Send + Sync + 'static,
-{
-    let OutgoingMessage::Message(mut message) = message else {
-        return sink
-            .send(AxumWebsocketMessage::Text("pong".into()))
-            .await
-            .map_err(anyhow::Error::from);
-    };
-
-    let span = tracing::info_span!(
-        "connection_gateway.websocket_send",
-        otel.kind = "producer",
-        message_type = %message.message_type,
-        otel.status_code = tracing::field::Empty,
-        otel.status_description = tracing::field::Empty,
-    );
-    if let Some(parent) = message.remote_trace_context() {
-        let _ = span.set_parent(parent);
-    }
-
-    let result = async move {
-        message = message.with_current_trace_context();
-        let websocket_message = AxumWebsocketMessage::try_from(message)?;
-        sink.send(websocket_message)
-            .await
-            .map_err(anyhow::Error::from)
-    }
-    .instrument(span.clone())
-    .await;
-    if let Err(error) = &result {
-        record_span_error(&span, error);
-    }
-    result
 }

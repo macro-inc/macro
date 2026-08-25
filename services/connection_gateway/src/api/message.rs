@@ -48,11 +48,7 @@ where
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(
-    err(Debug),
-    skip_all,
-    fields(message_type = %body.message_type, recipient_count = 1)
-)]
+#[tracing::instrument(skip(_internal_authorization, ctx))]
 #[axum::debug_handler(state = AppState)]
 pub async fn send_message_handler(
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
@@ -96,7 +92,7 @@ pub async fn send_message_handler(
 #[tracing::instrument(
     name = "send_messages",
     skip_all,
-    fields(message_type = %body.message_type, recipient_count = body.entities.len()),
+    fields(batch_kind = "shared", message_count = body.entities.len()),
     err(Debug)
 )]
 pub async fn batch_send_message_handler(
@@ -147,7 +143,7 @@ pub async fn batch_send_message_handler(
 #[tracing::instrument(
     name = "send_messages",
     skip_all,
-    fields(recipient_count = body.messages.len()),
+    fields(batch_kind = "unique", message_count = body.messages.len()),
     err(Debug)
 )]
 #[axum::debug_handler(state = AppState)]
