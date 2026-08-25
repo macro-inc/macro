@@ -46,10 +46,10 @@ export function scrollEventChipIntoView(
 }
 
 /**
- * Time of day a time grid opens on, matching Google Calendar's early-morning
- * start so the workday is in view without scrolling.
+ * Time of day a time grid opens on, an early-morning start that puts the
+ * workday in view without scrolling.
  */
-export const TIME_GRID_OPENING_SCROLL_TIME = '06:00:00';
+export const TIME_GRID_OPENING_SCROLL_TIME = '07:00:00';
 
 /**
  * Re-applies the opening scroll position of a grid that rendered without
