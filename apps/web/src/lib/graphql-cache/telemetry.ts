@@ -76,6 +76,18 @@ export const CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY = [
 export type CacheQueueDiagnosticsAvailability =
   (typeof CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY)[number];
 
+export const CACHE_REVISION_CATEGORIES = [
+  'authoritative-write',
+  'optimistic-enqueue',
+  'optimistic-commit',
+  'optimistic-rollback',
+  'external-invalidation',
+  'deletion',
+  'clear',
+] as const;
+export type CacheRevisionCategory =
+  (typeof CACHE_REVISION_CATEGORIES)[number];
+
 /** Payload-free, bounded error classes shared by all cache layers. */
 export const CACHE_ERROR_CODES = [
   'none',
@@ -144,14 +156,7 @@ export type CacheTelemetryObservation = {
   persistence?: 'granted' | 'denied' | 'unknown';
   openOutcome?: CacheOpenOutcome;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
-  revisionCategory?:
-    | 'authoritative-write'
-    | 'optimistic-enqueue'
-    | 'optimistic-commit'
-    | 'optimistic-rollback'
-    | 'external-invalidation'
-    | 'deletion'
-    | 'clear';
+  revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
   durationMs?: number;
   bytes?: number;
@@ -253,6 +258,10 @@ function sanitizeObservation(
       ? {
           queueDiagnosticsAvailability: input.queueDiagnosticsAvailability,
         }
+      : {}),
+    ...(input.revisionCategory !== undefined &&
+    CACHE_REVISION_CATEGORIES.includes(input.revisionCategory)
+      ? { revisionCategory: input.revisionCategory }
       : {}),
     ...(input.resetAttempt === 'wipe-before-open'
       ? { resetAttempt: input.resetAttempt }
@@ -622,6 +631,7 @@ export function isCacheTelemetryObservation(
       'persistence',
       'openOutcome',
       'queueDiagnosticsAvailability',
+      'revisionCategory',
       'resetAttempt',
       'durationMs',
       'bytes',
