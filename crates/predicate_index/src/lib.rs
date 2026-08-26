@@ -394,6 +394,20 @@ impl ValidatedIndexQuery {
         self.0.sort_attribute == *attribute
             || expression_depends_on(&candidate.predicate, attribute)
     }
+
+    /// Collect predicate and sort attributes inspected in one selected partition.
+    pub fn dependent_attributes(&self, partition: &Token) -> BTreeSet<Token> {
+        let mut attributes = BTreeSet::from([self.0.sort_attribute.clone()]);
+        if let Some(candidate) = self
+            .0
+            .partitions
+            .iter()
+            .find(|candidate| candidate.partition == *partition)
+        {
+            collect_expression_attributes(&candidate.predicate, &mut attributes);
+        }
+        attributes
+    }
 }
 
 /// Why a known projection is not currently safe to query.
@@ -839,6 +853,20 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
         }
         PredicateExpr::Not(expr) => expression_depends_on(expr, attribute),
         PredicateExpr::All | PredicateExpr::None => false,
+    }
+}
+
+fn collect_expression_attributes(expr: &PredicateExpr, attributes: &mut BTreeSet<Token>) {
+    match expr {
+        PredicateExpr::Exact { attribute, .. } | PredicateExpr::I64Range { attribute, .. } => {
+            attributes.insert(attribute.clone());
+        }
+        PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
+            collect_expression_attributes(left, attributes);
+            collect_expression_attributes(right, attributes);
+        }
+        PredicateExpr::Not(expr) => collect_expression_attributes(expr, attributes),
+        PredicateExpr::All | PredicateExpr::None => {}
     }
 }
 

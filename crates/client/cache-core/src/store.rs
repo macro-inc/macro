@@ -21,7 +21,7 @@ use predicate_index::{
     EffectiveOptimisticProjection, IndexDocument, PendingOptimisticProjection,
     RecordKey as PredicateRecordKey, evaluate_reference,
 };
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -239,6 +239,8 @@ pub struct InMemoryStorage {
     next_mutation_id: MutationId,
     record_get_count: Arc<AtomicUsize>,
     search_catalog_load_count: Arc<AtomicUsize>,
+    mutation_queue_load_count: Arc<AtomicUsize>,
+    index_document_load_count: Arc<AtomicUsize>,
 }
 
 impl InMemoryStorage {
@@ -262,6 +264,16 @@ impl InMemoryStorage {
     /// Number of compact catalog loads (test diagnostics).
     pub fn search_catalog_load_count(&self) -> usize {
         self.search_catalog_load_count.load(Ordering::Relaxed)
+    }
+
+    /// Number of full mutation-queue loads (test diagnostics).
+    pub fn mutation_queue_load_count(&self) -> usize {
+        self.mutation_queue_load_count.load(Ordering::Relaxed)
+    }
+
+    /// Number of authoritative projection batch loads (test diagnostics).
+    pub fn index_document_load_count(&self) -> usize {
+        self.index_document_load_count.load(Ordering::Relaxed)
     }
 }
 
@@ -395,6 +407,8 @@ impl Storage for InMemoryStorage {
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        self.mutation_queue_load_count
+            .fetch_add(1, Ordering::Relaxed);
         Ok(self
             .mutations
             .iter()
@@ -632,40 +646,81 @@ impl PredicateIndexStorage for InMemoryStorage {
         &self,
         query: &predicate_index::ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, Self::Error> {
-        let query_descriptor = query.as_query();
-        let queried_partitions = query_descriptor
+        let descriptor = query.as_query();
+        let queried_partitions = descriptor
             .partitions
             .iter()
             .map(|partition| &partition.partition)
-            .collect::<std::collections::HashSet<_>>();
-        if self.projections.values().any(|projection| {
-            projection.profile() == &query_descriptor.profile
+            .collect::<HashSet<_>>();
+        if self.projections.iter().any(|(key, projection)| {
+            !self.optimistic_projections.contains_key(key)
+                && projection.profile() == &descriptor.profile
                 && queried_partitions.contains(projection.partition())
                 && matches!(projection, ProjectionState::Incomplete { .. })
         }) {
             return Ok(PredicateQueryResult::Incomplete);
         }
 
+        let mut has_relevant_shadow = false;
+        for projection in self.optimistic_projections.values() {
+            if projection.state.profile() != &descriptor.profile
+                || !queried_partitions.contains(projection.state.partition())
+            {
+                continue;
+            }
+            has_relevant_shadow = true;
+            if matches!(
+                projection.state,
+                predicate_index::OptimisticProjectionState::Incomplete { .. }
+            ) {
+                return Ok(PredicateQueryResult::Incomplete);
+            }
+            if query
+                .dependent_attributes(projection.state.partition())
+                .iter()
+                .any(|attribute| projection.uncertainty.affects(attribute))
+            {
+                return Ok(PredicateQueryResult::Incomplete);
+            }
+        }
+
         let documents = self
             .projections
-            .values()
-            .filter_map(|projection| match projection {
+            .iter()
+            .filter(|(key, _)| !self.optimistic_projections.contains_key(*key))
+            .filter_map(|(_, projection)| match projection {
                 ProjectionState::Complete(document) => Some(document.clone()),
                 ProjectionState::Incomplete { .. } => None,
             })
+            .chain(
+                self.optimistic_projections
+                    .values()
+                    .filter_map(|projection| match &projection.state {
+                        predicate_index::OptimisticProjectionState::Complete(document) => {
+                            Some(document.clone())
+                        }
+                        predicate_index::OptimisticProjectionState::Deleted { .. }
+                        | predicate_index::OptimisticProjectionState::Incomplete { .. } => None,
+                    }),
+            )
             .collect::<Vec<IndexDocument>>();
-        Ok(PredicateQueryResult::Complete(
-            evaluate_reference(query, &documents)
-                .into_iter()
-                .map(|hit| hit.record_key)
-                .collect(),
-        ))
+        let keys = evaluate_reference(query, &documents)
+            .into_iter()
+            .map(|hit| hit.record_key)
+            .collect();
+        Ok(if has_relevant_shadow {
+            PredicateQueryResult::Optimistic(keys)
+        } else {
+            PredicateQueryResult::Complete(keys)
+        })
     }
 
     async fn get_index_documents(
         &self,
         keys: &[PredicateRecordKey],
     ) -> Result<Vec<Option<IndexDocument>>, Self::Error> {
+        self.index_document_load_count
+            .fetch_add(1, Ordering::Relaxed);
         Ok(keys
             .iter()
             .map(|key| match self.projections.get(key) {

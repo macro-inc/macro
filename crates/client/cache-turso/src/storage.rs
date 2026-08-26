@@ -42,7 +42,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 8;
+pub const STORAGE_SCHEMA_VERSION: u32 = 9;
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,7 +53,7 @@ pub enum TursoStorageOpenOutcome {
     OpenedNew,
 }
 
-const CREATE_SCHEMA: [&str; 24] = [
+const CREATE_SCHEMA: [&str; 27] = [
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
     "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
@@ -78,6 +78,9 @@ const CREATE_SCHEMA: [&str; 24] = [
     "CREATE TABLE optimistic_integer_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute, value), FOREIGN KEY (document_id) REFERENCES optimistic_index_documents(id) ON DELETE CASCADE)",
     "CREATE TABLE optimistic_sort_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute), FOREIGN KEY (document_id) REFERENCES optimistic_index_documents(id) ON DELETE CASCADE)",
     "CREATE TABLE optimistic_uncertain_attributes (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, PRIMARY KEY (document_id, attribute), FOREIGN KEY (document_id) REFERENCES optimistic_index_documents(id) ON DELETE CASCADE)",
+    "CREATE INDEX optimistic_exact_facts_lookup_idx ON optimistic_exact_facts(attribute, value, document_id)",
+    "CREATE INDEX optimistic_integer_facts_lookup_idx ON optimistic_integer_facts(attribute, value, document_id)",
+    "CREATE INDEX optimistic_sort_facts_lookup_idx ON optimistic_sort_facts(attribute, value, document_id)",
 ];
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
@@ -1400,6 +1403,10 @@ impl PredicateIndexStorage for TursoStorage {
             if predicate_scope_is_incomplete(&connection, query)? {
                 return Ok(PredicateQueryResult::Incomplete);
             }
+            let optimistic = optimistic_query_status(&connection, query)?;
+            if optimistic.incomplete {
+                return Ok(PredicateQueryResult::Incomplete);
+            }
             let (sql, parameters) = compile_predicate_sql(query);
             let rows = driver::query(&connection, &sql, parameters)?;
             let mut keys = Vec::with_capacity(rows.len());
@@ -1411,7 +1418,11 @@ impl PredicateIndexStorage for TursoStorage {
                     PredicateRecordKey::new(required_text(&row, 0)?).map_err(|_| invariant())?,
                 );
             }
-            Ok(PredicateQueryResult::Complete(keys))
+            Ok(if optimistic.has_shadow {
+                PredicateQueryResult::Optimistic(keys)
+            } else {
+                PredicateQueryResult::Complete(keys)
+            })
         });
         self.latch_result(result)
     }
@@ -2147,7 +2158,9 @@ fn predicate_scope_is_incomplete(
         .map(|_| "(profile = ? AND partition = ?)")
         .collect::<Vec<_>>()
         .join(" OR ");
-    let sql = format!("SELECT 1 FROM index_documents WHERE state <> 0 AND ({clauses}) LIMIT 1");
+    let sql = format!(
+        "SELECT 1 FROM index_documents AS d WHERE d.state <> 0 AND ({clauses}) AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) LIMIT 1"
+    );
     let mut parameters = Vec::with_capacity(descriptor.partitions.len() * 2);
     for partition in &descriptor.partitions {
         parameters.push(text(descriptor.profile.token().as_str()));
@@ -2156,9 +2169,73 @@ fn predicate_scope_is_incomplete(
     Ok(!driver::query(connection, &sql, parameters)?.is_empty())
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct OptimisticQueryStatus {
+    has_shadow: bool,
+    incomplete: bool,
+}
+
+fn optimistic_query_status(
+    connection: &Arc<Connection>,
+    query: &ValidatedIndexQuery,
+) -> Result<OptimisticQueryStatus, TursoStorageError> {
+    let descriptor = query.as_query();
+    let clauses = descriptor
+        .partitions
+        .iter()
+        .map(|_| "(d.profile = ? AND d.partition = ?)")
+        .collect::<Vec<_>>()
+        .join(" OR ");
+    let sql = format!(
+        "SELECT d.id, d.partition, d.state, u.attribute FROM optimistic_index_documents AS d LEFT JOIN optimistic_uncertain_attributes AS u ON u.document_id = d.id WHERE {clauses} ORDER BY d.id, u.attribute"
+    );
+    let mut parameters = Vec::with_capacity(descriptor.partitions.len() * 2);
+    for partition in &descriptor.partitions {
+        parameters.push(text(descriptor.profile.token().as_str()));
+        parameters.push(text(partition.partition.as_str()));
+    }
+    let rows = driver::query(connection, &sql, parameters)?;
+    let mut status = OptimisticQueryStatus {
+        has_shadow: !rows.is_empty(),
+        incomplete: false,
+    };
+    let mut uncertainty: HashMap<(i64, Token), Vec<String>> = HashMap::new();
+    for row in rows {
+        if row.len() != 4 {
+            return Err(invariant());
+        }
+        let state = OptimisticIndexDocumentState::try_from(required_i64(&row, 2)?)?;
+        if state == OptimisticIndexDocumentState::Incomplete {
+            status.incomplete = true;
+            return Ok(status);
+        }
+        if let Some(attribute) = nullable_text(&row, 3)? {
+            uncertainty
+                .entry((
+                    required_i64(&row, 0)?,
+                    Token::new(required_text(&row, 1)?).map_err(|_| invariant())?,
+                ))
+                .or_default()
+                .push(attribute);
+        }
+    }
+    for ((_, partition), attributes) in uncertainty {
+        let uncertainty = parse_optimistic_uncertainty(attributes)?;
+        if query
+            .dependent_attributes(&partition)
+            .iter()
+            .any(|attribute| uncertainty.affects(attribute))
+        {
+            status.incomplete = true;
+            break;
+        }
+    }
+    Ok(status)
+}
+
 fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
     let descriptor = query.as_query();
-    let mut compiler = SqlPredicateCompiler::default();
+    let mut compiler = SqlPredicateCompiler::new();
     let roots = descriptor
         .partitions
         .iter()
@@ -2173,15 +2250,22 @@ fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
     let matches = compiler.next_name();
     let union = roots
         .iter()
-        .map(|root| format!("SELECT document_id FROM {root}"))
+        .map(|root| format!("SELECT source, document_id FROM {root}"))
         .collect::<Vec<_>>()
         .join(" UNION ");
     compiler
         .ctes
-        .push(format!("{matches}(document_id) AS ({union})"));
+        .push(format!("{matches}(source, document_id) AS ({union})"));
+    let effective_sort = compiler.next_name();
     compiler
         .parameters
         .push(text(descriptor.sort_attribute.as_str()));
+    compiler
+        .parameters
+        .push(text(descriptor.sort_attribute.as_str()));
+    compiler.ctes.push(format!(
+        "{effective_sort}(source, document_id, value) AS (SELECT 0, document_id, value FROM sort_facts WHERE attribute = ? UNION ALL SELECT 1, document_id, value FROM optimistic_sort_facts WHERE attribute = ?)"
+    ));
     compiler
         .parameters
         .push(Value::from_i64(i64::from(descriptor.limit)));
@@ -2194,13 +2278,12 @@ fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
         SortDirection::Desc => "DESC",
     };
     let sql = format!(
-        "WITH {} SELECT d.record_key FROM {matches} AS m JOIN index_documents AS d ON d.id = m.document_id JOIN sort_facts AS s ON s.document_id = d.id WHERE s.attribute = ? ORDER BY s.value {sort_direction}, d.record_key {tie_direction} LIMIT ?",
+        "WITH {} SELECT d.record_key FROM {matches} AS m JOIN effective_documents AS d ON d.source = m.source AND d.document_id = m.document_id JOIN {effective_sort} AS s ON s.source = m.source AND s.document_id = m.document_id ORDER BY s.value {sort_direction}, d.record_key {tie_direction} LIMIT ?",
         compiler.ctes.join(", ")
     );
     (sql, compiler.parameters)
 }
 
-#[derive(Default)]
 struct SqlPredicateCompiler {
     ctes: Vec<String>,
     parameters: Vec<Value>,
@@ -2208,6 +2291,16 @@ struct SqlPredicateCompiler {
 }
 
 impl SqlPredicateCompiler {
+    fn new() -> Self {
+        Self {
+            ctes: vec![
+                "effective_documents(source, document_id, record_key, profile, partition) AS (SELECT 0, d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0)".to_owned(),
+            ],
+            parameters: Vec::new(),
+            next_id: 0,
+        }
+    }
+
     fn next_name(&mut self) -> String {
         let name = format!("expr_{}", self.next_id);
         self.next_id += 1;
@@ -2220,19 +2313,21 @@ impl SqlPredicateCompiler {
             PredicateExpr::None => {
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(document_id) AS (SELECT id FROM index_documents WHERE 0)"
+                    "{name}(source, document_id) AS (SELECT source, document_id FROM effective_documents WHERE 0)"
                 ));
                 name
             }
             PredicateExpr::Exact { attribute, value } => {
                 let name = self.next_name();
-                self.parameters.push(text(profile.token().as_str()));
-                self.parameters.push(text(partition.as_str()));
-                self.parameters.push(text(attribute.as_str()));
-                self.parameters
-                    .push(Value::from_blob(value.as_bytes().to_vec()));
+                for _ in 0..2 {
+                    self.parameters.push(text(profile.token().as_str()));
+                    self.parameters.push(text(partition.as_str()));
+                    self.parameters.push(text(attribute.as_str()));
+                    self.parameters
+                        .push(Value::from_blob(value.as_bytes().to_vec()));
+                }
                 self.ctes.push(format!(
-                    "{name}(document_id) AS (SELECT f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.profile = ? AND d.partition = ? AND d.state = 0 AND f.attribute = ? AND f.value = ?)"
+                    "{name}(source, document_id) AS (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ?)"
                 ));
                 name
             }
@@ -2242,22 +2337,30 @@ impl SqlPredicateCompiler {
                 upper,
             } => {
                 let name = self.next_name();
-                self.parameters.push(text(profile.token().as_str()));
-                self.parameters.push(text(partition.as_str()));
-                self.parameters.push(text(attribute.as_str()));
                 let mut range = String::new();
                 if let Some(bound) = lower {
-                    let (operator, value) = sql_bound(*bound, true);
+                    let (operator, _) = sql_bound(*bound, true);
                     range.push_str(&format!(" AND f.value {operator} ?"));
-                    self.parameters.push(Value::from_i64(value));
                 }
                 if let Some(bound) = upper {
-                    let (operator, value) = sql_bound(*bound, false);
+                    let (operator, _) = sql_bound(*bound, false);
                     range.push_str(&format!(" AND f.value {operator} ?"));
-                    self.parameters.push(Value::from_i64(value));
+                }
+                for _ in 0..2 {
+                    self.parameters.push(text(profile.token().as_str()));
+                    self.parameters.push(text(partition.as_str()));
+                    self.parameters.push(text(attribute.as_str()));
+                    if let Some(bound) = lower {
+                        self.parameters
+                            .push(Value::from_i64(sql_bound(*bound, true).1));
+                    }
+                    if let Some(bound) = upper {
+                        self.parameters
+                            .push(Value::from_i64(sql_bound(*bound, false).1));
+                    }
                 }
                 self.ctes.push(format!(
-                    "{name}(document_id) AS (SELECT f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.profile = ? AND d.partition = ? AND d.state = 0 AND f.attribute = ?{range})"
+                    "{name}(source, document_id) AS (SELECT 0, f.document_id FROM integer_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
                 ));
                 name
             }
@@ -2271,7 +2374,7 @@ impl SqlPredicateCompiler {
                 };
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(document_id) AS (SELECT document_id FROM {left} {operator} SELECT document_id FROM {right})"
+                    "{name}(source, document_id) AS (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})"
                 ));
                 name
             }
@@ -2280,7 +2383,7 @@ impl SqlPredicateCompiler {
                 let child = self.compile(expr, profile, partition);
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(document_id) AS (SELECT document_id FROM {universe} EXCEPT SELECT document_id FROM {child})"
+                    "{name}(source, document_id) AS (SELECT source, document_id FROM {universe} EXCEPT SELECT source, document_id FROM {child})"
                 ));
                 name
             }
@@ -2292,7 +2395,7 @@ impl SqlPredicateCompiler {
         self.parameters.push(text(profile.token().as_str()));
         self.parameters.push(text(partition.as_str()));
         self.ctes.push(format!(
-            "{name}(document_id) AS (SELECT id FROM index_documents WHERE profile = ? AND partition = ? AND state = 0)"
+            "{name}(source, document_id) AS (SELECT source, document_id FROM effective_documents WHERE profile = ? AND partition = ?)"
         ));
         name
     }
@@ -2833,21 +2936,6 @@ fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStora
     validate_optimistic_predicate_indexes(connection)?;
     validate_table_indexes(
         connection,
-        "optimistic_exact_facts",
-        &[(0, "document_id"), (1, "attribute"), (2, "value")],
-    )?;
-    validate_table_indexes(
-        connection,
-        "optimistic_integer_facts",
-        &[(0, "document_id"), (1, "attribute"), (2, "value")],
-    )?;
-    validate_table_indexes(
-        connection,
-        "optimistic_sort_facts",
-        &[(0, "document_id"), (1, "attribute")],
-    )?;
-    validate_table_indexes(
-        connection,
         "optimistic_uncertain_attributes",
         &[(0, "document_id"), (1, "attribute")],
     )?;
@@ -2930,9 +3018,12 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
         "integer_facts_lookup_idx",
         "index_documents_record_key_idx",
         "mutation_queue_created_at_ms_idx",
+        "optimistic_exact_facts_lookup_idx",
         "optimistic_index_documents_owner_idx",
         "optimistic_index_documents_record_key_idx",
         "optimistic_index_documents_scope_idx",
+        "optimistic_integer_facts_lookup_idx",
+        "optimistic_sort_facts_lookup_idx",
         "search_documents_browse_idx",
         "sort_facts_lookup_idx",
     ];
@@ -3479,6 +3570,21 @@ fn validate_predicate_indexes(connection: &Arc<Connection>) -> Result<(), TursoS
         (
             "sort_facts",
             "sort_facts_lookup_idx",
+            &["attribute", "value", "document_id"][..],
+        ),
+        (
+            "optimistic_exact_facts",
+            "optimistic_exact_facts_lookup_idx",
+            &["attribute", "value", "document_id"][..],
+        ),
+        (
+            "optimistic_integer_facts",
+            "optimistic_integer_facts_lookup_idx",
+            &["attribute", "value", "document_id"][..],
+        ),
+        (
+            "optimistic_sort_facts",
+            "optimistic_sort_facts_lookup_idx",
             &["attribute", "value", "document_id"][..],
         ),
     ] {

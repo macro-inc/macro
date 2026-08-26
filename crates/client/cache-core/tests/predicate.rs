@@ -279,13 +279,15 @@ fn replacement_removes_stale_facts_and_incomplete_states_fall_back() {
                 .collect(),
         )
         .await;
-        assert_eq!(
-            too_many_engine
-                .query_predicate_index(&query("owner-1"))
-                .await
-                .unwrap(),
-            PredicateQueryResult::Incomplete
-        );
+        let PredicateQueryResult::Optimistic(keys) = too_many_engine
+            .query_predicate_index(&query("owner-1"))
+            .await
+            .unwrap()
+            .value
+        else {
+            panic!("durable shadows remove the per-query touched-key bound")
+        };
+        assert_eq!(keys.len(), 20);
 
         let mut expanded_limit_engine = Engine::new(InMemoryStorage::new());
         begin_with_projection(
@@ -300,7 +302,7 @@ fn replacement_removes_stale_facts_and_incomplete_states_fall_back() {
                 .query_predicate_index(&ValidatedIndexQuery::new(maximum_query).unwrap())
                 .await
                 .unwrap(),
-            PredicateQueryResult::Incomplete
+            PredicateQueryResult::Optimistic(vec![record_key()])
         );
     });
 }
@@ -392,6 +394,8 @@ fn optimistic_projection_layers_are_queryable_offline_and_survive_restart() {
             shadow.state,
             OptimisticProjectionState::Complete(_)
         ));
+        let queue_loads = engine.storage().mutation_queue_load_count();
+        let projection_loads = engine.storage().index_document_load_count();
 
         assert_eq!(
             engine
@@ -406,6 +410,11 @@ fn optimistic_projection_layers_are_queryable_offline_and_survive_restart() {
                 .await
                 .unwrap(),
             PredicateQueryResult::Optimistic(vec![record_key()])
+        );
+        assert_eq!(engine.storage().mutation_queue_load_count(), queue_loads);
+        assert_eq!(
+            engine.storage().index_document_load_count(),
+            projection_loads
         );
 
         let storage = engine.into_storage();
