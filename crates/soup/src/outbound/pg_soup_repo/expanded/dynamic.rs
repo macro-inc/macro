@@ -1857,6 +1857,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
 }
 
 /// Execute a flat expanded dynamic query without exposing projection metadata.
+#[cfg(test)]
 #[tracing::instrument(skip(db), err)]
 pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,

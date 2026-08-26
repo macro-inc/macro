@@ -282,6 +282,7 @@ pub async fn expanded_generic_cursor_soup_with_projection(
 }
 
 /// Returns expanded objects while discarding internal projection metadata.
+#[cfg(test)]
 #[tracing::instrument(skip(db, limit))]
 pub async fn expanded_generic_cursor_soup(
     db: &PgPool,
@@ -298,8 +299,8 @@ pub async fn expanded_generic_cursor_soup(
     )
 }
 
-/// this is exactly the same a [expanded_generic_cursor_soup] except it will NEVER
-/// return items that DO have frecency scores
+/// This is the same query as the expanded generic cursor soup except it will
+/// never return items that have frecency scores.
 #[tracing::instrument(skip(db, limit))]
 async fn no_frecency_expanded_generic_soup_hydrated(
     db: &PgPool,

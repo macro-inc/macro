@@ -5,6 +5,7 @@ use crate::{
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::{Entity, EntityType};
+#[cfg(test)]
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -182,6 +183,7 @@ pub async fn expanded_soup_by_ids_with_projection<'a>(
 }
 
 /// Returns expanded authorized items by ID without projection metadata.
+#[cfg(test)]
 #[tracing::instrument(err, skip(db, entities))]
 pub async fn expanded_soup_by_ids<'a>(
     db: &PgPool,
