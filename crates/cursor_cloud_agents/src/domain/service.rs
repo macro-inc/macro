@@ -19,6 +19,12 @@
 //! distinction matters because Cursor keeps a cancelled run's stream open often
 //! enough that waiting for it meant the client's stop button did nothing until
 //! the agent finished of its own accord.
+//!
+//! The remote cancel still needs a run id, and this process only remembers
+//! one for a turn it is itself streaming. A session restored after a restart,
+//! or one whose run started from cursor.com, has no such memory — cancelling
+//! it falls back to asking Cursor which run is current rather than silently
+//! skipping the remote call.
 
 #[cfg(test)]
 mod test;
@@ -494,10 +500,17 @@ where
     /// Cancel the session's active turn, if any. Idempotent; a session with
     /// no active turn is a no-op rather than an error, because the turn may
     /// have ended while the cancel was in flight.
+    ///
+    /// `active_run` is this process's own memory of what it started, so it is
+    /// empty for a session restored after a restart — or one whose run this
+    /// process never drove at all (started from cursor.com). Either way the
+    /// agent may still have a run going, so a miss falls back to asking
+    /// Cursor which run, if any, is current before giving up on the remote
+    /// cancel.
     #[tracing::instrument(skip(self), err)]
     pub async fn cancel(&self, session_id: &AcpSessionId) -> Result<(), SessionError> {
         let session = self.session(session_id)?;
-        let target = {
+        let (agent, active_run) = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.cancelled = true;
             // Fired before the network call, and the turn ends on it alone:
@@ -506,12 +519,38 @@ where
             // gets its turn back. A cancel Cursor refuses used to leave the
             // turn streaming to natural completion.
             state.cancel.cancel();
-            state.agent.clone().zip(state.active_run.clone())
+            (state.agent.clone(), state.active_run.clone())
         };
-        if let Some((agent, run)) = target {
+        let Some(agent) = agent else {
+            return Ok(());
+        };
+        let run = match active_run {
+            Some(run) => Some(run),
+            None => self.current_run(&agent).await,
+        };
+        if let Some(run) = run {
             self.cursor.cancel_run(&agent, &run).await?;
         }
         Ok(())
+    }
+
+    /// The agent's run still in progress, if any, per Cursor's own record.
+    ///
+    /// The fallback [`Self::cancel`] takes when this process has no memory of
+    /// one: best-effort, like the remote cancel itself, so a lookup failure
+    /// costs the remote cancel, never the local one that already fired.
+    async fn current_run(&self, agent: &CursorAgentId) -> Option<CursorRunId> {
+        let listings = match self.cursor.list_runs(agent).await {
+            Ok(listings) => listings,
+            Err(error) => {
+                tracing::warn!(%agent, %error, "could not list runs to find one to cancel");
+                return None;
+            }
+        };
+        listings
+            .into_iter()
+            .find(|listing| matches!(listing.status, RunStatus::Creating | RunStatus::Running))
+            .map(|listing| listing.id)
     }
 
     /// Drop a session, reporting whether it existed. Any active run keeps
@@ -630,6 +669,7 @@ where
             {
                 Ok(None) => {
                     tracing::info!(%agent, %run, "turn cancelled by the client; abandoning the stream");
+                    self.close_open_tool_calls(session_id, session).await;
                     return Ok(StopReason::Cancelled);
                 }
                 Ok(Some(next)) => next,
@@ -725,6 +765,26 @@ where
             None => Err(SessionError::Cursor(rootcause::report!(
                 "cursor stream for run {run} ended without reporting a result"
             ))),
+        }
+    }
+
+    /// Close out every tool call left open when a turn ends on the client's
+    /// cancel rather than Cursor's own terminal event.
+    ///
+    /// The abandoned stream (see the `Ok(None)` arm above) means Cursor may
+    /// still be mid-call and will never get the chance to say how it ended,
+    /// so without this the client renders that call running forever.
+    async fn close_open_tool_calls(&self, session_id: &AcpSessionId, session: &Session) {
+        let updates = session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .translator
+            .close_open_calls();
+        for update in updates {
+            if let Err(error) = self.notifier.notify(session_id, update).await {
+                tracing::warn!(%error, "could not close an open tool call after cancel");
+            }
         }
     }
 
