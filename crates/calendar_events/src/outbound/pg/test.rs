@@ -2643,6 +2643,22 @@ fn reminder_upsert(
     }
 }
 
+fn reminder_attendee(email: &str, declined: bool, is_self: bool) -> CalendarAttendee {
+    CalendarAttendee {
+        email: email.to_string(),
+        display_name: None,
+        response_status: if declined {
+            AttendeeResponseStatus::Declined
+        } else {
+            AttendeeResponseStatus::Accepted
+        },
+        is_organizer: false,
+        is_optional: false,
+        is_self,
+        comment: None,
+    }
+}
+
 fn popup_reminders(minutes: &[u32]) -> EventReminders {
     EventReminders {
         use_default: false,
@@ -3013,6 +3029,75 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(past, Vec::new());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reminder_decline_follows_owner_inbox_not_calendar_self(pool: PgPool) {
+    let owner_id = "macro|reminder-owner-inbox@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let owner_inbox = format!("calendar-{link_id}@example.com");
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let starts_at = (Utc::now() + Duration::minutes(10)).trunc_subsecs(0);
+
+    let mut coworker_declined = reminder_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "coworker-declined",
+        starts_at,
+        popup_reminders(&[10]),
+    );
+    coworker_declined.event.attendees = vec![
+        reminder_attendee("jackson@example.com", true, true),
+        reminder_attendee(&owner_inbox, false, false),
+    ];
+    let coworker_event_id = repo.upsert_event_fixture(coworker_declined).await.unwrap();
+
+    let mut owner_declined = reminder_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "owner-declined",
+        starts_at,
+        popup_reminders(&[10]),
+    );
+    owner_declined.event.attendees = vec![
+        reminder_attendee("jackson@example.com", false, true),
+        reminder_attendee(&owner_inbox, true, false),
+    ];
+    let owner_event_id = repo.upsert_event_fixture(owner_declined).await.unwrap();
+
+    let due = repo
+        .due_reminder_firings(Utc::now(), None, 100)
+        .await
+        .unwrap();
+    let firing_for = |event_id| {
+        due.iter()
+            .find(|firing| firing.event_id == event_id)
+            .expect("event has a due firing")
+            .clone()
+    };
+
+    let coworker = repo
+        .find_due_reminder(&firing_for(coworker_event_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        !coworker.declined,
+        "a coworker's declined self row must not suppress the owner's reminder"
+    );
+
+    let owner = repo
+        .find_due_reminder(&firing_for(owner_event_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        owner.declined,
+        "the owner's own declined inbox must suppress the reminder even when is_self is on a coworker"
+    );
 }
 
 /// The provider classification has to survive the write and come back on the
