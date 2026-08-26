@@ -370,6 +370,46 @@ async fn forward_to_a_live_session_reuses_the_transport() {
 }
 
 #[tokio::test]
+async fn forward_announces_before_delivering_the_prompt() {
+    let (service, _repo, containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+    assert_eq!(prompts(&container.agent()).len(), 1);
+
+    // A chip that cannot be posted has nothing to anchor the response, so the
+    // prompt must not reach the agent at all.
+    announcer.fails("the chip could not be posted");
+    let result = service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("and add a regression test")),
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::Announce(_))));
+    assert_eq!(
+        prompts(&container.agent()).len(),
+        1,
+        "the chip is announced before the prompt is delivered"
+    );
+}
+
+#[tokio::test]
 async fn a_delivery_failure_is_not_automatically_resumed() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let command = open_command();

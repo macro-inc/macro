@@ -137,6 +137,19 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             })
     }
 
+    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+        let mut found: Vec<AgentSession> = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .values()
+            .filter(|session| session.thread_id == Some(thread_id))
+            .cloned()
+            .collect();
+        found.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(found)
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,

@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE thread_id = $1\n            ORDER BY created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "originating_message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "harness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "repo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "workspace",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "sandbox_size",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "acp_session_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "status_event_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "modified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "thread_channel_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "1b9d5291cf17cb33b9ba0843863f59ff3cf2e1473c89880a5a21d32f881ebc54"
+}

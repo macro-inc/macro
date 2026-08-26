@@ -9,6 +9,7 @@ import { CognitionV2Endpoint } from "./endpoints/cognition-v2";
 import { MarkdownEndpoint } from "./endpoints/markdown";
 import { MarkdownSnapshotEndpoint } from "./endpoints/markdown-snapshot";
 import { MentionsEndpoint } from "./endpoints/mentions";
+import { QuoteReplyEndpoint } from "./endpoints/quote-reply";
 import { XmlEndpoint } from "./endpoints/xml";
 import { PlaintextEndpoint } from "./endpoints/plaintext";
 import { SearchTextEndpoint } from "./endpoints/search-text";
@@ -42,6 +43,7 @@ app.use("/xml/*", internalAuth);
 app.use("/markdown/*", internalAuth);
 app.use("/snapshot/*", internalAuth);
 app.use("/mentions", internalAuth);
+app.use("/quote-reply", internalAuth);
 app.use("/agent-announcement", internalAuth);
 app.use("/internal/health", internalAuth);
 
@@ -66,6 +68,7 @@ openapi.get("/markdown/:docId", MarkdownEndpoint);
 openapi.get("/xml/:docId", XmlEndpoint);
 openapi.post("/snapshot/markdown", MarkdownSnapshotEndpoint);
 openapi.post("/mentions", MentionsEndpoint);
+openapi.post("/quote-reply", QuoteReplyEndpoint);
 openapi.post("/agent-announcement", AgentAnnouncementEndpoint);
 openapi.get("/internal/health", (c) => c.json({ status: "healthy" }));
 

@@ -338,6 +338,32 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         })
     }
 
+    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+        let rows = sqlx::query_as!(
+            AgentSessionRow,
+            r#"
+            SELECT
+                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                status_event_name, created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?"
+            FROM agent_session
+            WHERE thread_id = $1
+            ORDER BY created_at DESC
+            "#,
+            thread_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to find agent sessions for thread")?;
+
+        Ok(rows
+            .into_iter()
+            .map(AgentSession::try_from)
+            .collect::<anyhow::Result<Vec<_>>>()?)
+    }
+
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
         // Delegated to the bots hex rather than a bespoke query: this is
         // exactly bot id -> bot, and `get_bot` already excludes deleted bots -

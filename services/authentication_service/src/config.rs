@@ -48,7 +48,9 @@ maybe_env_vars! {
     /// definition rather than Doppler, and the Doppler config validator
     /// deserializes this struct from Doppler alone — a required field it
     /// cannot see fails CI. The service still refuses to start without it;
-    /// see `cursor_api_key_kms_key_id`.
+    /// see [`Config::cursor_api_key_kms_key_id`], which also reads the
+    /// process environment because `MacroConfig` does not fall back to it
+    /// when `APP_SECRETS_JSON` is present.
     pub struct CursorApiKeyKmsKeyId;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
@@ -173,9 +175,16 @@ impl Config {
     /// feature of the settings surface, and a service that cannot encrypt one
     /// should fail at startup rather than at the first user who tries.
     pub(crate) fn cursor_api_key_kms_key_id(&self) -> anyhow::Result<String> {
-        nonblank_value(self.cursor_api_key_kms_key_id.value())
-            .map(str::to_owned)
-            .context("CURSOR_API_KEY_KMS_KEY_ID is required")
+        // `MacroConfig` will not see a Pulumi-injected process env var once
+        // Doppler's `APP_SECRETS_JSON` is present. Re-read through the env-var
+        // type, which does fall back to process env.
+        let from_process_env = CursorApiKeyKmsKeyId::new();
+        resolve_cursor_api_key_kms_key_id(
+            &self.cursor_api_key_kms_key_id,
+            from_process_env
+                .as_ref()
+                .and_then(CursorApiKeyKmsKeyId::value),
+        )
     }
 
     /// Resolves Microsoft credentials, enforcing that all values are configured together.
@@ -221,6 +230,21 @@ fn resolve_microsoft_credentials(
 
 fn nonblank_value(value: Option<&str>) -> Option<&str> {
     value.filter(|value| !value.trim().is_empty())
+}
+
+/// Pulumi injects `CURSOR_API_KEY_KMS_KEY_ID` as a container env var, not
+/// through Doppler. ECS always has `APP_SECRETS_JSON`, and `MacroConfig` will
+/// not look at process env once that blob is present, so the field on `Config`
+/// is unset in deployed environments. `CursorApiKeyKmsKeyId::new()` still
+/// falls back to process env, which is what `process_env` is.
+fn resolve_cursor_api_key_kms_key_id(
+    configured: &CursorApiKeyKmsKeyId,
+    process_env: Option<&str>,
+) -> anyhow::Result<String> {
+    nonblank_value(configured.value())
+        .or_else(|| nonblank_value(process_env))
+        .map(str::to_owned)
+        .context("CURSOR_API_KEY_KMS_KEY_ID is required")
 }
 
 #[cfg(test)]

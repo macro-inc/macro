@@ -706,3 +706,12 @@ export const ENABLE_RECENT_VIEW_FLAG = 'enable-recent-view';
 export const ENABLE_RECENT_VIEW_OVERRIDE =
   getFeatureFlagOverride('ENABLE_RECENT_VIEW') ??
   (DEV_MODE_ENV ? true : undefined);
+
+// Settings › Notifications: the dedicated preferences tab (delivery, per-type
+// opt-outs, muted items). When off, the tab is hidden and Account keeps the
+// existing desktop/mobile toggle. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_NOTIFICATION_SETTINGS.
+export const ENABLE_NOTIFICATION_SETTINGS_FLAG = 'enable-notification-settings';
+export const ENABLE_NOTIFICATION_SETTINGS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_NOTIFICATION_SETTINGS') ??
+  (DEV_MODE_ENV ? true : undefined);

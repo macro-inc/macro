@@ -413,6 +413,7 @@ async fn run() -> anyhow::Result<()> {
     let mut trigger = tokio::spawn(trigger::supervise(
         pool.clone(),
         config.kafka_brokers.as_ref().to_owned(),
+        config.internal_api_key.clone(),
     ));
 
     // The consumer: every agent-session event, filtered to our bot.

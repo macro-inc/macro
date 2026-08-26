@@ -314,6 +314,9 @@ services:
       # In-network gateway address; the local default (http://localhost:8082)
       # would point at this container itself.
       - OVERRIDE_CONNECTION_GATEWAY_URL=http://connection-gateway:8080
+      # In-network lexical address; the local default (http://localhost:8096)
+      # would point at this container itself.
+      - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
     volumes:
       # The local container provider drives the host's Docker daemon, so
       # sandboxes are siblings of this container rather than children. Harmless
@@ -323,6 +326,7 @@ services:
       - postgres
       - kafka
       - connection_gateway
+      - lexical_service
     networks:
       - databases
       - services

@@ -1,7 +1,7 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
+    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
     ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use bot_id::MACRO_CODER_BOT_ID;
@@ -47,6 +47,7 @@ fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
     AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
+        kind: ChannelKind::MentionThread,
         message: message(ChannelSender::new_from_user(user())),
     }))
 }
@@ -182,6 +183,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
         ChannelEventMetadata {
             bot_id: BotId::TEST_A,
             session_id: AgentSessionId::TEST_A,
+            kind: ChannelKind::MentionThread,
             message: message(ChannelSender::new_from_bot(BotId::TEST_B)),
         },
     ));

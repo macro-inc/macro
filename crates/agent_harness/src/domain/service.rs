@@ -586,7 +586,8 @@ where
     ///
     /// Three steps, in this order: persist whatever the action changes about
     /// the session, work out whether anyone needs telling, then deliver it.
-    /// Announcing last means nothing is announced that was never sent.
+    /// Announcing before delivery means the chip exists to anchor the turn
+    /// the agent streams into.
     #[tracing::instrument(err, skip(self, command), fields(agent.session.id = %session_id))]
     async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
         let DeliverAction {
@@ -599,6 +600,13 @@ where
         let announcement = self
             .announcement(session_id, &action, actor.as_ref(), announce)
             .await?;
+
+        // Announced before the prompt is delivered, as `open` does: the chip
+        // anchors the turn the agent is about to stream into, so it has to
+        // exist before the response can arrive.
+        if let Some(announcement) = announcement {
+            self.announcer.announce(announcement).await?;
+        }
 
         match self
             .sessions
@@ -638,10 +646,6 @@ where
                     .await?;
             }
             Err(error) => return Err(error.into()),
-        }
-
-        if let Some(announcement) = announcement {
-            self.announcer.announce(announcement).await?;
         }
         Ok(())
     }
