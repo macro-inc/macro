@@ -17,6 +17,4 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-base64 = { workspace = true }
-postcard = { workspace = true }
 serde = { workspace = true }

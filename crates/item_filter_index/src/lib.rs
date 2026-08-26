@@ -25,14 +25,16 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// Stable profile name.
+/// Stable direct-field profile name retained for existing browser projections.
 pub const SOUP_FLAT_V1: &str = "soup-flat-v1";
+/// Stable server-minted profile containing exact derived document facts.
+pub const SOUP_FLAT_V2: &str = "soup-flat-v2";
 
 /// Opaque vocabulary shared with direct Soup projection generation.
 pub mod vocabulary {
     use predicate_index::{Profile, Token};
 
-    use crate::SOUP_FLAT_V1;
+    use crate::{SOUP_FLAT_V1, SOUP_FLAT_V2};
 
     fn token(value: &str) -> Token {
         Token::new(value).expect("static item-filter-index token is valid")
@@ -41,6 +43,11 @@ pub mod vocabulary {
     /// `soup-flat-v1` profile.
     pub fn profile() -> Profile {
         Profile::new(token(SOUP_FLAT_V1))
+    }
+
+    /// Server-minted `soup-flat-v2` profile.
+    pub fn profile_v2() -> Profile {
+        Profile::new(token(SOUP_FLAT_V2))
     }
 
     /// Document partition.
@@ -76,6 +83,16 @@ pub mod vocabulary {
     /// Document file-type attribute.
     pub fn file_type() -> Token {
         token("file-type")
+    }
+
+    /// Canonical document subtype attribute.
+    pub fn document_sub_type() -> Token {
+        token("document-sub-type")
+    }
+
+    /// Explicit document email-attachment Boolean attribute.
+    pub fn email_attachment() -> Token {
+        token("email-attachment")
     }
 
     /// Creation timestamp and sort attribute.

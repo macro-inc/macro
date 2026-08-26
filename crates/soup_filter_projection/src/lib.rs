@@ -6,12 +6,30 @@ use std::str::FromStr;
 use item_filter_index::vocabulary;
 use model_file_type::FileType;
 #[cfg(feature = "models")]
-use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
+use models_soup::{
+    chat::SoupChat,
+    document::{SoupDocument, SoupDocumentSubType},
+    item::SoupItem,
+    project::SoupProject,
+};
 use predicate_index::{
     ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
     OptimisticProjectionMutation, RecordKey, Token, ValidationError, utc_timestamp_micros,
 };
+#[cfg(feature = "models")]
+use soup::domain::models::{SoupProjectionHydration, SoupProjectionSource};
 use thiserror::Error;
+
+mod profile;
+mod wire;
+
+pub use profile::{ProfileValidationError, validate_soup_flat_v2};
+pub use wire::{
+    ExactFactWire, IntegerFactWire, MAX_SOUP_CACHE_PROJECTION_BYTES,
+    MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES, SOUP_CACHE_PROJECTION_WIRE_VERSION,
+    SoupCacheProjectionCapsuleV1, SoupCacheProjectionWireError, decode_cache_projection,
+    encode_cache_projection,
+};
 
 #[cfg(test)]
 mod test;
@@ -22,6 +40,12 @@ pub enum ProjectionError {
     /// The authoritative document contained an unknown file-type value.
     #[error("invalid authoritative Soup document file type `{0}`")]
     InvalidFileType(String),
+    /// Projection source metadata does not match the accompanying item.
+    #[error("projection source does not match Soup item variant")]
+    SourceMismatch,
+    /// The generated v2 document violated the Soup profile contract.
+    #[error(transparent)]
+    ProfileValidation(#[from] ProfileValidationError),
     /// The generic projection violated bounded IR invariants.
     #[error(transparent)]
     Validation(#[from] ValidationError),
@@ -106,6 +130,7 @@ pub fn project_direct_fields(
     }
     projection(
         input.record_key,
+        vocabulary::profile(),
         input.kind.partition(),
         exact_facts,
         input.created_at,
@@ -264,6 +289,57 @@ pub fn project_chat<T>(
     })
 }
 
+/// Compile an authorized item/source pair into a complete `soup-flat-v2`
+/// document.
+///
+/// Unsupported item variants and hydration paths return `None`; a non-null
+/// source attached to the wrong entity variant is rejected.
+#[cfg(feature = "models")]
+pub fn project_soup_hydration(
+    record_key: RecordKey,
+    hydration: &SoupProjectionHydration,
+) -> Result<Option<IndexDocument>, ProjectionError> {
+    if hydration.source == SoupProjectionSource::Unsupported {
+        return Ok(None);
+    }
+
+    let mut document = match (&hydration.item, hydration.source) {
+        (
+            SoupItem::Document(item),
+            SoupProjectionSource::Document {
+                is_email_attachment,
+            },
+        ) => {
+            let mut document = project_document(record_key, item)?;
+            document.exact_facts.push(ExactFact {
+                attribute: vocabulary::email_attachment(),
+                value: ExactValue::new(vec![u8::from(is_email_attachment)])?,
+            });
+            if let Some(sub_type) = &item.sub_type {
+                let value = match sub_type {
+                    SoupDocumentSubType::Task { .. } => "task",
+                    SoupDocumentSubType::Snippet {} => "snippet",
+                    SoupDocumentSubType::Skill {} => "skill",
+                };
+                document
+                    .exact_facts
+                    .push(utf8_fact(vocabulary::document_sub_type(), value)?);
+            }
+            document
+        }
+        (SoupItem::Project(item), SoupProjectionSource::Project) => {
+            project_project(record_key, item)?
+        }
+        (SoupItem::Chat(item), SoupProjectionSource::Chat) => project_chat(record_key, item)?,
+        _ => return Err(ProjectionError::SourceMismatch),
+    };
+
+    document.profile = vocabulary::profile_v2();
+    document.canonicalize();
+    validate_soup_flat_v2(&document)?;
+    Ok(Some(document))
+}
+
 fn common_exact_facts(id: uuid::Uuid, owner: String) -> Result<Vec<ExactFact>, ValidationError> {
     Ok(vec![
         uuid_fact(vocabulary::id(), id)?,
@@ -273,6 +349,7 @@ fn common_exact_facts(id: uuid::Uuid, owner: String) -> Result<Vec<ExactFact>, V
 
 fn projection(
     record_key: RecordKey,
+    profile: predicate_index::Profile,
     partition: Token,
     exact_facts: Vec<ExactFact>,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -288,7 +365,7 @@ fn projection(
     };
     let document = IndexDocument {
         record_key,
-        profile: vocabulary::profile(),
+        profile,
         partition,
         exact_facts,
         integer_facts: vec![created_at.clone(), updated_at.clone()],

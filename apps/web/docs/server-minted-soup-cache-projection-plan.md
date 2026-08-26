@@ -1,13 +1,13 @@
 # Server-Minted Soup Cache Projection Plan
 
-Status: **implementation in progress; Phase 2 underway**
+Status: **implementation in progress; Phase 3 underway**
 
 ## Implementation status
 
 - [x] Phase 0: fixtures and contract lock (including the document-email lifecycle audit below).
 - [x] Phase 1: server projection-source hydration. The flat expanded cursor, frecency fallback, and bounded by-ID paths now return authorized item/source pairs from one SQL result; the document relation probe uses `document_email_pkey`. `cargo check -p soup --all-features` and the full Soup test target compilation pass. Database-backed execution and root-level `just prepare_db` remain pending the required migration approval.
-- [ ] Phase 2: `soup-flat-v2` projection and wire capsule — **in progress**.
-- [ ] Phase 3: emit capsules from `GraphqlSoupEntity`.
+- [x] Phase 2: `soup-flat-v2` projection and wire capsule. The profile retains v1 facts, adds canonical subtype and explicit Boolean attachment postings, enforces strict partition/fact semantics, and uses bounded standard-unpadded-base64/version-byte/postcard capsule-v1 encoding. Native and WASM-reachable adapter golden fixtures pass.
+- [ ] Phase 3: emit capsules from `GraphqlSoupEntity` — **in progress**.
 - [ ] Phases 4-6: not started; outside the current implementation request.
 
 ## Objective

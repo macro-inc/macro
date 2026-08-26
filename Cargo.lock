@@ -15032,13 +15032,11 @@ dependencies = [
 name = "soup-filter-cache-adapter"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "cache-core",
  "chrono",
  "graphql_soup_filter_input",
  "indexmap 2.14.0",
  "item-filter-index",
- "postcard",
  "predicate-index",
  "serde",
  "serde_json",
@@ -15051,12 +15049,16 @@ dependencies = [
 name = "soup-filter-projection"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "item-filter-index",
  "macro_user_id",
  "model_file_type",
  "models_soup",
+ "postcard",
  "predicate-index",
+ "serde",
+ "soup",
  "thiserror 2.0.18",
  "uuid",
  "workspace-hack",
