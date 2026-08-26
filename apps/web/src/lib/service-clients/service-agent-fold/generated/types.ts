@@ -155,6 +155,23 @@ export type MessagePart =
       status: ToolStatus;
       /**  What the tool did, as far as the log reveals. */
       detail: ToolDetail;
+      /**
+       *  The call's input, verbatim from ACP's `rawInput`, when reported.
+       *
+       *  Carried on every call - not just [`ToolDetail::Other`] - so a
+       *  reader that knows a tool by name (the Macro toolset renders each
+       *  tool with its own component) can parse the real arguments instead
+       *  of settling for the coarse detail.
+       */
+      rawInput: unknown;
+      /**
+       *  The call's result, verbatim from ACP's `rawOutput`, when reported.
+       *
+       *  The structured counterpart to the text a detail may carry: Macro's
+       *  agent reports each tool response as JSON here, and named-tool
+       *  rendering needs that JSON whole.
+       */
+      rawOutput: unknown;
     }
   /**  The agent asking to proceed. */
   | {

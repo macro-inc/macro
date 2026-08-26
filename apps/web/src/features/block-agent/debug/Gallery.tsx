@@ -82,6 +82,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
+      rawInput: null,
+      rawOutput: null,
       id: 'demo-read',
       label: 'Read',
       status: 'completed',
@@ -89,6 +91,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
+      rawInput: null,
+      rawOutput: null,
       id: 'demo-search',
       label: 'Search',
       status: 'completed',
@@ -100,6 +104,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
+      rawInput: null,
+      rawOutput: null,
       id: 'demo-edit',
       label: 'Edit',
       status: 'completed',
@@ -107,6 +113,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
+      rawInput: null,
+      rawOutput: null,
       id: 'demo-terminal',
       label: 'Bash',
       status: 'running',

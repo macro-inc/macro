@@ -60,6 +60,7 @@ fn folds_a_complete_turn() {
         label: run_label,
         status: run_status,
         detail: run_detail,
+        ..
     } = &parts[1]
     else {
         panic!("second part is the terminal call: {:?}", parts[1]);

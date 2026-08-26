@@ -217,6 +217,23 @@ pub enum MessagePart {
         status: ToolStatus,
         /// What the tool did, as far as the log reveals.
         detail: ToolDetail,
+        /// The call's input, verbatim from ACP's `rawInput`, when reported.
+        ///
+        /// Carried on every call - not just [`ToolDetail::Other`] - so a
+        /// reader that knows a tool by name (the Macro toolset renders each
+        /// tool with its own component) can parse the real arguments instead
+        /// of settling for the coarse detail.
+        #[serde(rename = "rawInput")]
+        #[specta(type = specta_typescript::Unknown)]
+        raw_input: Option<Box<serde_json::Value>>,
+        /// The call's result, verbatim from ACP's `rawOutput`, when reported.
+        ///
+        /// The structured counterpart to the text a detail may carry: Macro's
+        /// agent reports each tool response as JSON here, and named-tool
+        /// rendering needs that JSON whole.
+        #[serde(rename = "rawOutput")]
+        #[specta(type = specta_typescript::Unknown)]
+        raw_output: Option<Box<serde_json::Value>>,
     },
     /// The agent asking to proceed.
     Permission {
