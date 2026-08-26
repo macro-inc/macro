@@ -178,14 +178,14 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
                     <Show when={chrome.isActive(destination)}>
                       <span class="pointer-events-none absolute inset-y-2 left-0 w-[3px] rounded-r-sm bg-accent" />
                     </Show>
-                    <span class="relative flex size-5 shrink-0 items-center justify-center">
+                    <span class="relative flex size-6 shrink-0 items-center justify-center">
                       <Dynamic
                         component={
                           chrome.isActive(destination)
                             ? destination.filledIcon
                             : destination.icon
                         }
-                        class="size-5"
+                        class="size-6"
                       />
                       <Show
                         when={isSlim() && chrome.unreadCount(destination) > 0}
