@@ -28,7 +28,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::model::{AcpSessionId, McpHeader, McpServer, McpTransport};
+use crate::domain::model::{McpHeader, McpServer, McpTransport};
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::service::CursorSessionService;
 use agent_client_protocol::schema::ProtocolVersion;
@@ -39,8 +39,8 @@ use agent_client_protocol::schema::v1::{
     McpCapabilities, McpServer as AcpMcpServer, NewSessionRequest, NewSessionResponse,
     PromptCapabilities, PromptRequest, PromptResponse, SessionConfigId, SessionConfigKind,
     SessionConfigOption, SessionConfigSelect, SessionConfigSelectOption,
-    SessionConfigSelectOptions, SessionConfigValueId, SessionNotification, SessionUpdate,
-    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+    SessionConfigSelectOptions, SessionConfigValueId, SessionId, SessionNotification,
+    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
 };
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, on_receive_notification,
@@ -100,7 +100,7 @@ impl AcpNotifier {
 impl SessionNotifier for AcpNotifier {
     async fn notify(
         &self,
-        session: &AcpSessionId,
+        session: &SessionId,
         update: SessionUpdate,
     ) -> Result<(), rootcause::Report> {
         // Unreachable in practice: the binding runner starts with the
@@ -458,7 +458,7 @@ where
 /// the state it was in before any of this existed.
 async fn session_config_options<Cursor, Notifier, Repos>(
     service: &CursorSessionService<Cursor, Notifier, Repos>,
-    session: &AcpSessionId,
+    session: &SessionId,
 ) -> Vec<SessionConfigOption>
 where
     Cursor: CursorAgents + RunStream,

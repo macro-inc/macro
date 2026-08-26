@@ -5,18 +5,6 @@ mod test;
 
 use serde::{Deserialize, Serialize};
 
-/// The identity of one ACP session as this agent knows it.
-///
-/// Minted by the agent on `session/new` and echoed by the client on every
-/// prompt. It is deliberately not the Cursor agent id: the ACP session exists
-/// before the first prompt, while Cursor only mints an agent once there is a
-/// prompt to run.
-///
-/// This is [`agent_client_protocol::schema::v1::SessionId`], not a parallel
-/// wrapper: the inbound adapter and the domain speak the same id, so there is
-/// nothing to convert.
-pub use agent_client_protocol::schema::v1::SessionId as AcpSessionId;
-
 /// The identity of a Cursor cloud agent (`bc-…`), which holds the
 /// conversation across runs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -226,7 +226,7 @@ async fn concurrent_prompt_on_an_active_turn_is_rejected() {
 #[tokio::test]
 async fn unknown_session_is_an_error() {
     let (service, _cursor, _notifier) = service(None);
-    let missing = AcpSessionId::new("nope");
+    let missing = SessionId::new("nope");
     assert!(matches!(
         service.prompt(&missing, "hi").await,
         Err(SessionError::UnknownSession(_))
@@ -522,19 +522,19 @@ async fn a_session_without_mcp_servers_forwards_none() {
 async fn a_restored_session_prompts_its_existing_agent() {
     let (service, cursor, _notifier) = service(None);
     service.restore_session(
-        AcpSessionId::new("cursor-acp-7"),
+        SessionId::new("cursor-acp-7"),
         Some(CursorAgentId::new("bc-restored")),
         None,
         None,
     );
-    assert!(service.has_session(&AcpSessionId::new("cursor-acp-7")));
+    assert!(service.has_session(&SessionId::new("cursor-acp-7")));
 
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
 
     service
-        .prompt(&AcpSessionId::new("cursor-acp-7"), "continue")
+        .prompt(&SessionId::new("cursor-acp-7"), "continue")
         .await
         .expect("prompt runs");
     assert_eq!(
@@ -552,15 +552,15 @@ async fn a_restored_session_prompts_its_existing_agent() {
 async fn new_sessions_never_collide_with_restored_ids() {
     let (service, _cursor, _notifier) = service(None);
     service.restore_session(
-        AcpSessionId::new("cursor-acp-1"),
+        SessionId::new("cursor-acp-1"),
         Some(CursorAgentId::new("bc-restored")),
         None,
         None,
     );
 
     let fresh = service.new_session(Path::new("/workspace"), Vec::new());
-    assert_ne!(fresh, AcpSessionId::new("cursor-acp-1"));
-    assert!(service.has_session(&AcpSessionId::new("cursor-acp-1")));
+    assert_ne!(fresh, SessionId::new("cursor-acp-1"));
+    assert!(service.has_session(&SessionId::new("cursor-acp-1")));
     assert!(service.has_session(&fresh));
 }
 
@@ -571,15 +571,15 @@ async fn new_sessions_never_collide_with_restored_ids() {
 #[tokio::test]
 async fn a_session_restored_without_an_agent_mints_one_on_the_next_prompt() {
     let (service, cursor, _notifier) = service(None);
-    service.restore_session(AcpSessionId::new("cursor-acp-9"), None, None, None);
-    assert!(service.has_session(&AcpSessionId::new("cursor-acp-9")));
+    service.restore_session(SessionId::new("cursor-acp-9"), None, None, None);
+    assert!(service.has_session(&SessionId::new("cursor-acp-9")));
 
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
 
     service
-        .prompt(&AcpSessionId::new("cursor-acp-9"), "hello again")
+        .prompt(&SessionId::new("cursor-acp-9"), "hello again")
         .await
         .expect("prompt runs");
     assert!(matches!(
