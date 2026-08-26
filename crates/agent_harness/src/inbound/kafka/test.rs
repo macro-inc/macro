@@ -57,6 +57,7 @@ fn a_mention_for_our_bot_opens_a_session() {
     let routed = route_agent_trigger(
         mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
         &[BotId::TEST_A],
+        false,
     )
     .expect("a mention for our bot should yield work");
 
@@ -84,11 +85,41 @@ fn a_threaded_mention_answers_into_its_thread() {
     ));
 
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
-        route_agent_trigger(event, &[BotId::TEST_A]).expect("the mention should yield work")
+        route_agent_trigger(event, &[BotId::TEST_A], false).expect("the mention should yield work")
     else {
         panic!("a new-session event should open");
     };
     assert_eq!(open.origin.thread_id, thread);
+}
+
+#[test]
+fn a_persona_mention_opens_when_the_in_memory_runtime_serves_it() {
+    // A persona id is in nobody's `our_bots`; `persona_inmem` is what admits it.
+    let routed = route_agent_trigger(
+        mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
+        &[BotId::TEST_B],
+        true,
+    )
+    .expect("a persona mention should open on the in-memory deployment");
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
+        panic!("a persona mention should open");
+    };
+    assert_eq!(open.bot_id, BotId::TEST_A);
+}
+
+#[test]
+fn a_persona_prompt_into_an_existing_session_is_delivered_here() {
+    // Personas are managed in-process, so the prompt is ours to deliver,
+    // not just to announce.
+    let routed = route_agent_trigger(channel_message(BotId::TEST_A), &[BotId::TEST_B], true)
+        .expect("a persona prompt should be delivered");
+    assert!(
+        matches!(
+            routed,
+            RoutedTrigger::Command(_, HarnessCommand::Deliver(_))
+        ),
+        "a persona session's prompt should be a managed delivery"
+    );
 }
 
 #[test]
@@ -97,6 +128,7 @@ fn a_foreign_bots_open_is_skipped() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
             &[BotId::TEST_B],
+            false,
         )
         .unwrap_err(),
         Skipped::ForeignBot
@@ -106,7 +138,8 @@ fn a_foreign_bots_open_is_skipped() {
 #[test]
 fn another_deployments_managed_traffic_is_skipped() {
     assert_eq!(
-        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), &[BotId::TEST_B]).unwrap_err(),
+        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), &[BotId::TEST_B], false)
+            .unwrap_err(),
         Skipped::ForeignBot
     );
 }
@@ -117,6 +150,7 @@ fn a_bot_authored_mention_is_skipped() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_bot(BotId::TEST_B)),
             &[BotId::TEST_A],
+            false,
         )
         .unwrap_err(),
         Skipped::NotFromUser
@@ -131,6 +165,7 @@ fn a_non_staff_mention_is_skipped() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user)),
             &[BotId::TEST_A],
+            false,
         )
         .unwrap_err(),
         Skipped::NotMacroStaff
@@ -139,8 +174,12 @@ fn a_non_staff_mention_is_skipped() {
 
 #[test]
 fn a_managed_channel_message_forwards_to_its_session() {
-    let routed = route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), &[MACRO_CODER_BOT_ID])
-        .expect("a channel event for our bot should yield work");
+    let routed = route_agent_trigger(
+        channel_message(MACRO_CODER_BOT_ID),
+        &[MACRO_CODER_BOT_ID],
+        false,
+    )
+    .expect("a channel event for our bot should yield work");
 
     let RoutedTrigger::Command(session_id, HarnessCommand::Deliver(deliver)) = routed else {
         panic!("a managed existing-session event should deliver");
@@ -163,7 +202,7 @@ fn a_managed_channel_message_forwards_to_its_session() {
 fn an_external_channel_message_announces_only() {
     // The external bot's own runtime delivers the prompt; this deployment
     // only posts the chip, whichever bot it manages itself.
-    let routed = route_agent_trigger(channel_message(BotId::TEST_A), &[MACRO_CODER_BOT_ID])
+    let routed = route_agent_trigger(channel_message(BotId::TEST_A), &[MACRO_CODER_BOT_ID], false)
         .expect("an external existing-session event should yield work");
 
     let RoutedTrigger::Announce(session_id, prompt) = routed else {
@@ -188,7 +227,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
         },
     ));
     assert_eq!(
-        route_agent_trigger(event, &[MACRO_CODER_BOT_ID]).unwrap_err(),
+        route_agent_trigger(event, &[MACRO_CODER_BOT_ID], false).unwrap_err(),
         Skipped::NotFromUser
     );
 }
@@ -215,6 +254,7 @@ fn a_non_staff_follow_up_to_a_cursor_session_is_skipped() {
                 ChannelSender::new_from_user(outsider)
             ),
             &[bot_id::CURSOR_BOT_ID],
+            false,
         )
         .unwrap_err(),
         Skipped::NotMacroStaff
@@ -227,6 +267,7 @@ fn a_non_staff_follow_up_to_a_cursor_session_is_skipped() {
                 ChannelSender::new_from_bot(BotId::TEST_B)
             ),
             &[bot_id::CURSOR_BOT_ID],
+            false,
         )
         .unwrap_err(),
         Skipped::NotMacroStaff
@@ -239,6 +280,7 @@ fn a_staff_follow_up_to_a_cursor_session_delivers() {
     let routed = route_agent_trigger(
         channel_message_from(bot_id::CURSOR_BOT_ID, ChannelSender::new_from_user(user())),
         &[bot_id::CURSOR_BOT_ID],
+        false,
     )
     .expect("staff follow-up is ours to deliver");
     assert!(matches!(
@@ -255,6 +297,7 @@ fn a_non_staff_follow_up_to_a_coder_session_still_delivers() {
     let routed = route_agent_trigger(
         channel_message_from(MACRO_CODER_BOT_ID, ChannelSender::new_from_user(outsider)),
         &[MACRO_CODER_BOT_ID],
+        false,
     )
     .expect("coder follow-ups are not staff-gated");
     assert!(matches!(

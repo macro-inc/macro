@@ -411,7 +411,45 @@ impl BotRepo for PgBotsRepo {
         .fetch_optional(&self.pool)
         .await
         .context("failed to get bot")?;
-        row.map(map_bot_row).transpose()
+        if let Some(row) = row {
+            return Ok(Some(map_bot_row(row)?));
+        }
+        // Personas are agent identities with their own table, but their ids
+        // live in the bot id space, so everything that resolves a bot by id -
+        // session-log identity, has-agent gating, channel display - funnels
+        // through here. Projected as a system-kind bot: `ensure_manageable`
+        // rejects system bots, which keeps `/bots` from becoming a second way
+        // to edit what `/personas` owns.
+        let persona = sqlx::query!(
+            r#"
+            SELECT id, owner_user_id, name, handle, description, avatar_url,
+                   created_at, updated_at
+            FROM personas
+            WHERE id = $1
+              AND deleted_at IS NULL
+            "#,
+            bot_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to get persona bot")?;
+        Ok(persona.map(|row| Bot {
+            id: BotId::new_from_uuid(row.id),
+            kind: BotKind::System,
+            owner: Some(BotOwner::User {
+                user_id: row.owner_user_id.clone(),
+            }),
+            name: row.name,
+            handle: row.handle,
+            description: row.description,
+            avatar_url: row.avatar_url,
+            created_by: Some(row.owner_user_id),
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: None,
+            // Mentioning a persona is the whole point of one.
+            has_agent: true,
+        }))
     }
 
     async fn user_has_team(

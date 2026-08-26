@@ -35,6 +35,7 @@ fn facts(id: AgentSessionId) -> SessionFacts {
         id,
         owner: owner(),
         model: "test-model".to_owned(),
+        persona_prompt: None,
         acp_session_id: None,
     }
 }

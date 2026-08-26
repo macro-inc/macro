@@ -46,6 +46,40 @@ pub trait RuntimeConnections: Send + Sync + 'static {
     ) -> impl Future<Output = Option<RuntimeAttachment<Self::Connector>>> + Send;
 }
 
+/// What the harness needs to know about a persona to run its sessions.
+#[derive(Debug, Clone)]
+pub struct PersonaFacts {
+    /// Instructions appended to the base system prompt of the persona's
+    /// sessions, when the persona has any.
+    pub system_prompt: Option<String>,
+}
+
+/// Resolves a bot id to a persona: a user-configured agent identity whose
+/// sessions the in-memory harness serves.
+///
+/// [`super::model::AgentKind::of`] resolves the closed set of first-party
+/// bots; personas are the open half of the same id space, known only to
+/// whoever holds the persona store, which is why this is a port rather than
+/// another arm of that function.
+pub trait PersonaDirectory: Send + Sync + 'static {
+    /// The persona with this bot id, when it is one.
+    fn persona(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<PersonaFacts>>> + Send;
+}
+
+/// A [`PersonaDirectory`] for deployments (and tests) without a persona
+/// store: nothing is a persona.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPersonas;
+
+impl PersonaDirectory for NoPersonas {
+    async fn persona(&self, _bot: BotId) -> anyhow::Result<Option<PersonaFacts>> {
+        Ok(None)
+    }
+}
+
 /// Provisions the container transports agent sessions run through.
 pub trait ContainerManager: Send + Sync + 'static {
     /// Transport returned by this provider.

@@ -365,6 +365,15 @@ pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo, DssEventBroker>;
 pub(crate) type DssBotsState =
     BotsRouterState<DssBotService, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the personas service wired into DSS.
+pub(crate) type DssPersonaService = personas::domain::service::PersonaServiceImpl<
+    personas::outbound::pg_personas_repo::PgPersonasRepo,
+>;
+
+/// Type alias for the personas router state.
+pub(crate) type DssPersonasState =
+    personas::inbound::axum_router::PersonasRouterState<DssPersonaService, AuthorizationService>;
+
 /// Type alias for the channel bot webhook router state.
 pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
     DssBotService,
@@ -531,6 +540,7 @@ pub(crate) struct ApiContext {
     /// the channels router (starter-doc seeding records mention backlinks).
     pub channel_service: Arc<DssChannelService>,
     pub bots_state: DssBotsState,
+    pub personas_state: DssPersonasState,
     pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,

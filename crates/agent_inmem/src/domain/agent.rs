@@ -94,14 +94,16 @@ impl AgentState {
         }
     }
 
-    /// The messages and model for a turn answering `prompt`.
-    fn turn_input(&self, prompt: &str) -> (Vec<ChatMessage>, String) {
+    /// The messages, model, and persona instructions for a turn answering
+    /// `prompt`.
+    fn turn_input(&self, prompt: &str) -> (Vec<ChatMessage>, String, Option<String>) {
         self.store.get(&self.session_id).map_or_else(
-            || (messages_for_turn(&[], prompt), String::new()),
+            || (messages_for_turn(&[], prompt), String::new(), None),
             |state| {
                 (
                     messages_for_turn(&state.history, prompt),
                     state.model.clone(),
+                    state.persona_prompt.clone(),
                 )
             },
         )
@@ -275,10 +277,11 @@ async fn run_turn(
     cancel: CancellationToken,
 ) -> StopReason {
     let _turn = state.turn_lock.lock().await;
-    let (messages, model) = state.turn_input(&prompt);
+    let (messages, model, persona_prompt) = state.turn_input(&prompt);
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
         model,
+        persona_prompt,
         messages,
         cancel: cancel.clone(),
     });

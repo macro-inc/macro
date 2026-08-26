@@ -65,21 +65,25 @@ async fn drive_turn(
     let TurnRequest {
         owner,
         model,
+        persona_prompt,
         messages,
         cancel,
     } = request;
 
     let tools = all_tools();
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
-    let system_prompt = match user_memory {
-        Some(memory) => format!(
-            "{}\n{}\n<user_memory>\n{}\n</user_memory>",
-            tools.prompt,
-            prompt::agent_session::PROMPT,
-            memory
-        ),
-        None => format!("{}\n{}", tools.prompt, prompt::agent_session::PROMPT),
-    };
+    let mut system_prompt = format!("{}\n{}", tools.prompt, prompt::agent_session::PROMPT);
+    // Persona instructions extend the base prompt rather than replacing it:
+    // the base is what makes the agent work at all (tools, session shape),
+    // the persona is how this bot in particular behaves.
+    if let Some(persona) = persona_prompt {
+        system_prompt.push_str(&format!(
+            "\n<persona_instructions>\n{persona}\n</persona_instructions>"
+        ));
+    }
+    if let Some(memory) = user_memory {
+        system_prompt.push_str(&format!("\n<user_memory>\n{memory}\n</user_memory>"));
+    }
 
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
     let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);

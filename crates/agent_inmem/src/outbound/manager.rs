@@ -32,6 +32,9 @@ pub struct SessionFacts {
     pub owner: MacroUserIdStr<'static>,
     /// Model id stamped on the session row.
     pub model: String,
+    /// Persona instructions for the bot the session runs as, when it is a
+    /// persona. Appended to the base system prompt of every turn.
+    pub persona_prompt: Option<String>,
     /// The ACP session id the row carries, when one was ever negotiated. A
     /// cold attach hydrates its rebuilt conversation under this id so the
     /// harness's `session/resume` keeps it.
@@ -92,6 +95,7 @@ impl InMemAgentManager {
             self.store.entry(facts.id).or_insert_with(|| SessionState {
                 acp_session_id: facts.acp_session_id.clone(),
                 model: facts.model.clone(),
+                persona_prompt: facts.persona_prompt.clone(),
                 history,
             });
         }

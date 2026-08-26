@@ -151,10 +151,15 @@ async fn get_bot_sender_profile(db: &PgPool, bot_id: BotId) -> Option<BotSenderP
             avatar_url: None,
         });
     }
+    // Personas share the bot id space, so the sender may be one.
     sqlx::query!(
         r#"
-        SELECT name, avatar_url
+        SELECT name AS "name!", avatar_url
         FROM bots
+        WHERE id = $1
+        UNION ALL
+        SELECT name, avatar_url
+        FROM personas
         WHERE id = $1
         "#,
         bot_id.as_uuid(),

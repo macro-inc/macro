@@ -1,5 +1,6 @@
 use super::*;
 use agent_fold::domain::service::FoldedMessageService;
+use agent_harness::domain::ports::NoPersonas;
 use agent_harness::outbound::daytona::{AnthropicApiKey, GithubToken};
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_session::domain::ports::NoOpRealtime;
@@ -35,7 +36,7 @@ fn sessions_with(bot: BotId) -> (AgentSessionId, impl AgentSessionService + use<
 #[tokio::test]
 async fn refuses_the_in_process_bot_when_no_in_memory_runtime_is_configured() {
     let (id, sessions) = sessions_with(bot_id::MACRO_AI_BOT_ID);
-    let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions);
+    let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions, NoPersonas);
 
     let error = containers
         .route(id)
@@ -48,11 +49,47 @@ async fn refuses_the_in_process_bot_when_no_in_memory_runtime_is_configured() {
     );
 }
 
+/// A `PersonaDirectory` that says one bot is a persona.
+struct OnePersona(BotId);
+
+impl agent_harness::domain::ports::PersonaDirectory for OnePersona {
+    async fn persona(
+        &self,
+        bot: BotId,
+    ) -> anyhow::Result<Option<agent_harness::domain::ports::PersonaFacts>> {
+        Ok(
+            (bot == self.0).then(|| agent_harness::domain::ports::PersonaFacts {
+                system_prompt: Some("be terse".to_owned()),
+            }),
+        )
+    }
+}
+
+/// Personas run in-process, so the refusal covers them too: a deployment
+/// without the in-memory runtime must not sandbox a persona session.
+#[tokio::test]
+async fn refuses_a_persona_when_no_in_memory_runtime_is_configured() {
+    let persona = BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0x0000_5678));
+    let (id, sessions) = sessions_with(persona);
+    let containers =
+        RoutedContainers::new(unreachable_sandbox(), None, sessions, OnePersona(persona));
+
+    let error = containers
+        .route(id)
+        .await
+        .expect_err("a deployment without the in-process runtime must refuse a persona");
+
+    assert!(
+        matches!(error, HarnessError::Container(message) if message.contains("persona")),
+        "expected a refusal naming the persona"
+    );
+}
+
 /// The sandboxed bot is unaffected by the refusal above.
 #[tokio::test]
 async fn routes_the_sandboxed_bot_to_the_sandbox() {
     let (id, sessions) = sessions_with(bot_id::MACRO_CODER_BOT_ID);
-    let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions);
+    let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions, NoPersonas);
 
     assert!(matches!(
         containers.route(id).await.expect("coder routes"),
@@ -65,7 +102,7 @@ async fn routes_the_sandboxed_bot_to_the_sandbox() {
 async fn routes_an_owned_bot_to_the_sandbox() {
     let owned = BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0x0000_1234));
     let (id, sessions) = sessions_with(owned);
-    let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions);
+    let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions, NoPersonas);
 
     assert!(matches!(
         containers.route(id).await.expect("owned bot routes"),

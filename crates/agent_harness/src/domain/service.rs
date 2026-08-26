@@ -24,7 +24,9 @@ use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
     OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
 };
-use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
+use crate::domain::ports::{
+    ContainerManager, PersonaDirectory, RuntimeConnections, SessionAnnouncer,
+};
 use crate::domain::sandbox::SandboxResizeEffect;
 
 type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
@@ -37,27 +39,29 @@ struct QueuedCommand {
     span: tracing::Span,
 }
 
-struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
+struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, Personas> {
     sessions: Sessions,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
+    personas: Personas,
     defaults: HarnessDefaults,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
-pub struct AgentHarnessService<Sessions, Containers, Announcer, Runtimes> {
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
+pub struct AgentHarnessService<Sessions, Containers, Announcer, Runtimes, Personas> {
+    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, Personas>>,
     workers: Arc<SessionWorkers>,
 }
 
-impl<Sessions, Containers, Announcer, Runtimes>
-    AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, Personas>
+    AgentHarnessService<Sessions, Containers, Announcer, Runtimes, Personas>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaDirectory,
 {
     /// Build the orchestrator from its ports.
     pub fn new(
@@ -65,6 +69,7 @@ where
         containers: Containers,
         announcer: Announcer,
         runtimes: Runtimes,
+        personas: Personas,
         defaults: impl Into<HarnessDefaults>,
     ) -> Self {
         Self {
@@ -73,6 +78,7 @@ where
                 containers,
                 announcer,
                 runtimes,
+                personas,
                 defaults: defaults.into(),
             }),
             workers: Arc::new(DashMap::new()),
@@ -189,13 +195,14 @@ where
 /// control routes notify. Both operations go through the per-session queue, so
 /// a teardown cannot land in the middle of an open and a model change cannot
 /// overtake the prompt it was meant to follow.
-impl<Sessions, Containers, Announcer, Runtimes> AgentSessionNotificationRecipient
-    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, Personas> AgentSessionNotificationRecipient
+    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes, Personas>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaDirectory,
 {
     async fn session_deleted(
         &self,
@@ -239,13 +246,15 @@ where
 /// The announcement is best-effort: a session a runtime is about to serve
 /// must not die because the courtesy post failed, most plainly when the bot
 /// cannot post in the claimed channel.
-impl<Sessions, Containers, Announcer, Runtimes> agent_session::domain::ports::SessionOpener
-    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, Personas>
+    agent_session::domain::ports::SessionOpener
+    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes, Personas>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaDirectory,
 {
     async fn open_external_session(
         &self,
@@ -409,14 +418,31 @@ fn into_session_error(error: HarnessError) -> AgentSessionError {
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes>
-    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, Personas>
+    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, Personas>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaDirectory,
 {
+    /// The runtime kind serving `bot`'s sessions, persona-aware: a persona
+    /// runs on the in-memory harness, everything else resolves through
+    /// [`AgentKind::of`]'s closed set.
+    async fn kind_of(&self, bot: BotId) -> Result<AgentKind> {
+        if self
+            .personas
+            .persona(bot)
+            .await
+            .map_err(AgentSessionError::Unknown)?
+            .is_some()
+        {
+            return Ok(AgentKind::InMemory);
+        }
+        Ok(AgentKind::of(bot))
+    }
+
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match &command {
             HarnessCommand::Open(open)
@@ -509,7 +535,15 @@ where
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
         let OpenSession { bot_id, origin } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
-        let defaults = self.defaults.for_bot(bot_id);
+        let kind = self.kind_of(bot_id).await?;
+        // A persona has no defaults row of its own: its sessions run exactly
+        // like the in-process bot's (which is what `managed()` names when the
+        // in-memory agent is armed), under the persona's identity.
+        let defaults = if kind == AgentKind::InMemory {
+            self.defaults.managed()
+        } else {
+            self.defaults.for_bot(bot_id)
+        };
         let repo_url = defaults.repo_url.clone();
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
@@ -546,7 +580,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id,
-                kind: AgentKind::of(bot_id),
+                kind,
                 repo_url,
                 size: sandbox_size,
             })
@@ -619,7 +653,7 @@ where
             // wire.
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id).is_managed() {
+                if self.kind_of(session.bot_id).await?.is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     self.sessions
                         .attach_session(session_id, RuntimeAttachment::solo(container))
@@ -684,15 +718,16 @@ where
     }
 }
 
-async fn run_session_worker<Sessions, Containers, Announcer, Runtimes>(
+async fn run_session_worker<Sessions, Containers, Announcer, Runtimes, Personas>(
     session_id: AgentSessionId,
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
+    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, Personas>>,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    Personas: PersonaDirectory,
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand {

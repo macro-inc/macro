@@ -11,6 +11,7 @@ mod api;
 mod bots_directory;
 mod config;
 mod containers;
+mod personas_directory;
 mod trigger;
 
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -18,7 +19,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{HarnessCommand, HarnessDefaults, SessionDefaults};
 use agent_harness::domain::service::AgentHarnessService;
-use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
+use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger, trigger_bot_id};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::containers::HarnessContainers;
@@ -241,6 +242,9 @@ async fn run() -> anyhow::Result<()> {
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
+    let personas_directory = crate::personas_directory::PgPersonaDirectory::new(
+        personas::outbound::pg_personas_repo::PgPersonasRepo::new(pool.clone()),
+    );
     let sandbox_and_inmem = RoutedContainers::new(
         sandbox,
         inmem,
@@ -249,6 +253,7 @@ async fn run() -> anyhow::Result<()> {
             FoldedMessageService::new(session_repo.clone()),
             NoOpRealtime,
         ),
+        personas_directory.clone(),
     );
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -357,6 +362,7 @@ async fn run() -> anyhow::Result<()> {
         containers,
         announcer,
         Arc::clone(&runtimes),
+        personas_directory.clone(),
         defaults,
     ));
 
@@ -398,7 +404,10 @@ async fn run() -> anyhow::Result<()> {
         entity_access,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
-    let bots_directory = Arc::new(PgBotDirectory::new(PgBotsRepo::new(pool.clone())));
+    let bots_directory = Arc::new(PgBotDirectory::new(
+        PgBotsRepo::new(pool.clone()),
+        personas_directory.clone(),
+    ));
     let create_state = CreateSessionState::new(
         harness.clone(),
         bots_directory.clone(),
@@ -495,7 +504,23 @@ async fn run() -> anyhow::Result<()> {
                     tracing::Span::current()
                         .record("macro.event.id", tracing::field::display(event.event().event_id));
 
-                    let routed = match route_agent_trigger(event.event().event.clone(), &our_bots) {
+                    // A persona bot's sessions are ours only when the
+                    // in-process runtime is armed. Resolved here, before the
+                    // pure router, because it takes a table lookup; a lookup
+                    // failure fails processing so the event is redelivered
+                    // rather than mis-skipped as a foreign bot.
+                    let persona_inmem = match trigger_bot_id(&event.event().event) {
+                        Some(bot) if inmem_bot.is_some() && !our_bots.contains(&bot) => {
+                            use agent_harness::domain::ports::PersonaDirectory as _;
+                            personas_directory
+                                .persona(bot)
+                                .await
+                                .context("failed to resolve a trigger's bot against personas")?
+                                .is_some()
+                        }
+                        _ => false,
+                    };
+                    let routed = match route_agent_trigger(event.event().event.clone(), &our_bots, persona_inmem) {
                         Ok(routed) => routed,
                         Err(skipped) => {
                             // Info, not debug: a skip is the last visible trace

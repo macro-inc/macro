@@ -46,6 +46,24 @@ pub enum Skipped {
     NotMacroStaff,
 }
 
+/// The bot an agent-trigger event is about, when the shape carries one.
+///
+/// Extracted before routing so the caller can resolve facts that need I/O -
+/// today, whether the bot is a persona - and hand the answer to
+/// [`route_agent_trigger`], which stays pure.
+#[must_use]
+pub fn trigger_bot_id(event: &AgentTriggerTopicEvent) -> Option<BotId> {
+    match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
+            Some(mentioned.bot_id)
+        }
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
+            Some(metadata.bot_id)
+        }
+        _ => None,
+    }
+}
+
 /// Route one trigger event: work for this deployment, or a reason it was
 /// skipped.
 ///
@@ -53,12 +71,18 @@ pub enum Skipped {
 /// bots' runtimes open their own sessions over the API. A deployment serves
 /// the sandboxed coder bot, the in-memory Macro bot when configured, and,
 /// when it holds a Cursor API key, the Cursor bot too, which is why this is a
-/// set rather than one id. Events for sessions that already exist always
-/// carry work: a prompt to deliver when the session is managed here, or just
-/// its announcement when the bot's own runtime delivers the prompt.
+/// set rather than one id. Personas are the open end of that set: they are
+/// rows, not configuration, so the caller resolves the event's bot against
+/// the persona store (see [`trigger_bot_id`]) and passes `persona_inmem` -
+/// true when the bot is a persona and this deployment runs the in-memory
+/// harness that serves persona sessions. Events for sessions that already
+/// exist always carry work: a prompt to deliver when the session is managed
+/// here, or just its announcement when the bot's own runtime delivers the
+/// prompt.
 pub fn route_agent_trigger(
     event: AgentTriggerTopicEvent,
     our_bots: &[BotId],
+    persona_inmem: bool,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
@@ -75,7 +99,7 @@ pub fn route_agent_trigger(
                 return Err(Skipped::NotMacroStaff);
             }
 
-            if !our_bots.contains(&mentioned.bot_id) {
+            if !our_bots.contains(&mentioned.bot_id) && !persona_inmem {
                 return Err(Skipped::ForeignBot);
             }
             let message = mentioned.message;
@@ -112,12 +136,16 @@ pub fn route_agent_trigger(
                 channel_id: message.channel_id,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
             };
-            let kind = AgentKind::of(bot_id);
+            let kind = if persona_inmem {
+                AgentKind::InMemory
+            } else {
+                AgentKind::of(bot_id)
+            };
             if kind.is_managed() {
                 // A managed session's prompt is delivered (and announced)
                 // by the deployment that manages it; anyone else stays out
                 // of the way entirely.
-                if !our_bots.contains(&bot_id) {
+                if !our_bots.contains(&bot_id) && !persona_inmem {
                     return Err(Skipped::ForeignBot);
                 }
                 // The open gate alone is not enough: the mentioning channel

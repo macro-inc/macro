@@ -9,7 +9,7 @@
 
 use agent_harness::domain::error::{HarnessError, Result};
 use agent_harness::domain::model::{AgentKind, SpawnContainer};
-use agent_harness::domain::ports::ContainerManager;
+use agent_harness::domain::ports::{ContainerManager, PersonaDirectory};
 use agent_harness::domain::sandbox::SandboxResizeEffect;
 use agent_harness::outbound::containers::{HarnessContainer, HarnessContainers};
 use agent_harness::outbound::sidecar::SidecarSender;
@@ -76,11 +76,13 @@ pub struct InMemRuntime {
 }
 
 /// The deployment's [`ContainerManager`]: the sandbox provider for the
-/// sandboxed bot, in-process for the in-memory bot when one is configured.
-pub struct RoutedContainers<Sessions> {
+/// sandboxed bot, in-process for the in-memory bot (and every persona) when
+/// one is configured.
+pub struct RoutedContainers<Sessions, Personas> {
     sandbox: HarnessContainers,
     inmem: Option<InMemRuntime>,
     sessions: Sessions,
+    personas: Personas,
 }
 
 #[derive(Debug)]
@@ -89,20 +91,24 @@ enum Route {
     InMem(SessionFacts),
 }
 
-impl<Sessions> RoutedContainers<Sessions>
+impl<Sessions, Personas> RoutedContainers<Sessions, Personas>
 where
     Sessions: AgentSessionService,
+    Personas: PersonaDirectory,
 {
-    /// Route by bot: `sessions` is where a session's bot is looked up.
+    /// Route by bot: `sessions` is where a session's bot is looked up, and
+    /// `personas` is where a persona bot's instructions come from.
     pub fn new(
         sandbox: HarnessContainers,
         inmem: Option<InMemRuntime>,
         sessions: Sessions,
+        personas: Personas,
     ) -> Self {
         Self {
             sandbox,
             inmem,
             sessions,
+            personas,
         }
     }
 
@@ -120,13 +126,28 @@ where
             .get_session(session)
             .await
             .map_err(HarnessError::Session)?;
-        if let Some(inmem) = &self.inmem
-            && row.bot_id == inmem.bot
-        {
+        // Personas run in-process too, under their own instructions, so the
+        // in-process bot and any persona id resolve to the same runtime.
+        let persona_prompt = match &self.inmem {
+            Some(inmem) if row.bot_id == inmem.bot => Some(None),
+            _ => self
+                .personas
+                .persona(row.bot_id)
+                .await
+                .map_err(|error| HarnessError::Container(error.to_string()))?
+                .map(|persona| persona.system_prompt),
+        };
+        if let Some(persona_prompt) = persona_prompt {
+            if self.inmem.is_none() {
+                return Err(HarnessError::Container(format!(
+                    "session {session} belongs to a persona, and this deployment does not serve the in-process runtime"
+                )));
+            }
             return Ok(Route::InMem(SessionFacts {
                 id: session,
                 owner: row.owner_id,
                 model: row.model,
+                persona_prompt,
                 acp_session_id: row.acp_session_id,
             }));
         }
@@ -145,9 +166,10 @@ where
     }
 }
 
-impl<Sessions> ContainerManager for RoutedContainers<Sessions>
+impl<Sessions, Personas> ContainerManager for RoutedContainers<Sessions, Personas>
 where
     Sessions: AgentSessionService,
+    Personas: PersonaDirectory,
 {
     type Transport = RoutedTransport;
 

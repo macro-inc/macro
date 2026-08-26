@@ -1309,6 +1309,12 @@ async fn run() -> anyhow::Result<()> {
             (*entity_access_service).clone(),
             authorization_state.clone(),
         ),
+        personas_state: personas::inbound::axum_router::PersonasRouterState::new(
+            personas::domain::service::PersonaServiceImpl::new(
+                personas::outbound::pg_personas_repo::PgPersonasRepo::new(db.clone()),
+            ),
+            authorization_state.clone(),
+        ),
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,

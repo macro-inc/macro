@@ -660,10 +660,15 @@ async fn load_bot_display_names(
     if uuids.is_empty() {
         return Ok(names);
     }
+    // Personas share the bot id space, so any of these ids may be one.
     let rows = sqlx::query!(
         r#"
-        SELECT id, name
+        SELECT id AS "id!", name AS "name!"
         FROM bots
+        WHERE id = ANY($1) AND deleted_at IS NULL
+        UNION ALL
+        SELECT id, name
+        FROM personas
         WHERE id = ANY($1) AND deleted_at IS NULL
         "#,
         &uuids,
@@ -3921,12 +3926,17 @@ impl ChannelRepo for PgChannelsRepo {
         if ids.is_empty() {
             return Ok(profiles);
         }
-        // Soft-deleted bots are included on purpose so historical messages
-        // keep their sender identity.
+        // Soft-deleted bots and personas are included on purpose so
+        // historical messages keep their sender identity. Personas share the
+        // bot id space, so any of these ids may be one.
         let rows = sqlx::query!(
             r#"
-            SELECT id, name, avatar_url
+            SELECT id AS "id!", name AS "name!", avatar_url
             FROM bots
+            WHERE id = ANY($1)
+            UNION ALL
+            SELECT id, name, avatar_url
+            FROM personas
             WHERE id = ANY($1)
             "#,
             &ids,

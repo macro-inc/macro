@@ -27,6 +27,11 @@ pub struct SessionState {
     pub acp_session_id: Option<SessionId>,
     /// Model id turns run on; `session/set_config_option` moves it.
     pub model: String,
+    /// Persona instructions appended to every turn's base system prompt,
+    /// when the session's bot is a persona. Snapshotted at attach: a
+    /// persona edit applies to its next session, not retroactively to one
+    /// already holding a conversation shaped by the old instructions.
+    pub persona_prompt: Option<String>,
     /// The conversation so far, oldest first.
     pub history: Vec<HistoryEntry>,
 }
@@ -38,6 +43,7 @@ impl SessionState {
         Self {
             acp_session_id: None,
             model,
+            persona_prompt: None,
             history: Vec::new(),
         }
     }

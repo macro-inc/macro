@@ -36,6 +36,7 @@ use crate::domain::model::{
     OpenSession, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
+use crate::domain::ports::NoPersonas;
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
@@ -90,6 +91,7 @@ type TestHarness = AgentHarnessService<
     MockContainerManager,
     AnnouncerMock,
     Arc<RuntimeRegistry<ContainerSender>>,
+    NoPersonas,
 >;
 
 fn harness() -> (
@@ -112,6 +114,7 @@ fn harness() -> (
         containers.clone(),
         announcer.clone(),
         Arc::clone(&runtimes),
+        NoPersonas,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -1127,6 +1130,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         containers.clone(),
         AnnouncerMock::new(),
         RuntimeRegistry::<ContainerSender>::new(),
+        NoPersonas,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),

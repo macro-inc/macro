@@ -281,6 +281,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "notification",
+ "personas",
  "rdkafka",
  "secretsmanager_client",
  "serde",
@@ -5088,6 +5089,7 @@ dependencies = [
  "notification",
  "opensearch_client",
  "ordered-float",
+ "personas",
  "projects",
  "properties",
  "properties_service",
@@ -11745,6 +11747,32 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+
+[[package]]
+name = "personas"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bot_id",
+ "chrono",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "pest"

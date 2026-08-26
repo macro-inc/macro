@@ -60,6 +60,7 @@ members = [
   "crates/mcp_select",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/personas",
   "crates/predicate_index",
   "crates/prompt",
   "crates/properties_service",

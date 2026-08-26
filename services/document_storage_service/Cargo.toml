@@ -156,6 +156,7 @@ models_properties = { path = "../../crates/models_properties" }
 models_soup = { path = "../../crates/models_soup", features = ["schema"] }
 notification = { path = "../../crates/notification" }
 opensearch_client = { path = "../../crates/opensearch_client" }
+personas = { path = "../../crates/personas" }
 projects_hex = { path = "../../crates/projects", package = "projects" }
 properties = { path = "../../crates/properties" }
 properties_service = { path = "../../crates/properties_service" }

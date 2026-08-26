@@ -259,6 +259,13 @@ use utoipa::OpenApi;
         bots::inbound::channel_webhook_router::create_channel_scoped_bot_handler,
         bots::inbound::channel_webhook_router::post_channel_webhook_handler,
 
+        // personas (user-facing "agents")
+        personas::inbound::axum_router::list_personas_handler,
+        personas::inbound::axum_router::create_persona_handler,
+        personas::inbound::axum_router::get_persona_handler,
+        personas::inbound::axum_router::patch_persona_handler,
+        personas::inbound::axum_router::delete_persona_handler,
+
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
         call::inbound::axum_router::check_active_call_handler,
@@ -363,6 +370,9 @@ use utoipa::OpenApi;
     ),
     components(
         schemas(
+            personas::domain::models::Persona,
+            personas::domain::models::CreatePersonaRequest,
+            personas::domain::models::PatchPersonaRequest,
             DocumentStorageServiceApiVersion,
             GenericResponse,
             GenericErrorResponse,

@@ -14,6 +14,9 @@ pub struct TurnRequest {
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,
+    /// Persona instructions appended to the turn's base system prompt, when
+    /// the session's bot is a persona.
+    pub persona_prompt: Option<String>,
     /// The full conversation, oldest first, ending with the prompt being
     /// answered.
     pub messages: Vec<ChatMessage>,
