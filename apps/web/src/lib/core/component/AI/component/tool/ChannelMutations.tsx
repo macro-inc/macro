@@ -2,27 +2,10 @@ import { ItemPreview } from '@core/component/ItemPreview';
 import Hash from '@phosphor-icons/core/regular/hash.svg';
 import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
 import Users from '@phosphor-icons/core/regular/users.svg';
-import { invalidateChannelParticipants } from '@queries/channel/channel-participants';
-import { invalidateListChannels } from '@queries/channel/channels';
-import { invalidateSoupEntity } from '@queries/soup/cache';
-import { createEffect, createSignal, For, on, Show, Suspense } from 'solid-js';
+import { createSignal, For, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
-
-function refreshChannelViews(channelId: string) {
-  invalidateListChannels();
-  invalidateSoupEntity(channelId);
-  void invalidateChannelParticipants(channelId);
-}
-
-function useRefreshChannelViews(channelId: () => string | undefined) {
-  createEffect(
-    on(channelId, (id) => {
-      if (id) refreshChannelViews(id);
-    })
-  );
-}
 
 type Detail = {
   label: string;
@@ -69,14 +52,10 @@ function displayParticipant(id: string) {
 
 const createChannelHandler = createToolRenderer({
   name: 'CreateChannel',
-  handleResponse: (ctx) => {
-    refreshChannelViews(ctx.tool.data.channelId);
-  },
   render: (ctx) => {
     const [expanded, setExpanded] = createSignal(false);
     const response = () => ctx.response?.data;
     const participants = () => response()?.participants ?? [];
-    useRefreshChannelViews(() => response()?.channelId);
 
     return (
       <BaseTool
@@ -133,13 +112,9 @@ const createChannelHandler = createToolRenderer({
 
 const renameChannelHandler = createToolRenderer({
   name: 'RenameChannel',
-  handleResponse: (ctx) => {
-    refreshChannelViews(ctx.tool.data.channelId);
-  },
   render: (ctx) => {
     const [expanded, setExpanded] = createSignal(false);
     const response = () => ctx.response?.data;
-    useRefreshChannelViews(() => response()?.channelId);
 
     return (
       <BaseTool
@@ -178,16 +153,12 @@ const renameChannelHandler = createToolRenderer({
 
 const manageChannelParticipantsHandler = createToolRenderer({
   name: 'ManageChannelParticipants',
-  handleResponse: (ctx) => {
-    refreshChannelViews(ctx.tool.data.channelId);
-  },
   render: (ctx) => {
     const [expanded, setExpanded] = createSignal(false);
     const response = () => ctx.response?.data;
     const adding = () => ctx.tool.data.action === 'add';
     const participants = () =>
       response()?.participants ?? ctx.tool.data.participants;
-    useRefreshChannelViews(() => response()?.channelId);
 
     return (
       <BaseTool
