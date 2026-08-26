@@ -875,12 +875,12 @@ pub(super) fn build_thread_email_filter(
             build_thread_property_predicate(lit)
         }
 
-        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(seen)) => {
-            SqlFragment::raw(if *seen {
-                "t.is_read = TRUE"
-            } else {
-                "t.is_read = FALSE"
-            })
+        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(true)) => {
+            SqlFragment::raw("t.is_read = TRUE")
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(false)) => {
+            SqlFragment::raw("t.is_read = FALSE")
         }
 
         filter_ast::ExprFrame::Literal(
