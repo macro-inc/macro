@@ -1,6 +1,14 @@
 # Server-Minted Soup Cache Projection Plan
 
-Status: **proposed; scoped to closing the flat Documents/Files realtime gap**
+Status: **implementation in progress; Phase 2 underway**
+
+## Implementation status
+
+- [x] Phase 0: fixtures and contract lock (including the document-email lifecycle audit below).
+- [x] Phase 1: server projection-source hydration. The flat expanded cursor, frecency fallback, and bounded by-ID paths now return authorized item/source pairs from one SQL result; the document relation probe uses `document_email_pkey`. `cargo check -p soup --all-features` and the full Soup test target compilation pass. Database-backed execution and root-level `just prepare_db` remain pending the required migration approval.
+- [ ] Phase 2: `soup-flat-v2` projection and wire capsule — **in progress**.
+- [ ] Phase 3: emit capsules from `GraphqlSoupEntity`.
+- [ ] Phases 4-6: not started; outside the current implementation request.
 
 ## Objective
 

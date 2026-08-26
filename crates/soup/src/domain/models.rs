@@ -1029,11 +1029,55 @@ fn reminder_or_is_sets_only(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilt
     }
 }
 
+/// Authoritative source metadata used to build a cache projection.
+///
+/// This value is internal hydration state. It is deliberately separate from
+/// public Soup entity models so relation-backed facts do not become business
+/// fields on [`models_soup::document::SoupDocument`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SoupProjectionSource {
+    /// Metadata loaded with an authoritative document row.
+    Document {
+        /// Whether `document_email` contains a row for the document.
+        is_email_attachment: bool,
+    },
+    /// Authoritative project row; all v2 projection facts are direct fields.
+    Project,
+    /// Authoritative chat row; all v2 projection facts are direct fields.
+    Chat,
+    /// The item variant or hydration path does not support cache projection.
+    Unsupported,
+}
+
+/// An authorized Soup item and projection metadata read from the same
+/// hydration result.
+#[derive(Debug, Clone)]
+pub struct SoupProjectionHydration<Item = SoupItem<()>> {
+    /// Authorized Soup item returned to the caller.
+    pub item: Item,
+    /// Internal facts needed by the active projection profile.
+    pub source: SoupProjectionSource,
+}
+
+impl<Item> SoupProjectionHydration<Item> {
+    /// Map the hydrated item while preserving its authoritative source facts.
+    pub fn map<F, Mapped>(self, map: F) -> SoupProjectionHydration<Mapped>
+    where
+        F: FnOnce(Item) -> Mapped,
+    {
+        SoupProjectionHydration {
+            item: map(self.item),
+            source: self.source,
+        }
+    }
+}
+
 /// A Soup result with both optional enrichments represented in one model.
 ///
 /// Service methods decide which fields to populate. An unfetched enrichment
 /// remains empty without changing the response model.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct EnrichedSoupItem {
     /// The Soup item with its property projection.

@@ -1,10 +1,16 @@
-use crate::outbound::pg_soup_repo::{
-    expanded::{
-        by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
-        by_ids::expanded_soup_by_ids,
-        dynamic::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup},
+use crate::{
+    domain::models::SoupProjectionSource,
+    outbound::pg_soup_repo::{
+        expanded::{
+            by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
+            by_ids::{expanded_soup_by_ids, expanded_soup_by_ids_with_projection},
+            dynamic::{
+                ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup,
+                expanded_dynamic_cursor_soup_with_projection,
+            },
+        },
+        populate_properties,
     },
-    populate_properties,
 };
 use filter_ast::Expr;
 use item_filters::{
@@ -5445,6 +5451,99 @@ async fn production_documents_presets_have_authoritative_membership(
             "{name}"
         );
     }
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn projection_hydration_carries_attachment_state_from_flat_and_by_id_rows(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let flat = expanded_dynamic_cursor_soup_with_projection(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::default()),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    let attachment_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let ordinary_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff")?;
+    let attachment_source = flat
+        .iter()
+        .find(|hydration| hydration.item.id() == attachment_id)
+        .map(|hydration| hydration.source)
+        .expect("attachment document is hydrated");
+    let ordinary_source = flat
+        .iter()
+        .find(|hydration| hydration.item.id() == ordinary_id)
+        .map(|hydration| hydration.source)
+        .expect("ordinary document is hydrated");
+    assert_eq!(
+        attachment_source,
+        SoupProjectionSource::Document {
+            is_email_attachment: true,
+        }
+    );
+    assert_eq!(
+        ordinary_source,
+        SoupProjectionSource::Document {
+            is_email_attachment: false,
+        }
+    );
+
+    let entities = [
+        EntityType::Document.with_entity_string(attachment_id.to_string()),
+        EntityType::Document.with_entity_string(ordinary_id.to_string()),
+    ];
+    let by_id = expanded_soup_by_ids_with_projection(&db, user_id, &entities).await?;
+    assert_eq!(by_id.len(), 2);
+    assert!(by_id.iter().any(|hydration| {
+        hydration.item.id() == attachment_id
+            && hydration.source
+                == SoupProjectionSource::Document {
+                    is_email_attachment: true,
+                }
+    }));
+    assert!(by_id.iter().any(|hydration| {
+        hydration.item.id() == ordinary_id
+            && hydration.source
+                == SoupProjectionSource::Document {
+                    is_email_attachment: false,
+                }
+    }));
+
+    // The relation probe is backed by the composite primary key's leading
+    // document_id column. Disable sequential scans so the fixture's tiny table
+    // still exposes the representative production access path.
+    let mut tx = db.begin().await?;
+    sqlx::query!("SET LOCAL enable_seqscan = off")
+        .execute(&mut *tx)
+        .await?;
+    let plan = sqlx::query_scalar!(
+        r#"EXPLAIN (FORMAT JSON)
+           SELECT EXISTS (
+               SELECT 1 FROM document_email de WHERE de.document_id = $1
+           )"#,
+        attachment_id.to_string(),
+    )
+    .fetch_one(&mut *tx)
+    .await?
+    .expect("EXPLAIN returns a JSON plan");
+    assert!(
+        plan.to_string().contains("document_email_pkey"),
+        "attachment existence lookup must use document_email_pkey: {plan}"
+    );
 
     Ok(())
 }
