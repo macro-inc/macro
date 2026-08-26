@@ -5,9 +5,9 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    DocumentContentUploadedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
-    DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata, DocumentTopicEvent,
-    InteractionReason,
+    DocumentContentUploadedMetadata, DocumentEmailAttachmentChangedMetadata,
+    DocumentInteractionMetadata, DocumentMacroEvent, DocumentPurgedMetadata,
+    DocumentSyncContentUpdatedMetadata, DocumentTopicEvent, InteractionReason,
 };
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
@@ -25,6 +25,36 @@ fn assert_wire_round_trip(event: Event<DocumentTopicEvent>, expected: Value) {
     let decoded: Event<DocumentTopicEvent> =
         serde_json::from_value(expected).expect("event deserializes");
     assert_eq!(decoded, event);
+}
+
+#[test]
+fn email_attachment_changed_serializes_to_the_exact_envelope() {
+    let event = Event::with_event_id(
+        Uuid::from_u128(6),
+        DocumentTopicEvent::EmailAttachmentChanged(DocumentEmailAttachmentChangedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        }),
+    );
+
+    assert_wire_round_trip(
+        event,
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000006",
+            "schema_version": 1,
+            "event_type": "document.email_attachment_changed",
+            "metadata": {
+                "document_id": DOCUMENT_ID,
+            },
+        }),
+    );
+
+    let event = DocumentMacroEvent::email_attachment_changed(
+        DOCUMENT_ID,
+        DocumentEmailAttachmentChangedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        },
+    );
+    assert_eq!(event.key(), DOCUMENT_ID);
 }
 
 #[test]

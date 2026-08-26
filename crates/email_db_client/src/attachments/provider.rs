@@ -67,12 +67,40 @@ pub async fn insert_attachments(
         })
         .collect();
 
-    // delete orphaned attachments
-    if !orphaned_attachments.is_empty() {
-        let orphaned_ids: Vec<Uuid> = orphaned_attachments
+    // A provider reconciliation must not cascade-delete `document_email`
+    // while the derived Document remains. Message/link deletion is different:
+    // those paths collect affected document ids and publish a post-commit
+    // relation-change event.
+    let deletable_orphans = if orphaned_attachments.is_empty() {
+        Vec::new()
+    } else {
+        let orphaned_ids = orphaned_attachments
             .iter()
             .map(|orphan| orphan.id)
-            .collect();
+            .collect::<Vec<_>>();
+        let linked_ids = sqlx::query_scalar!(
+            r#"
+            SELECT email_attachment_id
+            FROM document_email
+            WHERE email_attachment_id = ANY($1::uuid[])
+            "#,
+            &orphaned_ids
+        )
+        .fetch_all(&mut *tx)
+        .await?
+        .into_iter()
+        .collect::<std::collections::HashSet<_>>();
+        orphaned_attachments
+            .iter()
+            .filter(|orphan| !linked_ids.contains(&orphan.id))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    if !deletable_orphans.is_empty() {
+        let orphaned_ids = deletable_orphans
+            .iter()
+            .map(|orphan| orphan.id)
+            .collect::<Vec<_>>();
         sqlx::query!(
             r#"
             DELETE FROM email_attachments
@@ -84,9 +112,9 @@ pub async fn insert_attachments(
         .await?;
     }
 
-    // The thread-level flag only moves when a calendar attachment enters or
-    // leaves this message's attachment set.
-    let calendar_set_changed = orphaned_attachments
+    // The thread-level flag only moves when a calendar attachment actually
+    // enters or leaves this message's retained attachment set.
+    let calendar_set_changed = deletable_orphans
         .iter()
         .chain(new_attachments.iter())
         .any(|a| is_calendar_attachment(a.filename.as_deref(), a.mime_type.as_deref()));
@@ -223,7 +251,15 @@ where
     E: Executor<'e, Database = Postgres>,
 {
     sqlx::query!(
-        r#"DELETE FROM email_attachments WHERE message_id = $1"#,
+        r#"
+        DELETE FROM email_attachments ea
+        WHERE ea.message_id = $1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM document_email de
+              WHERE de.email_attachment_id = ea.id
+          )
+        "#,
         message_id
     )
     .execute(executor)

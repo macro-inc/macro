@@ -229,8 +229,8 @@ async fn draft_discard_recomputes_thread_metadata(pool: Pool<Postgres>) -> anyho
     };
 
     let mut conn = pool.acquire().await?;
-    let deleted_thread = crate::messages::delete::delete_message_with_tx(&mut conn, &draft).await?;
-    assert!(deleted_thread.is_none(), "thread should survive");
+    let outcome = crate::messages::delete::delete_message_with_tx(&mut conn, &draft).await?;
+    assert!(outcome.deleted_thread_id.is_none(), "thread should survive");
 
     // The remaining message is CATEGORY_PROMOTIONS-only: noise, and without
     // an INBOX label the thread leaves the inbox and has no inbound ts.

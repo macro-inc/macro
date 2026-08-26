@@ -84,6 +84,17 @@ pub struct DocumentDeletedMetadata {
     pub project_id: Option<String>,
 }
 
+/// Metadata for [`DocumentTopicEvent::EmailAttachmentChanged`].
+///
+/// The email service emits this after a committed `document_email` relation
+/// removal so recipient-scoped consumers can rehydrate derived document state.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentEmailAttachmentChangedMetadata {
+    /// The document whose email-attachment relation changed.
+    pub document_id: String,
+}
+
 /// Metadata for [`DocumentTopicEvent::ContentUploaded`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -179,6 +190,9 @@ pub enum DocumentTopicEvent {
     /// A document was soft-deleted.
     #[serde(rename = "document.deleted")]
     Deleted(DocumentDeletedMetadata),
+    /// The document's email-attachment relation changed.
+    #[serde(rename = "document.email_attachment_changed")]
+    EmailAttachmentChanged(DocumentEmailAttachmentChangedMetadata),
     /// The document's stored bytes were (re)written to S3.
     #[serde(rename = "document.content_uploaded")]
     ContentUploaded(DocumentContentUploadedMetadata),
@@ -222,6 +236,14 @@ impl DocumentMacroEvent {
     /// Build a deleted event keyed by the deleted document id.
     pub fn deleted(key: impl Into<String>, metadata: DocumentDeletedMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Deleted(metadata))
+    }
+
+    /// Build an email-attachment-changed event keyed by the document id.
+    pub fn email_attachment_changed(
+        key: impl Into<String>,
+        metadata: DocumentEmailAttachmentChangedMetadata,
+    ) -> Self {
+        Self::new(key, DocumentTopicEvent::EmailAttachmentChanged(metadata))
     }
 
     /// Build a content-uploaded event keyed by the document id.

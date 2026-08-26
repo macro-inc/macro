@@ -28,7 +28,9 @@ pub struct CreateDocumentArgs<'a> {
     pub project_name: Option<&'a str>,
     pub share_permission: &'a SharePermissionV2,
     pub skip_history: bool,
-    /// Optional value. If set, creates entry in document_email
+    /// Legacy compatibility field. `Some` is rejected: attachment documents
+    /// must use the document domain service so relation creation and lifecycle
+    /// events cannot diverge.
     pub email_attachment_id: Option<Uuid>,
     /// Optional value. defaults to now if not included
     pub created_at: Option<&'a chrono::DateTime<chrono::Utc>>,
@@ -64,6 +66,11 @@ pub async fn create_document_txn(
     args: CreateDocumentArgs<'_>,
 ) -> anyhow::Result<DocumentMetadata> {
     tracing::trace!("creating document");
+    if args.email_attachment_id.is_some() {
+        anyhow::bail!(
+            "legacy document creation cannot create document_email relations; use the document service"
+        );
+    }
     let CreateDocumentArgs {
         id,
         sha,
@@ -75,7 +82,7 @@ pub async fn create_document_txn(
         share_permission,
         skip_history,
         created_at: _, // overwritten below
-        email_attachment_id,
+        email_attachment_id: _,
         is_task,
     } = args;
 
@@ -219,15 +226,6 @@ pub async fn create_document_txn(
         AccessLevel::Owner,
     )
     .await?;
-
-    if let Some(attachment) = email_attachment_id {
-        crate::document::document_email::create_document_email_record(
-            transaction,
-            &document_id,
-            attachment,
-        )
-        .await?;
-    }
 
     Ok(DocumentMetadata::new_document(
         &document_id,

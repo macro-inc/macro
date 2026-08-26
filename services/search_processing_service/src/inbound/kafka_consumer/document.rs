@@ -85,6 +85,11 @@ pub(super) fn describe_document_event(event: &DocumentTopicEvent) -> DocumentEve
             document_id: metadata.document_id.clone(),
             event_type: "document.copied",
         },
+        DocumentTopicEvent::EmailAttachmentChanged(metadata) => DocumentEventDescription {
+            action: DocumentIndexAction::Ignore,
+            document_id: metadata.document_id.clone(),
+            event_type: "document.email_attachment_changed",
+        },
         DocumentTopicEvent::Interaction(metadata) => DocumentEventDescription {
             action: DocumentIndexAction::Ignore,
             document_id: metadata.document_id.clone(),

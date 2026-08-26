@@ -317,6 +317,42 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
     let ics_message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000b501")?;
     let fusionauth_user_id = "00000000-0000-0000-0000-000000000b01";
 
+    // Link a durable Document to the attachment so the deletion outcome can
+    // drive a post-commit Soup rehydration.
+    let document_owner = Uuid::parse_str("00000000-0000-0000-0000-000000000c02")?;
+    let document_id = "00000000-0000-0000-0000-00000000dc02";
+    let attachment_id = Uuid::parse_str("00000000-0000-0000-0000-0000001ba001")?;
+    sqlx::query!(
+        r#"INSERT INTO macro_user (id, username, email)
+           VALUES ($1, 'message-delete-owner', 'message-delete-owner@example.com')"#,
+        document_owner
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, name, macro_user_id)
+           VALUES ($1, 'message-delete-owner@example.com', 'Message Delete Owner', $2)"#,
+        document_owner.to_string(),
+        document_owner
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner, "fileType", uploaded, "createdAt", "updatedAt")
+           VALUES ($1, 'message-linked.pdf', $2, 'pdf', true, NOW(), NOW())"#,
+        document_id,
+        document_owner.to_string()
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO document_email (document_id, email_attachment_id) VALUES ($1, $2)",
+        document_id,
+        attachment_id
+    )
+    .execute(&pool)
+    .await?;
+
     // Establish the flag from the fixture's .ics attachment.
     let mut conn = pool.acquire().await?;
     crate::threads::update::sync_thread_calendar_flag(&mut conn, thread_id).await?;
@@ -332,13 +368,32 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
     .expect("fixture message present");
 
     let mut tx = pool.begin().await?;
-    let deleted_thread = crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
+    let outcome = crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
     tx.commit().await?;
 
     // The thread survives (a second message remains) and the flag flips off
     // because its attachments cascaded away with the message.
-    assert!(deleted_thread.is_none());
+    assert!(outcome.deleted_thread_id.is_none());
+    assert_eq!(outcome.detached_document_ids, vec![document_id.to_string()]);
     assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+    assert!(
+        sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1)"#,
+            document_id
+        )
+        .fetch_one(&pool)
+        .await?
+        .unwrap_or(false)
+    );
+    assert!(
+        !sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM document_email WHERE document_id = $1)",
+            document_id
+        )
+        .fetch_one(&pool)
+        .await?
+        .unwrap_or(false)
+    );
     Ok(())
 }
 

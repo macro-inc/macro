@@ -94,6 +94,7 @@ connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 crm = { path = "../../crates/crm" }
 unfurl = { path = "../../crates/unfurl", features = ["outbound"] }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
+documents = { path = "../../crates/documents", default-features = false }
 doppleganger = { workspace = true }
 doppler-config = { workspace = true }
 ego-tree = { workspace = true }

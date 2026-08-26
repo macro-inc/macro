@@ -1,7 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{
     cg_refresh_email, complete_transaction_with_processing_error, insert_crm_cleanup_candidates,
-    publish_email_event,
+    publish_document_email_attachment_updates, publish_email_event,
 };
 use email::domain::events::{EmailMacroEvent, MessageDeletedMetadata};
 use models_email::api::refresh::RefreshEmailEvent;
@@ -9,7 +9,6 @@ use models_email::email::service::link;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::result;
-use uuid::Uuid;
 
 // delete user's message from the db
 #[tracing::instrument(skip(ctx))]
@@ -106,12 +105,16 @@ pub async fn delete_message(
                     source: e.context("Failed to delete message with transaction".to_string()),
                 })
             })?;
-        Ok::<Option<Uuid>, ProcessingError>(result)
+        Ok::<email_db_client::messages::delete::DeleteMessageOutcome, ProcessingError>(result)
     }
     .await;
 
-    complete_transaction_with_processing_error(tx, result).await?;
+    let outcome = complete_transaction_with_processing_error(tx, result).await?;
 
+    publish_document_email_attachment_updates(
+        &ctx.macro_event_broker,
+        outcome.detached_document_ids,
+    );
     publish_email_event(
         &ctx.macro_event_broker,
         &EmailMacroEvent::message_deleted(MessageDeletedMetadata {

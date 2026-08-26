@@ -246,7 +246,8 @@ fn normalized_document_event(
         DocumentTopicEvent::Interaction(metadata) => {
             ("document.interaction", &metadata.document_id)
         }
-        DocumentTopicEvent::ContentUploaded(_)
+        DocumentTopicEvent::EmailAttachmentChanged(_)
+        | DocumentTopicEvent::ContentUploaded(_)
         | DocumentTopicEvent::SyncContentUpdated(_)
         | DocumentTopicEvent::Purged(_) => return Ok(None),
     };

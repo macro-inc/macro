@@ -5770,6 +5770,7 @@ dependencies = [
  "contacts",
  "crm",
  "document_storage_service_client",
+ "documents",
  "doppleganger",
  "doppler-config",
  "ego-tree",
