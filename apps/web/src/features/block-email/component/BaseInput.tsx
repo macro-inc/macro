@@ -369,8 +369,12 @@ export function BaseInput(props: {
   // Gmail-style sizing: the composer opens compact and grows to the full cap
   // once the user scrolls the content
   const [composerExpanded, setComposerExpanded] = createSignal(false);
-  // Appended quoted thread starts hidden behind a "⋯" pill (desktop)
-  const [quoteCollapsed, setQuoteCollapsed] = createSignal(true);
+  // Appended quoted thread starts hidden behind a "⋯" pill (desktop). A
+  // draft reloaded with the quote already appended opens expanded instead —
+  // that's how the composer looked when the draft was saved.
+  const [quoteCollapsed, setQuoteCollapsed] = createSignal(
+    !form().replyAppended()
+  );
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -440,6 +444,8 @@ export function BaseInput(props: {
       }
       setIncludeSignature(restoredSnapshot.includeSignature);
       form().setReplyAppended(restoredSnapshot.replyAppended);
+      // Reopen with the quote visible, as it was when the send was undone.
+      if (restoredSnapshot.replyAppended) setQuoteCollapsed(false);
     });
   }
 
@@ -456,6 +462,8 @@ export function BaseInput(props: {
     }
     setIncludeSignature(snapshot.includeSignature);
     form().setReplyAppended(snapshot.replyAppended);
+    // Reopen with the quote visible, as it was when the send was undone.
+    if (snapshot.replyAppended) setQuoteCollapsed(false);
   };
   onCleanup(() => {
     restoreUndoCallback = null;
@@ -2060,7 +2068,7 @@ export function BaseInput(props: {
         <div
           ref={setScrollContainer}
           class={cn(
-            'relative min-h-18 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
+            'relative min-h-8 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
             isMobileDrawer()
               ? 'max-h-none flex-1 overflow-visible px-5 pt-6 pb-4'
               : cn(
@@ -2137,55 +2145,6 @@ export function BaseInput(props: {
             refFn={(el) => props.markdownDomRef?.(el)}
             onConnect={handleEditorConnect}
           />
-          <Show when={form().replyAppended() && quoteCollapsed()}>
-            <div class="flex items-center py-1.5">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-                tooltip="Show quoted text"
-                onclick={(e: MouseEvent) => {
-                  e.stopPropagation();
-                  setQuoteCollapsed(false);
-                  setComposerExpanded(true);
-                }}
-              >
-                <DotsThree />
-              </Button>
-            </div>
-          </Show>
-          <Show
-            when={
-              props.replyingTo() &&
-              // The collapse pill above already covers this state
-              !(form().replyAppended() && quoteCollapsed())
-            }
-          >
-            <div
-              class="shrink-0 pt-1"
-              data-corvu-no-drag=""
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Tooltip
-                label={
-                  form().replyAppended()
-                    ? 'Hide quoted text'
-                    : 'Show quoted text'
-                }
-              >
-                <KToggleButton
-                  as={Button}
-                  variant="ghost"
-                  size="icon-sm"
-                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
-                  pressed={form().replyAppended()}
-                  onChange={toggleQuotedText}
-                >
-                  <DotsThree />
-                </KToggleButton>
-              </Tooltip>
-            </div>
-          </Show>
           <Show when={!hasPaidAccess()}>
             <div class="text-ink/50 mt-[1lh]" data-watermark>
               <MacroSignatureButton />
@@ -2203,6 +2162,56 @@ export function BaseInput(props: {
             )}
           </Show>
         </div>
+        {/* Quoted-text controls live below the scroll area so they stay
+            anchored to the composer bottom instead of scrolling with (and
+            floating over) tall content. */}
+        <Show when={form().replyAppended() && quoteCollapsed()}>
+          <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
+              tooltip="Show quoted text"
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                setQuoteCollapsed(false);
+                setComposerExpanded(true);
+              }}
+            >
+              <DotsThree />
+            </Button>
+          </div>
+        </Show>
+        <Show
+          when={
+            props.replyingTo() &&
+            // The collapse pill above already covers this state
+            !(form().replyAppended() && quoteCollapsed())
+          }
+        >
+          <div
+            class="shrink-0 pt-1"
+            data-corvu-no-drag=""
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Tooltip
+              label={
+                form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
+              }
+            >
+              <KToggleButton
+                as={Button}
+                variant="ghost"
+                size="icon-sm"
+                class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
+                pressed={form().replyAppended()}
+                onChange={toggleQuotedText}
+              >
+                <DotsThree />
+              </KToggleButton>
+            </Tooltip>
+          </div>
+        </Show>
         <Show when={!isMobileDrawer()}>
           {/* Below the scroll area so quoted email content can never overlap it */}
           <AttachmentsRow class="px-4" />
