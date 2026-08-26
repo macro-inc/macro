@@ -143,9 +143,15 @@ export default defineConfig({
       },
       {
         // tsconfigPaths so tests can resolve `@`-aliased imports (e.g. a util
-        // that imports `@core/util/url`). Per-file `@vitest-environment jsdom`
-        // opts a test into a DOM; the default here stays node.
-        plugins: [tsconfigPaths()],
+        // that imports `@core/util/url`). Solid plugins so .tsx tests compile
+        // as Solid JSX, not React.createElement. Per-file
+        // `@vitest-environment jsdom` opts a test into a DOM; the default
+        // here stays node.
+        plugins: [
+          tsconfigPaths(),
+          solidPlugin(),
+          solidSvg({ defaultAsComponent: true }),
+        ],
         test: {
           include: ['src/features/block-email/**/*.{test,spec}.{ts,tsx}'],
           name: 'block-email',
