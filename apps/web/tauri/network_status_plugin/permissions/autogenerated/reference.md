@@ -10,32 +10,6 @@
 <tr>
 <td>
 
-`network-status:allow-get-status`
-
-</td>
-<td>
-
-Enables the get_status command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
-`network-status:deny-get-status`
-
-</td>
-<td>
-
-Denies the get_status command without any pre-configured scope.
-
-</td>
-</tr>
-
-<tr>
-<td>
-
 `network-status:allow-watch-status`
 
 </td>

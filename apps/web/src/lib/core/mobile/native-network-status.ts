@@ -1,6 +1,6 @@
+import { isPlatform } from '@core/util/platform';
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
-import { isPlatform } from '../util/platform';
 
 /** Reachability reported by the native platform monitor. */
 export type NativeNetworkStatus = 'unknown' | 'online' | 'offline';
@@ -8,6 +8,12 @@ export type NativeNetworkStatus = 'unknown' | 'online' | 'offline';
 type NetworkStatusPayload = {
   status: NativeNetworkStatus;
 };
+
+/** Message carried by aborts and load errors caused by a missing network path. */
+export const NATIVE_OFFLINE_ERROR_MESSAGE = 'Native network path unavailable';
+
+const WATCH_START_ATTEMPTS = 3;
+const WATCH_START_RETRY_DELAY_MS = 1_000;
 
 const [nativeNetworkStatus, setNativeNetworkStatus] =
   createSignal<NativeNetworkStatus>('unknown');
@@ -31,7 +37,7 @@ function applyStatus(payload: NetworkStatusPayload): void {
   if (status === nativeNetworkStatus()) return;
 
   if (status === 'offline') {
-    networkAbortController.abort(new Error('Native network path unavailable'));
+    networkAbortController.abort(new Error(NATIVE_OFFLINE_ERROR_MESSAGE));
   } else if (status === 'online' && networkAbortController.signal.aborted) {
     networkAbortController = new AbortController();
   }
@@ -60,17 +66,30 @@ export function subscribeNativeNetworkStatus(
 /** Starts the singleton iOS `NWPathMonitor` channel. */
 export function initializeNativeNetworkStatus(): Promise<void> {
   if (!isPlatform('ios')) return Promise.resolve();
-  if (initialization) return initialization;
+  if (!initialization) initialization = startNativeMonitor();
+  return initialization;
+}
 
-  statusChannel = new Channel<NetworkStatusPayload>(applyStatus);
-  const started = invoke<void>('plugin:network-status|watch_status', {
-    channel: statusChannel,
-  }).catch((error) => {
-    initialization = undefined;
-    statusChannel = undefined;
-    console.error('[network-status] failed to start native monitor', error);
-  });
-  initialization = started;
-
-  return started;
+async function startNativeMonitor(): Promise<void> {
+  for (let attempt = 1; attempt <= WATCH_START_ATTEMPTS; attempt += 1) {
+    statusChannel = new Channel<NetworkStatusPayload>(applyStatus);
+    try {
+      await invoke<void>('plugin:network-status|watch_status', {
+        channel: statusChannel,
+      });
+      return;
+    } catch (error) {
+      statusChannel = undefined;
+      if (attempt === WATCH_START_ATTEMPTS) {
+        // Fail open: status stays 'unknown' and offline aborts never engage
+        // this session, matching the browser-connectivity behavior off iOS.
+        initialization = undefined;
+        console.error('[network-status] failed to start native monitor', error);
+        return;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, WATCH_START_RETRY_DELAY_MS * attempt)
+      );
+    }
+  }
 }

@@ -33,10 +33,6 @@ final class NetworkStatusPlugin: Plugin, @unchecked Sendable {
         monitor.cancel()
     }
 
-    @objc public func getStatus(_ invoke: Invoke) {
-        invoke.resolve(statusPayload(snapshotStatus()))
-    }
-
     @objc public func watchStatus(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(WatchStatusArgs.self)
         let currentStatus: NetworkStatus
@@ -48,12 +44,6 @@ final class NetworkStatusPlugin: Plugin, @unchecked Sendable {
 
         args.channel.send(statusPayload(currentStatus))
         invoke.resolve()
-    }
-
-    private func snapshotStatus() -> NetworkStatus {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return status
     }
 
     private func updateStatus(_ nextStatus: NetworkStatus) {

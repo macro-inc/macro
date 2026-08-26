@@ -274,6 +274,15 @@ export function BaseInput(props: {
   draft?: ApiMessage;
   preloadedBody?: string;
   preloadedHtml?: string;
+  /** Seed identity of the draft this composer mounted from — becomes part of
+   * the form-state cache key so a remount on a newer draft version gets a
+   * freshly seeded form. See EmailInput's seed key. */
+  formSeed?: string;
+  /** Reports the composer gaining local state worth keeping — a first edit
+   * or save (every modification funnels through scheduleDraftSave) or an
+   * undo-send restore. The parent latches the seed key on it so the input
+   * stops remounting on later draft versions. */
+  onEngaged?: () => void;
   sideEffectOnSend?: (newMessageId: ApiDraftOutputDbId | null) => void;
   onMarkDone?: (opts?: {
     silent?: boolean;
@@ -304,6 +313,7 @@ export function BaseInput(props: {
       return getOrInitEmailFormContext({
         type: 'replying_to',
         messageID: replyingTo.db_id,
+        seed: props.formSeed,
       });
     }
 
@@ -313,6 +323,7 @@ export function BaseInput(props: {
       return getOrInitEmailFormContext({
         type: 'draft',
         messageID: props.draft.db_id,
+        seed: props.formSeed,
       });
     }
 
@@ -439,6 +450,8 @@ export function BaseInput(props: {
   if (restoredSnapshot) {
     undoReplySnapshot = null;
     onMount(() => {
+      // Restored content is local state worth keeping — latch the seed.
+      props.onEngaged?.();
       for (const attachment of restoredSnapshot.attachments) {
         form().attachments.add(attachment);
       }
@@ -452,6 +465,7 @@ export function BaseInput(props: {
   // Register a callback so stale undoSend closures from a previous mount can
   // restore state into this (the live) component instance.
   restoreUndoCallback = (snapshot, draftId) => {
+    props.onEngaged?.();
     setSavedDraftId(draftId);
     const currentEditor = editor();
     if (currentEditor && snapshot.bodyHtml) {
@@ -895,6 +909,7 @@ export function BaseInput(props: {
   }
 
   function scheduleDraftSave() {
+    props.onEngaged?.();
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     draftSaveTimer = window.setTimeout(() => {
       void executeSaveDraft();
@@ -909,6 +924,7 @@ export function BaseInput(props: {
   // without a text edit, so it moves to the new inbox and the choice survives a
   // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
   const persistDraftOnSenderSwitch = (linkId: string) => {
+    props.onEngaged?.();
     form().setSelectedFromLink(linkId);
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     void executeSaveDraft();

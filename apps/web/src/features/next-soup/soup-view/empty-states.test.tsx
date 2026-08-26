@@ -2,9 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
-import { LoadErrorState, shouldShowLoadError } from './empty-states';
+import { shouldShowLoadError } from './empty-states';
 
 vi.mock('@app/features/command/Launcher', () => ({
   runCreateAction: vi.fn(),
@@ -28,7 +27,7 @@ vi.mock('./soup-view-context', () => ({
   useSoupView: () => ({ activeTab: () => undefined, searchText: () => '' }),
 }));
 
-describe('LoadErrorState', () => {
+describe('shouldShowLoadError', () => {
   it('replaces stale rendered rows when the active query has no data', () => {
     expect(
       shouldShowLoadError({
@@ -48,19 +47,5 @@ describe('LoadErrorState', () => {
         forceEmptyState: true,
       })
     ).toBe(false);
-  });
-
-  it('distinguishes a failed load from an empty view and allows retrying', () => {
-    const retry = vi.fn();
-
-    render(() => <LoadErrorState onRetry={retry} />);
-
-    expect(screen.getByText('Unable to load this view')).toBeTruthy();
-    expect(
-      screen.getByText('Check your internet connection and try again.')
-    ).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(retry).toHaveBeenCalledOnce();
   });
 });

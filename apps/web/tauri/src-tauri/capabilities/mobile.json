@@ -15,7 +15,6 @@
     "log:default",
     "auth:allow-authenticate",
     "device-info:default",
-    "network-status:allow-get-status",
     "network-status:allow-watch-status",
     "pasteboard:allow-stage-pasteboard-image",
     "photo-library:allow-pick-photo-library-images",

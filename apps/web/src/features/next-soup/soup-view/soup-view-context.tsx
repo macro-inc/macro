@@ -59,7 +59,10 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { nativeNetworkStatus } from '@core/mobile/native-network-status';
+import {
+  NATIVE_OFFLINE_ERROR_MESSAGE,
+  nativeNetworkStatus,
+} from '@core/mobile/native-network-status';
 import { idToDisplayName } from '@core/user/util';
 import {
   COMPANY_STAGE_OPTIONS,
@@ -287,7 +290,14 @@ type EntityWithRawNotifications = EntityData & {
   notifications?: Notification[];
 };
 
-const NATIVE_OFFLINE_LOAD_ERROR = new Error('Native network path unavailable');
+const NATIVE_OFFLINE_LOAD_ERROR = new Error(NATIVE_OFFLINE_ERROR_MESSAGE);
+
+/** Retryable load error for a data-less view once iOS reports no network path. */
+function nativeOfflineLoadError(hasData: () => boolean): Error | null {
+  return nativeNetworkStatus() === 'offline' && !hasData()
+    ? NATIVE_OFFLINE_LOAD_ERROR
+    : null;
+}
 
 function rawEntityNotifications(
   entity: EntityData
@@ -996,10 +1006,7 @@ export const SoupViewContextProvider: FlowComponent<
   const itemsQueryHasData = () =>
     itemsQueryData() !== undefined && !itemsQuery.isPlaceholderData;
   const itemsQueryError = () =>
-    itemsQuery.error ??
-    (nativeNetworkStatus() === 'offline' && !itemsQueryHasData()
-      ? NATIVE_OFFLINE_LOAD_ERROR
-      : null);
+    itemsQuery.error ?? nativeOfflineLoadError(itemsQueryHasData);
 
   const itemsSource = {
     data: itemsQueryData,
@@ -1443,9 +1450,7 @@ export const SoupViewContextProvider: FlowComponent<
     (!searchQuery.isPlaceholderData && entities().length > 0);
   const searchSourceError = () =>
     (searchQuery.error as Error | null) ??
-    (nativeNetworkStatus() === 'offline' && !searchSourceHasData()
-      ? NATIVE_OFFLINE_LOAD_ERROR
-      : null);
+    nativeOfflineLoadError(searchSourceHasData);
 
   const context = {
     soup,
@@ -1458,7 +1463,12 @@ export const SoupViewContextProvider: FlowComponent<
         search.isSearching()
           ? searchSourceHasData()
           : itemsSource.hasData() ||
-            (!itemsSource.isPlaceholderData() && entities().length > 0),
+            // Rows retained across a query rebind count as data so the view
+            // doesn't flash, but once the query errors only client-local
+            // rows remain and must not suppress the load-error state.
+            (!itemsSource.error() &&
+              !itemsSource.isPlaceholderData() &&
+              entities().length > 0),
       isLoading: () => itemsSource.isLoading(),
       isFetching: () => itemsSource.isFetching() || searchQuery.isFetching,
       isPlaceholderData: () =>

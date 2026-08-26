@@ -18,7 +18,6 @@ import { useSoup } from '@app/features/next-soup/soup-context';
 import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
   EmptyState,
-  LoadErrorState,
   shouldShowLoadError,
 } from '@app/features/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
@@ -75,6 +74,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
@@ -1276,9 +1276,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 <Match when={showLoadError()}>
                   <div
                     ref={setEmptyStateRef}
-                    class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)"
+                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
                   >
-                    <LoadErrorState onRetry={retryLoad} />
+                    <LoadErrorPanel onRetry={retryLoad} />
                   </div>
                 </Match>
                 <Match

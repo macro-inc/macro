@@ -1,7 +1,16 @@
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { ThrownResultError } from '@core/util/result';
 import { EmptyStatePanel } from '@ui';
-import { type Accessor, type JSX, Match, Suspense, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  type JSX,
+  Match,
+  on,
+  onCleanup,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import Gone from './AccessErrorViews/Gone';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
@@ -64,6 +73,59 @@ export function toEntityLoadError(error: unknown): EntityLoadError | undefined {
   return 'LOAD_FAILED';
 }
 
+/** Delay between regaining native connectivity and the automatic retry. */
+const RECONNECT_AUTO_RETRY_DELAY_MS = 2_000;
+
+/**
+ * The retryable load-failure panel. While it is on screen, regaining native
+ * connectivity retries automatically shortly after the reconnect — the moment
+ * a retry is most likely to succeed — instead of waiting for the button. The
+ * Retry action is hidden while the device is offline: a manual retry can't
+ * succeed, a paused load resumes by itself on reconnect, and a failed one is
+ * covered by the automatic retry.
+ */
+export function LoadErrorPanel(props: {
+  title?: string;
+  onRetry?: () => void;
+}) {
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearRetryTimer = () => {
+    if (retryTimer !== undefined) clearTimeout(retryTimer);
+    retryTimer = undefined;
+  };
+  // Deferred: only a transition observed while this panel is showing counts
+  // as a reconnect. Mounting while already online means the failure wasn't
+  // connectivity (e.g. a server error), which must not self-retry.
+  createEffect(
+    on(
+      nativeNetworkStatus,
+      (status) => {
+        clearRetryTimer();
+        if (status !== 'online') return;
+        retryTimer = setTimeout(
+          () => props.onRetry?.(),
+          RECONNECT_AUTO_RETRY_DELAY_MS
+        );
+      },
+      { defer: true }
+    )
+  );
+  onCleanup(clearRetryTimer);
+
+  return (
+    <EmptyStatePanel
+      centered
+      title={props.title ?? 'Unable to load this view'}
+      description="Check your internet connection and try again."
+      primaryAction={
+        props.onRetry && nativeNetworkStatus() !== 'offline'
+          ? { label: 'Retry', onClick: props.onRetry }
+          : undefined
+      }
+    />
+  );
+}
+
 /** Renders entity content or the appropriate loading and access-error view. */
 export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
   const error = props.result.error;
@@ -98,15 +160,9 @@ export function EntityLoadGate<Data>(props: EntityLoadGateProps<Data>) {
             (error() === 'LOAD_FAILED' || nativeNetworkStatus() === 'offline')
           }
         >
-          <EmptyStatePanel
-            centered
-            title={props.loadErrorTitle ?? 'Unable to load this view'}
-            description="Check your internet connection and try again."
-            primaryAction={
-              props.onRetry
-                ? { label: 'Retry', onClick: props.onRetry }
-                : undefined
-            }
+          <LoadErrorPanel
+            title={props.loadErrorTitle}
+            onRetry={props.onRetry}
           />
         </Match>
         <Match when={props.result.isPending()}>

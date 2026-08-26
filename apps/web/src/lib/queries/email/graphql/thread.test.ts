@@ -3,9 +3,11 @@ import { CombinedError } from '@urql/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const queryMock = vi.hoisted(() => vi.fn());
+const cacheEnabledMock = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ query: queryMock }),
+  graphqlCacheEnabled: cacheEnabledMock,
 }));
 
 import { EmailThreadPageDocument } from '@service-storage/graphql/generated/graphql';
@@ -38,6 +40,8 @@ const cachedPage: EmailThreadPageQuery = {
 describe('fetchGraphqlEmailThread', () => {
   beforeEach(() => {
     queryMock.mockReset();
+    cacheEnabledMock.mockReset();
+    cacheEnabledMock.mockReturnValue(true);
   });
 
   it('falls back to the persisted operation after a network failure', async () => {
@@ -69,6 +73,20 @@ describe('fetchGraphqlEmailThread', () => {
       { threadId: 'thread-1', offset: 0, limit: 20 },
       { requestPolicy: 'cache-only' }
     );
+  });
+
+  it('skips the persisted fallback while the cache is inactive', async () => {
+    cacheEnabledMock.mockReturnValue(false);
+    queryMock.mockReturnValueOnce({
+      toPromise: async () => ({
+        error: new CombinedError({ networkError: new Error('offline') }),
+      }),
+    });
+
+    await expect(fetchGraphqlEmailThread('thread-1')).rejects.toMatchObject({
+      errors: [{ code: 'UNKNOWN', message: 'offline' }],
+    });
+    expect(queryMock).toHaveBeenCalledOnce();
   });
 
   it('surfaces a typed error when the thread was not persisted', async () => {

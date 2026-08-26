@@ -53,18 +53,6 @@ export function shouldShowLoadError(options: {
   return !options.hasData && !options.forceEmptyState;
 }
 
-/** Shown when no local rows are available and the active query cannot load. */
-export function LoadErrorState(props: { onRetry: () => void }) {
-  return (
-    <EmptyStatePanel
-      centered
-      title="Unable to load this view"
-      description="Check your internet connection and try again."
-      primaryAction={{ label: 'Retry', onClick: props.onRetry }}
-    />
-  );
-}
-
 const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   documents: {
     plural: 'documents',

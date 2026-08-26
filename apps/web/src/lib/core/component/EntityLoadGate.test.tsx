@@ -19,10 +19,18 @@ vi.mock('./LoadingBlock', () => ({
   LoadingBlock: () => <div>Loading</div>,
 }));
 
-let networkStatus: 'unknown' | 'online' | 'offline' = 'unknown';
-vi.mock('@core/mobile/native-network-status', () => ({
-  nativeNetworkStatus: () => networkStatus,
+// A real signal so components reacting to connectivity changes re-run.
+const network = vi.hoisted(() => ({
+  set: (_status: 'unknown' | 'online' | 'offline') => {},
 }));
+vi.mock('@core/mobile/native-network-status', async () => {
+  const { createSignal } = await import('solid-js');
+  const [status, setStatus] = createSignal<'unknown' | 'online' | 'offline'>(
+    'unknown'
+  );
+  network.set = setStatus;
+  return { nativeNetworkStatus: status };
+});
 
 import {
   type EntityLoadErrorCode,
@@ -54,7 +62,8 @@ function renderGate<Data>(result: EntityLoadResult<Data>): HTMLElement {
 afterEach(() => {
   dispose?.();
   dispose = undefined;
-  networkStatus = 'unknown';
+  network.set('unknown');
+  vi.useRealTimers();
 });
 
 describe('EntityLoadGate', () => {
@@ -172,7 +181,7 @@ describe('EntityLoadGate', () => {
   });
 
   it('renders the retryable load-error state when offline with nothing to show', () => {
-    networkStatus = 'offline';
+    network.set('offline');
     const container = renderGate({
       data: () => undefined,
       error: () => undefined,
@@ -183,7 +192,7 @@ describe('EntityLoadGate', () => {
   });
 
   it('renders loaded content while offline', () => {
-    networkStatus = 'offline';
+    network.set('offline');
     const container = renderGate({
       data: () => 'cached entity',
       error: () => undefined,
@@ -191,6 +200,133 @@ describe('EntityLoadGate', () => {
     });
 
     expect(container.textContent).toBe('Loaded');
+  });
+
+  it('hides the Retry action while the device is offline', () => {
+    network.set('offline');
+    const onRetry = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const disposeRender = render(
+      () => (
+        <EntityLoadGate
+          result={{
+            data: () => undefined,
+            error: () => 'LOAD_FAILED',
+            isPending: () => false,
+          }}
+          onRetry={onRetry}
+        >
+          <div>Loaded</div>
+        </EntityLoadGate>
+      ),
+      container
+    );
+    dispose = () => {
+      disposeRender();
+      container.remove();
+    };
+
+    expect(container.textContent).toContain('Unable to load this view');
+    expect(container.querySelector('button')).toBeNull();
+
+    network.set('online');
+    expect(container.querySelector('button')?.textContent).toContain('Retry');
+  });
+
+  it('auto-retries shortly after connectivity returns', () => {
+    vi.useFakeTimers();
+    network.set('offline');
+    const onRetry = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const disposeRender = render(
+      () => (
+        <EntityLoadGate
+          result={{
+            data: () => undefined,
+            error: () => 'LOAD_FAILED',
+            isPending: () => false,
+          }}
+          onRetry={onRetry}
+        >
+          <div>Loaded</div>
+        </EntityLoadGate>
+      ),
+      container
+    );
+    dispose = () => {
+      disposeRender();
+      container.remove();
+    };
+
+    network.set('online');
+    expect(onRetry).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2_000);
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it('does not auto-retry when mounted while already online', () => {
+    vi.useFakeTimers();
+    network.set('online');
+    const onRetry = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const disposeRender = render(
+      () => (
+        <EntityLoadGate
+          result={{
+            data: () => undefined,
+            error: () => 'LOAD_FAILED',
+            isPending: () => false,
+          }}
+          onRetry={onRetry}
+        >
+          <div>Loaded</div>
+        </EntityLoadGate>
+      ),
+      container
+    );
+    dispose = () => {
+      disposeRender();
+      container.remove();
+    };
+
+    vi.advanceTimersByTime(10_000);
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it('cancels the pending auto-retry when connectivity drops again', () => {
+    vi.useFakeTimers();
+    network.set('offline');
+    const onRetry = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const disposeRender = render(
+      () => (
+        <EntityLoadGate
+          result={{
+            data: () => undefined,
+            error: () => 'LOAD_FAILED',
+            isPending: () => false,
+          }}
+          onRetry={onRetry}
+        >
+          <div>Loaded</div>
+        </EntityLoadGate>
+      ),
+      container
+    );
+    dispose = () => {
+      disposeRender();
+      container.remove();
+    };
+
+    network.set('online');
+    vi.advanceTimersByTime(1_000);
+    network.set('offline');
+    vi.advanceTimersByTime(10_000);
+    expect(onRetry).not.toHaveBeenCalled();
   });
 
   it('invokes onRetry from the load-error state', () => {

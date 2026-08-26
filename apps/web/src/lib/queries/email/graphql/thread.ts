@@ -10,7 +10,10 @@ import {
   type EmailThreadPageQuery,
   type EmailThreadPageQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { mapGraphqlEmailThreadPage } from './mapper';
@@ -81,10 +84,10 @@ export function mapGraphqlThreadError(error: CombinedError): ThrownResultError {
 
 /**
  * Fetches the first page of an email thread through the persistent GraphQL
- * cache. A normal read still waits for the network, but a transport failure
- * falls back to the previously persisted operation so a visited thread can be
- * opened offline. Every failure is thrown as a ThrownResultError with typed
- * result codes.
+ * cache. A normal read still waits for the network, but while the persistent
+ * cache is active a transport failure falls back to the previously persisted
+ * operation so a visited thread can be opened offline. Every failure is
+ * thrown as a ThrownResultError with typed result codes.
  */
 export async function fetchGraphqlEmailThread(
   threadId: string
@@ -104,7 +107,9 @@ export async function fetchGraphqlEmailThread(
     .toPromise();
 
   if (result.error) {
-    if (result.error.networkError) {
+    // Without an active cache exchange a `cache-only` request is never
+    // answered, so only fall back when the persistent cache is live.
+    if (result.error.networkError && graphqlCacheEnabled()) {
       const cached = await client
         .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
           EmailThreadPageDocument,
