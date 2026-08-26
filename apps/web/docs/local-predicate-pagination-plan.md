@@ -1,5 +1,7 @@
 # Revision-Safe Local Predicate Pagination Plan
 
+Status: **blocked by [`optimistic-predicate-fact-index-plan.md`](./optimistic-predicate-fact-index-plan.md); implement that plan first**
+
 ## Objective
 
 Extend the browser Turso/OPFS-backed `soup-flat-v1` predicate index from an initial-page-only evaluator into a revision-safe local paginator.
@@ -10,6 +12,7 @@ This plan builds on:
 
 - `apps/web/docs/entity-filter-cache-index-plan.md`;
 - `apps/web/docs/soup-flat-v1-support-manifest.md`;
+- the completed prerequisite [`optimistic-predicate-fact-index-plan.md`](./optimistic-predicate-fact-index-plan.md), which provides an exact effective authoritative-plus-optimistic SQL universe;
 - the existing cache revision propagated through `cache-core`, WASM, worker hosts, urql result metadata, `entityFilter`, and `readRecordsByKeys`;
 - the current revision-authority state machine in `apps/web/src/lib/queries/soup/graphql/items.ts`.
 
@@ -24,7 +27,7 @@ Local predicate pagination does not exist today:
 - the frontend calls `entityFilter` only for GraphQL `initial` inputs;
 - once a local projection becomes authoritative, `fetchNextPage` discards it and returns to the stale server page chain.
 
-The index already has the required ordering basis: one integer sort fact plus a stable normalized-record-key tie-breaker. The missing work is cursor representation, keyset execution, a materialized optimistic fact index, revision validation, browser transport, and local page-chain ownership.
+After the optimistic fact-index prerequisite is complete, the index has the required effective document universe and ordering basis: one integer sort fact plus a stable normalized-record-key tie-breaker. The remaining work is cursor representation, keyset execution, revision validation, browser transport, and local page-chain ownership.
 
 ## Confirmed decisions
 
@@ -38,8 +41,7 @@ The index already has the required ordering basis: one integer sort fact plus a 
 8. Every local page returns normalized keys and is materialized through the generated `SoupItemFields` cache fragment. The frontend does not reimplement filter semantics.
 9. Browser Turso/OPFS is the first persistence target. Grouped Soup, Tauri predicate execution, and REST Soup are out of scope.
 10. Authorization remains server-side. Pagination can only traverse entities already present in the identity-scoped authorized cache.
-11. Optimistic projections are materialized into separate generic index-document and fact tables when queue state changes. Predicate reads query the effective authoritative-plus-optimistic index directly; they do not load projection blobs and replay every optimistic mutation per request.
-12. Optimistic index documents are children of their durable optimistic layer, and optimistic facts are children of their optimistic index document. Foreign-key `ON DELETE CASCADE` owns cleanup on settlement, rollback, clear, and identity reset.
+11. Pagination consumes the effective predicate query supplied by `optimistic-predicate-fact-index-plan.md`; it does not introduce a second optimistic composition path.
 
 ## Authority and page-chain model
 
@@ -165,151 +167,11 @@ ORDER BY s.value <sort direction>, d.record_key <tie direction>
 
 Fetch one extra effective result. Return at most the requested page size and derive `next_cursor` from the final returned hit only when another effective hit exists. The page-size bound must reserve capacity for this one-row lookahead; if it cannot, return `Incomplete` rather than guessing whether another page exists.
 
-## Investigation: materialized optimistic fact index
+## Optimistic fact-index prerequisite
 
-### Current read amplification
+Implement and verify [`optimistic-predicate-fact-index-plan.md`](./optimistic-predicate-fact-index-plan.md) before beginning this plan. Pagination assumes predicate storage already evaluates one exact effective authoritative-plus-optimistic document universe in SQL.
 
-The current predicate path stores `OptimisticProjectionMutation` values in the queue source. Every local predicate request then:
-
-1. hydrates and scans active optimistic layers;
-2. collects every relevant projection mutation;
-3. expands the authoritative query limit by the number of touched records;
-4. loads authoritative projections for base and touched keys;
-5. replays replacement, patch, deletion, and unknown mutations in Rust;
-6. runs the reference evaluator and sorts the composed documents in memory.
-
-That preserves semantics but makes each page proportional to optimistic queue state. Pagination makes the cost recur for every continuation and complicates exact keyset boundaries.
-
-### Alternatives considered
-
-**Keep per-query Rust composition.** This is the smallest change, but it retains repeated projection loads, mutation replay, candidate overfetch, and in-memory sorting on every page. It is not the selected design.
-
-**Store fact deltas per optimistic mutation and resolve the latest writer per attribute in SQL.** Cascading deletion naturally reveals the previous delta or authoritative fact and avoids rebasing later layers. However, multi-valued attribute replacement requires explicit empty-write markers, full replacement requires an attribute barrier, deletion requires a record barrier, and every predicate posting must resolve latest-writer semantics. This minimizes settlement writes but puts substantial complexity and window/anti-join work on the read path.
-
-**Store a complete materialized projection per touched record and optimistic layer.** Reads select the latest active optimistic projection for each record and union it with unshadowed authoritative projections. Patch composition happens once when queue state changes. Removing a parent optimistic layer cascades its projection and facts. Later layers are transactionally rematerialized when an earlier strict-queue layer settles. This is the selected read-optimized design.
-
-The queue is already rebuilt in order after commit and rollback so later normalized recipes do not retain stale snapshots. Materializing projection facts extends that existing write-time reconstruction rather than introducing a new ordering model.
-
-### Generic schema
-
-Add a parallel optimistic projection hierarchy:
-
-```sql
-CREATE TABLE optimistic_index_documents (
-  id INTEGER PRIMARY KEY,
-  mutation_id INTEGER NOT NULL,
-  record_key TEXT NOT NULL,
-  profile TEXT NOT NULL,
-  partition TEXT NOT NULL,
-  state INTEGER NOT NULL,
-  FOREIGN KEY (mutation_id)
-    REFERENCES optimistic_layers(mutation_id)
-    ON DELETE CASCADE
-);
-
-CREATE UNIQUE INDEX optimistic_index_documents_layer_key_idx
-  ON optimistic_index_documents(mutation_id, record_key);
-CREATE INDEX optimistic_index_documents_latest_key_idx
-  ON optimistic_index_documents(record_key, mutation_id DESC);
-CREATE INDEX optimistic_index_documents_scope_idx
-  ON optimistic_index_documents(profile, partition, state, mutation_id, id);
-
-CREATE TABLE optimistic_exact_facts (
-  document_id INTEGER NOT NULL,
-  attribute TEXT NOT NULL,
-  value BLOB NOT NULL,
-  PRIMARY KEY (document_id, attribute, value),
-  FOREIGN KEY (document_id)
-    REFERENCES optimistic_index_documents(id)
-    ON DELETE CASCADE
-);
-
-CREATE TABLE optimistic_integer_facts (
-  document_id INTEGER NOT NULL,
-  attribute TEXT NOT NULL,
-  value INTEGER NOT NULL,
-  PRIMARY KEY (document_id, attribute, value),
-  FOREIGN KEY (document_id)
-    REFERENCES optimistic_index_documents(id)
-    ON DELETE CASCADE
-);
-
-CREATE TABLE optimistic_sort_facts (
-  document_id INTEGER NOT NULL,
-  attribute TEXT NOT NULL,
-  value INTEGER NOT NULL,
-  PRIMARY KEY (document_id, attribute),
-  FOREIGN KEY (document_id)
-    REFERENCES optimistic_index_documents(id)
-    ON DELETE CASCADE
-);
-```
-
-The three optimistic fact tables receive lookup indexes equivalent to their authoritative counterparts. Add a child table for effective uncertainty when needed:
-
-```sql
-CREATE TABLE optimistic_uncertain_attributes (
-  document_id INTEGER NOT NULL,
-  attribute TEXT NOT NULL,
-  PRIMARY KEY (document_id, attribute),
-  FOREIGN KEY (document_id)
-    REFERENCES optimistic_index_documents(id)
-    ON DELETE CASCADE
-);
-```
-
-A reserved attribute token represents uncertainty affecting every query attribute. Query-irrelevant uncertainty preserves the complete materialized facts and only forces `Incomplete` when it intersects the compiled query's partition/attribute dependencies.
-
-`optimistic_index_documents.state` distinguishes at least:
-
-- complete materialized projection;
-- deletion tombstone, which shadows authority and carries no facts;
-- incomplete projection, which forces fallback for relevant scope.
-
-Facts always belong to one optimistic document. Deleting that document deletes all facts and uncertainty rows. Deleting `optimistic_layers` or its parent `mutation_queue` row cascades through the entire hierarchy. Cleanup must not issue separate fact-table deletes.
-
-### Write-time materialization
-
-For each touched `(mutation_id, record_key)`:
-
-- `Replace` writes a complete optimistic index document and all projected facts;
-- `Patch` composes against the preceding effective projection once, then writes a complete materialized document rather than a fact delta;
-- `Delete` writes a tombstone document with no facts;
-- `Unknown` carries the preceding materialized facts plus its effective uncertainty set, or writes incomplete state when no safe base exists.
-
-Multiple queued mutations may have rows for the same record. The row with the greatest active `mutation_id` is the effective optimistic projection. Older rows remain available if a later layer is removed and are deleted by their own parent cascade; the durable projection mutations in the queue source remain the authority for transactional rematerialization.
-
-All lifecycle changes are atomic:
-
-- **enqueue:** insert `mutation_queue`, `optimistic_layers`, optimistic index documents, and their facts in one transaction;
-- **defer/retry:** retain the existing optimistic index rows unchanged;
-- **commit:** write authoritative records/facts, delete the settled queue row (cascading its optimistic rows), and replace every affected later layer's rematerialized optimistic rows in the same transaction;
-- **rollback/discard:** delete the queue row and atomically replace affected later materialized rows against the revealed base;
-- **clear/identity reset:** delete queue parents and rely on cascades before clearing authoritative tables.
-
-The commit/rollback rebase must be crash-safe. It is not acceptable to commit parent deletion and rematerialize later optimistic facts in a second transaction: a restart between those steps would expose stale full snapshots.
-
-Storage APIs therefore need atomic commands that accept authoritative projection mutations plus the complete rematerialized optimistic projection replacement for remaining affected layers. In-memory storage must implement the same behavior for conformance.
-
-### Effective predicate SQL
-
-Build a latest-optimistic CTE keyed by record key, then define one effective document universe:
-
-```text
-unshadowed authoritative documents
-UNION ALL
-latest complete optimistic documents
-```
-
-A latest tombstone excludes both itself and its authoritative record. A latest incomplete row or intersecting uncertainty marker causes `Incomplete` before page results are returned.
-
-Predicate posting CTEs read facts from the source belonging to each effective document. The final keyset predicate, order, and limit run over this already composed universe. No normalized record blob, optimistic source JSON, projection-mutation blob, or per-key projection batch is loaded on the normal predicate read path.
-
-This removes touched-record candidate overfetch from pagination. `limit + 1` applies directly to the effective ordered result. The cursor revision keeps the chosen optimistic row set stable for the page chain: enqueue, commit, rollback, authoritative settlement, or cross-tab queue refresh advances revision and invalidates existing cursors.
-
-### Trade-off
-
-This design intentionally chooses write amplification over repeated read amplification. Settling the strict queue head can require rematerializing later projections, but current queue reconstruction already walks those layers for normalized-cache correctness. The added work is bounded fact replacement inside the same durable transaction. Instrument queue depth, touched projection count, rows rewritten per settlement, and transaction latency before removing the existing in-memory fallback implementation.
+The pagination implementation must apply its cursor boundary, ordering, and `limit + 1` to that effective universe. It must not restore touched-record overfetch, per-page projection loading, queue replay, or Rust-side optimistic sorting. Enqueue, commit, rollback, and settlement continue to advance cache revision and therefore invalidate every existing local cursor.
 
 ## Revision consistency
 
@@ -390,57 +252,32 @@ Files:
 - `crates/predicate_index/src/lib.rs`;
 - `crates/predicate_index/src/test.rs`.
 
-### Phase 2: Add authoritative Turso keyset execution
+### Phase 2: Add effective Turso keyset execution
 
-In `cache-turso`:
+In `cache-turso` and `cache-core`:
 
 - return sort value with every predicate hit;
 - compile parameterized keyset predicates for all direction combinations;
+- apply the boundary to the prerequisite's effective authoritative-plus-optimistic universe;
 - fetch one bounded extra result for next-cursor detection;
-- retain the complete-scope check in the same read transaction;
-- verify relevant indexes with `EXPLAIN QUERY PLAN`;
-- avoid scanning or decoding normalized record blobs.
-
-Files:
-
-- `crates/client/cache-turso/src/storage.rs`;
-- `crates/client/cache-turso/src/storage/test.rs`;
-- `crates/client/cache-turso/tests/predicate.rs`.
-
-Keep this phase authoritative-only so keyset semantics can be verified before introducing the effective optimistic universe.
-
-### Phase 3: Materialize optimistic index documents and facts
-
-In `cache-core` and `cache-turso`:
-
-- add generic materialized optimistic projection-state models;
-- create the parallel optimistic document/fact/uncertainty tables and lookup indexes;
-- extend enqueue to atomically persist queue state and materialized optimistic facts;
-- extend commit and rollback to atomically cascade the settled layer and replace rematerialized later-layer projections;
-- make clear and identity reset rely on the foreign-key cascade hierarchy;
-- validate that no optimistic document or fact can exist without its queue/layer parent;
-- build the effective authoritative-plus-latest-optimistic SQL universe;
-- return revision-qualified `PredicatePage` values directly from that effective universe;
+- retain completeness and relevant-uncertainty checks in the same read transaction;
+- return revision-qualified `PredicatePage` values;
 - validate expected cursor revision/generation before execution;
-- retain typed stale-cursor and incomplete outcomes;
-- keep the old in-memory composition path temporarily as differential-test evidence, then remove it after conformance and query-plan gates pass.
+- return typed stale-cursor and incomplete outcomes;
+- verify relevant authoritative and optimistic indexes with `EXPLAIN QUERY PLAN`;
+- avoid scanning normalized record blobs, queue JSON, or projection blobs.
 
 Files:
 
 - `crates/client/cache-core/src/predicate.rs`;
-- `crates/client/cache-core/src/queue.rs` if the durable projection envelope changes;
-- `crates/client/cache-core/src/store.rs`;
 - `crates/client/cache-core/src/engine.rs`;
 - `crates/client/cache-core/tests/predicate.rs`;
-- `crates/client/cache-core/tests/optimistic.rs`;
-- `crates/client/cache-core/tests/mutation_queue.rs`;
-- `crates/client/cache-turso/src/storage.rs` and storage validation tests;
-- `crates/client/cache-turso/tests/predicate.rs`;
-- `crates/client/cache-turso/tests/storage_conformance.rs`.
+- `crates/client/cache-core/tests/optimistic.rs` where queue transitions affect cursor validity;
+- `crates/client/cache-turso/src/storage.rs`;
+- `crates/client/cache-turso/src/storage/test.rs`;
+- `crates/client/cache-turso/tests/predicate.rs`.
 
-This changes the browser cache schema and therefore requires the normal cache namespace/schema-version reset path, not a SQLx migration. Do not create or run an application database migration.
-
-### Phase 4: Compile and transport local cursors
+### Phase 3: Compile and transport local cursors
 
 In the Soup adapter and browser composition boundary:
 
@@ -464,7 +301,7 @@ Likely files:
 - `apps/web/src/lib/graphql-cache/host/worker-host.ts` and tests;
 - no-op/Tauri host adapters.
 
-### Phase 5: Add the local page chain to flat Soup
+### Phase 4: Add the local page chain to flat Soup
 
 In the frontend:
 
@@ -481,7 +318,7 @@ Files:
 - `apps/web/src/lib/queries/soup/graphql/items.test.ts`;
 - `apps/web/src/lib/urql-solid/*` only if the existing public observer API cannot represent local next-page state cleanly. Prefer keeping local predicate pagination inside the Soup adapter rather than adding Soup behavior to the generic urql observer.
 
-### Phase 6: Verification and rollout
+### Phase 5: Verification and rollout
 
 Run generic, storage, WASM, worker-host, and frontend tests before enabling local continuation behavior. Add telemetry before broad rollout.
 
@@ -492,9 +329,6 @@ Track at least:
 - local page latency by page depth;
 - revision and generation reset counts;
 - optimistic versus authoritative local pages;
-- optimistic queue depth and touched projection count;
-- optimistic documents/facts written on enqueue;
-- later-layer rows rematerialized and settlement transaction latency;
 - network requests avoided by local pagination;
 - cursor decode/query-fingerprint failures;
 - duplicate-key defense activation.
@@ -515,39 +349,22 @@ Track at least:
 ### Turso conformance tests
 
 - Turso pages equal reference pages for generated predicates and projections;
+- authoritative and optimistic fixtures paginate over the same effective universe;
 - keyset predicates use bound parameters;
 - `Not`, `And`, and `Or` remain exact after a cursor;
-- completeness markers force `Incomplete` on every page;
-- latest optimistic documents shadow authoritative documents by record key;
-- optimistic tombstones exclude their authoritative records;
+- completeness markers and relevant optimistic uncertainty force `Incomplete` on every page;
 - `EXPLAIN QUERY PLAN` uses authoritative and optimistic fact indexes and does not scan record blobs, queue JSON, or projection blobs;
 - cursor ordering remains stable after close/reopen at the same stored state.
 
-### Optimistic persistence and lifecycle tests
-
-- enqueue atomically writes queue, layer, optimistic document, and fact rows;
-- enqueue failure at every injected write boundary leaves none of those rows;
-- deleting an optimistic index document cascades all of its exact, integer, sort, and uncertainty rows;
-- deleting an optimistic layer cascades all of its documents and facts;
-- deleting a mutation queue row cascades its layer, documents, and facts;
-- no orphan row passes storage-open validation;
-- clear and identity reset leave every optimistic table empty;
-- commit atomically writes authority, removes the settled hierarchy, and rematerializes later layers;
-- rollback atomically removes the settled hierarchy and rematerializes later layers against revealed authority;
-- a crash/fault at every settlement boundary exposes either the complete old state or complete new state, never stale later snapshots.
-
-### Optimistic query tests
+### Optimistic pagination tests
 
 - optimistic insertion before and after the cursor;
 - optimistic deletion from a full page exposes the next effective result without touched-key overfetch;
 - optimistic sort change crosses the cursor in both directions;
 - optimistic predicate membership change crosses the cursor;
-- two patches to one record select the latest fully materialized layer;
-- settling the earlier of two layers rebases the later layer to committed authority;
-- rolling back the earlier of two layers rebases the later layer to prior authority;
 - enqueue, commit, rollback, and authoritative settlement invalidate old cursors;
 - query-relevant unknown state returns `Incomplete` while unrelated uncertainty remains queryable;
-- materialized SQL pages equal the existing in-memory optimistic reference composition during migration.
+- concatenated pages equal one unpaginated effective-index evaluation at the same revision.
 
 ### WASM and protocol tests
 
@@ -589,7 +406,7 @@ Using the real WASM/Turso host:
 - **Unsupported request:** use the existing network path.
 - **Incomplete local scope:** retain stale visible data and obtain a fresh network initial page before server continuation.
 - **Stale cursor:** discard the local chain and reevaluate page 1 at the current revision.
-- **Revision race during materialization:** discard and retry within the existing bounded retry policy.
+- **Revision race during page record selection:** discard and retry within the existing bounded retry policy.
 - **Generation replacement:** discard all local revision and cursor state immediately.
 - **Storage or cursor decode error:** report telemetry and fall back to a fresh network chain.
 - **Network unavailable after local incompleteness:** keep stale visible data, expose no unsafe continuation, and preserve normal retry/error UI.
@@ -601,8 +418,7 @@ No failure mode may append a page from an unknown or mismatched revision.
 - No normalized record blob scan during predicate membership or ordering.
 - Keyset pagination, not SQL `OFFSET`.
 - Bounded cursor size and decode work.
-- No touched-record candidate overfetch or projection batch load on the materialized optimistic predicate path.
-- Bounded optimistic write/rematerialization work, with fallback or reset policy for pathological queue depth.
+- No touched-record candidate overfetch, projection batch load, or queue replay on the prerequisite's effective predicate path.
 - One effective-index predicate query and one bounded record-selection read per local page in the normal case.
 - No automatic prefetch in the first implementation.
 - Preserve the existing initial-page latency targets; establish separate p95/p99 targets for continuation pages before rollout.
@@ -624,9 +440,7 @@ No failure mode may append a page from an unknown or mismatched revision.
 - Concatenated local pages equal the reference evaluator and Turso result at that revision.
 - No duplicate or skipped keys occur at stable revision boundaries.
 - Revision or generation changes reset rather than mix local pages.
-- Materialized optimistic facts preserve exact membership and ordering or return `Incomplete`.
-- Queue/layer deletion cascades every owned optimistic index document and fact.
-- Commit and rollback atomically rematerialize later optimistic projections; crashes cannot expose stale full snapshots.
+- The prerequisite's effective optimistic facts preserve exact paginated membership and ordering or return `Incomplete`.
 - Local `fetchNextPage` performs no GraphQL Soup network request.
 - A current live network response retakes authority and restores server pagination.
 - Unsupported or incomplete requests retain all-or-network behavior.
@@ -635,14 +449,12 @@ No failure mode may append a page from an unknown or mismatched revision.
 
 ## Revision discipline
 
-Implement in independently verified Jujutsu revisions:
+First complete every acceptance criterion in [`optimistic-predicate-fact-index-plan.md`](./optimistic-predicate-fact-index-plan.md). Then implement this plan in independently verified Jujutsu revisions:
 
 1. generic cursor/reference evaluator;
-2. authoritative Turso keyset execution;
-3. optimistic index schema and cascade lifecycle;
-4. atomic optimistic materialization/rebase and effective SQL query;
-5. Soup adapter/WASM/protocol transport;
-6. frontend local page-chain integration;
-7. browser end-to-end evidence and telemetry.
+2. effective Turso keyset execution and revision handling;
+3. Soup adapter/WASM/protocol transport;
+4. frontend local page-chain integration;
+5. browser end-to-end evidence and telemetry.
 
 After each successful verification step, follow repository policy with `jj desc -m "..." && jj new`.
