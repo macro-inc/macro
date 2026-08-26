@@ -599,7 +599,7 @@ async fn a_restored_session_prompts_its_existing_agent() {
 async fn cancel_on_a_restored_session_finds_the_run_from_cursor() {
     let (service, cursor, _notifier) = service(None);
     service.restore_session(
-        AcpSessionId::new("cursor-acp-7"),
+        SessionId::new("cursor-acp-7"),
         Some(CursorAgentId::new("bc-restored")),
         None,
         None,
@@ -617,7 +617,7 @@ async fn cancel_on_a_restored_session_finds_the_run_from_cursor() {
     ]);
 
     service
-        .cancel(&AcpSessionId::new("cursor-acp-7"))
+        .cancel(&SessionId::new("cursor-acp-7"))
         .await
         .expect("cancel works");
 
@@ -638,7 +638,7 @@ async fn cancel_on_a_restored_session_finds_the_run_from_cursor() {
 async fn cancel_on_a_restored_session_cancels_every_run_in_progress() {
     let (service, cursor, _notifier) = service(None);
     service.restore_session(
-        AcpSessionId::new("cursor-acp-10"),
+        SessionId::new("cursor-acp-10"),
         Some(CursorAgentId::new("bc-restored")),
         None,
         None,
@@ -660,7 +660,7 @@ async fn cancel_on_a_restored_session_cancels_every_run_in_progress() {
     ]);
 
     service
-        .cancel(&AcpSessionId::new("cursor-acp-10"))
+        .cancel(&SessionId::new("cursor-acp-10"))
         .await
         .expect("cancel works");
 
@@ -685,7 +685,7 @@ async fn cancel_on_a_restored_session_cancels_every_run_in_progress() {
 async fn cancel_on_a_restored_session_with_no_run_going_is_a_no_op() {
     let (service, cursor, _notifier) = service(None);
     service.restore_session(
-        AcpSessionId::new("cursor-acp-8"),
+        SessionId::new("cursor-acp-8"),
         Some(CursorAgentId::new("bc-restored")),
         None,
         None,
@@ -697,7 +697,7 @@ async fn cancel_on_a_restored_session_with_no_run_going_is_a_no_op() {
     }]);
 
     service
-        .cancel(&AcpSessionId::new("cursor-acp-8"))
+        .cancel(&SessionId::new("cursor-acp-8"))
         .await
         .expect("cancel works");
 
