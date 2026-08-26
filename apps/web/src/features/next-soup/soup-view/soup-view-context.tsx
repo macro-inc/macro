@@ -966,6 +966,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
+        onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
           itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
