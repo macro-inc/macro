@@ -23,6 +23,14 @@ const REPO_ROOT = '../../..';
 
 const MICROSOFT_TOKEN_KMS_ACTIONS = ['kms:GenerateDataKey', 'kms:Decrypt'];
 
+// This service only ever writes a Cursor key, so it gets Encrypt and not
+// Decrypt. Reading one is the agent harness's job, and granting it separately
+// means a compromise of either side cannot do the other's half. `GET` on the
+// settings endpoint reports whether a key exists without decrypting it, so
+// nothing here needs Decrypt.
+const CURSOR_API_KEY_KMS_WRITE_ACTIONS = ['kms:Encrypt'];
+const CURSOR_API_KEY_KMS_READ_ACTIONS = ['kms:Decrypt'];
+
 export const SERVICE_DOMAIN_NAME = `auth-service${
   stack === 'prod' ? '' : `-${stack}`
 }.${BASE_DOMAIN}`;
@@ -44,6 +52,10 @@ type Args = {
   tags: { [key: string]: string };
   queueArns: pulumi.Output<string>[];
   microsoftTokenKmsDeletionWindowInDays: number;
+  /** Deletion window for the Cursor API key CMK. */
+  cursorApiKeyKmsDeletionWindowInDays: number;
+  /** Role ARNs allowed to decrypt Cursor API keys — the agent harness. */
+  cursorApiKeyReaderRoleArns: pulumi.Input<string>[];
 };
 
 export class AuthenticationService extends pulumi.ComponentResource {
@@ -58,6 +70,10 @@ export class AuthenticationService extends pulumi.ComponentResource {
   public domain: string;
   public clusterName: pulumi.Output<string> | string;
   public tags: { [key: string]: string };
+  /** ARN of the CMK that encrypts users' Cursor API keys. The agent harness
+   * needs it to grant itself Decrypt, and the service reads it as
+   * `CURSOR_API_KEY_KMS_KEY_ID`. */
+  public cursorApiKeyKmsKeyArn: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -74,6 +90,8 @@ export class AuthenticationService extends pulumi.ComponentResource {
       secretKeyArns,
       queueArns,
       microsoftTokenKmsDeletionWindowInDays,
+      cursorApiKeyKmsDeletionWindowInDays,
+      cursorApiKeyReaderRoleArns,
     }: Args,
     opts?: pulumi.ComponentResourceOptions
   ) {
@@ -240,6 +258,99 @@ export class AuthenticationService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // A key of its own rather than the Microsoft one. The argument is IAM, not
+    // rotation: sharing it would grant the agent harness — which runs agent
+    // code — decrypt permission on the key protecting everyone's mailbox
+    // refresh tokens. Different blast radii should not share a key.
+    const cursorApiKeyKmsKeyPolicy = aws.iam.getPolicyDocumentOutput({
+      statements: [
+        {
+          sid: 'AllowAccountKeyAdministration',
+          effect: 'Allow',
+          principals: [{ type: 'AWS', identifiers: [accountRootArn] }],
+          actions: [
+            'kms:CancelKeyDeletion',
+            'kms:Create*',
+            'kms:Delete*',
+            'kms:Describe*',
+            'kms:Disable*',
+            'kms:Enable*',
+            'kms:Get*',
+            'kms:List*',
+            'kms:Put*',
+            'kms:Revoke*',
+            'kms:ScheduleKeyDeletion',
+            'kms:TagResource',
+            'kms:UntagResource',
+            'kms:Update*',
+          ],
+          resources: ['*'],
+        },
+        {
+          sid: 'AllowAuthenticationServiceCursorKeyEncryption',
+          effect: 'Allow',
+          principals: [{ type: 'AWS', identifiers: [this.role.arn] }],
+          actions: CURSOR_API_KEY_KMS_WRITE_ACTIONS,
+          resources: ['*'],
+        },
+        // The agent harness decrypts a session owner's key at every spawn and
+        // resume. Granted by role ARN passed in rather than by this stack
+        // reaching into another, so the dependency stays one-directional.
+        {
+          sid: 'AllowAgentHarnessCursorKeyDecryption',
+          effect: 'Allow',
+          principals: [
+            { type: 'AWS', identifiers: cursorApiKeyReaderRoleArns },
+          ],
+          actions: CURSOR_API_KEY_KMS_READ_ACTIONS,
+          resources: ['*'],
+        },
+      ],
+    });
+
+    const cursorApiKeyKmsKey = new aws.kms.Key(
+      `${BASE_NAME}-cursor-api-key-key`,
+      {
+        description: `Cursor API key encryption key for ${stack}`,
+        deletionWindowInDays: cursorApiKeyKmsDeletionWindowInDays,
+        enableKeyRotation: true,
+        policy: cursorApiKeyKmsKeyPolicy.json,
+        tags: this.tags,
+      },
+      { parent: this, protect: stack === 'prod' }
+    );
+
+    new aws.kms.Alias(
+      `${BASE_NAME}-cursor-api-key-key-alias`,
+      {
+        name: `alias/${BASE_NAME}-cursor-api-key-${stack}`,
+        targetKeyId: cursorApiKeyKmsKey.keyId,
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicy(
+      `${BASE_NAME}-cursor-api-key-kms-policy`,
+      {
+        role: this.role.id,
+        policy: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: CURSOR_API_KEY_KMS_WRITE_ACTIONS,
+              Resource: cursorApiKeyKmsKey.arn,
+              Effect: 'Allow',
+            },
+          ],
+        },
+      },
+      { parent: this }
+    );
+
+    // The ARN the harness stack needs in order to grant itself Decrypt, and
+    // what the service reads as CURSOR_API_KEY_KMS_KEY_ID.
+    this.cursorApiKeyKmsKeyArn = cursorApiKeyKmsKey.arn;
+
     // ecr image
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -320,6 +431,15 @@ export class AuthenticationService extends pulumi.ComponentResource {
               memory: 718, //1024 - (256 + 50)
               environment: [
                 { name: 'BASE_URL', value: this.domain },
+                // Injected here rather than configured in Doppler: a key id is
+                // not a secret, and deriving it from the resource keeps the two
+                // from drifting. Note MICROSOFT_TOKEN_KMS_KEY_ID is documented
+                // as injected the same way but is not — see the Pulumi yaml
+                // comment; that gap is not fixed here.
+                {
+                  name: 'CURSOR_API_KEY_KMS_KEY_ID',
+                  value: cursorApiKeyKmsKey.arn,
+                },
                 ...(containerEnvVars ?? []),
               ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],

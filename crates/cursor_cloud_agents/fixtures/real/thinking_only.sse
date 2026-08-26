@@ -1,0 +1,281 @@
+event: status
+data: {"runId":"run-bf582f53-60a4-459a-b3f0-4dc67578b6d8","status":"RUNNING"}
+
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-bf582f53-60a4-459a-b3f0-4dc67578b6d8","text":"can you put up a pr with a tiny one line TEST at the bottom of our readme change"}}
+
+event: thinking
+data: {"text":"Preparing a pull request"}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":"Preparing a pull request"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+event: thinking
+data: {"text":" with a one-line test"}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":" with a one-line test"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+event: thinking
+data: {"text":" appended to the README"}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":" appended to the README"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+event: thinking
+data: {"text":" change."}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":" change."}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: thinking
+data: {"text":"\n\nChecking the repository"}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nChecking the repository"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+event: thinking
+data: {"text":" state and existing "}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":" state and existing "}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+event: thinking
+data: {"text":"README changes."}
+
+event: interaction_update
+data: {"type":"thinking-delta","text":"README changes."}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":46}
+
+event: assistant
+data: {"text":"I'll"}
+
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" inspect"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" inspect"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":" the"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" repo"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" repo"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" and"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" README"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" README"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":" so"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" so"}
+
+event: assistant
+data: {"text":" I"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" I"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" can"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" can"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" add"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" add"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" a"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+event: assistant
+data: {"text":" one"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" one"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":"-"}
+
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":"line"}
+
+event: interaction_update
+data: {"type":"text-delta","text":"line"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" TEST"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" TEST"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" at"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" at"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" the"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" bottom"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" bottom"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" and"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":" open"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" open"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+event: assistant
+data: {"text":" a"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+event: assistant
+data: {"text":" PR"}
+
+event: interaction_update
+data: {"type":"text-delta","text":" PR"}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+event: assistant
+data: {"text":"."}
+
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":12}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+event: interaction_update
+data: {"type":"token-delta","tokens":34}
+
+event: heartbeat
+data: {}

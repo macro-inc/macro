@@ -84,6 +84,20 @@ pub const MACRO_CODER_HANDLE: &str = "coder";
 /// Display name for the "Macro Coder" system bot.
 pub const MACRO_CODER_NAME: &str = "Macro Coder";
 
+/// Stable [`BotId`] for the "Cursor" system bot.
+///
+/// Mentioning it opens an agent session like [`MACRO_CODER_BOT_ID`] does, but
+/// the session is served by a Cursor cloud agent rather than a Macro-managed
+/// sandbox.
+pub const CURSOR_BOT_ID: BotId =
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_c5c5));
+
+/// Stable handle for the "Cursor" system bot (used for `@` mentions).
+pub const CURSOR_HANDLE: &str = "cursor";
+
+/// Display name for the "Cursor" system bot.
+pub const CURSOR_NAME: &str = "Cursor";
+
 /// A bot id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

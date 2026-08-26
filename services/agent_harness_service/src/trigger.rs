@@ -3,15 +3,19 @@
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_channel_event;
 use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
+use agent_trigger::outbound::{ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector};
 use bot_id::BotId;
 use bots::domain::ports::BotRepo as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::broker_events::ChannelMacroEvent;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
+use lexical_client::LexicalClient;
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
     MacroEventCollection as _, MacroEventConsumerService,
 };
+use macro_service_urls::LexicalServiceUrl;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::PgPool;
@@ -49,19 +53,29 @@ fn commit_message(consumer: &TriggerConsumer, message: &BorrowedMessage<'_>) -> 
 }
 
 /// Keeps the channel trigger consumer running across transient failures.
-pub async fn supervise(pool: PgPool, kafka_brokers: String) {
+pub async fn supervise(pool: PgPool, kafka_brokers: String, internal_api_key: String) {
     loop {
-        if let Err(error) = run(pool.clone(), kafka_brokers.clone()).await {
+        if let Err(error) = run(
+            pool.clone(),
+            kafka_brokers.clone(),
+            internal_api_key.clone(),
+        )
+        .await
+        {
             tracing::error!(error = ?error, "agent trigger stopped; restarting");
             sleep(Duration::from_secs(1)).await;
         }
     }
 }
 
-async fn run(pool: PgPool, kafka_brokers: String) -> anyhow::Result<()> {
+async fn run(pool: PgPool, kafka_brokers: String, internal_api_key: String) -> anyhow::Result<()> {
+    let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(pool.clone()),
-        PgAgentBotLookup(PgBotsRepo::new(pool)),
+        PgAgentBotLookup(PgBotsRepo::new(pool.clone())),
+        LexicalReplyDetector::new(lexical),
+        FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
+        ChannelThreadHistory::new(PgChannelsRepo::new(pool)),
     );
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(&kafka_brokers)?,

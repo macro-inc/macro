@@ -723,6 +723,17 @@
             "format": "date-time",
             "description": "When the session was created."
           },
+          "external": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalSessionResponse",
+                "description": "The external provider serving this session, when one does. Absent for\nsandboxed sessions, so existing payloads are byte-identical."
+              }
+            ]
+          },
           "harness": {
             "type": "string",
             "description": "Harness slug."
@@ -877,6 +888,25 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
+          }
+        }
+      },
+      "ExternalSessionResponse": {
+        "type": "object",
+        "description": "The provider-side identity of an externally-served session.",
+        "required": ["provider"],
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The provider's display name for the agent, when it reported one."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Which provider serves the session, e.g. `cursor`."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "The agent's page on the provider's site, for a client to link out to."
           }
         }
       },

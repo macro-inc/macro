@@ -25,6 +25,9 @@ aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+aws-sdk-kms = { workspace = true }
+cursor_api_key = { path = "../../crates/cursor_api_key" }
+cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
 contacts = { path = "../../crates/contacts" }

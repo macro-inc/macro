@@ -1,0 +1,34 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 237
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/search_tools.sse
+---
+
+--- thinking ---
+I'll begin by searching the codebase semantically for SSE decoding logic.
+
+I'll run three targeted searches next: grep for the exact string SseDecoder, glob for *.sse files, and the semantic tool for SSE decoding logic. I'll report all results without modifying anything.
+
+No dedicated SemanticSearch tool is available. I'll use the Task tool with the explore subagent instead.
+--- assistant ---
+I'll search the codebase three ways: a semantic look at SSE decoding, an exact grep for `SseDecoder`, and a glob for `*.sse` files. No code changes.
+--- thinking ---
+All three tools have returned results. I am ready to report what each one found.
+--- assistant ---
+Here is what each search returned. Nothing was modified, committed, pushed, or opened as a PR.
+
+**Semantic search (SSE decoding)**  
+SSE wire-format parsing lives in two in-repo places:
+
+1. **TypeScript SDK** — `createSseClient` in 12 generated copies of `packages/sdk/generated/*/core/serverSentEvents.gen.ts`. It reads `response.body` via `TextDecoderStream`, splits on `\n\n`, and parses `data:` / `event:` / `id:` / `retry:` lines. Wired from each service’s `client.gen.ts` via `makeSseFn`. No current product callers of `client.sse.*`.
+
+2. **Rust Anthropic client** — `Client::post_stream` in `crates/anthropic/src/client/mod.rs`. Line-oriented parse of `data: ` prefixes from the HTTP body; called from `Chat::create_stream`. JSON is then deserialized as `StreamEvent`.
+
+Related but not in-repo: `eventsource-stream` inside `async-openai` / `rig-core`. Product chat streaming uses WebSocket JSON (`connection_gateway`), not HTTP SSE. There is no `SseDecoder` type.
+
+**Grep (`SseDecoder`)**  
+No matches.
+
+**Glob (`*.sse`)**  
+0 files found.

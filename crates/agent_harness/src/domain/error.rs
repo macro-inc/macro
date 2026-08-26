@@ -15,6 +15,20 @@ pub enum HarnessError {
     /// A container could not be spawned or reattached.
     #[error("container unavailable: {0}")]
     Container(String),
+    /// The session's owner has no Cursor API key registered.
+    ///
+    /// Its own variant because it is the one provisioning failure that is the
+    /// user's to fix, and the most likely first run of `@cursor` there is.
+    ///
+    /// Phrased for a reader rather than an operator, but be aware of where it
+    /// currently lands: the trigger path announces the session *before* it
+    /// spawns, so a spawn failure marks the session disconnected and returns,
+    /// and this sentence reaches a log. What the user sees is a session chip
+    /// whose session never answers. Closing that needs a way to post a failure
+    /// back to the thread, which [`crate::domain::ports::SessionAnnouncer`]
+    /// does not have — it announces sessions and nothing else.
+    #[error("connect your Cursor account in Settings → Connections to use @cursor")]
+    CursorNotConnected,
     /// The agent would not open an ACP session.
     #[error("acp handshake failed: {0}")]
     Handshake(String),
