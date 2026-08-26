@@ -231,7 +231,7 @@ export class CacheWorkerCore {
         });
       }
       if (
-        (request.kind === 'write' || request.kind === 'hydrate') &&
+        request.kind === 'write' &&
         typeof result === 'object' &&
         result !== null &&
         'soupProjectionTelemetry' in result
@@ -558,6 +558,9 @@ export class CacheWorkerCore {
           request.identity
         );
         result.revision = parseCacheRevision(result.revision);
+        if (result.soupProjectionTelemetry) {
+          this.recordSoupProjectionTelemetry(result.soupProjectionTelemetry);
+        }
         this.fanOut(result, true);
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
