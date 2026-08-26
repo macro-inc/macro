@@ -39,8 +39,8 @@ use agent_client_protocol::schema::v1::{
     McpCapabilities, McpServer as AcpMcpServer, NewSessionRequest, NewSessionResponse,
     PromptCapabilities, PromptRequest, PromptResponse, SessionConfigId, SessionConfigKind,
     SessionConfigOption, SessionConfigSelect, SessionConfigSelectOption,
-    SessionConfigSelectOptions, SessionConfigValueId, SessionId, SessionNotification,
-    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+    SessionConfigSelectOptions, SessionConfigValueId, SessionNotification, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
 };
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, on_receive_notification,
@@ -111,10 +111,7 @@ impl SessionNotifier for AcpNotifier {
             .get()
             .ok_or_else(|| rootcause::report!("session update before the acp connection was up"))?;
         connection
-            .send_notification(SessionNotification::new(
-                SessionId::new(session.as_str()),
-                update,
-            ))
+            .send_notification(SessionNotification::new(session.clone(), update))
             .map_err(|error| rootcause::report!("{error}"))
     }
 }
@@ -311,10 +308,7 @@ where
                     let mcp_servers = forwardable_mcp_servers(request.mcp_servers);
                     let session = service.new_session(&request.cwd, mcp_servers);
                     let options = session_config_options(&service, &session).await;
-                    responder.respond(
-                        NewSessionResponse::new(SessionId::new(session.as_str()))
-                            .config_options(options),
-                    )
+                    responder.respond(NewSessionResponse::new(session).config_options(options))
                 }
             },
             on_receive_request!(),
@@ -327,7 +321,7 @@ where
                     // cancels while the turn streams.
                     let service = Arc::clone(&service);
                     connection.spawn(async move {
-                        let session = AcpSessionId::new(request.session_id.0.as_ref());
+                        let session = request.session_id;
                         let text = prompt_text(&request.prompt);
                         // A failed respond means the client is gone; failing
                         // the spawned task would tear down the (already
@@ -360,7 +354,7 @@ where
                     // agent serves keep their own durable log of every frame,
                     // and Cursor accumulates the conversation server-side, so
                     // a replay would tell the client what it already knows.
-                    let session = AcpSessionId::new(request.session_id.0.as_ref());
+                    let session = request.session_id;
                     if service.has_session(&session) {
                         // The MCP list is the client's, and a load restates
                         // it — the one way a restored process, whose host
@@ -386,7 +380,7 @@ where
                     // session map does not grow for the process lifetime. A
                     // session this agent never had is the client's mistake,
                     // not a no-op worth acknowledging.
-                    if service.close(&AcpSessionId::new(request.session_id.0.as_ref())) {
+                    if service.close(&request.session_id) {
                         responder.respond(CloseSessionResponse::new())
                     } else {
                         responder.respond_with_error(AcpError::invalid_params())
@@ -399,7 +393,7 @@ where
             {
                 let service = Arc::clone(&service);
                 async move |request: SetSessionConfigOptionRequest, responder, _connection| {
-                    let session = AcpSessionId::new(request.session_id.0.as_ref());
+                    let session = request.session_id;
                     // Only the model is configurable, so anything else is the
                     // client naming an option this agent never advertised.
                     if request.config_id.to_string() != MODEL_CONFIG_ID {
@@ -432,7 +426,7 @@ where
                     // on it.
                     let service = Arc::clone(&service);
                     connection.spawn(async move {
-                        let session = AcpSessionId::new(notification.session_id.0.as_ref());
+                        let session = notification.session_id;
                         if let Err(error) = service.cancel(&session).await {
                             tracing::error!(error = %error, "cancel failed");
                         }

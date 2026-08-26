@@ -294,7 +294,7 @@ where
                     .await?
                     .map(|external| CursorAgentId::new(external.external_id));
                 Some(RestoredCursorSession {
-                    acp_session: AcpSessionId::new(acp.0.as_ref()),
+                    acp_session: acp.clone(),
                     agent,
                     // The projected model column. It round-trips a picked
                     // model back into the wrapper — and for a session that
