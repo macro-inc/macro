@@ -5,8 +5,8 @@ use cache_core::codec::{
     cache_namespace, decode_record, decode_record_updates, encode_record, encode_record_updates,
 };
 use cache_core::predicate::{
-    PredicateIndexStorage, PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation,
-    ProjectionState,
+    OptimisticShadowReconciliation, PredicateIndexStorage, PredicateQueryResult,
+    ProjectionIncompleteKind, ProjectionMutation, ProjectionState,
 };
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
@@ -1201,6 +1201,64 @@ impl Storage for TursoStorage {
         self.latch_result(result)
     }
 
+    async fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            validate_shadow_reconciliation(id, &reconciliation)?;
+            let sql_id = mutation_id_to_sql(id)?;
+            generation_to_sql(claim.generation)?;
+            let entries = prepare_records(entries)?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                if !claim_is_current(&connection, sql_id, &claim)?
+                    || !queue_identity_matches(&connection, &reconciliation.expected_queue)?
+                {
+                    return Ok(false);
+                }
+                require_layer(&connection, sql_id)?;
+                {
+                    let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                    for (index, entry) in entries.iter().enumerate() {
+                        require_changed(
+                            driver::execute_prepared(
+                                &mut statement,
+                                vec![
+                                    text(&entry.key.typename),
+                                    text(&entry.key.id),
+                                    Value::from_blob(entry.value.clone()),
+                                ],
+                            )?,
+                            1,
+                        )?;
+                        self.fault_after(TestFaultSite::Complete, index)?;
+                    }
+                }
+                write_search_documents(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)?;
+                require_changed(
+                    driver::execute(
+                        &connection,
+                        "DELETE FROM mutation_queue WHERE id = ?1",
+                        vec![Value::from_i64(sql_id)],
+                    )?,
+                    1,
+                )?;
+                write_shadow_reconciliation(&connection, reconciliation, |index| {
+                    self.fault_after(TestFaultSite::Complete, entries.len() + index)
+                })?;
+                Ok(true)
+            })
+        })();
+        self.latch_result(result)
+    }
+
     async fn discard_mutation(
         &mut self,
         id: MutationId,
@@ -1225,6 +1283,42 @@ impl Storage for TursoStorage {
                     1,
                 )?;
                 self.fault_after(TestFaultSite::Discard, 0)?;
+                Ok(true)
+            })
+        })();
+        self.latch_result(result)
+    }
+
+    async fn discard_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        self.require_healthy()?;
+        let result = (|| {
+            validate_shadow_reconciliation(id, &reconciliation)?;
+            let sql_id = mutation_id_to_sql(id)?;
+            generation_to_sql(claim.generation)?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                if !claim_is_current(&connection, sql_id, &claim)?
+                    || !queue_identity_matches(&connection, &reconciliation.expected_queue)?
+                {
+                    return Ok(false);
+                }
+                require_layer(&connection, sql_id)?;
+                require_changed(
+                    driver::execute(
+                        &connection,
+                        "DELETE FROM mutation_queue WHERE id = ?1",
+                        vec![Value::from_i64(sql_id)],
+                    )?,
+                    1,
+                )?;
+                write_shadow_reconciliation(&connection, reconciliation, |index| {
+                    self.fault_after(TestFaultSite::Discard, index)
+                })?;
                 Ok(true)
             })
         })();
@@ -1349,6 +1443,55 @@ fn validate_pending_optimistic_projections(
     Ok(())
 }
 
+fn validate_shadow_reconciliation(
+    id: MutationId,
+    reconciliation: &OptimisticShadowReconciliation,
+) -> Result<(), TursoStorageError> {
+    reconciliation
+        .validate(id)
+        .map_err(|_| TursoStorageError::InvalidInput)
+}
+
+fn queue_identity_matches(
+    connection: &Arc<Connection>,
+    expected: &[MutationId],
+) -> Result<bool, TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT id FROM mutation_queue ORDER BY id ASC",
+        Vec::new(),
+    )?;
+    if rows.len() != expected.len() {
+        return Ok(false);
+    }
+    for (row, expected) in rows.iter().zip(expected) {
+        if row.len() != 1 || mutation_id_from_row(required_i64(row, 0)?)? != *expected {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn write_shadow_reconciliation(
+    connection: &Arc<Connection>,
+    reconciliation: OptimisticShadowReconciliation,
+    mut after_write: impl FnMut(usize) -> Result<(), TursoStorageError>,
+) -> Result<(), TursoStorageError> {
+    for key in &reconciliation.affected_keys {
+        delete_optimistic_projection(connection, key)?;
+    }
+    for (index, replacement) in reconciliation.replacements.into_iter().enumerate() {
+        insert_optimistic_projection(
+            connection,
+            mutation_id_to_sql(replacement.owner)?,
+            replacement.state,
+            replacement.uncertainty,
+        )?;
+        after_write(index)?;
+    }
+    Ok(())
+}
+
 fn write_pending_optimistic_projections(
     connection: &Arc<Connection>,
     owner: MutationId,
@@ -1357,78 +1500,95 @@ fn write_pending_optimistic_projections(
 ) -> Result<(), TursoStorageError> {
     let owner = mutation_id_to_sql(owner)?;
     for (index, projection) in projections.into_iter().enumerate() {
-        let record_key = projection.state.record_key();
-        let changed = driver::execute(
-            connection,
-            OPTIMISTIC_INDEX_DOCUMENT_DELETE,
-            vec![text(record_key.as_str())],
-        )?;
-        if !(0..=1).contains(&changed) {
-            return Err(invariant());
-        }
-        let rows = driver::query(
-            connection,
-            OPTIMISTIC_INDEX_DOCUMENT_INSERT,
-            vec![
-                Value::from_i64(owner),
-                text(record_key.as_str()),
-                text(projection.state.profile().token().as_str()),
-                text(projection.state.partition().as_str()),
-                Value::from_i64(optimistic_projection_state_code(&projection.state)),
-            ],
-        )?;
-        let document_id = match rows.as_slice() {
-            [row] if row.len() == 1 => required_i64(row, 0)?,
-            _ => return Err(invariant()),
-        };
-        if let OptimisticProjectionState::Complete(document) = projection.state {
-            for fact in document.exact_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        OPTIMISTIC_EXACT_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_blob(fact.value.as_bytes().to_vec()),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
-            for fact in document.integer_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        OPTIMISTIC_INTEGER_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_i64(fact.value),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
-            for fact in document.sort_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        OPTIMISTIC_SORT_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_i64(fact.value),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
-        }
-        write_optimistic_uncertainty(connection, document_id, projection.uncertainty)?;
+        delete_optimistic_projection(connection, projection.state.record_key())?;
+        insert_optimistic_projection(connection, owner, projection.state, projection.uncertainty)?;
         after_write(index)?;
     }
     Ok(())
+}
+
+fn delete_optimistic_projection(
+    connection: &Arc<Connection>,
+    record_key: &PredicateRecordKey,
+) -> Result<(), TursoStorageError> {
+    let changed = driver::execute(
+        connection,
+        OPTIMISTIC_INDEX_DOCUMENT_DELETE,
+        vec![text(record_key.as_str())],
+    )?;
+    if (0..=1).contains(&changed) {
+        Ok(())
+    } else {
+        Err(invariant())
+    }
+}
+
+fn insert_optimistic_projection(
+    connection: &Arc<Connection>,
+    owner: i64,
+    state: OptimisticProjectionState,
+    uncertainty: OptimisticUncertainty,
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        OPTIMISTIC_INDEX_DOCUMENT_INSERT,
+        vec![
+            Value::from_i64(owner),
+            text(state.record_key().as_str()),
+            text(state.profile().token().as_str()),
+            text(state.partition().as_str()),
+            Value::from_i64(optimistic_projection_state_code(&state)),
+        ],
+    )?;
+    let document_id = match rows.as_slice() {
+        [row] if row.len() == 1 => required_i64(row, 0)?,
+        _ => return Err(invariant()),
+    };
+    if let OptimisticProjectionState::Complete(document) = state {
+        for fact in document.exact_facts {
+            require_changed(
+                driver::execute(
+                    connection,
+                    OPTIMISTIC_EXACT_FACT_INSERT,
+                    vec![
+                        Value::from_i64(document_id),
+                        text(fact.attribute.as_str()),
+                        Value::from_blob(fact.value.as_bytes().to_vec()),
+                    ],
+                )?,
+                1,
+            )?;
+        }
+        for fact in document.integer_facts {
+            require_changed(
+                driver::execute(
+                    connection,
+                    OPTIMISTIC_INTEGER_FACT_INSERT,
+                    vec![
+                        Value::from_i64(document_id),
+                        text(fact.attribute.as_str()),
+                        Value::from_i64(fact.value),
+                    ],
+                )?,
+                1,
+            )?;
+        }
+        for fact in document.sort_facts {
+            require_changed(
+                driver::execute(
+                    connection,
+                    OPTIMISTIC_SORT_FACT_INSERT,
+                    vec![
+                        Value::from_i64(document_id),
+                        text(fact.attribute.as_str()),
+                        Value::from_i64(fact.value),
+                    ],
+                )?,
+                1,
+            )?;
+        }
+    }
+    write_optimistic_uncertainty(connection, document_id, uncertainty)
 }
 
 fn write_optimistic_uncertainty(

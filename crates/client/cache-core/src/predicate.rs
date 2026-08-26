@@ -9,6 +9,7 @@ use predicate_index::{
     RecordKey, Token, ValidatedIndexQuery, ValidationError,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use thiserror::Error;
 
 /// Persisted projection state for one supported normalized record.
@@ -76,6 +77,56 @@ pub enum ProjectionCompositionError {
     /// A supplied base or effective shadow belonged to another record key.
     #[error("optimistic projection base does not match the requested record key")]
     RecordKeyMismatch,
+    /// A staged reconciliation has duplicate keys or an inactive owner.
+    #[error("optimistic shadow reconciliation is inconsistent")]
+    InvalidReconciliation,
+}
+
+/// Atomic shadow replacement staged against one exact durable queue identity.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptimisticShadowReconciliation {
+    /// Ordered mutation IDs observed while composing replacements.
+    pub expected_queue: Vec<u64>,
+    /// Keys to remove or replace, in deterministic key order.
+    pub affected_keys: Vec<RecordKey>,
+    /// Effective replacements for keys still touched by active layers.
+    pub replacements: Vec<EffectiveOptimisticProjection>,
+}
+
+impl OptimisticShadowReconciliation {
+    /// Validate queue order, key uniqueness, replacement ownership, and bounds.
+    pub fn validate(&self, settled: u64) -> Result<(), ProjectionCompositionError> {
+        if self.expected_queue.first().copied() != Some(settled)
+            || self.expected_queue.iter().any(|owner| *owner == 0)
+            || self
+                .expected_queue
+                .windows(2)
+                .any(|owners| owners[0] >= owners[1])
+        {
+            return Err(ProjectionCompositionError::LayerOrder);
+        }
+        if self.affected_keys.windows(2).any(|keys| keys[0] >= keys[1]) {
+            return Err(ProjectionCompositionError::InvalidReconciliation);
+        }
+        let active_owners = self
+            .expected_queue
+            .iter()
+            .copied()
+            .skip(1)
+            .collect::<BTreeSet<_>>();
+        let affected = self.affected_keys.iter().collect::<BTreeSet<_>>();
+        let mut replacement_keys = BTreeSet::new();
+        for replacement in &self.replacements {
+            replacement.validate()?;
+            if !active_owners.contains(&replacement.owner)
+                || !affected.contains(replacement.state.record_key())
+                || !replacement_keys.insert(replacement.state.record_key())
+            {
+                return Err(ProjectionCompositionError::InvalidReconciliation);
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Compose one key from authority and all active queue layers.

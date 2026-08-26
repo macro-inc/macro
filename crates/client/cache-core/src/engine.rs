@@ -21,8 +21,9 @@ use crate::normalize::{
     project_hydration_response,
 };
 use crate::predicate::{
-    PredicateIndexStorage, PredicateQueryResult, ProjectionMutation,
-    compose_pending_optimistic_projection,
+    OptimisticShadowReconciliation, PredicateIndexStorage, PredicateQueryResult,
+    ProjectionMutation, ProjectionMutationLayer, ProjectionState,
+    compose_effective_optimistic_projection, compose_pending_optimistic_projection,
 };
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
@@ -1441,6 +1442,114 @@ impl<S: Storage> Engine<S> {
         Ok(())
     }
 
+    async fn stage_shadow_reconciliation(
+        &self,
+        transaction: OptimisticTransactionId,
+        authoritative_mutations: &[ProjectionMutation],
+    ) -> Result<OptimisticShadowReconciliation, EngineError<S::Error>> {
+        let expected_queue = self
+            .optimistic
+            .iter()
+            .map(|layer| layer.id)
+            .collect::<Vec<_>>();
+        let settled = self
+            .optimistic
+            .iter()
+            .find(|layer| layer.id == transaction)
+            .ok_or(EngineError::UnknownTransaction(transaction))?;
+        let affected_keys = settled
+            .projection_mutations
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .chain(
+                authoritative_mutations
+                    .iter()
+                    .map(|mutation| mutation.record_key().clone()),
+            )
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let loaded = self
+            .storage
+            .load_projection_states(&affected_keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        if loaded.len() != affected_keys.len() {
+            return Err(EngineError::InvalidOptimisticProjection(
+                "storage returned misaligned authoritative projection states".to_owned(),
+            ));
+        }
+        let mut authoritative = affected_keys
+            .iter()
+            .cloned()
+            .zip(loaded)
+            .collect::<BTreeMap<_, _>>();
+        for mutation in authoritative_mutations {
+            match mutation {
+                ProjectionMutation::Replace(document) => {
+                    let mut document = document.clone();
+                    document.canonicalize();
+                    document.validate().map_err(|error| {
+                        EngineError::InvalidOptimisticProjection(error.to_string())
+                    })?;
+                    authoritative.insert(
+                        document.record_key.clone(),
+                        Some(ProjectionState::Complete(document)),
+                    );
+                }
+                ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile,
+                    partition,
+                    kind,
+                } => {
+                    authoritative.insert(
+                        record_key.clone(),
+                        Some(ProjectionState::Incomplete {
+                            record_key: record_key.clone(),
+                            profile: profile.clone(),
+                            partition: partition.clone(),
+                            kind: *kind,
+                        }),
+                    );
+                }
+                ProjectionMutation::Delete(record_key) => {
+                    authoritative.insert(record_key.clone(), None);
+                }
+            }
+        }
+        let remaining_layers = self
+            .optimistic
+            .iter()
+            .filter(|layer| layer.id != transaction)
+            .map(|layer| ProjectionMutationLayer {
+                owner: layer.id,
+                mutations: &layer.projection_mutations,
+            })
+            .collect::<Vec<_>>();
+        let replacements = affected_keys
+            .iter()
+            .filter_map(|key| {
+                compose_effective_optimistic_projection(
+                    key,
+                    authoritative.get(key).and_then(Option::as_ref),
+                    &remaining_layers,
+                )
+                .transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
+        let reconciliation = OptimisticShadowReconciliation {
+            expected_queue,
+            affected_keys,
+            replacements,
+        };
+        reconciliation
+            .validate(transaction)
+            .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
+        Ok(reconciliation)
+    }
+
     /// Replaces the claimed head's optimistic contribution with the real
     /// network response without flickering through the pre-mutation value.
     /// Real records and queue deletion commit in one storage transaction.
@@ -1504,9 +1613,18 @@ impl<S: Storage> Engine<S> {
         merge_updates_into_effective(&mut effective, &updates);
         apply_link_patches(&mut effective, &mut updates, &recipes, true)?;
         let (durable_changed, entries) = stage_updates(&bases, updates);
+        let reconciliation = self
+            .stage_shadow_reconciliation(transaction, &projections)
+            .await?;
         if !self
             .storage
-            .complete_mutation_with_projections(transaction, claim, entries.clone(), projections)
+            .complete_mutation_with_shadow(
+                transaction,
+                claim,
+                entries.clone(),
+                projections,
+                reconciliation,
+            )
             .await
             .map_err(EngineError::Storage)?
         {
@@ -1561,9 +1679,10 @@ impl<S: Storage> Engine<S> {
         let mut candidates = layer_keys(&self.optimistic);
         let bases = self.load_bases(&candidates).await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
+        let reconciliation = self.stage_shadow_reconciliation(transaction, &[]).await?;
         if !self
             .storage
-            .discard_mutation(transaction, claim)
+            .discard_mutation_with_shadow(transaction, claim, reconciliation)
             .await
             .map_err(EngineError::Storage)?
         {

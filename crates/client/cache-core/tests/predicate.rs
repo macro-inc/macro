@@ -569,6 +569,159 @@ fn optimistic_projection_rolls_back_and_settles_to_authoritative_facts() {
 }
 
 #[test]
+fn rollback_recomposes_later_owned_shadow_without_discarded_facts() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        let first = begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
+        )
+        .await;
+        let second = begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Patch {
+                record_key: record_key(),
+                profile: profile(),
+                partition: token("document"),
+                exact: vec![],
+                integers: vec![],
+                sorts: vec![IntegerFact {
+                    attribute: token("updated-at"),
+                    value: 99,
+                }],
+            }],
+        )
+        .await;
+        let claimed = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".to_owned(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        engine
+            .rollback_optimistic_write(
+                first,
+                MutationClaimToken {
+                    owner: "runner".to_owned(),
+                    generation: claimed.lease_generation,
+                },
+            )
+            .await
+            .unwrap();
+
+        let shadow = engine
+            .storage()
+            .load_optimistic_projections(&[record_key()])
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(shadow.owner, second);
+        let OptimisticProjectionState::Complete(document) = shadow.state else {
+            panic!("later patch should remain complete over authority")
+        };
+        assert!(document.exact_facts.iter().any(|fact| {
+            fact.attribute == token("owner") && fact.value == ExactValue::utf8("owner-1").unwrap()
+        }));
+        assert_eq!(document.sort_facts[0].value, 99);
+    });
+}
+
+#[test]
+fn commit_recomposes_later_patch_against_anticipated_authority() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        let first = begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
+        )
+        .await;
+        let second = begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Patch {
+                record_key: record_key(),
+                profile: profile(),
+                partition: token("document"),
+                exact: vec![],
+                integers: vec![],
+                sorts: vec![IntegerFact {
+                    attribute: token("updated-at"),
+                    value: 99,
+                }],
+            }],
+        )
+        .await;
+        let claimed = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".to_owned(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        engine
+            .commit_optimistic_write_with_projections(
+                first,
+                MutationClaimToken {
+                    owner: "runner".to_owned(),
+                    generation: claimed.lease_generation,
+                },
+                OPTIMISTIC_MUTATION,
+                Some("SetEntityProperty"),
+                &optimistic_variables(),
+                &optimistic_data(),
+                vec![ProjectionMutation::Replace(projection("owner-3"))],
+            )
+            .await
+            .unwrap();
+
+        let shadow = engine
+            .storage()
+            .load_optimistic_projections(&[record_key()])
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(shadow.owner, second);
+        let OptimisticProjectionState::Complete(document) = shadow.state else {
+            panic!("later patch should remain complete over committed authority")
+        };
+        assert!(document.exact_facts.iter().any(|fact| {
+            fact.attribute == token("owner") && fact.value == ExactValue::utf8("owner-3").unwrap()
+        }));
+        assert_eq!(document.sort_facts[0].value, 99);
+    });
+}
+
+#[test]
 fn optimistic_deletion_overfetches_authoritative_replacement_candidates() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

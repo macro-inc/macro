@@ -1,5 +1,6 @@
 use cache_core::predicate::{
-    PredicateIndexStorage, PredicateQueryResult, ProjectionMutation, ProjectionState,
+    OptimisticShadowReconciliation, PredicateIndexStorage, PredicateQueryResult,
+    ProjectionMutation, ProjectionState,
 };
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
@@ -178,12 +179,36 @@ impl Storage for BrowserStorage {
             .await
     }
 
+    async fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        self.inner
+            .complete_mutation_with_shadow(id, claim, entries, projections, reconciliation)
+            .await
+    }
+
     async fn discard_mutation(
         &mut self,
         id: MutationId,
         claim: MutationClaimToken,
     ) -> Result<bool, Self::Error> {
         self.inner.discard_mutation(id, claim).await
+    }
+
+    async fn discard_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        self.inner
+            .discard_mutation_with_shadow(id, claim, reconciliation)
+            .await
     }
 
     async fn clear(&mut self) -> Result<(), Self::Error> {

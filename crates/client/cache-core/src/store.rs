@@ -7,7 +7,8 @@
 //! `Send`.
 
 use crate::predicate::{
-    PredicateIndexStorage, PredicateQueryResult, ProjectionMutation, ProjectionState,
+    OptimisticShadowReconciliation, PredicateIndexStorage, PredicateQueryResult,
+    ProjectionMutation, ProjectionState,
 };
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
@@ -184,6 +185,19 @@ pub trait Storage: MaybeSend {
         projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
+    /// Atomically commits authority, removes the strict head, and reconciles shadows.
+    fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
+        let _ = reconciliation;
+        self.complete_mutation_with_projections(id, claim, entries, projections)
+    }
+
     /// Atomically removes a permanently failed mutation and its optimistic
     /// layer. Returns `false` when the claim is stale.
     fn discard_mutation(
@@ -191,6 +205,17 @@ pub trait Storage: MaybeSend {
         id: MutationId,
         claim: MutationClaimToken,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
+
+    /// Atomically removes the strict head and reconciles affected shadows.
+    fn discard_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
+        let _ = reconciliation;
+        self.discard_mutation(id, claim)
+    }
 
     /// Drops records, queued mutations, and optimistic layers (logout or
     /// identity mismatch).
@@ -485,6 +510,51 @@ impl Storage for InMemoryStorage {
         Ok(true)
     }
 
+    async fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        if reconciliation.validate(id).is_err()
+            || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
+        {
+            return Ok(false);
+        }
+        let Some((mutation, _)) = self.mutations.get(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(mutation, &claim) {
+            return Ok(false);
+        }
+        for replacement in &reconciliation.replacements {
+            if replacement.owner == id || !self.mutations.contains_key(&replacement.owner) {
+                return Ok(false);
+            }
+        }
+        for (key, record) in entries {
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != &key);
+            for document in project_search_documents(&key, &record) {
+                self.search_documents
+                    .insert((document.profile, key.clone()), document);
+            }
+            self.records.insert(key, record);
+        }
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
+        self.mutations.remove(&id);
+        for key in reconciliation.affected_keys {
+            self.optimistic_projections.remove(&key);
+        }
+        for replacement in reconciliation.replacements {
+            self.optimistic_projections
+                .insert(replacement.state.record_key().clone(), replacement);
+        }
+        Ok(true)
+    }
+
     async fn discard_mutation(
         &mut self,
         id: MutationId,
@@ -499,6 +569,39 @@ impl Storage for InMemoryStorage {
         self.mutations.remove(&id);
         self.optimistic_projections
             .retain(|_, projection| projection.owner != id);
+        Ok(true)
+    }
+
+    async fn discard_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        if reconciliation.validate(id).is_err()
+            || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
+        {
+            return Ok(false);
+        }
+        let Some((mutation, _)) = self.mutations.get(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(mutation, &claim) {
+            return Ok(false);
+        }
+        for replacement in &reconciliation.replacements {
+            if replacement.owner == id || !self.mutations.contains_key(&replacement.owner) {
+                return Ok(false);
+            }
+        }
+        self.mutations.remove(&id);
+        for key in reconciliation.affected_keys {
+            self.optimistic_projections.remove(&key);
+        }
+        for replacement in reconciliation.replacements {
+            self.optimistic_projections
+                .insert(replacement.state.record_key().clone(), replacement);
+        }
         Ok(true)
     }
 

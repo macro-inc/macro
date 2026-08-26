@@ -469,6 +469,115 @@ fn enqueue_atomically_replaces_one_effective_shadow_per_key() {
 }
 
 #[test]
+fn settlement_fences_queue_identity_and_atomically_replaces_affected_shadows() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("shadow-settlement").unwrap();
+        let key = PredicateRecordKey::new("Thing:1").unwrap();
+        let first = storage
+            .enqueue_mutation_with_shadow(
+                queued("First"),
+                vec![pending_projection("Thing:1", "user-1", 10)],
+            )
+            .await
+            .unwrap();
+        let second = storage
+            .enqueue_mutation_with_shadow(
+                queued("Second"),
+                vec![pending_projection("Thing:1", "user-2", 20)],
+            )
+            .await
+            .unwrap();
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        let claim = token("runner", claimed.lease_generation);
+        let replacement = storage
+            .load_optimistic_projections(std::slice::from_ref(&key))
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+
+        assert!(
+            !storage
+                .discard_mutation_with_shadow(
+                    first,
+                    claim.clone(),
+                    OptimisticShadowReconciliation {
+                        expected_queue: vec![first],
+                        affected_keys: vec![key.clone()],
+                        replacements: vec![],
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
+
+        let reconciliation = OptimisticShadowReconciliation {
+            expected_queue: vec![first, second],
+            affected_keys: vec![key.clone()],
+            replacements: vec![replacement.clone()],
+        };
+        storage.arm_fault(TestFault::After {
+            site: TestFaultSite::Discard,
+            index: 0,
+        });
+        assert!(
+            storage
+                .discard_mutation_with_shadow(first, claim.clone(), reconciliation.clone())
+                .await
+                .is_err()
+        );
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
+        assert_eq!(
+            storage
+                .load_optimistic_projections(std::slice::from_ref(&key))
+                .await
+                .unwrap()
+                .pop()
+                .flatten(),
+            Some(replacement)
+        );
+
+        assert!(
+            storage
+                .discard_mutation_with_shadow(first, claim, reconciliation)
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            storage
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .iter()
+                .map(|mutation| mutation.id)
+                .collect::<Vec<_>>(),
+            vec![second]
+        );
+        assert_eq!(
+            storage
+                .load_optimistic_projections(&[key])
+                .await
+                .unwrap()
+                .pop()
+                .flatten()
+                .unwrap()
+                .owner,
+            second
+        );
+    });
+}
+
+#[test]
 fn optimistic_shadow_hierarchy_enforces_unique_keys_owners_and_cascades() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("shadow-cascades").unwrap();
