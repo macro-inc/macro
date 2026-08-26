@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::CatalogEntry;
 use std::sync::Mutex;
 
 /// Fake directory returning a canned page and recording the query it got.
@@ -41,73 +42,33 @@ fn directory_entry(app_slug: &str) -> CatalogEntry {
         display_name: app_slug.to_owned(),
         description: Some("from the directory".to_owned()),
         icon_url: None,
-        priority: false,
     }
 }
 
 #[tokio::test]
-async fn first_page_pins_priority_connectors_before_directory_results() {
-    let directory = FakeDirectory::returning(vec![directory_entry("airtable")]);
-
-    let page = browse_catalog(&directory, None, None, None).await.unwrap();
-
-    let split = page.entries.iter().position(|e| !e.priority).unwrap();
-    assert_eq!(split, PRIORITY_CONNECTORS.len());
-    assert!(page.entries[..split].iter().all(|e| e.priority));
-    assert_eq!(page.entries[split].app_slug, "airtable");
-}
-
-#[tokio::test]
-async fn directory_duplicates_of_priority_connectors_are_dropped() {
+async fn directory_results_pass_through_in_order() {
     let directory =
-        FakeDirectory::returning(vec![directory_entry("linear"), directory_entry("airtable")]);
+        FakeDirectory::returning(vec![directory_entry("slack"), directory_entry("airtable")]);
 
     let page = browse_catalog(&directory, None, None, None).await.unwrap();
 
-    let linear: Vec<_> = page
-        .entries
-        .iter()
-        .filter(|e| e.app_slug == "linear")
-        .collect();
-    assert_eq!(linear.len(), 1, "Linear must appear exactly once");
-    assert!(linear[0].priority);
-    assert_eq!(
-        linear[0].description.as_deref(),
-        Some("Create and update issues without leaving Macro."),
-        "priority tagline wins over the directory description"
-    );
+    let slugs: Vec<_> = page.entries.iter().map(|e| e.app_slug.as_str()).collect();
+    assert_eq!(slugs, ["slack", "airtable"]);
 }
 
 #[tokio::test]
-async fn search_filters_priority_connectors_and_marks_them() {
-    let directory = FakeDirectory::returning(vec![directory_entry("linear_helper")]);
+async fn search_is_trimmed_and_forwarded() {
+    let directory = FakeDirectory::returning(vec![]);
 
-    let page = browse_catalog(&directory, Some("linear"), None, None)
+    browse_catalog(&directory, Some("  linear  "), Some("cursor-1"), Some(5))
         .await
         .unwrap();
 
-    assert_eq!(page.entries[0].display_name, "Linear");
-    assert!(page.entries[0].priority);
-    assert_eq!(
-        page.entries.iter().filter(|e| e.priority).count(),
-        1,
-        "only the matching priority connector is pinned"
-    );
-    assert_eq!(page.entries[1].app_slug, "linear_helper");
-}
-
-#[tokio::test]
-async fn later_pages_never_repeat_priority_connectors() {
-    let directory = FakeDirectory::returning(vec![directory_entry("linear")]);
-
-    let page = browse_catalog(&directory, None, Some("cursor-1"), None)
-        .await
-        .unwrap();
-
-    assert!(
-        page.entries.is_empty(),
-        "priority connectors are neither pinned nor repeated on later pages"
-    );
+    let seen = directory.seen.lock().unwrap();
+    let (search, cursor, limit) = seen[0].clone();
+    assert_eq!(search.as_deref(), Some("linear"));
+    assert_eq!(cursor.as_deref(), Some("cursor-1"));
+    assert_eq!(limit, 5);
 }
 
 #[tokio::test]

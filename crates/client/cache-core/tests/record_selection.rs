@@ -101,6 +101,8 @@ fn projects_cold_links_and_skips_incomplete_explicit_keys() {
             )
             .await
             .unwrap();
+        assert_eq!(selected.revision, engine.current_revision());
+        assert_eq!(selected.revision.to_string(), "0");
         assert_eq!(selected.len(), 2);
         assert_eq!(selected[0].record["documentId"], json!("a"));
         assert_eq!(

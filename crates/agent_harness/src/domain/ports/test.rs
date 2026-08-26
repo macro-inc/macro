@@ -16,7 +16,7 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::ContainerManager;
-use crate::domain::model::SpawnContainer;
+use crate::domain::model::{AgentKind, SpawnContainer};
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
 
 fn owner() -> MacroUserIdStr<'static> {
@@ -63,6 +63,7 @@ async fn container_session_runs_and_logs_end_to_end() {
     let container = containers
         .spawn(SpawnContainer {
             session_id: id,
+            kind: AgentKind::SandboxedCoder,
             repo_url: "https://github.com/macro/macro".to_owned(),
             size: agent_session::domain::model::SandboxSize::Default,
         })

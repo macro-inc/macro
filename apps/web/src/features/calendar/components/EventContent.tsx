@@ -37,8 +37,10 @@ export function hasEveryoneElseDeclined(
 /** Renders responsive event content for FullCalendar. */
 export function EventContent(props: EventContentProps) {
   const isRenderedAllDay = () => props.renderProps.event.allDay;
-  const isCompact = () =>
-    isRenderedAllDay() || props.renderProps.view.type === 'dayGridMonth';
+  const isMonthView = () => props.renderProps.view.type === 'dayGridMonth';
+  const showsMonthDot = () => isMonthView() && !isRenderedAllDay();
+  const showsColorBar = () => !isMonthView() || isRenderedAllDay();
+  const isCompact = () => isRenderedAllDay() || isMonthView();
   const showLocation = () =>
     !isRenderedAllDay() && props.renderProps.view.type === 'timeGridDay';
   const selfResponseStatus = () =>
@@ -75,10 +77,14 @@ export function EventContent(props: EventContentProps) {
       class={cn(
         'calendar-event-content w-full min-w-0 overflow-hidden',
         !isCompact() && 'h-full min-h-0',
+        showsColorBar() && 'calendar-event-content-with-color-bar',
         props.isSelected && 'calendar-event-content-selected'
       )}
       data-response-status={selfResponseStatus()}
     >
+      <Show when={showsColorBar()}>
+        <span class="calendar-event-color-bar" aria-hidden="true" />
+      </Show>
       <div
         class={cn(
           'calendar-event-content-layout flex w-full min-h-0 flex-col overflow-hidden',
@@ -88,6 +94,9 @@ export function EventContent(props: EventContentProps) {
             'calendar-event-content-layout-single-line'
         )}
       >
+        <Show when={showsMonthDot()}>
+          <span class="calendar-event-response-dot" aria-hidden="true" />
+        </Show>
         <span class="calendar-event-title-row flex max-w-full min-w-0 shrink-0 items-center gap-0.5">
           <Show when={everyoneElseDeclined()}>
             <span
@@ -101,7 +110,7 @@ export function EventContent(props: EventContentProps) {
           </Show>
           <span
             class={cn(
-              'calendar-event-title min-w-0 max-w-full shrink font-semibold leading-tight',
+              'calendar-event-title min-w-0 max-w-full shrink font-medium leading-tight',
               props.isNarrow ? 'whitespace-nowrap' : 'truncate'
             )}
           >

@@ -91,12 +91,9 @@ pub async fn handler(
 
     let mut tx = ctx.db.begin().await?;
 
-    let result = email_db_client::messages::delete::delete_message_with_tx(
-        &mut tx,
-        &message_replying_to,
-        false,
-    )
-    .await;
+    let result =
+        email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message_replying_to)
+            .await;
 
     match result {
         Ok(_deleted_thread) => {

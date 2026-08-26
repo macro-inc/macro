@@ -211,7 +211,7 @@ fn explicit_key_selection_returns_native_cache_entities() {
     ))
     .unwrap();
     assert_eq!(
-        records[0].record,
+        records.records[0].record,
         serde_json::json!({"id": "doc-1", "name": "A note"})
     );
 }
@@ -458,7 +458,7 @@ fn invalidate_reports_dependent_ops() {
     read(&handle, Some("client:1"));
 
     let affected = block_on(handle.invalidate(written.changed)).unwrap();
-    assert_eq!(affected, vec!["client:1".to_string()]);
+    assert_eq!(affected.affected_ops, vec!["client:1".to_string()]);
 }
 
 #[test]

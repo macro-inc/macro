@@ -17,6 +17,8 @@ pub struct Config {
     pub database_url: DatabaseUrl,
     /// Kafka bootstrap servers.
     pub kafka_brokers: KafkaBrokers,
+    /// Key for internal service-to-service calls (the lexical service).
+    pub internal_api_key: String,
 }
 
 impl Config {

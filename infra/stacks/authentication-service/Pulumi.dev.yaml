@@ -7,6 +7,8 @@ config:
   # Keep Microsoft OAuth credentials in the authentication_service Doppler config.
   # Pulumi injects MICROSOFT_TOKEN_KMS_KEY_ID from the per-stack key; it is not a secret config value.
   authentication-service:microsoft_token_kms_deletion_window_days: 7
+  # Pulumi injects CURSOR_API_KEY_KMS_KEY_ID from the per-stack key; it is not a secret.
+  authentication-service:cursor_api_key_kms_deletion_window_days: 7
   authentication-service:service_internal_auth_key: document-storage-service-auth-key-dev
   authentication-service:fusionauth_client_secret_key: fusionauth-client-secret-dev
   authentication-service:stripe_secret_key: stripe-dev

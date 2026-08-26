@@ -28,7 +28,6 @@ pub struct NewDocumentMetadata {
     id: Option<uuid::Uuid>,
     document_name: String,
     project_id: Option<uuid::Uuid>,
-    email_attachment_id: Option<uuid::Uuid>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     skip_history: bool,
     attribution: Option<Attribution>,
@@ -47,7 +46,6 @@ impl NewDocumentMetadata {
                 id: None,
                 document_name: document_name.into(),
                 project_id: None,
-                email_attachment_id: None,
                 created_at: None,
                 skip_history: false,
                 attribution: None,
@@ -68,7 +66,6 @@ impl NewDocumentMetadata {
             file_type: kind.file_type,
             project_id: self.project_id,
             team_id: kind.team_id,
-            email_attachment_id: self.email_attachment_id,
             created_at: self.created_at,
             sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
@@ -93,12 +90,6 @@ impl NewDocumentMetadataBuilder {
     /// Set the project to associate with the document.
     pub fn project_id(mut self, project_id: uuid::Uuid) -> Self {
         self.metadata.project_id = Some(project_id);
-        self
-    }
-
-    /// Set an email attachment to link to this document.
-    pub fn email_attachment_id(mut self, email_attachment_id: uuid::Uuid) -> Self {
-        self.metadata.email_attachment_id = Some(email_attachment_id);
         self
     }
 
@@ -744,6 +735,7 @@ mod tests {
         MarkdownSubtype, NewDocumentMetadata, NewPlainTextDocument, RepoDocumentKind,
         RepoDocumentSubtype, file_shas,
     };
+    use crate::domain::models::ImportEmailAttachmentRepoArgs;
     use activity::{Actor, Attribution};
     use macro_user_id::user_id::MacroUserIdStr;
     use model::document::FileType;
@@ -776,13 +768,13 @@ mod tests {
     }
 
     #[test]
-    fn email_attachment_create_resolves_to_the_system_principal() {
-        let args = NewDocumentMetadata::builder("invoice.pdf")
-            .email_attachment_id(uuid::Uuid::from_u128(1))
-            .build()
-            .into_repo_args(owner(), repo_kind());
+    fn email_import_resolves_to_the_system_principal() {
+        let args = ImportEmailAttachmentRepoArgs {
+            email_attachment_id: uuid::Uuid::from_u128(1),
+            create: metadata().into_repo_args(owner(), repo_kind()),
+        };
 
-        assert_eq!(args.user_id.as_ref(), "macro|owner@example.com");
+        assert_eq!(args.create.user_id.as_ref(), "macro|owner@example.com");
         assert_eq!(
             args.resolved_attribution(),
             Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))

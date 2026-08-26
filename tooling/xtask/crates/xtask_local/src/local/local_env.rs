@@ -172,6 +172,17 @@ impl InfraEnv {
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
         );
+        // The alias LocalStack provisions for the Cursor API key CMK. Named by
+        // alias rather than key id because `CreateKey` mints a random id every
+        // run, and KMS accepts an alias anywhere a key id goes. Required by
+        // both the authentication service (which encrypts users' keys) and the
+        // harness (which decrypts them per session), so neither starts without
+        // it — local matches deployed behaviour instead of being a special
+        // case.
+        env.insert(
+            "CURSOR_API_KEY_KMS_KEY_ID".into(),
+            resources::CURSOR_API_KEY_KMS_ALIAS.into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
@@ -261,6 +272,11 @@ impl MailEnv {
 /// `DAYTONA_API_KEY=... DEV_DANGEROUS_LOCAL_CONTAINERS=false just run_local`.
 /// `GITHUB_TOKEN` is left to Doppler / process env so a local sandbox can
 /// still clone.
+///
+/// Two managed bots: `@coder` (`HARNESS_BOT_ID`) gets a sandbox from the
+/// local Docker provider, and `@macro` runs in-process on the in-memory ACP
+/// runtime. Only the first is configured - `@macro` is `bot_id::MACRO_AI_BOT_ID`
+/// in code, served wherever `ENVIRONMENT` is not production.
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
@@ -275,7 +291,7 @@ struct AgentHarnessEnv {
 impl AgentHarnessEnv {
     fn local(project_name: &str) -> Self {
         AgentHarnessEnv {
-            // bot_id::MACRO_CODER_BOT_ID, seeded by the bots_has_agent migration.
+            // bot_id::MACRO_CODER_BOT_ID, a first-party bot with no row.
             bot_id: "00000000-0000-0000-0000-00000000a9e7",
             snapshot: "macro-agent-harness",
             image: super::sandbox_image::DEFAULT_LOCAL_TAG,
@@ -324,7 +340,15 @@ impl ServiceAuthEnv {
             identity::INTERNAL_AUTH_KEY.into(),
         );
         env.insert(
+            "INTERNAL_API_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
+        env.insert(
             "INTERNAL_AUTH_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
+        env.insert(
+            "AUTHENTICATION_SERVICE_SECRET_KEY".into(),
             identity::INTERNAL_AUTH_KEY.into(),
         );
         env.insert(
@@ -428,16 +452,6 @@ impl BootStubEnv {
         env.insert(
             "MACRO_DB_URL".into(),
             "postgres://user:password@postgres:5432/macrodb".into(),
-        );
-        // services validating the shared internal auth header.
-        env.insert(
-            "INTERNAL_API_KEY".into(),
-            identity::INTERNAL_AUTH_KEY.into(),
-        );
-        // document_cognition_service's soup client (internal HMAC).
-        env.insert(
-            "AUTHENTICATION_SERVICE_SECRET_KEY".into(),
-            identity::INTERNAL_AUTH_KEY.into(),
         );
         // search_processing_service; the local cluster has the security plugin
         // disabled so these are accepted but ignored (same as opensearch.rs).

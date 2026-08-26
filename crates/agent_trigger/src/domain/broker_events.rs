@@ -10,6 +10,20 @@ use serde::{Deserialize, Serialize};
 #[cfg(test)]
 mod test;
 
+/// How a message was attributed to the session it feeds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelKind {
+    /// The thread the session was created from, where the bot was pinged.
+    MentionThread,
+    /// The session's thread, where the message quote-replied without a
+    /// mention.
+    QuoteReply,
+    /// The session's thread, where a model inferred the message was addressed
+    /// to the agent.
+    Inferred,
+}
+
 /// A session opened by a mention in a channel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentBotMentionedEvent {
@@ -35,6 +49,8 @@ pub struct ChannelEventMetadata {
     pub bot_id: BotId,
     /// The session to feed.
     pub session_id: AgentSessionId,
+    /// How the message was attributed to the session.
+    pub kind: ChannelKind,
     /// The message, verbatim.
     pub message: ChannelMessagePostedMetadata,
 }

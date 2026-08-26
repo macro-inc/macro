@@ -1,6 +1,10 @@
 /// <reference lib="webworker" />
 
-import type { CacheRequest, CacheResponse } from '../../protocol';
+import type {
+  CacheRequest,
+  CacheResponse,
+  INITIAL_CACHE_REVISION,
+} from '../../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CoordinatorToEngineEnvelope,
@@ -92,9 +96,12 @@ const sendStaleResponse = (ownerEpoch: number, routeId: number): void => {
   );
 };
 
+type FakeEngineState = { revision: bigint };
+
 const execute = async (
   database: IDBDatabase,
-  request: CacheRequest
+  request: CacheRequest,
+  state: FakeEngineState
 ): Promise<CacheResponse> => {
   if (request.kind === 'read' && request.query.includes('Slow')) {
     await delay(10_000);
@@ -102,12 +109,20 @@ const execute = async (
   switch (request.kind) {
     case 'init':
       return { id: request.id, ok: true, result: null };
+    case 'current-revision':
+      return { id: request.id, ok: true, result: state.revision.toString() };
     case 'write':
       await put(database, request.data);
+      state.revision += 1n;
       return {
         id: request.id,
         ok: true,
-        result: { changed: ['ROOT_QUERY'], affectedOps: [], reset: false },
+        result: {
+          revision: state.revision.toString(),
+          changed: ['ROOT_QUERY'],
+          affectedOps: [],
+          reset: false,
+        },
       };
     case 'read': {
       const value = await get(database);
@@ -120,7 +135,12 @@ const execute = async (
     }
     case 'clear':
       await clear(database);
-      return { id: request.id, ok: true, result: null };
+      state.revision += 1n;
+      return {
+        id: request.id,
+        ok: true,
+        result: state.revision.toString(),
+      };
     default:
       return {
         id: request.id,
@@ -148,6 +168,7 @@ async function activate(
         ownerEpoch: activation.ownerEpoch,
       });
       let database: IDBDatabase | undefined;
+      const engineState: FakeEngineState = { revision: 0n };
       let queue = Promise.resolve();
       let draining = false;
       let requestShutdown: (() => void) | undefined;
@@ -214,7 +235,11 @@ async function activate(
               queue = queue.then(async () => {
                 let response: CacheResponse;
                 try {
-                  response = await execute(activeDatabase, message.request);
+                  response = await execute(
+                    activeDatabase,
+                    message.request,
+                    engineState
+                  );
                 } catch (error) {
                   response = {
                     id: message.request.id,
@@ -240,7 +265,11 @@ async function activate(
                     withVersion<EngineToCoordinatorEnvelope>({
                       kind: 'engine-push',
                       ownerEpoch: activation.ownerEpoch,
-                      push: { kind: 'cache-changed' },
+                      push: {
+                        kind: 'cache-changed',
+                        revision:
+                          engineState.revision.toString() as typeof INITIAL_CACHE_REVISION,
+                      },
                     })
                   );
                 }

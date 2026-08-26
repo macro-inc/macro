@@ -68,6 +68,7 @@ import {
   isWithNotification,
   type Notification,
   toNotificationEntity,
+  unreadFilterFn,
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -774,12 +775,19 @@ export const SoupViewContextProvider: FlowComponent<
         documentSeen: seen,
         emailSeen: seen,
         channelSeen: seen,
-        // channelThreadSeen: seen,
+        channelThreadSeen: seen,
         chatSeen: seen,
         folderSeen: seen,
         foreignEntitySeen: seen,
       },
     };
+  };
+
+  const entityMatchesInboxReadFilter = (entity: EntityData): boolean => {
+    const filter = readFilter();
+    if (filter === 'all' || !isInboxView()) return true;
+    const isUnread = unreadFilterFn(entity);
+    return filter === 'unread' ? isUnread : !isUnread;
   };
 
   const applyViewFilters = (state: QueryState): QueryState => {
@@ -954,9 +962,10 @@ export const SoupViewContextProvider: FlowComponent<
     const membershipFilter = config().itemMembershipFilter;
     if (membershipFilter && !membershipFilter(item)) return false;
 
-    return soup.predicates.test(
-      mapApiSoupItemToEntity(item) as SoupEntity,
-      getFilterContext()
+    const entity = mapApiSoupItemToEntity(item) as SoupEntity;
+    return (
+      soup.predicates.test(entity, getFilterContext()) &&
+      entityMatchesInboxReadFilter(entity)
     );
   };
 
@@ -1073,6 +1082,9 @@ export const SoupViewContextProvider: FlowComponent<
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
+        continue;
+      }
+      if (!entityMatchesInboxReadFilter(entity)) {
         continue;
       }
       if (!entityMatchesTagFilter(entity, tagOptionIds, tagFilterMode)) {

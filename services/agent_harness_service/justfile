@@ -12,6 +12,9 @@ check:
 
 # Run against host-exposed local Postgres, Kafka, and connection gateway.
 # Needs DAYTONA_API_KEY, DAYTONA_SNAPSHOT, and GITHUB_TOKEN in the environment.
+#
+# Two managed bots: @coder (HARNESS_BOT_ID) runs in a Daytona sandbox, @macro
+# (INMEM_BOT_ID) runs on the in-process ACP runtime.
 run-local:
   ENVIRONMENT=local \
     DATABASE_URL=postgres://user:password@localhost:5432/macrodb \
@@ -19,6 +22,7 @@ run-local:
     OVERRIDE_CONNECTION_GATEWAY_URL=http://localhost:8082 \
     INTERNAL_API_KEY=local \
     HARNESS_BOT_ID=00000000-0000-0000-0000-00000000a9e7 \
+    INMEM_BOT_ID=00000000-0000-0000-0000-00000000a1a1 \
     cargo run -p agent_harness_service
 
 # Print the full agent-session protocol log for a dedicated channel, oldest

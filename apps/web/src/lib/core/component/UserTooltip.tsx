@@ -29,20 +29,22 @@ type UserTooltipProps = {
   photoUrl?: string;
 };
 
-export function UserTooltip(props: UserTooltipProps) {
-  const [copied, setCopied] = createSignal(false);
-  const resetCopied = debounce(() => setCopied(false), 800);
-
-  function handleCopyEmail(e: MouseEvent) {
-    e.stopPropagation();
-    const email = props.email;
-    if (!email) return;
-    setCopied(true);
-    navigator.clipboard.writeText(email);
-    toast.success('Email copied');
-    resetCopied();
-    props.onClose?.();
+function copyableName(
+  displayName: string,
+  email: string | undefined
+): string | undefined {
+  const name = displayName.trim();
+  if (!name) return undefined;
+  if (name.toLowerCase() === 'me') return undefined;
+  if (email && name.toLowerCase() === email.toLowerCase()) return undefined;
+  const localPart = email?.split('@')[0];
+  if (localPart && name.toLowerCase() === localPart.toLowerCase()) {
+    return undefined;
   }
+  return name;
+}
+
+export function UserTooltip(props: UserTooltipProps) {
   const currentUserId = useUserId();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   const canTreatAsUser = () =>
@@ -121,18 +123,28 @@ export function UserTooltip(props: UserTooltipProps) {
           </div>
         </div>
 
-        <Show when={props.email || props.id}>
+        <Show
+          when={
+            props.email ||
+            props.id ||
+            copyableName(props.displayName, props.email)
+          }
+        >
           <div class="border-t border-edge"></div>
           <div class="p-1.5 flex flex-col gap-0.5">
             <Show when={props.email}>
-              <ActionItem onClick={handleCopyEmail}>
-                {copied() ? (
-                  <IconCheck class="size-3.5" />
-                ) : (
-                  <WideCopy class="size-3.5" />
-                )}
-                Copy email
-              </ActionItem>
+              {(email) => (
+                <CopyActionItem value={email()} toastMessage="Email copied">
+                  Copy email
+                </CopyActionItem>
+              )}
+            </Show>
+            <Show when={copyableName(props.displayName, props.email)}>
+              {(name) => (
+                <CopyActionItem value={name()} toastMessage="Name copied">
+                  Copy name
+                </CopyActionItem>
+              )}
             </Show>
             <Show when={crmFlag().enabled ? props.email : undefined}>
               {(email) => (
@@ -194,6 +206,34 @@ function OpenContactAction(props: { email: string; onClose?: () => void }) {
         </ActionItem>
       )}
     </Show>
+  );
+}
+
+function CopyActionItem(props: {
+  value: string;
+  toastMessage: string;
+  children: JSX.Element;
+}) {
+  const [copied, setCopied] = createSignal(false);
+  const resetCopied = debounce(() => setCopied(false), 800);
+
+  function handleCopy(e: MouseEvent) {
+    e.stopPropagation();
+    setCopied(true);
+    navigator.clipboard.writeText(props.value);
+    toast.success(props.toastMessage);
+    resetCopied();
+  }
+
+  return (
+    <ActionItem onClick={handleCopy}>
+      {copied() ? (
+        <IconCheck class="size-3.5" />
+      ) : (
+        <WideCopy class="size-3.5" />
+      )}
+      {props.children}
+    </ActionItem>
   );
 }
 

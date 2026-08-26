@@ -219,6 +219,9 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
 
     /// Delete a draft message and its thread if the thread is left empty.
+    /// A surviving thread gets its denormalized metadata (inbox visibility,
+    /// latest timestamps, is_signal) recomputed, since drafts count toward
+    /// those fields.
     fn delete_draft_message(
         &self,
         message_id: Uuid,

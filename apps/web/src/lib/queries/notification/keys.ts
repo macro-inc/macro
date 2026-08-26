@@ -16,4 +16,5 @@ export const notificationKeys = createQueryKeys('notification', {
     queryKey: ['entities', { infinite: true, ...params }],
   }),
   unsubscribes: null,
+  preferences: null,
 });
