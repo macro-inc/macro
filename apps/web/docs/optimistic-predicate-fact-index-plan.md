@@ -1,6 +1,6 @@
 # Effective Optimistic Predicate Shadow Index Plan
 
-Status: **implementation prerequisite for [`local-predicate-pagination-plan.md`](./local-predicate-pagination-plan.md)**
+Status: **implemented; prerequisite complete for [`local-predicate-pagination-plan.md`](./local-predicate-pagination-plan.md)**
 
 ## Objective
 

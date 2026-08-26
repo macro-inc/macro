@@ -1,6 +1,6 @@
 # Revision-Safe Local Predicate Pagination Plan
 
-Status: **blocked by [`optimistic-predicate-fact-index-plan.md`](./optimistic-predicate-fact-index-plan.md); implement that plan first**
+Status: **optimistic predicate-index prerequisite complete; ready for implementation**
 
 ## Objective
 

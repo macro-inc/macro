@@ -1426,17 +1426,6 @@ impl PredicateIndexStorage for TursoStorage {
         });
         self.latch_result(result)
     }
-
-    async fn get_index_documents(
-        &self,
-        keys: &[PredicateRecordKey],
-    ) -> Result<Vec<Option<predicate_index::IndexDocument>>, Self::Error> {
-        self.require_healthy()?;
-        let connection = self.connection();
-        let result =
-            driver::read_transaction(&connection, || load_index_documents(&connection, keys));
-        self.latch_result(result)
-    }
 }
 
 fn validate_pending_optimistic_projections(
@@ -1825,7 +1814,7 @@ fn load_projection_states(
     }
     Ok(keys
         .iter()
-        .map(|key| states.remove(key).flatten())
+        .map(|key| states.get(key).cloned().flatten())
         .collect())
 }
 
@@ -2180,19 +2169,27 @@ fn optimistic_query_status(
     query: &ValidatedIndexQuery,
 ) -> Result<OptimisticQueryStatus, TursoStorageError> {
     let descriptor = query.as_query();
-    let clauses = descriptor
+    let current_clauses = descriptor
         .partitions
         .iter()
         .map(|_| "(d.profile = ? AND d.partition = ?)")
         .collect::<Vec<_>>()
         .join(" OR ");
+    let authority_clauses = descriptor
+        .partitions
+        .iter()
+        .map(|_| "(a.profile = ? AND a.partition = ?)")
+        .collect::<Vec<_>>()
+        .join(" OR ");
     let sql = format!(
-        "SELECT d.id, d.partition, d.state, u.attribute FROM optimistic_index_documents AS d LEFT JOIN optimistic_uncertain_attributes AS u ON u.document_id = d.id WHERE {clauses} ORDER BY d.id, u.attribute"
+        "SELECT d.id, d.profile, d.partition, d.state, u.attribute FROM optimistic_index_documents AS d LEFT JOIN optimistic_uncertain_attributes AS u ON u.document_id = d.id WHERE ({current_clauses}) OR EXISTS (SELECT 1 FROM index_documents AS a WHERE a.record_key = d.record_key AND ({authority_clauses})) ORDER BY d.id, u.attribute"
     );
-    let mut parameters = Vec::with_capacity(descriptor.partitions.len() * 2);
-    for partition in &descriptor.partitions {
-        parameters.push(text(descriptor.profile.token().as_str()));
-        parameters.push(text(partition.partition.as_str()));
+    let mut parameters = Vec::with_capacity(descriptor.partitions.len() * 4);
+    for _ in 0..2 {
+        for partition in &descriptor.partitions {
+            parameters.push(text(descriptor.profile.token().as_str()));
+            parameters.push(text(partition.partition.as_str()));
+        }
     }
     let rows = driver::query(connection, &sql, parameters)?;
     let mut status = OptimisticQueryStatus {
@@ -2201,20 +2198,20 @@ fn optimistic_query_status(
     };
     let mut uncertainty: HashMap<(i64, Token), Vec<String>> = HashMap::new();
     for row in rows {
-        if row.len() != 4 {
+        if row.len() != 5 {
             return Err(invariant());
         }
-        let state = OptimisticIndexDocumentState::try_from(required_i64(&row, 2)?)?;
-        if state == OptimisticIndexDocumentState::Incomplete {
+        let profile = Profile::new(Token::new(required_text(&row, 1)?).map_err(|_| invariant())?);
+        let partition = Token::new(required_text(&row, 2)?).map_err(|_| invariant())?;
+        let current_scope = query.includes_scope(&profile, &partition);
+        let state = OptimisticIndexDocumentState::try_from(required_i64(&row, 3)?)?;
+        if current_scope && state == OptimisticIndexDocumentState::Incomplete {
             status.incomplete = true;
             return Ok(status);
         }
-        if let Some(attribute) = nullable_text(&row, 3)? {
+        if current_scope && let Some(attribute) = nullable_text(&row, 4)? {
             uncertainty
-                .entry((
-                    required_i64(&row, 0)?,
-                    Token::new(required_text(&row, 1)?).map_err(|_| invariant())?,
-                ))
+                .entry((required_i64(&row, 0)?, partition))
                 .or_default()
                 .push(attribute);
         }
@@ -3852,22 +3849,19 @@ fn validate_optimistic_shadow_consistency(
     }
     let rows = driver::query(
         connection,
-        "SELECT attribute FROM optimistic_uncertain_attributes ORDER BY document_id, attribute",
+        "SELECT document_id, attribute FROM optimistic_uncertain_attributes ORDER BY document_id, attribute",
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?;
+    let mut by_document: HashMap<i64, Vec<String>> = HashMap::new();
     for row in rows {
-        let attribute = required_text(&row, 0)?;
-        if attribute != UNCERTAINTY_ALL_V1
-            && attribute
-                .strip_prefix(UNCERTAINTY_CERTAIN_V1_PREFIX)
-                .map_or_else(
-                    || Token::new(&attribute).is_err(),
-                    |attribute| Token::new(attribute).is_err(),
-                )
-        {
-            return Err(invariant());
-        }
+        by_document
+            .entry(required_i64(&row, 0)?)
+            .or_default()
+            .push(required_text(&row, 1)?);
+    }
+    for attributes in by_document.into_values() {
+        parse_optimistic_uncertainty(attributes)?;
     }
     Ok(())
 }

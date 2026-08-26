@@ -11,8 +11,7 @@ use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
 use predicate_index::{
-    EffectiveOptimisticProjection, IndexDocument, PendingOptimisticProjection, RecordKey,
-    ValidatedIndexQuery,
+    EffectiveOptimisticProjection, PendingOptimisticProjection, RecordKey, ValidatedIndexQuery,
 };
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -232,12 +231,5 @@ impl PredicateIndexStorage for BrowserStorage {
         query: &ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, Self::Error> {
         self.inner.query_predicate_index(query).await
-    }
-
-    async fn get_index_documents(
-        &self,
-        keys: &[RecordKey],
-    ) -> Result<Vec<Option<IndexDocument>>, Self::Error> {
-        self.inner.get_index_documents(keys).await
     }
 }

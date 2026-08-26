@@ -240,7 +240,6 @@ pub struct InMemoryStorage {
     record_get_count: Arc<AtomicUsize>,
     search_catalog_load_count: Arc<AtomicUsize>,
     mutation_queue_load_count: Arc<AtomicUsize>,
-    index_document_load_count: Arc<AtomicUsize>,
 }
 
 impl InMemoryStorage {
@@ -269,11 +268,6 @@ impl InMemoryStorage {
     /// Number of full mutation-queue loads (test diagnostics).
     pub fn mutation_queue_load_count(&self) -> usize {
         self.mutation_queue_load_count.load(Ordering::Relaxed)
-    }
-
-    /// Number of authoritative projection batch loads (test diagnostics).
-    pub fn index_document_load_count(&self) -> usize {
-        self.index_document_load_count.load(Ordering::Relaxed)
     }
 }
 
@@ -662,23 +656,30 @@ impl PredicateIndexStorage for InMemoryStorage {
         }
 
         let mut has_relevant_shadow = false;
-        for projection in self.optimistic_projections.values() {
-            if projection.state.profile() != &descriptor.profile
-                || !queried_partitions.contains(projection.state.partition())
-            {
+        for (key, projection) in &self.optimistic_projections {
+            let current_scope = projection.state.profile() == &descriptor.profile
+                && queried_partitions.contains(projection.state.partition());
+            let shadows_queried_authority = self.projections.get(key).is_some_and(|authority| {
+                authority.profile() == &descriptor.profile
+                    && queried_partitions.contains(authority.partition())
+            });
+            if !current_scope && !shadows_queried_authority {
                 continue;
             }
             has_relevant_shadow = true;
-            if matches!(
-                projection.state,
-                predicate_index::OptimisticProjectionState::Incomplete { .. }
-            ) {
+            if current_scope
+                && matches!(
+                    projection.state,
+                    predicate_index::OptimisticProjectionState::Incomplete { .. }
+                )
+            {
                 return Ok(PredicateQueryResult::Incomplete);
             }
-            if query
-                .dependent_attributes(projection.state.partition())
-                .iter()
-                .any(|attribute| projection.uncertainty.affects(attribute))
+            if current_scope
+                && query
+                    .dependent_attributes(projection.state.partition())
+                    .iter()
+                    .any(|attribute| projection.uncertainty.affects(attribute))
             {
                 return Ok(PredicateQueryResult::Incomplete);
             }
@@ -713,21 +714,6 @@ impl PredicateIndexStorage for InMemoryStorage {
         } else {
             PredicateQueryResult::Complete(keys)
         })
-    }
-
-    async fn get_index_documents(
-        &self,
-        keys: &[PredicateRecordKey],
-    ) -> Result<Vec<Option<IndexDocument>>, Self::Error> {
-        self.index_document_load_count
-            .fetch_add(1, Ordering::Relaxed);
-        Ok(keys
-            .iter()
-            .map(|key| match self.projections.get(key) {
-                Some(ProjectionState::Complete(document)) => Some(document.clone()),
-                Some(ProjectionState::Incomplete { .. }) | None => None,
-            })
-            .collect())
     }
 }
 

@@ -97,7 +97,7 @@ impl OptimisticShadowReconciliation {
     /// Validate queue order, key uniqueness, replacement ownership, and bounds.
     pub fn validate(&self, settled: u64) -> Result<(), ProjectionCompositionError> {
         if self.expected_queue.first().copied() != Some(settled)
-            || self.expected_queue.iter().any(|owner| *owner == 0)
+            || self.expected_queue.contains(&0)
             || self
                 .expected_queue
                 .windows(2)
@@ -417,13 +417,4 @@ pub trait PredicateIndexStorage: Storage {
         &self,
         query: &ValidatedIndexQuery,
     ) -> impl Future<Output = Result<PredicateQueryResult, Self::Error>> + MaybeSend;
-
-    /// Load complete authoritative projections aligned with `keys`.
-    ///
-    /// Incomplete or absent projections are returned as `None`. This is used
-    /// to compose a bounded optimistic overlay without scanning record blobs.
-    fn get_index_documents(
-        &self,
-        keys: &[RecordKey],
-    ) -> impl Future<Output = Result<Vec<Option<IndexDocument>>, Self::Error>> + MaybeSend;
 }
