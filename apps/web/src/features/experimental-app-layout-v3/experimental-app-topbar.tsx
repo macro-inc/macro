@@ -22,7 +22,6 @@ import LogoIcon from '@icon/macro-logo.svg';
 import GridIcon from '@phosphor/dots-nine.svg';
 import GearIcon from '@phosphor/gear.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { useNavigate } from '@solidjs/router';
 import { cn, Dropdown, Hotkey, Tooltip } from '@ui';
 import {
@@ -39,7 +38,6 @@ import {
   TOP_BAR_SUB_APPS,
   TOP_BAR_VIEWS,
   type TopBarDestination,
-  type TopBarDestinationId,
 } from './topbar-destinations';
 
 /**
@@ -100,13 +98,6 @@ export function ExperimentalAppTopBar() {
   const { openSettings } = useSettingsState();
   const [appsOpen, setAppsOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
-  const [nav, setNav] = createSignal<HTMLElement>();
-  const navSize = createElementSize(nav);
-  const viewButtons = new Map<TopBarDestinationId, HTMLButtonElement>();
-  const [underline, setUnderline] = createSignal<{
-    left: number;
-    width: number;
-  }>();
 
   /**
    * The focused split's own list search, which the bar drives in place of the
@@ -155,25 +146,6 @@ export function ExperimentalAppTopBar() {
 
   const visibleViews = () => TOP_BAR_VIEWS.filter(isVisible);
   const visibleSubApps = () => TOP_BAR_SUB_APPS.filter(isVisible);
-
-  /**
-   * One underline slides between the views rather than each one drawing its
-   * own, so switching views reads as the marker travelling. It is measured
-   * off the live buttons — re-run when the active view changes, when the row
-   * gains or loses a view, and when the bar is resized under it.
-   */
-  createEffect(() => {
-    // Reading the width both subscribes to bar resizes and stands in for
-    // "the row is laid out": it stays null until the nav element exists.
-    const navWidth = navSize.width;
-    const active = visibleViews().find(isActive);
-    const button = active && viewButtons.get(active.id);
-    setUnderline(
-      button && navWidth !== null
-        ? { left: button.offsetLeft, width: button.offsetWidth }
-        : undefined
-    );
-  });
 
   const openSearch = () => {
     analytics.track('sidebar_click', { surface: 'topbar', view: 'search' });
@@ -375,21 +347,16 @@ export function ExperimentalAppTopBar() {
         </Show>
       </div>
 
-      <nav
-        ref={setNav}
-        aria-label="App views"
-        class="relative flex items-stretch justify-center"
-      >
+      <nav aria-label="App views" class="flex items-stretch justify-center">
         <For each={visibleViews()}>
           {(destination) => (
             <Tooltip label={destination.label}>
               <button
                 type="button"
-                ref={(element) => viewButtons.set(destination.id, element)}
                 aria-label={destination.label}
                 aria-current={isActive(destination) ? 'page' : undefined}
                 class={cn(
-                  'group/top-bar-view flex h-full w-[76px] items-center justify-center px-1 outline-none',
+                  'group/top-bar-view relative flex h-full w-[76px] items-center justify-center px-1 outline-none',
                   isActive(destination) ? 'text-accent' : 'text-ink-muted'
                 )}
                 {...pressHandlers((event) =>
@@ -413,23 +380,13 @@ export function ExperimentalAppTopBar() {
                     class="size-6"
                   />
                 </span>
+                <Show when={isActive(destination)}>
+                  <span class="pointer-events-none absolute inset-x-0 -bottom-px h-[3px] rounded-t-sm bg-accent" />
+                </Show>
               </button>
             </Tooltip>
           )}
         </For>
-        {/* Mounted only while a view is active, so it appears at its
-            destination rather than sliding in from the row's left edge. */}
-        <Show when={underline()}>
-          {(bar) => (
-            <span
-              class="pointer-events-none absolute bottom-[-1px] left-0 h-[3px] rounded-t-sm bg-accent transition-[translate,width] duration-200 ease-out motion-reduce:transition-none"
-              style={{
-                translate: `${bar().left}px`,
-                width: `${bar().width}px`,
-              }}
-            />
-          )}
-        </Show>
       </nav>
 
       <div class="flex min-w-0 items-center justify-end gap-1.5">
