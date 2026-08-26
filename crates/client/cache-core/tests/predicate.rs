@@ -1,15 +1,20 @@
 use cache_core::{
     engine::{BeginOptimisticWrite, Engine, EngineError},
-    predicate::{PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation},
+    predicate::{
+        PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation,
+        ProjectionMutationLayer, ProjectionState, compose_effective_optimistic_projection,
+        compose_pending_optimistic_projection,
+    },
     queue::{MutationClaimRequest, MutationClaimToken, MutationId},
     store::{InMemoryStorage, Storage},
     value::{CacheValue, EntityKey, Record},
 };
 use predicate_index::{
-    ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerAttributePatch,
-    IntegerFact, MAX_OPTIMISTIC_RECORDS_PER_QUERY, MAX_QUERY_LIMIT, OptimisticProjectionMutation,
-    PartitionPredicate, PredicateExpr, Profile, RecordKey, SortDirection, Token,
-    ValidatedIndexQuery,
+    EffectiveOptimisticProjection, ExactAttributePatch, ExactFact, ExactValue, IndexDocument,
+    IndexQuery, IntegerAttributePatch, IntegerFact, MAX_OPTIMISTIC_RECORDS_PER_QUERY,
+    MAX_QUERY_LIMIT, OptimisticProjectionMutation, OptimisticProjectionState,
+    OptimisticUncertainty, PartitionPredicate, PredicateExpr, Profile, RecordKey, SortDirection,
+    Token, ValidatedIndexQuery,
 };
 
 fn token(value: &str) -> Token {
@@ -667,6 +672,201 @@ fn optimistic_delete_and_query_scoped_uncertainty_are_composed() {
             PredicateQueryResult::Optimistic(vec![])
         );
     });
+}
+
+#[test]
+fn effective_composer_tracks_latest_owner_and_field_uncertainty() {
+    let key = record_key();
+    let authoritative = ProjectionState::Complete(projection("owner-1"));
+    let unknown = OptimisticProjectionMutation::Unknown {
+        record_key: key.clone(),
+        profile: profile(),
+        partition: token("document"),
+        affected_attributes: vec![],
+    };
+    let patch = OptimisticProjectionMutation::Patch {
+        record_key: key.clone(),
+        profile: profile(),
+        partition: token("document"),
+        exact: vec![ExactAttributePatch {
+            attribute: token("owner"),
+            values: vec![ExactValue::utf8("owner-2").unwrap()],
+        }],
+        integers: vec![],
+        sorts: vec![],
+    };
+    let result = compose_effective_optimistic_projection(
+        &key,
+        Some(&authoritative),
+        &[
+            ProjectionMutationLayer {
+                owner: 10,
+                mutations: std::slice::from_ref(&unknown),
+            },
+            ProjectionMutationLayer {
+                owner: 20,
+                mutations: std::slice::from_ref(&patch),
+            },
+        ],
+    )
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(result.owner, 20);
+    assert!(!result.uncertainty.affects(&token("owner")));
+    assert!(result.uncertainty.affects(&token("updated-at")));
+    let OptimisticProjectionState::Complete(document) = result.state else {
+        panic!("expected complete effective facts")
+    };
+    assert!(document.exact_facts.iter().any(|fact| {
+        fact.attribute == token("owner") && fact.value == ExactValue::utf8("owner-2").unwrap()
+    }));
+}
+
+#[test]
+fn effective_composer_handles_create_delete_patch_and_replacement() {
+    let key = record_key();
+    let delete = OptimisticProjectionMutation::Delete {
+        record_key: key.clone(),
+        profile: profile(),
+        partition: token("document"),
+    };
+    let patch = OptimisticProjectionMutation::Patch {
+        record_key: key.clone(),
+        profile: profile(),
+        partition: token("document"),
+        exact: vec![],
+        integers: vec![],
+        sorts: vec![IntegerFact {
+            attribute: token("updated-at"),
+            value: 99,
+        }],
+    };
+    let replacement = OptimisticProjectionMutation::Replace(projection("owner-3"));
+
+    let incomplete = compose_effective_optimistic_projection(
+        &key,
+        None,
+        &[
+            ProjectionMutationLayer {
+                owner: 1,
+                mutations: std::slice::from_ref(&delete),
+            },
+            ProjectionMutationLayer {
+                owner: 2,
+                mutations: std::slice::from_ref(&patch),
+            },
+        ],
+    )
+    .unwrap()
+    .unwrap();
+    assert!(matches!(
+        incomplete.state,
+        OptimisticProjectionState::Incomplete {
+            kind: ProjectionIncompleteKind::Missing,
+            ..
+        }
+    ));
+
+    let complete = compose_effective_optimistic_projection(
+        &key,
+        None,
+        &[
+            ProjectionMutationLayer {
+                owner: 1,
+                mutations: &[delete],
+            },
+            ProjectionMutationLayer {
+                owner: 2,
+                mutations: &[patch],
+            },
+            ProjectionMutationLayer {
+                owner: 3,
+                mutations: &[replacement],
+            },
+        ],
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(complete.owner, 3);
+    assert!(complete.uncertainty.is_empty());
+    assert!(matches!(
+        complete.state,
+        OptimisticProjectionState::Complete(_)
+    ));
+}
+
+#[test]
+fn pending_composer_reuses_current_effective_shadow_deterministically() {
+    let key = record_key();
+    let current = EffectiveOptimisticProjection {
+        owner: 7,
+        state: OptimisticProjectionState::Complete(projection("owner-1")),
+        uncertainty: OptimisticUncertainty::Attributes([token("file-type")].into()),
+    };
+    let patch = OptimisticProjectionMutation::Patch {
+        record_key: key.clone(),
+        profile: profile(),
+        partition: token("document"),
+        exact: vec![ExactAttributePatch {
+            attribute: token("owner"),
+            values: vec![
+                ExactValue::utf8("owner-2").unwrap(),
+                ExactValue::utf8("owner-2").unwrap(),
+            ],
+        }],
+        integers: vec![],
+        sorts: vec![],
+    };
+
+    let pending = compose_pending_optimistic_projection(&key, None, Some(&current), &[patch])
+        .unwrap()
+        .unwrap();
+    let OptimisticProjectionState::Complete(document) = pending.state else {
+        panic!("expected complete pending projection")
+    };
+    assert_eq!(document.exact_facts.len(), 1);
+    assert!(pending.uncertainty.affects(&token("file-type")));
+    assert!(!pending.uncertainty.affects(&token("owner")));
+}
+
+#[test]
+fn composer_rejects_out_of_order_layers_and_ignores_disjoint_keys() {
+    let key = record_key();
+    let other = OptimisticProjectionMutation::Replace(projection_for(
+        RecordKey::new("GraphqlSoupDocument:other").unwrap(),
+        "owner-2",
+        1,
+    ));
+    assert!(
+        compose_effective_optimistic_projection(
+            &key,
+            Some(&ProjectionState::Complete(projection("owner-1"))),
+            &[
+                ProjectionMutationLayer {
+                    owner: 2,
+                    mutations: std::slice::from_ref(&other),
+                },
+                ProjectionMutationLayer {
+                    owner: 1,
+                    mutations: &[],
+                },
+            ],
+        )
+        .is_err()
+    );
+    assert_eq!(
+        compose_effective_optimistic_projection(
+            &key,
+            Some(&ProjectionState::Complete(projection("owner-1"))),
+            &[ProjectionMutationLayer {
+                owner: 1,
+                mutations: &[other],
+            }],
+        )
+        .unwrap(),
+        None
+    );
 }
 
 #[test]
