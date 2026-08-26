@@ -1,6 +1,6 @@
 # Server-Minted Soup Cache Projection Plan
 
-Status: **Phases 0-3 implemented; Phase 4 not started**
+Status: **Phases 0-4 implemented; Phase 5 not started**
 
 ## Implementation status
 
@@ -8,7 +8,8 @@ Status: **Phases 0-3 implemented; Phase 4 not started**
 - [x] Phase 1: server-fact hydration. The flat expanded cursor, frecency fallback, and bounded by-ID paths now return authorized items plus optional document relation facts from one SQL result; the document relation probe uses `document_email_pkey`. Projects, chats, unsupported entities, and unenriched paths carry no supplement source.
 - [x] Phase 2: `soup-flat-v2` profile validation and typed supplement wire. The complete profile retains v1 facts and adds subtype plus an explicit Boolean attachment posting, while capsule-v1 contains only the server-owned attachment Boolean and defensive target-profile/record-key/partition bindings. Native and WASM-reachable adapter golden fixtures pass.
 - [x] Phase 3: emit supplements from `GraphqlSoupEntity`. The nullable argument-free opaque scalar is implemented by every concrete Soup entity, but only documents with authoritative relation hydration return a capsule. Projects, chats, unsupported variants, and unenriched constructors return `null`. `SoupItemFields` selects the scalar with `@cacheOnly`; the composed SDL, generated client document, shared-interface contract, flat-page emission, unsupported-variant, and realtime loader tests are updated.
-- [ ] Phases 4-6: not started; outside the current implementation request.
+- [x] Phase 4: atomically compose server supplements with direct response facts. The Soup WASM composition edge follows the selected GraphQL response shape, derives direct facts including subtype, decodes and binds each Document attachment supplement, validates one complete `soup-flat-v2` projection, and emits its replacement alongside normalized writes. A bounded generic authoritative patch lifecycle preserves unmentioned server-owned facts across partial mutation responses; missing bases remain explicitly incomplete. Cache-core optimistic settlement, in-memory storage, and Turso use the same patch semantics, with transaction rollback and mutation/subscription ordering coverage in native and real browser WASM tests.
+- [ ] Phases 5-6: not started; delegated recursively after each verified phase.
 
 ## Objective
 

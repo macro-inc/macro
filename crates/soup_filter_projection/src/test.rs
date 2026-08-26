@@ -135,7 +135,7 @@ fn optimistic_direct_projection_and_patch_share_authoritative_vocabulary() {
         project_id: Some(Some(Uuid::from_u128(2))),
         file_type: Some(None),
         created_at: None,
-        updated_at: timestamp(3),
+        updated_at: Some(timestamp(3)),
     })
     .unwrap();
     let OptimisticProjectionMutation::Patch {

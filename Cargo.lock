@@ -2956,6 +2956,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "soup-filter-cache-adapter",
+ "soup-filter-projection",
  "turso-opfs",
  "wasm-bindgen",
  "wasm-bindgen-futures",

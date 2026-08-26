@@ -128,21 +128,230 @@ fn optimistic_mutations_keep_first_seen_order_and_deletion_precedence() {
 
 #[test]
 fn authoritative_direct_fields_do_not_require_a_projection_schema_field() {
-    let mutations = authoritative_projection_mutations(&serde_json::json!({
-        "item": {
-            "__typename": "GraphqlSoupDocument",
-            "id": "00000000-0000-0000-0000-000000000001",
-            "ownerId": "user-1",
-            "projectId": null,
-            "fileType": "md",
-            "createdAt": "2025-01-01T00:00:00.000001Z",
-            "updatedAt": "2025-01-02T00:00:00.000001Z"
+    let query = r#"query LegacySoup {
+        user {
+            soup(input: { limit: 1 }) {
+                items {
+                    __typename
+                    id
+                    ... on GraphqlSoupDocument {
+                        ownerId
+                        projectId
+                        fileType
+                        createdAt
+                        updatedAt
+                    }
+                }
+            }
         }
-    }));
+    }"#;
+    let mutations = authoritative_projection_mutations(
+        query,
+        Some("LegacySoup"),
+        &serde_json::json!({
+            "user": {
+                "soup": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": "00000000-0000-0000-0000-000000000001",
+                        "ownerId": "user-1",
+                        "projectId": null,
+                        "fileType": "md",
+                        "createdAt": "2025-01-01T00:00:00.000001Z",
+                        "updatedAt": "2025-01-02T00:00:00.000001Z"
+                    }]
+                }
+            }
+        }),
+    )
+    .expect("legacy query parses");
     assert!(matches!(
         mutations.as_slice(),
         [ProjectionMutation::Replace(_)]
     ));
+}
+
+const ORDINARY_DOCUMENT_CAPSULE: &str = "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQEEGVtYWlsLWF0dGFjaG1lbnQBAAlmaWxlLXR5cGUCbWQCaWQQAAAAAAAAAAAAAAAAAAAAAQVvd25lchdtYWNyb3xvd25lckBleGFtcGxlLmNvbQIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBgIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBg";
+
+const CAPSULE_SUBSCRIPTION: &str = r#"subscription Capsule {
+    soupUpdates {
+        __typename
+        ... on SoupUpdated {
+            item {
+                __typename
+                id
+                cacheProjection @cacheOnly
+            }
+        }
+    }
+}"#;
+
+fn capsule_subscription_data(id: &str, capsule: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "soupUpdates": [{
+            "__typename": "SoupUpdated",
+            "item": {
+                "__typename": "GraphqlSoupDocument",
+                "id": id,
+                "cacheProjection": capsule
+            }
+        }]
+    })
+}
+
+#[test]
+fn selected_capsules_replace_v2_and_bind_to_the_surrounding_entity() {
+    let mutations = authoritative_projection_mutations(
+        CAPSULE_SUBSCRIPTION,
+        Some("Capsule"),
+        &capsule_subscription_data(
+            "00000000-0000-0000-0000-000000000001",
+            serde_json::Value::String(ORDINARY_DOCUMENT_CAPSULE.to_owned()),
+        ),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
+        panic!("valid selected capsule must replace authority");
+    };
+    assert_eq!(document.profile, vocabulary::profile_v2());
+    assert_eq!(document.partition, vocabulary::document_partition());
+
+    for (name, data, expected_kind) in [
+        (
+            "absent",
+            serde_json::json!({
+                "soupUpdates": [{
+                    "__typename": "SoupUpdated",
+                    "item": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": "00000000-0000-0000-0000-000000000001"
+                    }
+                }]
+            }),
+            ProjectionIncompleteKind::Missing,
+        ),
+        (
+            "null",
+            capsule_subscription_data(
+                "00000000-0000-0000-0000-000000000001",
+                serde_json::Value::Null,
+            ),
+            ProjectionIncompleteKind::Missing,
+        ),
+        (
+            "malformed",
+            capsule_subscription_data(
+                "00000000-0000-0000-0000-000000000001",
+                serde_json::Value::String("not-base64".to_owned()),
+            ),
+            ProjectionIncompleteKind::IncompatibleVersion,
+        ),
+        (
+            "mismatched-key",
+            capsule_subscription_data(
+                "00000000-0000-0000-0000-000000000099",
+                serde_json::Value::String(ORDINARY_DOCUMENT_CAPSULE.to_owned()),
+            ),
+            ProjectionIncompleteKind::IncompatibleVersion,
+        ),
+    ] {
+        let mutations =
+            authoritative_projection_mutations(CAPSULE_SUBSCRIPTION, Some("Capsule"), &data)
+                .unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert!(
+            matches!(
+                mutations.as_slice(),
+                [ProjectionMutation::MarkIncomplete { profile, kind, .. }]
+                    if profile == &vocabulary::profile_v2() && *kind == expected_kind
+            ),
+            "{name}: {mutations:?}"
+        );
+    }
+}
+
+#[test]
+fn partial_mutation_payloads_patch_v2_without_fabricating_relation_facts() {
+    let query = r#"mutation PartialRename($inputs: [RenameEntityInput!]!) {
+        renameEntities(inputs: $inputs) {
+            results {
+                __typename
+                ... on GraphqlMutationSuccess {
+                    effects {
+                        __typename
+                        ... on SoupUpdated {
+                            item {
+                                __typename
+                                id
+                                displayName
+                                ... on GraphqlSoupDocument {
+                                    ownerId
+                                    projectId
+                                    fileType
+                                    subType { __typename }
+                                    updatedAt
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }"#;
+    let data = serde_json::json!({
+        "renameEntities": {
+            "results": [{
+                "__typename": "GraphqlMutationSuccess",
+                "effects": [{
+                    "__typename": "SoupUpdated",
+                    "item": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": "00000000-0000-0000-0000-000000000001",
+                        "displayName": "Renamed",
+                        "ownerId": "macro|new-owner@example.com",
+                        "projectId": null,
+                        "fileType": "md",
+                        "subType": { "__typename": "GraphqlTaskSubType" },
+                        "updatedAt": "2026-01-03T00:00:00.000Z"
+                    }
+                }]
+            }]
+        }
+    });
+    let mutations =
+        authoritative_projection_mutations(query, Some("PartialRename"), &data).unwrap();
+    let [
+        ProjectionMutation::Patch {
+            profile,
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ] = mutations.as_slice()
+    else {
+        panic!("partial authoritative entity must produce one v2 patch");
+    };
+    assert_eq!(profile, &vocabulary::profile_v2());
+    assert!(
+        exact
+            .iter()
+            .any(|patch| patch.attribute == vocabulary::document_sub_type())
+    );
+    assert!(
+        exact
+            .iter()
+            .all(|patch| patch.attribute != vocabulary::email_attachment())
+    );
+    assert!(
+        integers
+            .iter()
+            .any(|patch| patch.attribute == vocabulary::updated_at())
+    );
+    assert!(
+        sorts
+            .iter()
+            .any(|fact| fact.attribute == vocabulary::updated_at())
+    );
 }
 
 #[test]

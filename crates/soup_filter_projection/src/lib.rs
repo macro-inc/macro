@@ -100,8 +100,8 @@ pub struct DirectProjectionPatchInput {
     pub file_type: Option<Option<String>>,
     /// Replacement creation timestamp when supplied.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Effective optimistic update timestamp.
-    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Replacement update timestamp when supplied.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Generate a complete optimistic projection from direct Soup fields.
@@ -183,15 +183,17 @@ pub fn patch_direct_fields(
             value,
         });
     }
-    let updated_at = utc_timestamp_micros(input.updated_at);
-    integers.push(IntegerAttributePatch {
-        attribute: vocabulary::updated_at(),
-        values: vec![updated_at],
-    });
-    sorts.push(IntegerFact {
-        attribute: vocabulary::updated_at(),
-        value: updated_at,
-    });
+    if let Some(updated_at) = input.updated_at {
+        let value = utc_timestamp_micros(updated_at);
+        integers.push(IntegerAttributePatch {
+            attribute: vocabulary::updated_at(),
+            values: vec![value],
+        });
+        sorts.push(IntegerFact {
+            attribute: vocabulary::updated_at(),
+            value,
+        });
+    }
 
     Ok(OptimisticProjectionMutation::Patch {
         record_key: input.record_key,
