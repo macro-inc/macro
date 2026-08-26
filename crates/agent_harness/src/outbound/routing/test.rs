@@ -119,6 +119,13 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never routes channel events")
     }
 
+    async fn find_all_for_thread(
+        &self,
+        _thread_id: macro_uuid::Uuid,
+    ) -> SessionResult<Vec<AgentSession>> {
+        unimplemented!("the router never lists thread sessions")
+    }
+
     async fn session_bot(&self, _id: BotId) -> SessionResult<SessionBot> {
         unimplemented!("the router never renders bots")
     }

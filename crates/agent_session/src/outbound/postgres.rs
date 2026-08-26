@@ -345,12 +345,15 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
-                status_event_name, created_at, modified_at,
+                status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
-                    AS "thread_channel_id?"
+                    AS "thread_channel_id?",
+                ext.provider AS "external_provider?", ext.external_id AS "external_id?",
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?"
             FROM agent_session
+            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
             WHERE thread_id = $1
-            ORDER BY created_at DESC
+            ORDER BY agent_session.created_at DESC
             "#,
             thread_id,
         )

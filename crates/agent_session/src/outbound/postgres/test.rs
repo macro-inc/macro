@@ -506,6 +506,60 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_a = create_test_bot(&pool).await;
+    let bot_b = create_test_bot(&pool).await;
+    let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
+    let older = create_session(
+        &repo,
+        new_session(bot_a, Some(thread), Some(originating_message)),
+    )
+    .await;
+    let newer = create_session(
+        &repo,
+        new_session(bot_b, Some(thread), Some(originating_message)),
+    )
+    .await;
+    create_session(&repo, new_session(bot_a, None, None)).await;
+    ExternalSessionRepo::upsert(&repo, newer.id, cursor_external("bc-thread"))
+        .await
+        .expect("attach an external identity");
+
+    let found = repo
+        .find_all_for_thread(thread)
+        .await
+        .expect("list sessions on the thread");
+    assert_eq!(found.len(), 2);
+    assert!(found.iter().any(|session| session.id == newer.id));
+    assert!(found.iter().any(|session| session.id == older.id));
+    assert!(
+        found
+            .windows(2)
+            .all(|pair| pair[0].created_at >= pair[1].created_at)
+    );
+    let with_external = found
+        .iter()
+        .find(|session| session.id == newer.id)
+        .expect("the newer session is on the thread");
+    assert_eq!(with_external.external, Some(cursor_external("bc-thread")));
+    assert!(
+        found
+            .iter()
+            .find(|session| session.id == older.id)
+            .expect("the older session is on the thread")
+            .external
+            .is_none()
+    );
+
+    let empty = repo
+        .find_all_for_thread(macro_uuid::generate_uuid_v7())
+        .await
+        .expect("list an unrelated thread");
+    assert!(empty.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
