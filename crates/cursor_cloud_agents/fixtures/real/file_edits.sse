@@ -1,0 +1,2530 @@
+event: status
+data: {"runId":"run-748e69e5-5931-4f2f-9787-7ff68ed82db3","status":"RUNNING"}
+
+id: 1787345110571-0
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+id: 1787345110586-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-748e69e5-5931-4f2f-9787-7ff68ed82db3","text":"Using your file editing tools (not shell), add a single comment line at the very top of the README.md in this workspace, then create a brand new file docs/PROBE.md with one line of text. Then show me both changes. Do not commit, do not push, do not open a PR."}}
+
+id: 1787345112876-0
+event: thinking
+data: {"text":"I'll add a comment line"}
+
+id: 1787345112876-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"I'll add a comment line"}
+
+id: 1787345112878-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345112935-0
+event: thinking
+data: {"text":" to the top of README.md"}
+
+id: 1787345112935-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" to the top of README.md"}
+
+id: 1787345112938-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345112999-0
+event: thinking
+data: {"text":" using file editing "}
+
+id: 1787345112999-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" using file editing "}
+
+id: 1787345113001-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345113062-0
+event: thinking
+data: {"text":"tools."}
+
+id: 1787345113062-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"tools."}
+
+id: 1787345113064-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345113863-0
+event: thinking
+data: {"text":"\n\nI'll also create docs/PROBE.md"}
+
+id: 1787345113863-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nI'll also create docs/PROBE.md"}
+
+id: 1787345113867-0
+event: interaction_update
+data: {"type":"token-delta","tokens":8}
+
+id: 1787345113870-0
+event: thinking
+data: {"text":" with one line of text."}
+
+id: 1787345113870-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" with one line of text."}
+
+id: 1787345113872-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345113875-0
+event: thinking
+data: {"text":" Both changes will be"}
+
+id: 1787345113875-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" Both changes will be"}
+
+id: 1787345113877-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345113880-0
+event: thinking
+data: {"text":" shown. No commits, "}
+
+id: 1787345113880-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" shown. No commits, "}
+
+id: 1787345113882-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345113884-0
+event: thinking
+data: {"text":"pushes, or PRs will "}
+
+id: 1787345113884-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"pushes, or PRs will "}
+
+id: 1787345113886-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345113889-0
+event: thinking
+data: {"text":"be made. I'll read the"}
+
+id: 1787345113889-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"be made. I'll read the"}
+
+id: 1787345113891-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345113893-0
+event: thinking
+data: {"text":" README first."}
+
+id: 1787345113893-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" README first."}
+
+id: 1787345113895-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787345113898-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":1024}
+
+id: 1787345113901-0
+event: assistant
+data: {"text":"I'll"}
+
+id: 1787345113901-0
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+id: 1787345113903-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113906-0
+event: assistant
+data: {"text":" add"}
+
+id: 1787345113906-0
+event: interaction_update
+data: {"type":"text-delta","text":" add"}
+
+id: 1787345113908-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113910-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345113910-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345113912-0
+event: assistant
+data: {"text":" top"}
+
+id: 1787345113912-0
+event: interaction_update
+data: {"type":"text-delta","text":" top"}
+
+id: 1787345113914-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113916-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345113916-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345113919-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113921-0
+event: assistant
+data: {"text":"line"}
+
+id: 1787345113921-0
+event: interaction_update
+data: {"type":"text-delta","text":"line"}
+
+id: 1787345113922-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113925-0
+event: assistant
+data: {"text":" comment"}
+
+id: 1787345113925-0
+event: interaction_update
+data: {"type":"text-delta","text":" comment"}
+
+id: 1787345113927-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345113929-0
+event: assistant
+data: {"text":" to"}
+
+id: 1787345113929-0
+event: interaction_update
+data: {"type":"text-delta","text":" to"}
+
+id: 1787345113931-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345113931-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345113933-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113935-0
+event: assistant
+data: {"text":"README"}
+
+id: 1787345113935-0
+event: interaction_update
+data: {"type":"text-delta","text":"README"}
+
+id: 1787345113937-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113940-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345113940-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345113942-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113945-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345113945-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345113947-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345113947-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345113949-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113951-0
+event: assistant
+data: {"text":" create"}
+
+id: 1787345113951-0
+event: interaction_update
+data: {"type":"text-delta","text":" create"}
+
+id: 1787345113953-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345113960-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345113960-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345113962-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113964-0
+event: assistant
+data: {"text":"docs"}
+
+id: 1787345113964-0
+event: interaction_update
+data: {"type":"text-delta","text":"docs"}
+
+id: 1787345113966-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113968-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345113968-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345113970-0
+event: assistant
+data: {"text":"PROBE"}
+
+id: 1787345113970-0
+event: interaction_update
+data: {"type":"text-delta","text":"PROBE"}
+
+id: 1787345113972-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113974-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345113974-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345113976-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113978-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345113978-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345113980-0
+event: assistant
+data: {"text":" with"}
+
+id: 1787345113980-0
+event: interaction_update
+data: {"type":"text-delta","text":" with"}
+
+id: 1787345113982-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113985-0
+event: assistant
+data: {"text":" file"}
+
+id: 1787345113985-0
+event: interaction_update
+data: {"type":"text-delta","text":" file"}
+
+id: 1787345113987-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345113991-0
+event: assistant
+data: {"text":" tools"}
+
+id: 1787345113991-0
+event: interaction_update
+data: {"type":"text-delta","text":" tools"}
+
+id: 1787345113993-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345113995-0
+event: assistant
+data: {"text":" only"}
+
+id: 1787345113995-0
+event: interaction_update
+data: {"type":"text-delta","text":" only"}
+
+id: 1787345113998-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114014-0
+event: assistant
+data: {"text":","}
+
+id: 1787345114014-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345114019-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114021-0
+event: assistant
+data: {"text":" then"}
+
+id: 1787345114021-0
+event: interaction_update
+data: {"type":"text-delta","text":" then"}
+
+id: 1787345114023-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114025-0
+event: assistant
+data: {"text":" show"}
+
+id: 1787345114025-0
+event: interaction_update
+data: {"type":"text-delta","text":" show"}
+
+id: 1787345114027-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114029-0
+event: assistant
+data: {"text":" both"}
+
+id: 1787345114029-0
+event: interaction_update
+data: {"type":"text-delta","text":" both"}
+
+id: 1787345114032-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114034-0
+event: assistant
+data: {"text":" changes"}
+
+id: 1787345114034-0
+event: interaction_update
+data: {"type":"text-delta","text":" changes"}
+
+id: 1787345114036-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345114041-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345114041-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345114043-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114046-0
+event: assistant
+data: {"text":" No"}
+
+id: 1787345114046-0
+event: interaction_update
+data: {"type":"text-delta","text":" No"}
+
+id: 1787345114048-0
+event: assistant
+data: {"text":" git"}
+
+id: 1787345114048-0
+event: interaction_update
+data: {"type":"text-delta","text":" git"}
+
+id: 1787345114050-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114052-0
+event: assistant
+data: {"text":" commit"}
+
+id: 1787345114052-0
+event: interaction_update
+data: {"type":"text-delta","text":" commit"}
+
+id: 1787345114054-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345114057-0
+event: assistant
+data: {"text":","}
+
+id: 1787345114057-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345114058-0
+event: assistant
+data: {"text":" push"}
+
+id: 1787345114058-0
+event: interaction_update
+data: {"type":"text-delta","text":" push"}
+
+id: 1787345114060-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345114063-0
+event: assistant
+data: {"text":","}
+
+id: 1787345114063-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345114065-0
+event: assistant
+data: {"text":" or"}
+
+id: 1787345114065-0
+event: interaction_update
+data: {"type":"text-delta","text":" or"}
+
+id: 1787345114067-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114069-0
+event: assistant
+data: {"text":" PR"}
+
+id: 1787345114069-0
+event: interaction_update
+data: {"type":"text-delta","text":" PR"}
+
+id: 1787345114071-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345114071-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345114074-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345114077-0
+event: interaction_update
+data: {"type":"token-delta","tokens":10}
+
+id: 1787345114079-0
+event: interaction_update
+data: {"type":"token-delta","tokens":16}
+
+id: 1787345114082-0
+event: interaction_update
+data: {"type":"token-delta","tokens":15}
+
+id: 1787345116061-0
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-2\nfc_f4e12410-c553-9712-bec3-07b314422b88_2","name":"file_search","status":"running"}
+
+id: 1787345116061-1
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-2\nfc_f4e12410-c553-9712-bec3-07b314422b88_2","name":"file_search","status":"running","args":{"targetDirectory":"/workspace","globPattern":"README.md"}}
+
+id: 1787345116061-1
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-2\nfc_f4e12410-c553-9712-bec3-07b314422b88_2","toolCall":{"type":"glob","args":{"globPattern":"README.md","targetDirectory":"/workspace"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-0-p5da"}
+
+id: 1787345116087-0
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-0\nfc_f4e12410-c553-9712-bec3-07b314422b88_0","name":"read_file","status":"running"}
+
+id: 1787345116087-1
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-0\nfc_f4e12410-c553-9712-bec3-07b314422b88_0","name":"read_file","status":"running","args":{"path":"/workspace/README.md","limit":20}}
+
+id: 1787345116087-1
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-0\nfc_f4e12410-c553-9712-bec3-07b314422b88_0","toolCall":{"type":"read","args":{"path":"/workspace/README.md"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-1-rdsc"}
+
+id: 1787345116137-0
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-0\nfc_f4e12410-c553-9712-bec3-07b314422b88_0","name":"read_file","status":"completed","args":{"path":"/workspace/README.md","limit":20},"result":{"success":{"content":"<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>","totalLines":266,"fileSize":19987,"path":"/workspace/README.md","readRange":{"startLine":1,"endLine":20}}}}
+
+id: 1787345116137-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-0\nfc_f4e12410-c553-9712-bec3-07b314422b88_0","toolCall":{"type":"read","args":{"path":"/workspace/README.md"},"result":{"status":"success","value":{"content":"<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>","totalLines":266,"fileSize":19987}}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-1-rdsc"}
+
+id: 1787345116141-0
+event: interaction_update
+data: {"type":"token-delta","tokens":170}
+
+id: 1787345116202-0
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-1\nfc_f4e12410-c553-9712-bec3-07b314422b88_1","name":"file_search","status":"running"}
+
+id: 1787345116202-1
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-1\nfc_f4e12410-c553-9712-bec3-07b314422b88_1","name":"file_search","status":"running","args":{"targetDirectory":"/workspace","globPattern":"docs/PROBE.md"}}
+
+id: 1787345116202-1
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-1\nfc_f4e12410-c553-9712-bec3-07b314422b88_1","toolCall":{"type":"glob","args":{"globPattern":"docs/PROBE.md","targetDirectory":"/workspace"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-0-xs1j"}
+
+id: 1787345116375-0
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-1\nfc_f4e12410-c553-9712-bec3-07b314422b88_1","name":"file_search","status":"completed","args":{"targetDirectory":"/workspace","globPattern":"docs/PROBE.md"},"result":{"success":{"path":"/workspace"}}}
+
+id: 1787345116375-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-1\nfc_f4e12410-c553-9712-bec3-07b314422b88_1","toolCall":{"type":"glob","args":{"globPattern":"docs/PROBE.md","targetDirectory":"/workspace"},"result":{"status":"success","value":{"files":[],"totalFiles":0,"clientTruncated":false,"ripgrepTruncated":false}}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-0-xs1j"}
+
+id: 1787345116379-0
+event: interaction_update
+data: {"type":"token-delta","tokens":12}
+
+id: 1787345116382-0
+event: tool_call
+data: {"callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-2\nfc_f4e12410-c553-9712-bec3-07b314422b88_2","name":"file_search","status":"completed","args":{"targetDirectory":"/workspace","globPattern":"README.md"},"result":{"success":{"path":"/workspace","files":["packages/loro-mirror/README.md","README.md","crates/client/README.md","crates/client/turso-opfs/README.md","packages/collaboration/README.md","packages/collaboration/src/websocket/README.md","packages/lexical-core/README.md","packages/sdk/README.md","crates/mcp_client/src/domain/provider_registry/slack/README.md","tooling/seed_cli/README.md","tooling/seed_cli/src/entity/email/README.md","apps/web/tauri/src-tauri/README.md","infra/README.md","infra/stacks/fusion-auth/README.md","crates/properties/README.md","crates/notification_db_client/README.md","infra/stacks/fusionauth-instance/README.md","crates/opensearch_query_builder/README.md","infra/stacks/opensearch/README.md","infra/stacks/opensearch/helpers/README.md","apps/web/README.md","apps/web/src/features/block-image/README.md","apps/web/src/features/block-chat/README.md","crates/chat/README.md","crates/comms_db_client/README.md","crates/macro_db_client/README.md","crates/teams/README.md","services/unfurl_service/README.md","services/sync-service/README.md","services/email_scheduled_handler/README.md","apps/web/src/features/block-canvas/README.md","services/search_processing_service/README.md","apps/web/src/features/block-md/README.md","services/contacts_service/README.md","services/email_refresh_handler/README.md","services/bots/stripe-payment-bot/README.md","services/bots/anthropic-status-bot/README.md","infra/stacks/cloud-storage-cache/README.md","infra/stacks/web-app/README.md","infra/preview/README.md","services/worker_trigger/README.md","services/document_storage_service/README.md","services/mcp_auth_proxy/README.md","services/email_service/src/bin/cleanup_unused_sfs/README.md","services/email_service/src/bin/find_used_sfs_ids/README.md","apps/web/src/features/block-code/README.md","services/email_service/src/bin/backfill_gmail_attachments/README.md","services/delete_chat_handler/README.md","services/convert_service/load-test/README.md","services/convert_service/helpers/README.md","crates/opensearch_client/README.md","services/deleted_item_poller/README.md","crates/anthropic/README.md","services/notification_service/README.md","services/lexical-service/README.md","services/email_service/src/bin/backfill_contacts/README.md","services/email_service/src/bin/find_unused_sfs_ids/README.md","services/email_service/src/bin/backfill_sfs_attachments/README.md","apps/web/src/features/entity/README.md","services/email_sfs_delete_handler/README.md","apps/web/src/features/block-project/README.md","services/docx_unzip_handler/README.md","services/connection_gateway/README.md","apps/web/src/features/property/README.md","services/email_suppression_handler/README.md","crates/bots/README.md","crates/integration_tests/local_e2e/README.md","services/sha_cleanup_worker/README.md","services/document_cognition_service/README.md","services/document_cognition_service/load-test/README.md","services/document_text_extractor/README.md","services/organization_retention_handler/README.md","services/user_link_cleanup_handler/README.md","services/cla-worker/README.md","apps/web/src/components/app/split-layout/README.md","crates/webhook/README.md","crates/kafka_util/README.md","crates/email_db_client/README.md","apps/web/src/lib/service-clients/service-cognition/README.md","apps/web/src/lib/service-clients/service-connection/README.md","crates/properties_service/README.md","apps/web/src/lib/service-clients/service-sync/README.md","crates/local_e2e_test_support/README.md","crates/soup_realtime/README.md","apps/web/src/lib/filesystem/README.md","apps/web/src/lib/core/README.md","apps/docs/README.md"],"totalFiles":87}}}
+
+id: 1787345116382-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-87b872bb-846a-4dea-ba61-0b05b866fc2a-2\nfc_f4e12410-c553-9712-bec3-07b314422b88_2","toolCall":{"type":"glob","args":{"globPattern":"README.md","targetDirectory":"/workspace"},"result":{"status":"success","value":{"files":["packages/loro-mirror/README.md","README.md","crates/client/README.md","crates/client/turso-opfs/README.md","packages/collaboration/README.md","packages/collaboration/src/websocket/README.md","packages/lexical-core/README.md","packages/sdk/README.md","crates/mcp_client/src/domain/provider_registry/slack/README.md","tooling/seed_cli/README.md","tooling/seed_cli/src/entity/email/README.md","apps/web/tauri/src-tauri/README.md","infra/README.md","infra/stacks/fusion-auth/README.md","crates/properties/README.md","crates/notification_db_client/README.md","infra/stacks/fusionauth-instance/README.md","crates/opensearch_query_builder/README.md","infra/stacks/opensearch/README.md","infra/stacks/opensearch/helpers/README.md","apps/web/README.md","apps/web/src/features/block-image/README.md","apps/web/src/features/block-chat/README.md","crates/chat/README.md","crates/comms_db_client/README.md","crates/macro_db_client/README.md","crates/teams/README.md","services/unfurl_service/README.md","services/sync-service/README.md","services/email_scheduled_handler/README.md","apps/web/src/features/block-canvas/README.md","services/search_processing_service/README.md","apps/web/src/features/block-md/README.md","services/contacts_service/README.md","services/email_refresh_handler/README.md","services/bots/stripe-payment-bot/README.md","services/bots/anthropic-status-bot/README.md","infra/stacks/cloud-storage-cache/README.md","infra/stacks/web-app/README.md","infra/preview/README.md","services/worker_trigger/README.md","services/document_storage_service/README.md","services/mcp_auth_proxy/README.md","services/email_service/src/bin/cleanup_unused_sfs/README.md","services/email_service/src/bin/find_used_sfs_ids/README.md","apps/web/src/features/block-code/README.md","services/email_service/src/bin/backfill_gmail_attachments/README.md","services/delete_chat_handler/README.md","services/convert_service/load-test/README.md","services/convert_service/helpers/README.md","crates/opensearch_client/README.md","services/deleted_item_poller/README.md","crates/anthropic/README.md","services/notification_service/README.md","services/lexical-service/README.md","services/email_service/src/bin/backfill_contacts/README.md","services/email_service/src/bin/find_unused_sfs_ids/README.md","services/email_service/src/bin/backfill_sfs_attachments/README.md","apps/web/src/features/entity/README.md","services/email_sfs_delete_handler/README.md","apps/web/src/features/block-project/README.md","services/docx_unzip_handler/README.md","services/connection_gateway/README.md","apps/web/src/features/property/README.md","services/email_suppression_handler/README.md","crates/bots/README.md","crates/integration_tests/local_e2e/README.md","services/sha_cleanup_worker/README.md","services/document_cognition_service/README.md","services/document_cognition_service/load-test/README.md","services/document_text_extractor/README.md","services/organization_retention_handler/README.md","services/user_link_cleanup_handler/README.md","services/cla-worker/README.md","apps/web/src/components/app/split-layout/README.md","crates/webhook/README.md","crates/kafka_util/README.md","crates/email_db_client/README.md","apps/web/src/lib/service-clients/service-cognition/README.md","apps/web/src/lib/service-clients/service-connection/README.md","crates/properties_service/README.md","apps/web/src/lib/service-clients/service-sync/README.md","crates/local_e2e_test_support/README.md","crates/soup_realtime/README.md","apps/web/src/lib/filesystem/README.md","apps/web/src/lib/core/README.md","apps/docs/README.md"],"totalFiles":87,"clientTruncated":false,"ripgrepTruncated":false}}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-0-p5da"}
+
+id: 1787345116385-0
+event: interaction_update
+data: {"type":"token-delta","tokens":909}
+
+id: 1787345116903-0
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":6324}
+
+id: 1787345117119-0
+event: interaction_update
+data: {"type":"step-started","stepId":98}
+
+id: 1787345118236-0
+event: thinking
+data: {"text":"Adding a comment to "}
+
+id: 1787345118236-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Adding a comment to "}
+
+id: 1787345118237-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345118361-0
+event: thinking
+data: {"text":"the top of README.md."}
+
+id: 1787345118361-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"the top of README.md."}
+
+id: 1787345118365-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345119601-0
+event: thinking
+data: {"text":"\n\nAn HTML comment will"}
+
+id: 1787345119601-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nAn HTML comment will"}
+
+id: 1787345119607-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345119609-0
+event: thinking
+data: {"text":" be inserted since the"}
+
+id: 1787345119609-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" be inserted since the"}
+
+id: 1787345119611-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345119613-0
+event: thinking
+data: {"text":" README begins with "}
+
+id: 1787345119613-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" README begins with "}
+
+id: 1787345119615-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345119617-0
+event: thinking
+data: {"text":"HTML. A one-line docs/PROBE.md"}
+
+id: 1787345119617-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"HTML. A one-line docs/PROBE.md"}
+
+id: 1787345119619-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787345119621-0
+event: thinking
+data: {"text":" will also be created."}
+
+id: 1787345119621-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" will also be created."}
+
+id: 1787345119623-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345119625-0
+event: thinking
+data: {"text":" Both files will be "}
+
+id: 1787345119625-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" Both files will be "}
+
+id: 1787345119628-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345119630-0
+event: thinking
+data: {"text":"read afterward to display"}
+
+id: 1787345119630-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"read afterward to display"}
+
+id: 1787345119632-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345119634-0
+event: thinking
+data: {"text":" the changes. The docs"}
+
+id: 1787345119634-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" the changes. The docs"}
+
+id: 1787345119638-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345119645-0
+event: thinking
+data: {"text":" directory needs to "}
+
+id: 1787345119645-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" directory needs to "}
+
+id: 1787345119649-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345119659-0
+event: thinking
+data: {"text":"be checked first."}
+
+id: 1787345119659-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"be checked first."}
+
+id: 1787345119662-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787345119668-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":1433}
+
+id: 1787345119675-0
+event: assistant
+data: {"text":"I'll"}
+
+id: 1787345119675-0
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+id: 1787345119678-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119680-0
+event: assistant
+data: {"text":" insert"}
+
+id: 1787345119680-0
+event: interaction_update
+data: {"type":"text-delta","text":" insert"}
+
+id: 1787345119683-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345119685-0
+event: assistant
+data: {"text":" an"}
+
+id: 1787345119685-0
+event: interaction_update
+data: {"type":"text-delta","text":" an"}
+
+id: 1787345119688-0
+event: assistant
+data: {"text":" HTML"}
+
+id: 1787345119688-0
+event: interaction_update
+data: {"type":"text-delta","text":" HTML"}
+
+id: 1787345119690-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345119692-0
+event: assistant
+data: {"text":" comment"}
+
+id: 1787345119692-0
+event: interaction_update
+data: {"type":"text-delta","text":" comment"}
+
+id: 1787345119694-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345119696-0
+event: assistant
+data: {"text":" at"}
+
+id: 1787345119696-0
+event: interaction_update
+data: {"type":"text-delta","text":" at"}
+
+id: 1787345119698-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345119698-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345119700-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119702-0
+event: assistant
+data: {"text":" top"}
+
+id: 1787345119702-0
+event: interaction_update
+data: {"type":"text-delta","text":" top"}
+
+id: 1787345119704-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119707-0
+event: assistant
+data: {"text":" of"}
+
+id: 1787345119707-0
+event: interaction_update
+data: {"type":"text-delta","text":" of"}
+
+id: 1787345119710-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119717-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345119717-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345119721-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119724-0
+event: assistant
+data: {"text":"README"}
+
+id: 1787345119724-0
+event: interaction_update
+data: {"type":"text-delta","text":"README"}
+
+id: 1787345119729-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119764-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345119764-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345119778-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119798-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345119798-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345119827-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345119827-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345119835-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119841-0
+event: assistant
+data: {"text":" add"}
+
+id: 1787345119841-0
+event: interaction_update
+data: {"type":"text-delta","text":" add"}
+
+id: 1787345119850-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119861-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345119861-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345119866-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119869-0
+event: assistant
+data: {"text":"docs"}
+
+id: 1787345119869-0
+event: interaction_update
+data: {"type":"text-delta","text":"docs"}
+
+id: 1787345119871-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119878-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345119878-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345119887-0
+event: assistant
+data: {"text":"PROBE"}
+
+id: 1787345119887-0
+event: interaction_update
+data: {"type":"text-delta","text":"PROBE"}
+
+id: 1787345119896-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119925-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345119925-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345119942-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119950-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345119950-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345119956-0
+event: assistant
+data: {"text":" with"}
+
+id: 1787345119956-0
+event: interaction_update
+data: {"type":"text-delta","text":" with"}
+
+id: 1787345119958-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119962-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345119962-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345119964-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119967-0
+event: assistant
+data: {"text":" single"}
+
+id: 1787345119967-0
+event: interaction_update
+data: {"type":"text-delta","text":" single"}
+
+id: 1787345119971-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345119973-0
+event: assistant
+data: {"text":" line"}
+
+id: 1787345119973-0
+event: interaction_update
+data: {"type":"text-delta","text":" line"}
+
+id: 1787345119975-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345119981-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345119981-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345119992-0
+event: interaction_update
+data: {"type":"token-delta","tokens":40}
+
+id: 1787345120024-0
+event: interaction_update
+data: {"type":"token-delta","tokens":23}
+
+id: 1787345120829-0
+event: tool_call
+data: {"callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-4\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_1","name":"edit_file","status":"running"}
+
+id: 1787345120830-1
+event: tool_call
+data: {"callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-4\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_1","name":"edit_file","status":"running","args":{"path":"/workspace/docs/PROBE.md"}}
+
+id: 1787345120830-1
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-4\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_1","toolCall":{"type":"edit","args":{"path":"/workspace/docs/PROBE.md"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-0-tapo"}
+
+id: 1787345120830-2
+event: tool_call
+data: {"callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-4\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_1","name":"edit_file","status":"running","args":{"path":"/workspace/docs/PROBE.md","streamContent":"This is a probe file with one line of text.\n"}}
+
+id: 1787345120830-2
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-4\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_1","toolCall":{"type":"edit","args":{"path":"/workspace/docs/PROBE.md"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-0-tapo"}
+
+id: 1787345120976-0
+event: tool_call
+data: {"callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-3\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_0","name":"edit_file","status":"running"}
+
+id: 1787345120977-1
+event: tool_call
+data: {"callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-3\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_0","name":"edit_file","status":"running","args":{"path":"/workspace/README.md"}}
+
+id: 1787345120977-1
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-3\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_0","toolCall":{"type":"edit","args":{"path":"/workspace/README.md"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-5-7dg4"}
+
+id: 1787345120977-2
+event: tool_call
+data: {"callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-3\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_0","name":"edit_file","status":"running","args":{"path":"/workspace/README.md","streamContent":"<!-- probe: comment added at top of README.md -->\n<div align=\"center\">"}}
+
+id: 1787345120977-2
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-3\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_0","toolCall":{"type":"edit","args":{"path":"/workspace/README.md"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-5-7dg4"}
+
+id: 1787345120988-0
+event: tool_call
+data: {"callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-4\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_1","name":"edit_file","status":"completed","args":{"path":"/workspace/docs/PROBE.md","streamContent":"This is a probe file with one line of text.\n"},"result":{"success":{"path":"/workspace/docs/PROBE.md","linesAdded":1,"linesRemoved":0,"diffString":"--- /dev/null\n+++ b//workspace/docs/PROBE.md\n@@ -1,0 +1 @@\n+This is a probe file with one line of text.","afterFullFileContent":"This is a probe file with one line of text.\n","message":"Wrote contents to /workspace/docs/PROBE.md"}}}
+
+id: 1787345120988-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-4\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_1","toolCall":{"type":"edit","args":{"path":"/workspace/docs/PROBE.md"},"result":{"status":"success","value":{"linesAdded":1,"linesRemoved":0,"diffString":"--- /dev/null\n+++ b//workspace/docs/PROBE.md\n@@ -1,0 +1 @@\n+This is a probe file with one line of text."}}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-0-tapo"}
+
+id: 1787345120991-0
+event: interaction_update
+data: {"type":"token-delta","tokens":10}
+
+id: 1787345121270-0
+event: tool_call
+data: {"callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-3\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_0","name":"edit_file","status":"completed","args":{"path":"/workspace/README.md","streamContent":"<!-- probe: comment added at top of README.md -->\n<div align=\"center\">"},"result":{"success":{"path":"/workspace/README.md","linesAdded":1,"linesRemoved":0,"diffString":"--- a//workspace/README.md\n+++ b//workspace/README.md\n@@ -1,3 +1,4 @@\n+<!-- probe: comment added at top of README.md -->\n <div align=\"center\">\n   <a target=\"_blank\" href=\"https://macro.com\">\n     <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />","beforeFullFileContent":"<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>\n    ·\n    <a href=\"mailto:teo@macro.com\">Hiring</a>\n  </p>\n</div>\n\n<br />\n\nMacro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.\n\n<br />\n\n# Why Macro\n\nWe built Macro because we wanted a single operating system for our startup. There are many good software products, and we used them all — Slack, Linear, Notion, HubSpot, and Superhuman — but they don't work together as one system. As we scaled our last venture to ~20 people things started to break: every team got their own tools and the company was held together by MCP and Zapier. The company was not computable. It was chaotic.\n\nMacro is a complete redesign of work software from the ground up as a single system.\n\nDesigned by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their \"operating system\".\n\n<br />\n\n# Features\n\nMacro is composed of 'blocks' designed to be modular, extensible, and work together like Lego. For each block, we studied the best prior art and tried to make it even better.\n\nEach surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.\n\n| Block         | Docs                                                      | What it does                                                                  |\n| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |\n| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |\n| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |\n| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |\n| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |\n| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |\n| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |\n| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |\n| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |\n| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |\n| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |\n\n<br />\n\n# **Multiple email inboxes** w/ good AI tools, integrated CRM\n\nMacro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:\n\n1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.\n2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.\n3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.\n\n![Macro email thread with actions, tags, and properties in the sidebar](.github/readme/email-thread.png)\n\n4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.\n5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.\n\nMacro Mail lives in the same interface as channels, docs, tasks, and code. From any email, hit \"task\" to create a linked task, e.g. a ticket for an engineer from a customer support email. @mention emails in documents, e.g. @Re: Contract Signature.eml inside of Todos.md. In Macro, your email is brought into the fold with all of your tools, and your team, in the same permissions system: just hit `Share` to share an email to any DM or channel — no need to screenshot.\n\n[Email docs &rarr;](https://docs.macro.com/product/email)\n\n<br />\n\n# **Team chat** for focused technical discussions\n\nMacro Chat is designed to be more focused than Slack. The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Threads are permissioned severally so you can share threads across channels by copying links. Everything is stored in a bidirectional graph, so tasks @link to messages that created them, customer support emails tie into support channels, CRM records get updated when they're discussed in messages, etc. The core idea is that (i) messaging should be the centerpiece around which tasks, mail, docs, and content management are built, all in a lightweight way, and agents should be first-class citizens like human users and (ii) messaging needs to be more focused and readable for technical conversations, and not turn into battles where context is lost and progress is indistinguishable from noise.\n\n![Macro #Engineers channel with threads, mentions, and an inline GitHub check](.github/readme/messages-channel.png)\n\n[Messages docs &rarr;](https://docs.macro.com/product/channels)\n\n<br />\n\n# **Task management** built around chat\n\nLinear recently published a report that issue tracking is dead. We agree with that, but the stronger form is that issue tracking never really worked, at least for us. We really tried and we blamed ourselves, but as we talked to other companies, it turns out that nobody was using their issue tracker \"correctly\". And if that's the case, the problem is the design of the tool, not the companies that use it.\n\nThe core problem with traditional issue trackers or project management tools is that they get out of date. The reason they get out of date is that (i) they're a separate system from where the conversation really happens in team chat (e.g. Slack, Macro, Discord, etc.) and (ii) they don't add much benefit beyond tracking the work. They're a chore with near-term costs and only the promise of long-term benefit. They're too rigid compared to a 2D canvas, too opinionated, and don't match how your project actually functions.\n\nThe solution isn't to forgo tracking entirely. We tried that and it was a different form of chaos. **The solution we've found is lightweight issues tightly coupled to your channels and DMs, so that issue tracking naturally occurs where the conversation itself happens.**\n\n![Macro tasks list grouped by assignee, with a task detail showing its source message and linked PR](.github/readme/tasks-list.png)\n\nCreating tasks in Macro is easy. Where possible, tasks created are bidirectionally linked to the creating context (e.g. a customer email) so the full chain is auditable from \"why are we doing this\" → task → agent → pull request, all in one system.\n\n- Create a task from an email\n- From anywhere via `c` `t`\n- From a markdown doc with `/task`\n- From any `- [ ]` bullet by highlighting and clicking \"Task\"\n- `@Macro` create tasks in any channel or DM\n- In any agent chat\n- Via external MCP, API or SDK\n\n[Tasks docs &rarr;](https://docs.macro.com/product/tasks)\n\n<br />\n\n# @linked markdown docs powered by CRDTs\n\nWe wanted everything in a single markdown editor without switching tools.\n\n- Native markdown compatibility and bulk/import export (see \"file over app\" paradigm)\n- Live collaboration with CRDTs and Cloudflare durable objects make it feel like you're editing on the same computer. Edits come in ~instantly instead of ka-chunking like Google Docs\n- Version control: history and forking, with a neat UI for scrubbing history. This is still in v1, there's a lot to do to get it closer to git, or we may eventually add git compatibility.\n- Offline editing and reconciliation.\n- @-linked to everything in your workspace: email, docs, tasks, messages, channels, companies, contacts, etc. Like Notion but multi-modal\n- Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) or on the web (Android app coming soon)\n- Agent native editing, powered by swarms of agents operating as peers in the CRDT collaboration system like human collaborators. See [Wolf's tech blog on this](https://404wolf.com/posts/AgentsAttackTheDocument/). Use via MCP or internal agent.\n\n![A PRD in Macro with tags, assignees, properties, and references](.github/readme/docs-prd.png)\n\nAgents can edit documents that are open or closed. One interesting use case for agentic editing is to maintain team-context. For example we have a Macro Automation that runs daily to update our in-office Pool Games markdown doc. It scans through all of the channels to see if anyone has one and then updates the doc. If somebody has already edited the doc, it can know that and forgo the update. Conflicts are handled natively by the CRDT collaboration system.\n\n[Docs &rarr;](https://docs.macro.com/product/docs)\n\n<br />\n\n# CRM that keeps itself up to date\n\nThe problem with standalone CRM is the same as with task trackers: it's not up to date. The CRM only partially reflects reality, so if you want to know what the latest status on a deal is you still have to message the AE/SDR and ask for context. CRMs are also too rigid and closed-source, while DIY CRMs in Airtable/Notion don't provide email aggregation by Company/Contact/Deal that is the core feature of CRM. We went through all the CRMs, including the new AI-native ones, and while they're well-designed they're just structurally set up to fail over time.\n\n**Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!\n\n![Macro CRM board grouped by pipeline stage](.github/readme/crm-board.png)\n\nWe haven't innovated on the core idea of CRM other than what you read in the above paragraph. None of this should be that interesting:\n\n- Kanban board and customizable deal stages, list view, saved views, shareable views, personal and team views, etc.\n- \"Notes\" on the company actually use the same system as channels/DMs, so you can @mention and do all of the things you expect in a channel. Basically, every deal gets its own channel, automatically, that's pinned right to the deal record\n- @mention the company or contact from any note, message, task, pull request, etc., to create a bidirectional link between the record and that thing. For example, @mention a company from an engineering task to note their request. It all ties together.\n\n[CRM docs &rarr;](https://docs.macro.com/product/crm)\n\n<br />\n\n# Agents and unified team-level memory\n\nSince Macro has the team context in a single database, it is uniquely positioned to offer team-level memory with full context of all of the operations of the business. We do this every day via a cron job. Your memory is updated from team conversations, your DMs, your sent and received emails, tasks created and completed, etc. All of this is synthesized together in one pass, rather than severally, and combined with your previous memory to form the new memory output. The net result:\n\n- Macro has the best memory on what you're working on and what you care about vs. chatbots that only build memory from prior chats\n- This memory is available to external agents via MCP, or any AI model (OpenAI, Google, Anthropic, etc.) through the model picker for maximum portability\n- The memory is plainly stored in markdown so you can export it as you please. To manually update it, just ask the AI to remember something/update your memory\n\nTeam memory comes in quite handy. For example, I took a screenshot of some features I'd written in a paper notepad and asked the agent to create tickets and assign to the appropriate engineer which it did perfectly without any runtime tool use.\n\n![A Macro task being handed off to a coding agent, with a linked branch](.github/readme/agents-task-handoff.png)\n\nMemory isn't supposed to encompass everything. Macro also has a tool/MCP surface with near 100% coverage of the things you can do in Macro's UI, so that your agents aren't limited in what they can do like they are in most SaaS. There are also no rate limits on MCP.\n\n[Agents docs &rarr;](https://docs.macro.com/product/agents)\n\nYour coding agents can use Macro too. Point Claude Code, Codex, or any MCP client at your workspace:\n\n```bash\nclaude mcp add --transport http macro https://mcp-server.macro.com/mcp\n```\n\nSee [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.\n\n<br />\n\n# How it all works together\n\nAs we've discussed above, each of the blocks is designed to be best-in-class. We have thoughtfully designed each of Chat, Docs, Email, Agents, etc., to improve on your status quo individually. But where it all comes together is how it's more than the sum of its modules; it's how they work together.\n\n**Bidirectional @linking.** @mention a doc in a message and both know about each other. Your workspace becomes a web of context you can navigate in either direction.\n\n**Channel-based permissions.** Anything you @mention in a channel is automatically shared with its members. Join a channel, gain access; leave, lose it. No permission-request dance.\n\n**Unified memory.** Agents remember what your whole team is doing across email, messages, tasks, docs, and calls, not just your own chat history. Refreshed nightly.\n\n**One inbox.** Emails, channel messages, task assignments, @mentions, and agent responses all land in one place, split into Signal and Noise. Keyboard-first throughout.\n\nDeeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers blocks, mentions, properties, and permissions; the [FAQ](https://docs.macro.com/faq) covers comparisons, licensing, and self-hosting.\n\n<br />\n\n# Using the hosted app\n\n[Sign up](https://macro.com/app) and connect your Gmail or Google Workspace account. Macro runs in any modern browser, with an [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) for your phone. The [getting started guide](https://docs.macro.com/getting-started) takes you from a fresh account to a working setup in about 15 minutes. Coming from Notion, Slack, Superhuman, or Linear? See [Switch to Macro](https://docs.macro.com/switch-to-macro).\n\n<br />\n\n# Running it locally\n\nTo run the full app on your machine, follow [Running locally](docs/RUNNING_LOCALLY.md).\n\nTo contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).\n\n<br />\n\n# Layout\n\n```\nmacro/\n├── apps/\n│   ├── web/       SolidJS client — browser, Tauri desktop, mobile\n│   └── docs/      docs.macro.com\n├── services/      42 deployable services, workers, and Lambda handlers\n├── crates/        167 Rust libraries — domain logic, models, db clients\n├── packages/      shared TypeScript — collaboration, lexical-core, loro-mirror\n├── infra/         Pulumi definitions\n├── docker/        local Compose stack\n├── nix/           pinned dev shell and build inputs\n└── tooling/       repo scripts and code generators\n```\n\nServices follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.\n\n<br />\n\n# Security\n\n<img width=\"520\" alt=\"ISO 27001 and SOC 2 Type II badges\" src=\".github/readme/security-badges.svg\" />\n\nEnterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified. We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).\n\n<br />\n\n# License\n\nMacro is fully open source — not \"open core\" — under the GNU Affero General Public License v3.0. See `LICENSE.txt` for details.\n\nYou can self-host Macro under the terms of the AGPLv3; the [FAQ](https://docs.macro.com/faq) covers what that involves. If you want to build on top of Macro under a different license, contact [licensing@macro.com](mailto:licensing@macro.com). For managed hosting or commercial arrangements, contact [self-host@macro.com](mailto:self-host@macro.com).\n\n<br />\n\n# Community\n\nHave an idea, want to contribute, or want to work on Macro?\n\n- Feature requests: [contact@macro.com](mailto:contact@macro.com)\n- Contributions: see our [contribution guidelines](CONTRIBUTING.md)\n- Hiring: [teo@macro.com](mailto:teo@macro.com)\n\n<br />\n\n# Star us on GitHub\n\nIf Macro is interesting/useful to you, please scroll up and give the repo a star (scroll to the top of this page -> click `Star` in top right). Stars are how most users hear about Macro because they move us up GitHub's search and trending pages.\n\n<a href=\"https://github.com/macro-inc/macro\">\n  <picture>\n    <source media=\"(prefers-color-scheme: dark)\" srcset=\".github/readme/star-history-dark.svg\" />\n    <img alt=\"Star history for macro-inc/macro, from launch to 3608 stars\" src=\".github/readme/star-history-light.svg\" width=\"100%\" />\n  </picture>\n</a>\n","afterFullFileContent":"<!-- probe: comment added at top of README.md -->\n<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>\n    ·\n    <a href=\"mailto:teo@macro.com\">Hiring</a>\n  </p>\n</div>\n\n<br />\n\nMacro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.\n\n<br />\n\n# Why Macro\n\nWe built Macro because we wanted a single operating system for our startup. There are many good software products, and we used them all — Slack, Linear, Notion, HubSpot, and Superhuman — but they don't work together as one system. As we scaled our last venture to ~20 people things started to break: every team got their own tools and the company was held together by MCP and Zapier. The company was not computable. It was chaotic.\n\nMacro is a complete redesign of work software from the ground up as a single system.\n\nDesigned by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their \"operating system\".\n\n<br />\n\n# Features\n\nMacro is composed of 'blocks' designed to be modular, extensible, and work together like Lego. For each block, we studied the best prior art and tried to make it even better.\n\nEach surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.\n\n| Block         | Docs                                                      | What it does                                                                  |\n| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |\n| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |\n| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |\n| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |\n| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |\n| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |\n| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |\n| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |\n| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |\n| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |\n| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |\n\n<br />\n\n# **Multiple email inboxes** w/ good AI tools, integrated CRM\n\nMacro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:\n\n1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.\n2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.\n3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.\n\n![Macro email thread with actions, tags, and properties in the sidebar](.github/readme/email-thread.png)\n\n4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.\n5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.\n\nMacro Mail lives in the same interface as channels, docs, tasks, and code. From any email, hit \"task\" to create a linked task, e.g. a ticket for an engineer from a customer support email. @mention emails in documents, e.g. @Re: Contract Signature.eml inside of Todos.md. In Macro, your email is brought into the fold with all of your tools, and your team, in the same permissions system: just hit `Share` to share an email to any DM or channel — no need to screenshot.\n\n[Email docs &rarr;](https://docs.macro.com/product/email)\n\n<br />\n\n# **Team chat** for focused technical discussions\n\nMacro Chat is designed to be more focused than Slack. The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Threads are permissioned severally so you can share threads across channels by copying links. Everything is stored in a bidirectional graph, so tasks @link to messages that created them, customer support emails tie into support channels, CRM records get updated when they're discussed in messages, etc. The core idea is that (i) messaging should be the centerpiece around which tasks, mail, docs, and content management are built, all in a lightweight way, and agents should be first-class citizens like human users and (ii) messaging needs to be more focused and readable for technical conversations, and not turn into battles where context is lost and progress is indistinguishable from noise.\n\n![Macro #Engineers channel with threads, mentions, and an inline GitHub check](.github/readme/messages-channel.png)\n\n[Messages docs &rarr;](https://docs.macro.com/product/channels)\n\n<br />\n\n# **Task management** built around chat\n\nLinear recently published a report that issue tracking is dead. We agree with that, but the stronger form is that issue tracking never really worked, at least for us. We really tried and we blamed ourselves, but as we talked to other companies, it turns out that nobody was using their issue tracker \"correctly\". And if that's the case, the problem is the design of the tool, not the companies that use it.\n\nThe core problem with traditional issue trackers or project management tools is that they get out of date. The reason they get out of date is that (i) they're a separate system from where the conversation really happens in team chat (e.g. Slack, Macro, Discord, etc.) and (ii) they don't add much benefit beyond tracking the work. They're a chore with near-term costs and only the promise of long-term benefit. They're too rigid compared to a 2D canvas, too opinionated, and don't match how your project actually functions.\n\nThe solution isn't to forgo tracking entirely. We tried that and it was a different form of chaos. **The solution we've found is lightweight issues tightly coupled to your channels and DMs, so that issue tracking naturally occurs where the conversation itself happens.**\n\n![Macro tasks list grouped by assignee, with a task detail showing its source message and linked PR](.github/readme/tasks-list.png)\n\nCreating tasks in Macro is easy. Where possible, tasks created are bidirectionally linked to the creating context (e.g. a customer email) so the full chain is auditable from \"why are we doing this\" → task → agent → pull request, all in one system.\n\n- Create a task from an email\n- From anywhere via `c` `t`\n- From a markdown doc with `/task`\n- From any `- [ ]` bullet by highlighting and clicking \"Task\"\n- `@Macro` create tasks in any channel or DM\n- In any agent chat\n- Via external MCP, API or SDK\n\n[Tasks docs &rarr;](https://docs.macro.com/product/tasks)\n\n<br />\n\n# @linked markdown docs powered by CRDTs\n\nWe wanted everything in a single markdown editor without switching tools.\n\n- Native markdown compatibility and bulk/import export (see \"file over app\" paradigm)\n- Live collaboration with CRDTs and Cloudflare durable objects make it feel like you're editing on the same computer. Edits come in ~instantly instead of ka-chunking like Google Docs\n- Version control: history and forking, with a neat UI for scrubbing history. This is still in v1, there's a lot to do to get it closer to git, or we may eventually add git compatibility.\n- Offline editing and reconciliation.\n- @-linked to everything in your workspace: email, docs, tasks, messages, channels, companies, contacts, etc. Like Notion but multi-modal\n- Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) or on the web (Android app coming soon)\n- Agent native editing, powered by swarms of agents operating as peers in the CRDT collaboration system like human collaborators. See [Wolf's tech blog on this](https://404wolf.com/posts/AgentsAttackTheDocument/). Use via MCP or internal agent.\n\n![A PRD in Macro with tags, assignees, properties, and references](.github/readme/docs-prd.png)\n\nAgents can edit documents that are open or closed. One interesting use case for agentic editing is to maintain team-context. For example we have a Macro Automation that runs daily to update our in-office Pool Games markdown doc. It scans through all of the channels to see if anyone has one and then updates the doc. If somebody has already edited the doc, it can know that and forgo the update. Conflicts are handled natively by the CRDT collaboration system.\n\n[Docs &rarr;](https://docs.macro.com/product/docs)\n\n<br />\n\n# CRM that keeps itself up to date\n\nThe problem with standalone CRM is the same as with task trackers: it's not up to date. The CRM only partially reflects reality, so if you want to know what the latest status on a deal is you still have to message the AE/SDR and ask for context. CRMs are also too rigid and closed-source, while DIY CRMs in Airtable/Notion don't provide email aggregation by Company/Contact/Deal that is the core feature of CRM. We went through all the CRMs, including the new AI-native ones, and while they're well-designed they're just structurally set up to fail over time.\n\n**Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!\n\n![Macro CRM board grouped by pipeline stage](.github/readme/crm-board.png)\n\nWe haven't innovated on the core idea of CRM other than what you read in the above paragraph. None of this should be that interesting:\n\n- Kanban board and customizable deal stages, list view, saved views, shareable views, personal and team views, etc.\n- \"Notes\" on the company actually use the same system as channels/DMs, so you can @mention and do all of the things you expect in a channel. Basically, every deal gets its own channel, automatically, that's pinned right to the deal record\n- @mention the company or contact from any note, message, task, pull request, etc., to create a bidirectional link between the record and that thing. For example, @mention a company from an engineering task to note their request. It all ties together.\n\n[CRM docs &rarr;](https://docs.macro.com/product/crm)\n\n<br />\n\n# Agents and unified team-level memory\n\nSince Macro has the team context in a single database, it is uniquely positioned to offer team-level memory with full context of all of the operations of the business. We do this every day via a cron job. Your memory is updated from team conversations, your DMs, your sent and received emails, tasks created and completed, etc. All of this is synthesized together in one pass, rather than severally, and combined with your previous memory to form the new memory output. The net result:\n\n- Macro has the best memory on what you're working on and what you care about vs. chatbots that only build memory from prior chats\n- This memory is available to external agents via MCP, or any AI model (OpenAI, Google, Anthropic, etc.) through the model picker for maximum portability\n- The memory is plainly stored in markdown so you can export it as you please. To manually update it, just ask the AI to remember something/update your memory\n\nTeam memory comes in quite handy. For example, I took a screenshot of some features I'd written in a paper notepad and asked the agent to create tickets and assign to the appropriate engineer which it did perfectly without any runtime tool use.\n\n![A Macro task being handed off to a coding agent, with a linked branch](.github/readme/agents-task-handoff.png)\n\nMemory isn't supposed to encompass everything. Macro also has a tool/MCP surface with near 100% coverage of the things you can do in Macro's UI, so that your agents aren't limited in what they can do like they are in most SaaS. There are also no rate limits on MCP.\n\n[Agents docs &rarr;](https://docs.macro.com/product/agents)\n\nYour coding agents can use Macro too. Point Claude Code, Codex, or any MCP client at your workspace:\n\n```bash\nclaude mcp add --transport http macro https://mcp-server.macro.com/mcp\n```\n\nSee [MCP setup](https://docs.macro.com/AI/mcp/overview) and [agent recipes](https://docs.macro.com/AI/recipes) for what they can do once connected.\n\n<br />\n\n# How it all works together\n\nAs we've discussed above, each of the blocks is designed to be best-in-class. We have thoughtfully designed each of Chat, Docs, Email, Agents, etc., to improve on your status quo individually. But where it all comes together is how it's more than the sum of its modules; it's how they work together.\n\n**Bidirectional @linking.** @mention a doc in a message and both know about each other. Your workspace becomes a web of context you can navigate in either direction.\n\n**Channel-based permissions.** Anything you @mention in a channel is automatically shared with its members. Join a channel, gain access; leave, lose it. No permission-request dance.\n\n**Unified memory.** Agents remember what your whole team is doing across email, messages, tasks, docs, and calls, not just your own chat history. Refreshed nightly.\n\n**One inbox.** Emails, channel messages, task assignments, @mentions, and agent responses all land in one place, split into Signal and Noise. Keyboard-first throughout.\n\nDeeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers blocks, mentions, properties, and permissions; the [FAQ](https://docs.macro.com/faq) covers comparisons, licensing, and self-hosting.\n\n<br />\n\n# Using the hosted app\n\n[Sign up](https://macro.com/app) and connect your Gmail or Google Workspace account. Macro runs in any modern browser, with an [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649) for your phone. The [getting started guide](https://docs.macro.com/getting-started) takes you from a fresh account to a working setup in about 15 minutes. Coming from Notion, Slack, Superhuman, or Linear? See [Switch to Macro](https://docs.macro.com/switch-to-macro).\n\n<br />\n\n# Running it locally\n\nTo run the full app on your machine, follow [Running locally](docs/RUNNING_LOCALLY.md).\n\nTo contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).\n\n<br />\n\n# Layout\n\n```\nmacro/\n├── apps/\n│   ├── web/       SolidJS client — browser, Tauri desktop, mobile\n│   └── docs/      docs.macro.com\n├── services/      42 deployable services, workers, and Lambda handlers\n├── crates/        167 Rust libraries — domain logic, models, db clients\n├── packages/      shared TypeScript — collaboration, lexical-core, loro-mirror\n├── infra/         Pulumi definitions\n├── docker/        local Compose stack\n├── nix/           pinned dev shell and build inputs\n└── tooling/       repo scripts and code generators\n```\n\nServices follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.\n\n<br />\n\n# Security\n\n<img width=\"520\" alt=\"ISO 27001 and SOC 2 Type II badges\" src=\".github/readme/security-badges.svg\" />\n\nEnterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified. We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).\n\n<br />\n\n# License\n\nMacro is fully open source — not \"open core\" — under the GNU Affero General Public License v3.0. See `LICENSE.txt` for details.\n\nYou can self-host Macro under the terms of the AGPLv3; the [FAQ](https://docs.macro.com/faq) covers what that involves. If you want to build on top of Macro under a different license, contact [licensing@macro.com](mailto:licensing@macro.com). For managed hosting or commercial arrangements, contact [self-host@macro.com](mailto:self-host@macro.com).\n\n<br />\n\n# Community\n\nHave an idea, want to contribute, or want to work on Macro?\n\n- Feature requests: [contact@macro.com](mailto:contact@macro.com)\n- Contributions: see our [contribution guidelines](CONTRIBUTING.md)\n- Hiring: [teo@macro.com](mailto:teo@macro.com)\n\n<br />\n\n# Star us on GitHub\n\nIf Macro is interesting/useful to you, please scroll up and give the repo a star (scroll to the top of this page -> click `Star` in top right). Stars are how most users hear about Macro because they move us up GitHub's search and trending pages.\n\n<a href=\"https://github.com/macro-inc/macro\">\n  <picture>\n    <source media=\"(prefers-color-scheme: dark)\" srcset=\".github/readme/star-history-dark.svg\" />\n    <img alt=\"Star history for macro-inc/macro, from launch to 3608 stars\" src=\".github/readme/star-history-light.svg\" width=\"100%\" />\n  </picture>\n</a>\n","message":"The file /workspace/README.md has been updated."}}}
+
+id: 1787345121270-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-fdc0bfa9-dd77-44a2-8763-234e79014519-3\nfc_c5a647e9-bc45-9ca1-9afb-6ca5d50df52f_0","toolCall":{"type":"edit","args":{"path":"/workspace/README.md"},"result":{"status":"success","value":{"linesAdded":1,"linesRemoved":0,"diffString":"--- a//workspace/README.md\n+++ b//workspace/README.md\n@@ -1,3 +1,4 @@\n+<!-- probe: comment added at top of README.md -->\n <div align=\"center\">\n   <a target=\"_blank\" href=\"https://macro.com\">\n     <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />"}}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-5-7dg4"}
+
+id: 1787345121276-0
+event: interaction_update
+data: {"type":"token-delta","tokens":11}
+
+id: 1787345121952-0
+event: interaction_update
+data: {"type":"step-completed","stepId":98,"stepDurationMs":4820}
+
+id: 1787345122063-0
+event: interaction_update
+data: {"type":"step-started","stepId":174}
+
+id: 1787345123293-0
+event: thinking
+data: {"text":"Both files were written."}
+
+id: 1787345123293-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Both files were written."}
+
+id: 1787345123295-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345123297-0
+event: thinking
+data: {"text":" Now reading them to"}
+
+id: 1787345123297-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" Now reading them to"}
+
+id: 1787345123300-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345123302-0
+event: thinking
+data: {"text":" display the changes."}
+
+id: 1787345123302-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" display the changes."}
+
+id: 1787345123304-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345123306-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":14}
+
+id: 1787345123309-0
+event: interaction_update
+data: {"type":"token-delta","tokens":10}
+
+id: 1787345123312-0
+event: interaction_update
+data: {"type":"token-delta","tokens":9}
+
+id: 1787345123398-0
+event: tool_call
+data: {"callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-5\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_0","name":"read_file","status":"running"}
+
+id: 1787345123400-0
+event: tool_call
+data: {"callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-6\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_1","name":"read_file","status":"running"}
+
+id: 1787345123400-1
+event: tool_call
+data: {"callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-5\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_0","name":"read_file","status":"running","args":{"path":"/workspace/README.md","limit":8}}
+
+id: 1787345123400-1
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-5\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_0","toolCall":{"type":"read","args":{"path":"/workspace/README.md"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-3-ckoe"}
+
+id: 1787345123400-2
+event: tool_call
+data: {"callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-6\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_1","name":"read_file","status":"running","args":{"path":"/workspace/docs/PROBE.md"}}
+
+id: 1787345123400-2
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-6\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_1","toolCall":{"type":"read","args":{"path":"/workspace/docs/PROBE.md"}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-4-66f7"}
+
+id: 1787345123474-0
+event: tool_call
+data: {"callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-5\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_0","name":"read_file","status":"completed","args":{"path":"/workspace/README.md","limit":8},"result":{"success":{"content":"<!-- probe: comment added at top of README.md -->\n<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />","totalLines":267,"fileSize":20037,"path":"/workspace/README.md","readRange":{"startLine":1,"endLine":8}}}}
+
+id: 1787345123474-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-5\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_0","toolCall":{"type":"read","args":{"path":"/workspace/README.md"},"result":{"status":"success","value":{"content":"<!-- probe: comment added at top of README.md -->\n<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />","totalLines":267,"fileSize":20037}}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-3-ckoe"}
+
+id: 1787345123478-0
+event: interaction_update
+data: {"type":"token-delta","tokens":77}
+
+id: 1787345123480-0
+event: tool_call
+data: {"callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-6\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_1","name":"read_file","status":"completed","args":{"path":"/workspace/docs/PROBE.md"},"result":{"success":{"content":"This is a probe file with one line of text.\n","totalLines":2,"fileSize":44,"path":"/workspace/docs/PROBE.md","readRange":{"startLine":1,"endLine":2}}}}
+
+id: 1787345123480-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-a6ca0091-e504-426f-b792-35c16c1596ac-6\nfc_db897d7c-4825-919f-8abe-6c22e1f39b97_1","toolCall":{"type":"read","args":{"path":"/workspace/docs/PROBE.md"},"result":{"status":"success","value":{"content":"This is a probe file with one line of text.\n","totalLines":2,"fileSize":44}}},"modelCallId":"serverGenReqId_4f620c66-4907-43ff-8f4c-d796e3838b0d-4-66f7"}
+
+id: 1787345123483-0
+event: interaction_update
+data: {"type":"token-delta","tokens":11}
+
+id: 1787345123569-0
+event: interaction_update
+data: {"type":"step-completed","stepId":174,"stepDurationMs":1505}
+
+id: 1787345123726-0
+event: interaction_update
+data: {"type":"step-started","stepId":194}
+
+id: 1787345125024-0
+event: thinking
+data: {"text":"Both files are updated."}
+
+id: 1787345125024-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Both files are updated."}
+
+id: 1787345125027-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345125035-0
+event: thinking
+data: {"text":" The README.md comment"}
+
+id: 1787345125035-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" The README.md comment"}
+
+id: 1787345125039-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345125042-0
+event: thinking
+data: {"text":" and the new docs/PROBE.md"}
+
+id: 1787345125042-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" and the new docs/PROBE.md"}
+
+id: 1787345125044-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345125046-0
+event: thinking
+data: {"text":" line have been added."}
+
+id: 1787345125046-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" line have been added."}
+
+id: 1787345125049-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345125052-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":47}
+
+id: 1787345125059-0
+event: assistant
+data: {"text":"Added"}
+
+id: 1787345125059-0
+event: interaction_update
+data: {"type":"text-delta","text":"Added"}
+
+id: 1787345125063-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125065-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345125065-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345125068-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125070-0
+event: assistant
+data: {"text":" comment"}
+
+id: 1787345125070-0
+event: interaction_update
+data: {"type":"text-delta","text":" comment"}
+
+id: 1787345125072-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125075-0
+event: assistant
+data: {"text":" at"}
+
+id: 1787345125075-0
+event: interaction_update
+data: {"type":"text-delta","text":" at"}
+
+id: 1787345125077-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345125077-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345125080-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125082-0
+event: assistant
+data: {"text":" top"}
+
+id: 1787345125082-0
+event: interaction_update
+data: {"type":"text-delta","text":" top"}
+
+id: 1787345125084-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125086-0
+event: assistant
+data: {"text":" of"}
+
+id: 1787345125086-0
+event: interaction_update
+data: {"type":"text-delta","text":" of"}
+
+id: 1787345125088-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125091-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345125091-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345125093-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125095-0
+event: assistant
+data: {"text":"README"}
+
+id: 1787345125095-0
+event: interaction_update
+data: {"type":"text-delta","text":"README"}
+
+id: 1787345125097-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125099-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345125099-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345125101-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125103-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345125103-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345125108-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345125108-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345125112-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125116-0
+event: assistant
+data: {"text":" created"}
+
+id: 1787345125116-0
+event: interaction_update
+data: {"type":"text-delta","text":" created"}
+
+id: 1787345125118-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125121-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345125121-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345125124-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125127-0
+event: assistant
+data: {"text":"docs"}
+
+id: 1787345125127-0
+event: interaction_update
+data: {"type":"text-delta","text":"docs"}
+
+id: 1787345125129-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125132-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345125132-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345125134-0
+event: assistant
+data: {"text":"PROBE"}
+
+id: 1787345125134-0
+event: interaction_update
+data: {"type":"text-delta","text":"PROBE"}
+
+id: 1787345125136-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125140-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345125140-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345125143-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125147-0
+event: assistant
+data: {"text":"`."}
+
+id: 1787345125147-0
+event: interaction_update
+data: {"type":"text-delta","text":"`."}
+
+id: 1787345125151-0
+event: assistant
+data: {"text":" Nothing"}
+
+id: 1787345125151-0
+event: interaction_update
+data: {"type":"text-delta","text":" Nothing"}
+
+id: 1787345125155-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125162-0
+event: assistant
+data: {"text":" was"}
+
+id: 1787345125162-0
+event: interaction_update
+data: {"type":"text-delta","text":" was"}
+
+id: 1787345125164-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125170-0
+event: assistant
+data: {"text":" committed"}
+
+id: 1787345125170-0
+event: interaction_update
+data: {"type":"text-delta","text":" committed"}
+
+id: 1787345125173-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345125175-0
+event: assistant
+data: {"text":","}
+
+id: 1787345125175-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345125178-0
+event: assistant
+data: {"text":" pushed"}
+
+id: 1787345125178-0
+event: interaction_update
+data: {"type":"text-delta","text":" pushed"}
+
+id: 1787345125180-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125183-0
+event: assistant
+data: {"text":","}
+
+id: 1787345125183-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345125185-0
+event: assistant
+data: {"text":" or"}
+
+id: 1787345125185-0
+event: interaction_update
+data: {"type":"text-delta","text":" or"}
+
+id: 1787345125188-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125190-0
+event: assistant
+data: {"text":" opened"}
+
+id: 1787345125190-0
+event: interaction_update
+data: {"type":"text-delta","text":" opened"}
+
+id: 1787345125192-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125195-0
+event: assistant
+data: {"text":" as"}
+
+id: 1787345125195-0
+event: interaction_update
+data: {"type":"text-delta","text":" as"}
+
+id: 1787345125203-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345125203-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345125205-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125208-0
+event: assistant
+data: {"text":" PR"}
+
+id: 1787345125208-0
+event: interaction_update
+data: {"type":"text-delta","text":" PR"}
+
+id: 1787345125212-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125214-0
+event: assistant
+data: {"text":".\n\n"}
+
+id: 1787345125214-0
+event: interaction_update
+data: {"type":"text-delta","text":".\n\n"}
+
+id: 1787345125218-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345125218-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345125223-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125226-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345125226-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345125229-0
+event: assistant
+data: {"text":"README"}
+
+id: 1787345125229-0
+event: interaction_update
+data: {"type":"text-delta","text":"README"}
+
+id: 1787345125232-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125234-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345125234-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345125236-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345125236-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345125239-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125241-0
+event: assistant
+data: {"text":" ("}
+
+id: 1787345125241-0
+event: interaction_update
+data: {"type":"text-delta","text":" ("}
+
+id: 1787345125243-0
+event: assistant
+data: {"text":"new"}
+
+id: 1787345125243-0
+event: interaction_update
+data: {"type":"text-delta","text":"new"}
+
+id: 1787345125245-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125248-0
+event: assistant
+data: {"text":" first"}
+
+id: 1787345125248-0
+event: interaction_update
+data: {"type":"text-delta","text":" first"}
+
+id: 1787345125250-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125252-0
+event: assistant
+data: {"text":" line"}
+
+id: 1787345125252-0
+event: interaction_update
+data: {"type":"text-delta","text":" line"}
+
+id: 1787345125255-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125257-0
+event: assistant
+data: {"text":"):**"}
+
+id: 1787345125257-0
+event: interaction_update
+data: {"type":"text-delta","text":"):**"}
+
+id: 1787345125259-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125262-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345125262-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345125265-0
+event: assistant
+data: {"text":"```"}
+
+id: 1787345125265-0
+event: interaction_update
+data: {"type":"text-delta","text":"```"}
+
+id: 1787345125273-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125275-0
+event: assistant
+data: {"text":"1"}
+
+id: 1787345125275-0
+event: interaction_update
+data: {"type":"text-delta","text":"1"}
+
+id: 1787345125277-0
+event: assistant
+data: {"text":":"}
+
+id: 1787345125277-0
+event: interaction_update
+data: {"type":"text-delta","text":":"}
+
+id: 1787345125280-0
+event: assistant
+data: {"text":"2"}
+
+id: 1787345125280-0
+event: interaction_update
+data: {"type":"text-delta","text":"2"}
+
+id: 1787345125282-0
+event: assistant
+data: {"text":":/"}
+
+id: 1787345125282-0
+event: interaction_update
+data: {"type":"text-delta","text":":/"}
+
+id: 1787345125284-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125287-0
+event: assistant
+data: {"text":"workspace"}
+
+id: 1787345125287-0
+event: interaction_update
+data: {"type":"text-delta","text":"workspace"}
+
+id: 1787345125289-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125292-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345125292-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345125296-0
+event: assistant
+data: {"text":"README"}
+
+id: 1787345125296-0
+event: interaction_update
+data: {"type":"text-delta","text":"README"}
+
+id: 1787345125298-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125301-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345125301-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345125304-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125306-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345125306-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345125309-0
+event: assistant
+data: {"text":"<!--"}
+
+id: 1787345125309-0
+event: interaction_update
+data: {"type":"text-delta","text":"<!--"}
+
+id: 1787345125315-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125321-0
+event: assistant
+data: {"text":" probe"}
+
+id: 1787345125321-0
+event: interaction_update
+data: {"type":"text-delta","text":" probe"}
+
+id: 1787345125323-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125327-0
+event: assistant
+data: {"text":":"}
+
+id: 1787345125327-0
+event: interaction_update
+data: {"type":"text-delta","text":":"}
+
+id: 1787345125330-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125332-0
+event: assistant
+data: {"text":" comment"}
+
+id: 1787345125332-0
+event: interaction_update
+data: {"type":"text-delta","text":" comment"}
+
+id: 1787345125335-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125337-0
+event: assistant
+data: {"text":" added"}
+
+id: 1787345125337-0
+event: interaction_update
+data: {"type":"text-delta","text":" added"}
+
+id: 1787345125340-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125342-0
+event: assistant
+data: {"text":" at"}
+
+id: 1787345125342-0
+event: interaction_update
+data: {"type":"text-delta","text":" at"}
+
+id: 1787345125345-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125347-0
+event: assistant
+data: {"text":" top"}
+
+id: 1787345125347-0
+event: interaction_update
+data: {"type":"text-delta","text":" top"}
+
+id: 1787345125349-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125353-0
+event: assistant
+data: {"text":" of"}
+
+id: 1787345125353-0
+event: interaction_update
+data: {"type":"text-delta","text":" of"}
+
+id: 1787345125356-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125358-0
+event: assistant
+data: {"text":" README"}
+
+id: 1787345125358-0
+event: interaction_update
+data: {"type":"text-delta","text":" README"}
+
+id: 1787345125362-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125366-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345125366-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345125369-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125371-0
+event: assistant
+data: {"text":" -->"}
+
+id: 1787345125371-0
+event: interaction_update
+data: {"type":"text-delta","text":" -->"}
+
+id: 1787345125373-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125375-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345125375-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345125378-0
+event: assistant
+data: {"text":"<div"}
+
+id: 1787345125378-0
+event: interaction_update
+data: {"type":"text-delta","text":"<div"}
+
+id: 1787345125380-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125382-0
+event: assistant
+data: {"text":" align"}
+
+id: 1787345125382-0
+event: interaction_update
+data: {"type":"text-delta","text":" align"}
+
+id: 1787345125384-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125387-0
+event: assistant
+data: {"text":"=\""}
+
+id: 1787345125387-0
+event: interaction_update
+data: {"type":"text-delta","text":"=\""}
+
+id: 1787345125389-0
+event: assistant
+data: {"text":"center"}
+
+id: 1787345125389-0
+event: interaction_update
+data: {"type":"text-delta","text":"center"}
+
+id: 1787345125391-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125394-0
+event: assistant
+data: {"text":"\">"}
+
+id: 1787345125394-0
+event: interaction_update
+data: {"type":"text-delta","text":"\">"}
+
+id: 1787345125396-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345125396-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345125398-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125400-0
+event: assistant
+data: {"text":"```"}
+
+id: 1787345125400-0
+event: interaction_update
+data: {"type":"text-delta","text":"```"}
+
+id: 1787345125403-0
+event: assistant
+data: {"text":"\n\n"}
+
+id: 1787345125403-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n\n"}
+
+id: 1787345125405-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125407-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345125407-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345125409-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345125409-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345125412-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125415-0
+event: assistant
+data: {"text":"docs"}
+
+id: 1787345125415-0
+event: interaction_update
+data: {"type":"text-delta","text":"docs"}
+
+id: 1787345125420-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125423-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345125423-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345125425-0
+event: assistant
+data: {"text":"PROBE"}
+
+id: 1787345125425-0
+event: interaction_update
+data: {"type":"text-delta","text":"PROBE"}
+
+id: 1787345125427-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125430-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345125430-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345125433-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125435-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345125435-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345125438-0
+event: assistant
+data: {"text":" ("}
+
+id: 1787345125438-0
+event: interaction_update
+data: {"type":"text-delta","text":" ("}
+
+id: 1787345125440-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125442-0
+event: assistant
+data: {"text":"new"}
+
+id: 1787345125442-0
+event: interaction_update
+data: {"type":"text-delta","text":"new"}
+
+id: 1787345125445-0
+event: assistant
+data: {"text":" file"}
+
+id: 1787345125445-0
+event: interaction_update
+data: {"type":"text-delta","text":" file"}
+
+id: 1787345125447-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125449-0
+event: assistant
+data: {"text":"):**"}
+
+id: 1787345125449-0
+event: interaction_update
+data: {"type":"text-delta","text":"):**"}
+
+id: 1787345125451-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125454-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345125454-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345125456-0
+event: assistant
+data: {"text":"```"}
+
+id: 1787345125456-0
+event: interaction_update
+data: {"type":"text-delta","text":"```"}
+
+id: 1787345125458-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125461-0
+event: assistant
+data: {"text":"1"}
+
+id: 1787345125461-0
+event: interaction_update
+data: {"type":"text-delta","text":"1"}
+
+id: 1787345125464-0
+event: assistant
+data: {"text":":"}
+
+id: 1787345125464-0
+event: interaction_update
+data: {"type":"text-delta","text":":"}
+
+id: 1787345125467-0
+event: assistant
+data: {"text":"1"}
+
+id: 1787345125467-0
+event: interaction_update
+data: {"type":"text-delta","text":"1"}
+
+id: 1787345125471-0
+event: assistant
+data: {"text":":/"}
+
+id: 1787345125471-0
+event: interaction_update
+data: {"type":"text-delta","text":":/"}
+
+id: 1787345125474-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125477-0
+event: assistant
+data: {"text":"workspace"}
+
+id: 1787345125477-0
+event: interaction_update
+data: {"type":"text-delta","text":"workspace"}
+
+id: 1787345125480-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125482-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345125482-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345125485-0
+event: assistant
+data: {"text":"docs"}
+
+id: 1787345125485-0
+event: interaction_update
+data: {"type":"text-delta","text":"docs"}
+
+id: 1787345125487-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125491-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345125491-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345125493-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125496-0
+event: assistant
+data: {"text":"PROBE"}
+
+id: 1787345125496-0
+event: interaction_update
+data: {"type":"text-delta","text":"PROBE"}
+
+id: 1787345125498-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125501-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345125501-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345125506-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125508-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345125508-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345125511-0
+event: assistant
+data: {"text":"This"}
+
+id: 1787345125511-0
+event: interaction_update
+data: {"type":"text-delta","text":"This"}
+
+id: 1787345125513-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125516-0
+event: assistant
+data: {"text":" is"}
+
+id: 1787345125516-0
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+id: 1787345125518-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125522-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345125522-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345125524-0
+event: assistant
+data: {"text":" probe"}
+
+id: 1787345125524-0
+event: interaction_update
+data: {"type":"text-delta","text":" probe"}
+
+id: 1787345125526-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345125528-0
+event: assistant
+data: {"text":" file"}
+
+id: 1787345125528-0
+event: interaction_update
+data: {"type":"text-delta","text":" file"}
+
+id: 1787345125530-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125533-0
+event: assistant
+data: {"text":" with"}
+
+id: 1787345125533-0
+event: interaction_update
+data: {"type":"text-delta","text":" with"}
+
+id: 1787345125536-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125538-0
+event: assistant
+data: {"text":" one"}
+
+id: 1787345125538-0
+event: interaction_update
+data: {"type":"text-delta","text":" one"}
+
+id: 1787345125541-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125543-0
+event: assistant
+data: {"text":" line"}
+
+id: 1787345125543-0
+event: interaction_update
+data: {"type":"text-delta","text":" line"}
+
+id: 1787345125546-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125548-0
+event: assistant
+data: {"text":" of"}
+
+id: 1787345125548-0
+event: interaction_update
+data: {"type":"text-delta","text":" of"}
+
+id: 1787345125550-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125553-0
+event: assistant
+data: {"text":" text"}
+
+id: 1787345125553-0
+event: interaction_update
+data: {"type":"text-delta","text":" text"}
+
+id: 1787345125555-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125557-0
+event: assistant
+data: {"text":".\n"}
+
+id: 1787345125557-0
+event: interaction_update
+data: {"type":"text-delta","text":".\n"}
+
+id: 1787345125559-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125562-0
+event: assistant
+data: {"text":"```"}
+
+id: 1787345125562-0
+event: interaction_update
+data: {"type":"text-delta","text":"```"}
+
+id: 1787345125564-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345125667-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787345125670-0
+event: interaction_update
+data: {"type":"step-completed","stepId":194,"stepDurationMs":1943}
+
+event: status
+data: {"runId":"run-748e69e5-5931-4f2f-9787-7ff68ed82db3","status":"FINISHED"}
+
+id: 1787345126997-0
+event: result
+data: {"runId":"run-748e69e5-5931-4f2f-9787-7ff68ed82db3","status":"FINISHED","text":"Added a comment at the top of `README.md` and created `docs/PROBE.md`. Nothing was committed, pushed, or opened as a PR.\n\n**`README.md` (new first line):**\n```1:2:/workspace/README.md\n<!-- probe: comment added at top of README.md -->\n<div align=\"center\">\n```\n\n**`docs/PROBE.md` (new file):**\n```1:1:/workspace/docs/PROBE.md\nThis is a probe file with one line of text.\n```","durationMs":16901,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/readme-comment-probe-file-4942"}]}}
+
+id: 1787345126997-0
+event: done
+data: {}
+

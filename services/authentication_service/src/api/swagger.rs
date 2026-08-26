@@ -18,6 +18,7 @@ use teams::inbound::axum_router::{
 use user_quota::UserQuota;
 use utoipa::OpenApi;
 
+use crate::api::cursor_api_key::{CursorApiKeyStatus, put_cursor_api_key::PutCursorApiKeyRequest};
 use crate::api::email::generate_email_link::GenerateEmailLinkRequest;
 use crate::api::email::resend_fusionauth_verify_user_email::ResendFusionauthVerifyUserEmailRequest;
 use crate::api::jwt::macro_api_token::MacroApiTokenResponse;
@@ -82,6 +83,13 @@ use model::user::{
                 link::gmail::init_gmail_link_handler,
                 link::gmail::check_gmail_link_status_handler,
                 link::outlook::init_outlook_link_handler,
+
+                // Cursor API key (settings -> Connections). Fully qualified:
+                // the `cursor_api_key` crate shadows the module of the same
+                // name in this path position.
+                crate::api::cursor_api_key::get_cursor_api_key::handler,
+                crate::api::cursor_api_key::put_cursor_api_key::handler,
+                crate::api::cursor_api_key::delete_cursor_api_key::handler,
 
                 /// /github_pull_requests
                 github_pull_requests::handler,
@@ -184,6 +192,8 @@ use model::user::{
                         InitGmailLinkResponse,
                         GmailLinkStatusResponse,
                         InitOutlookLinkResponse,
+                        CursorApiKeyStatus,
+                        PutCursorApiKeyRequest,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,

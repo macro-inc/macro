@@ -172,6 +172,17 @@ impl InfraEnv {
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
         );
+        // The alias LocalStack provisions for the Cursor API key CMK. Named by
+        // alias rather than key id because `CreateKey` mints a random id every
+        // run, and KMS accepts an alias anywhere a key id goes. Required by
+        // both the authentication service (which encrypts users' keys) and the
+        // harness (which decrypts them per session), so neither starts without
+        // it — local matches deployed behaviour instead of being a special
+        // case.
+        env.insert(
+            "CURSOR_API_KEY_KMS_KEY_ID".into(),
+            resources::CURSOR_API_KEY_KMS_ALIAS.into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());
@@ -261,6 +272,10 @@ impl MailEnv {
 /// `DAYTONA_API_KEY=... DEV_DANGEROUS_LOCAL_CONTAINERS=false just run_local`.
 /// `GITHUB_TOKEN` is left to Doppler / process env so a local sandbox can
 /// still clone.
+///
+/// Two managed bots: `@coder` (`HARNESS_BOT_ID`) gets a sandbox from the
+/// local Docker provider, and `@macro` (`INMEM_BOT_ID`) runs in-process on
+/// the in-memory ACP runtime.
 struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
@@ -286,6 +301,12 @@ impl AgentHarnessEnv {
 
     fn write(&self, env: &mut BTreeMap<String, String>) {
         env.insert("HARNESS_BOT_ID".into(), self.bot_id.into());
+        // bot_id::MACRO_AI_BOT_ID: @macro's sessions run on the in-process
+        // ACP runtime, while @coder's get sandboxes from the local provider.
+        env.insert(
+            "INMEM_BOT_ID".into(),
+            "00000000-0000-0000-0000-00000000a1a1".into(),
+        );
         env.insert("DAYTONA_SNAPSHOT".into(), self.snapshot.into());
         env.insert("DAYTONA_API_KEY".into(), String::new());
         env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());
@@ -324,7 +345,15 @@ impl ServiceAuthEnv {
             identity::INTERNAL_AUTH_KEY.into(),
         );
         env.insert(
+            "INTERNAL_API_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
+        env.insert(
             "INTERNAL_AUTH_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
+        env.insert(
+            "AUTHENTICATION_SERVICE_SECRET_KEY".into(),
             identity::INTERNAL_AUTH_KEY.into(),
         );
         env.insert(
@@ -428,16 +457,6 @@ impl BootStubEnv {
         env.insert(
             "MACRO_DB_URL".into(),
             "postgres://user:password@postgres:5432/macrodb".into(),
-        );
-        // services validating the shared internal auth header.
-        env.insert(
-            "INTERNAL_API_KEY".into(),
-            identity::INTERNAL_AUTH_KEY.into(),
-        );
-        // document_cognition_service's soup client (internal HMAC).
-        env.insert(
-            "AUTHENTICATION_SERVICE_SECRET_KEY".into(),
-            identity::INTERNAL_AUTH_KEY.into(),
         );
         // search_processing_service; the local cluster has the security plugin
         // disabled so these are accepted but ignored (same as opensearch.rs).

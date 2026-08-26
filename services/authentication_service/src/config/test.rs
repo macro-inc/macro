@@ -139,3 +139,46 @@ fn microsoft_token_kms_key_id(value: Option<&'static str>) -> MicrosoftTokenKmsK
         None => MicrosoftTokenKmsKeyId::new_unset(),
     }
 }
+
+#[test]
+fn cursor_kms_key_from_config_field() {
+    let configured = CursorApiKeyKmsKeyId::new_testing("arn:aws:kms:from-config");
+    assert_eq!(
+        resolve_cursor_api_key_kms_key_id(&configured, None).unwrap(),
+        "arn:aws:kms:from-config"
+    );
+}
+
+#[test]
+fn cursor_kms_key_from_process_env_when_config_unset() {
+    let configured = CursorApiKeyKmsKeyId::new_unset();
+    assert_eq!(
+        resolve_cursor_api_key_kms_key_id(&configured, Some("arn:aws:kms:from-env")).unwrap(),
+        "arn:aws:kms:from-env"
+    );
+}
+
+#[test]
+fn cursor_kms_key_prefers_config_over_process_env() {
+    let configured = CursorApiKeyKmsKeyId::new_testing("arn:aws:kms:from-config");
+    assert_eq!(
+        resolve_cursor_api_key_kms_key_id(&configured, Some("arn:aws:kms:from-env")).unwrap(),
+        "arn:aws:kms:from-config"
+    );
+}
+
+#[test]
+fn cursor_kms_key_blank_config_falls_back_to_process_env() {
+    let configured = CursorApiKeyKmsKeyId::new_testing("  ");
+    assert_eq!(
+        resolve_cursor_api_key_kms_key_id(&configured, Some("arn:aws:kms:from-env")).unwrap(),
+        "arn:aws:kms:from-env"
+    );
+}
+
+#[test]
+fn cursor_kms_key_required_when_both_absent() {
+    let configured = CursorApiKeyKmsKeyId::new_unset();
+    let error = resolve_cursor_api_key_kms_key_id(&configured, None).unwrap_err();
+    assert!(error.to_string().contains("CURSOR_API_KEY_KMS_KEY_ID"));
+}

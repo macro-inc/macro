@@ -407,8 +407,7 @@ export class Sdk extends HeyApiClient {
     /**
      * Browse or search the catalog of connectable apps.
      *
-     * Curated priority connectors come first (flagged `priority`), followed by
-     * results from Pipedream's app directory.
+     * Results come from Pipedream's app directory, most popular first.
      */
     public browsePipedreamMcpCatalog<ThrowOnError extends boolean = false>(options?: Options<BrowsePipedreamMcpCatalogData, ThrowOnError>): RequestResult<BrowsePipedreamMcpCatalogResponses, BrowsePipedreamMcpCatalogErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<BrowsePipedreamMcpCatalogResponses, BrowsePipedreamMcpCatalogErrors, ThrowOnError>({ url: '/pipedream/mcp/catalog', ...options });

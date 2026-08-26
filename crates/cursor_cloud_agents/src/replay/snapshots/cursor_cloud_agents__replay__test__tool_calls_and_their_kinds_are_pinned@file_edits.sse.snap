@@ -1,0 +1,31 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 199
+expression: calls
+input_file: crates/cursor_acp/fixtures/real/file_edits.sse
+---
+[
+    "tool_call \"file_search\" kind=Search status=InProgress",
+    "  update   Some(\"file_search\") kind=Some(Search) status=Some(InProgress)",
+    "tool_call \"read_file\" kind=Read status=InProgress",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(InProgress)",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(Completed)",
+    "tool_call \"file_search\" kind=Search status=InProgress",
+    "  update   Some(\"file_search\") kind=Some(Search) status=Some(InProgress)",
+    "  update   Some(\"file_search\") kind=Some(Search) status=Some(Completed)",
+    "  update   Some(\"file_search\") kind=Some(Search) status=Some(Completed)",
+    "tool_call \"edit_file\" kind=Edit status=InProgress",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(InProgress)",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(InProgress)",
+    "tool_call \"edit_file\" kind=Edit status=InProgress",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(InProgress)",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(InProgress)",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(Completed)",
+    "  update   Some(\"edit_file\") kind=Some(Edit) status=Some(Completed)",
+    "tool_call \"read_file\" kind=Read status=InProgress",
+    "tool_call \"read_file\" kind=Read status=InProgress",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(InProgress)",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(InProgress)",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(Completed)",
+    "  update   Some(\"read_file\") kind=Some(Read) status=Some(Completed)",
+]

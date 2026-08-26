@@ -113,6 +113,7 @@ export type AgentSessionResponse = {
      * When the session was created.
      */
     createdAt: string;
+    external?: null | ExternalSessionResponse;
     /**
      * Harness slug.
      */
@@ -272,6 +273,24 @@ export type CreateSessionThread = {
      * is how a top-level mention roots its own thread.
      */
     threadId?: string | null;
+};
+
+/**
+ * The provider-side identity of an externally-served session.
+ */
+export type ExternalSessionResponse = {
+    /**
+     * The provider's display name for the agent, when it reported one.
+     */
+    name?: string | null;
+    /**
+     * Which provider serves the session, e.g. `cursor`.
+     */
+    provider: string;
+    /**
+     * The agent's page on the provider's site, for a client to link out to.
+     */
+    url?: string | null;
 };
 
 /**

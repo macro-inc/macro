@@ -16,6 +16,7 @@ serde_json = { workspace = true }
 # the orchestrator builds against the same crate graph as the services it
 # launches.
 aws-sdk-dynamodb = { workspace = true }
+aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 clap = { workspace = true }

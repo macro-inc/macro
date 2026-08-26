@@ -202,6 +202,7 @@ deny = [
   { crate = "tracing-subscriber", wrappers = [
     "channels",                  # Dev logging only
     "coding_agent_worker",       # Standalone daemon logging setup
+    "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber

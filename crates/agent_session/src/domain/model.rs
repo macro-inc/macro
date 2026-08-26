@@ -92,6 +92,10 @@ pub struct AgentSession {
     pub sandbox_size: SandboxSize,
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
+    /// The provider-side identity, when an external provider serves this
+    /// session. `None` for sandboxed sessions and for external sessions
+    /// whose agent has not been minted yet.
+    pub external: Option<ExternalSession>,
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
@@ -104,6 +108,25 @@ pub struct AgentSessionRenamed {
     pub agent_session_id: AgentSessionId,
     /// New user-facing name.
     pub name: String,
+}
+
+/// The provider-side identity of a session served by an external provider.
+///
+/// For a Cursor-backed session this is the cloud agent: its `bc-…` id, the
+/// display name Cursor derived from the prompt, and its page on cursor.com.
+/// The stored row is the only durable record of the mapping — Cursor's API
+/// has no labels to recover it from — which is why this exists as data
+/// rather than being re-derived.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalSession {
+    /// Which provider serves the session, e.g. `cursor`.
+    pub provider: String,
+    /// The provider's id for the agent, e.g. `bc-…`.
+    pub external_id: String,
+    /// The provider's display name for the agent, when it reported one.
+    pub external_name: Option<String>,
+    /// The agent's page on the provider's site, for opening it there.
+    pub external_url: Option<String>,
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.
