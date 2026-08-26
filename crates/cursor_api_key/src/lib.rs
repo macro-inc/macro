@@ -14,7 +14,7 @@
 //!
 //! # Threat model
 //!
-//! The row is not the exposure. A `cursor_api_keys` row is a KMS ciphertext
+//! The row is not the exposure. A `cursor_configs` row is a KMS ciphertext
 //! blob, useless without a KMS call that IAM gates and CloudTrail records, and
 //! bound by its encryption context to exactly one user — so a row copied into
 //! another user's id does not decrypt. What is worth worrying about is

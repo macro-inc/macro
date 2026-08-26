@@ -5,36 +5,6 @@ mod test;
 
 use serde::{Deserialize, Serialize};
 
-/// The identity of one ACP session as this agent knows it.
-///
-/// Minted by the agent on `session/new` and echoed by the client on every
-/// prompt. It is deliberately not the Cursor agent id: the ACP session exists
-/// before the first prompt, while Cursor only mints an agent once there is a
-/// prompt to run.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct AcpSessionId(String);
-
-impl AcpSessionId {
-    /// Wrap an existing session id string.
-    #[must_use]
-    pub fn new(id: impl Into<String>) -> Self {
-        Self(id.into())
-    }
-
-    /// The id as the string the wire uses.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for AcpSessionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
-
 /// The identity of a Cursor cloud agent (`bc-…`), which holds the
 /// conversation across runs.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

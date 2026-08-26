@@ -90,15 +90,6 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
       name: 'ENVIRONMENT',
       value: stack,
     },
-    ...(stack === 'dev'
-      ? [
-          {
-            // bot_id::MACRO_AI_BOT_ID: @macro runs on the in-process runtime.
-            name: 'INMEM_BOT_ID',
-            value: '00000000-0000-0000-0000-00000000a1a1',
-          },
-        ]
-      : []),
     // Datadog
     {
       name: 'DD_SERVICE',

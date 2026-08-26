@@ -119,6 +119,12 @@ export type CreateUserRequest = {
  */
 export type CursorApiKeyStatus = {
     /**
+     * The Cursor model id this user's sessions start on, when they have
+     * chosen one. `None` means the deployment default is in effect — the
+     * settings dropdown shows that as its resting value.
+     */
+    defaultModelId?: string | null;
+    /**
      * Whether this user has a key stored.
      */
     registered: boolean;
@@ -126,6 +132,34 @@ export type CursorApiKeyStatus = {
      * When the stored key was last replaced, if there is one.
      */
     updatedAt?: string | null;
+};
+
+/**
+ * One model the settings dropdown can offer.
+ *
+ * Just id and name: the dropdown lists models, not the hundreds of parameter
+ * variants each carries. The chosen id's parameters are resolved to Cursor's
+ * default variant at session start.
+ */
+export type CursorModelOption = {
+    /**
+     * The human-readable name, e.g. `Cursor Grok 4.6`.
+     */
+    displayName: string;
+    /**
+     * The id to store and send, e.g. `grok-4.6`.
+     */
+    id: string;
+};
+
+/**
+ * The models this account may choose from.
+ */
+export type CursorModelsResponse = {
+    /**
+     * The offered models, in the order Cursor returned them.
+     */
+    models: Array<CursorModelOption>;
 };
 
 /**
@@ -712,6 +746,17 @@ export type PutCursorApiKeyRequest = {
     apiKey: string;
 };
 
+/**
+ * The model the user chose for their sessions.
+ */
+export type PutCursorDefaultModelRequest = {
+    /**
+     * A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and
+     * fall back to the deployment default.
+     */
+    modelId?: string | null;
+};
+
 export type PutUserNameQueryParams = {
     /**
      * First Name of user
@@ -1038,6 +1083,49 @@ export type PutCursorApiKeyResponses = {
 };
 
 export type PutCursorApiKeyResponse = PutCursorApiKeyResponses[keyof PutCursorApiKeyResponses];
+
+export type PutCursorDefaultModelData = {
+    body: PutCursorDefaultModelRequest;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key/default-model';
+};
+
+export type PutCursorDefaultModelErrors = {
+    401: string;
+    403: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type PutCursorDefaultModelError = PutCursorDefaultModelErrors[keyof PutCursorDefaultModelErrors];
+
+export type PutCursorDefaultModelResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type PutCursorDefaultModelResponse = PutCursorDefaultModelResponses[keyof PutCursorDefaultModelResponses];
+
+export type ListCursorModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key/models';
+};
+
+export type ListCursorModelsErrors = {
+    401: string;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type ListCursorModelsError = ListCursorModelsErrors[keyof ListCursorModelsErrors];
+
+export type ListCursorModelsResponses = {
+    200: CursorModelsResponse;
+};
+
+export type ListCursorModelsResponse = ListCursorModelsResponses[keyof ListCursorModelsResponses];
 
 export type VerifyFusionauthUserEmailData = {
     body?: never;

@@ -29,6 +29,7 @@ return_passwordless_code = []
 
 [dependencies]
 cursor_api_key = { path = "../../crates/cursor_api_key" }
+cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 aes-gcm = { workspace = true }
 calendar_events = { path = "../../crates/calendar_events" }
 analytics_client = { path = "../../crates/analytics_client" }
