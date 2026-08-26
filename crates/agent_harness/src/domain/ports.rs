@@ -30,6 +30,17 @@ pub trait ChannelPromptContext: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<PriorChannelMessage>>> + Send;
 }
 
+/// Composes an agent prompt from raw markdown and optional channel history.
+pub trait AgentPromptComposer: Send + Sync + 'static {
+    /// Return the markdown that should be delivered to the agent runtime.
+    /// `None` sanitizes a prompt without adding a channel-context node.
+    fn compose(
+        &self,
+        prompt_markdown: &str,
+        messages: Option<&[PriorChannelMessage]>,
+    ) -> impl Future<Output = Result<String>> + Send;
+}
+
 /// Posts a pointer to a new agent session into its originating thread.
 pub trait SessionAnnouncer: Send + Sync + 'static {
     /// Publish one session announcement.

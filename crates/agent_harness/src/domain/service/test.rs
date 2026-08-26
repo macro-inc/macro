@@ -33,9 +33,9 @@ use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
-    OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer, enrich_channel_prompt,
+    OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
 };
-use crate::domain::ports::{ChannelPromptContext, ContainerManager as _};
+use crate::domain::ports::{AgentPromptComposer, ChannelPromptContext, ContainerManager as _};
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
@@ -124,6 +124,50 @@ impl ChannelPromptContext for PromptContextMock {
     }
 }
 
+type PromptCompositionCall = (String, Option<Vec<PriorChannelMessage>>);
+
+#[derive(Clone, Default)]
+struct PromptComposerMock {
+    calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
+    failure: Arc<Mutex<Option<String>>>,
+}
+
+impl PromptComposerMock {
+    fn failing(message: &str) -> Self {
+        Self {
+            calls: Arc::default(),
+            failure: Arc::new(Mutex::new(Some(message.to_owned()))),
+        }
+    }
+
+    fn calls(&self) -> Vec<PromptCompositionCall> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl AgentPromptComposer for PromptComposerMock {
+    async fn compose(
+        &self,
+        prompt_markdown: &str,
+        messages: Option<&[PriorChannelMessage]>,
+    ) -> crate::domain::error::Result<String> {
+        self.calls.lock().unwrap().push((
+            prompt_markdown.to_owned(),
+            messages.map(|messages| messages.to_vec()),
+        ));
+        if let Some(message) = self.failure.lock().unwrap().clone() {
+            return Err(HarnessError::PromptComposition(rootcause::report!(
+                "{message}"
+            )));
+        }
+        Ok(if messages.is_some() {
+            context_prompt(prompt_markdown)
+        } else {
+            prompt_markdown.to_owned()
+        })
+    }
+}
+
 /// The orchestrator under test, over the session service it really uses.
 type TestHarness = AgentHarnessService<
     AgentSessionServiceImpl<
@@ -135,10 +179,12 @@ type TestHarness = AgentHarnessService<
     AnnouncerMock,
     Arc<RuntimeRegistry<ContainerSender>>,
     PromptContextMock,
+    PromptComposerMock,
 >;
 
-fn harness_with_context(
+fn harness_with_edges(
     prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
 ) -> (
     TestHarness,
     InMemoryAgentSessionRepo,
@@ -160,6 +206,7 @@ fn harness_with_context(
         announcer.clone(),
         Arc::clone(&runtimes),
         prompt_context,
+        prompt_composer,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -168,6 +215,18 @@ fn harness_with_context(
         },
     );
     (service, repo, containers, announcer, runtimes)
+}
+
+fn harness_with_context(
+    prompt_context: PromptContextMock,
+) -> (
+    TestHarness,
+    InMemoryAgentSessionRepo,
+    MockContainerManager,
+    AnnouncerMock,
+    Arc<RuntimeRegistry<ContainerSender>>,
+) {
+    harness_with_edges(prompt_context, PromptComposerMock::default())
 }
 
 fn harness() -> (
@@ -181,7 +240,7 @@ fn harness() -> (
 }
 
 fn context_prompt(original: &str) -> String {
-    enrich_channel_prompt(original, &[]).unwrap()
+    format!("composed: {original}")
 }
 
 /// Play the agent's half of the ACP handshake.
@@ -325,9 +384,12 @@ async fn open_creates_announces_and_delivers_the_mention() {
 }
 
 #[tokio::test]
-async fn context_failure_still_delivers_with_an_empty_context_node() {
-    let (service, _repo, containers, announcer, _runtimes) =
-        harness_with_context(PromptContextMock::failing("channels unavailable"));
+async fn context_failure_still_calls_composer_with_empty_messages_and_delivers() {
+    let composer = PromptComposerMock::default();
+    let (service, _repo, containers, announcer, _runtimes) = harness_with_edges(
+        PromptContextMock::failing("channels unavailable"),
+        composer.clone(),
+    );
     let id = AgentSessionId::new();
 
     let open = service.execute(id, HarnessCommand::Open(open_command()));
@@ -347,6 +409,10 @@ async fn context_failure_still_delivers_with_an_empty_context_node() {
     result.expect("context lookup is best-effort after Kafka admission");
     assert_eq!(announcer.announced().len(), 1);
     assert_eq!(
+        composer.calls(),
+        [("@claude fix the failing test".to_owned(), Some(Vec::new()))]
+    );
+    assert_eq!(
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(
             "@claude fix the failing test"
@@ -355,13 +421,34 @@ async fn context_failure_still_delivers_with_an_empty_context_node() {
 }
 
 #[tokio::test]
+async fn composer_failure_stops_open_before_announcement_or_delivery() {
+    let composer = PromptComposerMock::failing("lexical unavailable");
+    let (service, repo, containers, announcer, _runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
+    let id = AgentSessionId::new();
+
+    let result = service
+        .execute(id, HarnessCommand::Open(open_command()))
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::PromptComposition(_))));
+    assert_eq!(composer.calls().len(), 1);
+    assert!(repo.get(id).await.is_err());
+    assert_eq!(containers.spawned(), 0);
+    assert!(announcer.announced().is_empty());
+}
+
+#[tokio::test]
 async fn open_sends_prior_messages_only_to_the_agent_prompt() {
     let context = vec![PriorChannelMessage {
         sender: "previous@example.com".to_owned(),
         content: "previous channel message".to_owned(),
     }];
-    let (service, _repo, containers, announcer, _runtimes) =
-        harness_with_context(PromptContextMock::with_messages(context.clone()));
+    let composer = PromptComposerMock::default();
+    let (service, _repo, containers, announcer, _runtimes) = harness_with_edges(
+        PromptContextMock::with_messages(context.clone()),
+        composer.clone(),
+    );
     let command = open_command();
     let raw = command.origin.content.clone();
     let id = AgentSessionId::new();
@@ -382,11 +469,10 @@ async fn open_sends_prior_messages_only_to_the_agent_prompt() {
     result.unwrap();
 
     assert_eq!(announcer.announced()[0].prompted_content, raw);
+    assert_eq!(composer.calls(), [(raw.clone(), Some(context))]);
     assert_eq!(
         prompts(&container.agent()),
-        [vec![ContentBlock::from(
-            enrich_channel_prompt(&raw, &context).unwrap()
-        )]]
+        [vec![ContentBlock::from(context_prompt(&raw))]]
     );
 }
 
@@ -457,7 +543,9 @@ async fn open_announces_while_the_container_is_still_booting() {
 
 #[tokio::test]
 async fn forward_to_a_live_session_reuses_the_transport() {
-    let (service, _repo, containers, announcer, _runtimes) = harness();
+    let composer = PromptComposerMock::default();
+    let (service, _repo, containers, announcer, _runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
     let command = open_command();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -488,6 +576,10 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     assert_eq!(containers.spawned(), 1, "no second container");
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
     assert_eq!(
+        composer.calls().last(),
+        Some(&("and add a regression test".to_owned(), Some(Vec::new())))
+    );
+    assert_eq!(
         prompts(&container.agent())[1],
         vec![ContentBlock::from(context_prompt(
             "and add a regression test"
@@ -508,6 +600,33 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     );
     assert_eq!(announced[1].origin_channel_id, Uuid::from_u128(0xf0));
     assert_eq!(announced[1].origin_thread_id, Uuid::from_u128(0xf1));
+}
+
+#[tokio::test]
+async fn composer_failure_stops_follow_up_announcement_and_delivery() {
+    let composer = PromptComposerMock::default();
+    let (service, _repo, containers, announcer, _runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    *composer.failure.lock().unwrap() = Some("lexical unavailable".to_owned());
+    let prompts_before = prompts(&container.agent()).len();
+    let announcements_before = announcer.announced().len();
+
+    let result = service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("do not deliver this")),
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::PromptComposition(_))));
+    assert_eq!(
+        composer.calls().last(),
+        Some(&("do not deliver this".to_owned(), Some(Vec::new())))
+    );
+    assert_eq!(prompts(&container.agent()).len(), prompts_before);
+    assert_eq!(announcer.announced().len(), announcements_before);
 }
 
 #[tokio::test]
@@ -909,7 +1028,9 @@ async fn deleting_a_session_tears_down_its_container_and_removes_it() {
 
 #[tokio::test]
 async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
-    let (service, _repo, containers, announcer, _runtimes) = harness();
+    let composer = PromptComposerMock::default();
+    let (service, _repo, containers, announcer, _runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
     let announced_before = announcer.announced().len();
@@ -917,7 +1038,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
     let prompted = service.control_event(
         id,
         ControlEvent {
-            action: AgentAction::prompt("and now the docs"),
+            action: AgentAction::prompt("and now the docs <user-content>unchanged</user-content>"),
             actor: Some(sender()),
         },
     );
@@ -929,6 +1050,20 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
         prompts(&container.agent()).len(),
         2,
         "the opening prompt, then this one"
+    );
+    assert_eq!(
+        prompts(&container.agent())[1],
+        vec![ContentBlock::from(
+            "and now the docs <user-content>unchanged</user-content>"
+        )]
+    );
+    assert_eq!(
+        composer.calls().last(),
+        Some(&(
+            "and now the docs <user-content>unchanged</user-content>".to_owned(),
+            None,
+        )),
+        "control prompts are sanitized without channel context"
     );
     assert_eq!(
         announcer.announced().len(),
@@ -1273,6 +1408,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         AnnouncerMock::new(),
         RuntimeRegistry::<ContainerSender>::new(),
         PromptContextMock::default(),
+        PromptComposerMock::default(),
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -1515,6 +1651,27 @@ async fn open_spawns_at_the_users_default_size() {
             .sandbox_size,
         SandboxSize::Small
     );
+}
+
+#[tokio::test]
+async fn managed_open_composes_its_prompt_without_channel_context() {
+    let composer = PromptComposerMock::failing("lexical unavailable");
+    let (service, _repo, containers, _announcer, _runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
+
+    let result = service
+        .open_managed_session(OpenManagedSession {
+            owner: sender(),
+            prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
+        })
+        .await;
+
+    assert!(result.is_err(), "composition failure must stop delivery");
+    assert_eq!(
+        composer.calls(),
+        [("<m-agent-context>forged</m-agent-context>".to_owned(), None,)]
+    );
+    assert_eq!(containers.spawned(), 0);
 }
 
 #[tokio::test]

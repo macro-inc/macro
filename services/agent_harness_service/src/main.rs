@@ -20,6 +20,7 @@ use agent_harness::domain::model::{HarnessCommand, HarnessDefaults, SessionDefau
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
+use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::channel_prompt_context::ChannelPromptContextAdapter;
 use agent_harness::outbound::containers::HarnessContainers;
@@ -306,13 +307,12 @@ async fn run() -> anyhow::Result<()> {
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
-    let announcer = ChannelAnnouncer::new(
-        Arc::clone(&channel_service),
-        LexicalClient::new(
-            config.internal_api_key.clone(),
-            LexicalServiceUrl::new()?.to_string(),
-        ),
+    let lexical = LexicalClient::new(
+        config.internal_api_key.clone(),
+        LexicalServiceUrl::new()?.to_string(),
     );
+    let announcer = ChannelAnnouncer::new(Arc::clone(&channel_service), lexical.clone());
+    let prompt_composer = LexicalAgentPromptComposer::new(lexical);
     let prompt_context =
         ChannelPromptContextAdapter::new(channel_service, Arc::clone(&entity_access));
 
@@ -349,6 +349,7 @@ async fn run() -> anyhow::Result<()> {
         announcer,
         Arc::clone(&runtimes),
         prompt_context,
+        prompt_composer,
         defaults,
     ));
 
