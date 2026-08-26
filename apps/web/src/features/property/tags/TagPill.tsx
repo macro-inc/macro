@@ -18,7 +18,7 @@ export function tagPillClasses(className?: string): string {
   return badgeTriggerClasses({
     variant: 'outline',
     size: 'sm',
-    class: cn('min-w-0 bg-surface text-ink-muted transition-colors', className),
+    class: cn('min-w-0 text-ink-muted transition-colors', className),
   });
 }
 

@@ -338,14 +338,14 @@ function ThemeDebug() {
                     Content samples · size="sm"
                   </span>
                   <div class="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" size="sm" class="bg-surface">
+                    <Badge variant="outline" size="sm">
                       <span
                         aria-hidden="true"
                         class="size-2 rounded-full bg-blue"
                       />
                       tags
                     </Badge>
-                    <Badge variant="outline" size="sm" class="bg-surface">
+                    <Badge variant="outline" size="sm">
                       <span
                         aria-hidden="true"
                         class="size-2 rounded-full bg-pink"

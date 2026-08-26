@@ -31,10 +31,10 @@ export function PropertyPill(props: PropertyPillProps) {
 
   const classes = () => {
     const options = {
-      variant: local.variant ?? 'outline',
+      variant: local.variant ?? 'ghost',
       size: local.size ?? 'sm',
       class: cn(
-        'max-w-full bg-surface text-left',
+        'max-w-full text-left',
         isEmpty() && 'text-ink-extra-muted',
         local.class
       ),

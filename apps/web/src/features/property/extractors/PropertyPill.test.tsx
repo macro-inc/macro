@@ -47,7 +47,7 @@ function context(
 afterEach(cleanup);
 
 describe('PropertyPill', () => {
-  it('uses the interactive outline/sm contract when editable', async () => {
+  it('uses the interactive ghost/sm contract when editable', async () => {
     const onEdit = vi.fn();
 
     render(() => (
@@ -58,9 +58,10 @@ describe('PropertyPill', () => {
 
     const pill = screen.getByRole('button', { name: 'Status' });
     expect(pill.classList).toContain('h-6');
-    expect(pill.classList).toContain('border-edge-muted');
+    expect(pill.classList).toContain('border-transparent');
+    expect(pill.classList).toContain('bg-transparent');
     expect(pill.classList).toContain('rounded-full');
-    expect(pill.classList).toContain('not-disabled:hover:bg-hover');
+    expect(pill.classList).toContain('not-disabled:hover:overlay-hover');
 
     await fireEvent.click(pill);
     expect(onEdit).toHaveBeenCalledOnce();
@@ -74,7 +75,7 @@ describe('PropertyPill', () => {
     ));
 
     const pill = screen.getByRole('button', { name: 'Status' });
-    expect(pill.classList).not.toContain('not-disabled:hover:bg-hover');
+    expect(pill.classList).not.toContain('not-disabled:hover:overlay-hover');
     expect(pill.getAttribute('aria-disabled')).toBe('true');
     expect(pill.dataset.readonly).toBe('');
   });

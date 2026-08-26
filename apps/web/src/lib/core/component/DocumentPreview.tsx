@@ -434,9 +434,9 @@ function PreviewPropertyPill(props: {
     <Property.Root property={props.property}>
       <Layer depth={2}>
         <Badge
-          variant="outline"
+          variant="ghost"
           size="sm"
-          class="min-w-0 max-w-full gap-1.5 bg-surface text-left"
+          class="min-w-0 max-w-full gap-1.5 text-left"
         >
           <Switch
             fallback={

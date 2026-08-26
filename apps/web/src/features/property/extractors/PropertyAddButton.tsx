@@ -35,9 +35,9 @@ export function PropertyAddButton(props: Props) {
       onClick={handleClick}
       disabled={isReadOnly()}
       class={badgeTriggerClasses({
-        variant: 'outline',
+        variant: 'ghost',
         size: 'sm',
-        class: cn('size-6 bg-surface p-0', props.class),
+        class: cn('size-6 p-0', props.class),
       })}
       aria-label={`Add ${ctx.property().displayName}`}
     >

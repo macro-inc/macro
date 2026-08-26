@@ -244,7 +244,7 @@ function TagOverflow(props: {
           triggerClass={badgeTriggerClasses({
             variant: 'outline',
             size: 'sm',
-            class: 'max-w-[14ch] gap-1.5 bg-surface',
+            class: 'max-w-[14ch] gap-1.5',
           })}
           triggerLabel="Edit tags"
           onOpenChange={setPickerOpen}
@@ -353,7 +353,7 @@ export function InlineTagsPill(props: {
             variant: 'outline',
             size: 'sm',
             class: cn(
-              'min-w-0 gap-1.5 bg-surface text-left',
+              'min-w-0 gap-1.5 text-left',
               tags().length === 0 && 'text-ink-extra-muted',
               props.class
             ),

@@ -371,11 +371,11 @@ function AddPinnedPropertyButton() {
   return (
     <Button
       type="button"
-      variant="outline"
+      variant="ghost"
       size="sm"
       noTouchResize
       onClick={openPropertySelector}
-      class="m-px rounded-full bg-surface"
+      class="m-px rounded-full"
     >
       <Plus class="size-3" />
       <span>Add property</span>
@@ -704,11 +704,7 @@ function MultiValue(props: { property: Property }) {
               property={props.property}
               renderChip={(chip) => (
                 <Layer depth={2}>
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    class="max-w-35 bg-surface"
-                  >
+                  <Badge variant="ghost" size="sm" class="max-w-35">
                     <PropertyValueIcon
                       optionId={chip.key}
                       class="size-3 shrink-0"
@@ -772,7 +768,7 @@ function NonUserEntityValue(props: { property: Property }) {
         when={!isReadOnly()}
         fallback={
           <Show when={entities().length === 0}>
-            <Badge variant="outline" size="sm" class="bg-surface">
+            <Badge variant="ghost" size="sm">
               <SidePanel.EmptyPill />
             </Badge>
           </Show>
@@ -781,10 +777,10 @@ function NonUserEntityValue(props: { property: Property }) {
         <Show when={entities().length === 0 || props.property.isMultiSelect}>
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             depth={0}
             size="icon-sm"
-            class="rounded-full bg-surface"
+            class="rounded-full"
             aria-label={`Add ${props.property.displayName}`}
             onClick={(event) => {
               event.stopPropagation();

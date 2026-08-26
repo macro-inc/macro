@@ -54,7 +54,7 @@ function TagChip(props: {
               <Badge
                 variant="outline"
                 size="sm"
-                class="m-px min-w-0 max-w-[30ch] gap-1.5 bg-surface cursor-default"
+                class="m-px min-w-0 max-w-[30ch] gap-1.5 cursor-default"
               >
                 <TagDot color={props.tag.color} />
                 <span class="min-w-0 truncate">{props.tag.label}</span>
@@ -154,7 +154,7 @@ export function TagsRow(props: {
               triggerClass={badgeTriggerClasses({
                 variant: 'outline',
                 size: 'sm',
-                class: 'm-px gap-1.5 bg-surface',
+                class: 'm-px gap-1.5',
               })}
               triggerLabel="Add tags"
             >
@@ -168,7 +168,7 @@ export function TagsRow(props: {
               triggerClass={badgeTriggerClasses({
                 variant: 'outline',
                 size: 'sm',
-                class: 'm-px size-6 bg-surface p-0',
+                class: 'm-px size-6 p-0',
               })}
               triggerLabel="Add tags"
             >

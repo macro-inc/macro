@@ -58,7 +58,7 @@ export const PropertyChips: Component<Props> = (props) => {
   const renderChip =
     props.renderChip ??
     ((chip: ChipInfo) => (
-      <Badge variant="outline" size="sm" class="max-w-full bg-surface">
+      <Badge variant="ghost" size="sm" class="max-w-full">
         <Show when={isSelectProperty(props.property)}>
           <PropertyIcon property={props.property} class="size-3 shrink-0" />
         </Show>
