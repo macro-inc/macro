@@ -68,9 +68,12 @@ export function Dialog(props: DialogProps) {
       <KobalteDialog.Portal>
         <KobalteDialog.Overlay
           class={cn(
-            'invisible fixed inset-0 z-modal bg-modal-overlay',
+            // Every floating dialog dims the page behind it with the accent
+            // sheen; `visibleScrim` layers the heavier legacy coat on top for
+            // destructive flows (its background-color wins over the scrim's).
+            'fixed inset-0 z-modal scrim-glass',
             animateOnOpen() && 'dialog-overlay-open-animation',
-            Boolean(props.visibleScrim) && 'visible'
+            Boolean(props.visibleScrim) && 'bg-modal-overlay'
           )}
         />
         <div

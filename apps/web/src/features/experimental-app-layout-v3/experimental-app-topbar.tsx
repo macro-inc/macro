@@ -412,7 +412,7 @@ export function ExperimentalAppTopBar() {
                 type="button"
                 aria-label={`Open ${destination.label} in a split`}
                 class={cn(
-                  'flex size-10 shrink-0 items-center justify-center rounded-full bg-ink/5 outline-none transition-colors hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-accent/40',
+                  'glass flex size-10 shrink-0 items-center justify-center rounded-full bg-ink/5 outline-none transition-colors hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-accent/40',
                   isActive(destination) ? 'text-accent' : 'text-ink'
                 )}
                 {...pressHandlers(() => openAsSplit(destination))}
@@ -435,7 +435,9 @@ export function ExperimentalAppTopBar() {
           placement="bottom-end"
         >
           <Tooltip label="Macro apps">
+            {/* icon-md so the Button picks the medium glass its neighbors wear */}
             <Dropdown.Trigger
+              size="icon-md"
               class="!size-10 shrink-0 rounded-full bg-ink/5 px-0"
               aria-label="Macro apps"
             >
@@ -467,7 +469,7 @@ export function ExperimentalAppTopBar() {
           <button
             type="button"
             aria-label="Settings"
-            class="flex size-10 shrink-0 items-center justify-center rounded-full bg-ink/5 text-ink outline-none transition-colors hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-accent/40"
+            class="glass flex size-10 shrink-0 items-center justify-center rounded-full bg-ink/5 text-ink outline-none transition-colors hover:bg-ink/10 focus-visible:ring-2 focus-visible:ring-accent/40"
             {...pressHandlers(() => openSettings('Account'))}
           >
             <GearIcon class="size-5" />

@@ -2,7 +2,6 @@ import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { buildBrainWorkspacePath } from '@components/app/split-layout/brainWorkspaceRoute';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import ActivityIcon from '@phosphor/bell.svg';
-import BrainIcon from '@phosphor/brain.svg';
 import CrmIcon from '@phosphor/buildings.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ChatIcon from '@phosphor/chats-circle.svg';
@@ -11,7 +10,6 @@ import TasksIcon from '@phosphor/list-checks.svg';
 import DriveIcon from '@phosphor/shipping-container.svg';
 import AiChatIcon from '@phosphor/sparkle.svg';
 import ActivityFilledIcon from '@phosphor-icons/core/assets/fill/bell-fill.svg';
-import BrainFilledIcon from '@phosphor-icons/core/assets/fill/brain-fill.svg';
 import CrmFilledIcon from '@phosphor-icons/core/assets/fill/buildings-fill.svg';
 import CalendarFilledIcon from '@phosphor-icons/core/assets/fill/calendar-blank-fill.svg';
 import ChatFilledIcon from '@phosphor-icons/core/assets/fill/chats-circle-fill.svg';
@@ -130,8 +128,9 @@ export const TOP_BAR_VIEWS: readonly TopBarDestination[] = [
     label: 'Brain',
     content: { type: 'component', id: 'agents' },
     path: buildBrainWorkspacePath(undefined),
-    icon: BrainIcon,
-    filledIcon: BrainFilledIcon,
+    // The AI sparkle rather than an anatomy glyph: Brain is the AI home.
+    icon: AiChatIcon,
+    filledIcon: AiChatFilledIcon,
   },
   componentDestination({
     id: 'crm',
