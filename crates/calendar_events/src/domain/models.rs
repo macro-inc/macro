@@ -322,9 +322,6 @@ pub struct CalendarAttendee {
     /// Whether attendance is optional.
     pub is_optional: bool,
     /// Whether this attendee is one of the viewing requester's inboxes.
-    ///
-    /// Outbound projections use the requester's owned inboxes only.
-    /// Persisted rows keep the provider's flag, which reminder decline reads.
     pub is_self: bool,
     /// Optional attendee comment.
     pub comment: Option<String>,

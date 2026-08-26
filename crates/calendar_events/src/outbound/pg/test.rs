@@ -2998,7 +2998,7 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         popup_reminders(&[10]),
     );
     declined.event.attendees = vec![CalendarAttendee {
-        email: "self@example.com".to_string(),
+        email: format!("calendar-{link_id}@example.com"),
         display_name: None,
         response_status: AttendeeResponseStatus::Declined,
         is_organizer: false,
