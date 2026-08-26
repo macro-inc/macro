@@ -27,6 +27,9 @@ export const ResizeZoneContext = createContext<ResizeZoneCtx>();
  *
  * @property direction - The direction of the zone. The direction of the flow, not the splits.
  * @property gutter - The size of gutters (in px).
+ * @property gutterHitSlop - Extra px of drag target on each side of a gutter.
+ *   Lets a hairline gutter stay grabbable; the overhang paints above the
+ *   neighbouring panels, so keep it small.
  * @property minSize - The zone-wide min size for a panel (in px). Individual panels can override.
  * @property class - Optional class name for the Zone.
  * @property id - Optional id for the Zone.
@@ -35,6 +38,7 @@ export const ResizeZoneContext = createContext<ResizeZoneCtx>();
 type ZoneProps = {
   direction: 'horizontal' | 'vertical';
   gutter?: number;
+  gutterHitSlop?: number;
   minSize?: number;
   class?: string;
   id?: string;
@@ -181,6 +185,7 @@ function Zone(props: ParentProps<ZoneProps>) {
                     index={actualIndex}
                     nudge={solver.moveHandle}
                     root={root}
+                    hitSlop={props.gutterHitSlop ?? 0}
                   />
                 </Show>
               );
@@ -402,12 +407,14 @@ function Panel(props: ParentProps<PanelProps>) {
  * @property offset - The offset position of the gutter in pixels
  * @property index - The index of the gutter in the layout
  * @property nudge - Function to call when the gutter is moved, with index and movement amount
+ * @property hitSlop - Extra px of drag target on each side of the gutter
  */
 type GutterProps = {
   offset: number;
   index: number;
   nudge: (index: number, amt: number) => void;
   root: () => HTMLDivElement | undefined;
+  hitSlop: number;
 };
 
 function Gutter(props: GutterProps) {
@@ -520,6 +527,28 @@ function Gutter(props: GutterProps) {
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
     >
+      {/* Overhangs the gutter so a hairline seam is still grabbable. Events
+          bubble to the gutter itself, and `cursor` inherits. */}
+      <Show when={props.hitSlop > 0}>
+        <div
+          class="absolute"
+          style={
+            ctx.direction() === 'horizontal'
+              ? {
+                  top: '0px',
+                  bottom: '0px',
+                  left: `-${props.hitSlop}px`,
+                  right: `-${props.hitSlop}px`,
+                }
+              : {
+                  left: '0px',
+                  right: '0px',
+                  top: `-${props.hitSlop}px`,
+                  bottom: `-${props.hitSlop}px`,
+                }
+          }
+        />
+      </Show>
       <div
         class={cn(
           'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',

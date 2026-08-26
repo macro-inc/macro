@@ -119,7 +119,7 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       </Tooltip>
       <Popover.Portal>
         <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-1.5 text-sm shadow-menu menu-open-animation">
+          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-1.5 text-sm glass-lg menu-open-animation">
             <Popover.Title class="sr-only">Event guests</Popover.Title>
             <Show
               when={props.selected.length > 0}
@@ -315,7 +315,7 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       <Combobox.Portal>
         <Layer depth={3}>
           <Combobox.Content
-            class="z-action-menu flex w-96 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge bg-menu p-0 text-sm shadow-menu menu-open-animation"
+            class="z-action-menu flex w-96 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge bg-menu-glass p-0 text-sm glass-lg menu-open-animation"
             on:keydown={(event: KeyboardEvent) => {
               if (event.key !== 'Escape') return;
               event.preventDefault();
@@ -516,7 +516,7 @@ export function EventComposerLocationPill(
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-2 shadow-menu menu-open-animation"
+            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass-lg menu-open-animation"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               queueMicrotask(() => input?.focus());

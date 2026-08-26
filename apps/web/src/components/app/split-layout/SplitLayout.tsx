@@ -42,6 +42,13 @@ import {
 import { splitMinWidthForContent } from './splitContentSizing';
 import { createSplitFocusTracker } from './splitFocusTracker';
 
+/** The gap between floating split cards. */
+const CARD_GUTTER_PX = 8;
+/** One border width, so a flat layout's seam matches every other hairline. */
+const SEAM_GUTTER_PX = 1;
+/** Widens the hairline's drag target without widening the seam itself. */
+const SEAM_GUTTER_HIT_SLOP_PX = 4;
+
 type SplitLayoutContainerProps = {
   pairs: string[];
   setManager: Setter<SplitManager | undefined>;
@@ -102,6 +109,13 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   // <For> on plain ids for stable referential equality
   const ids = createMemo(() => splits().map(({ id }) => id));
 
+  /**
+   * Flat layouts drop the card look: the zone paints the seam color, the
+   * panels sit flush on top of it, and each resize gutter narrows to a
+   * hairline so all that shows through is one border-width line.
+   */
+  const flatSeams = () => activeAppLayout().capabilities.flatSplitSeams;
+
   createLayoutUrlSync(
     splitManager,
     () => props.pairs,
@@ -122,9 +136,11 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       <div
         class={cn('size-full p-2 touch:p-0', {
           'pl-0':
+            !flatSeams() &&
             isSidebarVisible() &&
             (!sidebar.isCollapsed() ||
               activeAppLayout().capabilities.removesSplitContentLeftPadding),
+          'bg-edge-muted p-0': flatSeams(),
         })}
       >
         <Show
@@ -133,7 +149,8 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
             // Desktop: side-by-side resizable splits.
             <Resize.Zone
               direction="horizontal"
-              gutter={8}
+              gutter={flatSeams() ? SEAM_GUTTER_PX : CARD_GUTTER_PX}
+              gutterHitSlop={flatSeams() ? SEAM_GUTTER_HIT_SLOP_PX : 0}
               captureResizeCtx={splitManager.setResizeContext}
             >
               <For each={ids()}>

@@ -6,6 +6,10 @@ import {
 } from '@app/features/next-soup/filters/filter-store';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  splitChromeIsTinted,
+  splitOwnsIdentity,
+} from '@app/features/app-layout/split-chrome';
 import { ComposedSplitControls } from '@components/app/split-layout/composed/ComposedSplitControls';
 import { ComposedSplitHeader } from '@components/app/split-layout/composed/ComposedSplitHeader';
 import {
@@ -517,17 +521,22 @@ export function ExperimentalMessagesRail(props: ExperimentalMessagesRailProps) {
     <aside
       ref={sidebarRef}
       aria-label="Chat navigation"
-      class="relative flex h-full shrink-0 flex-col bg-ink/2 pb-5 pt-2"
+      class={cn(
+        'relative flex h-full shrink-0 flex-col pb-5 pt-2',
+        splitChromeIsTinted() && 'bg-ink/2'
+      )}
       style={{ width: `${effectiveMessagesSidebarWidth()}px` }}
     >
-      <ComposedSplitHeader class="mx-4 flex min-h-8 shrink-0 items-center @max-[720px]/experimental-soup:hidden">
-        <ComposedSplitControls />
-      </ComposedSplitHeader>
-      <div class="mx-4 mt-3 flex shrink-0 items-center @max-[720px]/experimental-soup:hidden">
-        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-          Chat
-        </h1>
-      </div>
+      <Show when={splitOwnsIdentity()}>
+        <ComposedSplitHeader class="mx-4 flex min-h-8 shrink-0 items-center @max-[720px]/experimental-soup:hidden">
+          <ComposedSplitControls />
+        </ComposedSplitHeader>
+        <div class="mx-4 mt-3 flex shrink-0 items-center @max-[720px]/experimental-soup:hidden">
+          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+            Chat
+          </h1>
+        </div>
+      </Show>
 
       <div
         class="mx-4 mt-3 grid h-9 shrink-0 grid-cols-2 gap-1 rounded-xl bg-ink/4 p-1 @max-[720px]/experimental-soup:mx-3 @max-[720px]/experimental-soup:mt-0 @max-[720px]/experimental-soup:h-[76px] @max-[720px]/experimental-soup:grid-cols-1"

@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
@@ -370,6 +371,16 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     return true;
   };
 
+  /**
+   * V3-style app chrome owns Tab and the digits for switching app views, so
+   * the in-view tabs give those keys up rather than shadowing them from the
+   * closer scope.
+   */
+  const tabKeysOwnedHere = () =>
+    !activeAppLayout().capabilities.chromeOwnsViewControls;
+
+  const tabKeysNavigable = () => tabKeysOwnedHere() && getTabKeys().length > 1;
+
   // 1-9 number keys to jump to specific tabs
   const tabNumberKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
   for (let i = 0; i < tabNumberKeys.length; i++) {
@@ -380,7 +391,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       scopeId,
       hotkeyToken: TOKENS.soup.tabs[key],
       description: `Switch to tab ${key}`,
-      condition: () => getTabKeys().length > index,
+      condition: () => tabKeysOwnedHere() && getTabKeys().length > index,
       keyDownHandler: () => switchToTabIndex(index),
       hide: true,
     }).withGroup(group);
@@ -409,7 +420,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     scopeId,
     hotkeyToken: TOKENS.soup.tabs.next,
     description: 'Next tab',
-    condition: () => getTabKeys().length > 1,
+    condition: tabKeysNavigable,
     keyDownHandler: () => {
       const view = currentView();
       if (!view) return false;
@@ -426,7 +437,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     scopeId,
     hotkeyToken: TOKENS.soup.tabs.prev,
     description: 'Previous tab',
-    condition: () => getTabKeys().length > 1,
+    condition: tabKeysNavigable,
     keyDownHandler: () => {
       const view = currentView();
       if (!view) return false;

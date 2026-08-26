@@ -1,33 +1,41 @@
+import { DOCS_BASE, LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
+import {
+  splitChromeIsTinted,
+  splitOwnsIdentity,
+  splitOwnsSearch,
+} from '@app/features/app-layout/split-chrome';
 import {
   describeSchedule,
   getDefaultTimezone,
   parseCron,
 } from '@app/features/block-automation/component/automationUtils';
 import {
+  buildDocumentTypeQuery,
+  getActiveDocumentTypeFilterIds,
+  isDocumentTypeFilterId,
+} from '@app/features/next-soup/filters/configs/document-type-query';
+import {
   defineQueryFilters,
   NIL_UUID,
 } from '@app/features/next-soup/filters/filter-store';
+import { registerViewSearch } from '@app/features/next-soup/soup-view/active-view-search';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import {
-  buildDocumentTypeQuery,
-  getActiveDocumentTypeFilterIds,
-  isDocumentTypeFilterId,
-} from '@app/features/next-soup/filters/configs/document-type-query';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/features/next-soup/soup-view/soup-view-create-button';
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
 import {
   CompanyDisplayMenu,
   CompanyViewsMenu,
 } from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { SidePanel } from '@components/app/side-panel';
 import {
   BRAIN_WORKSPACE_ENTRY_STATE_KEY,
   type BrainWorkspaceSelection,
@@ -42,28 +50,26 @@ import {
   parseChannelsWorkspaceRoute,
   serializeChannelsWorkspacePath,
 } from '@components/app/split-layout/channelsWorkspaceRoute';
-import { SidePanel } from '@components/app/side-panel';
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { ComposedSplitControls } from '@components/app/split-layout/composed/ComposedSplitControls';
 import { ComposedSplitHeader } from '@components/app/split-layout/composed/ComposedSplitHeader';
 import { SplitLayoutContext } from '@components/app/split-layout/context';
-import { Entity } from '@entity';
-import type { ChatEntity } from '@entity/types/entity';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { DOCS_BASE, LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createBlockInstance } from '@core/orchestrator';
+import { Entity } from '@entity';
+import type { ChatEntity } from '@entity/types/entity';
 import SkillIcon from '@icon/skill.svg';
 import WideAutomationIcon from '@icon/wide-automation.svg';
 import PdfAppIcon from '@icon/wide-book.svg';
+import CanvasAppIcon from '@icon/wide-diagram.svg';
 import CodeAppIcon from '@icon/wide-file-code.svg';
 import ImageAppIcon from '@icon/wide-file-image.svg';
 import DocumentAppIcon from '@icon/wide-file-md.svg';
-import CanvasAppIcon from '@icon/wide-diagram.svg';
-import VideoAppIcon from '@icon/wide-video.svg';
 import NoiseIcon from '@icon/wide-noise.svg';
 import SignalIcon from '@icon/wide-signal.svg';
+import VideoAppIcon from '@icon/wide-video.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import BrainIcon from '@phosphor/brain.svg';
@@ -71,22 +77,22 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
 import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
 import FolderIcon from '@phosphor/folder-simple.svg';
+import FilterIcon from '@phosphor/funnel-simple.svg';
 import MenuIcon from '@phosphor/list.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
 import PaperPlaneIcon from '@phosphor/paper-plane-tilt.svg';
 import PlugIcon from '@phosphor/plug.svg';
-import SquaresIcon from '@phosphor/squares-four.svg';
-import ShareIcon from '@phosphor/share-network.svg';
 import RecordIcon from '@phosphor/record.svg';
+import ShareIcon from '@phosphor/share-network.svg';
+import SquaresIcon from '@phosphor/squares-four.svg';
 import UsersIcon from '@phosphor/users-three.svg';
-import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import XIcon from '@phosphor/x.svg';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { useNavigate, useParams } from '@solidjs/router';
-import XIcon from '@phosphor/x.svg';
 import {
   Button,
   Checkbox,
@@ -131,8 +137,8 @@ import {
 } from './experimental-memories-view';
 import { ExperimentalMessagesRail } from './experimental-messages-rail';
 import {
-  ExperimentalPowersDetailsContext,
   type ExperimentalPowersDetail,
+  ExperimentalPowersDetailsContext,
 } from './experimental-powers-details-context';
 import {
   ExperimentalViewSidebar,
@@ -342,9 +348,8 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     parseBrainWorkspaceRoute(params.brainPath)
   );
   const entryBrainSelection = (() => {
-    const value = panel.handle.currentEntryState()?.[
-      BRAIN_WORKSPACE_ENTRY_STATE_KEY
-    ];
+    const value =
+      panel.handle.currentEntryState()?.[BRAIN_WORKSPACE_ENTRY_STATE_KEY];
     return isBrainWorkspaceSelection(value) ? value : undefined;
   })();
   const isPrimaryPanel = () =>
@@ -371,12 +376,13 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     () => ({ enabled: props.view === 'machines' })
   );
   const [brainChatSearch, setBrainChatSearch] = createSignal('');
-  const [selectedBrainChatId, setSelectedBrainChatId] =
-    createSignal<string | undefined>(
-      initialBrainSelection?.kind === 'chat'
-        ? initialBrainSelection.chatId
-        : undefined
-    );
+  const [selectedBrainChatId, setSelectedBrainChatId] = createSignal<
+    string | undefined
+  >(
+    initialBrainSelection?.kind === 'chat'
+      ? initialBrainSelection.chatId
+      : undefined
+  );
   const brainChats = createMemo<ChatEntity[]>(() =>
     (chatsQuery.data ?? []).filter(isChatEntity)
   );
@@ -501,8 +507,9 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       ? active.slice('project:'.length)
       : undefined;
   };
-  const [librarySection, setLibrarySection] =
-    createSignal<LibrarySection | undefined>(initialLibrarySection());
+  const [librarySection, setLibrarySection] = createSignal<
+    LibrarySection | undefined
+  >(initialLibrarySection());
   const [selectedLibraryProjectId, setSelectedLibraryProjectId] = createSignal<
     string | undefined
   >(initialLibraryProjectId());
@@ -526,10 +533,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     if (nextQuery) soupView.queryFilters.add(nextQuery);
     soupView.soup.predicates.set(({ andIds, orIds }) => ({
       and: andIds.filter((id) => !isDocumentTypeFilterId(id)),
-      or: [
-        ...orIds.filter((id) => !isDocumentTypeFilterId(id)),
-        ...nextIds,
-      ],
+      or: [...orIds.filter((id) => !isDocumentTypeFilterId(id)), ...nextIds],
     }));
   };
 
@@ -664,6 +668,18 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     setViewMenuOpen(false);
   };
 
+  // Publish this split's list search so the top bar can drive it; the in-view
+  // search bar is gone under that layout, and nothing reads this without it.
+  onMount(() =>
+    onCleanup(
+      registerViewSearch(panel.handle.id, {
+        placeholder: searchPlaceholder,
+        text: soupView.searchText,
+        setText: soupView.setSearchText,
+      })
+    )
+  );
+
   onMount(() => {
     if (props.view === 'machines') {
       const unregister = panel.handle.registerEntryStateCaptor(
@@ -737,16 +753,16 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   const messagesRoute = createMemo(() =>
     parseChannelsWorkspaceRoute(params.channelsPath)
   );
-  const entryMessageChannelId = panel.handle.currentEntryState()?.[
-    'channels.workspace'
-  ];
-  const [selectedMessageChannelId, setSelectedMessageChannelId] =
-    createSignal<string | undefined>(
-      (isPrimaryPanel() ? messagesRoute().selectedChannelId : undefined) ??
-        (typeof entryMessageChannelId === 'string'
-          ? entryMessageChannelId
-          : undefined)
-    );
+  const entryMessageChannelId =
+    panel.handle.currentEntryState()?.['channels.workspace'];
+  const [selectedMessageChannelId, setSelectedMessageChannelId] = createSignal<
+    string | undefined
+  >(
+    (isPrimaryPanel() ? messagesRoute().selectedChannelId : undefined) ??
+      (typeof entryMessageChannelId === 'string'
+        ? entryMessageChannelId
+        : undefined)
+  );
   createEffect(
     on(
       () => params.channelsPath,
@@ -847,20 +863,58 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   );
 
   const SearchBar = () => (
-    <div class="w-full min-w-20 max-w-md">
-      <SoupSearchbar
-        variant="filled"
-        size="comfortable"
-        class="rounded-2xl"
-        placeholder={searchPlaceholder()}
-        initialValue={props.initialSearchText}
-      />
-    </div>
+    <Show when={splitOwnsSearch()}>
+      <div class="w-full min-w-20 max-w-md">
+        <SoupSearchbar
+          variant="filled"
+          size="comfortable"
+          class="rounded-2xl"
+          placeholder={searchPlaceholder()}
+          initialValue={props.initialSearchText}
+        />
+      </div>
+    </Show>
   );
 
-  const SearchAndControls = (
-    controlProps: { flush?: boolean } = {}
-  ) => (
+  /**
+   * The search's own row, for the views that stack it above their controls —
+   * it collapses whole rather than leaving an empty band behind.
+   */
+  const SearchRow = () => (
+    <Show when={splitOwnsSearch()}>
+      <div class="flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
+        <div class="min-w-0 flex-1">
+          <SearchBar />
+        </div>
+      </div>
+    </Show>
+  );
+
+  /** Split navigation controls, above a view sidebar's own heading. */
+  const SidebarSplitControls = () => (
+    <Show when={splitOwnsIdentity()}>
+      <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
+        <ComposedSplitControls />
+      </ComposedSplitHeader>
+    </Show>
+  );
+
+  /** A view sidebar's heading and its create action. */
+  const ViewTitleRow = (titleProps: {
+    title: string;
+    action?: JSX.Element;
+  }) => (
+    <Show when={splitOwnsIdentity()}>
+      <div class="mt-3 flex shrink-0 items-center gap-2">
+        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+          {titleProps.title}
+        </h1>
+        {titleProps.action ?? <SoupViewCreateButton inline experimental />}
+      </div>
+    </Show>
+  );
+
+  const SearchAndControls = (controlProps: { flush?: boolean } = {}) => (
     <div
       class={cn(
         'flex items-center gap-4 @max-[720px]/experimental-soup:gap-2',
@@ -881,8 +935,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     >
       <For each={LIBRARY_TYPE_FILTERS}>
         {(filter) => {
-          const active = () =>
-            soupView.soup.predicates.isActive(filter.id);
+          const active = () => soupView.soup.predicates.isActive(filter.id);
           return (
             <button
               type="button"
@@ -1002,9 +1055,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
             <input
               type="search"
               value={brainChatSearch()}
-              onInput={(event) =>
-                setBrainChatSearch(event.currentTarget.value)
-              }
+              onInput={(event) => setBrainChatSearch(event.currentTarget.value)}
               placeholder="Search chats"
               class="min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
             />
@@ -1076,9 +1127,7 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     </HorizontalScrollArea>
   );
 
-  const ListContentContainer = (containerProps: {
-    children: JSX.Element;
-  }) => (
+  const ListContentContainer = (containerProps: { children: JSX.Element }) => (
     <main class="flex min-h-0 min-w-0 flex-1 flex-col">
       {containerProps.children}
     </main>
@@ -1462,26 +1511,27 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       <div class="flex size-full min-h-0">
         <ExperimentalViewSidebar
           label="Brain navigation"
-          class="mb-0 border-r-0! bg-ink/2 pt-2"
+          class={cn(
+            'mb-0 border-r-0! pt-2',
+            splitChromeIsTinted() && 'bg-ink/2'
+          )}
           collapsed={viewSidebarCollapsed()}
         >
-          <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
-            <ComposedSplitControls />
-          </ComposedSplitHeader>
-          <div class="mt-3 flex shrink-0 items-center gap-2">
-            <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-              Brain
-            </h1>
-            <Button
-              variant="cta"
-              size="sm"
-              class="h-8 shrink-0 rounded-full px-2.5"
-              onClick={startBrainChat}
-            >
-              <NoteIcon class="size-3.5" />
-              <span>Chat</span>
-            </Button>
-          </div>
+          <SidebarSplitControls />
+          <ViewTitleRow
+            title="Brain"
+            action={
+              <Button
+                variant="cta"
+                size="sm"
+                class="h-8 shrink-0 rounded-full px-2.5"
+                onClick={startBrainChat}
+              >
+                <NoteIcon class="size-3.5" />
+                <span>Chat</span>
+              </Button>
+            }
+          />
           <div class="mt-3 flex min-h-0 flex-1 flex-col">
             <BrainNavigation />
           </div>
@@ -1559,37 +1609,35 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       <div>
         <InboxSelector inline experimentalSidebar />
       </div>
-      <ExperimentalViewSidebarItems
-        class="mt-3"
-      >
+      <ExperimentalViewSidebarItems class="mt-3">
         <nav aria-label="Email views" class="flex flex-col gap-0.5">
-        <For each={emailTabs()}>
-          {(tab) => {
-            const active = () => soupView.activeTab() === tab.value;
-            return (
-              <button
-                type="button"
-                class={cn(
-                  'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
-                  active()
-                    ? 'bg-active text-ink'
-                    : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
-                )}
-                aria-pressed={active()}
-                onClick={() => {
-                  selectTab(tab.value);
-                  setViewMenuOpen(false);
-                }}
-              >
-                <Dynamic
-                  component={EMAIL_TAB_ICONS[tab.value]}
-                  class="size-4 shrink-0"
-                />
-                {tab.label}
-              </button>
-            );
-          }}
-        </For>
+          <For each={emailTabs()}>
+            {(tab) => {
+              const active = () => soupView.activeTab() === tab.value;
+              return (
+                <button
+                  type="button"
+                  class={cn(
+                    'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
+                    active()
+                      ? 'bg-active text-ink'
+                      : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
+                  )}
+                  aria-pressed={active()}
+                  onClick={() => {
+                    selectTab(tab.value);
+                    setViewMenuOpen(false);
+                  }}
+                >
+                  <Dynamic
+                    component={EMAIL_TAB_ICONS[tab.value]}
+                    class="size-4 shrink-0"
+                  />
+                  {tab.label}
+                </button>
+              );
+            }}
+          </For>
         </nav>
       </ExperimentalViewSidebarItems>
     </>
@@ -1739,28 +1787,28 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         </button>
         <Show when={taskTeamExpanded()}>
           <For each={TASK_TEAM_ITEMS}>
-          {(item) => {
-            const active = () => soupView.activeTab() === item.value;
-            return (
-              <button
-                type="button"
-                class={cn(
-                  'flex w-full shrink-0 items-center gap-2.5 rounded-xl py-2 pl-8 pr-3 text-left text-sm font-medium transition-colors',
-                  active()
-                    ? 'bg-active text-ink'
-                    : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
-                )}
-                aria-pressed={active()}
-                onClick={() => {
-                  selectTab(item.value);
-                  setViewMenuOpen(false);
-                }}
-              >
-                <Dynamic component={item.icon} class="size-4 shrink-0" />
-                {item.label}
-              </button>
-            );
-          }}
+            {(item) => {
+              const active = () => soupView.activeTab() === item.value;
+              return (
+                <button
+                  type="button"
+                  class={cn(
+                    'flex w-full shrink-0 items-center gap-2.5 rounded-xl py-2 pl-8 pr-3 text-left text-sm font-medium transition-colors',
+                    active()
+                      ? 'bg-active text-ink'
+                      : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
+                  )}
+                  aria-pressed={active()}
+                  onClick={() => {
+                    selectTab(item.value);
+                    setViewMenuOpen(false);
+                  }}
+                >
+                  <Dynamic component={item.icon} class="size-4 shrink-0" />
+                  {item.label}
+                </button>
+              );
+            }}
           </For>
         </Show>
       </nav>
@@ -1773,17 +1821,26 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
     dropdownContentClass?: string;
   }) => (
     <div class="hidden shrink-0 px-2 pt-2 @max-[720px]/experimental-soup:block">
-      <div class="flex min-h-7 items-center">
-        <ComposedSplitControls />
-      </div>
-      <div class="mt-1 flex min-w-0 items-center gap-2">
+      <Show when={splitOwnsIdentity()}>
+        <div class="flex min-h-7 items-center">
+          <ComposedSplitControls />
+        </div>
+      </Show>
+      <div
+        class={cn(
+          'flex min-w-0 items-center gap-2',
+          splitOwnsIdentity() && 'mt-1'
+        )}
+      >
         <ViewSidebarControl contentClass={headerProps.dropdownContentClass}>
           {headerProps.navigation}
         </ViewSidebarControl>
-        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-          {headerProps.title}
-        </h1>
-        <SoupViewCreateButton inline experimental />
+        <Show when={splitOwnsIdentity()}>
+          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+            {headerProps.title}
+          </h1>
+          <SoupViewCreateButton inline experimental />
+        </Show>
       </div>
     </div>
   );
@@ -1791,14 +1848,20 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   const InboxLayout = () => (
     <div class="flex size-full min-h-0 flex-col">
       <ComposedSplitHeader class="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 pb-4 pt-2 @max-[720px]/experimental-soup:px-2">
-        <ComposedSplitControls />
+        <Show when={splitOwnsIdentity()}>
+          <ComposedSplitControls />
+        </Show>
         <div class="flex min-w-0 flex-1 items-center gap-6 @max-[720px]/experimental-soup:gap-3">
-          <h1 class="m-0 shrink-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-            Inbox
-          </h1>
+          <Show when={splitOwnsIdentity()}>
+            <h1 class="m-0 shrink-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+              Inbox
+            </h1>
+          </Show>
           <InboxTabs />
         </div>
-        <SoupViewCreateButton inline experimental />
+        <Show when={splitOwnsIdentity()}>
+          <SoupViewCreateButton inline experimental />
+        </Show>
       </ComposedSplitHeader>
       <ListContentContainer>
         <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
@@ -1816,32 +1879,23 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         class="mb-0 border-r-0! pt-2"
         collapsed={viewSidebarCollapsed()}
       >
-        <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
-          <ComposedSplitControls />
-        </ComposedSplitHeader>
-        <div class="mt-3 flex shrink-0 items-center gap-2">
-          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-            Email
-          </h1>
-          <SoupViewCreateButton inline experimental />
-        </div>
+        <SidebarSplitControls />
+        <ViewTitleRow title="Email" />
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <EmailNavigation />
         </div>
       </ExperimentalViewSidebar>
 
       <ListContentContainer>
-        <NarrowViewHeader
-          title="Email"
-          navigation={<EmailNavigation />}
-        />
+        <NarrowViewHeader title="Email" navigation={<EmailNavigation />} />
         <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
-          <div class="flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
-            <div class="min-w-0 flex-1">
-              <SearchBar />
-            </div>
-          </div>
-          <div class="mt-3 flex min-w-0 items-center justify-end">
+          <SearchRow />
+          <div
+            class={cn(
+              'flex min-w-0 items-center justify-end',
+              splitOwnsSearch() && 'mt-3'
+            )}
+          >
             <PrimaryControls />
           </div>
         </header>
@@ -1857,32 +1911,23 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         class="mb-0 border-r-0! pt-2"
         collapsed={viewSidebarCollapsed()}
       >
-        <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
-          <ComposedSplitControls />
-        </ComposedSplitHeader>
-        <div class="mt-3 flex shrink-0 items-center gap-2">
-          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-            Drive
-          </h1>
-          <SoupViewCreateButton inline experimental />
-        </div>
+        <SidebarSplitControls />
+        <ViewTitleRow title="Drive" />
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <LibraryNavigation />
         </div>
       </ExperimentalViewSidebar>
 
       <ListContentContainer>
-        <NarrowViewHeader
-          title="Drive"
-          navigation={<LibraryNavigation />}
-        />
+        <NarrowViewHeader title="Drive" navigation={<LibraryNavigation />} />
         <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
-          <div class="flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
-            <div class="min-w-0 flex-1">
-              <SearchBar />
-            </div>
-          </div>
-          <div class="mt-3 flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
+          <SearchRow />
+          <div
+            class={cn(
+              'flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2',
+              splitOwnsSearch() && 'mt-3'
+            )}
+          >
             <div class="min-w-0 flex-1">
               <LibraryTypeQuickFilters inline />
             </div>
@@ -1901,32 +1946,23 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
         class="mb-0 border-r-0! pt-2"
         collapsed={viewSidebarCollapsed()}
       >
-        <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
-          <ComposedSplitControls />
-        </ComposedSplitHeader>
-        <div class="mt-3 flex shrink-0 items-center gap-2">
-          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-            Tasks
-          </h1>
-          <SoupViewCreateButton inline experimental />
-        </div>
+        <SidebarSplitControls />
+        <ViewTitleRow title="Tasks" />
         <div class="mt-5 min-h-0 flex-1 overflow-y-auto">
           <TaskNavigation />
         </div>
       </ExperimentalViewSidebar>
 
       <ListContentContainer>
-        <NarrowViewHeader
-          title="Tasks"
-          navigation={<TaskNavigation />}
-        />
+        <NarrowViewHeader title="Tasks" navigation={<TaskNavigation />} />
         <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
-          <div class="flex min-w-0 items-center gap-4 @max-[720px]/experimental-soup:gap-2">
-            <div class="min-w-0 flex-1">
-              <SearchBar />
-            </div>
-          </div>
-          <div class="mt-3 flex min-w-0 items-center justify-end">
+          <SearchRow />
+          <div
+            class={cn(
+              'flex min-w-0 items-center justify-end',
+              splitOwnsSearch() && 'mt-3'
+            )}
+          >
             <PrimaryControls />
           </div>
         </header>
@@ -1937,13 +1973,15 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
 
   const CrmLayout = () => (
     <div class="flex size-full min-h-0 flex-col">
-      <ComposedSplitHeader class="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 pb-4 pt-2 @max-[720px]/experimental-soup:px-2">
-        <ComposedSplitControls />
-        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-          CRM
-        </h1>
-        <SoupViewCreateButton inline experimental />
-      </ComposedSplitHeader>
+      <Show when={splitOwnsIdentity()}>
+        <ComposedSplitHeader class="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 pb-4 pt-2 @max-[720px]/experimental-soup:px-2">
+          <ComposedSplitControls />
+          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+            CRM
+          </h1>
+          <SoupViewCreateButton inline experimental />
+        </ComposedSplitHeader>
+      </Show>
       <ListContentContainer>
         <header class="shrink-0 px-4 pb-5 pt-4 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
           <SearchAndControls flush />

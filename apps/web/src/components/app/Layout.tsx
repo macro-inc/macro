@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import { activeAppLayoutSurfaces } from '@app/features/app-layout/layout-surfaces';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
 import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
@@ -18,7 +19,6 @@ import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
-import { activeAppLayoutSurfaces } from '@app/features/app-layout/layout-surfaces';
 import {
   AddInboxDialog,
   isAddInboxDialogOpen,
@@ -110,6 +110,9 @@ const [sidebarState, setSidebarState] = makePersisted(
   }
 );
 
+/** The active layout's top bar, when it hangs its chrome above the splits. */
+const appTopBarSurface = () => activeAppLayoutSurfaces()?.AppTopBar;
+
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const location = useLocation();
@@ -126,7 +129,10 @@ export function Layout(props: RouteSectionProps) {
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
       <SidebarCollapseContext.Provider
         value={{
-          isCollapsed: () => sidebarVisible() && sidebarState() === 'slim',
+          isCollapsed: () =>
+            sidebarVisible() &&
+            !appTopBarSurface() &&
+            sidebarState() === 'slim',
           expand: () => setSidebarState('expanded'),
         }}
       >
@@ -352,15 +358,26 @@ function LayoutInner(props: RouteSectionProps) {
     createSignal(false);
   const callCtx = useCallContextOptional();
   const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
+  /** True while the layout's chrome is the top bar rather than the sidebar. */
+  const usesTopBar = createMemo(
+    () => isSidebarVisible() && !!appTopBarSurface()
+  );
   const sidebarCollapsed = createMemo(
-    () => isSidebarVisible() && sidebarState() === 'slim'
+    () => isSidebarVisible() && !usesTopBar() && sidebarState() === 'slim'
+  );
+  /**
+   * The classic sidebar hosts the call controls, so they float once it is
+   * slim — and always under custom layout chrome (the top bar, or the V2/V4
+   * sidebars), none of which carries them.
+   */
+  const callWidgetsFloat = createMemo(
+    () =>
+      sidebarCollapsed() ||
+      (isSidebarVisible() && !!activeAppLayoutSurfaces()?.AppSidebar) ||
+      usesTopBar()
   );
   const activeCallWidgetVisible = createMemo(
-    () =>
-      isSidebarVisible() &&
-      sidebarState() === 'slim' &&
-      !!callCtx?.isInCall() &&
-      !callCtx?.isCallPage()
+    () => callWidgetsFloat() && !!callCtx?.isInCall() && !callCtx?.isCallPage()
   );
   let sidebarOverlayCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -488,11 +505,14 @@ function LayoutInner(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="max-h-full grow flex">
+      <Show when={usesTopBar() ? appTopBarSurface() : undefined}>
+        {(AppTopBar) => <Dynamic component={AppTopBar()} />}
+      </Show>
+      <div class="max-h-full grow flex min-h-0">
         {/* The provider spans the sidebar too so its favorites can register
             sortables with the same drag-drop context as the entity drags. */}
         <ItemDndProvider>
-          <Show when={isSidebarVisible()}>
+          <Show when={isSidebarVisible() && !usesTopBar()}>
             <Show
               when={activeAppLayoutSurfaces()?.AppSidebar}
               fallback={
@@ -549,11 +569,7 @@ function LayoutInner(props: RouteSectionProps) {
         </ItemDndProvider>
       </div>
       <CollapsedSidebarIncomingCallWidget
-        visible={
-          isSidebarVisible() &&
-          sidebarState() === 'slim' &&
-          incomingCallWidgetVisible()
-        }
+        visible={callWidgetsFloat() && incomingCallWidgetVisible()}
         activeCallWidgetVisible={activeCallWidgetVisible()}
       />
       <CollapsedSidebarCallWidget visible={activeCallWidgetVisible()} />
