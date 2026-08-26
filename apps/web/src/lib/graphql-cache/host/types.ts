@@ -8,9 +8,11 @@
 
 import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
+  AffectedOperationsResult,
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   CacheReadPriority,
+  CacheRevision,
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
@@ -22,10 +24,10 @@ import type {
   QueryRevalidationWire,
   QueryVariableFilter,
   ReadRecordsByKeysArgs,
+  ReadRecordsByKeysResult,
   ReadResult,
   SearchCacheArgs,
   SearchCachePage,
-  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 
@@ -83,11 +85,13 @@ export interface CacheHost {
   /** True for the storage-free fallback when browser cache APIs are unsupported. */
   readonly disabled?: boolean;
 
+  /** Returns the current revision of the active cache-engine generation. */
+  currentRevision(): Promise<CacheRevision>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   /** Projects a bounded explicit set of normalized entity keys. */
   readRecordsByKeys(
     args: ReadRecordsByKeysArgs
-  ): Promise<SelectedRecordByKeyWire[]>;
+  ): Promise<ReadRecordsByKeysResult>;
   /** Searches the compact write-through materialized projection. */
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
@@ -132,13 +136,13 @@ export interface CacheHost {
     error: string
   ): Promise<WriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
-  invalidate(keys: string[]): Promise<string[]>;
+  invalidate(keys: string[]): Promise<AffectedOperationsResult>;
   /** Apply explicit server-provided cache-deletion effects. */
-  deleteRecords(keys: string[]): Promise<string[]>;
+  deleteRecords(keys: string[]): Promise<AffectedOperationsResult>;
   /** urql teardown for an operation key. */
   teardown(opKey: number): Promise<void>;
   /** Wipe all cached state (logout). */
-  clear(): Promise<void>;
+  clear(): Promise<CacheRevision>;
 
   /**
    * Subscribes to "these urql operation keys must re-execute" pushes
@@ -148,7 +152,10 @@ export interface CacheHost {
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
 
   /** Subscribes whenever the effective normalized-cache view changes. */
-  onCacheChanged(cb: () => void): () => void;
+  onCacheChanged(cb: (revision: CacheRevision) => void): () => void;
+
+  /** Invalidates revision watermarks before a replacement engine is used. */
+  onCacheGenerationChanged(cb: () => void): () => void;
 
   /** Subscribes to final commit/rollback events for queued mutations. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

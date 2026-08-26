@@ -11,10 +11,10 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee, CalendarBackfillClaim,
-        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
-        CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
-        CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
+        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
+        CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
+        CalendarBackfillJob, CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget,
+        CalendarEvent, CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
         CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity, CalendarMentionEvent,
         CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
         CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease,
@@ -1559,7 +1559,16 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(report)?;
-        Ok(row.map(|row| CalendarEventMutationTarget {
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let actor = ActorInboxes::from_owned(self.owned_inbox_emails(requester_id).await?);
+        let token_identity = CalendarLinkTokenIdentity {
+            fusionauth_user_id: row.fusionauth_user_id,
+            email_address: row.email_address,
+            provider: row.provider,
+        };
+        Ok(Some(CalendarEventMutationTarget {
             event_id: row.event_id,
             is_read_only: row.is_read_only,
             provider_event_id: row.provider_event_id,
@@ -1569,11 +1578,8 @@ impl CalendarRepository for PgCalendarRepository {
             account_id: row.account_id,
             calendar_id: row.calendar_id,
             provider_calendar_id: row.provider_calendar_id,
-            token_identity: CalendarLinkTokenIdentity {
-                fusionauth_user_id: row.fusionauth_user_id,
-                email_address: row.email_address,
-                provider: row.provider,
-            },
+            token_identity,
+            actor,
         }))
     }
 
@@ -1628,18 +1634,24 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(report)?;
-        Ok(row.map(|row| CalendarCreationTarget {
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let actor = ActorInboxes::from_owned(self.owned_inbox_emails(requester_id).await?);
+        let token_identity = CalendarLinkTokenIdentity {
+            fusionauth_user_id: row.fusionauth_user_id,
+            email_address: row.email_address,
+            provider: row.provider,
+        };
+        Ok(Some(CalendarCreationTarget {
             owner_id: row.owner_id,
             email_link_id: row.email_link_id,
             account_id: row.account_id,
             calendar_id: row.calendar_id,
             provider_calendar_id: row.provider_calendar_id,
             is_read_only: !matches!(row.access_role.as_deref(), Some("owner" | "writer")),
-            token_identity: CalendarLinkTokenIdentity {
-                fusionauth_user_id: row.fusionauth_user_id,
-                email_address: row.email_address,
-                provider: row.provider,
-            },
+            token_identity,
+            actor,
         }))
     }
 
@@ -1703,6 +1715,21 @@ impl CalendarRepository for PgCalendarRepository {
                     .unwrap_or_default(),
             })
             .collect())
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn owned_inbox_emails(&self, requester_id: &str) -> Result<Vec<String>, Report> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT email_address::text AS "email_address!"
+            FROM email_links
+            WHERE macro_id = $1
+            "#,
+            requester_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)
     }
 
     #[tracing::instrument(skip(self), err)]

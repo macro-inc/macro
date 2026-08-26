@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ONBOARDING_CATALOG_STEP_KEY,
   ONBOARDING_CONNECTORS,
   resolveOnboardingConnectorNames,
   resolveOnboardingStepIndex,
@@ -66,7 +65,6 @@ describe('resolveOnboardingStepIndex', () => {
     'connect-notion',
     'connect-slack',
     'connect-github',
-    ONBOARDING_CATALOG_STEP_KEY,
     'team',
     'building',
     'summary',
@@ -105,29 +103,5 @@ describe('resolveOnboardingStepIndex', () => {
 
   it('falls back safely for an unknown saved step', () => {
     expect(resolveOnboardingStepIndex(fullStepList, 'unknown')).toBe(0);
-  });
-
-  // The catalog step only exists on the Pipedream stack. A session that saved
-  // it and came back without it must fall forward, not restart the flow —
-  // which is what an unranked step key would do (indexOf -1 → step 0).
-  it('falls forward to team when the catalog step is absent', () => {
-    const withoutCatalog = fullStepList.filter(
-      (key) => key !== ONBOARDING_CATALOG_STEP_KEY
-    );
-    const index = resolveOnboardingStepIndex(
-      withoutCatalog,
-      ONBOARDING_CATALOG_STEP_KEY
-    );
-
-    expect(withoutCatalog[index]).toBe('team');
-  });
-
-  it('resumes into the catalog step when it is present', () => {
-    const index = resolveOnboardingStepIndex(
-      fullStepList,
-      ONBOARDING_CATALOG_STEP_KEY
-    );
-
-    expect(fullStepList[index]).toBe(ONBOARDING_CATALOG_STEP_KEY);
   });
 });

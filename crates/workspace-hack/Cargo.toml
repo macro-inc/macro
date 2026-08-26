@@ -33,6 +33,7 @@ aws_lambda_events = { version = "0.16", default-features = false, features = ["e
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
 base64 = { version = "0.22" }
+bstr = { version = "1" }
 byteorder = { version = "1" }
 bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
@@ -95,7 +96,7 @@ rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 redis = { version = "1", features = ["cluster-async", "tokio-rustls-comp"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa-backtrack", "perf-inline", "perf-literal", "std", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
@@ -163,6 +164,7 @@ aws_lambda_events = { version = "0.16", default-features = false, features = ["e
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
 base64 = { version = "0.22" }
+bstr = { version = "1" }
 byteorder = { version = "1" }
 bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
@@ -230,7 +232,7 @@ rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 redis = { version = "1", features = ["cluster-async", "tokio-rustls-comp"] }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa-backtrack", "perf-inline", "perf-literal", "std", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-build", "dfa-onepass", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
@@ -259,6 +261,7 @@ sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
 stable_deref_trait = { version = "1" }
 subtle = { version = "2" }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["visit-mut"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }

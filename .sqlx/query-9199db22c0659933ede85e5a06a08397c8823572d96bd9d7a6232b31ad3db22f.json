@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO external_agent_session (\n                agent_session_id, provider, external_id, external_name, external_url\n            )\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (agent_session_id) DO UPDATE SET\n                provider = EXCLUDED.provider,\n                external_id = EXCLUDED.external_id,\n                external_name = EXCLUDED.external_name,\n                external_url = EXCLUDED.external_url,\n                updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9199db22c0659933ede85e5a06a08397c8823572d96bd9d7a6232b31ad3db22f"
+}

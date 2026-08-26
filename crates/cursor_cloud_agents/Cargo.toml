@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "cursor_cloud_agents"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# In-memory port implementations and recorded fixtures, for crates that test
+# against this one.
+test-utils = []
+
+[[bin]]
+name = "cursor_cloud_agents"
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+futures = { workspace = true }
+macro_env_var = { path = "../macro_env_var" }
+# `stream` on top of the workspace features: the run stream is consumed as
+# `bytes_stream`, which reqwest gates behind it.
+reqwest = { workspace = true, features = ["stream"] }
+rootcause = { workspace = true }
+# Strictly spec-compliant SSE decoding. `default-features = false` drops the
+# retry/jitter and async-stream halves: this crate drives the decoder itself,
+# synchronously, so all it needs is the state machine.
+sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# `compat` bridges tokio streams to the futures traits the ACP SDK's
+# `ByteStreams` transport takes.
+tokio-util = { workspace = true, features = ["compat"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "sync", "time"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+insta = { version = "1.48.0", features = ["glob", "json"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "sync", "time", "test-util"] }

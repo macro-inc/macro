@@ -1,4 +1,5 @@
 import type { Transformer } from '@lexical/markdown';
+import { I_AGENT_CONTEXT } from './agentContext';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
@@ -75,6 +76,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_AGENT_CONTEXT,
   I_TABLE_NODE,
   HTML_BLOCKQUOTE,
   I_MACRO_QUOTE,
@@ -157,6 +159,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_AGENT_CONTEXT,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
   I_THEME_MENTION,

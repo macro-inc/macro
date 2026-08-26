@@ -120,7 +120,7 @@ export async function materializeCachedGraphqlHistoryItems(
         nameSelection(typename),
         keys
       );
-      for (const { recordKey, record } of records) {
+      for (const { recordKey, record } of records.records) {
         recordsByKey.set(recordKey, record);
       }
     })

@@ -8,13 +8,9 @@ export const ONBOARDING_CONNECTORS = [
   { key: 'github', serverName: 'GitHub' },
 ] as const;
 
-/** The catch-all catalog step, after every curated connector step. */
-export const ONBOARDING_CATALOG_STEP_KEY = 'connect-more';
-
 const ONBOARDING_STEP_ORDER = [
   'email',
   ...ONBOARDING_CONNECTORS.map(({ key }) => `connect-${key}`),
-  ONBOARDING_CATALOG_STEP_KEY,
   'team',
   'building',
   'summary',

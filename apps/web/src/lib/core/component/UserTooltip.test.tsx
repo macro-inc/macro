@@ -88,9 +88,9 @@ describe('UserTooltip CRM contact action', () => {
     const user = userEvent.setup({ skipHover: true });
     render(() => (
       <UserTooltip
-        displayName="Panat Taranat"
-        email="panat@pync.com"
-        id="macro|panat@pync.com"
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
+        id="macro|jane.doe@example.com"
         onClose={mocks.onClose}
       />
     ));
@@ -110,7 +110,7 @@ describe('UserTooltip CRM contact action', () => {
     mocks.crmFlagEnabled = false;
 
     render(() => (
-      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
@@ -120,7 +120,7 @@ describe('UserTooltip CRM contact action', () => {
     mocks.teamCrmEnabled = false;
 
     render(() => (
-      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
@@ -130,7 +130,7 @@ describe('UserTooltip CRM contact action', () => {
     mocks.teamCrmEnabled = null;
 
     render(() => (
-      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
@@ -140,7 +140,7 @@ describe('UserTooltip CRM contact action', () => {
     mocks.contact = null;
 
     render(() => (
-      <UserTooltip displayName="Panat Taranat" email="panat@pync.com" />
+      <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
@@ -151,13 +151,13 @@ describe('UserTooltip CRM contact action', () => {
 
     render(() => (
       <UserTooltip
-        displayName="Panat Taranat"
-        email="panat@pync.com"
-        id="macro|panat@pync.com"
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
+        id="macro|jane.doe@example.com"
       />
     ));
 
-    expect(screen.getByText('Panat Taranat')).toBeTruthy();
+    expect(screen.getByText('Jane Doe')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
   });

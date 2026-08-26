@@ -32,6 +32,7 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use dashmap::DashMap;
 use tokio::sync::{Mutex, mpsc, watch};
+use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::AgentSessionId;
 use crate::domain::session::HandshakeStatus;
@@ -171,6 +172,13 @@ pub struct RuntimeConnection<Sender> {
     bound: Bound,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
+    /// Cancelled once this connection's transport has ended.
+    ///
+    /// A token rather than a notification because whoever waits on it mostly
+    /// arrives late: a connection can die before anybody asks, and
+    /// [`CancellationToken::cancelled`] on an already-cancelled token returns
+    /// at once, where a missed notification would wait forever.
+    closed: CancellationToken,
 }
 
 impl<Sender> RuntimeConnection<Sender>
@@ -195,6 +203,7 @@ where
             bound: DashMap::new(),
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
+            closed: CancellationToken::new(),
         });
         let router = tokio::spawn(Arc::clone(&connection).route_inbound(inbound));
         let _ = connection.router.set(router.abort_handle());
@@ -207,6 +216,19 @@ where
         if let Some(router) = self.router.get() {
             router.abort();
         }
+        // An aborted router will never reach the end of `route_inbound`, so
+        // the signal is raised here too: whoever is waiting for this
+        // connection to be over is waiting for either way of it ending.
+        self.closed.cancel();
+    }
+
+    /// Resolves once this connection's transport has ended, however it ended.
+    ///
+    /// What a registry holding connections needs in order to stop handing out
+    /// one that is closed: a socket dies with nothing to announce it, so the
+    /// holder has to be told rather than discover it on the next send.
+    pub async fn closed(&self) {
+        self.closed.cancelled().await;
     }
 
     /// The gate every session on this connection shares.
@@ -311,6 +333,7 @@ where
             }
         }
         self.bound.clear();
+        self.closed.cancel();
     }
 
     async fn deliver(&self, session: AgentSessionId, message: ToServerMessage) {

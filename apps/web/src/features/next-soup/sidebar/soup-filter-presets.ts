@@ -283,6 +283,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   mail: {
     default: 'important',
     tabs: {
+      // No 'no-drafts' on any thread-listing tab: a thread whose latest
+      // message is a saved draft must stay in Signal/Noise/Calendar/Sent (it
+      // also shows under Drafts). The server counts drafts toward is_signal
+      // and inbox visibility for the same reason.
       important: () => ({
         filters: defineQueryFilters({
           include: {
@@ -292,7 +296,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           emailView: 'inbox',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       noise: () => ({
@@ -304,7 +308,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           emailView: 'inbox',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       calendar: () => ({
@@ -316,7 +320,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         }),
 
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       drafts: () => ({
@@ -334,7 +338,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({
           emailView: 'sent',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       shared: () => ({

@@ -652,7 +652,7 @@ where
         })
         .ok()
         .filter(|turn| *turn == MessageId::first(AuthorKind::User).turn)
-        .map(|_| prompt.prompt.clone())
+        .map(|_| prompt.name_source().to_owned())
 }
 
 fn spawn_initial_agent_session_rename<R, Rt, Namer>(
@@ -855,6 +855,10 @@ where
         bot_id: Option<bots::domain::models::BotId>,
     ) -> Result<super::model::ChannelSession> {
         self.repo.find_for_channel(thread_id, bot_id).await
+    }
+
+    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+        self.repo.find_all_for_thread(thread_id).await
     }
 
     async fn set_acp_session_id(

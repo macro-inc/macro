@@ -30,7 +30,7 @@ export function SettingsPage(props: {
   children: JSX.Element;
 }) {
   return (
-    <div class="h-full overflow-y-auto">
+    <div class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]">
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
           the floating header and bottom rows like every other block. */}

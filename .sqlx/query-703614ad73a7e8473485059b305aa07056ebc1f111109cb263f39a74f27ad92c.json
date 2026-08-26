@@ -1,0 +1,61 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO cursor_configs (\n            user_id,\n            key_ciphertext,\n            encryption_version,\n            kms_key_id\n        )\n        VALUES ($1, $2, $3, $4)\n        ON CONFLICT (user_id) DO UPDATE SET\n            key_ciphertext       = EXCLUDED.key_ciphertext,\n            encryption_version   = EXCLUDED.encryption_version,\n            kms_key_id           = EXCLUDED.kms_key_id,\n            updated_at           = NOW()\n        RETURNING\n            user_id,\n            key_ciphertext,\n            encryption_version,\n            kms_key_id,\n            default_model_id,\n            created_at,\n            updated_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "key_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 3,
+        "name": "kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "default_model_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bytea",
+        "Int2",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "703614ad73a7e8473485059b305aa07056ebc1f111109cb263f39a74f27ad92c"
+}

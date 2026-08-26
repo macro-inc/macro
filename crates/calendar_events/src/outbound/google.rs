@@ -10,11 +10,11 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput, CalendarEvent,
-        CalendarEventDraft, CalendarEventOverride, CalendarEventPatch, CalendarEventSource,
-        CalendarEventUpsert, CalendarOccurrence, ConferenceChange, ConferenceProvider,
-        EventReminderOverride, EventReminders, EventStart, EventStatus, EventTime,
-        EventTransparency, EventVisibility, GoogleCalendarTarget, GoogleEventSource,
+        ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
+        CalendarEvent, CalendarEventDraft, CalendarEventOverride, CalendarEventPatch,
+        CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, ConferenceChange,
+        ConferenceProvider, EventReminderOverride, EventReminders, EventStart, EventStatus,
+        EventTime, EventTransparency, EventVisibility, GoogleCalendarTarget, GoogleEventSource,
         GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig,
         OccurrenceRange, ProviderCalendar,
     },
@@ -1140,7 +1140,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
     }
 
     #[tracing::instrument(
-        skip(self, access_token, target, self_email),
+        skip(self, access_token, target, actor),
         fields(provider_calendar_id = %target.provider_calendar_id),
         err
     )]
@@ -1149,7 +1149,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         access_token: &str,
         target: &GoogleCalendarTarget,
         master_provider_event_id: &str,
-        self_email: &str,
+        actor: &ActorInboxes,
         response: AttendeeResponseStatus,
         scope: &CalendarRsvpScope,
     ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
@@ -1169,13 +1169,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         };
         if let Some(provider_event_id) = &patch_target {
             match self
-                .patch_self_response(
-                    access_token,
-                    target,
-                    provider_event_id,
-                    self_email,
-                    response,
-                )
+                .patch_actor_response(access_token, target, provider_event_id, actor, response)
                 .await?
             {
                 RsvpPatch::Applied => {}
@@ -1271,22 +1265,22 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             .map(|instance| instance.id))
     }
 
-    /// Rewrite just the connected account's `responseStatus` on one provider
-    /// event, leaving every other attendee untouched.
+    /// Rewrite just the actor's `responseStatus` on one provider event,
+    /// leaving every other attendee untouched.
     ///
-    /// The patch sends `attendeesOmitted: true` with only the connected
-    /// attendee's entry — Google's documented mechanism for updating one
-    /// participant's response — so a concurrent attendee change between our
+    /// The patch sends `attendeesOmitted: true` with only the actor's
+    /// entry, which is Google's documented mechanism for updating one
+    /// participant's response. A concurrent attendee change between our
     /// read and this write cannot be overwritten by a full-array replace.
     /// The read stays: it distinguishes a vanished event from a requester
     /// who simply is not on the guest list, which the patch alone would
     /// answer by quietly adding them.
-    async fn patch_self_response(
+    async fn patch_actor_response(
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
         provider_event_id: &str,
-        self_email: &str,
+        actor: &ActorInboxes,
         response: AttendeeResponseStatus,
     ) -> Result<RsvpPatch, GoogleProviderError> {
         let Some(current) = self
@@ -1301,21 +1295,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             return Ok(RsvpPatch::Gone);
         };
         let attendees: Vec<GoogleAttendee> = current.attendees.clone().unwrap_or_default();
-        let self_attendee = attendees
-            .iter()
-            .find(|attendee| attendee.is_self)
-            .or_else(|| {
-                attendees.iter().find(|attendee| {
-                    attendee
-                        .email
-                        .as_deref()
-                        .is_some_and(|email| email.eq_ignore_ascii_case(self_email))
-                })
-            });
-        let Some(self_attendee) = self_attendee else {
+        let Some(actor_attendee) = find_actor_attendee(&attendees, actor) else {
             return Ok(RsvpPatch::NotAttendee);
         };
-        let body = rsvp_patch_body(self_attendee, response);
+        let body = rsvp_patch_body(actor_attendee, response);
         match self
             .patch_event_raw(access_token, target, provider_event_id, body)
             .await?
@@ -1417,6 +1400,18 @@ fn google_response_status(status: AttendeeResponseStatus) -> &'static str {
         AttendeeResponseStatus::Declined => "declined",
         AttendeeResponseStatus::Tentative => "tentative",
     }
+}
+
+fn find_actor_attendee<'a>(
+    attendees: &'a [GoogleAttendee],
+    actor: &ActorInboxes,
+) -> Option<&'a GoogleAttendee> {
+    attendees.iter().find(|attendee| {
+        attendee
+            .email
+            .as_deref()
+            .is_some_and(|email| actor.matches(email))
+    })
 }
 
 /// Body updating only the connected attendee's response: `attendeesOmitted`

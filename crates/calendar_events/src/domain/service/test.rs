@@ -113,7 +113,11 @@ impl CalendarRepository for FakeRepo {
         &self,
         _requester_id: &str,
     ) -> Result<Vec<crate::domain::models::VisibleCalendar>, Report> {
-        unreachable!("mutation lookups are not exercised by sync tests")
+        Ok(Vec::new())
+    }
+
+    async fn owned_inbox_emails(&self, _requester_id: &str) -> Result<Vec<String>, Report> {
+        Ok(Vec::new())
     }
 
     async fn remove_google_source(

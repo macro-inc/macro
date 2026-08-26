@@ -7,7 +7,7 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::models::{
-    AppliedGoogleGrant, AttendeeResponseStatus, CalendarBackfillClaim,
+    ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarBackfillClaim,
     CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
     CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
     CalendarEventPatch, CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity,
@@ -175,10 +175,10 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         original_start: &str,
     ) -> impl Future<Output = Result<GoogleSeriesMutationOutcome, GoogleProviderError>> + Send;
 
-    /// Set the connected account's own RSVP on an event. An event that no
-    /// longer exists at the provider surfaces as [`GoogleRsvpOutcome::Gone`];
-    /// absence of a self attendee surfaces as
-    /// [`GoogleRsvpOutcome::NotAttendee`].
+    /// Set the actor's own RSVP on an event. `actor` is the requester's
+    /// owned-inbox identity. An event that no longer exists at the
+    /// provider surfaces as [`GoogleRsvpOutcome::Gone`]; absence of a matching
+    /// attendee surfaces as [`GoogleRsvpOutcome::NotAttendee`].
     ///
     /// `scope` selects what the response covers: the master for
     /// [`CalendarRsvpScope::All`], one exception instance for
@@ -188,7 +188,7 @@ pub trait GoogleCalendarMutationProvider: Send + Sync + 'static {
         access_token: &str,
         target: &GoogleCalendarTarget,
         master_provider_event_id: &str,
-        self_email: &str,
+        actor: &ActorInboxes,
         response: AttendeeResponseStatus,
         scope: &CalendarRsvpScope,
     ) -> impl Future<Output = Result<GoogleRsvpOutcome, GoogleProviderError>> + Send;
@@ -504,6 +504,14 @@ pub trait CalendarRepository: Send + Sync + 'static {
         &self,
         requester_id: &str,
     ) -> impl Future<Output = Result<Vec<VisibleCalendar>, Report>> + Send;
+
+    /// Addresses of every connected inbox the requester owns
+    /// (`email_links.macro_id = requester`). Raw and unnormalized;
+    /// [`ActorInboxes::from_owned`] is the single normalization point.
+    fn owned_inbox_emails(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
 
     /// Retire a Google source the provider confirmed deleted (a recurring
     /// master also retires its expanded instances), restoring the best

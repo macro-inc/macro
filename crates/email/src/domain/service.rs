@@ -17,7 +17,7 @@ use crate::domain::{
     models::{
         CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailThreadMetadata,
         EnrichedEmailThreadPreview, GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread,
-        Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+        SenderPolicy, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
     },
     ports::{
         EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService,
@@ -122,29 +122,36 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
     }
 }
 
+pub(crate) const MAX_SENDER_ADDRESS_LEN: usize = 320;
+
 impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
+    pub(crate) fn validate_sender_address(addr: &str) -> Result<String, EmailErr> {
+        let addr = addr.trim().to_lowercase();
+        if addr.is_empty() {
+            return Err(EmailErr::InvalidEmailFilter(
+                "Email address cannot be empty".to_string(),
+            ));
+        }
+        if !addr.contains('@') {
+            return Err(EmailErr::InvalidEmailFilter(
+                "Invalid email address format".to_string(),
+            ));
+        }
+        if addr.len() > MAX_SENDER_ADDRESS_LEN {
+            return Err(EmailErr::InvalidEmailFilter(
+                "Email address is too long".to_string(),
+            ));
+        }
+        Ok(addr)
+    }
+
     /// Validate and normalize email filter input.
     fn validate_email_filter_input(
         input: UpsertEmailFilterInput,
     ) -> Result<UpsertEmailFilterInput, EmailErr> {
         match (&input.email_address, &input.email_domain) {
             (Some(addr), None) => {
-                let addr = addr.trim().to_lowercase();
-                if addr.is_empty() {
-                    return Err(EmailErr::InvalidEmailFilter(
-                        "Email address cannot be empty".to_string(),
-                    ));
-                }
-                if !addr.contains('@') {
-                    return Err(EmailErr::InvalidEmailFilter(
-                        "Invalid email address format".to_string(),
-                    ));
-                }
-                if addr.len() > 320 {
-                    return Err(EmailErr::InvalidEmailFilter(
-                        "Email address is too long".to_string(),
-                    ));
-                }
+                let addr = Self::validate_sender_address(addr)?;
                 Ok(UpsertEmailFilterInput {
                     email_address: Some(addr),
                     email_domain: None,
@@ -450,6 +457,41 @@ where
             .upsert_email_filter(link.id, validated)
             .await
             .map_err(|e| EmailErr::RepoErr(e.into()))
+    }
+
+    #[tracing::instrument(skip(self, link), fields(link_id = %link.id), err)]
+    async fn set_sender_policy(
+        &self,
+        link: &Link,
+        sender_email: &str,
+        policy: SenderPolicy,
+    ) -> Result<(), EmailErr> {
+        match policy {
+            SenderPolicy::Signal | SenderPolicy::Noise => {
+                let addr = Self::validate_sender_address(sender_email)?;
+                self.enqueuer
+                    .enqueue_gmail_ops_unblock_sender(link.id, addr.clone())
+                    .await
+                    .map_err(|e| EmailErr::EnqueueErr(anyhow::Error::from(e)))?;
+                self.upsert_email_filter(
+                    link,
+                    UpsertEmailFilterInput {
+                        email_address: Some(addr),
+                        email_domain: None,
+                        is_important: matches!(policy, SenderPolicy::Signal),
+                    },
+                )
+                .await?;
+                Ok(())
+            }
+            SenderPolicy::Block => {
+                let addr = Self::validate_sender_address(sender_email)?;
+                self.enqueuer
+                    .enqueue_gmail_ops_block_sender(link.id, addr)
+                    .await
+                    .map_err(|e| EmailErr::EnqueueErr(anyhow::Error::from(e)))
+            }
+        }
     }
 
     async fn delete_email_filter(&self, link: &Link, filter_id: Uuid) -> Result<bool, EmailErr> {

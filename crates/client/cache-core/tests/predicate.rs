@@ -147,13 +147,12 @@ fn replacement_removes_stale_facts_and_incomplete_states_fall_back() {
             )
             .await
             .unwrap();
-        assert_eq!(
-            engine
-                .query_predicate_index(&query("owner-1"))
-                .await
-                .unwrap(),
-            PredicateQueryResult::Complete(vec![record_key()])
-        );
+        let observed = engine
+            .query_predicate_index(&query("owner-1"))
+            .await
+            .unwrap();
+        assert_eq!(observed.revision, engine.current_revision());
+        assert_eq!(observed, PredicateQueryResult::Complete(vec![record_key()]));
 
         engine
             .put_records_with_projections(
