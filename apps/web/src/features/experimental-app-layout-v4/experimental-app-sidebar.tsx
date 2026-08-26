@@ -139,7 +139,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
       </Show>
 
       <nav aria-label="App views" class="mt-1 min-h-0 flex-1 overflow-y-auto">
-        <ul class="flex flex-col gap-1">
+        <ul class="flex flex-col gap-2">
           <For each={chrome.visibleViews()}>
             {(destination) => (
               <li>
@@ -185,7 +185,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
                             ? destination.filledIcon
                             : destination.icon
                         }
-                        class="size-6"
+                        class="size-5.5"
                       />
                       <Show
                         when={isSlim() && chrome.unreadCount(destination) > 0}
