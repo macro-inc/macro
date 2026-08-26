@@ -468,10 +468,15 @@ where
     ) -> Result<(), EmailErr> {
         match policy {
             SenderPolicy::Signal | SenderPolicy::Noise => {
+                let addr = Self::validate_sender_address(sender_email)?;
+                self.enqueuer
+                    .enqueue_gmail_ops_unblock_sender(link.id, addr.clone())
+                    .await
+                    .map_err(|e| EmailErr::EnqueueErr(anyhow::Error::from(e)))?;
                 self.upsert_email_filter(
                     link,
                     UpsertEmailFilterInput {
-                        email_address: Some(sender_email.to_string()),
+                        email_address: Some(addr),
                         email_domain: None,
                         is_important: matches!(policy, SenderPolicy::Signal),
                     },

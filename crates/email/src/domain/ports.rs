@@ -45,6 +45,13 @@ pub trait EmailMessageEnqueuer: Send + Sync + 'static {
         link_id: Uuid,
         email_address: String,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Enqueue a Gmail-ops UnblockSender operation for the link.
+    fn enqueue_gmail_ops_unblock_sender(
+        &self,
+        link_id: Uuid,
+        email_address: String,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// The sending inbox's signature preferences, used by the send pipeline to
@@ -596,6 +603,9 @@ pub trait EmailService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<EmailFilter, EmailErr>> + Send;
 
     /// Set where future mail from a sender lands for the given inbox.
+    ///
+    /// Signal and Noise also enqueue an UnblockSender so a prior Block does
+    /// not keep trashing new mail.
     fn set_sender_policy(
         &self,
         link: &Link,
@@ -681,6 +691,14 @@ impl EmailMessageEnqueuer for NoOpEnqueuer {
     }
 
     async fn enqueue_gmail_ops_block_sender(
+        &self,
+        _link_id: Uuid,
+        _email_address: String,
+    ) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn enqueue_gmail_ops_unblock_sender(
         &self,
         _link_id: Uuid,
         _email_address: String,
