@@ -365,6 +365,123 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
 }
 
 #[test]
+fn optimistic_shadow_hierarchy_enforces_unique_keys_owners_and_cascades() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("shadow-cascades").unwrap();
+        let first = storage.enqueue_mutation(queued("First")).await.unwrap();
+        let second = storage.enqueue_mutation(queued("Second")).await.unwrap();
+        let connection = storage.connection();
+
+        raw_execute(
+            &storage,
+            "INSERT INTO optimistic_index_documents (id, owner_mutation_id, record_key, profile, partition, state) VALUES (100, ?1, 'Thing:1', 'profile-v1', 'thing', 0)",
+            vec![Value::from_i64(mutation_id_to_sql(second).unwrap())],
+        );
+        for (sql, parameters) in [
+            (
+                "INSERT INTO optimistic_exact_facts (document_id, attribute, value) VALUES (100, 'owner', ?1)",
+                vec![Value::from_blob(b"user-1".to_vec())],
+            ),
+            (
+                "INSERT INTO optimistic_integer_facts (document_id, attribute, value) VALUES (100, 'updated-at', 10)",
+                vec![],
+            ),
+            (
+                "INSERT INTO optimistic_sort_facts (document_id, attribute, value) VALUES (100, 'updated-at', 10)",
+                vec![],
+            ),
+            (
+                "INSERT INTO optimistic_uncertain_attributes (document_id, attribute) VALUES (100, 'file-type')",
+                vec![],
+            ),
+        ] {
+            raw_execute(&storage, sql, parameters);
+        }
+        assert!(
+            driver::execute(
+                &connection,
+                "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state) VALUES (?1, 'Thing:1', 'profile-v1', 'thing', 0)",
+                vec![Value::from_i64(mutation_id_to_sql(second).unwrap())],
+            )
+            .is_err()
+        );
+        assert!(
+            driver::execute(
+                &connection,
+                "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state) VALUES (999, 'Thing:missing-owner', 'profile-v1', 'thing', 0)",
+                vec![],
+            )
+            .is_err()
+        );
+
+        raw_execute(
+            &storage,
+            "DELETE FROM mutation_queue WHERE id = ?1",
+            vec![Value::from_i64(mutation_id_to_sql(first).unwrap())],
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_index_documents"),
+            1
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_exact_facts"),
+            1
+        );
+
+        raw_execute(
+            &storage,
+            "DELETE FROM optimistic_index_documents WHERE id = 100",
+            vec![],
+        );
+        for table in [
+            "optimistic_exact_facts",
+            "optimistic_integer_facts",
+            "optimistic_sort_facts",
+            "optimistic_uncertain_attributes",
+        ] {
+            assert_eq!(
+                raw_scalar(&storage, &format!("SELECT COUNT(*) FROM {table}")),
+                0
+            );
+        }
+
+        raw_execute(
+            &storage,
+            "INSERT INTO optimistic_index_documents (id, owner_mutation_id, record_key, profile, partition, state) VALUES (101, ?1, 'Thing:2', 'profile-v1', 'thing', 1)",
+            vec![Value::from_i64(mutation_id_to_sql(second).unwrap())],
+        );
+        raw_execute(
+            &storage,
+            "DELETE FROM mutation_queue WHERE id = ?1",
+            vec![Value::from_i64(mutation_id_to_sql(second).unwrap())],
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_index_documents"),
+            0
+        );
+    });
+}
+
+#[test]
+fn invalid_shadow_state_requests_reset_on_reopen() {
+    let database = TursoMemoryDatabase::new("invalid-shadow-state.db");
+    let mut storage = database.open("scope").unwrap();
+    let owner = block_on(storage.enqueue_mutation(queued("Owner"))).unwrap();
+    raw_execute(
+        &storage,
+        "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state) VALUES (?1, 'Thing:1', 'profile-v1', 'thing', 99)",
+        vec![Value::from_i64(mutation_id_to_sql(owner).unwrap())],
+    );
+    storage.try_close().unwrap();
+
+    let error = database.open("scope").unwrap_err();
+    assert_eq!(
+        error.physical_reset_reason(),
+        Some(PhysicalResetReason::Invariant)
+    );
+}
+
+#[test]
 fn quick_check_requires_exactly_one_ok_text_row() {
     assert!(validate_quick_check_rows(&[vec![text("ok")]]).is_ok());
     for rows in [

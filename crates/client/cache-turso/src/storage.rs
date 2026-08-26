@@ -40,7 +40,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 7;
+pub const STORAGE_SCHEMA_VERSION: u32 = 8;
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,7 +51,7 @@ pub enum TursoStorageOpenOutcome {
     OpenedNew,
 }
 
-const CREATE_SCHEMA: [&str; 16] = [
+const CREATE_SCHEMA: [&str; 24] = [
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
     "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
@@ -68,6 +68,14 @@ const CREATE_SCHEMA: [&str; 16] = [
     "CREATE INDEX integer_facts_lookup_idx ON integer_facts(attribute, value, document_id)",
     "CREATE TABLE sort_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute), FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)",
     "CREATE INDEX sort_facts_lookup_idx ON sort_facts(attribute, value, document_id)",
+    "CREATE TABLE optimistic_index_documents (id INTEGER PRIMARY KEY, owner_mutation_id INTEGER NOT NULL, record_key TEXT NOT NULL, profile TEXT NOT NULL, partition TEXT NOT NULL, state INTEGER NOT NULL, FOREIGN KEY (owner_mutation_id) REFERENCES optimistic_layers(mutation_id) ON DELETE CASCADE)",
+    "CREATE UNIQUE INDEX optimistic_index_documents_record_key_idx ON optimistic_index_documents(record_key)",
+    "CREATE INDEX optimistic_index_documents_owner_idx ON optimistic_index_documents(owner_mutation_id, id)",
+    "CREATE INDEX optimistic_index_documents_scope_idx ON optimistic_index_documents(profile, partition, state, id)",
+    "CREATE TABLE optimistic_exact_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (document_id, attribute, value), FOREIGN KEY (document_id) REFERENCES optimistic_index_documents(id) ON DELETE CASCADE)",
+    "CREATE TABLE optimistic_integer_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute, value), FOREIGN KEY (document_id) REFERENCES optimistic_index_documents(id) ON DELETE CASCADE)",
+    "CREATE TABLE optimistic_sort_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute), FOREIGN KEY (document_id) REFERENCES optimistic_index_documents(id) ON DELETE CASCADE)",
+    "CREATE TABLE optimistic_uncertain_attributes (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, PRIMARY KEY (document_id, attribute), FOREIGN KEY (document_id) REFERENCES optimistic_index_documents(id) ON DELETE CASCADE)",
 ];
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
@@ -100,6 +108,27 @@ const ANY_LAYER_SELECT: &str = "SELECT mutation_id FROM optimistic_layers LIMIT 
 const CLAIM_SELECT: &str = "SELECT lease_owner, lease_generation FROM mutation_queue WHERE id = ?1";
 const REQUIRE_LAYER_SELECT: &str = "SELECT 1 FROM optimistic_layers WHERE mutation_id = ?1";
 const QUEUE_DIAGNOSTICS_SELECT: &str = "SELECT COUNT(*), MIN(created_at_ms) FROM mutation_queue";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i64)]
+enum OptimisticIndexDocumentState {
+    Complete = 0,
+    Deleted = 1,
+    Incomplete = 2,
+}
+
+impl TryFrom<i64> for OptimisticIndexDocumentState {
+    type Error = TursoStorageError;
+
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Complete),
+            1 => Ok(Self::Deleted),
+            2 => Ok(Self::Incomplete),
+            _ => Err(invariant()),
+        }
+    }
+}
 
 /// Turso-backed implementation of [`Storage`].
 ///
@@ -1765,7 +1794,8 @@ fn initialize(
     for sql in INDEX_FACTS_DELETE {
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
-    validate_queue_consistency(connection)
+    validate_queue_consistency(connection)?;
+    validate_optimistic_shadow_consistency(connection)
 }
 
 fn enable_foreign_keys(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
@@ -2101,6 +2131,68 @@ const SORT_FACT_COLUMNS: &[ColumnSpec] = &[
     },
 ];
 
+const OPTIMISTIC_INDEX_DOCUMENT_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "id",
+        declared_type: "INTEGER",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "owner_mutation_id",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "record_key",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "profile",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "partition",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+    ColumnSpec {
+        name: "state",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 0,
+    },
+];
+
+const OPTIMISTIC_UNCERTAIN_ATTRIBUTE_COLUMNS: &[ColumnSpec] = &[
+    ColumnSpec {
+        name: "document_id",
+        declared_type: "INTEGER",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 1,
+    },
+    ColumnSpec {
+        name: "attribute",
+        declared_type: "TEXT",
+        not_null: true,
+        default_zero: false,
+        primary_key_position: 2,
+    },
+];
+
 fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
     validate_allowed_schema_objects(connection)?;
     validate_table_columns(connection, "meta", META_COLUMNS)?;
@@ -2112,12 +2204,46 @@ fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStora
     validate_table_columns(connection, "exact_facts", EXACT_FACT_COLUMNS)?;
     validate_table_columns(connection, "integer_facts", INTEGER_FACT_COLUMNS)?;
     validate_table_columns(connection, "sort_facts", SORT_FACT_COLUMNS)?;
+    validate_table_columns(
+        connection,
+        "optimistic_index_documents",
+        OPTIMISTIC_INDEX_DOCUMENT_COLUMNS,
+    )?;
+    validate_table_columns(connection, "optimistic_exact_facts", EXACT_FACT_COLUMNS)?;
+    validate_table_columns(connection, "optimistic_integer_facts", INTEGER_FACT_COLUMNS)?;
+    validate_table_columns(connection, "optimistic_sort_facts", SORT_FACT_COLUMNS)?;
+    validate_table_columns(
+        connection,
+        "optimistic_uncertain_attributes",
+        OPTIMISTIC_UNCERTAIN_ATTRIBUTE_COLUMNS,
+    )?;
     validate_table_indexes(connection, "meta", &[(0, "key")])?;
     validate_table_indexes(connection, "records", &[(0, "__typename"), (1, "id")])?;
     validate_search_indexes(connection)?;
     validate_mutation_queue_indexes(connection)?;
     validate_table_indexes(connection, "optimistic_layers", &[])?;
     validate_predicate_indexes(connection)?;
+    validate_optimistic_predicate_indexes(connection)?;
+    validate_table_indexes(
+        connection,
+        "optimistic_exact_facts",
+        &[(0, "document_id"), (1, "attribute"), (2, "value")],
+    )?;
+    validate_table_indexes(
+        connection,
+        "optimistic_integer_facts",
+        &[(0, "document_id"), (1, "attribute"), (2, "value")],
+    )?;
+    validate_table_indexes(
+        connection,
+        "optimistic_sort_facts",
+        &[(0, "document_id"), (1, "attribute")],
+    )?;
+    validate_table_indexes(
+        connection,
+        "optimistic_uncertain_attributes",
+        &[(0, "document_id"), (1, "attribute")],
+    )?;
     validate_table_constraints(connection, "meta", false)?;
     validate_table_constraints(connection, "records", false)?;
     validate_table_constraints(connection, "search_documents", false)?;
@@ -2127,15 +2253,41 @@ fn validate_frozen_schema(connection: &Arc<Connection>) -> Result<(), TursoStora
     validate_table_constraints(connection, "exact_facts", false)?;
     validate_table_constraints(connection, "integer_facts", false)?;
     validate_table_constraints(connection, "sort_facts", false)?;
+    validate_table_constraints(connection, "optimistic_index_documents", false)?;
+    validate_table_constraints(connection, "optimistic_exact_facts", false)?;
+    validate_table_constraints(connection, "optimistic_integer_facts", false)?;
+    validate_table_constraints(connection, "optimistic_sort_facts", false)?;
+    validate_table_constraints(connection, "optimistic_uncertain_attributes", false)?;
     validate_no_foreign_keys(connection, "meta")?;
     validate_no_foreign_keys(connection, "records")?;
     validate_no_foreign_keys(connection, "search_documents")?;
     validate_no_foreign_keys(connection, "mutation_queue")?;
     validate_no_foreign_keys(connection, "index_documents")?;
     validate_optimistic_foreign_key(connection)?;
-    validate_fact_foreign_key(connection, "exact_facts")?;
-    validate_fact_foreign_key(connection, "integer_facts")?;
-    validate_fact_foreign_key(connection, "sort_facts")
+    validate_fact_foreign_key(connection, "exact_facts", "index_documents")?;
+    validate_fact_foreign_key(connection, "integer_facts", "index_documents")?;
+    validate_fact_foreign_key(connection, "sort_facts", "index_documents")?;
+    validate_shadow_document_foreign_key(connection)?;
+    validate_fact_foreign_key(
+        connection,
+        "optimistic_exact_facts",
+        "optimistic_index_documents",
+    )?;
+    validate_fact_foreign_key(
+        connection,
+        "optimistic_integer_facts",
+        "optimistic_index_documents",
+    )?;
+    validate_fact_foreign_key(
+        connection,
+        "optimistic_sort_facts",
+        "optimistic_index_documents",
+    )?;
+    validate_fact_foreign_key(
+        connection,
+        "optimistic_uncertain_attributes",
+        "optimistic_index_documents",
+    )
 }
 
 const SQLITE_SEQUENCE_TABLE: &str = "sqlite_sequence";
@@ -2155,7 +2307,12 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
         "integer_facts",
         "meta",
         "mutation_queue",
+        "optimistic_exact_facts",
+        "optimistic_index_documents",
+        "optimistic_integer_facts",
         "optimistic_layers",
+        "optimistic_sort_facts",
+        "optimistic_uncertain_attributes",
         "records",
         "search_documents",
         "sort_facts",
@@ -2166,12 +2323,15 @@ fn validate_allowed_schema_objects(connection: &Arc<Connection>) -> Result<(), T
         "integer_facts_lookup_idx",
         "index_documents_record_key_idx",
         "mutation_queue_created_at_ms_idx",
+        "optimistic_index_documents_owner_idx",
+        "optimistic_index_documents_record_key_idx",
+        "optimistic_index_documents_scope_idx",
         "search_documents_browse_idx",
         "sort_facts_lookup_idx",
     ];
     let support = [SQLITE_SEQUENCE_TABLE, TURSO_AUTOINCREMENT_TABLE];
-    let mut seen = [false; 9];
-    let mut named_index_seen = [false; 7];
+    let mut seen = vec![false; expected.len()];
+    let mut named_index_seen = vec![false; named_indexes.len()];
     let mut support_seen = [false; 2];
     for row in rows {
         if row.len() != 3 {
@@ -2749,6 +2909,69 @@ fn validate_predicate_indexes(connection: &Arc<Connection>) -> Result<(), TursoS
     Ok(())
 }
 
+fn validate_optimistic_predicate_indexes(
+    connection: &Arc<Connection>,
+) -> Result<(), TursoStorageError> {
+    let indexes = driver::query(
+        connection,
+        "PRAGMA index_list('optimistic_index_documents')",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let expected = [
+        (
+            "optimistic_index_documents_record_key_idx",
+            true,
+            &["record_key"][..],
+        ),
+        (
+            "optimistic_index_documents_owner_idx",
+            false,
+            &["owner_mutation_id", "id"][..],
+        ),
+        (
+            "optimistic_index_documents_scope_idx",
+            false,
+            &["profile", "partition", "state", "id"][..],
+        ),
+    ];
+    if indexes.len() != expected.len() {
+        return Err(compatibility());
+    }
+    for (index, unique, expected_columns) in expected {
+        let Some(row) = indexes
+            .iter()
+            .find(|row| required_text(row, 1).ok().as_deref() == Some(index))
+        else {
+            return Err(compatibility());
+        };
+        if row.len() != 5
+            || required_i64(row, 2).ok() != Some(i64::from(unique))
+            || required_text(row, 3).ok().as_deref() != Some("c")
+        {
+            return Err(compatibility());
+        }
+        let columns = driver::query(
+            connection,
+            &format!("PRAGMA index_info('{index}')"),
+            Vec::new(),
+        )
+        .map_err(TursoStorageError::initialization)?;
+        if columns.len() != expected_columns.len()
+            || columns.iter().zip(expected_columns).enumerate().any(
+                |(position, (row, expected))| {
+                    row.len() != 3
+                        || required_i64(row, 0).ok() != i64::try_from(position).ok()
+                        || required_text(row, 2).ok().as_deref() != Some(*expected)
+                },
+            )
+        {
+            return Err(compatibility());
+        }
+    }
+    Ok(())
+}
+
 fn validate_no_foreign_keys(
     connection: &Arc<Connection>,
     table: &str,
@@ -2793,9 +3016,32 @@ fn validate_optimistic_foreign_key(connection: &Arc<Connection>) -> Result<(), T
     Ok(())
 }
 
+fn validate_shadow_document_foreign_key(
+    connection: &Arc<Connection>,
+) -> Result<(), TursoStorageError> {
+    validate_cascade_foreign_key(
+        connection,
+        "optimistic_index_documents",
+        "optimistic_layers",
+        "owner_mutation_id",
+        "mutation_id",
+    )
+}
+
 fn validate_fact_foreign_key(
     connection: &Arc<Connection>,
     table: &str,
+    parent: &str,
+) -> Result<(), TursoStorageError> {
+    validate_cascade_foreign_key(connection, table, parent, "document_id", "id")
+}
+
+fn validate_cascade_foreign_key(
+    connection: &Arc<Connection>,
+    table: &str,
+    parent: &str,
+    from: &str,
+    to: &str,
 ) -> Result<(), TursoStorageError> {
     let rows = driver::query(
         connection,
@@ -2809,9 +3055,9 @@ fn validate_fact_foreign_key(
     if row.len() != 8
         || required_i64(row, 0).ok() != Some(0)
         || required_i64(row, 1).ok() != Some(0)
-        || required_text(row, 2).ok().as_deref() != Some("index_documents")
-        || required_text(row, 3).ok().as_deref() != Some("document_id")
-        || required_text(row, 4).ok().as_deref() != Some("id")
+        || required_text(row, 2).ok().as_deref() != Some(parent)
+        || required_text(row, 3).ok().as_deref() != Some(from)
+        || required_text(row, 4).ok().as_deref() != Some(to)
         || required_text(row, 5).ok().as_deref() != Some("NO ACTION")
         || required_text(row, 6).ok().as_deref() != Some("CASCADE")
         || required_text(row, 7).ok().as_deref() != Some("NONE")
@@ -2858,6 +3104,40 @@ fn validate_queue_consistency(connection: &Arc<Connection>) -> Result<(), TursoS
     } else {
         Err(invariant())
     }
+}
+
+fn validate_optimistic_shadow_consistency(
+    connection: &Arc<Connection>,
+) -> Result<(), TursoStorageError> {
+    if !driver::query(connection, "PRAGMA foreign_key_check", Vec::new())
+        .map_err(TursoStorageError::initialization)?
+        .is_empty()
+    {
+        return Err(invariant());
+    }
+    for row in driver::query(
+        connection,
+        "SELECT state FROM optimistic_index_documents",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?
+    {
+        if row.len() != 1 {
+            return Err(invariant());
+        }
+        OptimisticIndexDocumentState::try_from(required_i64(&row, 0)?)?;
+    }
+    if !driver::query(
+        connection,
+        "SELECT 1 FROM optimistic_index_documents AS d WHERE d.state <> 0 AND (EXISTS (SELECT 1 FROM optimistic_exact_facts AS f WHERE f.document_id = d.id) OR EXISTS (SELECT 1 FROM optimistic_integer_facts AS f WHERE f.document_id = d.id) OR EXISTS (SELECT 1 FROM optimistic_sort_facts AS f WHERE f.document_id = d.id)) LIMIT 1",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?
+    .is_empty()
+    {
+        return Err(invariant());
+    }
+    Ok(())
 }
 
 struct EncodedRecord {
