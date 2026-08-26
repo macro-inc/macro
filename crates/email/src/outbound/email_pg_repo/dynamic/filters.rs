@@ -36,6 +36,8 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
+            | EmailLiteral::NotificationSeen(_)
+            | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
             | EmailLiteral::Property(_),
@@ -56,6 +58,8 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
+            | EmailLiteral::NotificationSeen(_)
+            | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
             | EmailLiteral::Property(_),
