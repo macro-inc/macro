@@ -120,6 +120,30 @@ export const APP_LAYOUT_DEFINITIONS = [
       messages: 'Chat',
     },
   },
+  {
+    id: 'experimental-v5',
+    label: 'Experimental v5',
+    splitPanelRenderer: 'v2-composed',
+    capabilities: {
+      experimentalSurfaces: true,
+      usesNewInbox: true,
+      usesMessagesWorkspace: true,
+      usesBrainWorkspace: true,
+      usesCalendarWorkspace: true,
+      usesFloatingSplitClose: true,
+      hidesGlobalSidebar: true,
+      compactSplitHeader: true,
+      removesSplitContentLeftPadding: true,
+      removesSplitContentTopPadding: true,
+    },
+    contentOwnedSplitChrome: V2_CONTENT_OWNED_CHROME,
+    experimentalViewNames: {
+      crm: 'CRM',
+      library: 'Drive',
+      machines: 'Brain',
+      messages: 'Chat',
+    },
+  },
 ] as const satisfies readonly AppLayoutDefinition[];
 
 /** Registered ids are inferred from the registry, so future layouts add one entry. */

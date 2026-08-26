@@ -16,6 +16,8 @@ export const ScrollIndicators = (props: {
   scrollRef: Accessor<HTMLElement | undefined>;
   direction?: 'vertical' | 'horizontal';
   appearance?: 'pattern' | 'gradient';
+  /** Color used at the opaque edge of gradient indicators. */
+  color?: string;
   class?: string;
   noBorderStart?: boolean;
   noBorderEnd?: boolean;
@@ -25,6 +27,19 @@ export const ScrollIndicators = (props: {
 
   const isHorizontal = () => props.direction === 'horizontal';
   const isGradient = () => props.appearance === 'gradient';
+  const gradientStyle = (edge: 'start' | 'end') => {
+    if (!isGradient() || !props.color) return;
+    const direction = isHorizontal()
+      ? edge === 'start'
+        ? 'right'
+        : 'left'
+      : edge === 'start'
+        ? 'bottom'
+        : 'top';
+    return {
+      'background-image': `linear-gradient(to ${direction}, ${props.color}, transparent)`,
+    };
+  };
 
   const updateIndicators = () => {
     const ref = props.scrollRef();
@@ -72,6 +87,7 @@ export const ScrollIndicators = (props: {
       <div
         ref={startIndicator}
         aria-hidden="true"
+        style={gradientStyle('start')}
         class={cn(
           'pointer-events-none absolute z-annotation-layer',
           isGradient()
@@ -93,6 +109,7 @@ export const ScrollIndicators = (props: {
       <div
         ref={endIndicator}
         aria-hidden="true"
+        style={gradientStyle('end')}
         class={cn(
           'pointer-events-none absolute z-annotation-layer',
           isGradient()

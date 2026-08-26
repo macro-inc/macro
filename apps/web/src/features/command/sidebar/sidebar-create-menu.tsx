@@ -19,9 +19,11 @@ export const SidebarCreateMenu = (props: {
   variant?: 'row' | 'icon';
   icon?: 'create' | 'plus';
   filled?: boolean;
+  showLabel?: boolean;
   large?: boolean;
   triggerClass?: string;
   animateSlimLabel?: boolean;
+  placement?: 'right-start' | 'bottom-start';
   onMenuOpenChange?: (open: boolean) => void;
   onAgentSelect?: () => void;
 }) => {
@@ -85,7 +87,7 @@ export const SidebarCreateMenu = (props: {
     <Dropdown
       open={open()}
       onOpenChange={handleOpenChange}
-      placement="right-start"
+      placement={props.placement ?? 'right-start'}
       gutter={8}
     >
       <Show
@@ -160,6 +162,9 @@ export const SidebarCreateMenu = (props: {
         >
           <Show when={props.icon === 'plus'} fallback={<CreateIcon />}>
             <PlusIcon />
+          </Show>
+          <Show when={props.showLabel}>
+            <span class="text-xs">Create</span>
           </Show>
         </Dropdown.Trigger>
       </Show>

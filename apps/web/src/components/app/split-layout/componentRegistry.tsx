@@ -276,6 +276,21 @@ function MyActivityViewWrapper() {
 registerComponent('activity', withAuth(MyActivityViewWrapper));
 
 registerComponent(
+  'notifications',
+  withAuth(() => {
+    usePageViewTracking('notifications');
+    return (
+      <Show
+        when={activeAppLayoutSurfaces()?.InboxView}
+        fallback={<RedirectSplit to={{ type: 'component', id: 'inbox' }} />}
+      >
+        {(InboxView) => <Dynamic component={InboxView()} />}
+      </Show>
+    );
+  })
+);
+
+registerComponent(
   'reminders',
   withAuth(() => {
     // Registered even when the flag is closed so a bookmarked /reminders or a
