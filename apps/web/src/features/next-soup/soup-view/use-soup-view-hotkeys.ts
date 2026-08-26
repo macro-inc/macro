@@ -371,6 +371,14 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     return true;
   };
 
+  /**
+   * A top bar owns Tab and the digits for switching app views, so the in-view
+   * tabs give those keys up rather than shadowing them from the closer scope.
+   */
+  const tabKeysOwnedHere = () => !activeAppLayout().capabilities.usesTopBar;
+
+  const tabKeysNavigable = () => tabKeysOwnedHere() && getTabKeys().length > 1;
+
   // 1-9 number keys to jump to specific tabs
   const tabNumberKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
   for (let i = 0; i < tabNumberKeys.length; i++) {
@@ -381,7 +389,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       scopeId,
       hotkeyToken: TOKENS.soup.tabs[key],
       description: `Switch to tab ${key}`,
-      condition: () => getTabKeys().length > index,
+      condition: () => tabKeysOwnedHere() && getTabKeys().length > index,
       keyDownHandler: () => switchToTabIndex(index),
       hide: true,
     }).withGroup(group);
@@ -403,13 +411,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     const defaultIdx = tabKeys.indexOf(config.default);
     return defaultIdx !== -1 ? defaultIdx : 0;
   };
-
-  /**
-   * A top bar owns Tab for switching app views, so the in-view tabs give the
-   * key up rather than shadowing it from the closer scope.
-   */
-  const tabKeysNavigable = () =>
-    getTabKeys().length > 1 && !activeAppLayout().capabilities.usesTopBar;
 
   // tab - Next tab
   registerHotkey({

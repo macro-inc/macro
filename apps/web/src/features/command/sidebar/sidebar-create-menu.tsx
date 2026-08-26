@@ -11,12 +11,12 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@icon/square-pen-create.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
-import { createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export const SidebarCreateMenu = (props: {
   isSlim: () => boolean;
-  variant?: 'row' | 'icon' | 'pill';
+  variant?: 'row' | 'icon';
   icon?: 'create' | 'plus';
   /** Menu placement; defaults to the sidebar's side-anchored flyout. */
   placement?: 'right-start' | 'bottom-start' | 'bottom-end';
@@ -88,7 +88,8 @@ export const SidebarCreateMenu = (props: {
       placement={props.placement ?? 'right-start'}
       gutter={8}
     >
-      <Switch
+      <Show
+        when={props.variant === 'icon'}
         fallback={
           <Dropdown.Trigger
             as={NavRow}
@@ -120,52 +121,32 @@ export const SidebarCreateMenu = (props: {
           </Dropdown.Trigger>
         }
       >
-        <Match when={props.variant === 'pill'}>
-          {/* Accent pill sized to sit beside the top bar's search field. */}
-          <Dropdown.Trigger
-            as={Button}
-            variant="cta"
-            size="sm"
-            class="h-10 shrink-0 gap-1.5 rounded-full border-transparent px-4 font-semibold [&_svg]:size-4!"
-            label="Create"
-            hotkey={TOKENS.global.createCommand}
-            onMouseDown={(e: MouseEvent) => {
-              if (e.button !== 0) return;
-              e.preventDefault();
-            }}
-          >
+        <Dropdown.Trigger
+          as={Button}
+          variant={props.filled ? 'ghost' : 'base'}
+          size="icon-sm"
+          depth={1}
+          class={cn(
+            'rounded-full',
+            props.large
+              ? 'size-9 [&_svg]:size-[18px]!'
+              : 'size-[26px] [&_svg]:size-4!',
+            props.filled
+              ? 'border-transparent bg-ink/8 text-ink shadow-none hover:bg-ink/12 hover:text-ink!'
+              : 'bg-surface shadow-md shadow-drop-shadow'
+          )}
+          label="Create"
+          hotkey={TOKENS.global.createCommand}
+          onMouseDown={(e: MouseEvent) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+          }}
+        >
+          <Show when={props.icon === 'plus'} fallback={<CreateIcon />}>
             <PlusIcon />
-            <span>New</span>
-          </Dropdown.Trigger>
-        </Match>
-        <Match when={props.variant === 'icon'}>
-          <Dropdown.Trigger
-            as={Button}
-            variant={props.filled ? 'ghost' : 'base'}
-            size="icon-sm"
-            depth={1}
-            class={cn(
-              'rounded-full',
-              props.large
-                ? 'size-9 [&_svg]:size-[18px]!'
-                : 'size-[26px] [&_svg]:size-4!',
-              props.filled
-                ? 'border-transparent bg-ink/8 text-ink shadow-none hover:bg-ink/12 hover:text-ink!'
-                : 'bg-surface shadow-md shadow-drop-shadow'
-            )}
-            label="Create"
-            hotkey={TOKENS.global.createCommand}
-            onMouseDown={(e: MouseEvent) => {
-              if (e.button !== 0) return;
-              e.preventDefault();
-            }}
-          >
-            <Show when={props.icon === 'plus'} fallback={<CreateIcon />}>
-              <PlusIcon />
-            </Show>
-          </Dropdown.Trigger>
-        </Match>
-      </Switch>
+          </Show>
+        </Dropdown.Trigger>
+      </Show>
       <Dropdown.Content class="min-w-52 shadow-menu">
         <Dropdown.Group>
           <For each={blocks()}>
