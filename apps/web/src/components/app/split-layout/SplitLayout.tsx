@@ -1,4 +1,5 @@
 import { activeAppLayout } from '@app/features/app-layout/layout-state';
+import { splitsSitBesideChromeRail } from '@app/features/app-layout/split-chrome';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
   isSidebarVisible,
@@ -138,6 +139,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
           'pl-0':
             !flatSeams() &&
             isSidebarVisible() &&
+            splitsSitBesideChromeRail() &&
             (!sidebar.isCollapsed() ||
               activeAppLayout().capabilities.removesSplitContentLeftPadding),
           'bg-edge-muted p-0': flatSeams(),

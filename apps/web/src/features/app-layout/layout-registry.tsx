@@ -143,7 +143,9 @@ export const APP_LAYOUT_DEFINITIONS = [
       // their own chrome — only the top bar takes those over.
       usesTopBar: false,
       usesBottomBar: true,
-      flatSplitSeams: true,
+      // V2's bento: the dock floats over a page of rounded, shadowed cards
+      // rather than over one edge-to-edge sheet.
+      flatSplitSeams: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },

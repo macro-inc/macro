@@ -16,6 +16,16 @@ export const splitOwnsIdentity = () =>
 export const splitOwnsSearch = () => !activeAppLayout().capabilities.usesTopBar;
 
 /**
+ * Whether app chrome is a rail beside the splits rather than a bar above or
+ * below them. A rail fills the page's left gutter itself, so the splits drop
+ * their padding on that side; a bar leaves the gutter to them.
+ */
+export const splitsSitBesideChromeRail = () => {
+  const { usesTopBar, usesBottomBar } = activeAppLayout().capabilities;
+  return !usesTopBar && !usesBottomBar;
+};
+
+/**
  * Whether a view's own chrome may sit on a tinted surface. Flat layouts paint
  * everything at the page's own level, so a sidebar that lifts itself off the
  * panel reads as a leftover from the card look.
