@@ -189,6 +189,41 @@ describe('CacheWorkerCore', () => {
     expect(JSON.stringify(observations)).not.toContain('redacted-by-design');
   });
 
+  it('records Soup projection storage failures without payload data', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        hydrateQuery: vi.fn().mockRejectedValue(new Error('OPFS WAL io failure')),
+      }),
+    });
+    const core = new CacheWorkerCore({
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'hydrate',
+      operationName: 'SoupBackfill',
+      query: 'query SoupBackfill { user { id } }',
+      data: { user: { id: 'must-not-be-exported' } },
+    });
+
+    expect(observations).toContainEqual(
+      expect.objectContaining({
+        name: 'graphql_cache.soup_projection',
+        operationCategory: 'write',
+        outcome: 'error',
+        errorCode: 'opfs-io',
+        soupOperation: 'backfill',
+      })
+    );
+    expect(JSON.stringify(observations)).not.toContain('must-not-be-exported');
+  });
+
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
     let resolveEnqueue!: (result: {
