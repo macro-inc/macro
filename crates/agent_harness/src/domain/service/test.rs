@@ -33,8 +33,7 @@ use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
-    OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer, enrich_channel_prompt,
-    escape_agent_context_tags,
+    OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::{AgentPromptComposer, ChannelPromptContext, ContainerManager as _};
 use crate::outbound::runtime_registry::RuntimeRegistry;
@@ -161,10 +160,11 @@ impl AgentPromptComposer for PromptComposerMock {
                 "{message}"
             )));
         }
-        match messages {
-            Some(messages) => enrich_channel_prompt(prompt_markdown, messages),
-            None => Ok(escape_agent_context_tags(prompt_markdown)),
-        }
+        Ok(if messages.is_some() {
+            context_prompt(prompt_markdown)
+        } else {
+            prompt_markdown.to_owned()
+        })
     }
 }
 
@@ -240,7 +240,7 @@ fn harness() -> (
 }
 
 fn context_prompt(original: &str) -> String {
-    enrich_channel_prompt(original, &[]).unwrap()
+    format!("composed: {original}")
 }
 
 /// Play the agent's half of the ACP handshake.
@@ -469,12 +469,10 @@ async fn open_sends_prior_messages_only_to_the_agent_prompt() {
     result.unwrap();
 
     assert_eq!(announcer.announced()[0].prompted_content, raw);
-    assert_eq!(composer.calls(), [(raw.clone(), Some(context.clone()))]);
+    assert_eq!(composer.calls(), [(raw.clone(), Some(context))]);
     assert_eq!(
         prompts(&container.agent()),
-        [vec![ContentBlock::from(
-            enrich_channel_prompt(&raw, &context).unwrap()
-        )]]
+        [vec![ContentBlock::from(context_prompt(&raw))]]
     );
 }
 
