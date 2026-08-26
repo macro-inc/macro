@@ -26,6 +26,7 @@ const enginePort = {
 describe('coordinator runtime protocol', () => {
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
+    expect(isCacheRequest({ id: 1, kind: 'current-revision' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'read', query: '{ x }' })).toBe(true);
     expect(
       isCacheRequest({
