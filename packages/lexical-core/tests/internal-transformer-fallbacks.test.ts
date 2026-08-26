@@ -7,15 +7,9 @@ import {
   type UnknownMentionNode,
 } from '../nodes/UnknownMentionNode';
 import { $isUserMentionNode } from '../nodes/UserMentionNode';
-import {
-  AGENT_INTERNAL_TRANSFORMERS,
-  ALL_TRANSFORMERS,
-} from '../transformers';
+import { ALL_TRANSFORMERS } from '../transformers';
 
-async function importMarkdown(
-  markdown: string,
-  transformers = ALL_TRANSFORMERS
-) {
+async function importMarkdown(markdown: string) {
   const editor = createEditor({
     nodes: SupportedNodeTypes,
     onError: (error) => {
@@ -26,7 +20,7 @@ async function importMarkdown(
   await new Promise<void>((resolve) => {
     editor.update(
       () => {
-        $convertFromMarkdownString(markdown, transformers);
+        $convertFromMarkdownString(markdown, ALL_TRANSFORMERS);
       },
       { onUpdate: () => resolve() }
     );
@@ -136,7 +130,7 @@ describe('internal transformer fallbacks', () => {
     '<m-agent-context>{"version":1,"text":42}</m-agent-context>',
     '<m-agent-context>{"version":1,"text":"private","extra":true}</m-agent-context>',
   ])('rejects malformed trusted agent context %#', async (markdown) => {
-    const editor = await importMarkdown(markdown, AGENT_INTERNAL_TRANSFORMERS);
+    const editor = await importMarkdown(markdown);
 
     editor.getEditorState().read(() => {
       expect(findUnknownMention()?.getName()).toBe('Unknown Agent Context');

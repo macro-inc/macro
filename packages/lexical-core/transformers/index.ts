@@ -76,6 +76,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_AGENT_CONTEXT,
   I_TABLE_NODE,
   HTML_BLOCKQUOTE,
   I_MACRO_QUOTE,
@@ -158,6 +159,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_AGENT_CONTEXT,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,
   I_THEME_MENTION,
@@ -172,11 +174,4 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
-];
-
-/** Internal parsing for trusted agent-session prompts enriched by the harness. */
-export const AGENT_INTERNAL_TRANSFORMERS: Transformer[] = [
-  ...ALL_TRANSFORMERS.slice(0, -1),
-  I_AGENT_CONTEXT,
-  UNKNOWN_MENTION,
 ];

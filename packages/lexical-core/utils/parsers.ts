@@ -170,15 +170,17 @@ export function stripAgentContext(text: string): string {
  * - Links: text (fallback to url)
  */
 export function markdownToPlainText(markdown: string): string {
-  return parseLinks(
-    parseDocumentCards(
-      parseSnapshots(
-        parseTagMentions(
-          parsePullRequestMentions(
-            parseDocumentMentions(
-              parseGroupMentions(
-                parseDateMentions(
-                  parseContactMentions(parseUserMentions(markdown))
+  return stripAgentContext(
+    parseLinks(
+      parseDocumentCards(
+        parseSnapshots(
+          parseTagMentions(
+            parsePullRequestMentions(
+              parseDocumentMentions(
+                parseGroupMentions(
+                  parseDateMentions(
+                    parseContactMentions(parseUserMentions(markdown))
+                  )
                 )
               )
             )
@@ -314,7 +316,7 @@ function flattenEmailThreadEmbeds(text: string): string {
 export function markdownToEmbeddingText(markdown: string): string {
   // Containers first: their payloads nest further tags that the leaf passes
   // below pick up.
-  let text = markdown.replace(
+  let text = stripAgentContext(markdown).replace(
     /<m-snapshot>(.*?)<\/m-snapshot>/gs,
     (_, encoded) => snapshotToEmbeddingText(encoded)
   );
