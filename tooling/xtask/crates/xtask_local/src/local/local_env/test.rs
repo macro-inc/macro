@@ -148,6 +148,17 @@ fn boot_stubs_are_local_only() {
     );
 }
 
+#[test]
+fn internal_auth_values_are_authoritative_local_env() {
+    let env =
+        LocalEnv::for_instance(Mode::Local, &Instance::derive(None, None).unwrap(), true).to_env();
+    let expected = env.get("INTERNAL_API_SECRET_KEY");
+
+    assert_eq!(env.get("INTERNAL_API_KEY"), expected);
+    assert_eq!(env.get("INTERNAL_AUTH_KEY"), expected);
+    assert_eq!(env.get("AUTHENTICATION_SERVICE_SECRET_KEY"), expected);
+}
+
 /// Local must never point at real dev/prod infrastructure: endpoints are docker
 /// aliases / localhost, and creds are the LocalStack dummies. (Note `ISSUER` is
 /// the local `local.macro.com` JWT issuer — a value, not an endpoint — so we
@@ -278,6 +289,9 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
     // Present so `GITHUB_TOKEN=... just run_local` overlays, but empty in a
     // no-Doppler stack. Doppler would supply a real token above this stub.
     assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
+    // No `CURSOR_API_KEY`: `@cursor` sessions run on the key each user
+    // registers in settings, so there is no deployment-wide one to stub.
+    assert!(!env.contains_key("CURSOR_API_KEY"));
 }
 
 /// Sandboxes and the harness are both containers, so they reach each other on a

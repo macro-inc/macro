@@ -21,8 +21,8 @@ use tracing::instrument::WithSubscriber as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults, OpenSession,
-    SessionAnnouncement, SpawnContainer, is_managed_bot,
+    AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
+    OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
 };
 use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -333,6 +333,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id: session.id,
+                kind: AgentKind::of(session.bot_id),
                 repo_url: defaults.repo_url.clone(),
                 size: sandbox_size,
             })
@@ -417,6 +418,26 @@ where
     Runtimes: RuntimeConnections,
 {
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
+        match &command {
+            HarnessCommand::Open(open)
+                if AgentKind::of(open.bot_id) == AgentKind::Cursor
+                    && !is_macro_staff(&open.origin.sender) =>
+            {
+                return Err(AgentSessionError::Forbidden.into());
+            }
+            HarnessCommand::Deliver(deliver) => {
+                let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::of(session.bot_id) == AgentKind::Cursor
+                    && !deliver.actor.as_ref().is_some_and(is_macro_staff)
+                {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
+            HarnessCommand::Open(_)
+            | HarnessCommand::SetSandboxSize(_)
+            | HarnessCommand::Delete => {}
+        }
+
         match command {
             HarnessCommand::Open(command) => self.open(session_id, command).await,
             HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
@@ -451,7 +472,13 @@ where
     ) -> Result<()> {
         let session = self.sessions.get_session(session_id).await?;
         let effect = self.containers.resize_effect(session.sandbox_size, size);
-        if is_managed_bot(session.bot_id) && effect != SandboxResizeEffect::NoOp {
+        // Only a sandboxed coder has a sandbox to act on: a Cursor session
+        // runs in Cursor's cloud, the in-memory bot has no sandbox, and an
+        // external bot provisions its own. For all three, the size is only
+        // recorded below as a preference.
+        if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
+            && effect != SandboxResizeEffect::NoOp
+        {
             if effect == SandboxResizeEffect::Restart {
                 self.sessions.close_session(session_id).await?;
             }
@@ -519,6 +546,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id,
+                kind: AgentKind::of(bot_id),
                 repo_url,
                 size: sandbox_size,
             })
@@ -558,7 +586,8 @@ where
     ///
     /// Three steps, in this order: persist whatever the action changes about
     /// the session, work out whether anyone needs telling, then deliver it.
-    /// Announcing last means nothing is announced that was never sent.
+    /// Announcing before delivery means the chip exists to anchor the turn
+    /// the agent streams into.
     #[tracing::instrument(err, skip(self, command), fields(agent.session.id = %session_id))]
     async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
         let DeliverAction {
@@ -572,6 +601,13 @@ where
             .announcement(session_id, &action, actor.as_ref(), announce)
             .await?;
 
+        // Announced before the prompt is delivered, as `open` does: the chip
+        // anchors the turn the agent is about to stream into, so it has to
+        // exist before the response can arrive.
+        if let Some(announcement) = announcement {
+            self.announcer.announce(announcement).await?;
+        }
+
         match self
             .sessions
             .send_action(session_id, actor.clone(), action.clone(), id.clone())
@@ -583,7 +619,7 @@ where
             // wire.
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
-                if is_managed_bot(session.bot_id) {
+                if AgentKind::of(session.bot_id).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     self.sessions
                         .attach_session(session_id, RuntimeAttachment::solo(container))
@@ -610,10 +646,6 @@ where
                     .await?;
             }
             Err(error) => return Err(error.into()),
-        }
-
-        if let Some(announcement) = announcement {
-            self.announcer.announce(announcement).await?;
         }
         Ok(())
     }

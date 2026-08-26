@@ -1,6 +1,7 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const authKeys = createQueryKeys('auth', {
+  cursorApiKeyStatus: null,
   githubLinkStatus: null,
   userInfo: null,
   userName: (userId: string) => ({

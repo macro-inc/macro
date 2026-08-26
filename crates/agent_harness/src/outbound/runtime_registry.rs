@@ -67,9 +67,46 @@ where
     {
         let connection = RuntimeConnection::connect(carrier);
 
-        if let Some(displaced) = self.connections.insert(bot, connection) {
+        // Listed before it is watched: a socket that dies immediately would
+        // otherwise have its eviction run before the entry it is meant to
+        // remove exists, leaving the dead connection listed for good.
+        if let Some(displaced) = self.connections.insert(bot, Arc::clone(&connection)) {
             displaced.evict();
             tracing::info!(%bot, "a redialed runtime replaced this bot's connection");
+        }
+        self.watch_for_close(bot, connection);
+    }
+
+    /// Drop `connection` from the registry once its transport ends.
+    ///
+    /// Without this, a bot whose runtime went away keeps an entry that
+    /// [`RuntimeConnections::bind`] will hand out: sessions attach to a closed
+    /// socket, their handshake writes succeed into nothing, and every prompt
+    /// fails until some later dial happens to displace it. A registry of live
+    /// connections has to stop listing the dead ones.
+    fn watch_for_close(self: &Arc<Self>, bot: BotId, connection: Arc<RuntimeConnection<Sender>>) {
+        tokio::spawn(Arc::clone(self).drop_when_closed(bot, connection));
+    }
+
+    /// The body of that watch: wait for the end, then unlist it.
+    ///
+    /// Separate from the spawn so a test can await the whole thing rather than
+    /// race a task it has no handle on.
+    async fn drop_when_closed(
+        self: Arc<Self>,
+        bot: BotId,
+        connection: Arc<RuntimeConnection<Sender>>,
+    ) {
+        connection.closed().await;
+        // Only if it is still this connection: a redial that already replaced
+        // it owns the entry now, and evicting that would take the live socket
+        // down along with the dead one.
+        let removed = self
+            .connections
+            .remove_if(&bot, |_, current| Arc::ptr_eq(current, &connection))
+            .is_some();
+        if removed {
+            tracing::info!(%bot, "dropped this bot's closed runtime connection");
         }
     }
 }

@@ -42,7 +42,7 @@ use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, Message, SandboxSize, SessionBot, SessionStatus,
+    AgentSession, AgentSessionId, ExternalSession, Message, SandboxSize, SessionBot, SessionStatus,
     StoredAgentSessionLog,
 };
 use crate::domain::ports::{
@@ -248,6 +248,9 @@ impl From<AgentSessionError> for AgentSessionApiError {
 impl IntoResponse for AgentSessionApiError {
     fn into_response(self) -> Response {
         match self {
+            Self::Domain(AgentSessionError::Forbidden) => {
+                (StatusCode::FORBIDDEN, "forbidden").into_response()
+            }
             Self::Domain(error) => {
                 if let AgentSessionError::InvalidName(message) = error {
                     return (StatusCode::BAD_REQUEST, Json(message)).into_response();
@@ -354,10 +357,38 @@ pub struct AgentSessionResponse {
     pub acp_session_id: Option<String>,
     /// The session's status.
     pub status: SessionStatusDto,
+    /// The external provider serving this session, when one does. Absent for
+    /// sandboxed sessions, so existing payloads are byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external: Option<ExternalSessionResponse>,
     /// When the session was created.
     pub created_at: DateTime<Utc>,
     /// When the session was last modified.
     pub modified_at: DateTime<Utc>,
+}
+
+/// The provider-side identity of an externally-served session.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSessionResponse {
+    /// Which provider serves the session, e.g. `cursor`.
+    pub provider: String,
+    /// The provider's display name for the agent, when it reported one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The agent's page on the provider's site, for a client to link out to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+impl From<ExternalSession> for ExternalSessionResponse {
+    fn from(external: ExternalSession) -> Self {
+        Self {
+            provider: external.provider,
+            name: external.external_name,
+            url: external.external_url,
+        }
+    }
 }
 
 impl From<AgentSession> for AgentSessionResponse {
@@ -376,6 +407,7 @@ impl From<AgentSession> for AgentSessionResponse {
             workspace: session.workspace,
             sandbox_size: session.sandbox_size,
             acp_session_id: session.acp_session_id.map(|id| id.to_string()),
+            external: session.external.map(Into::into),
             status: session.status.into(),
             created_at: session.created_at,
             modified_at: session.modified_at,

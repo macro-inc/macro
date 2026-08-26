@@ -4,6 +4,7 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
+use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
@@ -37,15 +38,59 @@ pub struct OpenSession {
     pub origin: MentionOrigin,
 }
 
-/// Whether this deployment provisions a runtime for `bot`'s sessions.
+/// How a bot's sessions get a runtime — the closed set of first-party
+/// providers, one name per member.
 ///
-/// The Macro coder bot's sessions run in a provisioned sandbox and the Macro
-/// bot's run in-process; every other agent bot hosts its own runtime and
-/// dials the gateway. This becomes a bot attribute the day managed bots stop
-/// being a closed set.
-#[must_use]
-pub fn is_managed_bot(bot: BotId) -> bool {
-    bot == bot_id::MACRO_CODER_BOT_ID || bot == bot_id::MACRO_AI_BOT_ID
+/// Derived from the bot rather than stored anywhere: the bot id is the
+/// durable fact (on trigger events and session rows), and the kind is a pure
+/// function of it, so deriving at each decision site is what keeps the two
+/// from drifting. Matching on it is exhaustive on purpose — a new
+/// provider becomes a compile error at every decision site instead of a
+/// silently wrong `else`. This becomes a bot attribute the day the set
+/// stops being closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentKind {
+    /// A sandbox this deployment provisions (Daytona, or local Docker when
+    /// a developer has opted in).
+    SandboxedCoder,
+    /// A Cursor cloud agent, served over an in-process ACP pipe.
+    Cursor,
+    /// The in-process (in-memory) Macro bot, served by `agent_inmem`.
+    InMemory,
+    /// The bot's operator hosts the runtime and dials the gateway; no
+    /// deployment here provisions anything for it.
+    External,
+}
+
+impl AgentKind {
+    /// The kind of runtime serving `bot`'s sessions.
+    #[must_use]
+    pub fn of(bot: BotId) -> Self {
+        if bot == bot_id::MACRO_CODER_BOT_ID {
+            Self::SandboxedCoder
+        } else if bot == bot_id::CURSOR_BOT_ID {
+            Self::Cursor
+        } else if bot == bot_id::MACRO_AI_BOT_ID {
+            Self::InMemory
+        } else {
+            Self::External
+        }
+    }
+
+    /// Whether a deployment provisions this kind's runtimes itself.
+    ///
+    /// Membership is about who provisions, not whether *this* deployment is
+    /// armed to — an unarmed deployment refuses a managed bot's sessions
+    /// rather than waiting for a dial-in that can never come.
+    #[must_use]
+    pub fn is_managed(self) -> bool {
+        !matches!(self, Self::External)
+    }
+}
+
+/// Whether a user belongs to the Macro staff domain.
+pub(crate) fn is_macro_staff(user: &MacroUserIdStr<'_>) -> bool {
+    user.email_part().domain_part() == "macro.com"
 }
 
 /// Where a prompt came from, when it came from somewhere the session should
@@ -170,6 +215,11 @@ pub struct SessionAnnouncement {
 pub struct SpawnContainer {
     /// Session that will own the container transport.
     pub session_id: AgentSessionId,
+    /// Which provider serves this session — the routing decision itself,
+    /// resolved by the emitter from the session's bot. Routing is the only
+    /// thing spawn ever consumed the bot for; resume and teardown re-derive
+    /// the same kind from the session row's bot.
+    pub kind: AgentKind,
     /// Repository cloned into the container workspace.
     pub repo_url: String,
     /// Compute tier to request from the provider.

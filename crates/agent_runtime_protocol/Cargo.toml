@@ -26,11 +26,11 @@ specta-serde = { workspace = true }
 specta-typescript = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "sync"], optional = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"], optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 
 [dev-dependencies]
 agent-client-protocol = { workspace = true }
-tokio = { workspace = true, features = ["io-std", "io-util", "macros", "net", "rt", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["io-std", "io-util", "macros", "net", "rt", "rt-multi-thread", "test-util", "time"] }

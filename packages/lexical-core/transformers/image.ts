@@ -10,7 +10,7 @@ import {
 export const I_IMAGE_CONSTRAINED: ElementTransformer = {
   dependencies: [ImageNode, UnknownMentionNode],
   type: 'element',
-  regExp: /<m-image>(.*?)<\/m-image>/,
+  regExp: /^<m-image>(.*?)<\/m-image>\s*$/,
   export: (node: LexicalNode) => {
     if (!$isImageNode(node)) return null;
     if (node.getSrcType() === 'local') return null;
