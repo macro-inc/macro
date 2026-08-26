@@ -714,7 +714,9 @@ export const SoupView = (props: SoupViewProps) => {
       </div>
       <Suspense>
         {/* The board and Preview Controller hide the AI bar: it floats over
-            content that is already constrained in both layouts. */}
+            content that is already constrained in both layouts. The agents
+            Sessions tab hides it too — its launch composer is the input
+            there, and two chat boxes on one page read as a mistake. */}
         <Show
           when={
             ENABLE_UNIFIED_LIST_AI_INPUT &&
@@ -722,7 +724,11 @@ export const SoupView = (props: SoupViewProps) => {
             !isInboxView() &&
             !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
-            !isComponentListView('search')
+            !isComponentListView('search') &&
+            !(
+              isComponentListView('agents') &&
+              (soupView.activeTab() ?? 'sessions') === 'sessions'
+            )
           }
         >
           <SoupChatInput />

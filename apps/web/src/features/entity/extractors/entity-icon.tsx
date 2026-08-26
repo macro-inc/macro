@@ -27,7 +27,6 @@ import {
   isSnippetEntity,
   isTaskEntity,
 } from '../types/entity';
-import { agentAttentionState } from '../utils/agent-attention';
 
 interface EntityIconProps {
   entity: EntityData;
@@ -188,12 +187,9 @@ export function EntityIcon(props: EntityIconProps) {
         {(entity) => (
           <PulsingStar
             kind="listIcon"
-            animate={
-              agentAttentionState(
-                entity(),
-                agentSessionLiveState(entity().id)
-              ) === 'running'
-            }
+            // Pulse only while the agent is actually mid-turn, per the fold —
+            // an alive-but-idle session groups under Running without pulsing.
+            animate={agentSessionLiveState(entity().id)?.working === true}
             class={props.class}
           />
         )}
