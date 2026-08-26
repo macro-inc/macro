@@ -5478,7 +5478,7 @@ async fn projection_hydration_carries_attachment_state_from_flat_and_by_id_rows(
     .await?;
 
     let attachment_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
-    let ordinary_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff")?;
+    let ordinary_id = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?;
     let attachment_source = flat
         .iter()
         .find(|hydration| hydration.item.id() == attachment_id)
