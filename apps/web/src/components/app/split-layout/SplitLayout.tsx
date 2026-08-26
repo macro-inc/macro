@@ -142,6 +142,9 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
             splitsSitBesideChromeRail() &&
             (!sidebar.isCollapsed() ||
               activeAppLayout().capabilities.removesSplitContentLeftPadding),
+          // No rail on the left, so the cards open the page with a margin
+          // rather than hugging the window edge.
+          'pl-4': !flatSeams() && !splitsSitBesideChromeRail(),
           'bg-edge-muted p-0': flatSeams(),
         })}
       >

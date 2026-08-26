@@ -49,6 +49,31 @@ export function destinationUrl(destination: ChromeDestination) {
   return `${getWebOrigin()}/app${destination.path}`;
 }
 
+/**
+ * Runs a task only once the browser has painted what the press just marked.
+ * Solid would otherwise apply the marker and mount the new content in the same
+ * tick, so neither reaches the screen until the mount finishes and the press
+ * reads as ignored. Two frames is what it takes to know the first paint
+ * landed; a newer press replaces an older queued one. Cancels on dispose.
+ */
+export function createAfterPaintRunner() {
+  let queued: number | undefined;
+
+  onCleanup(() => {
+    if (queued !== undefined) cancelAnimationFrame(queued);
+  });
+
+  return (task: () => void) => {
+    if (queued !== undefined) cancelAnimationFrame(queued);
+    queued = requestAnimationFrame(() => {
+      queued = requestAnimationFrame(() => {
+        queued = undefined;
+        task();
+      });
+    });
+  };
+}
+
 export type ChromeNavigation = ReturnType<typeof createChromeNavigation>;
 
 /**
@@ -127,28 +152,8 @@ export function createChromeNavigation(surface: string) {
     );
   };
 
-  /**
-   * Run the navigation only once the browser has painted the bar's new state.
-   * Solid would otherwise apply the marker and mount the new view in the same
-   * tick, so neither reaches the screen until the mount finishes and the press
-   * reads as ignored. Two frames is what it takes to know the first paint
-   * landed; a newer press replaces an older queued one.
-   */
-  let queuedNavigation: number | undefined;
-
-  const navigateAfterPaint = (task: () => void) => {
-    if (queuedNavigation !== undefined) cancelAnimationFrame(queuedNavigation);
-    queuedNavigation = requestAnimationFrame(() => {
-      queuedNavigation = requestAnimationFrame(() => {
-        queuedNavigation = undefined;
-        task();
-      });
-    });
-  };
-
-  onCleanup(() => {
-    if (queuedNavigation !== undefined) cancelAnimationFrame(queuedNavigation);
-  });
+  /** Navigate only once the bar's new state has reached the screen. */
+  const navigateAfterPaint = createAfterPaintRunner();
 
   const isVisible = (destination: ChromeDestination) =>
     !destination.requiresCrmFlag || crmFlag().enabled;
