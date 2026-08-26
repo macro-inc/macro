@@ -71,11 +71,11 @@ export function mapGraphqlThreadError(error: CombinedError): ThrownResultError {
     resultErrors.length > 0
       ? resultErrors
       : [
-        {
-          code: 'UNKNOWN',
-          message: error.networkError?.message ?? error.message,
-        },
-      ]
+          {
+            code: 'UNKNOWN',
+            message: error.networkError?.message ?? error.message,
+          },
+        ]
   );
 }
 
@@ -121,7 +121,10 @@ export async function fetchGraphqlEmailThread(
 
   if (!result.data) {
     throw new ThrownResultError([
-      { code: 'UNKNOWN', message: 'GraphQL email thread query returned no data' },
+      {
+        code: 'UNKNOWN',
+        message: 'GraphQL email thread query returned no data',
+      },
     ]);
   }
 
