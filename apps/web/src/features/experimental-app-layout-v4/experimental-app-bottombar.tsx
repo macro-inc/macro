@@ -42,9 +42,14 @@ const WINDOW_SETTLE_MS = 250;
  * reads as the same kind of thing hovering over the page — `bg-surface` is the
  * page's own color and would disappear into it.
  */
-function DockPill(props: ParentProps) {
+function DockPill(props: ParentProps<{ class?: string }>) {
   return (
-    <div class="glass-lg pointer-events-auto flex items-center gap-0.5 rounded-full bg-(--color-menu-glass) p-1.5">
+    <div
+      class={cn(
+        'glass-lg pointer-events-auto flex items-center gap-0.5 rounded-full bg-(--color-menu-glass) p-1.5',
+        props.class
+      )}
+    >
       {props.children}
     </div>
   );
@@ -325,13 +330,16 @@ export function ExperimentalAppBottomBar() {
       </Show>
 
       {/* Create rides outside the row of views: the row is where you are,
-          this is what you make next. */}
-      <DockPill>
+          this is what you make next. Alone in its island it is the island —
+          one round button carrying the glass itself, rather than a smaller
+          button sitting inside a circle of it. */}
+      <DockPill class="p-0">
         <SidebarCreateMenu
           isSlim={() => true}
           variant="icon"
           icon="plus"
           placement="top-end"
+          class="size-12 border-transparent bg-transparent text-ink-muted shadow-none hover:bg-ink/5 hover:text-ink! [&_svg]:size-5!"
           onAgentSelect={() => navigate('/chat')}
         />
       </DockPill>

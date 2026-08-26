@@ -22,6 +22,8 @@ export const SidebarCreateMenu = (props: {
   placement?: 'right-start' | 'bottom-start' | 'bottom-end' | 'top-end';
   filled?: boolean;
   large?: boolean;
+  /** Extra classes for the icon trigger, so a host can reshape it. */
+  class?: string;
   onMenuOpenChange?: (open: boolean) => void;
   onAgentSelect?: () => void;
 }) => {
@@ -133,7 +135,8 @@ export const SidebarCreateMenu = (props: {
               : 'size-[26px] [&_svg]:size-4!',
             props.filled
               ? 'border-transparent bg-ink/8 text-ink shadow-none hover:bg-ink/12 hover:text-ink!'
-              : 'bg-surface shadow-md shadow-drop-shadow'
+              : 'bg-surface shadow-md shadow-drop-shadow',
+            props.class
           )}
           label="Create"
           hotkey={TOKENS.global.createCommand}
