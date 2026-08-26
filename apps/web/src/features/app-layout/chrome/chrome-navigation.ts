@@ -7,6 +7,7 @@ import {
   getLastBrainWorkspaceSelection,
 } from '@components/app/split-layout/brainWorkspaceRoute';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import {
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
@@ -24,6 +25,42 @@ import {
 
 /** Ceiling on how long a bar will answer with a press that never lands. */
 const PENDING_VIEW_TIMEOUT_MS = 4000;
+
+/**
+ * What pressing a view in the bar's row does.
+ *
+ * `page` treats the row as a set of places: the view becomes the whole page,
+ * whatever was open stays reachable elsewhere, and a view never swaps itself
+ * into someone else's split. `split` is the older reading, where the row acts
+ * on the focused split and leaves the rest of the layout standing.
+ */
+export type ChromeViewBehavior = 'page' | 'split';
+
+export type ChromeNavigationOptions = {
+  /** Names the bar in analytics. */
+  surface: string;
+  views: ChromeViewBehavior;
+};
+
+/**
+ * The splits standing on their own. A Preview Pair's Viewer is the
+ * Controller's reading pane rather than something opened beside it, so it is
+ * never one of these.
+ */
+export function standaloneSplits(): SplitHandle[] {
+  const manager = globalSplitManager();
+  if (!manager) return [];
+  return manager
+    .splits()
+    .map((split) => manager.getSplit(split.id))
+    .filter((handle) => handle !== undefined)
+    .filter((handle) => !handle.isViewerSplit());
+}
+
+const isSameContent = (
+  a: { type: string; id: string },
+  b: { type: string; id: string }
+) => a.type === b.type && a.id === b.id;
 
 /**
  * Act on press instead of release, so a bar responds the instant a button goes
@@ -80,11 +117,11 @@ export type ChromeNavigation = ReturnType<typeof createChromeNavigation>;
  * Everything an app chrome bar does apart from drawing itself: which views it
  * shows, which one it reads as active, and how a press reaches the splits.
  * Shared by the layouts that replace the sidebar with a bar, so the top bar
- * and the bottom dock differ only in their markup.
- *
- * `surface` names the bar in analytics.
+ * and the bottom dock differ only in their markup and in how their row of
+ * views behaves (see `ChromeViewBehavior`).
  */
-export function createChromeNavigation(surface: string) {
+export function createChromeNavigation(options: ChromeNavigationOptions) {
+  const surface = options.surface;
   const analytics = useAnalytics();
   const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
     enabledOverride: ENABLE_CRM_OVERRIDE,
@@ -144,12 +181,18 @@ export function createChromeNavigation(surface: string) {
     const pending = pendingView();
     if (pending !== undefined) return pending === destination.id;
 
+    if (options.views === 'page') {
+      // A place is where you are only while it is the whole page. With
+      // anything else open you are in that instead, and the bar says so
+      // elsewhere rather than lighting up a view you are merely beside.
+      const splits = standaloneSplits();
+      if (splits.length !== 1) return false;
+      return isSameContent(splits[0]!.content(), destination.content);
+    }
+
     const content = activeContent();
     if (!content) return false;
-    return (
-      content.type === destination.content.type &&
-      content.id === destination.content.id
-    );
+    return isSameContent(content, destination.content);
   };
 
   /** Navigate only once the bar's new state has reached the screen. */
@@ -167,12 +210,17 @@ export function createChromeNavigation(surface: string) {
     CommandState.open();
   };
 
-  /** Primary views replace the active split; shift-click opens a new one. */
+  /**
+   * Go to a view. Under `page` the view becomes the whole page and nothing it
+   * replaces is lost — the layout it stood in is somewhere else in the bar.
+   * Under `split` it swaps into the focused split instead. Shift-click opens
+   * the view beside what you have either way.
+   */
   const openView = (
     destination: ChromeDestination,
-    options?: { newSplit?: boolean; surface?: string }
+    pressOptions?: { newSplit?: boolean; surface?: string }
   ) => {
-    const newSplit = options?.newSplit ?? false;
+    const newSplit = pressOptions?.newSplit ?? false;
 
     if (!newSplit && isActive(destination)) {
       globalSplitManager()?.returnFocus();
@@ -180,19 +228,30 @@ export function createChromeNavigation(surface: string) {
     }
 
     analytics.track('sidebar_click', {
-      surface: options?.surface ?? surface,
+      surface: pressOptions?.surface ?? surface,
       view: destination.id,
     });
     markPendingView(destination);
 
     navigateAfterPaint(() => {
-      // Brain owns a route rather than a plain split, so replacing the active
-      // split means navigating to it.
+      // Brain owns a route rather than a plain split, so going to it is a
+      // navigation — which lands the whole page on it either way.
       if (destination.id === 'brain' && !newSplit) {
         navigate(buildBrainWorkspacePath(getLastBrainWorkspaceSelection()));
+      } else if (newSplit) {
+        layout.openWithSplit(destination.content, {
+          preferNewSplit: true,
+          mergeHistory: false,
+          allowDuplicate: true,
+          referredFrom: 'sidebar',
+        });
+      } else if (options.views === 'page') {
+        globalSplitManager()?.replaceAllSplits(destination.content, {
+          referredFrom: 'sidebar',
+        });
       } else {
         layout.openWithSplit(destination.content, {
-          preferNewSplit: newSplit,
+          preferNewSplit: false,
           mergeHistory: false,
           allowDuplicate: true,
           referredFrom: 'sidebar',

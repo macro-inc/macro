@@ -37,7 +37,10 @@ import { Dynamic } from 'solid-js/web';
  * companion splits and the sub-app grid.
  */
 export function ExperimentalAppTopBar() {
-  const navigation = createChromeNavigation('topbar');
+  const navigation = createChromeNavigation({
+    surface: 'topbar',
+    views: 'split',
+  });
   const navigate = useNavigate();
   const { openSettings } = useSettingsState();
   const [appsOpen, setAppsOpen] = createSignal(false);

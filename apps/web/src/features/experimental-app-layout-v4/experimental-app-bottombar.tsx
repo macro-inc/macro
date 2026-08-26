@@ -201,7 +201,12 @@ function DockWindowTab(props: {
  * destinations.
  */
 export function ExperimentalAppBottomBar() {
-  const navigation = createChromeNavigation('bottombar');
+  const navigation = createChromeNavigation({
+    surface: 'bottombar',
+    // The dock's row is places, not panes: a view never swaps itself into a
+    // split you opened, it just takes you to that page.
+    views: 'page',
+  });
   const navigate = useNavigate();
   const { openSettings } = useSettingsState();
   const [appsOpen, setAppsOpen] = createSignal(false);

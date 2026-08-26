@@ -1,6 +1,6 @@
 import { toBaseRelative } from '@app/constants/routerBase';
 import { CHROME_SUB_APPS } from '@app/features/app-layout/chrome/chrome-destinations';
-import { globalSplitManager } from '@app/signal/splitLayout';
+import { standaloneSplits } from '@app/features/app-layout/chrome/chrome-navigation';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import { makePersisted } from '@solid-primitives/storage';
@@ -112,14 +112,7 @@ export function createCurrentDockWindow(): Accessor<DockWindow | undefined> {
   const location = useLocation();
 
   return createMemo(() => {
-    const manager = globalSplitManager();
-    if (!manager) return undefined;
-
-    const handles = manager
-      .splits()
-      .map((split) => manager.getSplit(split.id))
-      .filter((handle) => handle !== undefined)
-      .filter((handle) => !handle.isViewerSplit());
+    const handles = standaloneSplits();
     if (handles.length === 0) return undefined;
 
     const contents = handles.map((handle) => handle.content());
