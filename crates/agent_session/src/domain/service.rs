@@ -652,7 +652,7 @@ where
         })
         .ok()
         .filter(|turn| *turn == MessageId::first(AuthorKind::User).turn)
-        .map(|_| prompt.prompt.clone())
+        .map(|_| prompt.name_source().to_owned())
 }
 
 fn spawn_initial_agent_session_rename<R, Rt, Namer>(

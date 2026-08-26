@@ -1,3 +1,5 @@
+import { isAgentContextData } from '../nodes/AgentContextNode';
+
 export function parseUserMentions(text: string): string {
   return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_, json) => {
     try {
@@ -135,6 +137,26 @@ export function parseSnapshots(text: string): string {
   });
 }
 
+/** Remove private agent context from user-visible text. */
+export function stripAgentContext(text: string): string {
+  const match = text.match(
+    /^<m-agent-context>(.*?)<\/m-agent-context>(?:\r?\n\r?\n)?/s
+  );
+  if (!match) return text;
+  try {
+    const data: unknown = JSON.parse(match[1] ?? '');
+    if (
+      !isAgentContextData(data) ||
+      Object.keys(data as Record<string, unknown>).length !== 2
+    ) {
+      return text;
+    }
+    return text.slice(match[0].length);
+  } catch {
+    return text;
+  }
+}
+
 /**
  * Converts markdown text with XML mention tags to plain text.
  * Extracts the readable text from mention nodes:
@@ -148,15 +170,17 @@ export function parseSnapshots(text: string): string {
  * - Links: text (fallback to url)
  */
 export function markdownToPlainText(markdown: string): string {
-  return parseLinks(
-    parseDocumentCards(
-      parseSnapshots(
-        parseTagMentions(
-          parsePullRequestMentions(
-            parseDocumentMentions(
-              parseGroupMentions(
-                parseDateMentions(
-                  parseContactMentions(parseUserMentions(markdown))
+  return stripAgentContext(
+    parseLinks(
+      parseDocumentCards(
+        parseSnapshots(
+          parseTagMentions(
+            parsePullRequestMentions(
+              parseDocumentMentions(
+                parseGroupMentions(
+                  parseDateMentions(
+                    parseContactMentions(parseUserMentions(markdown))
+                  )
                 )
               )
             )
@@ -292,7 +316,7 @@ function flattenEmailThreadEmbeds(text: string): string {
 export function markdownToEmbeddingText(markdown: string): string {
   // Containers first: their payloads nest further tags that the leaf passes
   // below pick up.
-  let text = markdown.replace(
+  let text = stripAgentContext(markdown).replace(
     /<m-snapshot>(.*?)<\/m-snapshot>/gs,
     (_, encoded) => snapshotToEmbeddingText(encoded)
   );
@@ -350,5 +374,8 @@ export function markdownToEmbeddingText(markdown: string): string {
   // Anything still tagged is an unrecognized m-* node: drop it entirely so
   // its payload cannot leak boilerplate into the embedding (the string
   // analogue of the UNKNOWN_MENTION fallback transformer).
-  return text.replace(/<(m-[a-zA-Z0-9_-]+)>(.*?)<\/\1>/gs, '');
+  return text.replace(
+    /<(m-[a-zA-Z0-9_-]+)>(.*?)<\/\1>/gs,
+    (tagged, tag: string) => (tag === 'm-agent-context' ? tagged : '')
+  );
 }

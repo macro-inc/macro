@@ -3,16 +3,17 @@ import "./polyfills/prism";
 import { fromHono } from "chanfana";
 import { Hono, type MiddlewareHandler } from "hono";
 import { AgentAnnouncementEndpoint } from "./endpoints/agent-announcement";
+import { AgentContextEndpoint } from "./endpoints/agent-context";
 import { CognitionPresignedEndpoint } from "./endpoints/cognition-presigned";
 import { CognitionTextEndpoint } from "./endpoints/cognition-text";
 import { CognitionV2Endpoint } from "./endpoints/cognition-v2";
 import { MarkdownEndpoint } from "./endpoints/markdown";
 import { MarkdownSnapshotEndpoint } from "./endpoints/markdown-snapshot";
 import { MentionsEndpoint } from "./endpoints/mentions";
-import { QuoteReplyEndpoint } from "./endpoints/quote-reply";
-import { XmlEndpoint } from "./endpoints/xml";
 import { PlaintextEndpoint } from "./endpoints/plaintext";
+import { QuoteReplyEndpoint } from "./endpoints/quote-reply";
 import { SearchTextEndpoint } from "./endpoints/search-text";
+import { XmlEndpoint } from "./endpoints/xml";
 
 type Bindings = {
 	INTERNAL_AUTH_KEY: string;
@@ -45,6 +46,7 @@ app.use("/snapshot/*", internalAuth);
 app.use("/mentions", internalAuth);
 app.use("/quote-reply", internalAuth);
 app.use("/agent-announcement", internalAuth);
+app.use("/agent-context", internalAuth);
 app.use("/internal/health", internalAuth);
 
 const openapi = fromHono(app, {
@@ -70,6 +72,7 @@ openapi.post("/snapshot/markdown", MarkdownSnapshotEndpoint);
 openapi.post("/mentions", MentionsEndpoint);
 openapi.post("/quote-reply", QuoteReplyEndpoint);
 openapi.post("/agent-announcement", AgentAnnouncementEndpoint);
+openapi.post("/agent-context", AgentContextEndpoint);
 openapi.get("/internal/health", (c) => c.json({ status: "healthy" }));
 
 export default app;
