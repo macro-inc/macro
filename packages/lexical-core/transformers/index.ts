@@ -1,4 +1,5 @@
 import type { Transformer } from '@lexical/markdown';
+import { I_AGENT_CONTEXT } from './agentContext';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
@@ -171,4 +172,11 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
+];
+
+/** Internal parsing for trusted agent-session prompts enriched by the harness. */
+export const AGENT_INTERNAL_TRANSFORMERS: Transformer[] = [
+  ...ALL_TRANSFORMERS.slice(0, -1),
+  I_AGENT_CONTEXT,
+  UNKNOWN_MENTION,
 ];

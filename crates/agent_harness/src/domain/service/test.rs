@@ -2,7 +2,7 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
@@ -33,9 +33,9 @@ use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
-    OpenSession, SessionDefaults, SpawnContainer,
+    OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer, enrich_channel_prompt,
 };
-use crate::domain::ports::ContainerManager as _;
+use crate::domain::ports::{ChannelPromptContext, ContainerManager as _};
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
@@ -76,8 +76,52 @@ fn forward_message(content: &str) -> DeliverAction {
         Some(AnnounceOrigin {
             channel_id: macro_uuid::Uuid::from_u128(0xf0),
             thread_id: macro_uuid::Uuid::from_u128(0xf1),
+            message_id: macro_uuid::Uuid::from_u128(0xf2),
         }),
     )
+}
+
+#[derive(Clone, Default)]
+struct PromptContextMock {
+    messages: Arc<Mutex<Vec<PriorChannelMessage>>>,
+    failure: Arc<Mutex<Option<String>>>,
+}
+
+impl PromptContextMock {
+    fn with_messages(messages: Vec<PriorChannelMessage>) -> Self {
+        Self {
+            messages: Arc::new(Mutex::new(messages)),
+            failure: Arc::default(),
+        }
+    }
+
+    fn failing(message: &str) -> Self {
+        Self {
+            messages: Arc::default(),
+            failure: Arc::new(Mutex::new(Some(message.to_owned()))),
+        }
+    }
+}
+
+impl ChannelPromptContext for PromptContextMock {
+    async fn authorize_member(
+        &self,
+        _actor: &MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> crate::domain::error::Result<()> {
+        Ok(())
+    }
+
+    async fn preceding_messages(
+        &self,
+        _channel_id: Uuid,
+        _message_id: Uuid,
+    ) -> crate::domain::error::Result<Vec<PriorChannelMessage>> {
+        if let Some(message) = self.failure.lock().unwrap().clone() {
+            return Err(HarnessError::PromptContext(rootcause::report!("{message}")));
+        }
+        Ok(self.messages.lock().unwrap().clone())
+    }
 }
 
 /// The orchestrator under test, over the session service it really uses.
@@ -90,9 +134,12 @@ type TestHarness = AgentHarnessService<
     MockContainerManager,
     AnnouncerMock,
     Arc<RuntimeRegistry<ContainerSender>>,
+    PromptContextMock,
 >;
 
-fn harness() -> (
+fn harness_with_context(
+    prompt_context: PromptContextMock,
+) -> (
     TestHarness,
     InMemoryAgentSessionRepo,
     MockContainerManager,
@@ -112,6 +159,7 @@ fn harness() -> (
         containers.clone(),
         announcer.clone(),
         Arc::clone(&runtimes),
+        prompt_context,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -120,6 +168,20 @@ fn harness() -> (
         },
     );
     (service, repo, containers, announcer, runtimes)
+}
+
+fn harness() -> (
+    TestHarness,
+    InMemoryAgentSessionRepo,
+    MockContainerManager,
+    AnnouncerMock,
+    Arc<RuntimeRegistry<ContainerSender>>,
+) {
+    harness_with_context(PromptContextMock::default())
+}
+
+fn context_prompt(original: &str) -> String {
+    enrich_channel_prompt(original, &[]).unwrap()
 }
 
 /// Play the agent's half of the ACP handshake.
@@ -251,10 +313,80 @@ async fn open_creates_announces_and_delivers_the_mention() {
         MessageId::first(AuthorKind::User)
     );
 
-    // The mention's text reached the agent as the first prompt.
+    // The announcement retains the raw trigger while only the agent prompt is
+    // enriched, including the required node for empty history.
+    assert_eq!(announced[0].prompted_content, origin.content);
     assert_eq!(
         prompts(&container.agent()),
-        [vec![ContentBlock::from("@claude fix the failing test")]]
+        [vec![ContentBlock::from(context_prompt(
+            "@claude fix the failing test"
+        ))]]
+    );
+}
+
+#[tokio::test]
+async fn context_failure_still_delivers_with_an_empty_context_node() {
+    let (service, _repo, containers, announcer, _runtimes) =
+        harness_with_context(PromptContextMock::failing("channels unavailable"));
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(id).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (result, container) = tokio::join!(open, drive);
+
+    result.expect("context lookup is best-effort after Kafka admission");
+    assert_eq!(announcer.announced().len(), 1);
+    assert_eq!(
+        prompts(&container.agent()),
+        [vec![ContentBlock::from(context_prompt(
+            "@claude fix the failing test"
+        ))]]
+    );
+}
+
+#[tokio::test]
+async fn open_sends_prior_messages_only_to_the_agent_prompt() {
+    let context = vec![PriorChannelMessage {
+        sender: "previous@example.com".to_owned(),
+        content: "previous channel message".to_owned(),
+    }];
+    let (service, _repo, containers, announcer, _runtimes) =
+        harness_with_context(PromptContextMock::with_messages(context.clone()));
+    let command = open_command();
+    let raw = command.origin.content.clone();
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(id).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (result, container) = tokio::join!(open, drive);
+    result.unwrap();
+
+    assert_eq!(announcer.announced()[0].prompted_content, raw);
+    assert_eq!(
+        prompts(&container.agent()),
+        [vec![ContentBlock::from(
+            enrich_channel_prompt(&raw, &context).unwrap()
+        )]]
     );
 }
 
@@ -355,9 +487,18 @@ async fn forward_to_a_live_session_reuses_the_transport() {
 
     assert_eq!(containers.spawned(), 1, "no second container");
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
-    assert_eq!(prompts(&container.agent()).len(), 2);
+    assert_eq!(
+        prompts(&container.agent())[1],
+        vec![ContentBlock::from(context_prompt(
+            "and add a regression test"
+        ))]
+    );
     let announced = announcer.announced();
     assert_eq!(announced.len(), 2);
+    assert_eq!(
+        announced[1].prompted_content, "and add a regression test",
+        "the announcement must retain the raw triggering message"
+    );
     assert_eq!(
         announced[1].prompted_message_id,
         MessageId {
@@ -473,7 +614,9 @@ async fn forward_to_a_disconnected_session_resumes_acp_and_delivers_the_prompt()
     assert_eq!(containers.resumed(), 1);
     assert_eq!(
         prompts(&resumed.agent()),
-        [vec![ContentBlock::from("continue after reconnecting")]]
+        [vec![ContentBlock::from(context_prompt(
+            "continue after reconnecting"
+        ))]]
     );
     let prompt_logs = repo
         .list_by_session(id)
@@ -524,8 +667,8 @@ async fn concurrent_forwards_share_one_session_recovery() {
     assert_eq!(
         prompts(&resumed.agent()),
         [
-            vec![ContentBlock::from("first")],
-            vec![ContentBlock::from("second")],
+            vec![ContentBlock::from(context_prompt("first"))],
+            vec![ContentBlock::from(context_prompt("second"))],
         ]
     );
     assert_eq!(
@@ -614,9 +757,9 @@ async fn an_admitted_command_survives_caller_cancellation() {
 
     assert_eq!(
         prompts(&resumed.agent()),
-        [vec![ContentBlock::from(
+        [vec![ContentBlock::from(context_prompt(
             "finish even when nobody is waiting"
-        )]]
+        ))]]
     );
 }
 
@@ -855,7 +998,9 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
     assert_eq!(
         prompts(&container.agent()),
         [
-            vec![ContentBlock::from("@claude fix the failing test")],
+            vec![ContentBlock::from(context_prompt(
+                "@claude fix the failing test"
+            ))],
             vec![ContentBlock::from(
                 agent_runtime_protocol::domain::action::COMPACT_COMMAND
             )],
@@ -1127,6 +1272,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         containers.clone(),
         AnnouncerMock::new(),
         RuntimeRegistry::<ContainerSender>::new(),
+        PromptContextMock::default(),
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -1284,6 +1430,7 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
                 origin: AnnounceOrigin {
                     channel_id: macro_uuid::Uuid::from_u128(0xAA),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
+                    message_id: macro_uuid::Uuid::from_u128(0xAC),
                 },
                 content: "follow-up from the channel".to_owned(),
                 sender: sender(),
@@ -1323,6 +1470,7 @@ async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
                 origin: AnnounceOrigin {
                     channel_id: macro_uuid::Uuid::from_u128(0xAA),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
+                    message_id: macro_uuid::Uuid::from_u128(0xAC),
                 },
                 content: "not yours".to_owned(),
                 sender: sender(),

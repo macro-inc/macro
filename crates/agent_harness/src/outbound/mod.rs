@@ -2,6 +2,7 @@
 //! ports are satisfied by.
 
 pub mod channel_announcer;
+pub mod channel_prompt_context;
 pub mod containers;
 pub mod cursor;
 pub mod daytona;

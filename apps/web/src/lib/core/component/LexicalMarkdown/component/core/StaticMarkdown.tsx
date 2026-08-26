@@ -11,6 +11,7 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AgentContextNode,
   type AwaitNode,
   type ClassedBlockNode,
   type ContactMentionNode,
@@ -494,6 +495,12 @@ const Await: TypedRenderableEntity<AwaitNode> = {
   },
 };
 
+const AgentContext: TypedRenderableEntity<AgentContextNode> = {
+  guard: (node: LexicalNode): node is AgentContextNode =>
+    node.__type === 'agent-context',
+  render: () => <></>,
+};
+
 const MagicChip: TypedRenderableEntity<MagicChipNode> = {
   guard: (node: LexicalNode): node is MagicChipNode =>
     node.__type === 'magic-chip',
@@ -854,6 +861,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(DateMention),
   eraseRenderableEntity(GroupMention),
   eraseRenderableEntity(Await),
+  eraseRenderableEntity(AgentContext),
   eraseRenderableEntity(MagicChip),
   eraseRenderableEntity(Snapshot),
   eraseRenderableEntity(Image),
@@ -977,6 +985,8 @@ export function StaticMarkdown(props: {
   stateRefKey?: string;
   rootRef?: (ref: HTMLDivElement) => void;
   target?: 'internal' | 'external' | 'both';
+  /** Parse trusted context attached to a folded agent-session user prompt. */
+  allowAgentContext?: boolean;
   singleLine?: boolean;
   lazy?: boolean;
 }) {
@@ -1025,7 +1035,15 @@ export function StaticMarkdown(props: {
       return;
     }
 
-    setEditorStateFromMarkdown(editor, props.markdown, props.target);
+    setEditorStateFromMarkdown(
+      editor,
+      props.markdown,
+      props.target,
+      false,
+      undefined,
+      false,
+      props.allowAgentContext
+    );
     if (props.singleLine) {
       forceSingleLine(editor);
     }
@@ -1038,7 +1056,15 @@ export function StaticMarkdown(props: {
 
     // Handle citations without affecting mentions
     replaceCitations(props.markdown).then((content: string) => {
-      setEditorStateFromMarkdown(editor, content, props.target);
+      setEditorStateFromMarkdown(
+        editor,
+        content,
+        props.target,
+        false,
+        undefined,
+        false,
+        props.allowAgentContext
+      );
       if (props.singleLine) {
         forceSingleLine(editor);
       }

@@ -13,6 +13,7 @@ import {
   TabNode,
   TextNode,
 } from 'lexical';
+import { AgentContextNode } from './nodes/AgentContextNode';
 import { AwaitNode } from './nodes/AwaitNode';
 import { ClassedBlockNode } from './nodes/ClassedBlockNode';
 import { CommentNode } from './nodes/CommentNode';
@@ -109,6 +110,7 @@ export const SupportedNodeTypes = [
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,
+  AgentContextNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

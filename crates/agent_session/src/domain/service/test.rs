@@ -52,7 +52,12 @@ async fn only_the_first_prompt_is_selected_for_automatic_naming() {
     let session = test_session();
     repo.insert_session(test_agent_session(session));
     let folds = FoldedMessageService::new(repo.clone());
-    let prompt = AgentAction::prompt("fix the flaky tests");
+    let mut prompt =
+        AgentAction::prompt("<m-agent-context>private</m-agent-context>\n\nfix the flaky tests");
+    let AgentAction::Prompt(prompt_action) = &mut prompt else {
+        unreachable!("the test constructed a prompt");
+    };
+    prompt_action.set_name_source("fix the flaky tests");
 
     assert_eq!(
         initial_prompt_for_rename(&folds, session, &prompt).await,

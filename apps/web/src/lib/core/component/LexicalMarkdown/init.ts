@@ -1,4 +1,5 @@
 import {
+  AgentContextNode,
   AwaitNode,
   ContactMentionNode,
   DateMentionNode,
@@ -53,6 +54,7 @@ import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
  */
 export function initializeLexical() {
   clearDecorators();
+  setDecorator(AgentContextNode, () => null);
   setDecorator(HorizontalRuleNode, HorizontalRule);
   setDecorator(UserMentionNode, UserMention);
   setDecorator(GroupMentionNode, GroupMention);

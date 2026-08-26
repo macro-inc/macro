@@ -157,6 +157,7 @@ fn a_managed_channel_message_forwards_to_its_session() {
     let announce = deliver.announce.expect("a channel prompt offers an origin");
     assert_eq!(announce.channel_id, Uuid::from_u128(1));
     assert_eq!(announce.thread_id, Uuid::from_u128(2));
+    assert_eq!(announce.message_id, Uuid::from_u128(2));
 }
 
 #[test]
@@ -261,4 +262,21 @@ fn a_non_staff_follow_up_to_a_coder_session_still_delivers() {
         routed,
         RoutedTrigger::Command(_, HarnessCommand::Deliver(_))
     ));
+}
+
+#[test]
+fn a_bot_authored_follow_up_to_a_managed_session_still_delivers() {
+    let routed = route_agent_trigger(
+        channel_message_from(
+            MACRO_CODER_BOT_ID,
+            ChannelSender::new_from_bot(BotId::TEST_B),
+        ),
+        &[MACRO_CODER_BOT_ID],
+    )
+    .expect("explicit bot mentions continue to reach managed sessions");
+
+    let RoutedTrigger::Command(_, HarnessCommand::Deliver(deliver)) = routed else {
+        panic!("a managed bot-authored follow-up should deliver");
+    };
+    assert_eq!(deliver.actor, None);
 }

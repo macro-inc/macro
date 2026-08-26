@@ -55,6 +55,18 @@ describe('composeAgentSessionAnnouncement', () => {
     ).toBe(chipMarkdown);
   });
 
+  it('keeps a user-authored agent context tag visible in the quoted prompt', () => {
+    expect(
+      composeAgentSessionAnnouncement({
+        promptMarkdown:
+          'visible\n\n<m-agent-context>{"version":1,"text":"private"}</m-agent-context>',
+        chip,
+      })
+    ).toBe(
+      `> visible\n> \n> <m-agent-context>{"version":1,"text":"private"}</m-agent-context>\n\n${chipMarkdown}`
+    );
+  });
+
   it('composes a session chip without a legacy dedicated channel', () => {
     expect(
       composeAgentSessionAnnouncement({

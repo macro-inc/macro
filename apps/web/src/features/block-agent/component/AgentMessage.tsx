@@ -23,9 +23,16 @@ function AgentMessagePart(props: {
   part: MessagePart;
   /** The turn is still in flight — thoughts read "Thinking" and shimmer. */
   inFlight: boolean;
+  /** The harness may have attached hidden channel context to this user turn. */
+  allowAgentContext?: boolean;
 }): JSX.Element {
   return match(props.part)
-    .with({ kind: 'text' }, (part) => <TextPart text={part.text} />)
+    .with({ kind: 'text' }, (part) => (
+      <TextPart
+        text={part.text}
+        allowAgentContext={props.allowAgentContext}
+      />
+    ))
     .with({ kind: 'thought' }, (part) => (
       <Thought text={part.text} active={props.inFlight} />
     ))
@@ -46,7 +53,13 @@ function UserMessage(props: { message: FoldedMessage }) {
     <div class="flex w-full">
       <div class="relative ml-auto max-w-[calc(100%-8rem)] overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink">
         <For each={props.message.parts}>
-          {(part) => <AgentMessagePart part={part} inFlight={false} />}
+          {(part) => (
+            <AgentMessagePart
+              part={part}
+              inFlight={false}
+              allowAgentContext
+            />
+          )}
         </For>
       </div>
     </div>

@@ -22,9 +22,12 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
-    OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
+    OpenSession, SessionAnnouncement, SpawnContainer, enrich_channel_prompt,
+    escape_agent_context_tags, is_macro_staff,
 };
-use crate::domain::ports::{ContainerManager, RuntimeConnections, SessionAnnouncer};
+use crate::domain::ports::{
+    ChannelPromptContext, ContainerManager, RuntimeConnections, SessionAnnouncer,
+};
 use crate::domain::sandbox::SandboxResizeEffect;
 
 type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
@@ -37,27 +40,29 @@ struct QueuedCommand {
     span: tracing::Span,
 }
 
-struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes> {
+struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext> {
     sessions: Sessions,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
+    prompt_context: PromptContext,
     defaults: HarnessDefaults,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
-pub struct AgentHarnessService<Sessions, Containers, Announcer, Runtimes> {
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
+pub struct AgentHarnessService<Sessions, Containers, Announcer, Runtimes, PromptContext> {
+    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext>>,
     workers: Arc<SessionWorkers>,
 }
 
-impl<Sessions, Containers, Announcer, Runtimes>
-    AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext>
+    AgentHarnessService<Sessions, Containers, Announcer, Runtimes, PromptContext>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    PromptContext: ChannelPromptContext,
 {
     /// Build the orchestrator from its ports.
     pub fn new(
@@ -65,6 +70,7 @@ where
         containers: Containers,
         announcer: Announcer,
         runtimes: Runtimes,
+        prompt_context: PromptContext,
         defaults: impl Into<HarnessDefaults>,
     ) -> Self {
         Self {
@@ -73,6 +79,7 @@ where
                 containers,
                 announcer,
                 runtimes,
+                prompt_context,
                 defaults: defaults.into(),
             }),
             workers: Arc::new(DashMap::new()),
@@ -189,13 +196,14 @@ where
 /// control routes notify. Both operations go through the per-session queue, so
 /// a teardown cannot land in the middle of an open and a model change cannot
 /// overtake the prompt it was meant to follow.
-impl<Sessions, Containers, Announcer, Runtimes> AgentSessionNotificationRecipient
-    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext> AgentSessionNotificationRecipient
+    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes, PromptContext>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    PromptContext: ChannelPromptContext,
 {
     async fn session_deleted(
         &self,
@@ -239,13 +247,15 @@ where
 /// The announcement is best-effort: a session a runtime is about to serve
 /// must not die because the courtesy post failed, most plainly when the bot
 /// cannot post in the claimed channel.
-impl<Sessions, Containers, Announcer, Runtimes> agent_session::domain::ports::SessionOpener
-    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext>
+    agent_session::domain::ports::SessionOpener
+    for AgentHarnessService<Sessions, Containers, Announcer, Runtimes, PromptContext>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    PromptContext: ChannelPromptContext,
 {
     async fn open_external_session(
         &self,
@@ -370,7 +380,7 @@ where
                 .send_action(
                     session.id,
                     Some(request.owner),
-                    AgentAction::prompt(prompt),
+                    AgentAction::prompt(escape_agent_context_tags(&prompt)),
                     AgentActionId::mint(),
                 )
                 .await?;
@@ -409,13 +419,14 @@ fn into_session_error(error: HarnessError) -> AgentSessionError {
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes>
-    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext>
+    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext>
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    PromptContext: ChannelPromptContext,
 {
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match &command {
@@ -512,6 +523,10 @@ where
         let defaults = self.defaults.for_bot(bot_id);
         let repo_url = defaults.repo_url.clone();
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
+        let prior_messages = self
+            .load_prompt_context(origin.channel_id, origin.message_id, Some(&origin.sender))
+            .await;
+        let enriched_prompt = enrich_channel_prompt(&origin.content, &prior_messages)?;
 
         self.sessions
             .create_session(CreateAgentSessionParams {
@@ -571,11 +586,16 @@ where
         self.sessions
             .attach_session(session_id, RuntimeAttachment::solo(container))
             .await?;
+        let mut action = AgentAction::prompt(enriched_prompt);
+        let AgentAction::Prompt(prompt) = &mut action else {
+            unreachable!("a prompt constructor always returns a prompt action");
+        };
+        prompt.set_name_source(origin.content);
         self.sessions
             .send_action(
                 session_id,
                 Some(origin.sender),
-                AgentAction::prompt(origin.content),
+                action,
                 AgentActionId::mint(),
             )
             .await?;
@@ -592,13 +612,25 @@ where
     async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
         let DeliverAction {
             id,
-            action,
+            mut action,
             actor,
             announce,
         } = command;
 
+        let raw_action = action.clone();
+        if let (AgentAction::Prompt(prompt), Some(origin)) = (&mut action, announce.as_ref()) {
+            let prior_messages = self
+                .load_prompt_context(origin.channel_id, origin.message_id, actor.as_ref())
+                .await;
+            let raw_prompt = prompt.prompt.clone();
+            prompt.prompt = enrich_channel_prompt(&raw_prompt, &prior_messages)?;
+            prompt.set_name_source(raw_prompt);
+        } else if let AgentAction::Prompt(prompt) = &mut action {
+            prompt.prompt = escape_agent_context_tags(&prompt.prompt);
+        }
+
         let announcement = self
-            .announcement(session_id, &action, actor.as_ref(), announce)
+            .announcement(session_id, &raw_action, actor.as_ref(), announce)
             .await?;
 
         // Announced before the prompt is delivered, as `open` does: the chip
@@ -650,6 +682,36 @@ where
         Ok(())
     }
 
+    async fn load_prompt_context(
+        &self,
+        channel_id: macro_uuid::Uuid,
+        message_id: macro_uuid::Uuid,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> Vec<crate::domain::model::PriorChannelMessage> {
+        async {
+            if let Some(actor) = actor {
+                self.prompt_context
+                    .authorize_member(actor, channel_id)
+                    .await?;
+            }
+            self.prompt_context
+                .preceding_messages(channel_id, message_id)
+                .await
+        }
+        .await
+        .inspect_err(|error| {
+            // Trigger events are admitted at-most-once. Context is useful,
+            // but a transient lookup failure must not discard the prompt.
+            tracing::warn!(
+                error = ?error,
+                %channel_id,
+                %message_id,
+                "sending agent prompt without channel history"
+            );
+        })
+        .unwrap_or_default()
+    }
+
     /// Who, if anyone, should be told that this landed.
     ///
     /// Only prompts are announced, and only when the caller named an origin
@@ -684,15 +746,16 @@ where
     }
 }
 
-async fn run_session_worker<Sessions, Containers, Announcer, Runtimes>(
+async fn run_session_worker<Sessions, Containers, Announcer, Runtimes, PromptContext>(
     session_id: AgentSessionId,
-    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes>>,
+    inner: Arc<AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext>>,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
+    PromptContext: ChannelPromptContext,
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand {
