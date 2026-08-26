@@ -2,7 +2,7 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { stringifyDocument } from '@urql/core';
 import { type FragmentDefinitionNode, Kind } from 'graphql';
 import type { CacheHost } from '../host/types';
-import type { SelectedRecordByKeyWire } from '../protocol';
+import type { CacheRevision } from '../protocol';
 
 const recordResultType: unique symbol = Symbol('recordResultType');
 
@@ -50,16 +50,22 @@ export async function readRecordsByKeys<TResult>(
   host: Pick<CacheHost, 'readRecordsByKeys'>,
   selection: RecordSelection<TResult>,
   keys: string[]
-): Promise<Array<{ recordKey: string; record: TResult }>> {
-  const records: SelectedRecordByKeyWire[] = await host.readRecordsByKeys({
+): Promise<{
+  revision: CacheRevision;
+  records: Array<{ recordKey: string; record: TResult }>;
+}> {
+  const result = await host.readRecordsByKeys({
     document: selection.document,
     fragmentName: selection.fragmentName,
     keys,
   });
-  return records.map(({ recordKey, record }) => {
-    if (!recordKey || !isRecord(record)) {
-      throw new Error('invalid cache selected record by key');
-    }
-    return { recordKey, record: record as TResult };
-  });
+  return {
+    revision: result.revision,
+    records: result.records.map(({ recordKey, record }) => {
+      if (!recordKey || !isRecord(record)) {
+        throw new Error('invalid cache selected record by key');
+      }
+      return { recordKey, record: record as TResult };
+    }),
+  };
 }

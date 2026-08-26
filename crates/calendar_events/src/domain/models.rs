@@ -6,6 +6,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use super::acting::ActorInboxes;
+
 /// Read and write events on every calendar the user can access. Covers the
 /// event list, get, instances, insert, patch, and watch calls.
 pub const GOOGLE_CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
@@ -319,7 +321,10 @@ pub struct CalendarAttendee {
     pub is_organizer: bool,
     /// Whether attendance is optional.
     pub is_optional: bool,
-    /// Whether this attendee represents the connected account.
+    /// Whether this attendee is one of the viewing requester's inboxes.
+    ///
+    /// Outbound projections use the requester's owned inboxes only.
+    /// Persisted rows keep the provider's flag, which reminder decline reads.
     pub is_self: bool,
     /// Optional attendee comment.
     pub comment: Option<String>,
@@ -899,8 +904,10 @@ pub struct CalendarEventMutationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
-    /// Token identity of the connected inbox.
+    /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
+    /// The clicker's owned inboxes. `None` when they own none.
+    pub actor: Option<ActorInboxes>,
 }
 
 impl CalendarEventMutationTarget {
@@ -964,8 +971,10 @@ pub struct CalendarCreationTarget {
     pub provider_calendar_id: String,
     /// Whether the provider role prohibits event creation.
     pub is_read_only: bool,
-    /// Token identity of the connected inbox.
+    /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
+    /// The clicker's owned inboxes. `None` when they own none.
+    pub actor: Option<ActorInboxes>,
 }
 
 impl CalendarCreationTarget {

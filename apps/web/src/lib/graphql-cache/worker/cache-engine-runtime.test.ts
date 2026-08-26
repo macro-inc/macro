@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CacheRequest } from '../protocol';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   type CacheEngineRuntimeOptions,
   installCacheEngineWorker,
@@ -587,7 +588,10 @@ describe('cache engine worker runtime', () => {
           markEffectStarted();
           await oldOutputBlocked;
           port.postMessage({ id: request.id, ok: true, result: null });
-          port.postMessage({ kind: 'cache-changed' });
+          port.postMessage({
+            kind: 'cache-changed',
+            revision: INITIAL_CACHE_REVISION,
+          });
           markOldOutputPosted();
         },
       })

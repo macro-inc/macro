@@ -39,6 +39,8 @@ pub async fn handler(
 
     Ok(Json(CursorApiKeyStatus {
         registered: false,
+        // The row is gone, model choice with it: disconnecting is a clean slate.
+        default_model_id: None,
         updated_at: None,
     }))
 }

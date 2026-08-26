@@ -466,6 +466,28 @@
 
 .calendar-view
 	.fc
+	.fc-event:not(.fc-daygrid-dot-event):not(
+		:has(.calendar-event-content-selected)
+	):has([data-response-status="accepted"]) {
+	--fc-event-bg-color: var(--color-surface);
+	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
+	background-image: linear-gradient(
+		color-mix(
+			in oklch,
+			var(--event-calendar-color, var(--color-calendar)) 25%,
+			transparent
+		),
+		color-mix(
+			in oklch,
+			var(--event-calendar-color, var(--color-calendar)) 25%,
+			transparent
+		)
+	);
+	--fc-event-text-color: var(--color-ink-muted);
+}
+
+.calendar-view
+	.fc
 	.fc-event:has(.calendar-event-content[data-response-status="tentative"]) {
 	--fc-event-bg-color: var(--color-panel);
 	border-style: dashed;

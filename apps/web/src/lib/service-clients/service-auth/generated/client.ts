@@ -13,6 +13,7 @@ import type {
   CreateTeamRequest,
   CreateUserRequest,
   CursorApiKeyStatus,
+  CursorModelsResponse,
   EmptyResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
@@ -49,6 +50,7 @@ import type {
   PostGetNamesRequestBody,
   ProfilePictures,
   PutCursorApiKeyRequest,
+  PutCursorDefaultModelRequest,
   PutProfilePictureParams,
   PutUserNameParams,
   ResendFusionauthVerifyUserEmailRequest,
@@ -253,6 +255,148 @@ export const deleteCursorApiKey = async (
     status: res.status,
     headers: res.headers,
   } as deleteCursorApiKeyResponse;
+};
+
+/**
+ * Stores the id only; its parameters are resolved from Cursor's own default
+variant at session start. Not validated against the live model list here —
+the settings dropdown offers only real ids, and a stale id degrades to the
+deployment default at spawn rather than failing, so a round trip to Cursor
+on every save would buy nothing.
+ * @summary Choose the model this user's `@cursor` sessions start on.
+ */
+export type putCursorDefaultModelResponse200 = {
+  data: CursorApiKeyStatus;
+  status: 200;
+};
+
+export type putCursorDefaultModelResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putCursorDefaultModelResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type putCursorDefaultModelResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type putCursorDefaultModelResponseSuccess =
+  putCursorDefaultModelResponse200 & {
+    headers: Headers;
+  };
+export type putCursorDefaultModelResponseError = (
+  | putCursorDefaultModelResponse401
+  | putCursorDefaultModelResponse403
+  | putCursorDefaultModelResponse409
+) & {
+  headers: Headers;
+};
+
+export type putCursorDefaultModelResponse =
+  | putCursorDefaultModelResponseSuccess
+  | putCursorDefaultModelResponseError;
+
+export const getPutCursorDefaultModelUrl = () => {
+  return `/cursor-api-key/default-model`;
+};
+
+export const putCursorDefaultModel = async (
+  putCursorDefaultModelRequest: PutCursorDefaultModelRequest,
+  options?: RequestInit
+): Promise<putCursorDefaultModelResponse> => {
+  const res = await fetch(getPutCursorDefaultModelUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putCursorDefaultModelRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putCursorDefaultModelResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putCursorDefaultModelResponse;
+};
+
+/**
+ * Reached only from the settings dropdown, so it decrypts the user's own key
+and asks Cursor directly — the list is per-account and changes, so there is
+nothing to cache statically. Reuses the harness's Cursor client rather than
+reimplementing the `/v1/models` parse, keeping one source of truth for what
+a model is.
+ * @summary List the models the caller's Cursor account offers.
+ */
+export type listCursorModelsResponse200 = {
+  data: CursorModelsResponse;
+  status: 200;
+};
+
+export type listCursorModelsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listCursorModelsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listCursorModelsResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type listCursorModelsResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type listCursorModelsResponseSuccess = listCursorModelsResponse200 & {
+  headers: Headers;
+};
+export type listCursorModelsResponseError = (
+  | listCursorModelsResponse401
+  | listCursorModelsResponse403
+  | listCursorModelsResponse409
+  | listCursorModelsResponse502
+) & {
+  headers: Headers;
+};
+
+export type listCursorModelsResponse =
+  | listCursorModelsResponseSuccess
+  | listCursorModelsResponseError;
+
+export const getListCursorModelsUrl = () => {
+  return `/cursor-api-key/models`;
+};
+
+export const listCursorModels = async (
+  options?: RequestInit
+): Promise<listCursorModelsResponse> => {
+  const res = await fetch(getListCursorModelsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCursorModelsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCursorModelsResponse;
 };
 
 /**

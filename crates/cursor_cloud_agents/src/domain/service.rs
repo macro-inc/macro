@@ -19,6 +19,12 @@
 //! distinction matters because Cursor keeps a cancelled run's stream open often
 //! enough that waiting for it meant the client's stop button did nothing until
 //! the agent finished of its own accord.
+//!
+//! The remote cancel still needs a run id, and this process only remembers
+//! one for a turn it is itself streaming. A session restored after a restart,
+//! or one whose run started from cursor.com, has no such memory — cancelling
+//! it falls back to asking Cursor which run is current rather than silently
+//! skipping the remote call.
 
 #[cfg(test)]
 mod test;
@@ -26,13 +32,12 @@ mod test;
 use crate::domain::error::SessionError;
 use crate::domain::event::{CursorEvent, InteractionUpdate};
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
-    RunStatus,
+    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::translate::TranslateMachine;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, ContentChunk, SessionUpdate, StopReason, TextContent,
+    ContentBlock, ContentChunk, SessionId, SessionUpdate, StopReason, TextContent,
 };
 use futures::StreamExt as _;
 use futures::pin_mut;
@@ -150,7 +155,7 @@ pub struct CursorSessionService<Cursor, Notifier, Repos> {
     cursor: Cursor,
     notifier: Notifier,
     repos: Repos,
-    sessions: Mutex<HashMap<AcpSessionId, Arc<Session>>>,
+    sessions: Mutex<HashMap<SessionId, Arc<Session>>>,
     /// Monotonic counter for minting session ids without a clock or RNG.
     next_session: Mutex<u64>,
     /// A model id this deployment pins, applied to every new session. `None`
@@ -197,7 +202,7 @@ where
     /// The repository is resolved now rather than at first prompt so the
     /// warning about an unlisted (repo-less) session surfaces at `session/new`
     /// time, when the user can still do something about it.
-    pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> AcpSessionId {
+    pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> SessionId {
         let repo = self.repos.resolve(cwd);
         if repo.is_none() {
             tracing::warn!(
@@ -222,7 +227,7 @@ where
             let candidate = {
                 let mut next = self.next_session.lock().expect("session counter poisoned");
                 *next += 1;
-                AcpSessionId::new(format!("cursor-acp-{next}"))
+                SessionId::new(format!("cursor-acp-{next}"))
             };
             if !sessions.contains_key(&candidate) {
                 break candidate;
@@ -254,7 +259,7 @@ where
     /// the stream — so our own record is the only answer available.
     pub async fn session_model_id(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
     ) -> Result<Option<String>, SessionError> {
         Ok(self
             .effective_model(session_id)
@@ -270,7 +275,7 @@ where
     /// at the next prompt.
     pub async fn set_model(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         model_id: &str,
     ) -> Result<(), SessionError> {
         let session = self.session(session_id)?;
@@ -300,7 +305,7 @@ where
     /// happens once per session.
     async fn effective_model(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
     ) -> Result<Option<ModelChoice>, SessionError> {
         let session = self.session(session_id)?;
         if let Some(model) = session
@@ -371,7 +376,7 @@ where
     /// Driven by `session/load`: the list belongs to the client and the
     /// protocol restates it there, which is how a restored process — whose
     /// host never persisted it — learns it again.
-    pub fn set_mcp_servers(&self, session_id: &AcpSessionId, mcp_servers: Vec<McpServer>) {
+    pub fn set_mcp_servers(&self, session_id: &SessionId, mcp_servers: Vec<McpServer>) {
         if let Ok(session) = self.session(session_id) {
             session
                 .state
@@ -387,7 +392,7 @@ where
     #[tracing::instrument(skip(self, prompt), err)]
     pub async fn prompt(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         prompt: &str,
     ) -> Result<StopReason, SessionError> {
         let session = self.session(session_id)?;
@@ -494,10 +499,17 @@ where
     /// Cancel the session's active turn, if any. Idempotent; a session with
     /// no active turn is a no-op rather than an error, because the turn may
     /// have ended while the cancel was in flight.
+    ///
+    /// `active_run` is this process's own memory of what it started, so it is
+    /// empty for a session restored after a restart — or one whose run this
+    /// process never drove at all (started from cursor.com). Either way the
+    /// agent may still have a run going, so a miss falls back to asking
+    /// Cursor which run, if any, is current before giving up on the remote
+    /// cancel.
     #[tracing::instrument(skip(self), err)]
-    pub async fn cancel(&self, session_id: &AcpSessionId) -> Result<(), SessionError> {
+    pub async fn cancel(&self, session_id: &SessionId) -> Result<(), SessionError> {
         let session = self.session(session_id)?;
-        let target = {
+        let (agent, active_run) = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.cancelled = true;
             // Fired before the network call, and the turn ends on it alone:
@@ -506,12 +518,57 @@ where
             // gets its turn back. A cancel Cursor refuses used to leave the
             // turn streaming to natural completion.
             state.cancel.cancel();
-            state.agent.clone().zip(state.active_run.clone())
+            (state.agent.clone(), state.active_run.clone())
         };
-        if let Some((agent, run)) = target {
-            self.cursor.cancel_run(&agent, &run).await?;
+        let Some(agent) = agent else {
+            return Ok(());
+        };
+        let runs = match active_run {
+            Some(run) => vec![run],
+            None => self.current_runs(&agent).await,
+        };
+        // Concurrent rather than sequential so one failing cancel does not
+        // skip the rest — every run found gets its own attempt regardless of
+        // how the others land.
+        let results =
+            futures::future::join_all(runs.iter().map(|run| self.cursor.cancel_run(&agent, run)))
+                .await;
+        for result in results {
+            result?;
         }
         Ok(())
+    }
+
+    /// The agent's runs still in progress, per Cursor's own record.
+    ///
+    /// The fallback [`Self::cancel`] takes when this process has no memory of
+    /// one: best-effort, like the remote cancel itself, so a lookup failure
+    /// costs the remote cancel, never the local one that already fired.
+    /// Cursor documents one active run per agent (see
+    /// [`Self::create_run_when_free`]), but that is a server-side invariant
+    /// this client does not enforce, so every match is cancelled rather than
+    /// just the first — cheap insurance against it ever slipping.
+    async fn current_runs(&self, agent: &CursorAgentId) -> Vec<CursorRunId> {
+        let listings = match self.cursor.list_runs(agent).await {
+            Ok(listings) => listings,
+            Err(error) => {
+                tracing::warn!(%agent, %error, "could not list runs to find one to cancel");
+                return Vec::new();
+            }
+        };
+        let runs: Vec<CursorRunId> = listings
+            .into_iter()
+            .filter(|listing| matches!(listing.status, RunStatus::Creating | RunStatus::Running))
+            .map(|listing| listing.id)
+            .collect();
+        if runs.len() > 1 {
+            tracing::warn!(
+                %agent,
+                count = runs.len(),
+                "more than one run in progress for an agent; Cursor documents one active run per agent"
+            );
+        }
+        runs
     }
 
     /// Drop a session, reporting whether it existed. Any active run keeps
@@ -520,7 +577,7 @@ where
     ///
     /// The bool is what lets `session/close` answer a client that named a
     /// session this agent never had, rather than acknowledging a no-op.
-    pub fn close(&self, session_id: &AcpSessionId) -> bool {
+    pub fn close(&self, session_id: &SessionId) -> bool {
         self.sessions
             .lock()
             .expect("session map poisoned")
@@ -542,7 +599,7 @@ where
     /// with fresh ids because [`Self::new_session`] skips occupied ids.
     pub fn restore_session(
         &self,
-        id: AcpSessionId,
+        id: SessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
         model_id: Option<String>,
@@ -569,7 +626,7 @@ where
     /// loading is a lookup, not a fetch, because restoring state into the
     /// process is [`Self::restore_session`]'s job and happens before serving.
     #[must_use]
-    pub fn has_session(&self, session_id: &AcpSessionId) -> bool {
+    pub fn has_session(&self, session_id: &SessionId) -> bool {
         self.sessions
             .lock()
             .expect("session map poisoned")
@@ -586,7 +643,7 @@ where
     /// answer.
     async fn stream_turn(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         run: &CursorRunId,
@@ -630,6 +687,7 @@ where
             {
                 Ok(None) => {
                     tracing::info!(%agent, %run, "turn cancelled by the client; abandoning the stream");
+                    self.close_open_tool_calls(session_id, session).await;
                     return Ok(StopReason::Cancelled);
                 }
                 Ok(Some(next)) => next,
@@ -728,6 +786,26 @@ where
         }
     }
 
+    /// Close out every tool call left open when a turn ends on the client's
+    /// cancel rather than Cursor's own terminal event.
+    ///
+    /// The abandoned stream (see the `Ok(None)` arm above) means Cursor may
+    /// still be mid-call and will never get the chance to say how it ended,
+    /// so without this the client renders that call running forever.
+    async fn close_open_tool_calls(&self, session_id: &SessionId, session: &Session) {
+        let updates = session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .translator
+            .close_open_calls();
+        for update in updates {
+            if let Err(error) = self.notifier.notify(session_id, update).await {
+                tracing::warn!(%error, "could not close an open tool call after cancel");
+            }
+        }
+    }
+
     /// Create a follow-up run, waiting out whatever run is already going.
     ///
     /// Cursor allows one active run per agent and answers `agent_busy`
@@ -784,7 +862,7 @@ where
     /// Callers hold the session's turn gate.
     async fn backfill_foreign_runs(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
@@ -834,7 +912,7 @@ where
     /// recorded final text when the stream cannot be had.
     async fn mirror_foreign_run(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         run: &CursorRunId,
@@ -946,7 +1024,7 @@ where
     /// outcome, which is the part that must not be lost.
     async fn poll_turn(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         run: &CursorRunId,
@@ -1028,7 +1106,7 @@ where
     /// drove a run (no watermark to mirror from). Failures are logged per
     /// session and never stop the sweep.
     pub async fn sync_foreign_runs(&self) {
-        let sessions: Vec<(AcpSessionId, Arc<Session>)> = self
+        let sessions: Vec<(SessionId, Arc<Session>)> = self
             .sessions
             .lock()
             .expect("session map poisoned")
@@ -1057,7 +1135,7 @@ where
         }
     }
 
-    fn session(&self, id: &AcpSessionId) -> Result<Arc<Session>, SessionError> {
+    fn session(&self, id: &SessionId) -> Result<Arc<Session>, SessionError> {
         self.sessions
             .lock()
             .expect("session map poisoned")

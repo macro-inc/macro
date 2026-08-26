@@ -225,7 +225,7 @@ async fn session_close_forgets_the_session() {
 
     // The service must no longer know it.
     let error = service
-        .prompt(&AcpSessionId::new(session), "hi")
+        .prompt(&SessionId::new(session), "hi")
         .await
         .expect_err("a closed session is gone");
     assert!(matches!(
@@ -486,7 +486,7 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
     service
-        .prompt(&AcpSessionId::new(session), "go")
+        .prompt(&SessionId::new(session), "go")
         .await
         .expect("prompt runs");
 
@@ -566,7 +566,7 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
     service
-        .prompt(&AcpSessionId::new(session), "go")
+        .prompt(&SessionId::new(session), "go")
         .await
         .expect("prompt runs");
 
@@ -633,7 +633,7 @@ async fn the_initialize_response_is_pinned_whole() {
 async fn session_load_answers_for_restored_sessions_only() {
     let (_service, mut client) = serve_over_channel(FakeCursor::new(), |service| {
         service.restore_session(
-            AcpSessionId::new("cursor-acp-3"),
+            SessionId::new("cursor-acp-3"),
             Some(crate::domain::model::CursorAgentId::new("bc-restored")),
             None,
             None,
@@ -868,7 +868,7 @@ async fn a_restored_session_keeps_its_model() {
     cursor.script_models(offered_models());
     let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
         service.restore_session(
-            AcpSessionId::new("cursor-acp-3"),
+            SessionId::new("cursor-acp-3"),
             Some(crate::domain::model::CursorAgentId::new("bc-restored")),
             None,
             Some("gpt-5.5".to_owned()),
@@ -898,7 +898,7 @@ async fn a_restored_session_keeps_its_model() {
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
     service
-        .prompt(&AcpSessionId::new("cursor-acp-3"), "go")
+        .prompt(&SessionId::new("cursor-acp-3"), "go")
         .await
         .expect("prompt runs");
 
@@ -932,7 +932,7 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
     cursor.script_models(offered_models());
     let (service, _client) = serve_over_channel(cursor.clone(), |service| {
         service.restore_session(
-            AcpSessionId::new("cursor-acp-3"),
+            SessionId::new("cursor-acp-3"),
             Some(crate::domain::model::CursorAgentId::new("bc-restored")),
             None,
             Some("claude".to_owned()),
@@ -950,7 +950,7 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
     service
-        .prompt(&AcpSessionId::new("cursor-acp-3"), "go")
+        .prompt(&SessionId::new("cursor-acp-3"), "go")
         .await
         .expect("a prompt with an unresolvable restored model still runs");
 
@@ -976,7 +976,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
     let cursor = FakeCursor::new();
     let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
         // Restored with *no* agent: the session opened, never prompted, died.
-        service.restore_session(AcpSessionId::new("cursor-acp-3"), None, None, None);
+        service.restore_session(SessionId::new("cursor-acp-3"), None, None, None);
     });
 
     let loaded = client
@@ -1010,7 +1010,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
     service
-        .prompt(&AcpSessionId::new("cursor-acp-3"), "go")
+        .prompt(&SessionId::new("cursor-acp-3"), "go")
         .await
         .expect("prompt runs");
 
@@ -1077,7 +1077,7 @@ async fn a_session_with_no_choice_rests_the_picker_on_auto() {
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
     service
-        .prompt(&AcpSessionId::new(session), "go")
+        .prompt(&SessionId::new(session), "go")
         .await
         .expect("prompt runs");
     let asked = cursor

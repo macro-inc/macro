@@ -3,7 +3,7 @@ use cache_core::codec::cache_database_name;
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, NetworkWrite,
-    QueryRegistration, ReadResult,
+    QueryRegistration, ReadResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -140,6 +140,7 @@ struct JsQueryRegistration {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
+    revision: String,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -149,6 +150,7 @@ struct JsWriteResult {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JsHydrationWriteResult {
+    revision: String,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -165,6 +167,7 @@ struct JsInspectionPathSegment {
 #[serde(rename_all = "camelCase")]
 struct JsEnqueueOptimisticMutationResult {
     transaction_id: String,
+    revision: String,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -268,9 +271,48 @@ struct JsEntityFilterRequest {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 enum JsEntityFilterResult {
-    Complete { keys: Vec<String>, optimistic: bool },
+    Complete {
+        revision: String,
+        keys: Vec<String>,
+        optimistic: bool,
+    },
     Unsupported,
-    Incomplete,
+    Incomplete {
+        revision: String,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsRecordSelectionResult {
+    revision: String,
+    records: Vec<cache_core::record_selection::SelectedRecord>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsAffectedOperationsResult {
+    revision: String,
+    affected_ops: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct JsRevisionResult {
+    revision: String,
+}
+
+fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
+    JsWriteResult {
+        revision: result.revision.to_string(),
+        changed: result
+            .changed
+            .into_iter()
+            .map(|key| key.0.into_owned())
+            .collect(),
+        affected_ops: ops.names(result.affected_ops),
+        reset: result.reset,
+        revalidations: result.revalidations,
+    }
 }
 
 struct CacheState {
@@ -737,6 +779,17 @@ impl CacheEngine {
         })
     }
 
+    /// Returns the current in-memory cache revision as an unsigned decimal string.
+    #[wasm_bindgen(js_name = currentRevision)]
+    pub fn current_revision(&self) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            let revision = state.engine_mut()?.current_revision();
+            Ok(JsValue::from_str(&revision.to_string()))
+        })
+    }
+
     /// Returns the opaque identity bound to this cache, or `null` when no
     /// identity-bearing response has been stored yet.
     #[wasm_bindgen(js_name = boundIdentity)]
@@ -809,7 +862,10 @@ impl CacheEngine {
                 .read_records_by_keys(&selection, &keys)
                 .await;
             let records = state.engine_result(result)?;
-            to_js(&records)
+            to_js(&JsRecordSelectionResult {
+                revision: records.revision.to_string(),
+                records: records.value,
+            })
         })
     }
 
@@ -848,8 +904,11 @@ impl CacheEngine {
                 SoupFilterCompileOutcome::Unsupported => JsEntityFilterResult::Unsupported,
                 SoupFilterCompileOutcome::Supported(query) => {
                     let result = state.engine_mut()?.query_predicate_index(&query).await;
-                    match state.engine_result(result)? {
+                    let result = state.engine_result(result)?;
+                    let revision = result.revision.to_string();
+                    match result.value {
                         PredicateQueryResult::Complete(keys) => JsEntityFilterResult::Complete {
+                            revision,
                             keys: keys
                                 .into_iter()
                                 .map(|key| key.as_str().to_owned())
@@ -857,13 +916,16 @@ impl CacheEngine {
                             optimistic: false,
                         },
                         PredicateQueryResult::Optimistic(keys) => JsEntityFilterResult::Complete {
+                            revision,
                             keys: keys
                                 .into_iter()
                                 .map(|key| key.as_str().to_owned())
                                 .collect(),
                             optimistic: true,
                         },
-                        PredicateQueryResult::Incomplete => JsEntityFilterResult::Incomplete,
+                        PredicateQueryResult::Incomplete => {
+                            JsEntityFilterResult::Incomplete { revision }
+                        }
                     }
                 }
             };
@@ -925,16 +987,7 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&JsWriteResult {
-                changed: result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
-            })
+            to_js(&js_write_result(result, &ops.borrow()))
         })
     }
 
@@ -970,6 +1023,7 @@ impl CacheEngine {
                 .await;
             let result = state.engine_result(result)?;
             to_js(&JsHydrationWriteResult {
+                revision: result.write_result.revision.to_string(),
                 changed: result
                     .write_result
                     .changed
@@ -1055,6 +1109,7 @@ impl CacheEngine {
             };
             to_js(&JsEnqueueOptimisticMutationResult {
                 transaction_id: result.transaction_id.to_string(),
+                revision: result.write_result.revision.to_string(),
                 changed: result
                     .write_result
                     .changed
@@ -1207,16 +1262,7 @@ impl CacheEngine {
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&JsWriteResult {
-                changed: result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
-            })
+            to_js(&js_write_result(result, &ops.borrow()))
         })
     }
 
@@ -1244,16 +1290,7 @@ impl CacheEngine {
                 .rollback_optimistic_write(transaction, claim)
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&JsWriteResult {
-                changed: result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
-            })
+            to_js(&js_write_result(result, &ops.borrow()))
         })
     }
 
@@ -1268,17 +1305,17 @@ impl CacheEngine {
             let mut state = state.lock().await;
             state.ensure_callable()?;
             let projections = dirty_projection_mutations(&keys);
-            if !projections.is_empty() {
-                let result = state
-                    .engine_mut()?
-                    .mark_projections_incomplete(projections)
-                    .await;
-                state.engine_result(result)?;
-            }
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
-            let affected = state.engine_mut()?.invalidate_keys(keys.iter());
-            to_js(&ops.borrow().names(affected))
+            let result = state
+                .engine_mut()?
+                .invalidate_keys_with_projections(&keys, projections)
+                .await;
+            let affected = state.engine_result(result)?;
+            to_js(&JsAffectedOperationsResult {
+                revision: affected.revision.to_string(),
+                affected_ops: ops.borrow().names(affected.value),
+            })
         })
     }
 
@@ -1302,7 +1339,10 @@ impl CacheEngine {
                 .delete_keys_with_projections(&keys, &projection_keys)
                 .await;
             let affected = state.engine_result(result)?;
-            to_js(&ops.borrow().names(affected))
+            to_js(&JsAffectedOperationsResult {
+                revision: affected.revision.to_string(),
+                affected_ops: ops.borrow().names(affected.value),
+            })
         })
     }
 
@@ -1316,16 +1356,7 @@ impl CacheEngine {
             let mut state = state.lock().await;
             let result = state.engine_mut()?.refresh_optimistic_queue().await;
             let result = state.engine_result(result)?;
-            to_js(&JsWriteResult {
-                changed: result
-                    .changed
-                    .into_iter()
-                    .map(|key| key.0.into_owned())
-                    .collect(),
-                affected_ops: ops.borrow().names(result.affected_ops),
-                reset: result.reset,
-                revalidations: result.revalidations,
-            })
+            to_js(&js_write_result(result, &ops.borrow()))
         })
     }
 
@@ -1338,8 +1369,12 @@ impl CacheEngine {
         let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
-            let affected = state.engine_mut()?.external_reset();
-            to_js(&ops.borrow().names(affected))
+            let result = state.engine_mut()?.external_reset();
+            let affected = state.engine_result(result)?;
+            to_js(&JsAffectedOperationsResult {
+                revision: affected.revision.to_string(),
+                affected_ops: ops.borrow().names(affected.value),
+            })
         })
     }
 
@@ -1364,8 +1399,10 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             let result = state.engine_mut()?.clear().await;
-            state.engine_result(result)?;
-            Ok(JsValue::UNDEFINED)
+            let revision = state.engine_result(result)?;
+            to_js(&JsRevisionResult {
+                revision: revision.to_string(),
+            })
         })
     }
 

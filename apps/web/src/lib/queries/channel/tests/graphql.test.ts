@@ -4,6 +4,7 @@ import type {
   SearchCacheArgs,
   SearchCachePage,
 } from '@graphql-cache/index';
+import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import { expect, it, vi } from 'vitest';
 import { readCachedGraphqlChannels } from '../graphql';
 
@@ -13,7 +14,13 @@ function cacheHost(
     args: ReadRecordsByKeysArgs
   ) => Promise<Array<{ recordKey: string; record: unknown }>>
 ): Pick<CacheHost, 'search' | 'readRecordsByKeys'> {
-  return { search, readRecordsByKeys };
+  return {
+    search,
+    readRecordsByKeys: async (args) => ({
+      revision: INITIAL_CACHE_REVISION,
+      records: await readRecordsByKeys(args),
+    }),
+  };
 }
 
 it('reads recent channels and DMs from the cache projection', async () => {

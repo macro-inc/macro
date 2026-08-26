@@ -15,8 +15,14 @@ import {
   clearEmailBody,
   hasDraftContent,
   prepareEmailBody,
+  prepareEmailBodyFromHtml,
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
+import {
+  endUndoSend,
+  tryBeginUndoSend,
+  unscheduleWithRetry,
+} from '@block-email/util/undoSendGuard';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -398,16 +404,36 @@ export function EmailCompose(props: EmailComposeProps) {
   const [validationError, setValidationError] =
     createSignal<ComposeValidationError | null>(null);
 
-  const undoSend = async (draftId: string, threadId?: string) => {
+  // `linkId` is the X-Email-Link-Id header value the send itself used, resolved
+  // at send time.
+  const undoSend = async (
+    draftId: string,
+    threadId: string | undefined,
+    linkId: string | undefined
+  ) => {
+    if (!tryBeginUndoSend(draftId)) return;
     try {
-      const result = await emailClient.unscheduleMessage(
-        { draftID: draftId },
-        headerLinkId()
-      );
+      const result = await unscheduleWithRetry(draftId, linkId);
       // A non-2xx response comes back as an Err Result (it doesn't throw), so
       // bail before reverting the send appearance in the UI.
       if (result.isErr()) {
-        toast.failure('Failed to undo send');
+        endUndoSend(draftId);
+        Telemetry.error(
+          new Error(
+            `Failed to undo send for draft ${draftId}: ${result.error
+              .map((e) => `${e.code}: ${e.message}`)
+              .join(', ')}`
+          )
+        );
+        // 400 is the backend's "already sent" — the undo window has passed.
+        const alreadySent = result.error.some(
+          (e) => e.code === 'HTTP_ERROR' && e.message.includes('status: 400')
+        );
+        toast.failure(
+          alreadySent
+            ? 'Too late to undo — the email was already sent'
+            : 'Failed to undo send'
+        );
         return;
       }
       queryClient.invalidateQueries({
@@ -416,6 +442,43 @@ export function EmailCompose(props: EmailComposeProps) {
       // Wipe the new thread's cache when its view unmounts (replaceSplit
       // below) so the next visit fetches fresh data without the sent message.
       if (threadId) markThreadDraftSaved(threadId);
+
+      // The unscheduled message still carries the sent body (watermark and
+      // injected signature baked in), so overwrite the server-side draft with
+      // the pre-send content. The snapshot itself stays for the compose
+      // remount below to restore the form from.
+      const snapshot =
+        undoComposeSnapshot?.draftId === draftId ? undoComposeSnapshot : null;
+      if (snapshot) {
+        const prepared = prepareEmailBodyFromHtml(snapshot.bodyHtml);
+        const saveResult = await emailClient.createDraft(
+          {
+            draft: {
+              bcc: snapshot.recipients.bcc.map(
+                convertEmailRecipientToContactInfo
+              ),
+              body_html: prepared.bodyHtml,
+              cc: snapshot.recipients.cc.map(
+                convertEmailRecipientToContactInfo
+              ),
+              db_id: draftId,
+              subject: snapshot.subject,
+              to: snapshot.recipients.to.map(
+                convertEmailRecipientToContactInfo
+              ),
+            },
+          },
+          linkId
+        );
+        if (saveResult.isErr()) {
+          // Non-fatal: the compose remount restores from the snapshot either
+          // way, and the next draft autosave overwrites the stale body.
+          Telemetry.error(
+            new Error('Failed to restore draft body after undo-send')
+          );
+        }
+      }
+
       replaceSplit({
         content: {
           type: 'component',
@@ -428,15 +491,24 @@ export function EmailCompose(props: EmailComposeProps) {
       });
       toast.success('Send cancelled');
       invalidateSoupEntity(draftId);
-    } catch {
+    } catch (e) {
+      endUndoSend(draftId);
+      Telemetry.error(
+        e instanceof Error
+          ? e
+          : new Error(`Failed to undo send for draft ${draftId}`)
+      );
       toast.failure('Failed to undo send');
     }
   };
 
   const sendMutation = useSendMessageMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, vars) => {
       const draftId = data.message.db_id;
       const threadId = data.message.thread_db_id;
+      // This send opens a fresh undo cycle for the draft id.
+      if (draftId) endUndoSend(draftId);
+      const sendLinkId = vars.linkId;
       const toastId = toast.success('Email sent', {
         actions: draftId
           ? [
@@ -445,7 +517,7 @@ export function EmailCompose(props: EmailComposeProps) {
                 icon: ArrowCounterClockwise,
                 onClick: () => {
                   if (toastId != null) toast.dismiss(toastId);
-                  void undoSend(draftId, threadId ?? undefined);
+                  void undoSend(draftId, threadId ?? undefined, sendLinkId);
                 },
               },
             ]

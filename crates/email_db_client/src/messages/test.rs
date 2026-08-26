@@ -332,8 +332,7 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
     .expect("fixture message present");
 
     let mut tx = pool.begin().await?;
-    let deleted_thread =
-        crate::messages::delete::delete_message_with_tx(&mut tx, &message, true).await?;
+    let deleted_thread = crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
     tx.commit().await?;
 
     // The thread survives (a second message remains) and the flag flips off

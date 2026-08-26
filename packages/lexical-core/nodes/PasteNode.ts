@@ -103,7 +103,14 @@ export class PasteNode extends DecoratorBlockNode<
     };
 
     return {
-      div: () => ({ conversion: convert, priority: 1 }),
+      // Decline non-matching divs in the claim itself: the importer picks a
+      // single claimant per element (ties go to the first registered node)
+      // and never falls back when its conversion returns null, so an
+      // unconditional claim here would swallow every other node's divs.
+      div: (domNode: HTMLElement) =>
+        domNode.hasAttribute('data-paste-node')
+          ? { conversion: convert, priority: 1 }
+          : null,
     };
   }
 

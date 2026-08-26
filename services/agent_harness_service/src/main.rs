@@ -122,7 +122,15 @@ async fn run() -> anyhow::Result<()> {
     agent_harness::install_tls_provider();
     let config = Config::from_env()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
-    let inmem_bot = config.inmem_bot_id.map(BotId::new_from_uuid);
+    // The in-process Macro bot is a compile-time identity, not configuration:
+    // it is always `bot_id::MACRO_AI_BOT_ID`, so the only real question is
+    // whether this environment serves it. Production stays off until its AI
+    // tool config lands - `build_tool_service_context_from_env` below is
+    // fatal, so turning it on without that config would refuse to boot.
+    let inmem_bot = match config.environment {
+        Environment::Local | Environment::Develop => Some(bot_id::MACRO_AI_BOT_ID),
+        Environment::Production => None,
+    };
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -269,6 +277,15 @@ async fn run() -> anyhow::Result<()> {
         .chain(inmem_bot)
         .chain(std::iter::once(bot_id::CURSOR_BOT_ID))
         .collect();
+    // Logged because the failure mode this replaced was silent: a harness that
+    // resolved no in-process bot booted healthy, passed its health check, and
+    // dropped every `@macro` mention as ForeignBot with nothing to show for it.
+    tracing::info!(
+        bots = ?our_bots.iter().map(|bot| bot.as_uuid()).collect::<Vec<_>>(),
+        in_process_bot = ?inmem_bot.map(BotId::as_uuid),
+        environment = %config.environment,
+        "agent harness serving bots"
+    );
     let containers =
         RoutedContainerManager::new(sandbox_and_inmem, cursor_manager, session_repo.clone());
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
