@@ -38,25 +38,12 @@ import {
   TOP_BAR_SUB_APPS,
   TOP_BAR_VIEWS,
   type TopBarDestination,
+  type TopBarDestinationId,
 } from './topbar-destinations';
+import { registerTopBarViewHotkeys } from './topbar-view-hotkeys';
 
-/**
- * Roles whose own keyboard handling owns Tab — a dialog's focus trap, a menu's
- * roving focus — so the bar leaves the key alone while focus sits inside one.
- */
-const OVERLAY_ROLE_SELECTOR =
-  '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [role="grid"]';
-
-const isFocusInsideOverlay = () => {
-  const focused = document.activeElement;
-  return (
-    focused instanceof Element &&
-    focused.closest(OVERLAY_ROLE_SELECTOR) !== null
-  );
-};
-
-/** Position keys for the center row, in the order the views are rendered. */
-const VIEW_NUMBER_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+/** Ceiling on how long the bar will answer with a press that never lands. */
+const PENDING_VIEW_TIMEOUT_MS = 4000;
 
 /**
  * Act on press instead of release, so the bar responds the instant a button
@@ -132,7 +119,54 @@ export function ExperimentalAppTopBar() {
     globalSplitManager()?.activeSplit()?.content()
   );
 
+  /**
+   * The view the bar has committed to but the splits have not reached yet.
+   * Mounting a view is heavy enough to be felt, and until it lands the split
+   * manager still reports the old one — so the bar answers with the press and
+   * hands the question back to the real state as soon as the splits move.
+   */
+  const [pendingView, setPendingView] = createSignal<TopBarDestinationId>();
+  let pendingFrom: { type: string; id: string } | undefined;
+  let pendingTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const clearPendingView = () => {
+    if (pendingTimer !== undefined) clearTimeout(pendingTimer);
+    pendingTimer = undefined;
+    pendingFrom = undefined;
+    setPendingView(undefined);
+  };
+
+  const markPendingView = (destination: TopBarDestination) => {
+    clearPendingView();
+    const content = activeContent();
+    pendingFrom = content && { type: content.type, id: content.id };
+    setPendingView(destination.id);
+    // A navigation that never lands must not leave the bar pointing at a view
+    // the splits never opened.
+    pendingTimer = setTimeout(clearPendingView, PENDING_VIEW_TIMEOUT_MS);
+  };
+
+  onCleanup(clearPendingView);
+
+  createEffect(() => {
+    const content = activeContent();
+    if (pendingView() === undefined) return;
+    // Still on the view we pressed away from, so keep answering with the
+    // press. Any other content means the splits moved — to the pressed view
+    // or somewhere else entirely — and the real state is current again.
+    if (
+      content?.type === pendingFrom?.type &&
+      content?.id === pendingFrom?.id
+    ) {
+      return;
+    }
+    clearPendingView();
+  });
+
   const isActive = (destination: TopBarDestination) => {
+    const pending = pendingView();
+    if (pending !== undefined) return pending === destination.id;
+
     const content = activeContent();
     if (!content) return false;
     return (
@@ -140,6 +174,29 @@ export function ExperimentalAppTopBar() {
       content.id === destination.content.id
     );
   };
+
+  /**
+   * Run the navigation only once the browser has painted the bar's new state.
+   * Solid would otherwise apply the marker and mount the new view in the same
+   * tick, so neither reaches the screen until the mount finishes and the
+   * press reads as ignored. Two frames is what it takes to know the first
+   * paint landed; a newer press replaces an older queued one.
+   */
+  let queuedNavigation: number | undefined;
+
+  const navigateAfterPaint = (task: () => void) => {
+    if (queuedNavigation !== undefined) cancelAnimationFrame(queuedNavigation);
+    queuedNavigation = requestAnimationFrame(() => {
+      queuedNavigation = requestAnimationFrame(() => {
+        queuedNavigation = undefined;
+        task();
+      });
+    });
+  };
+
+  onCleanup(() => {
+    if (queuedNavigation !== undefined) cancelAnimationFrame(queuedNavigation);
+  });
 
   const isVisible = (destination: TopBarDestination) =>
     !destination.requiresCrmFlag || crmFlag().enabled;
@@ -161,105 +218,39 @@ export function ExperimentalAppTopBar() {
     const newSplit = options?.newSplit ?? false;
     const surface = options?.surface ?? 'topbar';
 
-    if (destination.id === 'brain' && !newSplit && !isActive(destination)) {
-      analytics.track('sidebar_click', { surface, view: destination.id });
-      navigate(buildBrainWorkspacePath(getLastBrainWorkspaceSelection()));
-      globalSplitManager()?.returnFocus();
-      return;
-    }
-
     if (!newSplit && isActive(destination)) {
       globalSplitManager()?.returnFocus();
       return;
     }
 
     analytics.track('sidebar_click', { surface, view: destination.id });
-    layout.openWithSplit(destination.content, {
-      preferNewSplit: newSplit,
-      mergeHistory: false,
-      allowDuplicate: true,
-      referredFrom: 'sidebar',
+    markPendingView(destination);
+
+    navigateAfterPaint(() => {
+      // Brain owns a route rather than a plain split, so replacing the active
+      // split means navigating to it.
+      if (destination.id === 'brain' && !newSplit) {
+        navigate(buildBrainWorkspacePath(getLastBrainWorkspaceSelection()));
+      } else {
+        layout.openWithSplit(destination.content, {
+          preferNewSplit: newSplit,
+          mergeHistory: false,
+          allowDuplicate: true,
+          referredFrom: 'sidebar',
+        });
+      }
+      globalSplitManager()?.returnFocus();
     });
-    globalSplitManager()?.returnFocus();
   };
 
-  /**
-   * Step through the center views, wrapping at both ends. With no view
-   * active — a document is open, say — forwards lands on the first and
-   * backwards on the last.
-   */
-  const cycleViews = (step: 1 | -1) => {
-    const views = visibleViews();
-    if (views.length === 0) return false;
-
-    const current = views.findIndex(isActive);
-    const next =
-      current === -1
-        ? step === 1
-          ? 0
-          : views.length - 1
-        : (current + step + views.length) % views.length;
-
-    openView(views[next]!, { surface: 'topbar_hotkey' });
-    return true;
-  };
-
-  /**
-   * Tab owns view switching under this layout, so it must not swallow the
-   * key where it still means "move focus": text fields opt out through
-   * `runWithInputFocused`, and dialogs and menus keep their own traversal.
-   * The soup views stand their own Tab binding down while the bar is up.
-   */
-  const cycleRegistrations = (
-    [
-      ['tab', 1, 'Next view'],
-      ['shift+tab', -1, 'Previous view'],
-    ] as const
-  ).map(([hotkey, step, description]) =>
-    registerHotkey({
-      hotkey,
-      scopeId: 'global',
-      description,
-      condition: () => visibleViews().length > 1 && !isFocusInsideOverlay(),
-      keyDownHandler: () => cycleViews(step),
-      icon: GridIcon,
-      keywords: ['view', 'views', 'switch', 'cycle', 'top bar'],
-    })
-  );
-  /**
-   * Straight digits jump to a view by its position in the row, so 1 is
-   * Activity and 3 is Email. Nine is the ceiling because there is no key
-   * past it; the soup views give the digits up while the bar is here, the
-   * same way they give up Tab.
-   */
-  const numberRegistrations = Array.from(
-    { length: VIEW_NUMBER_KEYS.length },
-    (_, index) =>
-      registerHotkey({
-        hotkey: VIEW_NUMBER_KEYS[index]!,
-        scopeId: 'global',
-        description: () => `Go to ${visibleViews()[index]?.label ?? 'view'}`,
-        condition: () =>
-          visibleViews().length > index && !isFocusInsideOverlay(),
-        keyDownHandler: () => {
-          const destination = visibleViews()[index];
-          if (!destination) return false;
-          openView(destination, { surface: 'topbar_hotkey' });
-          return true;
-        },
-        hide: () => visibleViews().length <= index,
-        icon: GridIcon,
-        keywords: ['view', 'views', 'switch', 'go to', 'top bar'],
-      })
-  );
-
+  const viewHotkeys = registerTopBarViewHotkeys({
+    views: visibleViews,
+    isActive,
+    openView: (destination) =>
+      openView(destination, { surface: 'topbar_hotkey' }),
+  });
   onCleanup(() => {
-    for (const registration of [
-      ...cycleRegistrations,
-      ...numberRegistrations,
-    ]) {
-      registration.dispose();
-    }
+    for (const registration of viewHotkeys) registration.dispose();
   });
 
   /**
@@ -271,13 +262,17 @@ export function ExperimentalAppTopBar() {
       surface: 'topbar',
       view: destination.id,
     });
-    layout.openWithSplit(destination.content, {
-      preferNewSplit: true,
-      mergeHistory: false,
-      allowDuplicate: false,
-      referredFrom: 'sidebar',
+    markPendingView(destination);
+
+    navigateAfterPaint(() => {
+      layout.openWithSplit(destination.content, {
+        preferNewSplit: true,
+        mergeHistory: false,
+        allowDuplicate: false,
+        referredFrom: 'sidebar',
+      });
+      globalSplitManager()?.returnFocus();
     });
-    globalSplitManager()?.returnFocus();
   };
 
   const openInNewTab = (destination: TopBarDestination) => {
