@@ -419,7 +419,19 @@ Before changing production behavior:
 2. Add a failing compiler/WASM fixture showing that a realtime ordinary document cannot currently satisfy these requests.
 3. Record authoritative PostgreSQL membership for regular documents, email-attachment documents, tasks, snippets, and null subtype documents.
 4. Define the single-entity capsule and `soup-flat-v2` canonical fact encodings in tests.
-5. Confirm the current document-email lifecycle has no relation mutation path lacking a document Soup update.
+5. Audit the current document-email lifecycle for relation mutation paths lacking a document Soup update.
+
+#### Phase 0 lifecycle audit result
+
+The audit found an invalidation gap; the stronger confirmation is **not** currently true:
+
+- `documents::PgDocumentRepo::create_document` inserts `document_email` in the document transaction, commits, and only then publishes `DocumentMacroEvent::Created`. This path is correctly ordered for realtime hydration.
+- `macro_db_client::document::v2::create` can also insert the relation. Its only non-test caller currently creates the instructions document with `email_attachment_id: None`, but this public legacy path is not intrinsically coupled to document event publication and must not gain a `Some` caller unnoticed.
+- `document_email.email_attachment_id` has `ON DELETE CASCADE`. Email attachment reconciliation deletes orphaned `email_attachments`; message deletion cascades attachments; link deletion cascades messages and attachments. Those paths can remove `document_email` while leaving the Document row.
+- No corresponding `DocumentMacroEvent` publication exists in `email_db_client`, `email_service`, or the email domain after those attachment/link deletions. A previously cached Document projection can therefore retain `isEmailAttachment: true` after the authoritative relation becomes false.
+- Cascading relation removal caused by deleting the Document itself is not a separate projection-update problem because the document deletion path emits/removes the entity.
+
+Before enabling v2 attachment facts, centralize or wrap relation-removing email operations so they collect affected document IDs and publish recipient-targeted document Soup updates after commit, or prevent deletion of an attachment while its derived Document remains. Add provider-reconciliation, message-deletion, and link-deletion tests. This is a rollout blocker discovered by Phase 0, not work to hide in the GraphQL adapter.
 
 Likely files:
 

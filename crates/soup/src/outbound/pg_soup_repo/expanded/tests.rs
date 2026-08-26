@@ -5311,6 +5311,144 @@ async fn test_dyn_filter_by_sub_type_and_file_type(db: PgPool) -> anyhow::Result
     Ok(())
 }
 
+async fn document_ids_for_phase0_membership_filter(
+    db: &PgPool,
+    document_filter: serde_json::Value,
+) -> anyhow::Result<HashSet<Uuid>> {
+    let filters: EntityFilterAst = serde_json::from_value(serde_json::json!({
+        "df": document_filter
+    }))?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let items = expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id,
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    Ok(items
+        .into_iter()
+        .filter_map(|item| match item {
+            SoupItem::Document(document) => Some(document.id),
+            _ => None,
+        })
+        .collect())
+}
+
+// Characterizes the authoritative PostgreSQL membership for every production
+// Documents tab before soup-flat-v2 introduces equivalent local facts.
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests", "soup_projection_phase0")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn production_documents_presets_have_authoritative_membership(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let owner = "macro|user-1@test.com";
+    let not_task = serde_json::json!({ "!": { "l": { "dst": "task" } } });
+    let not_task_or_snippet = serde_json::json!({
+        "!": {
+            "|": [
+                { "l": { "dst": "task" } },
+                { "l": { "dst": "snippet" } }
+            ]
+        }
+    });
+    let owned = |sub_type_filter: serde_json::Value| {
+        serde_json::json!({
+            "&": [
+                sub_type_filter,
+                {
+                    "&": [
+                        { "l": { "o": owner } },
+                        { "l": { "iea": false } }
+                    ]
+                }
+            ]
+        })
+    };
+    let shared = |sub_type_filter: serde_json::Value| {
+        serde_json::json!({
+            "&": [
+                sub_type_filter,
+                {
+                    "&": [
+                        { "!": { "l": { "o": owner } } },
+                        { "l": { "iea": false } }
+                    ]
+                }
+            ]
+        })
+    };
+    let ids = |values: &[&str]| {
+        values
+            .iter()
+            .map(|value| Uuid::parse_str(value).unwrap())
+            .collect::<HashSet<_>>()
+    };
+
+    let ordinary_owned = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+    let ordinary_shared = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+    let snippet = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+    let attachment_task_a = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let attachment_task_b = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+    let cases = [
+        (
+            "owned/snippets-on",
+            owned(not_task.clone()),
+            ids(&[ordinary_owned, snippet]),
+        ),
+        (
+            "owned/snippets-off",
+            owned(not_task_or_snippet.clone()),
+            ids(&[ordinary_owned]),
+        ),
+        (
+            "shared/snippets-on",
+            shared(not_task.clone()),
+            ids(&[ordinary_shared]),
+        ),
+        (
+            "shared/snippets-off",
+            shared(not_task_or_snippet.clone()),
+            ids(&[ordinary_shared]),
+        ),
+        (
+            "attachments",
+            serde_json::json!({ "l": { "iea": true } }),
+            ids(&[attachment_task_a, attachment_task_b]),
+        ),
+        (
+            "all/snippets-on",
+            not_task,
+            ids(&[ordinary_owned, ordinary_shared, snippet]),
+        ),
+        (
+            "all/snippets-off",
+            not_task_or_snippet,
+            ids(&[ordinary_owned, ordinary_shared]),
+        ),
+    ];
+
+    for (name, filter, expected) in cases {
+        assert_eq!(
+            document_ids_for_phase0_membership_filter(&db, filter).await?,
+            expected,
+            "{name}"
+        );
+    }
+
+    Ok(())
+}
+
 // Test filtering documents by is_email_attachment = true (only email attachments)
 #[sqlx::test(
     fixtures(

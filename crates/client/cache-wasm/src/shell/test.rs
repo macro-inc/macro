@@ -241,6 +241,112 @@ fn exact_document_filter(document_id: &str) -> serde_json::Value {
     })
 }
 
+fn documents_preset_filter(document_filter: serde_json::Value) -> serde_json::Value {
+    const NIL_ID: &str = "00000000-0000-0000-0000-000000000000";
+    serde_json::json!({
+        "filters": {
+            "calendarEventFilter": { "literal": { "id": NIL_ID } },
+            "documentFilter": document_filter,
+            "projectFilter": { "literal": { "projectId": NIL_ID } },
+            "chatFilter": { "literal": { "chatId": NIL_ID } },
+            "emailFilter": { "tree": { "literal": { "threadId": NIL_ID } } },
+            "channelFilter": { "literal": { "channelId": NIL_ID } },
+            "channelThreadFilter": { "literal": { "threadId": NIL_ID } },
+            "callFilter": { "literal": { "callId": NIL_ID } },
+            "crmCompanyFilter": { "literal": { "id": NIL_ID } },
+            "foreignEntityFilter": { "literal": { "id": NIL_ID } }
+        },
+        "sortMethod": "UPDATED_AT",
+        "sortDirection": "DESC",
+        "limit": 100
+    })
+}
+
+fn production_documents_preset_filters() -> Vec<(&'static str, serde_json::Value)> {
+    let owner = "macro|user@example.com";
+    let not_task = serde_json::json!({
+        "not": { "literal": { "subType": "TASK" } }
+    });
+    let not_task_or_snippet = serde_json::json!({
+        "not": {
+            "or": {
+                "left": { "literal": { "subType": "TASK" } },
+                "right": { "literal": { "subType": "SNIPPET" } }
+            }
+        }
+    });
+
+    vec![
+        (
+            "owned/snippets-on",
+            documents_preset_filter(serde_json::json!({
+                "and": {
+                    "left": not_task.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "literal": { "owner": owner } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            })),
+        ),
+        (
+            "owned/snippets-off",
+            documents_preset_filter(serde_json::json!({
+                "and": {
+                    "left": not_task_or_snippet.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "literal": { "owner": owner } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            })),
+        ),
+        (
+            "shared/snippets-on",
+            documents_preset_filter(serde_json::json!({
+                "and": {
+                    "left": not_task.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "not": { "literal": { "owner": owner } } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            })),
+        ),
+        (
+            "shared/snippets-off",
+            documents_preset_filter(serde_json::json!({
+                "and": {
+                    "left": not_task_or_snippet.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "not": { "literal": { "owner": owner } } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            })),
+        ),
+        (
+            "attachments",
+            documents_preset_filter(
+                serde_json::json!({ "literal": { "isEmailAttachment": true } }),
+            ),
+        ),
+        ("all/snippets-on", documents_preset_filter(not_task)),
+        (
+            "all/snippets-off",
+            documents_preset_filter(not_task_or_snippet),
+        ),
+    ]
+}
+
 async fn fresh_engine(scope: &str) -> CacheEngine {
     destroy_cache(scope.into())
         .await
@@ -418,6 +524,35 @@ async fn realtime_soup_items_are_locally_filterable_without_a_query_fetch() {
         selected["records"][0]["record"]["displayName"],
         "Realtime document"
     );
+
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn realtime_soup_item_cannot_satisfy_documents_presets_without_derived_facts() {
+    const SCOPE: &str = "cache-wasm-realtime-documents-preset-gap";
+    const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000006";
+    let engine = fresh_engine(SCOPE).await;
+
+    resolved(engine.write_query(
+        write_context(None),
+        SOUP_UPDATES_SUBSCRIPTION.into(),
+        Some("SoupUpdates".into()),
+        js(serde_json::json!({})),
+        js(realtime_document_data(DOCUMENT_ID)),
+        None,
+    ))
+    .await;
+
+    for (name, request) in production_documents_preset_filters() {
+        let filtered: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request))).await);
+        assert_eq!(
+            filtered,
+            serde_json::json!({ "kind": "unsupported" }),
+            "{name} must remain an explicit soup-flat-v1 fallback until v2 facts arrive"
+        );
+    }
 
     close_and_destroy(&engine, SCOPE).await;
 }
