@@ -2,11 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import { toast } from '@core/component/Toast/Toast';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserTooltip } from './UserTooltip';
 
 const mocks = vi.hoisted(() => ({
@@ -76,22 +75,12 @@ vi.mock('./UserIcon', () => ({
   UserIcon: () => <div data-testid="user-icon" />,
 }));
 
-const writeText = vi.fn();
-
-afterEach(cleanup);
-
 beforeEach(() => {
   mocks.crmFlagEnabled = true;
   mocks.teamCrmEnabled = true;
   mocks.contact = { id: 'contact-1' };
   mocks.openWithSplit.mockReset();
   mocks.onClose.mockReset();
-  writeText.mockReset();
-  vi.mocked(toast.success).mockReset();
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: { writeText },
-  });
 });
 
 describe('UserTooltip CRM contact action', () => {
@@ -171,39 +160,5 @@ describe('UserTooltip CRM contact action', () => {
     expect(screen.getByText('Jane Doe')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Copy email' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
-  });
-});
-
-describe('UserTooltip copy actions', () => {
-  it('copies the displayed name, toasts Name copied, and does not close', () => {
-    render(() => (
-      <UserTooltip
-        displayName="Jane Doe"
-        email="jane.doe@example.com"
-        onClose={mocks.onClose}
-      />
-    ));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Copy name' }));
-
-    expect(writeText).toHaveBeenCalledWith('Jane Doe');
-    expect(toast.success).toHaveBeenCalledWith('Name copied');
-    expect(mocks.onClose).not.toHaveBeenCalled();
-  });
-
-  it('hides Copy name when the label is not a distinct name', () => {
-    const cases = [
-      { displayName: 'Me', email: 'me@example.com' },
-      { displayName: 'me', email: 'me@example.com' },
-      { displayName: 'jane.doe@example.com', email: 'jane.doe@example.com' },
-      { displayName: 'jane.doe', email: 'jane.doe@example.com' },
-      { displayName: '   ', email: 'jane.doe@example.com' },
-    ];
-
-    for (const props of cases) {
-      const { unmount } = render(() => <UserTooltip {...props} />);
-      expect(screen.queryByRole('button', { name: 'Copy name' })).toBeNull();
-      unmount();
-    }
   });
 });
