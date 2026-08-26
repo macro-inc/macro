@@ -1,4 +1,6 @@
-use cache_core::predicate::{PredicateIndexStorage, PredicateQueryResult, ProjectionMutation};
+use cache_core::predicate::{
+    PredicateIndexStorage, PredicateQueryResult, ProjectionMutation, ProjectionState,
+};
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
     QueuedMutation,
@@ -7,7 +9,10 @@ use cache_core::search::{SearchCursor, SearchDocument, SearchProfile};
 use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
-use predicate_index::{IndexDocument, RecordKey, ValidatedIndexQuery};
+use predicate_index::{
+    EffectiveOptimisticProjection, IndexDocument, PendingOptimisticProjection, RecordKey,
+    ValidatedIndexQuery,
+};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Clone, Copy)]
@@ -100,11 +105,28 @@ impl Storage for BrowserStorage {
             .await
     }
 
-    async fn enqueue_mutation(
+    async fn enqueue_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
+        projections: Vec<PendingOptimisticProjection>,
     ) -> Result<MutationId, Self::Error> {
-        self.inner.enqueue_mutation(entry).await
+        self.inner
+            .enqueue_mutation_with_shadow(entry, projections)
+            .await
+    }
+
+    async fn load_projection_states(
+        &self,
+        keys: &[RecordKey],
+    ) -> Result<Vec<Option<ProjectionState>>, Self::Error> {
+        self.inner.load_projection_states(keys).await
+    }
+
+    async fn load_optimistic_projections(
+        &self,
+        keys: &[RecordKey],
+    ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error> {
+        self.inner.load_optimistic_projections(keys).await
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

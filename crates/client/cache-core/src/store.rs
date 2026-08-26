@@ -16,7 +16,10 @@ use crate::queue::{
 use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
-use predicate_index::{IndexDocument, RecordKey as PredicateRecordKey, evaluate_reference};
+use predicate_index::{
+    EffectiveOptimisticProjection, IndexDocument, PendingOptimisticProjection,
+    RecordKey as PredicateRecordKey, evaluate_reference,
+};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -97,7 +100,37 @@ pub trait Storage: MaybeSend {
     fn enqueue_mutation(
         &mut self,
         entry: NewQueuedMutation,
+    ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend {
+        self.enqueue_mutation_with_shadow(entry, Vec::new())
+    }
+
+    /// Atomically appends a mutation, its layer, and effective shadow replacements.
+    ///
+    /// Storage binds every pending projection to the mutation ID assigned in
+    /// this transaction. Existing shadows for the pending record keys are
+    /// replaced; all other shadows remain byte-for-byte unchanged.
+    fn enqueue_mutation_with_shadow(
+        &mut self,
+        entry: NewQueuedMutation,
+        projections: Vec<PendingOptimisticProjection>,
     ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend;
+
+    /// Loads authoritative projection states aligned with `keys`.
+    fn load_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend {
+        async { Ok(vec![None; keys.len()]) }
+    }
+
+    /// Loads current effective optimistic shadows aligned with `keys`.
+    fn load_optimistic_projections(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error>> + MaybeSend
+    {
+        async { Ok(vec![None; keys.len()]) }
+    }
 
     /// Loads the complete mutation queue in ascending id order.
     fn load_mutation_queue(
@@ -170,6 +203,7 @@ pub struct InMemoryStorage {
     records: HashMap<EntityKey<'static>, Record>,
     search_documents: HashMap<(SearchProfile, EntityKey<'static>), SearchDocument>,
     projections: HashMap<PredicateRecordKey, ProjectionState>,
+    optimistic_projections: HashMap<PredicateRecordKey, EffectiveOptimisticProjection>,
     mutations: BTreeMap<
         MutationId,
         (
@@ -292,15 +326,47 @@ impl Storage for InMemoryStorage {
         Ok(documents)
     }
 
-    async fn enqueue_mutation(
+    async fn enqueue_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
+        projections: Vec<PendingOptimisticProjection>,
     ) -> Result<MutationId, Self::Error> {
         self.next_mutation_id += 1;
         let id = self.next_mutation_id;
         self.mutations
             .insert(id, (entry.mutation, entry.optimistic));
+        for projection in projections {
+            let record_key = projection.state.record_key().clone();
+            self.optimistic_projections.insert(
+                record_key,
+                EffectiveOptimisticProjection {
+                    owner: id,
+                    state: projection.state,
+                    uncertainty: projection.uncertainty,
+                },
+            );
+        }
         Ok(id)
+    }
+
+    async fn load_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<ProjectionState>>, Self::Error> {
+        Ok(keys
+            .iter()
+            .map(|key| self.projections.get(key).cloned())
+            .collect())
+    }
+
+    async fn load_optimistic_projections(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error> {
+        Ok(keys
+            .iter()
+            .map(|key| self.optimistic_projections.get(key).cloned())
+            .collect())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
@@ -414,6 +480,8 @@ impl Storage for InMemoryStorage {
         }
         apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
+        self.optimistic_projections
+            .retain(|_, projection| projection.owner != id);
         Ok(true)
     }
 
@@ -429,6 +497,8 @@ impl Storage for InMemoryStorage {
             return Ok(false);
         }
         self.mutations.remove(&id);
+        self.optimistic_projections
+            .retain(|_, projection| projection.owner != id);
         Ok(true)
     }
 
@@ -436,6 +506,7 @@ impl Storage for InMemoryStorage {
         self.records.clear();
         self.search_documents.clear();
         self.projections.clear();
+        self.optimistic_projections.clear();
         self.mutations.clear();
         Ok(())
     }

@@ -39,6 +39,30 @@ fn queued(label: &str) -> NewQueuedMutation {
     }
 }
 
+fn pending_projection(key: &str, owner: &str, updated_at: i64) -> PendingOptimisticProjection {
+    let token = |value| Token::new(value).unwrap();
+    PendingOptimisticProjection {
+        state: OptimisticProjectionState::Complete(predicate_index::IndexDocument {
+            record_key: PredicateRecordKey::new(key).unwrap(),
+            profile: Profile::new(token("profile-v1")),
+            partition: token("thing"),
+            exact_facts: vec![predicate_index::ExactFact {
+                attribute: token("owner"),
+                value: predicate_index::ExactValue::utf8(owner).unwrap(),
+            }],
+            integer_facts: vec![predicate_index::IntegerFact {
+                attribute: token("updated-at"),
+                value: updated_at,
+            }],
+            sort_facts: vec![predicate_index::IntegerFact {
+                attribute: token("updated-at"),
+                value: updated_at,
+            }],
+        }),
+        uncertainty: OptimisticUncertainty::Attributes([token("file-type")].into()),
+    }
+}
+
 fn token(owner: &str, generation: u64) -> MutationClaimToken {
     MutationClaimToken {
         owner: owner.into(),
@@ -360,6 +384,86 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
         assert_eq!(
             raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_layers"),
             0
+        );
+    });
+}
+
+#[test]
+fn enqueue_atomically_replaces_one_effective_shadow_per_key() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("shadow-enqueue").unwrap();
+        let key = PredicateRecordKey::new("Thing:1").unwrap();
+        let first = storage
+            .enqueue_mutation_with_shadow(
+                queued("First"),
+                vec![pending_projection("Thing:1", "user-1", 10)],
+            )
+            .await
+            .unwrap();
+        let loaded = storage
+            .load_optimistic_projections(std::slice::from_ref(&key))
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(loaded.owner, first);
+        assert!(
+            loaded
+                .uncertainty
+                .affects(&Token::new("file-type").unwrap())
+        );
+
+        let second = storage
+            .enqueue_mutation_with_shadow(
+                queued("Second"),
+                vec![pending_projection("Thing:1", "user-2", 20)],
+            )
+            .await
+            .unwrap();
+        let loaded = storage
+            .load_optimistic_projections(&[key])
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(loaded.owner, second);
+        assert!(second > first);
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_index_documents"),
+            1
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_exact_facts"),
+            1
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_integer_facts"),
+            1
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_sort_facts"),
+            1
+        );
+
+        storage.arm_fault(TestFault::After {
+            site: TestFaultSite::Enqueue,
+            index: 1,
+        });
+        assert!(
+            storage
+                .enqueue_mutation_with_shadow(
+                    queued("Failed"),
+                    vec![pending_projection("Thing:2", "user-3", 30)],
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_index_documents"),
+            1
         );
     });
 }

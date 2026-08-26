@@ -374,11 +374,24 @@ fn optimistic_projection_layers_are_queryable_offline_and_survive_restart() {
             )
             .await
             .unwrap();
-        begin_with_projection(
+        let transaction = begin_with_projection(
             &mut engine,
             vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
         )
         .await;
+        let shadow = engine
+            .storage()
+            .load_optimistic_projections(&[record_key()])
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(shadow.owner, transaction);
+        assert!(matches!(
+            shadow.state,
+            OptimisticProjectionState::Complete(_)
+        ));
 
         assert_eq!(
             engine

@@ -20,7 +20,10 @@ use crate::normalize::{
     DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
     project_hydration_response,
 };
-use crate::predicate::{PredicateIndexStorage, PredicateQueryResult, ProjectionMutation};
+use crate::predicate::{
+    PredicateIndexStorage, PredicateQueryResult, ProjectionMutation,
+    compose_pending_optimistic_projection,
+};
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
     QueryInspectionError, matches_variable_filters, prepare, recover_variants, resolve_owner,
@@ -1267,6 +1270,49 @@ impl<S: Storage> Engine<S> {
                 .validate()
                 .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
         }
+        let shadow_replacements = if projection_mutations.is_empty() {
+            Vec::new()
+        } else {
+            let keys = projection_mutations
+                .iter()
+                .map(|mutation| mutation.record_key().clone())
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            let authoritative = self
+                .storage
+                .load_projection_states(&keys)
+                .await
+                .map_err(EngineError::Storage)?;
+            let current = self
+                .storage
+                .load_optimistic_projections(&keys)
+                .await
+                .map_err(EngineError::Storage)?;
+            if authoritative.len() != keys.len() || current.len() != keys.len() {
+                return Err(EngineError::InvalidOptimisticProjection(
+                    "storage returned misaligned optimistic projection bases".to_owned(),
+                ));
+            }
+            keys.iter()
+                .zip(authoritative.iter())
+                .zip(current.iter())
+                .map(|((key, authoritative), current)| {
+                    compose_pending_optimistic_projection(
+                        key,
+                        authoritative.as_ref(),
+                        current.as_ref(),
+                        &projection_mutations,
+                    )
+                    .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?
+                    .ok_or_else(|| {
+                        EngineError::InvalidOptimisticProjection(
+                            "touched optimistic projection key was not composed".to_owned(),
+                        )
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
         let source = OptimisticSource {
             mutation_data: data.clone(),
             link_patches: patches.clone(),
@@ -1275,21 +1321,24 @@ impl<S: Storage> Engine<S> {
         };
         let id = self
             .storage
-            .enqueue_mutation(NewQueuedMutation {
-                mutation: StoredMutation::new(
-                    MutationRequest {
-                        query: query.to_string(),
-                        operation_name: operation_name.map(str::to_string),
-                        variables_json: canonical_json(&Json::Object(variables.clone())),
-                        identity,
+            .enqueue_mutation_with_shadow(
+                NewQueuedMutation {
+                    mutation: StoredMutation::new(
+                        MutationRequest {
+                            query: query.to_string(),
+                            operation_name: operation_name.map(str::to_string),
+                            variables_json: canonical_json(&Json::Object(variables.clone())),
+                            identity,
+                        },
+                        created_at_ms,
+                    ),
+                    optimistic: PersistedOptimisticLayer {
+                        optimistic_data_json: encode_optimistic_source(&source),
+                        normalized_updates: updates.clone(),
                     },
-                    created_at_ms,
-                ),
-                optimistic: PersistedOptimisticLayer {
-                    optimistic_data_json: encode_optimistic_source(&source),
-                    normalized_updates: updates.clone(),
                 },
-            })
+                shadow_replacements,
+            )
             .await
             .map_err(EngineError::Storage)?;
         self.optimistic.push(OptimisticLayer {
