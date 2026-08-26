@@ -528,8 +528,14 @@ where
             Some(run) => vec![run],
             None => self.current_runs(&agent).await,
         };
-        for run in runs {
-            self.cursor.cancel_run(&agent, &run).await?;
+        // Concurrent rather than sequential so one failing cancel does not
+        // skip the rest — every run found gets its own attempt regardless of
+        // how the others land.
+        let results =
+            futures::future::join_all(runs.iter().map(|run| self.cursor.cancel_run(&agent, run)))
+                .await;
+        for result in results {
+            result?;
         }
         Ok(())
     }
@@ -551,11 +557,19 @@ where
                 return Vec::new();
             }
         };
-        listings
+        let runs: Vec<CursorRunId> = listings
             .into_iter()
             .filter(|listing| matches!(listing.status, RunStatus::Creating | RunStatus::Running))
             .map(|listing| listing.id)
-            .collect()
+            .collect();
+        if runs.len() > 1 {
+            tracing::warn!(
+                %agent,
+                count = runs.len(),
+                "more than one run in progress for an agent; Cursor documents one active run per agent"
+            );
+        }
+        runs
     }
 
     /// Drop a session, reporting whether it existed. Any active run keeps
