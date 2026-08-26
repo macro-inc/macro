@@ -18,6 +18,17 @@ import {
   ExperimentalSoupLayout as ExperimentalSoupLayoutV2,
   experimentalSoupViewForContent as experimentalSoupViewForContentV2,
 } from '@app/features/experimental-app-layout-v2/experimental-soup-layout';
+import { ExperimentalActivityView as ExperimentalActivityViewV4 } from '@app/features/experimental-app-layout-v4/experimental-activity-view';
+import { ExperimentalAppSidebar as ExperimentalAppSidebarV4 } from '@app/features/experimental-app-layout-v4/experimental-app-sidebar';
+import { ExperimentalAutomationCard as ExperimentalAutomationCardV4 } from '@app/features/experimental-app-layout-v4/experimental-automation-card';
+import { ExperimentalChatView as ExperimentalChatViewV4 } from '@app/features/experimental-app-layout-v4/experimental-chat-view';
+import { ExperimentalGlobalTopBar as ExperimentalGlobalTopBarV4 } from '@app/features/experimental-app-layout-v4/experimental-global-top-bar';
+import { ExperimentalGroupHeader as ExperimentalGroupHeaderV4 } from '@app/features/experimental-app-layout-v4/experimental-group-header';
+import { ExperimentalListEntity as ExperimentalListEntityV4 } from '@app/features/experimental-app-layout-v4/experimental-list-entity';
+import {
+  ExperimentalSoupLayout as ExperimentalSoupLayoutV4,
+  experimentalSoupViewForContent as experimentalSoupViewForContentV4,
+} from '@app/features/experimental-app-layout-v4/experimental-soup-layout';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { Component, ParentProps } from 'solid-js';
@@ -42,6 +53,7 @@ export type ActivityViewSurfaceProps = ParentProps<{
 
 export type AppLayoutSurfaces = {
   AppSidebar: Component<AppSidebarSurfaceProps>;
+  GlobalTopBar?: Component<AppSidebarSurfaceProps>;
   ActivityView: Component<ActivityViewSurfaceProps>;
   ChatView: Component;
   SoupLayout: Component<any>;
@@ -74,6 +86,17 @@ const APP_LAYOUT_SURFACES: Partial<Record<AppLayoutId, AppLayoutSurfaces>> = {
     SoupGroupHeader: ExperimentalGroupHeaderV2,
     SoupAutomationCard: ExperimentalAutomationCardV2,
     resolveSoupView: experimentalSoupViewForContentV2,
+  },
+  'experimental-v4': {
+    AppSidebar: ExperimentalAppSidebarV4,
+    GlobalTopBar: ExperimentalGlobalTopBarV4,
+    ActivityView: ExperimentalActivityViewV4,
+    ChatView: ExperimentalChatViewV4,
+    SoupLayout: ExperimentalSoupLayoutV4,
+    SoupListEntity: ExperimentalListEntityV4,
+    SoupGroupHeader: ExperimentalGroupHeaderV4,
+    SoupAutomationCard: ExperimentalAutomationCardV4,
+    resolveSoupView: experimentalSoupViewForContentV4,
   },
 };
 

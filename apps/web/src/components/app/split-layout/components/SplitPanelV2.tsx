@@ -9,6 +9,7 @@ import { isSoloSettings } from '@core/constant/SettingsState';
 import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import CloseIcon from '@phosphor/x.svg';
@@ -171,12 +172,21 @@ export function SplitPanelV2(props: SplitPanelProps) {
   });
   const usesNarrowMessagesRail = () =>
     usesFullHeightMessagesSidebar() && effectiveMessagesSidebarWidth() <= 64;
+  const usesFloatingCloseButton = createMemo(
+    () =>
+      activeAppLayout().capabilities.usesFloatingSplitClose &&
+      multipleSplits() &&
+      (contentOwnsSplitChrome() || usesFullHeightMessagesSidebar())
+  );
 
   // On mobile the header stays visible for list views too: it hosts the
   // floating filter-pill strip (see MobileSoupViewTabs). V2 content-owned
   // views compose their own chrome directly inside the view tree.
   const shouldHideSplitHeader = createMemo(
-    () => isSoloSettings() || contentOwnsSplitChrome()
+    () =>
+      isSoloSettings() ||
+      contentOwnsSplitChrome() ||
+      usesFloatingCloseButton()
   );
 
   const splitFocusStyling = () =>
@@ -276,6 +286,7 @@ export function SplitPanelV2(props: SplitPanelProps) {
           </Show>
 
           <div
+            class="group/split-panel"
             classList={{
               'fixed inset-16 z-modal-overlay isolate opacity-50':
                 props.handle.isSpotLight(),
@@ -315,6 +326,8 @@ export function SplitPanelV2(props: SplitPanelProps) {
             <Panel
               class={cn(
                 'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
+                activeAppLayout().capabilities.usesFloatingSplitClose &&
+                  'shadow-lg shadow-drop-shadow/60 dark:border-0!',
                 splitUnfocusedStyling() && 'split-panel-inactive',
                 {
                   'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
@@ -421,6 +434,19 @@ export function SplitPanelV2(props: SplitPanelProps) {
                 <MobileTopEdgeFade />
               </Panel.Body>
             </Panel>
+            <Show when={usesFloatingCloseButton()}>
+              <Button
+                variant="ghost"
+                class="pointer-events-none absolute -left-2 -top-2 z-modal-content size-[26px] shrink-0 rounded-md bg-panel p-0 text-ink-muted opacity-0 shadow-sm transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/split-panel:pointer-events-auto group-hover/split-panel:opacity-100 [&_svg]:size-3.5!"
+                label="Close"
+                aria-label="Close split"
+                tooltipDisabled
+                hotkey={TOKENS.split.close}
+                onClick={props.handle.close}
+              >
+                <CloseIcon />
+              </Button>
+            </Show>
           </div>
         </SplitDrawerGroup>
       </SplitPanelContext.Provider>

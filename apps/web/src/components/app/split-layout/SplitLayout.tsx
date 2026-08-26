@@ -123,8 +123,11 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
         class={cn('size-full p-2 touch:p-0', {
           'pl-0':
             isSidebarVisible() &&
+            !activeAppLayout().capabilities.hidesGlobalSidebar &&
             (!sidebar.isCollapsed() ||
               activeAppLayout().capabilities.removesSplitContentLeftPadding),
+          'pt-0':
+            activeAppLayout().capabilities.removesSplitContentTopPadding,
         })}
       >
         <Show

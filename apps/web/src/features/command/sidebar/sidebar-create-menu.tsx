@@ -21,6 +21,7 @@ export const SidebarCreateMenu = (props: {
   filled?: boolean;
   large?: boolean;
   triggerClass?: string;
+  animateSlimLabel?: boolean;
   onMenuOpenChange?: (open: boolean) => void;
   onAgentSelect?: () => void;
 }) => {
@@ -109,7 +110,19 @@ export const SidebarCreateMenu = (props: {
             <div class="size-4 shrink-0">
               <PlusIcon class="size-4" />
             </div>
-            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
+            <span
+              class={cn(
+                'whitespace-nowrap',
+                props.animateSlimLabel
+                  ? [
+                      'overflow-hidden transition-[max-width,opacity] duration-[220ms]',
+                      props.isSlim()
+                        ? 'max-w-0 opacity-0'
+                        : 'max-w-24 opacity-100',
+                    ]
+                  : 'group-data-[slim=true]/sidebar:hidden'
+              )}
+            >
               Create
             </span>
             <Show when={open()}>

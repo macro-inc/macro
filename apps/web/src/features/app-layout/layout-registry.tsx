@@ -4,8 +4,11 @@ export type AppLayoutCapabilities = {
   usesMessagesWorkspace: boolean;
   usesBrainWorkspace: boolean;
   usesCalendarWorkspace: boolean;
+  usesFloatingSplitClose: boolean;
+  hidesGlobalSidebar: boolean;
   compactSplitHeader: boolean;
   removesSplitContentLeftPadding: boolean;
+  removesSplitContentTopPadding: boolean;
 };
 
 export type AppLayoutDefinition = {
@@ -39,8 +42,11 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: false,
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
+      usesFloatingSplitClose: false,
+      hidesGlobalSidebar: false,
       compactSplitHeader: false,
       removesSplitContentLeftPadding: false,
+      removesSplitContentTopPadding: false,
     },
     contentOwnedSplitChrome: NO_CONTENT_OWNED_CHROME,
   },
@@ -54,8 +60,11 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: true,
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
+      usesFloatingSplitClose: false,
+      hidesGlobalSidebar: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
+      removesSplitContentTopPadding: false,
     },
     contentOwnedSplitChrome: NO_CONTENT_OWNED_CHROME,
     experimentalViewNames: {
@@ -73,8 +82,35 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: true,
       usesBrainWorkspace: true,
       usesCalendarWorkspace: true,
+      usesFloatingSplitClose: false,
+      hidesGlobalSidebar: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
+      removesSplitContentTopPadding: false,
+    },
+    contentOwnedSplitChrome: V2_CONTENT_OWNED_CHROME,
+    experimentalViewNames: {
+      crm: 'CRM',
+      library: 'Drive',
+      machines: 'Brain',
+      messages: 'Chat',
+    },
+  },
+  {
+    id: 'experimental-v4',
+    label: 'Experimental v4',
+    splitPanelRenderer: 'v2-composed',
+    capabilities: {
+      experimentalSurfaces: true,
+      usesNewInbox: true,
+      usesMessagesWorkspace: true,
+      usesBrainWorkspace: true,
+      usesCalendarWorkspace: true,
+      usesFloatingSplitClose: true,
+      hidesGlobalSidebar: false,
+      compactSplitHeader: true,
+      removesSplitContentLeftPadding: true,
+      removesSplitContentTopPadding: true,
     },
     contentOwnedSplitChrome: V2_CONTENT_OWNED_CHROME,
     experimentalViewNames: {

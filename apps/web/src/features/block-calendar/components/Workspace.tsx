@@ -154,6 +154,8 @@ function ExperimentalCalendarWorkspaceContent() {
   const pager = usePager<CalendarPageId>();
   const openEventComposer = useOpenEventComposer();
   const initialDate = new Date();
+  const usesFloatingSplitClose = () =>
+    activeAppLayout().capabilities.usesFloatingSplitClose;
 
   onMount(() => panel.handle.setDisplayName('Calendar'));
 
@@ -193,14 +195,28 @@ function ExperimentalCalendarWorkspaceContent() {
     <div class="@container/experimental-soup relative flex size-full min-h-0 bg-panel">
       <ExperimentalViewSidebar
         label="Calendar navigation"
-        class="mb-0 border-r-0! pt-2"
+        class={cn(
+          'mb-0 border-r-0!',
+          !usesFloatingSplitClose() && 'pt-2'
+        )}
       >
-        <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
-          <ComposedSplitControls />
-        </ComposedSplitHeader>
-        <div class="mt-3 flex shrink-0 items-center">
-          <NewEventButton />
-        </div>
+        <Show
+          when={usesFloatingSplitClose()}
+          fallback={
+            <>
+              <ComposedSplitHeader class="flex min-h-8 shrink-0 items-center">
+                <ComposedSplitControls />
+              </ComposedSplitHeader>
+              <div class="mt-3 flex shrink-0 items-center">
+                <NewEventButton />
+              </div>
+            </>
+          }
+        >
+          <ComposedSplitHeader class="flex min-h-10 shrink-0 items-center">
+            <NewEventButton />
+          </ComposedSplitHeader>
+        </Show>
         <div class="scrollbar-hidden mt-5 min-h-0 flex-1 overflow-y-auto">
           <CalendarMiniCalendarControl />
           <Show when={calendarView.sources().length > 1}>
@@ -226,12 +242,21 @@ function ExperimentalCalendarWorkspaceContent() {
       />
 
       <main class="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div class="hidden shrink-0 px-2 pt-2 @max-[720px]/experimental-soup:block">
-          <div class="flex min-h-7 items-center">
-            <ComposedSplitControls />
+        <Show when={!usesFloatingSplitClose()}>
+          <div class="hidden shrink-0 px-2 pt-2 @max-[720px]/experimental-soup:block">
+            <div class="flex min-h-7 items-center">
+              <ComposedSplitControls />
+            </div>
           </div>
-        </div>
-        <header class="flex shrink-0 items-center gap-3 px-4 pb-4 pt-4 @max-[720px]/experimental-soup:flex-col @max-[720px]/experimental-soup:items-stretch @max-[720px]/experimental-soup:gap-2 @max-[720px]/experimental-soup:pt-1 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2">
+        </Show>
+        <header
+          class={cn(
+            'flex shrink-0 items-center gap-3 px-4 pb-4 pt-4 @max-[720px]/experimental-soup:flex-col @max-[720px]/experimental-soup:items-stretch @max-[720px]/experimental-soup:gap-2 @max-[760px]/experimental-soup:px-3 @max-[480px]/experimental-soup:px-2',
+            usesFloatingSplitClose()
+              ? '@max-[720px]/experimental-soup:pt-2'
+              : '@max-[720px]/experimental-soup:pt-1'
+          )}
+        >
           <div class="flex min-w-0 flex-1 items-center gap-2">
             <h1 class="m-0 min-w-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink @max-[720px]/experimental-soup:flex-1">
               {dateTitle()}
