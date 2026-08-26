@@ -19,8 +19,8 @@ import DriveFilledIcon from '@phosphor-icons/core/assets/fill/shipping-container
 import AiChatFilledIcon from '@phosphor-icons/core/assets/fill/sparkle-fill.svg';
 import type { Component, JSX } from 'solid-js';
 
-/** Every destination the V3 top bar can reach, whichever control opens it. */
-export type TopBarDestinationId =
+/** Every destination an app chrome bar can reach, whichever control opens it. */
+export type ChromeDestinationId =
   | 'activity'
   | 'drive'
   | 'email'
@@ -31,26 +31,26 @@ export type TopBarDestinationId =
   | 'calendar'
   | 'ai-chat';
 
-export type TopBarDestination = {
-  id: TopBarDestinationId;
+export type ChromeDestination = {
+  id: ChromeDestinationId;
   label: string;
   /** Split content this destination opens in-app. */
   content: SplitContent;
   /** Router path used when the destination is opened in its own browser tab. */
   path: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-  /** Facebook-style active glyph: the same icon in Phosphor's fill weight. */
+  /** Active glyph: the same icon in Phosphor's fill weight. */
   filledIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   /** Only rendered once the CRM flag is on. */
   requiresCrmFlag?: boolean;
 };
 
 const componentDestination = (
-  destination: Omit<TopBarDestination, 'content' | 'path'> & {
+  destination: Omit<ChromeDestination, 'content' | 'path'> & {
     contentId: string;
     params?: Record<string, unknown>;
   }
-): TopBarDestination => {
+): ChromeDestination => {
   const { contentId, params, ...rest } = destination;
   return {
     ...rest,
@@ -60,7 +60,7 @@ const componentDestination = (
 };
 
 /** Full-screen from the center row, or alongside a view from the right. */
-const CALENDAR_DESTINATION: TopBarDestination = {
+const CALENDAR_DESTINATION: ChromeDestination = {
   id: 'calendar',
   label: 'Calendar',
   content: { type: 'calendar', id: CALENDAR_BLOCK_ID },
@@ -69,7 +69,7 @@ const CALENDAR_DESTINATION: TopBarDestination = {
   filledIcon: CalendarFilledIcon,
 };
 
-const AI_CHAT_DESTINATION: TopBarDestination = {
+const AI_CHAT_DESTINATION: ChromeDestination = {
   id: 'ai-chat',
   label: 'AI chat',
   content: { type: 'component', id: 'chat-workspace' },
@@ -82,7 +82,7 @@ const AI_CHAT_DESTINATION: TopBarDestination = {
  * The views that sit in the middle of the bar, in Facebook's "one row of
  * primary destinations" order.
  */
-export const TOP_BAR_VIEWS: readonly TopBarDestination[] = [
+export const CHROME_VIEWS: readonly ChromeDestination[] = [
   componentDestination({
     id: 'activity',
     label: 'Activity',
@@ -143,7 +143,7 @@ export const TOP_BAR_VIEWS: readonly TopBarDestination[] = [
 ];
 
 /** Opened as their own split from the right of the bar. */
-export const TOP_BAR_SPLIT_DESTINATIONS: readonly TopBarDestination[] = [
+export const CHROME_SPLIT_DESTINATIONS: readonly ChromeDestination[] = [
   AI_CHAT_DESTINATION,
   CALENDAR_DESTINATION,
 ];
@@ -152,9 +152,9 @@ export const TOP_BAR_SPLIT_DESTINATIONS: readonly TopBarDestination[] = [
  * The Gmail-style app grid lists every destination the bar can reach, once
  * each — Calendar answers to both the center row and the right cluster.
  */
-export const TOP_BAR_SUB_APPS: readonly TopBarDestination[] = [
-  ...TOP_BAR_VIEWS,
-  ...TOP_BAR_SPLIT_DESTINATIONS.filter(
-    (destination) => !TOP_BAR_VIEWS.includes(destination)
+export const CHROME_SUB_APPS: readonly ChromeDestination[] = [
+  ...CHROME_VIEWS,
+  ...CHROME_SPLIT_DESTINATIONS.filter(
+    (destination) => !CHROME_VIEWS.includes(destination)
   ),
 ];

@@ -86,6 +86,12 @@
   /* Icon inside a dock button / touch-menu trigger. */
   --mobile-chrome-icon-size: 27px;
 
+  /* The lane V4's floating dock hovers in: the pill (36px buttons in 6px of
+     padding) plus the gap it floats on. The splits pad by it so nothing they
+     own ends up underneath. Literal px for the same reason as the mobile
+     chrome above — this is chrome, not text. */
+  --app-dock-lane: 60px;
+
   /* chat vars */
   --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) * 0.5);
   --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) * 0.5);

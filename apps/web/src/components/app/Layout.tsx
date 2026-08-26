@@ -113,6 +113,9 @@ const [sidebarState, setSidebarState] = makePersisted(
 /** The active layout's top bar, when it hangs its chrome above the splits. */
 const appTopBarSurface = () => activeAppLayoutSurfaces()?.AppTopBar;
 
+/** The active layout's dock, when its chrome floats over the splits' bottom. */
+const appBottomBarSurface = () => activeAppLayoutSurfaces()?.AppBottomBar;
+
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const location = useLocation();
@@ -132,6 +135,7 @@ export function Layout(props: RouteSectionProps) {
           isCollapsed: () =>
             sidebarVisible() &&
             !appTopBarSurface() &&
+            !appBottomBarSurface() &&
             sidebarState() === 'slim',
           expand: () => setSidebarState('expanded'),
         }}
@@ -362,14 +366,24 @@ function LayoutInner(props: RouteSectionProps) {
   const usesTopBar = createMemo(
     () => isSidebarVisible() && !!appTopBarSurface()
   );
+  /** True while the layout's chrome is the floating bottom dock. */
+  const usesBottomBar = createMemo(
+    () => isSidebarVisible() && !!appBottomBarSurface()
+  );
   const sidebarCollapsed = createMemo(
-    () => isSidebarVisible() && !usesTopBar() && sidebarState() === 'slim'
+    () =>
+      isSidebarVisible() &&
+      !usesTopBar() &&
+      !usesBottomBar() &&
+      sidebarState() === 'slim'
   );
   /**
    * The sidebar normally hosts call controls, so they float once it is slim —
-   * and always under the top bar, which has no room for them.
+   * and always under the top or bottom bar, which have no room for them.
    */
-  const callWidgetsFloat = createMemo(() => usesTopBar() || sidebarCollapsed());
+  const callWidgetsFloat = createMemo(
+    () => usesTopBar() || usesBottomBar() || sidebarCollapsed()
+  );
   const activeCallWidgetVisible = createMemo(
     () => callWidgetsFloat() && !!callCtx?.isInCall() && !callCtx?.isCallPage()
   );
@@ -502,11 +516,18 @@ function LayoutInner(props: RouteSectionProps) {
       <Show when={usesTopBar() ? appTopBarSurface() : undefined}>
         {(AppTopBar) => <Dynamic component={AppTopBar()} />}
       </Show>
-      <div class="max-h-full grow flex min-h-0">
+      {/* The dock floats over the splits, so the row leaves it a lane rather
+          than letting it sit on a composer or the last row of a list. */}
+      <div
+        class={cn(
+          'max-h-full grow flex min-h-0',
+          usesBottomBar() && 'pb-(--app-dock-lane)'
+        )}
+      >
         {/* The provider spans the sidebar too so its favorites can register
             sortables with the same drag-drop context as the entity drags. */}
         <ItemDndProvider>
-          <Show when={isSidebarVisible() && !usesTopBar()}>
+          <Show when={isSidebarVisible() && !usesTopBar() && !usesBottomBar()}>
             <Show
               when={activeAppLayoutSurfaces()?.AppSidebar}
               fallback={
@@ -562,6 +583,9 @@ function LayoutInner(props: RouteSectionProps) {
           </div>
         </ItemDndProvider>
       </div>
+      <Show when={usesBottomBar() ? appBottomBarSurface() : undefined}>
+        {(AppBottomBar) => <Dynamic component={AppBottomBar()} />}
+      </Show>
       <CollapsedSidebarIncomingCallWidget
         visible={callWidgetsFloat() && incomingCallWidgetVisible()}
         activeCallWidgetVisible={activeCallWidgetVisible()}

@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { notificationIsRead } from '@notifications';
 import { createMemo } from 'solid-js';
-import type { TopBarDestinationId } from './topbar-destinations';
+import type { ChromeDestinationId } from './chrome-destinations';
 
 /**
  * Which view answers for an entity's unread notifications: mail for email
@@ -9,7 +9,7 @@ import type { TopBarDestinationId } from './topbar-destinations';
  * agent chats. Everything else the notification source carries belongs to a
  * view that does not badge.
  */
-const VIEW_BY_ENTITY_TYPE: Readonly<Record<string, TopBarDestinationId>> = {
+const VIEW_BY_ENTITY_TYPE: Readonly<Record<string, ChromeDestinationId>> = {
   email: 'email',
   channel: 'chat',
   chat: 'brain',
@@ -20,11 +20,11 @@ const VIEW_BY_ENTITY_TYPE: Readonly<Record<string, TopBarDestinationId>> = {
  * notification: five unread messages in one channel are one unread
  * conversation, which is what the badge is claiming.
  */
-export function createTopBarUnreadCounts() {
+export function createChromeUnreadCounts() {
   const notificationSource = useGlobalNotificationSource();
 
   return createMemo(() => {
-    const entitiesByView = new Map<TopBarDestinationId, Set<string>>();
+    const entitiesByView = new Map<ChromeDestinationId, Set<string>>();
 
     for (const notification of notificationSource.notifications()) {
       if (notificationIsRead(notification)) continue;
@@ -36,7 +36,7 @@ export function createTopBarUnreadCounts() {
       entitiesByView.set(viewId, entities);
     }
 
-    const counts = new Map<TopBarDestinationId, number>();
+    const counts = new Map<ChromeDestinationId, number>();
     for (const [viewId, entities] of entitiesByView) {
       counts.set(viewId, entities.size);
     }

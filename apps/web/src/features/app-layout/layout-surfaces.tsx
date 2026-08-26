@@ -19,6 +19,7 @@ import {
   experimentalSoupViewForContent as experimentalSoupViewForContentV2,
 } from '@app/features/experimental-app-layout-v2/experimental-soup-layout';
 import { ExperimentalAppTopBar } from '@app/features/experimental-app-layout-v3/experimental-app-topbar';
+import { ExperimentalAppBottomBar } from '@app/features/experimental-app-layout-v4/experimental-app-bottombar';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { Component, ParentProps } from 'solid-js';
@@ -44,10 +45,12 @@ export type ActivityViewSurfaceProps = ParentProps<{
 export type AppLayoutSurfaces = {
   /**
    * Layouts hang their app chrome off exactly one of these: `AppSidebar` for a
-   * vertical rail beside the splits, `AppTopBar` for a bar above them.
+   * vertical rail beside the splits, `AppTopBar` for a bar above them,
+   * `AppBottomBar` for a floating dock hovering over their bottom edge.
    */
   AppSidebar?: Component<AppSidebarSurfaceProps>;
   AppTopBar?: Component;
+  AppBottomBar?: Component;
   ActivityView: Component<ActivityViewSurfaceProps>;
   ChatView: Component;
   SoupLayout: Component<any>;
@@ -81,6 +84,18 @@ const APP_LAYOUT_SURFACES: Partial<Record<AppLayoutId, AppLayoutSurfaces>> = {
   // V3 keeps every V2 content surface and swaps the sidebar for a top bar.
   'experimental-v3': {
     AppTopBar: ExperimentalAppTopBar,
+    ActivityView: ExperimentalActivityViewV2,
+    ChatView: ExperimentalChatViewV2,
+    SoupLayout: ExperimentalSoupLayoutV2,
+    SoupListEntity: ExperimentalListEntityV2,
+    SoupGroupHeader: ExperimentalGroupHeaderV2,
+    SoupAutomationCard: ExperimentalAutomationCardV2,
+    resolveSoupView: experimentalSoupViewForContentV2,
+  },
+  // V4 keeps every V2 content surface and swaps the chrome for a Fey-style
+  // floating bottom dock.
+  'experimental-v4': {
+    AppBottomBar: ExperimentalAppBottomBar,
     ActivityView: ExperimentalActivityViewV2,
     ChatView: ExperimentalChatViewV2,
     SoupLayout: ExperimentalSoupLayoutV2,

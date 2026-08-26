@@ -1,7 +1,7 @@
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import type { RegisterHotkeyReturn, ValidHotkey } from '@core/hotkey/types';
 import GridIcon from '@phosphor/dots-nine.svg';
-import type { TopBarDestination } from './topbar-destinations';
+import type { ChromeDestination } from './chrome-destinations';
 
 /** Position keys for the center row, in the order the views are rendered. */
 export const VIEW_NUMBER_KEYS = [
@@ -32,15 +32,15 @@ const isFocusInsideOverlay = () => {
   );
 };
 
-export type TopBarViewHotkeyOptions = {
+export type ChromeViewHotkeyOptions = {
   /** The views in the center row, in the order they are rendered. */
-  views: () => readonly TopBarDestination[];
-  isActive: (destination: TopBarDestination) => boolean;
-  openView: (destination: TopBarDestination) => void;
+  views: () => readonly ChromeDestination[];
+  isActive: (destination: ChromeDestination) => boolean;
+  openView: (destination: ChromeDestination) => void;
 };
 
 /**
- * The top bar's keyboard contract, kept out of the component so it can be
+ * A chrome bar's keyboard contract, kept out of the component so it can be
  * exercised against the real hotkey system: Tab and Shift+Tab step through the
  * row, and a digit jumps straight to that position in it — 1 is Activity, 3 is
  * Email. The soup views stand their own bindings on these keys down while the
@@ -48,8 +48,8 @@ export type TopBarViewHotkeyOptions = {
  *
  * Returns the registrations; the caller disposes them.
  */
-export function registerTopBarViewHotkeys(
-  options: TopBarViewHotkeyOptions
+export function registerChromeViewHotkeys(
+  options: ChromeViewHotkeyOptions
 ): RegisterHotkeyReturn[] {
   /**
    * Step through the row, wrapping at both ends. With no view active — a
@@ -85,7 +85,7 @@ export function registerTopBarViewHotkeys(
       condition: () => options.views().length > 1 && !isFocusInsideOverlay(),
       keyDownHandler: () => cycle(step),
       icon: GridIcon,
-      keywords: ['view', 'views', 'switch', 'cycle', 'top bar'],
+      keywords: ['view', 'views', 'switch', 'cycle', 'app bar'],
     })
   );
 
@@ -104,7 +104,7 @@ export function registerTopBarViewHotkeys(
       },
       hide: () => options.views().length <= index,
       icon: GridIcon,
-      keywords: ['view', 'views', 'switch', 'go to', 'top bar'],
+      keywords: ['view', 'views', 'switch', 'go to', 'app bar'],
     })
   );
 

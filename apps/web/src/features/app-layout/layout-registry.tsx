@@ -7,6 +7,11 @@ export type AppLayoutCapabilities = {
   /** App chrome is a horizontal bar above the splits instead of a sidebar. */
   usesTopBar: boolean;
   /**
+   * App chrome is a floating dock hovering over the bottom of the splits,
+   * Fey-style, instead of a sidebar or top bar.
+   */
+  usesBottomBar: boolean;
+  /**
    * Splits run edge to edge and are divided by a hairline seam rather than
    * floating as rounded, shadowed cards over the page.
    */
@@ -47,6 +52,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
       usesTopBar: false,
+      usesBottomBar: false,
       flatSplitSeams: false,
       compactSplitHeader: false,
       removesSplitContentLeftPadding: false,
@@ -64,6 +70,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
       usesTopBar: false,
+      usesBottomBar: false,
       flatSplitSeams: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
@@ -85,6 +92,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesBrainWorkspace: true,
       usesCalendarWorkspace: true,
       usesTopBar: false,
+      usesBottomBar: false,
       flatSplitSeams: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
@@ -108,6 +116,33 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesBrainWorkspace: true,
       usesCalendarWorkspace: true,
       usesTopBar: true,
+      usesBottomBar: false,
+      flatSplitSeams: true,
+      compactSplitHeader: true,
+      removesSplitContentLeftPadding: true,
+    },
+    contentOwnedSplitChrome: V2_CONTENT_OWNED_CHROME,
+    experimentalViewNames: {
+      crm: 'CRM',
+      library: 'Drive',
+      machines: 'Brain',
+      messages: 'Chat',
+    },
+  },
+  {
+    id: 'experimental-v4',
+    label: 'Experimental v4',
+    splitPanelRenderer: 'v2-composed',
+    capabilities: {
+      experimentalSurfaces: true,
+      usesNewInbox: true,
+      usesMessagesWorkspace: true,
+      usesBrainWorkspace: true,
+      usesCalendarWorkspace: true,
+      // The dock carries no search field or view title, so the splits keep
+      // their own chrome — only the top bar takes those over.
+      usesTopBar: false,
+      usesBottomBar: true,
       flatSplitSeams: true,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,

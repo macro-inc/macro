@@ -8,17 +8,17 @@ import {
 import { activeScope, setActiveScope } from '@core/hotkey/state';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import type { TopBarDestination } from './topbar-destinations';
-import { registerTopBarViewHotkeys } from './topbar-view-hotkeys';
+import type { ChromeDestination } from './chrome-destinations';
+import { registerChromeViewHotkeys } from './chrome-view-hotkeys';
 
 /** Stand-ins for the center row: only id and label are read by the hotkeys. */
-const view = (id: string): TopBarDestination =>
+const view = (id: string): ChromeDestination =>
   ({
     id,
     label: id,
     content: { type: 'component', id },
     path: `/component/${id}`,
-  }) as unknown as TopBarDestination;
+  }) as unknown as ChromeDestination;
 
 const VIEWS = [
   view('activity'),
@@ -64,7 +64,7 @@ beforeEach(() => {
     useHotKeyRoot();
     attachGlobalDOMScope(container);
 
-    const [attachHotkeys, scopeId] = useHotkeyDOMScope('top-bar-hotkey-test');
+    const [attachHotkeys, scopeId] = useHotkeyDOMScope('chrome-hotkey-test');
     attachHotkeys(splitEl);
     splitScopeId = scopeId;
 
@@ -82,7 +82,7 @@ beforeEach(() => {
       });
     }
 
-    const registrations = registerTopBarViewHotkeys({
+    const registrations = registerChromeViewHotkeys({
       views: () => VIEWS,
       isActive: (destination) => destination.id === activeId,
       openView: (destination) => {
@@ -108,7 +108,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('top bar view hotkeys', () => {
+describe('chrome view hotkeys', () => {
   test('a digit opens the view at that position in the row', () => {
     press('3');
     expect(opened).toEqual(['email']);

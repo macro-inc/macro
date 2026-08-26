@@ -19,7 +19,7 @@ export const SidebarCreateMenu = (props: {
   variant?: 'row' | 'icon';
   icon?: 'create' | 'plus';
   /** Menu placement; defaults to the sidebar's side-anchored flyout. */
-  placement?: 'right-start' | 'bottom-start' | 'bottom-end';
+  placement?: 'right-start' | 'bottom-start' | 'bottom-end' | 'top-end';
   filled?: boolean;
   large?: boolean;
   onMenuOpenChange?: (open: boolean) => void;
