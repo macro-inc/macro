@@ -342,6 +342,7 @@ async fn realtime_soup_items_are_locally_filterable_without_a_query_fetch() {
         filtered,
         serde_json::json!({
             "kind": "complete",
+            "revision": "1",
             "keys": [format!("GraphqlSoupDocument:{DOCUMENT_ID}")],
             "optimistic": false
         })
@@ -355,8 +356,12 @@ async fn realtime_soup_items_are_locally_filterable_without_a_query_fetch() {
         ))
         .await,
     );
-    assert_eq!(selected[0]["record"]["id"], DOCUMENT_ID);
-    assert_eq!(selected[0]["record"]["displayName"], "Realtime document");
+    assert_eq!(selected["revision"], "1");
+    assert_eq!(selected["records"][0]["record"]["id"], DOCUMENT_ID);
+    assert_eq!(
+        selected["records"][0]["record"]["displayName"],
+        "Realtime document"
+    );
 
     close_and_destroy(&engine, SCOPE).await;
 }

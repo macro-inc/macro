@@ -656,7 +656,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       const timeoutMs =
         msg.kind === 'init'
           ? initializationTimeoutMs
-          : msg.kind === 'read' ||
+          : msg.kind === 'current-revision' ||
+              msg.kind === 'read' ||
               msg.kind === 'read-records-by-keys' ||
               msg.kind === 'search' ||
               msg.kind === 'entity-filter' ||

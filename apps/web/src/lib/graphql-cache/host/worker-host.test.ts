@@ -543,6 +543,29 @@ describe('createWorkerCacheHost', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('times out a hung current-revision request', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => fake.ignoredKinds.add('current-revision');
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+
+    const revision = host.currentRevision();
+    const revisionRejected = expect(revision).rejects.toThrow(
+      'cache worker timeout: current-revision'
+    );
+
+    await vi.advanceTimersByTimeAsync(11);
+    await revisionRejected;
+    expect(requireAdapter().requests.map(({ kind }) => kind)).toEqual([
+      'init',
+      'current-revision',
+    ]);
+    host.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('recovers typed initial epoch loss with fresh init handshakes only', async () => {
     configureAdapter = (fake) => fake.ignoredKinds.add('init');
     const onInitializationError = vi.fn();

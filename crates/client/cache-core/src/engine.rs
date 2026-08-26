@@ -1026,7 +1026,7 @@ impl<S: Storage> Engine<S> {
         candidates.extend(updates.keys().cloned());
         let bases_before = self.load_bases(&candidates).await?;
         let before = effective_records(&bases_before, &self.optimistic, &candidates);
-        let changed = self.persist_updates(updates, projections).await?;
+        let (changed, revision) = self.persist_updates(updates, projections).await?;
 
         if !self.optimistic.is_empty() {
             let queued = self
@@ -1063,7 +1063,6 @@ impl<S: Storage> Engine<S> {
                 self.deps.set_op_broad(registration.op_id);
             }
         }
-        let revision = self.advance_revision()?;
         Ok(WriteResult {
             revision,
             changed,
@@ -1145,7 +1144,7 @@ impl<S: Storage> Engine<S> {
         &mut self,
         updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
-    ) -> Result<BTreeSet<EntityKey<'static>>, EngineError<S::Error>> {
+    ) -> Result<(BTreeSet<EntityKey<'static>>, CacheRevision), EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
@@ -1201,8 +1200,9 @@ impl<S: Storage> Engine<S> {
             .put_batch_with_projections(to_persist.clone(), projections)
             .await
             .map_err(EngineError::Storage)?;
+        let revision = self.advance_revision()?;
         self.update_loaded_search_catalogs(&to_persist);
-        Ok(changed)
+        Ok((changed, revision))
     }
 
     /// Atomically enqueues a mutation together with its optimistic layer.
@@ -1463,6 +1463,7 @@ impl<S: Storage> Engine<S> {
         {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
+        let revision = self.advance_revision()?;
         self.update_loaded_search_catalogs(&entries);
         for (key, record) in entries {
             self.hot.put(key, record);
@@ -1486,7 +1487,6 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
-        let revision = self.advance_revision()?;
         Ok(WriteResult {
             revision,
             changed: durable_changed,
@@ -1520,6 +1520,7 @@ impl<S: Storage> Engine<S> {
         {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
+        let revision = self.advance_revision()?;
         let queued = self
             .storage
             .load_mutation_queue()
@@ -1535,7 +1536,6 @@ impl<S: Storage> Engine<S> {
             .filter(|key| before.get(key) != after.get(key))
             .collect();
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
-        let revision = self.advance_revision()?;
         Ok(WriteResult {
             revision,
             changed: BTreeSet::new(),
@@ -1825,12 +1825,11 @@ impl<S: PredicateIndexStorage> Engine<S> {
         for (key, record) in entries {
             updates.entry(key).or_default().merge(record);
         }
-        let changed = self.persist_updates(updates, projections).await?;
+        let (changed, revision) = self.persist_updates(updates, projections).await?;
         let mut affected_ops = self.deps.ops_for_keys(changed.iter());
         if let Some(origin_op) = origin_op {
             affected_ops.remove(&origin_op);
         }
-        let revision = self.advance_revision()?;
         Ok(WriteResult {
             revision,
             changed,
