@@ -217,10 +217,14 @@ export function Channel(props: ChannelProps) {
     isMissingChannelMessageError(messagesQuery.error);
   const messagesLoadResult = {
     data: () => messagesQuery.data,
-    // Pagination and background-refresh errors should not replace content that
-    // has already loaded. Only initial-loading errors belong to the gate.
+    // The gate owns the load policy: transport errors from pagination or a
+    // background refresh don't replace content that has already loaded,
+    // structural errors (e.g. access revoked) flip the view even over cached
+    // content, and an offline load with nothing cached becomes the retryable
+    // state (the query is paused rather than errored, and would otherwise
+    // pend forever).
     error: () =>
-      messagesQuery.isLoadingError && !isTargetMessageMissing()
+      messagesQuery.isError && !isTargetMessageMissing()
         ? toEntityLoadError(messagesQuery.error)
         : undefined,
     // Keep the loading view mounted while the missing-target handler switches
@@ -702,7 +706,11 @@ export function Channel(props: ChannelProps) {
   );
 
   return (
-    <EntityLoadGate result={messagesLoadResult}>
+    <EntityLoadGate
+      result={messagesLoadResult}
+      loadErrorTitle="Unable to load this channel"
+      onRetry={() => void messagesQuery.refetch()}
+    >
       <DebugSuspense name="Channel.root">
         <deleteConfirmation.ConfirmationDialog />
         <StaticMarkdownContext>

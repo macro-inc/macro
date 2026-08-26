@@ -19,6 +19,11 @@ vi.mock('./LoadingBlock', () => ({
   LoadingBlock: () => <div>Loading</div>,
 }));
 
+let networkStatus: 'unknown' | 'online' | 'offline' = 'unknown';
+vi.mock('@core/mobile/native-network-status', () => ({
+  nativeNetworkStatus: () => networkStatus,
+}));
+
 import {
   type EntityLoadErrorCode,
   EntityLoadGate,
@@ -49,6 +54,7 @@ function renderGate<Data>(result: EntityLoadResult<Data>): HTMLElement {
 afterEach(() => {
   dispose?.();
   dispose = undefined;
+  networkStatus = 'unknown';
 });
 
 describe('EntityLoadGate', () => {
@@ -132,16 +138,89 @@ describe('EntityLoadGate', () => {
     expect(container.textContent).toBe(expected);
   });
 
-  it('renders an unexpected-error fallback for other failures', () => {
+  it('renders the retryable load-error state for other failures', () => {
     const container = renderGate({
       data: () => undefined,
-      error: () => 'UNEXPECTED',
+      error: () => 'LOAD_FAILED',
       isPending: () => false,
     });
 
+    expect(container.textContent).toContain('Unable to load this view');
     expect(container.textContent).toContain(
-      'Sorry, an unexpected error has occurred.'
+      'Check your internet connection and try again.'
     );
+  });
+
+  it('renders loaded content over a LOAD_FAILED error', () => {
+    const container = renderGate({
+      data: () => 'cached entity',
+      error: () => 'LOAD_FAILED',
+      isPending: () => false,
+    });
+
+    expect(container.textContent).toBe('Loaded');
+  });
+
+  it('renders the structural error view even over loaded content', () => {
+    const container = renderGate({
+      data: () => 'cached entity',
+      error: () => 'UNAUTHORIZED',
+      isPending: () => false,
+    });
+
+    expect(container.textContent).toBe('Unauthorized');
+  });
+
+  it('renders the retryable load-error state when offline with nothing to show', () => {
+    networkStatus = 'offline';
+    const container = renderGate({
+      data: () => undefined,
+      error: () => undefined,
+      isPending: () => true,
+    });
+
+    expect(container.textContent).toContain('Unable to load this view');
+  });
+
+  it('renders loaded content while offline', () => {
+    networkStatus = 'offline';
+    const container = renderGate({
+      data: () => 'cached entity',
+      error: () => undefined,
+      isPending: () => false,
+    });
+
+    expect(container.textContent).toBe('Loaded');
+  });
+
+  it('invokes onRetry from the load-error state', () => {
+    const onRetry = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const disposeRender = render(
+      () => (
+        <EntityLoadGate
+          result={{
+            data: () => undefined,
+            error: () => 'LOAD_FAILED',
+            isPending: () => false,
+          }}
+          onRetry={onRetry}
+        >
+          <div>Loaded</div>
+        </EntityLoadGate>
+      ),
+      container
+    );
+    dispose = () => {
+      disposeRender();
+      container.remove();
+    };
+
+    const retryButton = container.querySelector('button');
+    expect(retryButton?.textContent).toContain('Retry');
+    retryButton?.click();
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 
   it('normalizes query errors into gate errors', () => {
@@ -153,7 +232,7 @@ describe('EntityLoadGate', () => {
       )
     ).toBe('NOT_FOUND');
     expect(toEntityLoadError(new Error('network unavailable'))).toBe(
-      'UNEXPECTED'
+      'LOAD_FAILED'
     );
   });
 });

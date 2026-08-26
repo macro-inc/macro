@@ -45,6 +45,26 @@ type FallbackContent = {
   documentationUrl?: string;
 };
 
+/** Whether a failed request has no trustworthy local result to render. */
+export function shouldShowLoadError(options: {
+  hasData: boolean;
+  forceEmptyState: boolean;
+}): boolean {
+  return !options.hasData && !options.forceEmptyState;
+}
+
+/** Shown when no local rows are available and the active query cannot load. */
+export function LoadErrorState(props: { onRetry: () => void }) {
+  return (
+    <EmptyStatePanel
+      centered
+      title="Unable to load this view"
+      description="Check your internet connection and try again."
+      primaryAction={{ label: 'Retry', onClick: props.onRetry }}
+    />
+  );
+}
+
 const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   documents: {
     plural: 'documents',

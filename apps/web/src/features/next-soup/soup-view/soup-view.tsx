@@ -16,7 +16,11 @@ import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
-import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
+import {
+  EmptyState,
+  LoadErrorState,
+  shouldShowLoadError,
+} from '@app/features/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
@@ -1126,6 +1130,17 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     ((!source.isFetching() || isPullRefreshing()) && !rows().length) ||
     forceEmptyState();
 
+  const showLoadError = () =>
+    !!source.error() &&
+    shouldShowLoadError({
+      hasData: source.hasData(),
+      forceEmptyState: forceEmptyState(),
+    });
+
+  const retryLoad = () => {
+    void source.refresh().catch(() => undefined);
+  };
+
   const entityById = createMemo(
     () => {
       const list = rows() ?? [];
@@ -1238,7 +1253,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       >
         <SoupViewFileDropzone>
           <div class="@container/u-list size-full unified-list-root flex flex-col relative no-select-children">
-            <Show when={isTouchDevice() && source.isPlaceholderData()}>
+            <Show
+              when={
+                isTouchDevice() && source.isPlaceholderData() && !source.error()
+              }
+            >
               <MobileTabLoadingBar />
             </Show>
             <Show when={isTouchDevice()}>
@@ -1251,6 +1270,14 @@ const SoupViewListContent = (props: SoupViewListProps) => {
             </Show>
             <StaticMarkdownContext>
               <Switch>
+                <Match when={showLoadError()}>
+                  <div
+                    ref={setEmptyStateRef}
+                    class="flex-1 min-h-0 flex flex-col mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)"
+                  >
+                    <LoadErrorState onRetry={retryLoad} />
+                  </div>
+                </Match>
                 <Match
                   when={
                     source.isFetching() && !rows().length && !isPullRefreshing()
