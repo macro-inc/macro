@@ -8,7 +8,7 @@
 //! from.
 
 use agent_harness::domain::error::{HarnessError, Result};
-use agent_harness::domain::model::SpawnContainer;
+use agent_harness::domain::model::{AgentKind, SpawnContainer};
 use agent_harness::domain::ports::ContainerManager;
 use agent_harness::domain::sandbox::SandboxResizeEffect;
 use agent_harness::outbound::containers::{HarnessContainer, HarnessContainers};
@@ -20,6 +20,9 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use agent_session::domain::service::AgentSessionService;
 use bot_id::BotId;
+
+#[cfg(test)]
+mod test;
 
 /// A session transport from whichever runtime the session's bot uses.
 pub enum RoutedTransport {
@@ -80,6 +83,7 @@ pub struct RoutedContainers<Sessions> {
     sessions: Sessions,
 }
 
+#[derive(Debug)]
 enum Route {
     Sandbox,
     InMem(SessionFacts),
@@ -104,25 +108,34 @@ where
 
     /// Which runtime serves `session`. The row exists before any container
     /// operation - `open` creates it first - so the lookup is authoritative.
+    ///
+    /// Deliberately has no "when in doubt, use the sandbox" branch. The
+    /// in-process bot must never be handed a sandbox: it has no repository to
+    /// clone and no reason to cost a Daytona container, so a deployment that
+    /// cannot serve it refuses the session instead of silently provisioning
+    /// the wrong runtime for it.
     async fn route(&self, session: AgentSessionId) -> Result<Route> {
-        let Some(inmem) = &self.inmem else {
-            return Ok(Route::Sandbox);
-        };
         let row = self
             .sessions
             .get_session(session)
             .await
             .map_err(HarnessError::Session)?;
-        if row.bot_id == inmem.bot {
-            Ok(Route::InMem(SessionFacts {
+        if let Some(inmem) = &self.inmem
+            && row.bot_id == inmem.bot
+        {
+            return Ok(Route::InMem(SessionFacts {
                 id: session,
                 owner: row.owner_id,
                 model: row.model,
                 acp_session_id: row.acp_session_id,
-            }))
-        } else {
-            Ok(Route::Sandbox)
+            }));
         }
+        if AgentKind::of(row.bot_id) == AgentKind::InMemory {
+            return Err(HarnessError::Container(format!(
+                "session {session} belongs to the in-process bot, which this deployment does not serve"
+            )));
+        }
+        Ok(Route::Sandbox)
     }
 
     fn inmem(&self) -> &InMemRuntime {

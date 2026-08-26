@@ -71,10 +71,16 @@ pub struct Config {
     pub local_container_network: String,
     /// The bot this deployment answers for.
     ///
-    /// Configuration rather than a constant: `@claude` and `@codex` are separate
-    /// deployments of this same binary, distinguished only by which bot id they
-    /// watch for. It must be a real `bots` row - `agent_session.bot_id`
-    /// references it.
+    /// Still configuration, because `@claude` and `@codex` are separate
+    /// deployments of this same binary distinguished only by the bot they
+    /// watch for, and those are user-owned bots with rows.
+    ///
+    /// Deliberately required, with no default. A default here would be the
+    /// same silent-misconfiguration trap this binary already fell into once:
+    /// a per-bot deployment that failed to set it would not fail, it would
+    /// quietly become a second deployment of whatever the default was, split
+    /// the shared consumer group with the real one, and answer half its
+    /// mentions.
     pub harness_bot_id: Uuid,
     /// Model slug stamped onto sessions this deployment opens.
     #[macro_config_default(String::from("claude"))]
@@ -91,11 +97,6 @@ pub struct Config {
     /// only works if *their* GitHub App installation can see this repo.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub cursor_repo_url: String,
-    /// The bot whose sessions run in-process (the in-memory agent). Dev sets
-    /// this to `bot_id::MACRO_AI_BOT_ID`; unset deployments serve only the
-    /// sandboxed bot. It must be a real `bots` row because
-    /// `agent_session.bot_id` references it.
-    pub inmem_bot_id: Option<Uuid>,
     /// Model id stamped onto sessions the in-memory bot opens. Unknown ids
     /// fall back to the agent loop's default model.
     #[macro_config_default(String::from("claude-sonnet-5"))]

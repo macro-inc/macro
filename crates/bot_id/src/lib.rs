@@ -98,6 +98,76 @@ pub const CURSOR_HANDLE: &str = "cursor";
 /// Display name for the "Cursor" system bot.
 pub const CURSOR_NAME: &str = "Cursor";
 
+/// Stable handle for the autonomous Macro platform principal.
+pub const MACRO_SYSTEM_HANDLE: &str = "macro-system";
+
+/// A first-party bot.
+///
+/// System bots live here rather than in the `bots` table. Their ids are
+/// compile-time constants, so a row would only be a second copy of this one
+/// that an environment could be missing - which is exactly how a deployment
+/// ends up serving a bot it cannot look up. Only user- and team-owned bots
+/// are rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SystemBot {
+    /// Stable id.
+    pub id: BotId,
+    /// Display name.
+    pub name: &'static str,
+    /// Handle used for `@` mentions.
+    pub handle: &'static str,
+    /// Whether mentioning this bot opens an agent session.
+    pub has_agent: bool,
+}
+
+/// Every first-party bot.
+pub const SYSTEM_BOTS: &[SystemBot] = &[
+    SystemBot {
+        id: MACRO_AI_BOT_ID,
+        name: MACRO_AI_NAME,
+        handle: MACRO_AI_HANDLE,
+        has_agent: true,
+    },
+    SystemBot {
+        id: MACRO_CODER_BOT_ID,
+        name: MACRO_CODER_NAME,
+        handle: MACRO_CODER_HANDLE,
+        has_agent: true,
+    },
+    SystemBot {
+        id: CURSOR_BOT_ID,
+        name: CURSOR_NAME,
+        handle: CURSOR_HANDLE,
+        has_agent: true,
+    },
+    // Posts as itself for autonomous platform operations, but nothing mentions
+    // it and it opens no sessions.
+    SystemBot {
+        id: MACRO_SYSTEM_BOT_ID,
+        name: MACRO_SYSTEM_NAME,
+        handle: MACRO_SYSTEM_HANDLE,
+        has_agent: false,
+    },
+];
+
+/// The first-party bot with this id, when it is one.
+#[must_use]
+pub fn system_bot(id: BotId) -> Option<&'static SystemBot> {
+    SYSTEM_BOTS.iter().find(|bot| bot.id == id)
+}
+
+/// The first-party bot with this handle, when it is one.
+#[must_use]
+pub fn system_bot_by_handle(handle: &str) -> Option<&'static SystemBot> {
+    SYSTEM_BOTS.iter().find(|bot| bot.handle == handle)
+}
+
+/// Whether `id` is a first-party bot, and so has no `bots` row.
+#[must_use]
+pub fn is_system_bot(id: BotId) -> bool {
+    system_bot(id).is_some()
+}
+
 /// A bot id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
