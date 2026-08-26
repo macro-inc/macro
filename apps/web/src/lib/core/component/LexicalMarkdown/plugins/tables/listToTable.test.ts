@@ -14,6 +14,10 @@ import {
   TableCellHeaderStates,
   type TableNode,
 } from '@lexical/table';
+import {
+  $createCollapsibleSection,
+  $isCollapsibleContainerNode,
+} from '@macro-inc/lexical-core';
 import { SupportedNodeTypes } from '@macro-inc/lexical-core/node-list';
 import {
   $createParagraphNode,
@@ -378,5 +382,39 @@ describe('list to table conversion', () => {
       { header: 'column 1', cells: ['a1'] },
       { header: 'column 2', cells: ['b1', 'b2'] },
     ]);
+  });
+
+  it('converts a list inside a collapsible section into a table', async () => {
+    const editor = createTestEditor();
+    let listKey = '';
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          const section = $createCollapsibleSection({ heading: 'h2' });
+          section.getTitle()?.append($createTextNode('Grid'));
+          const list = $buildColumns([
+            ['column 1', ['a1']],
+            ['column 2', ['b1']],
+          ]);
+          section.getContent()?.clear();
+          section.getContent()?.append(list);
+          $getRoot().clear().append(section);
+          listKey = list.getKey();
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+
+    const handled = editor.dispatchCommand(LIST_TO_TABLE_COMMAND, listKey);
+    await Promise.resolve();
+    expect(handled).toBe(true);
+
+    editor.getEditorState().read(() => {
+      const container = $getRoot().getFirstChild();
+      expect($isCollapsibleContainerNode(container)).toBe(true);
+      if (!$isCollapsibleContainerNode(container)) return;
+      const table = container.getContent()?.getFirstChild();
+      expect($isTableNode(table)).toBe(true);
+    });
   });
 });

@@ -11,8 +11,14 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  $isCollapsibleContainerNode,
+  $isCollapsibleContentNode,
+  $isCollapsibleTitleNode,
   type AwaitNode,
   type ClassedBlockNode,
+  type CollapsibleContainerNode,
+  type CollapsibleContentNode,
+  type CollapsibleTitleNode,
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
@@ -843,6 +849,45 @@ const ClassedBlock: TypedRenderableElement<ClassedBlockNode> = {
   },
 };
 
+const CollapsibleContainer: TypedRenderableElement<CollapsibleContainerNode> = {
+  guard: (node: LexicalNode): node is CollapsibleContainerNode =>
+    $isCollapsibleContainerNode(node),
+  render: (props) => (
+    <details
+      class={cn(props.theme.collapsible?.container)}
+      open={props.node.getOpen()}
+    >
+      {props.children}
+    </details>
+  ),
+};
+
+const CollapsibleTitle: TypedRenderableElement<CollapsibleTitleNode> = {
+  guard: (node: LexicalNode): node is CollapsibleTitleNode =>
+    $isCollapsibleTitleNode(node),
+  render: (props) => {
+    const heading = props.node.getHeading();
+    return (
+      <summary
+        class={cn(
+          props.theme.collapsible?.title,
+          heading !== 'p' && props.theme.heading?.[heading]
+        )}
+      >
+        {props.children}
+      </summary>
+    );
+  },
+};
+
+const CollapsibleContent: TypedRenderableElement<CollapsibleContentNode> = {
+  guard: (node: LexicalNode): node is CollapsibleContentNode =>
+    $isCollapsibleContentNode(node),
+  render: (props) => (
+    <div class={cn(props.theme.collapsible?.content)}>{props.children}</div>
+  ),
+};
+
 // The entities that cannot have children.
 const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(Text),
@@ -881,6 +926,9 @@ const Elements: RenderableElement[] = [
   eraseRenderableElement(TableRow),
   eraseRenderableElement(TableCell),
   eraseRenderableElement(ClassedBlock),
+  eraseRenderableElement(CollapsibleContainer),
+  eraseRenderableElement(CollapsibleTitle),
+  eraseRenderableElement(CollapsibleContent),
 ];
 
 function Render(

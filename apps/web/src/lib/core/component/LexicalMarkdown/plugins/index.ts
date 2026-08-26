@@ -4,6 +4,7 @@ export * from './await';
 export * from './blame-tooltip';
 export * from './checklist';
 export * from './code';
+export * from './collapsible';
 export * from './comments';
 export * from './custom-caret';
 export * from './custom-delete';

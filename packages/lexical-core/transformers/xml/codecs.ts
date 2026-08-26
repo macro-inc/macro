@@ -77,6 +77,9 @@ const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   mark: 1,
   tab: 1,
   'classed-block': 1,
+  'collapsible-container': 1,
+  'collapsible-title': 1,
+  'collapsible-content': 1,
   'custom-code': 1,
   equation: 1,
   image: 1,
@@ -273,6 +276,17 @@ export function serializeNode(node: SerNode): FxpNode {
         ...(n.classes?.length && { classes: n.classes.join(' ') }),
       })
     )
+    .with({ type: 'collapsible-container' }, (n) =>
+      container('details', n, {
+        ...(n.open ? { open: 'true' } : {}),
+      })
+    )
+    .with({ type: 'collapsible-title' }, (n) =>
+      container('summary', n, {
+        ...(n.heading !== 'p' && { heading: n.heading }),
+      })
+    )
+    .with({ type: 'collapsible-content' }, (n) => container('div', n))
     .with({ type: 'custom-code' }, (n) => serializeCode(n))
     .with({ type: 'equation' }, (n) =>
       textLeaf('equation', n, n.equation, {

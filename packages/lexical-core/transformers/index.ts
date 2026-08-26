@@ -1,6 +1,7 @@
 import type { Transformer } from '@lexical/markdown';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
+import { E_COLLAPSIBLE_NODE, I_COLLAPSIBLE_NODE } from './collapsible';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_HTML_RENDER } from './htmlRender';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
@@ -75,6 +76,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_COLLAPSIBLE_NODE,
   I_TABLE_NODE,
   HTML_BLOCKQUOTE,
   I_MACRO_QUOTE,
@@ -95,6 +97,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   I_VIDEO,
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
+  E_COLLAPSIBLE_NODE,
   E_TABLE_NODE,
   HTML_BLOCKQUOTE,
   E_USER_MENTION,
@@ -137,6 +140,8 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_IMAGE_CONSTRAINED,
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
+  I_COLLAPSIBLE_NODE,
+  E_COLLAPSIBLE_NODE,
   I_TABLE_NODE,
   E_TABLE_NODE,
   HTML_BLOCKQUOTE,

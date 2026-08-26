@@ -19,6 +19,11 @@ import { CommentNode } from './nodes/CommentNode';
 import { CompletionNode } from './nodes/CompletionNode';
 import { ContactMentionNode } from './nodes/ContactMentionNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
+import {
+  CollapsibleContainerNode,
+  CollapsibleContentNode,
+  CollapsibleTitleNode,
+} from './nodes/collapsible';
 import { DateMentionNode } from './nodes/DateMentionNode';
 import { DiffDeleteNode } from './nodes/DiffDeleteNode';
 import { DiffInsertNode } from './nodes/DiffInsertNode';
@@ -90,6 +95,9 @@ export const SupportedNodeTypes = [
   TableNode,
   TableCellNode,
   TableRowNode,
+  CollapsibleContainerNode,
+  CollapsibleTitleNode,
+  CollapsibleContentNode,
   CompletionNode,
   MarkNode,
   CommentNode,

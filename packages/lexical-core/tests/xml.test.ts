@@ -170,4 +170,45 @@ describe('xml', () => {
     expect(xml).toContain('&amp;');
     expect(xml).toContain('&gt;');
   });
+
+  it('serializes a collapsible section with a heading-sized title', () => {
+    const state = root([
+      {
+        children: [
+          {
+            children: [text('Notes', 0, 'tt')],
+            direction: 'ltr',
+            format: '',
+            indent: 0,
+            type: 'collapsible-title',
+            version: 1,
+            heading: 'h2',
+            $: { id: 'title1' },
+          },
+          {
+            children: [paragraph([text('Body', 0, 'tb')], 'p-body')],
+            direction: 'ltr',
+            format: '',
+            indent: 0,
+            type: 'collapsible-content',
+            version: 1,
+            $: { id: 'content1' },
+          },
+        ],
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        type: 'collapsible-container',
+        version: 1,
+        open: true,
+        $: { id: 'c1' },
+      },
+    ]);
+    const xml = toXml(state);
+    expect(xml).toContain('<details id="c1" open="true">');
+    expect(xml).toContain('<summary id="title1" heading="h2">');
+    expect(xml).toContain('<div id="content1">');
+    expect(xml).toContain('Notes');
+    expect(xml).toContain('Body');
+  });
 });
