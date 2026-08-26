@@ -15,8 +15,8 @@ async fn link_deletion_returns_documents_detached_by_the_commit(
     let document_owner = Uuid::parse_str("00000000-0000-0000-0000-000000000c03")?;
     let document_id = "00000000-0000-0000-0000-00000000dc03";
     sqlx::query!(
-        r#"INSERT INTO macro_user (id, username, email)
-           VALUES ($1, 'link-delete-owner', 'link-delete-owner@example.com')"#,
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+           VALUES ($1, 'link-delete-owner', 'link-delete-owner@example.com', 'cus_link_delete_owner')"#,
         document_owner
     )
     .execute(&pool)

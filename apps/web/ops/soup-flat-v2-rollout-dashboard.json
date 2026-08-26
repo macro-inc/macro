@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "status": "validated-provider-neutral-spec-not-deployed",
+  "provider": "neutral",
+  "executable": false,
+  "title": "Soup flat v2 cache projection rollout",
+  "telemetryContract": {
+    "clientEvents": [
+      "graphql_cache.soup_projection",
+      "graphql_cache.soup_filter",
+      "graphql_cache.soup_authority",
+      "graphql_cache.soup_stale_fallback",
+      "graphql_cache.soup_local_evaluation"
+    ],
+    "serverSpans": ["soup.cache_projection.compile"],
+    "dimensions": [
+      "cache.rollout_cohort",
+      "cache.soup_operation",
+      "cache.soup_filter_outcome",
+      "cache.soup_unsupported_reason",
+      "cache.outcome",
+      "cache.error_code",
+      "authority.source",
+      "authority.resumed_by",
+      "evaluation.outcome",
+      "evaluation.unsupported_reason",
+      "projection.outcome"
+    ],
+    "measurements": [
+      "cache.duration_ms",
+      "cache.bytes",
+      "cache.count",
+      "cache.fact_count",
+      "cache.requested_count",
+      "cache.present_count",
+      "cache.null_count",
+      "cache.absent_count",
+      "cache.complete_count",
+      "cache.missing_count",
+      "cache.incompatible_count",
+      "cache.mismatched_key_count",
+      "cache.unsupported_profile_count",
+      "projection.duration_micros",
+      "projection.bytes",
+      "projection.fact_count"
+    ],
+    "forbidden": [
+      "record_key",
+      "record_id",
+      "entity_id",
+      "document_id",
+      "user_id",
+      "raw_capsule",
+      "fact_value",
+      "graphql_variables",
+      "graphql_result"
+    ]
+  },
+  "queries": [
+    {
+      "id": "capsule-presence-by-operation",
+      "event": "graphql_cache.soup_projection",
+      "formula": "sum(cache.present_count) / sum(cache.requested_count)",
+      "groupBy": ["cache.soup_operation", "cache.rollout_cohort"],
+      "unit": "ratio"
+    },
+    {
+      "id": "capsule-complete-by-operation",
+      "event": "graphql_cache.soup_projection",
+      "formula": "sum(cache.complete_count) / sum(cache.requested_count)",
+      "groupBy": ["cache.soup_operation", "cache.rollout_cohort"],
+      "unit": "ratio"
+    },
+    {
+      "id": "capsule-failure-outcomes",
+      "event": "graphql_cache.soup_projection",
+      "formula": "sum each of missing_count, incompatible_count, mismatched_key_count, unsupported_profile_count and count(outcome='error')",
+      "groupBy": ["cache.soup_operation", "cache.error_code"],
+      "unit": "count"
+    },
+    {
+      "id": "capsule-payload-per-entity",
+      "event": "graphql_cache.soup_projection",
+      "formula": "sum(cache.bytes) / sum(cache.count)",
+      "groupBy": ["cache.soup_operation"],
+      "unit": "bytes"
+    },
+    {
+      "id": "capsule-facts-per-entity",
+      "event": "graphql_cache.soup_projection",
+      "formula": "sum(cache.fact_count) / sum(cache.complete_count)",
+      "groupBy": ["cache.soup_operation"],
+      "unit": "count"
+    },
+    {
+      "id": "capsule-decode-validation-latency",
+      "event": "graphql_cache.soup_projection",
+      "formula": "p50/p95/p99(cache.duration_ms)",
+      "groupBy": ["cache.soup_operation"],
+      "unit": "milliseconds"
+    },
+    {
+      "id": "server-projection-compilation",
+      "event": "soup.cache_projection.compile",
+      "formula": "count and p50/p95/p99(projection.duration_micros)",
+      "groupBy": ["projection.outcome"],
+      "unit": "microseconds"
+    },
+    {
+      "id": "local-filter-outcomes",
+      "event": "graphql_cache.soup_filter",
+      "formula": "count by cache.soup_filter_outcome",
+      "groupBy": ["cache.soup_filter_outcome", "cache.soup_unsupported_reason"],
+      "unit": "count"
+    },
+    {
+      "id": "stale-fallback-duration-and-resumption",
+      "event": "graphql_cache.soup_stale_fallback",
+      "formula": "count and p50/p95/p99 duration grouped by authority.resumed_by",
+      "groupBy": ["authority.resumed_by"],
+      "unit": "milliseconds"
+    },
+    {
+      "id": "authority-source",
+      "event": "graphql_cache.soup_authority",
+      "formula": "count by authority.source",
+      "groupBy": ["authority.source"],
+      "unit": "count"
+    }
+  ],
+  "panels": [
+    {
+      "id": "capsule-health",
+      "queryIds": [
+        "capsule-presence-by-operation",
+        "capsule-complete-by-operation",
+        "capsule-failure-outcomes"
+      ]
+    },
+    {
+      "id": "capsule-cost",
+      "queryIds": [
+        "capsule-payload-per-entity",
+        "capsule-facts-per-entity",
+        "capsule-decode-validation-latency",
+        "server-projection-compilation"
+      ]
+    },
+    {
+      "id": "local-authority",
+      "queryIds": [
+        "local-filter-outcomes",
+        "stale-fallback-duration-and-resumption",
+        "authority-source"
+      ]
+    }
+  ],
+  "alerts": [
+    {
+      "id": "backfill-projection-incomplete",
+      "metric": "capsule-complete-by-operation",
+      "selector": "cache.soup_operation='backfill'",
+      "windowMinutes": 15,
+      "minimumEntities": 100,
+      "warningBelow": 0.999,
+      "criticalBelow": 0.99,
+      "rollbackOnCritical": true
+    },
+    {
+      "id": "projection-storage-errors",
+      "metric": "capsule-failure-outcomes",
+      "selector": "cache.outcome='error'",
+      "windowMinutes": 15,
+      "minimumOperations": 100,
+      "warningRate": 0.001,
+      "criticalRate": 0.01,
+      "rollbackOnCritical": true
+    },
+    {
+      "id": "mismatched-or-unsupported-capsules",
+      "metric": "capsule-failure-outcomes",
+      "selector": "mismatched_key_count > 0 or unsupported_profile_count > 0",
+      "windowMinutes": 15,
+      "minimumEntities": 100,
+      "warningCount": 1,
+      "criticalCount": 10,
+      "rollbackOnCritical": true
+    }
+  ],
+  "rollout": {
+    "prerequisites": [
+      "additive GraphQL schema deployed before client exposure",
+      "provider, message, and link relation-removal invalidation verified",
+      "backfill complete ratio above warning threshold",
+      "real Chrome WASM/Turso production-shape differential suite green"
+    ],
+    "killSwitch": "disable-browser-turso-cache",
+    "mixedDeploymentFallback": "retry network operation without cacheProjection and suppress v2 local evaluation for the session",
+    "promotion": [
+      { "stage": "internal", "maximumPercent": 1, "minimumSoakHours": 24 },
+      { "stage": "canary", "maximumPercent": 5, "minimumSoakHours": 48 },
+      { "stage": "general", "maximumPercent": 100, "minimumSoakHours": 168 }
+    ]
+  }
+}

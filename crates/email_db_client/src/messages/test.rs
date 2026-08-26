@@ -323,8 +323,8 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
     let document_id = "00000000-0000-0000-0000-00000000dc02";
     let attachment_id = Uuid::parse_str("00000000-0000-0000-0000-0000001ba001")?;
     sqlx::query!(
-        r#"INSERT INTO macro_user (id, username, email)
-           VALUES ($1, 'message-delete-owner', 'message-delete-owner@example.com')"#,
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+           VALUES ($1, 'message-delete-owner', 'message-delete-owner@example.com', 'cus_message_delete_owner')"#,
         document_owner
     )
     .execute(&pool)

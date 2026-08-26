@@ -233,8 +233,8 @@ async fn attach_document_to_email_attachment(
 ) -> Result<()> {
     let user_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
     sqlx::query!(
-        r#"INSERT INTO macro_user (id, username, email)
-           VALUES ($1, 'projection-owner', 'projection-owner@example.com')"#,
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+           VALUES ($1, 'projection-owner', 'projection-owner@example.com', 'cus_projection_owner')"#,
         user_id
     )
     .execute(pool)

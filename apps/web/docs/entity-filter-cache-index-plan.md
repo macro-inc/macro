@@ -1,5 +1,7 @@
 # Incremental Exact GraphQL Entity-Filter Cache Index Plan
 
+Status: **initial `soup-flat-v1` implementation and the bounded `soup-flat-v2` Documents expansion are implemented**
+
 ## Objective
 
 Use the browser's Turso/OPFS-backed normalized GraphQL cache to answer a deliberately bounded subset of Soup GraphQL filter-AST requests exactly and efficiently.
@@ -123,6 +125,51 @@ The compiler may recognize positive nil-ID exclusion sentinels for unsupported p
 - relation-backed or otherwise non-deterministic optimistic projection state.
 
 These are deferred product capabilities, not silently false predicates.
+
+## Implemented expansion: `soup-flat-v2`
+
+The first measured semantic expansion is the server-minted Documents contract in
+[`server-minted-soup-cache-projection-plan.md`](server-minted-soup-cache-projection-plan.md).
+It retains every v1 fact and adds exactly:
+
+- `GraphqlDocumentLiteral.subType`, encoded as one canonical `task`, `snippet`,
+  or `skill` exact posting when present;
+- `GraphqlDocumentLiteral.isEmailAttachment`, encoded as exactly one explicit
+  Boolean exact posting for every complete Document projection.
+
+The relation-backed attachment fact comes from the authorized Soup PostgreSQL
+hydration row and is transported in the opaque, entity-bound
+`GraphqlSoupEntity.cacheProjection` capsule. It is not exposed on
+`GraphqlSoupDocument`, is not inferred in the UI, and is never treated as
+permission evidence. Project and Chat v2 documents retain their v1 direct facts.
+
+The browser compiler remains all-or-network across direct, `and`, `or`, and
+`not` trees. Created/Updated ascending and descending sorts are supported;
+viewed sorts, continuation cursors, and every other deferred literal remain
+unsupported. Cache compatibility epoch 2 discards persisted v1 authority rather
+than reinterpreting it as v2.
+
+Rollout safety is part of the profile contract:
+
+- canonical Soup, backfill, and realtime emissions ingest capsule facts in the
+  same transaction/revision as normalized records;
+- a backfill page with a missing or invalid required v2 capsule rejects before
+  storage and therefore cannot advance its checkpoint;
+- new-client/old-server validation failures retry the network operation without
+  `cacheProjection` and suppress v2 local evaluation for that session;
+- provider reconciliation preserves document-linked source attachments, while
+  committed message/link cascades publish a document relation-change event that
+  the existing Soup realtime domain service expands to current authorized
+  recipients;
+- anonymous bounded telemetry and the provider-neutral dashboard contract live
+  in `apps/web/ops/soup-flat-v2-rollout-dashboard.json`.
+
+The checked-in request audit measures eight Documents variants (Owned, Shared,
+Attachments, All × snippets on/off). All eight compile under v2 for all four
+Created/Updated sort combinations, versus zero under v1. In the original
+single-feature-context 36-preset baseline this changes four active Documents
+shapes from fallback to eligible: 7/36 (19.4%) becomes 11/36 (30.6%). This is a
+static shape delta, not a production completeness or local-hit-rate claim.
 
 ## Required architecture
 

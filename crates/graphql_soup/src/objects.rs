@@ -429,6 +429,7 @@ where
     /// Construct a GraphQL entity and opaque server-fact supplement from one
     /// authoritative hydration value.
     #[tracing::instrument(
+        name = "soup.cache_projection.compile",
         skip_all,
         fields(
             projection.outcome = tracing::field::Empty,
