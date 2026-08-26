@@ -8,6 +8,7 @@ import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
 import TagIcon from '@phosphor/tag-simple.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
@@ -21,6 +22,8 @@ import {
   BOT_MANAGEMENT_OVERRIDE,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
+  ENABLE_CHAT_V3_AGENTS_FLAG,
+  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
   ENABLE_NOTIFICATION_SETTINGS_FLAG,
@@ -72,6 +75,9 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: CpuIcon,
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
+      // Internal literal stays 'Personas' ("agent" is taken by the MCP-server
+      // tab and overloaded everywhere else); users see "Agents".
+      { tab: 'Personas', label: 'Agents', icon: SparkleIcon },
       { tab: 'Bots', label: 'Bots', icon: BotIcon },
     ],
   },
@@ -103,6 +109,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Shortcuts: 'shortcuts',
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
+  Personas: 'agents',
   Bots: 'bots',
   Team: 'team',
   Tags: 'tags',
@@ -149,6 +156,12 @@ export const useSettingsTabAvailable = () => {
   const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
     enabledOverride: BOT_MANAGEMENT_OVERRIDE,
   });
+  // Agents ride the same gate as every other agent-v3 surface (the mention
+  // entry, the folded session view): the page only makes sense where agent
+  // sessions can actually be opened.
+  const agentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
+    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
+  });
   const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
     enabledOverride: ENABLE_CRM_OVERRIDE,
   });
@@ -184,6 +197,8 @@ export const useSettingsTabAvailable = () => {
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
       case 'Agent':
         return !isNativeMobilePlatform();
+      case 'Personas':
+        return agentsFlag().enabled;
       case 'Bots':
         return botManagementFlag().enabled;
       case 'Mobile':

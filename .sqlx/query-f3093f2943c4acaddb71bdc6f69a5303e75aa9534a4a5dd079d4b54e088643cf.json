@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id AS \"id!\", name AS \"name!\"\n        FROM bots\n        WHERE id = ANY($1) AND deleted_at IS NULL\n        UNION ALL\n        SELECT id, name\n        FROM personas\n        WHERE id = ANY($1) AND deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "f3093f2943c4acaddb71bdc6f69a5303e75aa9534a4a5dd079d4b54e088643cf"
+}

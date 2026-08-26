@@ -24452,6 +24452,152 @@ export const postItemsSoupAstGroupedResponse = zod
   .describe('Response for grouped soup queries.');
 
 /**
+ * @summary Handler for `GET /personas`.
+ */
+export const listPersonasResponseItem = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe('Optional description shown in settings.'),
+    handle: zod
+      .string()
+      .describe('Typed after `@` to mention the persona. Lower kebab-case.'),
+    id: zod.string(),
+    name: zod.string().describe('Display name.'),
+    owner_user_id: zod
+      .string()
+      .describe('The user who owns and edits the persona.'),
+    system_prompt: zod
+      .string()
+      .nullish()
+      .describe(
+        "Markdown instructions prepended to the persona's sessions. `None`\nmeans the persona adds nothing beyond the base agent prompt."
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last edit time.'),
+  })
+  .describe(
+    'A persona: a user-configured agent identity.\n\nThe configurable half of an agent. The running half is a harness; every\npersona runs on the in-memory agent in this iteration, so the pairing is\nimplicit rather than a field.'
+  );
+export const listPersonasResponse = zod.array(listPersonasResponseItem);
+
+/**
+ * @summary Handler for `POST /personas`.
+ */
+export const createPersonaBody = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    handle: zod.string().describe('Stable handle, used for `@` mentions.'),
+    name: zod.string().describe('Display name.'),
+    system_prompt: zod
+      .string()
+      .nullish()
+      .describe('Markdown instructions prepended to every session.'),
+  })
+  .describe('Request to create a persona. The caller becomes the owner.');
+
+/**
+ * @summary Handler for `GET /personas/{persona_id}`.
+ */
+export const getPersonaParams = zod.object({
+  persona_id: zod.uuid().describe('Persona id'),
+});
+
+export const getPersonaResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe('Optional description shown in settings.'),
+    handle: zod
+      .string()
+      .describe('Typed after `@` to mention the persona. Lower kebab-case.'),
+    id: zod.string(),
+    name: zod.string().describe('Display name.'),
+    owner_user_id: zod
+      .string()
+      .describe('The user who owns and edits the persona.'),
+    system_prompt: zod
+      .string()
+      .nullish()
+      .describe(
+        "Markdown instructions prepended to the persona's sessions. `None`\nmeans the persona adds nothing beyond the base agent prompt."
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last edit time.'),
+  })
+  .describe(
+    'A persona: a user-configured agent identity.\n\nThe configurable half of an agent. The running half is a harness; every\npersona runs on the in-memory agent in this iteration, so the pairing is\nimplicit rather than a field.'
+  );
+
+/**
+ * @summary Handler for `DELETE /personas/{persona_id}`.
+ */
+export const deletePersonaParams = zod.object({
+  persona_id: zod.uuid().describe('Persona id'),
+});
+
+/**
+ * @summary Handler for `PATCH /personas/{persona_id}`.
+ */
+export const patchPersonaParams = zod.object({
+  persona_id: zod.uuid().describe('Persona id'),
+});
+
+export const patchPersonaBody = zod
+  .object({
+    avatar_url: zod
+      .string()
+      .nullish()
+      .describe('Avatar URL. `null` clears it.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe('Description. `null` clears it.'),
+    handle: zod.string().nullish().describe('Stable handle.'),
+    name: zod.string().nullish().describe('Display name.'),
+    system_prompt: zod
+      .string()
+      .nullish()
+      .describe('System prompt. `null` clears it.'),
+  })
+  .describe(
+    'Request to patch a persona.\n\nAbsent fields are left unchanged. The nullable fields distinguish absent\nfrom null: sending `null` clears the field.'
+  );
+
+export const patchPersonaResponse = zod
+  .object({
+    avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    description: zod
+      .string()
+      .nullish()
+      .describe('Optional description shown in settings.'),
+    handle: zod
+      .string()
+      .describe('Typed after `@` to mention the persona. Lower kebab-case.'),
+    id: zod.string(),
+    name: zod.string().describe('Display name.'),
+    owner_user_id: zod
+      .string()
+      .describe('The user who owns and edits the persona.'),
+    system_prompt: zod
+      .string()
+      .nullish()
+      .describe(
+        "Markdown instructions prepended to the persona's sessions. `None`\nmeans the persona adds nothing beyond the base agent prompt."
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last edit time.'),
+  })
+  .describe(
+    'A persona: a user-configured agent identity.\n\nThe configurable half of an agent. The running half is a harness; every\npersona runs on the in-memory agent in this iteration, so the pairing is\nimplicit rather than a field.'
+  );
+
+/**
  * @summary Gets the users pinned items
  */
 export const getPinsHandlerResponse = zod.object({

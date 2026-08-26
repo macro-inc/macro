@@ -3046,6 +3046,32 @@ export type CreateMarkdownDocumentResponse = {
     token: string;
 };
 
+/**
+ * Request to create a persona. The caller becomes the owner.
+ */
+export type CreatePersonaRequest = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle, used for `@` mentions.
+     */
+    handle: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Markdown instructions prepended to every session.
+     */
+    system_prompt?: string | null;
+};
+
 export type CreateProjectRequest = {
     /**
      * The name of the project.
@@ -5855,6 +5881,35 @@ export type PatchMessageRequest = {
     nonce?: string | null;
 };
 
+/**
+ * Request to patch a persona.
+ *
+ * Absent fields are left unchanged. The nullable fields distinguish absent
+ * from null: sending `null` clears the field.
+ */
+export type PatchPersonaRequest = {
+    /**
+     * Avatar URL. `null` clears it.
+     */
+    avatar_url?: string | null;
+    /**
+     * Description. `null` clears it.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle?: string | null;
+    /**
+     * Display name.
+     */
+    name?: string | null;
+    /**
+     * System prompt. `null` clears it.
+     */
+    system_prompt?: string | null;
+};
+
 export type PatchProjectRequestV2 = {
     /**
      * The new name of the project.
@@ -5997,6 +6052,53 @@ export type PdfPlaceableCommentAnchorRequest = {
     widthPct: number;
     xPct: number;
     yPct: number;
+};
+
+/**
+ * A persona: a user-configured agent identity.
+ *
+ * The configurable half of an agent. The running half is a harness; every
+ * persona runs on the in-memory agent in this iteration, so the pairing is
+ * implicit rather than a field.
+ */
+export type Persona = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Creation time.
+     */
+    created_at: string;
+    /**
+     * Optional description shown in settings.
+     */
+    description?: string | null;
+    /**
+     * Typed after `@` to mention the persona. Lower kebab-case.
+     */
+    handle: string;
+    /**
+     * Persona id, in the bot id space.
+     */
+    id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * The user who owns and edits the persona.
+     */
+    owner_user_id: string;
+    /**
+     * Markdown instructions prepended to the persona's sessions. `None`
+     * means the persona adds nothing beyond the base agent prompt.
+     */
+    system_prompt?: string | null;
+    /**
+     * Last edit time.
+     */
+    updated_at: string;
 };
 
 export type PinRequest = {
@@ -12225,6 +12327,128 @@ export type PostItemsSoupAstGroupedResponses = {
 };
 
 export type PostItemsSoupAstGroupedResponse = PostItemsSoupAstGroupedResponses[keyof PostItemsSoupAstGroupedResponses];
+
+export type ListPersonasData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/personas';
+};
+
+export type ListPersonasErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListPersonasError = ListPersonasErrors[keyof ListPersonasErrors];
+
+export type ListPersonasResponses = {
+    200: Array<Persona>;
+};
+
+export type ListPersonasResponse = ListPersonasResponses[keyof ListPersonasResponses];
+
+export type CreatePersonaData = {
+    body: CreatePersonaRequest;
+    path?: never;
+    query?: never;
+    url: '/personas';
+};
+
+export type CreatePersonaErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreatePersonaError = CreatePersonaErrors[keyof CreatePersonaErrors];
+
+export type CreatePersonaResponses = {
+    201: Persona;
+};
+
+export type CreatePersonaResponse = CreatePersonaResponses[keyof CreatePersonaResponses];
+
+export type DeletePersonaData = {
+    body?: never;
+    path: {
+        /**
+         * Persona id
+         */
+        persona_id: string;
+    };
+    query?: never;
+    url: '/personas/{persona_id}';
+};
+
+export type DeletePersonaErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeletePersonaError = DeletePersonaErrors[keyof DeletePersonaErrors];
+
+export type DeletePersonaResponses = {
+    204: void;
+};
+
+export type DeletePersonaResponse = DeletePersonaResponses[keyof DeletePersonaResponses];
+
+export type GetPersonaData = {
+    body?: never;
+    path: {
+        /**
+         * Persona id
+         */
+        persona_id: string;
+    };
+    query?: never;
+    url: '/personas/{persona_id}';
+};
+
+export type GetPersonaErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetPersonaError = GetPersonaErrors[keyof GetPersonaErrors];
+
+export type GetPersonaResponses = {
+    200: Persona;
+};
+
+export type GetPersonaResponse = GetPersonaResponses[keyof GetPersonaResponses];
+
+export type PatchPersonaData = {
+    body: PatchPersonaRequest;
+    path: {
+        /**
+         * Persona id
+         */
+        persona_id: string;
+    };
+    query?: never;
+    url: '/personas/{persona_id}';
+};
+
+export type PatchPersonaErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchPersonaError = PatchPersonaErrors[keyof PatchPersonaErrors];
+
+export type PatchPersonaResponses = {
+    200: Persona;
+};
+
+export type PatchPersonaResponse = PatchPersonaResponses[keyof PatchPersonaResponses];
 
 export type GetPinsHandlerData = {
     body?: never;

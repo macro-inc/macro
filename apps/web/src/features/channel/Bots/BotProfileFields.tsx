@@ -5,7 +5,9 @@ import { BotAvatar } from './BotAvatar';
 import type { BotFormErrors, BotFormValues } from './botForm';
 
 export function BotProfileFields(props: {
-  value: BotFormValues;
+  // Only the profile fields this renders, not all of `BotFormValues`: personas
+  // reuse this section with their own form shape, which has no `hasAgent`.
+  value: Pick<BotFormValues, 'name' | 'handle' | 'description' | 'avatarUrl'>;
   errors: BotFormErrors;
   uploadingAvatar: boolean;
   onUploadAvatar: () => void;

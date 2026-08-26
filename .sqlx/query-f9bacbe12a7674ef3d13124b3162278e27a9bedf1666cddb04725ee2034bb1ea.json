@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE personas\n            SET deleted_at = now(),\n                updated_at = now()\n            WHERE id = $1\n              AND deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f9bacbe12a7674ef3d13124b3162278e27a9bedf1666cddb04725ee2034bb1ea"
+}

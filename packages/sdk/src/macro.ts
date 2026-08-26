@@ -10,6 +10,7 @@ import { EmailNamespace } from './entities/email/namespace';
 import { FavoritesNamespace } from './entities/favorites/namespace';
 import { ForeignEntityNamespace } from './entities/foreign/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
+import { PersonaNamespace } from './entities/personas/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
 import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
@@ -46,6 +47,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly favorites: FavoritesNamespace;
   readonly foreignEntities: ForeignEntityNamespace;
   readonly notifications: NotificationNamespace;
+  readonly personas: PersonaNamespace;
   readonly pins: PinsNamespace;
   readonly projects: ProjectNamespace;
   readonly properties: PropertiesNamespace;
@@ -77,6 +79,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.notifications = new NotificationNamespace(client);
+    this.personas = new PersonaNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);

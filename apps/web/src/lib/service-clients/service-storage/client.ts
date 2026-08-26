@@ -69,6 +69,7 @@ import type { CreateEntityMentionResponse } from './generated/schemas/createEnti
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
+import type { CreatePersonaRequest } from './generated/schemas/createPersonaRequest';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
 import type { CreateReminderRequest } from './generated/schemas/createReminderRequest';
 import type { CreateSkillHandler200 } from './generated/schemas/createSkillHandler200';
@@ -129,6 +130,8 @@ import type { ListRemindersParams } from './generated/schemas/listRemindersParam
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
+import type { PatchPersonaRequest } from './generated/schemas/patchPersonaRequest';
+import type { Persona } from './generated/schemas/persona';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
@@ -277,6 +280,7 @@ export type TaskSimilaritySearchResponse = {
 
 type WithBotId = { bot_id: string };
 type WithChannelId = { channel_id: string };
+type WithPersonaId = { persona_id: string };
 
 type CreateBotRequest = {
   team_id?: string;
@@ -693,6 +697,47 @@ export const storageServiceClient = {
         }
       )
     ).map((result) => result);
+  },
+
+  async getPersonas() {
+    return (
+      await dssFetch<Persona[]>(`/personas`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async createPersona(args: CreatePersonaRequest) {
+    return (
+      await dssFetch<Persona>(`/personas`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  async getPersona(args: WithPersonaId) {
+    return (
+      await dssFetch<Persona>(`/personas/${args.persona_id}`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async patchPersona(args: WithPersonaId & PatchPersonaRequest) {
+    const { persona_id, ...request } = args;
+    return (
+      await dssFetch<Persona>(`/personas/${persona_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(request),
+      })
+    ).map((result) => result);
+  },
+
+  async deletePersona(args: WithPersonaId) {
+    return await dssFetch(`/personas/${args.persona_id}`, {
+      method: 'DELETE',
+    });
   },
 
   async getOrCreateDirectMessage(args: GetOrCreateDmRequest) {

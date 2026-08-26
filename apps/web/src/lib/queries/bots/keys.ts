@@ -5,4 +5,6 @@ export const botKeys = createQueryKeys('bots', {
   detail: (botId: string) => ({ queryKey: [botId] }),
   channels: (botId: string) => ({ queryKey: [botId] }),
   tokens: (botId: string) => ({ queryKey: [botId] }),
+  personas: null,
+  persona: (personaId: string) => ({ queryKey: [personaId] }),
 });

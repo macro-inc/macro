@@ -4,6 +4,12 @@ import { Button, Dialog, Surface } from '@ui';
 export function BotDeleteDialog(props: {
   open: boolean;
   botName?: string;
+  /** What the thing being deleted is called, for surfaces that call a bot
+   * something else (agents). Defaults to "bot". */
+  noun?: string;
+  /** Overrides the consequences line, which by default describes webhook bots
+   * and does not apply to bots without webhook URLs. */
+  description?: string;
   pending: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -18,13 +24,13 @@ export function BotDeleteDialog(props: {
       <Surface depth={2} class="rounded-xl text-ink">
         <div class="border-b border-edge-muted px-5 py-3">
           <Dialog.Title class="text-sm font-semibold">
-            Delete {props.botName ?? 'bot'}?
+            Delete {props.botName ?? props.noun ?? 'bot'}?
           </Dialog.Title>
         </div>
         <div class="flex flex-col gap-4 p-5">
           <Dialog.Description class="text-sm leading-5 text-ink-muted">
-            This removes the bot from every channel and disables its webhook
-            URLs. This action cannot be undone.
+            {props.description ??
+              'This removes the bot from every channel and disables its webhook URLs. This action cannot be undone.'}
           </Dialog.Description>
           <div class="flex justify-end gap-2">
             <Button

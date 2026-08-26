@@ -9013,6 +9013,317 @@
         }
       }
     },
+    "/personas": {
+      "get": {
+        "tags": ["personas"],
+        "summary": "Handler for `GET /personas`.",
+        "operationId": "list_personas",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Persona"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["personas"],
+        "summary": "Handler for `POST /personas`.",
+        "operationId": "create_persona",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePersonaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/personas/{persona_id}": {
+      "get": {
+        "tags": ["personas"],
+        "summary": "Handler for `GET /personas/{persona_id}`.",
+        "operationId": "get_persona",
+        "parameters": [
+          {
+            "name": "persona_id",
+            "in": "path",
+            "description": "Persona id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["personas"],
+        "summary": "Handler for `DELETE /personas/{persona_id}`.",
+        "operationId": "delete_persona",
+        "parameters": [
+          {
+            "name": "persona_id",
+            "in": "path",
+            "description": "Persona id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["personas"],
+        "summary": "Handler for `PATCH /personas/{persona_id}`.",
+        "operationId": "patch_persona",
+        "parameters": [
+          {
+            "name": "persona_id",
+            "in": "path",
+            "description": "Persona id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchPersonaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -15815,6 +16126,33 @@
           }
         }
       },
+      "CreatePersonaRequest": {
+        "type": "object",
+        "description": "Request to create a persona. The caller becomes the owner.",
+        "required": ["name", "handle"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable handle, used for `@` mentions."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "system_prompt": {
+            "type": ["string", "null"],
+            "description": "Markdown instructions prepended to every session."
+          }
+        }
+      },
       "CreateProjectRequest": {
         "type": "object",
         "required": ["name"],
@@ -20569,6 +20907,32 @@
           }
         }
       },
+      "PatchPersonaRequest": {
+        "type": "object",
+        "description": "Request to patch a persona.\n\nAbsent fields are left unchanged. The nullable fields distinguish absent\nfrom null: sending `null` clears the field.",
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Avatar URL. `null` clears it."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Description. `null` clears it."
+          },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "Stable handle."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          },
+          "system_prompt": {
+            "type": ["string", "null"],
+            "description": "System prompt. `null` clears it."
+          }
+        }
+      },
       "PatchProjectRequestV2": {
         "type": "object",
         "properties": {
@@ -21119,6 +21483,58 @@
           "yPct": {
             "type": "number",
             "format": "double"
+          }
+        }
+      },
+      "Persona": {
+        "type": "object",
+        "description": "A persona: a user-configured agent identity.\n\nThe configurable half of an agent. The running half is a harness; every\npersona runs on the in-memory agent in this iteration, so the pairing is\nimplicit rather than a field.",
+        "required": [
+          "id",
+          "owner_user_id",
+          "name",
+          "handle",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description shown in settings."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Typed after `@` to mention the persona. Lower kebab-case."
+          },
+          "id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Persona id, in the bot id space."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner_user_id": {
+            "type": "string",
+            "description": "The user who owns and edits the persona."
+          },
+          "system_prompt": {
+            "type": ["string", "null"],
+            "description": "Markdown instructions prepended to the persona's sessions. `None`\nmeans the persona adds nothing beyond the base agent prompt."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last edit time."
           }
         }
       },
