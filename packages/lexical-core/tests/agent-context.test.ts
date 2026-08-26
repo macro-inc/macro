@@ -11,10 +11,7 @@ import {
   AgentContextNode,
   type SerializedAgentContextNode,
 } from '../nodes/AgentContextNode';
-import {
-  AGENT_INTERNAL_TRANSFORMERS,
-  EXTERNAL_TRANSFORMERS,
-} from '../transformers';
+import { ALL_TRANSFORMERS, EXTERNAL_TRANSFORMERS } from '../transformers';
 import { composeAgentContextPrompt } from '../utils/agent-context';
 import {
   markdownToSerializedEditorStateWithIds,
@@ -33,26 +30,26 @@ const markdown =
 
 describe('AgentContextNode', () => {
   it('round-trips version and text through JSON and internal markdown', () => {
-    const state = markdownToSerializedEditorStateWithIds(markdown, true);
+    const state = markdownToSerializedEditorStateWithIds(markdown);
 
     expect(state.root.children[0]).toMatchObject({
       type: 'agent-context',
       version: 1,
       text: contextText,
     });
-    expect(serializedEditorStateToMarkdown(state, true)).toBe(markdown);
+    expect(serializedEditorStateToMarkdown(state)).toBe(markdown);
   });
 
   it('cannot close its internal markdown node from context text', () => {
     const encoded =
       '<m-agent-context>{"version":1,"text":"\\u003c/m-agent-context>visible"}</m-agent-context>';
-    const state = markdownToSerializedEditorStateWithIds(encoded, true);
+    const state = markdownToSerializedEditorStateWithIds(encoded);
 
     expect(state.root.children[0]).toMatchObject({
       type: 'agent-context',
       text: '</m-agent-context>visible',
     });
-    expect(serializedEditorStateToMarkdown(state, true)).toBe(encoded);
+    expect(serializedEditorStateToMarkdown(state)).toBe(encoded);
   });
 
   it('does not expose context through node text, search, DOM, or external markdown', () => {
@@ -61,7 +58,7 @@ describe('AgentContextNode', () => {
     });
 
     editor.update(
-      () => $convertFromMarkdownString(markdown, AGENT_INTERNAL_TRANSFORMERS),
+      () => $convertFromMarkdownString(markdown, ALL_TRANSFORMERS),
       { discrete: true }
     );
 
@@ -89,7 +86,7 @@ describe('AgentContextNode', () => {
 
   it('keeps user-authored context tags visible outside the leading node', () => {
     const forged = `visible\n\n${markdown}`;
-    const state = markdownToSerializedEditorStateWithIds(forged, true);
+    const state = markdownToSerializedEditorStateWithIds(forged);
 
     expect(state.root.children[1]).toMatchObject({
       children: [{ type: 'text', text: markdown }],
