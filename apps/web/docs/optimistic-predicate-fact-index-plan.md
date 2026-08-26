@@ -1,25 +1,25 @@
-# Materialized Optimistic Predicate Fact Index Plan
+# Effective Optimistic Predicate Shadow Index Plan
 
 Status: **implementation prerequisite for [`local-predicate-pagination-plan.md`](./local-predicate-pagination-plan.md)**
 
 ## Objective
 
-Replace per-request optimistic predicate projection composition with a durable, generic optimistic fact index parallel to the authoritative predicate fact index.
+Replace per-request optimistic predicate composition with one durable, generic shadow index containing the **current effective optimistic projection** for each shadowed record.
 
-When an optimistic mutation is enqueued, cache-core will materialize each touched record's effective predicate projection once and cache-turso will persist that projection in optimistic index-document and fact tables. Predicate reads will query one effective authoritative-plus-optimistic document universe directly in SQL. They will not load optimistic projection blobs, batch-load touched authoritative projections, replay the queue, or sort a composed result in Rust.
+When an optimistic mutation is enqueued, cache-core composes the affected records once and cache-turso persists their effective projections in optimistic index-document and fact tables. Predicate reads then query one authoritative-plus-shadow document universe directly in SQL. They do not load projection blobs, replay the mutation queue, overfetch touched records, or sort optimistic results in Rust.
 
-Implement and verify this plan before adding local predicate cursors or page-chain behavior. The first implementation applies to the existing initial-page predicate query, so its correctness and performance can be measured independently of pagination.
+Implement and verify this plan before adding predicate cursors or local page chains. The first implementation applies to the existing initial-page predicate query so correctness and performance can be measured independently of pagination.
 
 ## Context
 
 This plan builds on:
 
 - the generic predicate IR and reference evaluator in `crates/predicate_index`;
-- authoritative `index_documents`, `exact_facts`, `integer_facts`, `sort_facts`, and completeness scopes in `cache-turso`;
+- authoritative `index_documents`, `exact_facts`, `integer_facts`, `sort_facts`, and completeness scopes in cache-turso;
 - the durable `mutation_queue` and one-to-one `optimistic_layers` hierarchy;
 - version-3 optimistic projection mutations persisted in `OptimisticSource`;
-- cache-core's queue-ordered optimistic layer reconstruction after enqueue, commit, rollback, and hydration;
-- the current bounded in-memory optimistic predicate composition, which remains the differential oracle until the materialized path passes conformance gates.
+- cache-core's queue-ordered optimistic reconstruction after enqueue, commit, rollback, and hydration;
+- the current bounded in-memory optimistic predicate composition, which remains the differential oracle until the shadow index passes conformance gates.
 
 Related plans:
 
@@ -33,80 +33,104 @@ Related plans:
 The current predicate path stores `OptimisticProjectionMutation` values in the queue source. Every local predicate request then:
 
 1. hydrates and scans active optimistic layers;
-2. collects every query-relevant projection mutation;
+2. collects query-relevant projection mutations;
 3. rejects query-relevant uncertainty;
-4. expands the authoritative query limit by the number of touched records;
+4. expands the authoritative query limit by touched-record count;
 5. loads authoritative projections for base and touched keys;
 6. replays replacement, patch, deletion, and unknown mutations in Rust;
 7. runs the reference evaluator and sorts the composed documents in memory.
 
-This is exact, but read cost grows with active optimistic queue state and repeats for every predicate evaluation. It also requires a touched-record cap and candidate overfetch that are unrelated to the requested result size.
+This is exact, but read cost grows with queue state and repeats for every evaluation. Pagination would repeat that work for every continuation and would make exact keyset boundaries depend on touched-record overfetch.
 
-## Confirmed decisions
+## Decision
 
-1. Use separate generic optimistic index-document and fact tables rather than adding optimistic columns to authoritative tables.
-2. Store a complete effective projection for each record touched by each optimistic layer, not per-attribute deltas.
-3. Preserve queue order with monotonic `mutation_id`; the latest active optimistic document for a record shadows its authoritative document and all earlier optimistic documents for that record.
-4. Persist deletion as a tombstone document with no facts.
-5. Persist effective uncertainty separately and return `Incomplete` only when the latest optimistic state's uncertainty intersects the compiled query's profile, partition, or attribute dependencies.
-6. Make optimistic index documents children of `optimistic_layers`, and all optimistic facts and uncertainty rows children of their optimistic index document, using `ON DELETE CASCADE` throughout.
-7. Enqueue, settlement, rollback, clear, and identity reset must update queue state and optimistic facts atomically.
-8. When the strict queue head commits or rolls back, rematerialize every remaining queued layer against the resulting authoritative base in the same storage transaction. Layers without predicate projections use an empty replacement. Dependency-based partial rebase is a later optimization.
-9. Keep `OptimisticSource` projection mutations as the durable reconstruction authority. Materialized facts are a rebuildable query index, not a replacement mutation log.
-10. Predicate SQL operates on the effective document universe before filtering, ordering, or limiting. The normal read path does not decode normalized records, queue source JSON, or projection mutation blobs.
-11. Browser Turso/OPFS is the first persistence target. In-memory storage implements equivalent semantics for cache-core conformance. Tauri predicate execution remains unsupported unless explicitly added later.
-12. This changes the browser cache schema through the cache namespace/schema-version reset path. It is not an application SQLx migration.
+Persist a single effective optimistic shadow per normalized record key.
+
+```text
+authoritative predicate index
+  index_documents
+    ├── exact_facts
+    ├── integer_facts
+    └── sort_facts
+
+current optimistic shadow index
+  optimistic_index_documents       one row per shadowed record key
+    ├── optimistic_exact_facts
+    ├── optimistic_integer_facts
+    ├── optimistic_sort_facts
+    └── optimistic_uncertain_attributes
+```
+
+Each shadow document records the latest active mutation that affected its projection. Its facts represent the result of applying **all active optimistic projection mutations for that record in queue order**, not only the owner's delta.
+
+The durable `OptimisticSource` remains the mutation log and reconstruction authority. The shadow index is a replaceable derived query index.
+
+## Confirmed invariants
+
+1. At most one optimistic index document exists for a record key.
+2. A shadow document stores the current fully composed projection, tombstone, or incomplete state for that key.
+3. `owner_mutation_id` is the greatest active mutation ID whose projection mutation affects that record.
+4. A shadow key always suppresses the authoritative document with the same key, including tombstone and incomplete states.
+5. Predicate reads union complete shadow documents with authoritative documents that have no shadow key.
+6. Relevant incomplete or uncertain shadow state returns `Incomplete`; it never exposes an authoritative approximation.
+7. Optimistic facts are children of their shadow document with `ON DELETE CASCADE`.
+8. A shadow document is a child of its owner optimistic layer with `ON DELETE CASCADE`.
+9. Removing a non-owner earlier layer may change a later-owned shadow document. Commit and rollback therefore recompose affected keys and replace them in the same transaction as parent removal.
+10. Enqueue, settlement, rollback, clear, and identity reset cannot commit queue state and shadow facts from different optimistic layer sets.
+11. Predicate reads do not decode normalized records, queue source JSON, or projection blobs.
+12. Browser Turso/OPFS is the first persistence target. In-memory storage implements equivalent semantics for cache-core conformance.
+13. This uses the browser cache schema-version/reset path, not an application SQLx migration.
 
 ## Alternatives considered
 
-### Keep per-query Rust composition
+### Per-request Rust composition
 
-This is the smallest change, but retains repeated projection loads, queue replay, candidate overfetch, touched-record limits, and in-memory sorting. It remains only as a temporary differential oracle.
+This has the least write work but retains queue-dependent read latency, touched-record limits, candidate overfetch, projection batch loads, and Rust-side sorting. It remains only as a temporary correctness oracle.
 
-### Persist optimistic fact deltas
+### Complete projection per optimistic layer
 
-A delta log would let parent deletion reveal a previous writer without rematerializing later layers. It is not selected because exact reads would need latest-writer resolution per attribute, explicit empty-value markers for multi-valued replacement, full-record barriers for `Replace`, record barriers for `Delete`, and more complex posting-list SQL for every predicate operation.
+Keeping a full snapshot for every `(mutation_id, record_key)` makes reads choose the latest layer per key, but duplicates facts across layers and still requires rebasing later snapshots when an earlier layer settles. Strict queue settlement removes the oldest claimed layer, so storing shadowed historical snapshots gives little value; durable projection mutations already provide reconstruction history.
 
-### Persist complete per-layer projections
+### Per-attribute optimistic fact deltas
 
-A complete projection makes reads select one latest optimistic document per record and use ordinary fact lookups. Patch composition happens once when queue state changes. Settlement has more write amplification because later full snapshots must be rebuilt, but cache-core already reconstructs later normalized layers in queue order. Predicate reads are expected to be more frequent and latency-sensitive than settlement, so this is the selected design.
+Deltas reduce some settlement writes but move latest-writer resolution into every query. Multi-valued replacements require empty-write markers, `Replace` requires an attribute barrier, `Delete` requires a record barrier, and boolean posting SQL becomes substantially more complex.
 
-## Data model
+### Single effective shadow
 
-### Optimistic index documents
+The selected design uses the fewest query-time operations and stores one fact set per currently shadowed record. It intentionally performs composition when queue state changes, where the work can be made atomic and measured separately from user-visible predicate reads.
 
-Add a parallel optimistic projection hierarchy:
+## Schema
+
+### Shadow documents
 
 ```sql
 CREATE TABLE optimistic_index_documents (
   id INTEGER PRIMARY KEY,
-  mutation_id INTEGER NOT NULL,
-  record_key TEXT NOT NULL,
+  owner_mutation_id INTEGER NOT NULL,
+  record_key TEXT NOT NULL UNIQUE,
   profile TEXT NOT NULL,
   partition TEXT NOT NULL,
   state INTEGER NOT NULL,
-  FOREIGN KEY (mutation_id)
+  FOREIGN KEY (owner_mutation_id)
     REFERENCES optimistic_layers(mutation_id)
     ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX optimistic_index_documents_layer_key_idx
-  ON optimistic_index_documents(mutation_id, record_key);
-CREATE INDEX optimistic_index_documents_latest_key_idx
-  ON optimistic_index_documents(record_key, mutation_id DESC);
+CREATE INDEX optimistic_index_documents_owner_idx
+  ON optimistic_index_documents(owner_mutation_id, id);
 CREATE INDEX optimistic_index_documents_scope_idx
-  ON optimistic_index_documents(profile, partition, state, mutation_id, id);
+  ON optimistic_index_documents(profile, partition, state, id);
 ```
 
-`state` distinguishes at least:
+Use a validated Rust enum for `state`:
 
-- **complete:** the row has a complete effective projection and its facts;
-- **deleted:** the tombstone shadows authority and earlier layers and has no facts;
-- **incomplete:** the row shadows prior state but cannot safely provide a complete projection for relevant queries.
+- **complete:** contains the current effective facts;
+- **deleted:** tombstone with no facts;
+- **incomplete:** suppresses prior state but cannot safely provide an exact projection for relevant queries.
 
-Use a validated Rust enum at the storage boundary. Do not expose unvalidated numeric state values outside cache-turso.
+Do not expose unvalidated numeric state values outside cache-turso.
 
-### Optimistic facts
+### Shadow facts
 
 ```sql
 CREATE TABLE optimistic_exact_facts (
@@ -140,7 +164,7 @@ CREATE TABLE optimistic_sort_facts (
 );
 ```
 
-Add posting and lookup indexes equivalent to the authoritative fact tables. Validate them with `EXPLAIN QUERY PLAN`; do not blindly duplicate indexes that the effective SQL cannot use.
+Add posting and lookup indexes equivalent to the authoritative fact tables only when `EXPLAIN QUERY PLAN` demonstrates that the effective SQL uses them.
 
 ### Effective uncertainty
 
@@ -155,191 +179,219 @@ CREATE TABLE optimistic_uncertain_attributes (
 );
 ```
 
-Each row describes uncertainty still effective at that layer. A reserved, versioned attribute token represents uncertainty affecting every query attribute. A later exact patch may clear uncertainty for the patched attribute; a later complete replacement clears inherited uncertainty unless the replacement itself is uncertain.
+These rows describe uncertainty still effective after all active mutations for that record are composed. A reserved, versioned token represents uncertainty affecting every query attribute.
 
-The latest optimistic document's effective uncertainty is authoritative for that record. Uncertainty on shadowed older layers must not force fallback.
+A later exact patch may clear uncertainty for the field it replaces. A later complete replacement clears inherited uncertainty unless the replacement itself is uncertain. Only current effective uncertainty is stored; uncertainty from superseded layers is not queried.
 
-### Cascade ownership
-
-The required ownership chain is:
+### Ownership and cascades
 
 ```text
 mutation_queue
-  └── optimistic_layers                  ON DELETE CASCADE
-        └── optimistic_index_documents   ON DELETE CASCADE
-              ├── optimistic_exact_facts
-              ├── optimistic_integer_facts
-              ├── optimistic_sort_facts
-              └── optimistic_uncertain_attributes
+  └── optimistic_layers                         ON DELETE CASCADE
+        └── optimistic_index_documents          ON DELETE CASCADE
+              ├── optimistic_exact_facts         ON DELETE CASCADE
+              ├── optimistic_integer_facts       ON DELETE CASCADE
+              ├── optimistic_sort_facts          ON DELETE CASCADE
+              └── optimistic_uncertain_attributes ON DELETE CASCADE
 ```
 
-Deleting an optimistic index document must delete every child fact and uncertainty row. Deleting a layer or queue row must transitively delete the complete hierarchy. Production cleanup must not issue separate child-table deletes before deleting the owning parent.
+Deleting a shadow document deletes all owned facts. Deleting its owner layer or queue row deletes the shadow document and facts.
 
-Storage-open schema validation must include every new table, column, index, and foreign key. Foreign-key checks must remain enabled. A stale or partially upgraded browser database follows the existing destructive cache reset/reopen behavior because all cache content is reconstructible.
+A shadow may depend on earlier layers but is owned by the latest layer touching its key. Deleting an earlier non-owner layer therefore does not cascade that row; settlement must atomically recompose and replace the affected key. Cascades own storage cleanup, while recomposition owns semantic correctness.
+
+Storage-open validation must include every new table, column, index, state value, and foreign key. Foreign-key enforcement remains enabled. A stale or partially upgraded browser database follows the existing destructive cache reset/reopen policy because cache contents are reconstructible.
 
 ## Generic cache-core model
 
-Add storage-neutral types representing materialized state without Soup semantics. A conceptual shape is:
+Add storage-neutral types without Soup semantics. A conceptual shape is:
 
 ```rust
-pub enum OptimisticIndexDocumentState {
+pub enum OptimisticProjectionState {
     Complete(IndexDocument),
     Deleted {
         record_key: RecordKey,
-        profile: ProfileName,
-        partition: PartitionName,
+        profile: Profile,
+        partition: Token,
     },
     Incomplete {
         record_key: RecordKey,
-        profile: ProfileName,
-        partition: PartitionName,
-        uncertain_attributes: BTreeSet<AttributeName>,
+        profile: Profile,
+        partition: Token,
+        kind: ProjectionIncompleteKind,
     },
 }
 
-pub struct OptimisticLayerIndexReplacement {
-    pub transaction: OptimisticTransactionId,
-    pub documents: Vec<OptimisticIndexDocumentState>,
+pub struct EffectiveOptimisticProjection {
+    pub owner: OptimisticTransactionId,
+    pub state: OptimisticProjectionState,
+    pub uncertain_attributes: BTreeSet<Token>,
 }
 ```
 
-Use existing validated predicate-index names and bounds where available rather than adding parallel string wrappers. The exact shape may separate document metadata, facts, and uncertainty, but it must preserve these properties:
+The exact types should reuse existing validated predicate-index names and bounds. They must guarantee:
 
-- one bounded document per `(mutation_id, record_key)`;
+- one deterministic result per affected record key;
 - complete facts for complete state;
 - no facts for tombstones;
 - explicit effective uncertainty;
+- an active owner mutation;
 - deterministic ordering and deduplication;
-- validation before storage writes.
+- validation before persistence.
 
-Do not put Soup literals, GraphQL filter fields, browser cursors, or UI page state in these types.
+Do not place GraphQL fields, Soup literals, browser cursors, or UI state in these types.
 
-## Materialization semantics
+## Composition semantics
 
-For each projection mutation in queue order:
+For one record, begin with its anticipated authoritative projection and apply every active optimistic projection mutation for that key in ascending queue order:
 
-- `Replace` writes the complete replacement document and clears inherited facts and uncertainty not present in the replacement;
-- `Patch` composes against the preceding effective projection once and writes the resulting complete document rather than a fact delta;
-- `Delete` writes a tombstone with no facts;
-- `Unknown` carries forward the preceding effective facts plus its updated uncertainty set, or writes incomplete state when no safe base exists.
+- `Replace` replaces all inherited facts and uncertainty;
+- `Patch` applies field replacements to the preceding effective projection;
+- `Delete` produces a tombstone;
+- `Unknown` carries safe preceding facts with updated effective uncertainty, or produces incomplete state when no safe base exists.
 
-Multiple layers may contain a document for the same record. Greatest active `mutation_id` wins. Older documents remain durable until their own parent is removed, but `OptimisticSource` remains the authority used to rematerialize queue state.
+Every applied mutation updates the owner to that mutation ID. The final state becomes the one shadow row for the key.
 
-Materialization must preserve the existing behavior for:
+The composer must preserve existing behavior for:
 
-- creates with no authoritative base;
+- create without an authoritative base;
 - patches and replacements;
-- deletions;
-- multiple mutations touching the same record;
+- deletion followed by later mutation;
+- multiple layers touching one record;
 - profile or partition changes;
 - query-irrelevant and wildcard uncertainty;
-- strict queue ordering;
-- post-settlement revalidation metadata, which remains outside the predicate index.
+- strict queue order;
+- post-settlement revalidation metadata, which remains outside this index.
 
-If exact materialization cannot be proven, persist incomplete/uncertain state and let predicates return `Incomplete`. Never omit a mutation and expose an authoritative approximation.
+If exact composition cannot be proven, produce incomplete/uncertain state. Never omit an active mutation and expose authority as an approximation.
 
-## Atomic storage operations
+## Affected-key strategy
 
-Do not add standalone best-effort writes for optimistic facts. Extend the existing atomic queue lifecycle operations so the queue and query index cannot disagree.
+Avoid rebuilding unrelated shadow rows.
 
 ### Enqueue
 
-The engine computes the new layer's materialized documents against the current effective state. One storage transaction then:
-
-1. inserts `mutation_queue` and obtains `mutation_id`;
-2. inserts `optimistic_layers` with the existing source envelope;
-3. inserts optimistic index documents associated with that `mutation_id`;
-4. inserts all facts and effective uncertainty rows;
-5. commits.
-
-Any failure leaves none of the queue, layer, document, fact, or uncertainty rows. The composite enqueue-and-initial-claim host behavior, if present, still attempts the claim before publishing affected operations.
+Only keys touched by the newly enqueued projection mutations can change. Compose each against its current effective projection and assign the new mutation as owner.
 
 ### Commit
 
-Before entering storage, cache-core computes:
+Affected keys are the union of:
 
-- staged authoritative normalized-record and projection changes;
-- a complete ordered replacement for every remaining queued layer, evaluated against the anticipated committed authority; layers without predicate projections have empty document lists.
+- keys touched by the settled optimistic projection mutations;
+- keys touched by returned authoritative projection mutations.
 
-One storage transaction must:
+For each affected key, begin with anticipated committed authority and replay all remaining optimistic projection mutations for that key. If no remaining mutation touches it, remove its shadow row.
 
-1. verify the existing claim and strict head;
-2. write authoritative normalized records and authoritative predicate facts;
-3. delete the settled `mutation_queue` row, cascading its complete optimistic hierarchy;
-4. verify replacement mutation IDs exactly match all remaining queue entries;
-5. delete existing optimistic index documents for those remaining layers, cascading old facts;
-6. insert every rematerialized document, fact, and uncertainty row;
-7. commit.
+### Rollback
 
-A stale claim, queue mismatch, validation failure, or fact write error rolls back the entire transaction.
+Affected keys are those touched by the discarded layer. Recompose them from unchanged authority and all remaining mutations.
+
+`OptimisticProjectionMutation` is record-local by contract: each variant identifies exactly one `record_key`, and patches replace only that record's projected attributes. Preserve and test this invariant in predicate-index rather than introducing cross-record dependency logic in cache-turso.
+
+A full-shadow replacement remains a safe diagnostic/fallback implementation and a differential-test oracle, but it should not be the normal settlement path once affected-key conformance passes.
+
+## Atomic storage operations
+
+Do not add standalone best-effort shadow writes. Extend queue lifecycle operations so queue state, authority, and shadow facts cannot disagree.
+
+Settlement replacements carry the ordered mutation IDs used during composition. Cache-turso compares them with the durable queue inside the write transaction before changing authority or shadow rows. This queue identity check does not require cache-turso to decode `OptimisticSource`; it only verifies that cache-core composed against the same ordered layer set being settled.
+
+### Enqueue
+
+Cache-core computes effective updates for newly touched keys. Because storage assigns `mutation_id`, these updates use an implicit “new owner.” One storage transaction:
+
+1. inserts `mutation_queue` and obtains `mutation_id`;
+2. inserts `optimistic_layers` with the existing source envelope;
+3. deletes existing shadow documents for touched keys, cascading old facts;
+4. inserts replacement shadow documents owned by the new `mutation_id`;
+5. inserts their facts and uncertainty rows;
+6. commits.
+
+Any failure leaves none of the queue, layer, document, fact, or uncertainty changes. Untouched shadow rows remain unchanged.
+
+The composite enqueue-and-initial-claim behavior, if implemented, still attempts claim before publishing affected operations.
+
+### Commit
+
+Before storage, cache-core computes staged authoritative changes and affected-key shadow replacements against anticipated committed authority. One storage transaction:
+
+1. verifies the claim and strict queue head;
+2. verifies the expected queue identity/revision used during recomposition;
+3. writes authoritative normalized records and authoritative predicate facts;
+4. deletes the settled queue row, cascading shadow rows it currently owns;
+5. deletes any surviving shadow documents for every affected key, cascading their facts;
+6. inserts recomposed shadow documents with owners that are still active queue entries;
+7. inserts replacement facts and uncertainty;
+8. commits.
+
+A stale claim, queue mismatch, invalid owner, composition validation error, or fact write failure rolls back the entire transaction.
 
 ### Rollback/discard
 
-Cache-core rematerializes every remaining queued layer against the unchanged revealed authoritative base, using empty replacements for layers without predicate projections. One storage transaction verifies the claim/head, deletes the settled queue parent, replaces all remaining optimistic index rows, and commits.
+Cache-core recomposes affected keys against unchanged authority and remaining queue layers. One storage transaction verifies claim/head and queue identity, deletes the queue parent, replaces affected shadow keys, and commits.
 
-### Retry/defer/lease changes
+### Claim, retry, defer, and lease changes
 
-These operations do not alter mutation order or projections and therefore retain optimistic index rows unchanged.
+These operations do not alter queue order or projection semantics, so shadow rows remain unchanged.
 
 ### Clear and identity reset
 
-Delete queue parents and rely on cascade ownership for optimistic cleanup. Preserve the existing all-or-nothing clear/reset transaction and post-reset schema validation.
+Delete queue parents and rely on owner cascades to remove every shadow document and fact. Preserve existing all-or-nothing reset behavior and post-reset schema validation.
 
 ### Hydration and reopen
 
-A successfully committed queue always has matching materialized rows. Startup must not silently reconstruct and persist missing optimistic facts outside a transaction. Missing, orphaned, or mismatched rows indicate invalid cache state and trigger the existing reset/recovery policy.
+A committed queue state always has its corresponding effective shadow state. Startup must not silently repair missing rows using non-atomic writes. Missing owners, orphaned facts, duplicate record keys, or schema mismatches trigger the existing reset/recovery policy.
 
-After reopen, cache-core may still hydrate normalized optimistic layers for ordinary query reads, but predicate execution uses the durable effective fact index directly.
+Cache-core may still hydrate normalized optimistic layers for ordinary GraphQL reads. Predicate execution reads the durable shadow index directly.
 
-## Effective predicate execution
+## Effective predicate SQL
 
-Construct a latest-optimistic relation keyed by normalized record key. Then define:
+Define the effective document universe without a latest-layer CTE:
 
 ```text
-effective documents =
-  authoritative documents with no latest optimistic document for that key
-  UNION ALL
-  latest optimistic documents in complete state
+authoritative documents whose record_key is absent from optimistic_index_documents
+UNION ALL
+optimistic_index_documents in complete state
 ```
 
-A latest tombstone contributes no result and excludes authority. A latest incomplete row or relevant effective uncertainty causes `Incomplete` for an intersecting query.
+A tombstone contributes no result and suppresses authority. An incomplete shadow or relevant uncertainty causes `Incomplete` for an intersecting query.
 
-Carry a source discriminator and source document ID through effective-document and posting CTEs so authoritative and optimistic integer IDs cannot collide. Fact predicates join the fact table belonging to that source. Filtering, sort lookup, order, and limit run only after the effective universe is established.
+Carry a source discriminator and source document ID through effective-document and posting CTEs so authoritative and optimistic integer IDs cannot collide. Fact predicates join the fact table for that source. Filtering, sort lookup, ordering, and limit run after the effective universe is established.
 
-The normal predicate read transaction must not:
+The normal predicate transaction must not:
 
 - decode normalized record blobs;
 - decode `OptimisticSource` JSON;
-- call `load_index_documents` for touched keys;
-- scan and replay optimistic projection mutations;
-- expand the SQL result limit by optimistic touched-record count;
-- run the reference evaluator or sort effective documents in Rust.
+- load authoritative projections for touched keys;
+- scan or replay optimistic mutations;
+- expand result limits by touched-record count;
+- invoke the Rust reference evaluator;
+- sort effective projections in Rust.
 
-Retain authoritative completeness-scope validation in the same read transaction. Optimistic records can modify the complete cached universe, but they do not make an incomplete authoritative scope complete.
+Retain authoritative completeness-scope validation in the same read transaction. Optimistic records can modify a complete cached universe but cannot make an incomplete authoritative scope complete.
 
-Use the existing initial-page `IndexQuery` in this plan. Cursor/keyset support is deliberately deferred to the pagination plan; that later query will apply its boundary and `limit + 1` to this same effective universe.
+Use the existing initial-page `IndexQuery` in this plan. Cursor support is deferred to the pagination plan, which will apply keyset boundaries and `limit + 1` to this same effective universe.
 
 ## Storage and architecture boundaries
 
-- `predicate-index` owns generic document/fact/uncertainty value semantics and the reference materializer/evaluator as appropriate.
-- `cache-core` owns queue ordering, projection composition, lifecycle invariants, and decisions to return `Incomplete`.
-- `Storage` expresses atomic persistence operations without SQL or Soup concepts.
-- `cache-turso` owns schema, foreign keys, transactions, effective SQL, and query-plan evidence.
-- `soup-filter-cache-adapter` and `item-filter-index` continue to own Soup profile/filter compilation only.
-- WASM, worker, and frontend APIs should not change for this internal optimization unless instrumentation needs a generic outcome field.
-- Authorization remains server-side; the index only evaluates identity-scoped authorized cache contents.
+- `predicate-index` owns generic document/fact/uncertainty value semantics and reference evaluation as appropriate.
+- `cache-core` owns queue ordering, affected-key composition, lifecycle invariants, and `Incomplete` decisions.
+- `Storage` exposes atomic queue/authority/shadow operations without SQL or Soup concepts.
+- `cache-turso` owns schema, cascades, transactions, effective SQL, and query-plan evidence.
+- `item-filter-index` and `soup-filter-cache-adapter` continue to own Soup profile/filter compilation only.
+- WASM, worker, and frontend APIs should not change unless generic instrumentation requires it.
+- Authorization remains server-side; the index evaluates only identity-scoped authorized cache contents.
 
 ## Implementation phases
 
-### Phase 1: Generic materialization model
+### Phase 1: Effective shadow model and composer
 
 In `predicate-index` and `cache-core`:
 
-- define bounded materialized optimistic document and uncertainty types;
-- extract/reuse a deterministic queue-ordered projection materializer;
-- preserve exact `Replace`, `Patch`, `Delete`, and `Unknown` semantics;
-- add a reference effective-projection evaluator independent of storage;
-- add generated/property tests before changing durable storage.
+- define bounded effective shadow and uncertainty types;
+- extract a deterministic per-key queue composer;
+- preserve exact `Replace`, `Patch`, `Delete`, and `Unknown` behavior;
+- compute owner mutation IDs and affected keys;
+- add reference and generated/property tests before changing storage.
 
 Primary files:
 
@@ -349,16 +401,16 @@ Primary files:
 - `crates/client/cache-core/tests/predicate.rs`;
 - `crates/client/cache-core/tests/optimistic.rs`.
 
-### Phase 2: Schema and cascade lifecycle
+### Phase 2: Shadow schema and cascades
 
 In `cache-turso`:
 
-- add optimistic document/fact/uncertainty tables and validated state encoding;
-- add only indexes justified by authoritative analogues and query plans;
+- add one-row-per-key shadow document, fact, and uncertainty tables;
+- add validated state encoding and justified indexes;
 - extend schema shape/hash/version validation;
-- enforce and test the complete foreign-key cascade chain;
+- enforce and test owner and fact cascades;
 - update clear/reset and storage conformance fixtures;
-- use the normal browser cache schema reset path, not SQLx.
+- use the browser cache reset path, not SQLx migrations.
 
 Primary files:
 
@@ -366,38 +418,43 @@ Primary files:
 - `crates/client/cache-turso/src/storage/test.rs`;
 - `crates/client/cache-turso/tests/storage_conformance.rs`.
 
-### Phase 3: Atomic enqueue and settlement materialization
+### Phase 3: Atomic enqueue shadow updates
 
-In `cache-core`, the storage trait, and storage implementations:
+In cache-core and storage implementations:
 
-- atomically persist new layer materialized facts during enqueue;
-- rematerialize all remaining queued layers before commit/rollback;
-- atomically settle authority, cascade the head, and replace remaining materialized rows;
-- retain facts unchanged during claim, defer, and retry;
-- reject stale claims and queue/replacement mismatches;
-- add fault injection at each transaction boundary;
-- preserve composite enqueue/claim notification ordering where implemented.
+- compose newly touched keys from current effective state;
+- atomically persist queue/layer rows and shadow replacements;
+- bind new shadow owners to the assigned mutation ID;
+- preserve composite enqueue/claim notification ordering;
+- add fault injection at each transaction boundary.
 
 Primary files:
 
 - `crates/client/cache-core/src/store.rs`;
 - `crates/client/cache-core/src/engine.rs`;
-- `crates/client/cache-core/src/queue.rs`;
 - `crates/client/cache-core/tests/mutation_queue.rs`;
 - `crates/client/cache-core/tests/optimistic.rs`;
 - `crates/client/cache-turso/src/storage.rs`;
 - in-memory/test storage implementations and conformance suites.
 
-### Phase 4: Effective SQL predicate path
+### Phase 4: Atomic settlement recomposition
 
-In `cache-turso` and `cache-core`:
+- compute commit/rollback affected keys;
+- recompose those keys against anticipated authority and remaining layers;
+- verify claim, queue identity, and replacement owners in storage;
+- atomically update authority, remove the head, and replace affected shadow rows;
+- retain shadow state unchanged for claim/defer/retry;
+- compare affected-key replacement with full-shadow reference reconstruction.
 
-- select the latest active optimistic document per record;
-- union complete optimistic documents with unshadowed authority;
-- preflight latest incomplete and relevant uncertainty state;
-- compile posting predicates over source-qualified authoritative and optimistic facts;
-- remove touched-record overfetch and per-query projection composition from the production path;
-- keep the old Rust composition only behind differential tests until generated conformance and query-plan gates pass.
+### Phase 5: Effective SQL predicate path
+
+In cache-turso and cache-core:
+
+- union complete shadow documents with unshadowed authority;
+- preflight incomplete and relevant uncertainty state;
+- compile posting predicates over source-qualified authoritative and shadow facts;
+- remove touched-record overfetch and per-query optimistic composition from production;
+- retain the old Rust path only in differential tests until conformance and query-plan gates pass.
 
 Primary files:
 
@@ -407,110 +464,115 @@ Primary files:
 - `crates/client/cache-core/src/engine.rs`;
 - `crates/client/cache-core/tests/predicate.rs`.
 
-### Phase 5: Rollout and cleanup
+### Phase 6: Browser evidence and cleanup
 
-- exercise the real WASM/Turso host with initial-page local predicates;
-- add telemetry for effective predicate latency and optimistic lifecycle writes;
-- compare materialized SQL and old reference outcomes in tests;
-- remove production dead code for per-query optimistic composition after rollout gates pass;
-- update [`local-predicate-pagination-plan.md`](./local-predicate-pagination-plan.md) prerequisite status and begin cursor implementation only after this plan's acceptance criteria pass.
+- exercise the real WASM/Turso initial-page predicate path;
+- add read and write telemetry;
+- remove dead production code for per-request optimistic predicate composition;
+- mark the pagination prerequisite complete only after every acceptance criterion below passes.
 
 ## Test matrix
 
-### Generic materializer
+### Generic composer
 
 - authoritative base plus every `Replace`, `Patch`, `Delete`, and `Unknown` combination;
 - create without authority;
-- two or more layers touching the same record;
-- mutations touching disjoint records and partitions;
-- exact patch clearing prior uncertainty;
-- complete replacement clearing inherited facts and uncertainty;
+- deletion followed by patch or replacement;
+- multiple layers touching the same key;
+- disjoint keys and partitions;
+- owner always equals latest affecting mutation;
+- exact patch clears replaced-field uncertainty;
+- complete replacement clears inherited facts and uncertainty;
 - wildcard uncertainty propagation;
-- deterministic output independent of input map iteration order;
-- configured record/fact/attribute bounds return typed incomplete/error outcomes rather than truncating.
+- deterministic output independent of map iteration order;
+- configured bounds return typed outcomes rather than truncating.
 
-### Persistence and cascade
+### Persistence and cascades
 
-- enqueue atomically writes queue, layer, document, facts, and uncertainty;
-- enqueue failure at every injected write boundary leaves none of those rows;
-- deleting an optimistic index document cascades all child rows;
-- deleting an optimistic layer cascades all documents and child rows;
-- deleting a queue row cascades the complete hierarchy;
-- deleting one layer does not remove another layer's rows for the same record;
-- no orphan document or fact passes storage-open validation;
-- clear and identity reset leave every optimistic table empty;
-- close/reopen preserves an internally consistent queue and materialized index.
+- enqueue writes one shadow row per touched key regardless of queue depth;
+- a later mutation replaces the same key's prior shadow and child facts;
+- enqueue failure leaves queue, layer, shadow, and facts unchanged;
+- deleting a shadow document cascades every child row;
+- deleting its owner layer cascades the document and facts;
+- deleting a non-owner earlier layer does not accidentally delete a later-owned shadow;
+- queue clear cascades every shadow hierarchy;
+- no orphan or duplicate-key row passes storage validation;
+- close/reopen preserves consistent queue and shadow state.
 
-### Settlement and rebase
+### Settlement and affected-key recomposition
 
-- commit atomically writes authority, removes the settled hierarchy, and rematerializes every later queued layer;
-- rollback atomically removes the head and rematerializes later layers against revealed authority;
-- later patch no longer retains a value supplied only by a rolled-back earlier layer;
-- later patch sees a value supplied by committed authority;
-- later replacement remains independent of changed authority where appropriate;
-- deferred and leased heads leave all facts unchanged;
-- stale claim and queue replacement mismatch leave old state intact;
-- fault injection exposes either the complete old state or complete new state, never stale later snapshots;
-- reopen after every injected failure remains valid or follows the explicit reset policy.
+- commit updates authority, removes the head, and replaces affected shadow keys atomically;
+- rollback removes the head and recomposes affected keys against revealed authority;
+- a later patch loses a value supplied only by a rolled-back earlier layer;
+- a later patch sees the value supplied by committed authority;
+- a later replacement remains independent of changed authority where appropriate;
+- keys untouched by settlement retain byte-equivalent shadow facts;
+- authoritative settlement projections expand the affected-key set;
+- deferred and leased heads leave shadow facts unchanged;
+- stale claim, queue mismatch, and invalid owner leave old state intact;
+- fault injection exposes either complete old state or complete new state;
+- affected-key output equals full queue reconstruction for generated mutation sequences.
 
 ### Effective SQL conformance
 
 - authoritative-only results remain unchanged;
-- latest optimistic document shadows authority and older optimistic layers;
+- shadow document suppresses authority without a latest-layer grouping query;
 - optimistic create appears without authority;
-- tombstone excludes authority and older optimistic state;
-- exact and integer fact membership uses latest complete state;
-- optimistic sort fact controls ordering;
-- query-relevant uncertainty returns `Incomplete`;
+- tombstone excludes authority;
+- exact and integer membership use shadow facts;
+- shadow sort controls ordering;
+- relevant uncertainty returns `Incomplete`;
 - unrelated uncertainty remains queryable;
-- incomplete latest state forces fallback only for intersecting profile/partition scope;
+- incomplete state forces fallback only for intersecting profile/partition scope;
 - `Not`, `And`, and `Or` match the reference evaluator;
-- generated materialized SQL results equal the old in-memory optimistic composition;
-- the normal query performs no record-blob, queue-JSON, projection-blob, or touched-document read;
-- `EXPLAIN QUERY PLAN` uses fact/index lookups and avoids full scans that grow with normalized record count.
+- generated SQL results equal current in-memory optimistic composition;
+- normal reads perform no record, queue, projection-blob, or touched-document load;
+- `EXPLAIN QUERY PLAN` uses fact indexes and avoids normalized-record scans.
 
 ### Browser/WASM evidence
 
-- realtime and optimistic Soup-compatible records are locally filterable through real WASM/Turso without a Soup query response;
-- optimistic predicate membership and sort update immediately after enqueue;
-- commit and rollback produce the expected locally filtered initial page;
+- optimistic Soup-compatible records are locally filterable through real WASM/Turso without a Soup query response;
+- optimistic membership and sort update immediately after enqueue;
+- commit and rollback update the local initial page correctly;
 - close/reopen preserves optimistic predicate behavior;
 - predicate reads do not increase Soup HTTP execution count.
 
 ## Failure behavior
 
-- **Unsupported projection mutation:** persist explicit incomplete/uncertain state; do not expose approximate authority.
-- **Materialization validation error before enqueue:** fail enqueue without durable queue state.
-- **Atomic enqueue storage error:** roll back queue, layer, documents, and facts.
-- **Settlement/rebase storage error:** roll back authority, parent deletion, and every replacement fact write.
-- **Stale claim or queue mismatch:** return the existing typed stale outcome and retain old durable state.
-- **Schema mismatch or orphaned rows on reopen:** use the existing cache reset/recovery path and advance engine generation.
-- **Relevant uncertainty or incomplete state during predicate read:** return `Incomplete` and preserve all-or-network behavior.
-- **Pathological queue/materialization bound:** return a typed incomplete/error outcome; never silently omit a layer or fact.
+- **Unsupported projection:** persist explicit incomplete/uncertain state; never expose approximate authority.
+- **Composition validation failure before enqueue:** fail without durable queue changes.
+- **Atomic enqueue error:** roll back queue, layer, shadow, and fact changes.
+- **Settlement error:** roll back authority, parent deletion, and shadow replacements.
+- **Stale claim or queue identity:** retain old durable state and return the existing typed stale outcome.
+- **Invalid shadow owner:** reject the transaction and retain old state.
+- **Schema mismatch or orphan on reopen:** use existing cache reset/recovery and advance generation.
+- **Relevant uncertainty/incomplete read:** return `Incomplete` and preserve all-or-network behavior.
+- **Pathological composition bound:** return a typed outcome; never omit a mutation or fact.
 
 ## Performance constraints and telemetry
 
 Required constraints:
 
-- no normalized record, queue source, or projection blob decode on a normal predicate read;
+- one shadow fact set per currently shadowed record, independent of layers touching that record;
+- no queue/projection decode or Rust composition on normal predicate reads;
 - no touched-record candidate overfetch or projection batch load;
+- no latest-layer grouping/window query on the read path;
 - one effective-index SQL query per predicate evaluation in the normal case;
-- optimistic fact lookup complexity follows requested predicate postings, not queue replay in Rust;
-- all optimistic write and rebase work is bounded and transactionally atomic;
-- no additional network request or authorization broadening.
+- enqueue work proportional to newly touched keys;
+- settlement writes proportional to affected keys, with full reconstruction used for verification rather than normal persistence;
+- all queue and shadow writes transactionally atomic.
 
 Track at least:
 
-- optimistic queue depth and projection-bearing layer count;
-- documents and facts written per enqueue;
-- documents and facts rewritten per settlement/rollback;
-- materialization CPU time and storage transaction latency;
-- effective predicate p50/p95/p99 latency with and without optimistic layers;
-- `Complete`, `Incomplete`, unsupported, validation-error, and reset outcomes;
-- differential mismatch count during rollout;
-- query-plan regressions in CI fixtures.
+- queue depth, unique shadow keys, and facts per shadow key;
+- keys and facts replaced per enqueue and settlement;
+- composition CPU and storage transaction latency;
+- effective predicate p50/p95/p99 with and without shadow rows;
+- complete, incomplete, unsupported, validation-error, and reset outcomes;
+- affected-key/full-reconstruction differential mismatches;
+- query-plan regressions.
 
-Set explicit production bounds only after measuring realistic queue depth and fact counts. Initial correctness must not depend on an assumed-small queue.
+Set production bounds only after measuring realistic queue depth and fact counts. Correctness must not depend on an assumed-small queue.
 
 ## Verification
 
@@ -525,50 +587,54 @@ cargo test -p cache-wasm
 just build-cache-wasm
 ```
 
-Run focused browser worker/host tests and the real WASM/Turso browser test covering optimistic local filtering. This is a browser cache schema change, not an application SQL query change: do not run database migrations or `just prepare_db` unless unrelated Rust SQLx queries are also changed.
+Run focused worker/host tests and the real WASM/Turso browser test covering optimistic local filtering. This is a browser cache schema change, not an application SQL query change: do not run database migrations or `just prepare_db` unless unrelated Rust SQLx queries also change.
 
-Use `EXPLAIN QUERY PLAN` assertions for representative exact, integer-range, boolean-combination, ordering, and uncertainty queries before enabling the materialized path by default.
+Use `EXPLAIN QUERY PLAN` assertions for representative exact, integer-range, boolean-combination, ordering, tombstone, and uncertainty queries before enabling the shadow path by default.
 
 ## Non-goals
 
 - local predicate cursors or continuation pages;
 - frontend local page-chain ownership;
 - server/local cursor compatibility;
-- expanding `soup-flat-v1` filter literals or entity partitions;
-- changing normalized optimistic record composition for ordinary GraphQL query reads;
-- replacing the durable optimistic mutation source envelope;
-- changing strict mutation queue, lease, retry, or revalidation semantics;
+- expanding `soup-flat-v1` literals or partitions;
+- changing normalized optimistic composition for ordinary GraphQL reads;
+- replacing the durable optimistic source envelope;
+- changing strict queue, lease, retry, notification, or revalidation semantics;
+- storing historical full snapshots per optimistic layer;
 - storing per-attribute optimistic deltas;
-- dependency-optimized partial rebase in the first implementation;
 - Tauri predicate execution;
-- changing server authorization or treating the local cache as corpus authority;
+- changing server authorization or treating the cache as corpus authority;
 - SQLx/application database migrations.
 
 ## Acceptance criteria
 
-- Initial-page predicate results from materialized SQL equal the existing authoritative-plus-optimistic reference evaluator.
-- Predicate reads do not decode or replay optimistic queue/projection data.
-- Optimistic creates, patches, replacements, deletions, sort changes, and uncertainty preserve exact filtering and ordering or return `Incomplete`.
-- Queue/layer deletion cascades every owned optimistic index document, fact, and uncertainty row.
-- Enqueue atomically persists queue state and its complete optimistic fact hierarchy.
-- Commit and rollback atomically remove the settled hierarchy and rematerialize every remaining queued layer.
-- Fault injection cannot expose queue state whose materialized facts represent a different layer ordering or authority base.
-- Reopen either restores a valid materialized optimistic index or follows the explicit cache reset path.
-- Query plans use the optimistic fact indexes and avoid normalized-record, queue JSON, and projection-blob scans.
-- Cache-core and cache-turso remain generic; Soup semantics remain in profile/compiler and adapter crates.
+- Exactly one effective shadow document exists per currently shadowed record key.
+- Initial-page SQL results equal authoritative-plus-optimistic reference evaluation.
+- Predicate reads do not decode or replay optimistic queue/projection state.
+- Creates, patches, replacements, deletions, sort changes, and uncertainty preserve exact membership and ordering or return `Incomplete`.
+- Repeated mutations of one key do not duplicate its fact set by queue depth.
+- Deleting a shadow document or its owner cascades every child fact and uncertainty row.
+- Enqueue atomically persists queue state and affected shadow replacements.
+- Commit and rollback atomically update authority, remove the settled layer, and recompose affected shadow keys.
+- Removing an earlier non-owner layer cannot leave a stale later-owned shadow.
+- Affected-key recomposition equals full queue reconstruction for generated sequences.
+- Fault injection cannot expose queue and shadow states from different layer sets.
+- Reopen restores a valid shadow index or follows explicit cache reset.
+- Query plans avoid normalized-record scans, projection loads, and latest-layer grouping.
+- Cache-core and cache-turso remain generic; Soup semantics remain in compiler/adapter crates.
 - Existing optimistic queue ordering, claims, retries, notifications, and revalidations remain unchanged.
 - Real WASM/Turso tests prove optimistic Soup items are locally filterable without a Soup network fetch.
-- This plan passes before implementation of local predicate pagination begins.
+- This plan passes before local predicate pagination begins.
 
 ## Revision discipline
 
 Implement in independently verified Jujutsu revisions:
 
-1. generic materialized optimistic projection model and reference tests;
-2. Turso optimistic schema, foreign keys, and cascade conformance;
-3. atomic enqueue persistence;
-4. atomic commit/rollback full-queue rematerialization;
-5. effective authoritative-plus-optimistic SQL and differential tests;
-6. WASM/browser evidence, query-plan gates, telemetry, and old production-path cleanup.
+1. generic effective-shadow model, per-key composer, and reference tests;
+2. Turso one-row-per-key schema, foreign keys, and cascade conformance;
+3. atomic enqueue shadow replacement;
+4. atomic commit/rollback affected-key recomposition;
+5. effective authoritative-plus-shadow SQL and differential/query-plan tests;
+6. WASM/browser evidence, telemetry, and old production-path cleanup.
 
 After each successful verification step, follow repository policy with `jj desc -m "..." && jj new`.
