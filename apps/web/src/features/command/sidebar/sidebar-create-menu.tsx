@@ -11,7 +11,7 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@icon/square-pen-create.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export const SidebarCreateMenu = (props: {
@@ -26,11 +26,16 @@ export const SidebarCreateMenu = (props: {
   placement?: 'right-start' | 'bottom-start';
   onMenuOpenChange?: (open: boolean) => void;
   onAgentSelect?: () => void;
+  excludedLabels?: readonly string[];
 }) => {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
   const blocks = useCreateMenuBlocks();
+  const visibleBlocks = createMemo(() => {
+    const excluded = new Set(props.excludedLabels ?? []);
+    return blocks().filter((block) => !excluded.has(block.label));
+  });
 
   const runBlock = (block: CreatableBlock, event?: KeyboardEvent) => {
     if (block.blockName === 'chat' && props.onAgentSelect) {
@@ -67,7 +72,7 @@ export const SidebarCreateMenu = (props: {
       return true;
     }
 
-    const matchingBlock = blocks().find((block) => {
+    const matchingBlock = visibleBlocks().find((block) => {
       const shiftedHotkey = `shift+${block.hotkey}`;
       return (
         context.pressedKeysString === block.hotkey ||
@@ -170,7 +175,7 @@ export const SidebarCreateMenu = (props: {
       </Show>
       <Dropdown.Content class="min-w-52 shadow-menu">
         <Dropdown.Group>
-          <For each={blocks()}>
+          <For each={visibleBlocks()}>
             {(block, index) => (
               <Dropdown.Item
                 class="min-h-9 gap-2 px-2.5"

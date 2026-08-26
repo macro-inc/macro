@@ -1332,6 +1332,42 @@ html[data-theme-light="true"] .experimental-v5-drive-tag[data-active] {
   );
 }
 
+/* V6 owns its Drive tag treatment independently from the frozen V5 layout. */
+.experimental-v6-drive-tag {
+  color: color-mix(in srgb, var(--drive-tag-color) 72%, var(--color-ink));
+  background-color: color-mix(
+    in srgb,
+    var(--drive-tag-color) 12%,
+    transparent
+  );
+}
+
+.experimental-v6-drive-tag[data-active] {
+  background-color: color-mix(
+    in srgb,
+    var(--drive-tag-color) 36%,
+    transparent
+  );
+}
+
+html[data-theme-light="true"] .experimental-v6-drive-tag {
+  color: color-mix(in srgb, var(--drive-tag-color) 62%, var(--color-ink));
+  background-color: color-mix(
+    in srgb,
+    var(--drive-tag-color) 26%,
+    transparent
+  );
+}
+
+html[data-theme-light="true"] .experimental-v6-drive-tag[data-active] {
+  color: color-mix(in srgb, var(--drive-tag-color) 52%, var(--color-ink));
+  background-color: color-mix(
+    in srgb,
+    var(--drive-tag-color) 48%,
+    transparent
+  );
+}
+
 /* Empty-state illustration entrance: a one-shot 3D rise that tilts the
    graphic up into place from its base. The illustration's internal layers
    stagger-fade on their own (see the <style> inside each SVG). Plays once

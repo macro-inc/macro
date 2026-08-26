@@ -9,6 +9,7 @@ export type AppLayoutCapabilities = {
   compactSplitHeader: boolean;
   removesSplitContentLeftPadding: boolean;
   removesSplitContentTopPadding: boolean;
+  removesSplitContentBottomPadding?: boolean;
 };
 
 export type AppLayoutDefinition = {
@@ -29,6 +30,10 @@ const V2_CONTENT_OWNED_CHROME = new Set([
   'inbox',
   'mail',
   'tasks',
+]);
+const V6_CONTENT_OWNED_CHROME = new Set([
+  ...V2_CONTENT_OWNED_CHROME,
+  'notifications',
 ]);
 
 export const APP_LAYOUT_DEFINITIONS = [
@@ -141,6 +146,31 @@ export const APP_LAYOUT_DEFINITIONS = [
       crm: 'CRM',
       library: 'Drive',
       machines: 'Brain',
+      messages: 'Chat',
+    },
+  },
+  {
+    id: 'experimental-v6',
+    label: 'Experimental v6',
+    splitPanelRenderer: 'v2-composed',
+    capabilities: {
+      experimentalSurfaces: true,
+      usesNewInbox: true,
+      usesMessagesWorkspace: true,
+      usesBrainWorkspace: true,
+      usesCalendarWorkspace: true,
+      usesFloatingSplitClose: true,
+      hidesGlobalSidebar: true,
+      compactSplitHeader: true,
+      removesSplitContentLeftPadding: true,
+      removesSplitContentTopPadding: true,
+      removesSplitContentBottomPadding: true,
+    },
+    contentOwnedSplitChrome: V6_CONTENT_OWNED_CHROME,
+    experimentalViewNames: {
+      crm: 'CRM',
+      library: 'Drive',
+      machines: 'Agents',
       messages: 'Chat',
     },
   },

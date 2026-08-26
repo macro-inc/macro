@@ -128,6 +128,8 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
               activeAppLayout().capabilities.removesSplitContentLeftPadding),
           'pt-0':
             activeAppLayout().capabilities.removesSplitContentTopPadding,
+          'pb-0':
+            activeAppLayout().capabilities.removesSplitContentBottomPadding,
         })}
       >
         <Show

@@ -96,9 +96,19 @@ export type UnifiedListMeta = {
   viewId: ViewId;
 };
 
-export type ComponentMeta = UnifiedListMeta | { kind?: undefined };
+export type EmailComposeMeta = {
+  kind: 'email-compose';
+  draftId?: string;
+  hasDraft: boolean;
+};
+
+export type ComponentMeta =
+  | UnifiedListMeta
+  | EmailComposeMeta
+  | { kind?: undefined };
 
 export type ComponentMetaMap = {
+  'email-compose': EmailComposeMeta;
   'unified-list': UnifiedListMeta;
 };
 
@@ -587,25 +597,29 @@ registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
   return <ChannelCompose />;
 });
-registerComponent('email-compose', (params) => {
-  usePageViewTracking('email-compose');
-  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
-  const toParam = new URLSearchParams(window.location.search).get('to');
-  const paramsInitialTo = Array.isArray(params.initialTo)
-    ? params.initialTo.filter(
-        (value): value is string => typeof value === 'string'
-      )
-    : undefined;
-  const initialTo =
-    paramsInitialTo ??
-    toParam
-      ?.split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-  const draftID =
-    typeof params.draftID === 'string' ? params.draftID : undefined;
-  return <EmailCompose draftID={draftID} initialTo={initialTo} />;
-});
+registerComponent(
+  'email-compose',
+  (params) => {
+    usePageViewTracking('email-compose');
+    // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+    const toParam = new URLSearchParams(window.location.search).get('to');
+    const paramsInitialTo = Array.isArray(params.initialTo)
+      ? params.initialTo.filter(
+          (value): value is string => typeof value === 'string'
+        )
+      : undefined;
+    const initialTo =
+      paramsInitialTo ??
+      toParam
+        ?.split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+    const draftID =
+      typeof params.draftID === 'string' ? params.draftID : undefined;
+    return <EmailCompose draftID={draftID} initialTo={initialTo} />;
+  },
+  { hasDraft: false }
+);
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;

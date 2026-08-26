@@ -578,6 +578,16 @@ function LayoutInner(props: RouteSectionProps) {
             <div class="min-h-0 min-w-0 flex-1">
               {props.children}
             </div>
+            <Show
+              when={
+                isSidebarVisible() &&
+                activeAppLayoutSurfaces()?.GlobalBottomBar
+              }
+            >
+              {(GlobalBottomBarSurface) => (
+                <Dynamic component={GlobalBottomBarSurface()} />
+              )}
+            </Show>
           </div>
         </ItemDndProvider>
       </div>

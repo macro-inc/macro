@@ -41,6 +41,19 @@ import {
   ExperimentalSoupLayout as ExperimentalSoupLayoutV5,
   experimentalSoupViewForContent as experimentalSoupViewForContentV5,
 } from '@app/features/experimental-app-layout-v5/experimental-soup-layout';
+import { ExperimentalActivityView as ExperimentalActivityViewV6 } from '@app/features/experimental-app-layout-v6/experimental-activity-view';
+import { ExperimentalAppSidebar as ExperimentalAppSidebarV6 } from '@app/features/experimental-app-layout-v6/experimental-app-sidebar';
+import { ExperimentalAutomationCard as ExperimentalAutomationCardV6 } from '@app/features/experimental-app-layout-v6/experimental-automation-card';
+import { ExperimentalChatView as ExperimentalChatViewV6 } from '@app/features/experimental-app-layout-v6/experimental-chat-view';
+import { ExperimentalGlobalBottomBar as ExperimentalGlobalBottomBarV6 } from '@app/features/experimental-app-layout-v6/experimental-global-bottom-bar';
+import { ExperimentalGlobalTopBar as ExperimentalGlobalTopBarV6 } from '@app/features/experimental-app-layout-v6/experimental-global-top-bar';
+import { ExperimentalGroupHeader as ExperimentalGroupHeaderV6 } from '@app/features/experimental-app-layout-v6/experimental-group-header';
+import { ExperimentalInboxWorkspace as ExperimentalInboxViewV6 } from '@app/features/experimental-app-layout-v6/experimental-inbox-workspace';
+import { ExperimentalListEntity as ExperimentalListEntityV6 } from '@app/features/experimental-app-layout-v6/experimental-list-entity';
+import {
+  ExperimentalSoupLayout as ExperimentalSoupLayoutV6,
+  experimentalSoupViewForContent as experimentalSoupViewForContentV6,
+} from '@app/features/experimental-app-layout-v6/experimental-soup-layout';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { Component, ParentProps } from 'solid-js';
@@ -66,6 +79,7 @@ export type ActivityViewSurfaceProps = ParentProps<{
 export type AppLayoutSurfaces = {
   AppSidebar: Component<AppSidebarSurfaceProps>;
   GlobalTopBar?: Component<AppSidebarSurfaceProps>;
+  GlobalBottomBar?: Component;
   ActivityView: Component<ActivityViewSurfaceProps>;
   InboxView?: Component;
   ChatView: Component;
@@ -122,6 +136,19 @@ const APP_LAYOUT_SURFACES: Partial<Record<AppLayoutId, AppLayoutSurfaces>> = {
     SoupGroupHeader: ExperimentalGroupHeaderV5,
     SoupAutomationCard: ExperimentalAutomationCardV5,
     resolveSoupView: experimentalSoupViewForContentV5,
+  },
+  'experimental-v6': {
+    AppSidebar: ExperimentalAppSidebarV6,
+    GlobalTopBar: ExperimentalGlobalTopBarV6,
+    GlobalBottomBar: ExperimentalGlobalBottomBarV6,
+    ActivityView: ExperimentalActivityViewV6,
+    InboxView: ExperimentalInboxViewV6,
+    ChatView: ExperimentalChatViewV6,
+    SoupLayout: ExperimentalSoupLayoutV6,
+    SoupListEntity: ExperimentalListEntityV6,
+    SoupGroupHeader: ExperimentalGroupHeaderV6,
+    SoupAutomationCard: ExperimentalAutomationCardV6,
+    resolveSoupView: experimentalSoupViewForContentV6,
   },
 };
 

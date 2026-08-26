@@ -1,5 +1,6 @@
 import type { PropertyApiValues } from '@property/types';
 import type { SerializedEditorState } from 'lexical';
+import { createSignal } from 'solid-js';
 
 const STORAGE_KEY = 'task-composer-draft';
 const EXPIRY_TIME_MS = 2 * 60 * 1000; // 2 minutes
@@ -26,6 +27,57 @@ export interface TaskComposerDraft {
   timestamp: number;
 }
 
+const [trackedTaskComposerDraft, setTrackedTaskComposerDraft] =
+  createSignal<TaskComposerDraft | null>(null);
+let trackedDraftExpiryTimer: ReturnType<typeof setTimeout> | undefined;
+let activeTaskDraftCleanup: (() => void) | undefined;
+
+/** The current global task-composer draft, when one has been saved. */
+export { trackedTaskComposerDraft };
+
+const usesGlobalTaskDraftStorage = (storage?: TaskComposerDraftStorage) =>
+  storage?.storageKey === undefined || storage.storageKey === STORAGE_KEY;
+
+const scheduleTrackedDraftExpiry = (
+  timestamp: number,
+  storage?: TaskComposerDraftStorage
+) => {
+  if (!usesGlobalTaskDraftStorage(storage)) return;
+  if (trackedDraftExpiryTimer) clearTimeout(trackedDraftExpiryTimer);
+  const expiryMs =
+    storage?.expiryMs === undefined ? EXPIRY_TIME_MS : storage.expiryMs;
+  if (expiryMs === null) {
+    trackedDraftExpiryTimer = undefined;
+    return;
+  }
+  const expire = () => {
+    if (activeTaskDraftCleanup) {
+      trackedDraftExpiryTimer = setTimeout(expire, expiryMs);
+      return;
+    }
+    clearTaskComposerDraft(storage);
+  };
+  trackedDraftExpiryTimer = setTimeout(
+    expire,
+    Math.max(timestamp + expiryMs - Date.now() + 1, 1)
+  );
+};
+
+/** Registers cleanup owned by the currently mounted global task composer. */
+export function registerTaskDraftCleanup(handler: () => void) {
+  activeTaskDraftCleanup = handler;
+  return () => {
+    if (activeTaskDraftCleanup === handler) activeTaskDraftCleanup = undefined;
+  };
+}
+
+/** Clears through the mounted composer when it owns the global task draft. */
+export function cleanupTaskDraftThroughComposer() {
+  if (!activeTaskDraftCleanup) return false;
+  activeTaskDraftCleanup();
+  return true;
+}
+
 /**
  * Save task composer draft to local storage
  */
@@ -42,6 +94,10 @@ export function saveTaskComposerDraft(
       storage?.storageKey ?? STORAGE_KEY,
       JSON.stringify(draftWithTimestamp)
     );
+    if (usesGlobalTaskDraftStorage(storage)) {
+      setTrackedTaskComposerDraft(draftWithTimestamp);
+      scheduleTrackedDraftExpiry(draftWithTimestamp.timestamp, storage);
+    }
   } catch (error) {
     console.warn('Failed to save task composer draft:', error);
   }
@@ -69,6 +125,10 @@ export function loadTaskComposerDraft(
     }
 
     draft.propertyValues = rehydratePropertyValues(draft.propertyValues);
+    if (usesGlobalTaskDraftStorage(storage)) {
+      setTrackedTaskComposerDraft(draft);
+      scheduleTrackedDraftExpiry(draft.timestamp, storage);
+    }
     return draft;
   } catch (error) {
     console.warn('Failed to load task composer draft:', error);
@@ -106,6 +166,11 @@ export function clearTaskComposerDraft(
 ): void {
   try {
     localStorage.removeItem(storage?.storageKey ?? STORAGE_KEY);
+    if (usesGlobalTaskDraftStorage(storage)) {
+      if (trackedDraftExpiryTimer) clearTimeout(trackedDraftExpiryTimer);
+      trackedDraftExpiryTimer = undefined;
+      setTrackedTaskComposerDraft(null);
+    }
   } catch (error) {
     console.warn('Failed to clear task composer draft:', error);
   }
@@ -123,6 +188,10 @@ export function updateDraftTimestamp(storage?: TaskComposerDraftStorage): void {
     const draft: TaskComposerDraft = JSON.parse(stored);
     draft.timestamp = Date.now();
     localStorage.setItem(key, JSON.stringify(draft));
+    if (usesGlobalTaskDraftStorage(storage)) {
+      setTrackedTaskComposerDraft(draft);
+      scheduleTrackedDraftExpiry(draft.timestamp, storage);
+    }
   } catch (error) {
     console.warn('Failed to update draft timestamp:', error);
   }
