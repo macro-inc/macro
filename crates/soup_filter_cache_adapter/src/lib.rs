@@ -23,7 +23,7 @@ use soup_filter_projection::{
     project_direct_fields,
 };
 use std::collections::HashSet;
-use std::time::Instant;
+use web_time::Instant;
 
 /// Failure to materialize or compile a Soup filter request.
 #[derive(Debug, thiserror::Error)]

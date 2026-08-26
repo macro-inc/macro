@@ -16,6 +16,7 @@ serde_json = { workspace = true }
 soup-filter-projection = { path = "../soup_filter_projection", default-features = false }
 thiserror = { workspace = true }
 uuid = { workspace = true }
+web-time = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }
