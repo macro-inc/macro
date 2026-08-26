@@ -214,7 +214,7 @@ export function SignatureSection(props: { link: EmailLink }) {
           </Button>
           <Show when={!isMobile()}>
             <Button
-              variant="selected"
+              variant="accent"
               size="sm"
               depth={3}
               disabled={!isDirty() || updateSettings.isPending}

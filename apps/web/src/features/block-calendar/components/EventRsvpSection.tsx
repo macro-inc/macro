@@ -103,7 +103,7 @@ export function EventRsvpSection(props: {
               <Button
                 variant={
                   selfAttendee()?.responseStatus === option.response
-                    ? 'selected'
+                    ? 'accent'
                     : 'outline'
                 }
                 size={props.buttonSize ?? 'sm'}
@@ -154,7 +154,7 @@ export function EventRsvpSection(props: {
               >
                 Cancel
               </Button>
-              <Button variant="selected" class="rounded-lg" onClick={confirm}>
+              <Button variant="accent" class="rounded-lg" onClick={confirm}>
                 OK
               </Button>
             </div>

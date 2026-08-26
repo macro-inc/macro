@@ -101,16 +101,10 @@ function ChatInputBoxInner() {
     <Item label="Chat input - not connected to backend">
       <div class="size-full">
         <div class="flex gap-2 py-2">
-          <Button
-            onClick={() => input.setIsGenerating(true)}
-            variant="selected"
-          >
+          <Button onClick={() => input.setIsGenerating(true)} variant="accent">
             Generate
           </Button>
-          <Button
-            onClick={() => input.setIsGenerating(false)}
-            variant="selected"
-          >
+          <Button onClick={() => input.setIsGenerating(false)} variant="accent">
             Stop
           </Button>
         </div>
@@ -477,7 +471,7 @@ function ProviderFailureDemoBody(props: {
             if (e.key === 'Enter') send();
           }}
         />
-        <Button variant="selected" onClick={send}>
+        <Button variant="accent" onClick={send}>
           Send
         </Button>
       </div>
@@ -684,10 +678,10 @@ function TableStreamInner() {
   return (
     <Item col label="Table stream with controls">
       <div class="flex gap-x-2 items-center">
-        <Button onClick={startStream} variant="selected">
+        <Button onClick={startStream} variant="accent">
           Stream
         </Button>
-        <Button onClick={() => setIsPaused((p) => !p)} variant="selected">
+        <Button onClick={() => setIsPaused((p) => !p)} variant="accent">
           {isPaused() ? 'Resume' : 'Pause'}
         </Button>
         <label class="flex items-center gap-x-1 text-xs">
@@ -707,7 +701,7 @@ function TableStreamInner() {
           Raw
         </label>
         <Button
-          variant="selected"
+          variant="accent"
           onClick={() => {
             setStream(undefined);
             setRawText('');

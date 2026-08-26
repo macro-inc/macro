@@ -9,6 +9,19 @@ export type {
 } from './components/Avatar';
 export { Avatar, AvatarGroup } from './components/Avatar';
 export type {
+  BadgeClassOptions,
+  BadgeProps,
+  BadgeSize,
+  BadgeVariant,
+  BadgeVariantProps,
+} from './components/Badge';
+export {
+  Badge,
+  badgeClasses,
+  badgeTriggerClasses,
+  badgeVariants,
+} from './components/Badge';
+export type {
   ButtonClassOptions,
   ButtonProps,
   ButtonSize,

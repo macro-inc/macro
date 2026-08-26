@@ -54,7 +54,7 @@ export function OldOverlay() {
           Exit
         </Button>
         <Button
-          variant="selected"
+          variant="accent"
           size="sm"
           onClick={handleFork}
           disabled={

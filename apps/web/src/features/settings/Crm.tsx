@@ -185,7 +185,7 @@ function CrmEnablementSection() {
                 <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
               </Show>
               <Button
-                variant={crmEnabled() ? 'danger' : 'selected'}
+                variant={crmEnabled() ? 'danger' : 'accent'}
                 size="sm"
                 class="rounded-xs"
                 disabled={patchCrmMutation.isPending}
@@ -241,7 +241,7 @@ function CrmEnablementSection() {
                 </Show>
               </Button>
               <Button
-                variant="selected"
+                variant="accent"
                 class="rounded-xs"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(true)}

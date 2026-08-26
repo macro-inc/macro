@@ -35,10 +35,18 @@ describe('buttonClasses', () => {
     );
   });
 
+  it('includes the inverted strong treatment', () => {
+    const classes = buttonClasses({ variant: 'strong' });
+
+    expect(classes).toContain('bg-ink');
+    expect(classes).toContain('text-surface-4');
+    expect(classes).toContain('focus-visible:ring-surface-4/70');
+  });
+
   it.each([
     ['sm', 'h-6', 'px-2', 'text-xs', 'size-3'],
-    ['md', 'h-8', 'px-3', 'text-sm', 'size-3.5'],
-    ['lg', 'h-10', 'px-4', 'text-base', 'size-4'],
+    ['md', 'h-8', 'px-2', 'text-sm', 'size-3.5'],
+    ['lg', 'h-9', 'px-3', 'text-base', 'size-[1em]'],
   ] as const)(
     'gives %s buttons the intended height, padding, text size, and icon size',
     (size, heightClass, paddingClass, textClass, iconClass) => {
@@ -59,13 +67,13 @@ describe('buttonClasses', () => {
     expect(classes).toContain('h-8');
     expect(classes).toContain('aspect-square');
     expect(classes).toContain('p-0');
-    expect(classes).not.toContain('px-3');
+    expect(classes).not.toContain('px-2');
   });
 
   it('keeps large-button horizontal padding restrained', () => {
     const classes = buttonClasses({ size: 'lg' });
 
-    expect(classes).toContain('px-4');
+    expect(classes).toContain('px-3');
     expect(classes).not.toContain('px-6');
   });
 });
@@ -123,7 +131,7 @@ describe('Button', () => {
 
   it('exposes its resolved variant and size as data attributes', () => {
     render(() => (
-      <ButtonGroup variant="selected" size="icon-xs">
+      <ButtonGroup variant="accent" size="icon-xs">
         <Button label="Pinned">
           <svg aria-hidden="true" />
         </Button>
@@ -132,7 +140,7 @@ describe('Button', () => {
 
     const button = screen.getByRole('button', { name: 'Pinned' });
     expect(button.dataset.slot).toBe('button');
-    expect(button.dataset.variant).toBe('selected');
+    expect(button.dataset.variant).toBe('accent');
     expect(button.dataset.size).toBe('icon-xs');
   });
 });

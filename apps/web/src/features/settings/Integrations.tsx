@@ -145,7 +145,7 @@ function AddServerForm(props: {
               Cancel
             </Button>
             <Button
-              variant="selected"
+              variant="accent"
               size="sm"
               depth={3}
               disabled={
@@ -281,7 +281,7 @@ function ServerRow(props: { server: ServerResponse }) {
           </span>
         </Show>
         <Button
-          variant="selected"
+          variant="accent"
           size="sm"
           depth={3}
           disabled={authMutation.isPending}

@@ -504,7 +504,7 @@ function InboxRow(props: {
             }
           >
             <Button
-              variant="selected"
+              variant="accent"
               size="sm"
               depth={3}
               onClick={props.onReconnect}
@@ -521,7 +521,7 @@ function InboxRow(props: {
             when={calendarUiEnabled() && props.link.needs_calendar_permission}
           >
             <Button
-              variant="selected"
+              variant="accent"
               size="sm"
               depth={3}
               onClick={props.onEnableCalendar}

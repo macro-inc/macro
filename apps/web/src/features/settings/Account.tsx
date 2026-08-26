@@ -464,7 +464,7 @@ export function Account() {
             <div class="px-6 py-3.5">
               <Button
                 fullWidth
-                variant="selected"
+                variant="accent"
                 depth={4}
                 onClick={() => logout()}
               >
@@ -862,7 +862,7 @@ function BundleUpdateRow() {
         </span>
         <Show when={action()}>
           {(a) => (
-            <Button variant="selected" size="sm" depth={3} onClick={a().action}>
+            <Button variant="accent" size="sm" depth={3} onClick={a().action}>
               {a().label}
             </Button>
           )}

@@ -972,7 +972,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           <Button
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
-            variant={title().trim().length === 0 ? 'ghost' : 'selected'}
+            variant={title().trim().length === 0 ? 'ghost' : 'accent'}
             depth={3}
             class="gap-3 rounded-lg border-0"
           >

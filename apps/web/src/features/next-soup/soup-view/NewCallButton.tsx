@@ -79,7 +79,7 @@ export function NewCallButton() {
   return (
     <>
       <Button
-        variant="selected"
+        variant="accent"
         class="border-0 rounded-full px-3 py-2 pl-1 font-semibold"
         size="sm"
         onClick={() => setIsOpen(true)}

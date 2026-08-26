@@ -2,9 +2,8 @@ import { useMaybeBlockId } from '@core/block';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
-import { getEntityValues, hasValue } from '@property/utils';
+import { getEntityValues } from '@property/utils';
 import { Layer } from '@ui';
-import { cn } from '@ui/utils/classname';
 import { type Component, type JSX, Match, Switch } from 'solid-js';
 
 type InlinePropertyValueProps = {
@@ -16,7 +15,7 @@ type InlinePropertyValueProps = {
 /**
  * Inline property pill shown beneath a task title when the side panel is
  * closed. Built from @property primitives — same visual surface as before,
- * but routes through Property.Root / Tooltip / EditTrigger so any property
+ * but routes through Property.Root / Tooltip / Pill so any property
  * type renders correctly without bespoke per-type components.
  */
 export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
@@ -24,9 +23,6 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
 ) => {
   const ctx = usePropertiesContext();
   const blockId = useMaybeBlockId();
-
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const isEmpty = () => !hasValue(props.property);
 
   const isUserEntity = () =>
     props.property.valueType === 'ENTITY' &&
@@ -44,18 +40,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
     >
       <Property.Tooltip property={props.property}>
         <Layer depth={2}>
-          <Property.EditTrigger
-            class={cn(
-              'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
-              'px-2 py-1 leading-tight text-left rounded-full',
-              'bg-surface',
-              'focus-visible:bg-active focus-visible:ring-accent/10',
-              {
-                'hover:bg-hover': !isReadOnly(),
-                'text-ink-extra-muted': isEmpty(),
-              }
-            )}
-          >
+          <Property.Pill>
             <Switch
               fallback={
                 <Property.Icon
@@ -80,7 +65,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
               }
             />
             <Property.Caret />
-          </Property.EditTrigger>
+          </Property.Pill>
         </Layer>
       </Property.Tooltip>
       <Property.PopoverEditor

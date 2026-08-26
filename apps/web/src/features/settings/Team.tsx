@@ -505,7 +505,7 @@ function UserInviteRow(props: {
           </Show>
         </Button>
         <Button
-          variant="selected"
+          variant="accent"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
@@ -700,7 +700,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               Cancel
             </Button>
             <Button
-              variant="selected"
+              variant="accent"
               class="rounded-xs"
               disabled={
                 createTeamMutation.isPending ||
@@ -737,7 +737,7 @@ function EmptyTeamState() {
               together.
             </p>
             <Button
-              variant="selected"
+              variant="accent"
               class="rounded-xs"
               onClick={() => setShowCreateModal(true)}
             >
@@ -790,7 +790,7 @@ function SaveCancelButtons(props: {
     <div class="flex items-center gap-1 shrink-0">
       <Tooltip label="Save">
         <Button
-          variant="selected"
+          variant="accent"
           size="icon-sm"
           class="rounded-xs"
           disabled={props.saveDisabled}
@@ -1677,7 +1677,7 @@ function TeamManagement(props: {
                 Cancel
               </Button>
               <Button
-                variant={hasValidInvites() ? 'selected' : 'ghost'}
+                variant={hasValidInvites() ? 'accent' : 'ghost'}
                 class="rounded-xs"
                 disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
                 onClick={handleInvite}

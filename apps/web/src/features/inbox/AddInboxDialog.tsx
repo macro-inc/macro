@@ -68,7 +68,7 @@ export function AddInboxDialog() {
               Cancel
             </Button>
             <Button
-              variant="selected"
+              variant="accent"
               depth={3}
               disabled={pending()}
               onClick={handleConfirm}

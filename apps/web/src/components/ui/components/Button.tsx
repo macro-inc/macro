@@ -6,6 +6,7 @@ import {
 } from '@kobalte/core/button';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
+import { CONTROL_SIZE_VARIANTS } from '../utils/controlSizes';
 import { createVariants, type VariantProps } from '../utils/variants';
 import { useButtonGroupContext } from './ButtonGroup';
 import { Layer } from './Layer';
@@ -33,21 +34,21 @@ export const buttonVariants = createVariants(
         'bg-failure-bg text-failure dark:bg-failure-bg not-disabled:hover:bg-failure/25 not-disabled:active:bg-failure/30',
       outline:
         'bg-transparent text-ink-muted border-edge-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink not-disabled:active:bg-active',
-      selected: 'bg-accent-bg not-disabled:hover:overlay-accent-bg text-accent',
+      accent: 'bg-accent-bg not-disabled:hover:overlay-accent-bg text-accent',
       success:
         'bg-success-bg not-disabled:hover:overlay-success-bg text-success',
       ghost:
         'bg-transparent text-ink-muted not-disabled:hover:overlay-hover not-disabled:hover:text-ink not-disabled:active:overlay-active',
-      contrast:
-        'bg-ink text-surface focus-visible:ring-surface/70 not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
+      strong:
+        'bg-ink text-surface-4 focus-visible:ring-surface-4/70 not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface-4)_12%,transparent)] not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface-4)_22%,transparent)]',
       cta: 'bg-accent text-accent-contrast focus-visible:ring-accent-contrast/70 [--color-edge:var(--color-accent-contrast-muted)] [--color-edge-muted:var(--color-accent-contrast-muted)] not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
     },
     size: {
       xs: "h-5 gap-1 px-1 text-xs [&>svg:not([class*='size-'])]:size-3",
       'icon-xs': "size-5 p-0.5 [&>svg:not([class*='size-'])]:size-4",
-      lg: "h-9 gap-2 px-3 text-base rounded-lg [&>svg:not([class*='size-'])]:size-[1em]",
-      md: "h-8 gap-2 px-2 text-sm rounded-md [&>svg:not([class*='size-'])]:size-3.5",
-      sm: "h-6 gap-1 px-2 text-xs [&>svg:not([class*='size-'])]:size-3",
+      sm: CONTROL_SIZE_VARIANTS.sm,
+      md: CONTROL_SIZE_VARIANTS.md,
+      lg: `${CONTROL_SIZE_VARIANTS.lg} rounded-lg`,
       'icon-lg':
         "size-11 aspect-square p-2 [&>svg:not([class*='size-'])]:size-7",
       'icon-md':

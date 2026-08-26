@@ -212,7 +212,7 @@ function ConfirmDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="selected"
+              variant="accent"
               class="rounded-xs"
               disabled={props.pending}
               onClick={props.onConfirm}

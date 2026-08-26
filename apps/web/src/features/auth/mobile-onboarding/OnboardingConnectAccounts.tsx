@@ -109,7 +109,7 @@ export function OnboardingConnectAccounts() {
       <div>
         <div class="flex flex-col gap-2">
           <Button
-            variant="contrast"
+            variant="strong"
             size="lg"
             class="border border-edge-muted"
             disabled={!isAuthenticated()}
@@ -127,7 +127,7 @@ export function OnboardingConnectAccounts() {
 
         <div class="flex flex-col gap-2">
           <Button
-            variant="contrast"
+            variant="strong"
             size="lg"
             class="border border-edge-muted"
             disabled={

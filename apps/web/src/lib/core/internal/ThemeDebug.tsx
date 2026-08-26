@@ -1,5 +1,8 @@
+import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import CellSignalHighIcon from '@phosphor-icons/core/regular/cell-signal-high.svg?component-solid';
+import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import { Button, Panel } from '@ui';
+import { Badge, Button, Panel } from '@ui';
 import { For } from 'solid-js';
 
 const LOREM_SHORT = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
@@ -26,12 +29,14 @@ const INK_VARIANTS = [
 const BUTTON_VARIANTS = [
   'ghost',
   'outline',
-  'selected',
+  'accent',
+  'strong',
   'danger',
   'cta',
 ] as const;
-const BUTTON_CONTENT_VARIANTS = ['outline', 'cta'] as const;
+const BUTTON_CONTENT_VARIANTS = ['outline', 'accent', 'strong', 'cta'] as const;
 const BUTTON_SIZES = ['sm', 'md', 'lg'] as const;
+const BADGE_VARIANTS = ['ghost', 'outline'] as const;
 const BUTTON_SIZE_LABELS = {
   sm: 'Small',
   md: 'Default',
@@ -214,7 +219,8 @@ function ThemeDebug() {
         <section class="flex flex-col gap-4">
           <h2 class="text-xl font-semibold text-ink">Button Variants</h2>
           <p class="text-sm text-ink-muted">
-            All button variants: ghost, outline, selected, danger, and CTA.
+            All button variants: ghost, outline, accent, strong, danger, and
+            CTA.
           </p>
 
           <Panel depth={1}>
@@ -316,6 +322,84 @@ function ThemeDebug() {
           </Panel>
         </section>
 
+        {/* Badge variants and sizes */}
+        <section class="flex flex-col gap-4">
+          <h2 class="text-xl font-semibold text-ink">Badge Variants</h2>
+          <p class="text-sm text-ink-muted">
+            Ghost and outline badges share the Button sm, md, and lg size
+            definitions.
+          </p>
+
+          <Panel depth={1}>
+            <Panel.Body class="p-4">
+              <div class="flex flex-col gap-6">
+                <div class="flex flex-col items-start gap-2">
+                  <span class="text-xs text-ink-extra-muted font-mono">
+                    Content samples · size="sm"
+                  </span>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" size="sm" class="bg-surface">
+                      <span
+                        aria-hidden="true"
+                        class="size-2 rounded-full bg-blue"
+                      />
+                      tags
+                    </Badge>
+                    <Badge variant="outline" size="sm" class="bg-surface">
+                      <span
+                        aria-hidden="true"
+                        class="size-2 rounded-full bg-pink"
+                      />
+                      tags-ux
+                    </Badge>
+                    <Badge variant="outline" size="sm">
+                      <span class="inline-flex size-[1em] items-center justify-center rounded-full bg-pink text-surface-4">
+                        <CheckIcon aria-hidden="true" class="size-[0.65em]" />
+                      </span>
+                      Completed
+                      <CaretDownIcon aria-hidden="true" />
+                    </Badge>
+                    <Badge variant="outline" size="sm">
+                      <CellSignalHighIcon aria-hidden="true" />
+                      High
+                      <CaretDownIcon aria-hidden="true" />
+                    </Badge>
+                  </div>
+                </div>
+                <For each={BUTTON_SIZES}>
+                  {(size) => (
+                    <div class="flex flex-col items-start gap-2">
+                      <span class="text-xs text-ink-extra-muted font-mono">
+                        size="{size}"
+                      </span>
+                      <div class="flex flex-wrap items-end gap-4">
+                        <For each={BADGE_VARIANTS}>
+                          {(variant) => (
+                            <div class="flex flex-col items-start gap-1.5">
+                              <span class="text-xs text-ink-extra-muted font-mono">
+                                variant="{variant}"
+                              </span>
+                              <div class="flex flex-wrap items-center gap-2">
+                                <Badge variant={variant} size={size}>
+                                  Badge
+                                </Badge>
+                                <Badge variant={variant} size={size}>
+                                  <PlusIcon />
+                                  Badge
+                                </Badge>
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Panel.Body>
+          </Panel>
+        </section>
+
         {/* Buttons at Different Depths */}
         <section class="flex flex-col gap-4">
           <h2 class="text-xl font-semibold text-ink">
@@ -342,7 +426,7 @@ function ThemeDebug() {
                       <Button variant="outline" depth={depth}>
                         Base
                       </Button>
-                      <Button variant="selected" depth={depth}>
+                      <Button variant="accent" depth={depth}>
                         Active
                       </Button>
                       <Button variant="danger" depth={depth}>
@@ -375,7 +459,7 @@ function ThemeDebug() {
               <Button variant="ghost" size="sm">
                 Cancel
               </Button>
-              <Button variant="selected" size="sm">
+              <Button variant="accent" size="sm">
                 Confirm
               </Button>
             </Panel.Footer>

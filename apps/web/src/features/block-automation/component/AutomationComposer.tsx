@@ -311,7 +311,7 @@ export function AutomationComposer() {
                 Cancel
               </Button>
               <Button
-                variant="selected"
+                variant="accent"
                 size="sm"
                 class="cursor-default"
                 disabled={createMutation.isPending}

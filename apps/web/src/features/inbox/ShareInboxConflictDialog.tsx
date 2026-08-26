@@ -45,11 +45,7 @@ export function ShareInboxConflictDialog(props: {
             >
               Cancel
             </Button>
-            <Button
-              variant="selected"
-              depth={3}
-              onClick={() => props.onShare()}
-            >
+            <Button variant="accent" depth={3} onClick={() => props.onShare()}>
               Share inbox
             </Button>
           </div>

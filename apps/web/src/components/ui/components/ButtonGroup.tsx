@@ -29,20 +29,20 @@ type ButtonGroupProps = {
 const groupVariantStyles: Record<ButtonVariant, string> = {
   danger: 'border border-failure/50  ',
   outline: 'border border-edge-muted  ',
-  selected: 'border border-accent  ',
+  accent: 'border border-accent  ',
   success: 'border border-success  ',
   ghost: '                          ',
-  contrast: 'border border-transparent',
+  strong: 'border border-transparent',
   cta: 'border border-transparent ',
 };
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
   danger: 'bg-failure/50',
   outline: 'bg-edge-muted',
-  selected: 'bg-accent',
+  accent: 'bg-accent',
   success: 'bg-success',
   ghost: 'bg-edge-muted',
-  contrast: 'bg-surface/50',
+  strong: 'bg-surface-4/50',
   cta: 'bg-surface/50',
 };
 

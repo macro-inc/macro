@@ -442,7 +442,7 @@ export function FloatingLinkMenu(props: {
                 <Button
                   onClick={openInNewTab}
                   class="p-1 hover:bg-hover hover-transition-bg"
-                  variant="selected"
+                  variant="accent"
                   size="icon-sm"
                   tooltip="Open in new tab"
                 >

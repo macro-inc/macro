@@ -958,7 +958,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                   <Button variant="outline" onClick={props.onClose}>
                     Cancel
                   </Button>
-                  <Button variant="selected" onClick={handleSave}>
+                  <Button variant="accent" onClick={handleSave}>
                     Save
                   </Button>
                 </div>

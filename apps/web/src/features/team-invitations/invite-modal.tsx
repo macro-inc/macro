@@ -104,7 +104,7 @@ export const InviteModal = () => {
             <Button
               onClick={handleSend}
               variant={
-                sending() || !parseEmails(value()).length ? 'ghost' : 'selected'
+                sending() || !parseEmails(value()).length ? 'ghost' : 'accent'
               }
               disabled={sending() || !parseEmails(value()).length}
               class="rounded-xs font-semibold"

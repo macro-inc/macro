@@ -53,7 +53,7 @@ export function IpadUnsupportedDialog() {
               </Dialog.Description>
             </div>
             <div class="flex justify-end">
-              <Dialog.CloseButton as={Button} variant="selected" size="sm">
+              <Dialog.CloseButton as={Button} variant="accent" size="sm">
                 Got it
               </Dialog.CloseButton>
             </div>
