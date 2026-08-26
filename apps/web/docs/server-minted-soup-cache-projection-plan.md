@@ -46,7 +46,7 @@ The existing plans deliberately deferred relation-backed predicates. This plan i
 ### In scope
 
 1. A server-minted, versioned, opaque projection capsule for authoritative flat Soup hydration.
-2. An entity-scoped `GraphqlSoupEntity.cacheProjection(profile:)` field selected by:
+2. An entity-scoped `GraphqlSoupEntity.cacheProjection` field selected by:
    - `Query.user.soup` flat initial/continuation responses, including backfill hydration;
    - `Subscription.soupUpdates` through each `SoupUpdated.item`.
 3. A new `soup-flat-v2` profile containing all existing v1 direct facts plus:
@@ -73,7 +73,7 @@ The existing plans deliberately deferred relation-backed predicates. This plan i
 ## Confirmed design decisions
 
 1. **The server sends storage-neutral projection IR, not physical fact-table rows.** The client assigns local document IDs and persists facts using its existing generic schema.
-2. **The capsule belongs to the normalized entity.** Add nullable `cacheProjection(profile:)` to the shared `GraphqlSoupEntity` interface, which requires every concrete Soup entity type to implement it. Do not put entity projection facts on embedded `SoupPage`/`SoupUpdated` wrappers or introduce a synthetic per-item wrapper. `isEmailAttachment` itself remains absent from `GraphqlSoupDocument`.
+2. **The capsule belongs to the normalized entity and the field has no arguments.** Add nullable `cacheProjection` to the shared `GraphqlSoupEntity` interface, which requires every concrete Soup entity type to implement it. The capsule itself declares its wire version and projection profile; an unsupported profile is rejected safely rather than negotiated through GraphQL. Do not put entity projection facts on embedded `SoupPage`/`SoupUpdated` wrappers or introduce a synthetic per-item wrapper. `isEmailAttachment` itself remains absent from `GraphqlSoupDocument`.
 3. **The server emits complete authoritative `soup-flat-v2` documents.** It does not send only an `isEmailAttachment` delta. A complete capsule gives one validation and versioning boundary and prevents split ownership from growing with every future server fact.
 4. **The browser remains responsible for query compilation and optimistic composition.** Server projection data is authoritative fact input, not executable SQL or a server cursor.
 5. **Support remains all-or-network per query.** No unsupported leaf is ignored and no absent required fact is interpreted approximately.
@@ -215,7 +215,7 @@ The production Documents presets should become statically eligible when using `C
 
 Generic `IndexDocument::validate` only enforces storage-neutral bounds. Before accepting a server capsule, the Soup adapter must additionally validate profile semantics:
 
-- profile is exactly a supported wire/profile version;
+- wire version is supported and the embedded profile is exactly one the client understands;
 - record key matches the accompanying normalized entity key;
 - partition matches the GraphQL entity type;
 - required identity/direct/sort facts are present and unique;
@@ -237,7 +237,7 @@ scalar SoupCacheProjection
 
 interface GraphqlSoupEntity {
   id: ID!
-  cacheProjection(profile: String!): SoupCacheProjection
+  cacheProjection: SoupCacheProjection
 }
 
 type SoupPage {
@@ -250,9 +250,9 @@ type SoupUpdated {
 }
 ```
 
-`cacheProjection` is part of the shared interface contract, so every concrete Soup entity object must implement the nullable field. Supported entity/profile combinations return a capsule; unsupported profiles, unsupported entity variants, or responses without authoritative projection hydration return `null`.
+`cacheProjection` is part of the shared interface contract, so every concrete Soup entity object must implement the nullable field. Supported entity variants with authoritative projection hydration return the server's active capsule; unsupported entity variants or responses without authoritative projection hydration return `null`.
 
-The required `profile` argument is capability negotiation. Using a string avoids changing the GraphQL enum every time a new projection profile is introduced, while the server still validates it against a bounded allowlist. The capsule is generic cache-control metadata: it does not add `isEmailAttachment` or any other projected business fact to `GraphqlSoupDocument`.
+The field intentionally has no arguments. The capsule's embedded `wire_version` and `profile` identify its encoding and completeness contract. The client validates both before ingestion; an unknown value marks the projection incompatible and invokes network fallback. This avoids requiring the server to retain and negotiate every historical projection compiler through the GraphQL schema. The capsule is generic cache-control metadata: it does not add `isEmailAttachment` or any other projected business fact to `GraphqlSoupDocument`.
 
 This placement follows the normalized-cache schema convention that entity facts belong on the entity carrying the stable `__typename:id`. Do not create a no-ID `SoupItem` wrapper containing an entity plus projection; such a wrapper would be an embedded value carrying facts about another entity and would make key correlation indirect.
 
@@ -295,7 +295,7 @@ Canonical Soup hydration must construct each `GraphqlSoupEntity` from an item pl
 
 The flat `SoupPage` path must attach projection source to each returned entity before GraphQL object construction. The `SoupUpdated.item` loader must return the same item-plus-source hydration value so the entity fields and capsule cannot observe different database states or trigger a second relation query. Cache/coalesce that loader value for one patch resolution only; repeated websocket updates must still reload current state.
 
-Other GraphQL paths may construct a `GraphqlSoupEntity` without projection source during the first release. If they select `cacheProjection`, the resolver returns `null`, which safely marks that entity/profile incomplete. Future mutation or grouped-Soup paths can opt into authoritative capsules by using the same enriched constructor; they must not independently reconstruct relation facts in GraphQL.
+Other GraphQL paths may construct a `GraphqlSoupEntity` without projection source during the first release. If they select `cacheProjection`, the resolver returns `null`, which safely marks that entity's active projection incomplete. Future mutation or grouped-Soup paths can opt into authoritative capsules by using the same enriched constructor; they must not independently reconstruct relation facts in GraphQL.
 
 ## Browser ingestion
 
@@ -307,7 +307,7 @@ Add the interface field to the shared `SoupItemFields` fragment:
 fragment SoupItemFields on GraphqlSoupEntity {
   __typename
   id
-  cacheProjection(profile: "soup-flat-v2") @cacheOnly
+  cacheProjection @cacheOnly
   # existing shared and concrete fields
 }
 ```
@@ -340,7 +340,7 @@ For a recognized v2-supported entity arriving through a canonical Soup query/upd
 - valid capsule bound to the surrounding entity: replace the complete v2 projection;
 - null/absent capsule for a present supported entity: mark the v2 projection missing;
 - malformed capsule or mismatched bound identity/partition: mark it incompatible and report telemetry;
-- unsupported entity/profile combination: do not fabricate projection state.
+- unsupported entity variant: do not fabricate projection state.
 
 Other mutation/query responses may still contain partial `GraphqlSoupDocument` objects without a selected or populated capsule. The first release must preserve safety:
 
@@ -375,13 +375,15 @@ Introduce `soup-flat-v2`; do not reinterpret existing v1 complete rows. The addi
 
 The epoch bump is simpler and safer for the first release; a targeted reset is justified only if preserving normalized records materially reduces rollout cost. Retain explicit profile checks under either mechanism.
 
-The client requests only profiles it can decode through the interface field's `profile` argument. A server that has the field but does not support the requested profile returns `null`; the client then follows incomplete/network fallback. During a mixed deployment:
+The server emits one active projection profile in `cacheProjection`, and the client validates the profile embedded in every capsule. There is no GraphQL profile negotiation and the server is not required to retain historical profile compilers solely for stale clients. During the initial mixed deployment:
 
 - old clients do not select the interface field and continue using v1 behavior against a new server;
-- new clients request and validate v2;
+- new clients select the field and accept only embedded profiles they understand;
 - a new client talking to a server whose schema predates the interface field receives a GraphQL unknown-field validation error, not a null capsule.
 
 Deploy the additive server schema before shipping a client document that selects the field. If deployment ordering cannot guarantee this, the client needs a tested legacy-document retry/fallback rather than treating an operation validation error as a cache miss. Guard v2 local evaluation behind the existing cache rollout control until server support is established.
+
+For a future profile upgrade, ship client decode/validation/compiler support before changing the server's active emitted profile when uninterrupted local evaluation is desired. A stale client that receives an unknown embedded profile rejects it, marks the projection incompatible, and safely uses network authority until it reloads/upgrades. If uninterrupted multi-version local evaluation later becomes a product requirement, add bounded profile negotiation as a separate design rather than preemptively encoding it in this field.
 
 ### Backfill
 
@@ -459,12 +461,12 @@ Likely files:
 
 ### Phase 3: Emit capsules from `GraphqlSoupEntity`
 
-- Add the opaque scalar and nullable `cacheProjection(profile:)` field to the `GraphqlSoupEntity` interface.
-- Implement the field on every concrete interface implementor, returning `null` for unsupported entity/profile combinations or absent projection hydration.
+- Add the opaque scalar and nullable argument-free `cacheProjection` field to the `GraphqlSoupEntity` interface.
+- Implement the field on every concrete interface implementor, returning `null` for unsupported entity variants or absent projection hydration.
 - Extend GraphQL entity construction to retain optional projection source without changing public Soup domain models.
 - Refactor flat `SoupPage` construction so each supported entity receives source metadata from the same repository result.
 - Refactor `SoupUpdated.item` hydration so one loader result supplies both the entity and its capsule source.
-- Add `cacheProjection(profile: "soup-flat-v2") @cacheOnly` to the shared `SoupItemFields` fragment.
+- Add `cacheProjection @cacheOnly` to the shared `SoupItemFields` fragment.
 - Keep authorization and access filtering entirely in the existing Soup service path.
 - Regenerate composed SDL and GraphQL client documents and update the shared-interface contract test.
 - Confirm that `SoupPage` and `SoupUpdated` gain no projection fields and that `GraphqlSoupDocument` gains no `isEmailAttachment` field.
@@ -538,7 +540,7 @@ Likely files:
 
 ### Wire and validation
 
-- composed SDL exposes nullable `cacheProjection(profile:)` on `GraphqlSoupEntity` and every concrete implementor;
+- composed SDL exposes nullable argument-free `cacheProjection` on `GraphqlSoupEntity` and every concrete implementor;
 - composed SDL leaves `SoupPage` and `SoupUpdated` projection-free;
 - `@cacheOnly` delivers capsules to cache hydration while omitting them from the Soup UI operation result;
 - deterministic native/WASM single-entity capsule round trip;
@@ -551,8 +553,8 @@ Likely files:
 - capsule record key differs from the surrounding entity;
 - partition/typename mismatch;
 - corrupted base64/binary/JSON;
-- null field for a supported entity/profile;
-- null field for unsupported entity/profile combinations;
+- null field for a supported entity that should carry the active profile;
+- null field for unsupported entity variants;
 - multiple entities in one page bind and commit independently.
 
 Every malformed case must produce incomplete/network fallback without crashing the worker or exposing a partial local result.
@@ -636,7 +638,7 @@ Facts that are query-time dependent, authorization proofs, correlated multi-row 
 ## Acceptance criteria
 
 - `GraphqlSoupDocument` and `SoupDocument` do not expose `isEmailAttachment` or any other direct projected business fact; the only GraphQL addition is the generic opaque interface field.
-- `GraphqlSoupEntity` owns nullable `cacheProjection(profile:)`; `SoupPage`, `SoupUpdated`, and any synthetic per-item wrapper do not carry projection fields.
+- `GraphqlSoupEntity` owns nullable argument-free `cacheProjection`; `SoupPage`, `SoupUpdated`, and any synthetic per-item wrapper do not carry projection fields.
 - The server derives attachment state from committed authoritative storage and emits a valid opaque v2 capsule on each supported entity returned by flat Soup pages and `SoupUpdated.item`.
 - Every complete v2 Document projection has exact subtype semantics and an explicit attachment Boolean.
 - Capsule and normalized entity writes are atomic and install one cache revision.
