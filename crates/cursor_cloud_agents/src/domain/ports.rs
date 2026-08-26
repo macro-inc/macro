@@ -9,10 +9,10 @@
 
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
-    RunListing, RunOutcome,
+    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
+    RunOutcome,
 };
-use agent_client_protocol::schema::v1::SessionUpdate;
+use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
 use std::path::Path;
 
@@ -118,7 +118,7 @@ pub trait SessionNotifier {
     /// Send a `session/update` for the given session.
     fn notify(
         &self,
-        session: &AcpSessionId,
+        session: &SessionId,
         update: SessionUpdate,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }

@@ -2,11 +2,11 @@
 
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
-    RunListing, RunOutcome,
+    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
+    RunOutcome,
 };
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
-use agent_client_protocol::schema::v1::SessionUpdate;
+use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -278,7 +278,7 @@ impl RunStream for FakeCursor {
 /// Records every update it is asked to deliver.
 #[derive(Debug, Clone, Default)]
 pub struct RecordingNotifier {
-    updates: Arc<Mutex<Vec<(AcpSessionId, SessionUpdate)>>>,
+    updates: Arc<Mutex<Vec<(SessionId, SessionUpdate)>>>,
     delivered: Arc<tokio::sync::Notify>,
 }
 
@@ -291,7 +291,7 @@ impl RecordingNotifier {
 
     /// Everything delivered so far, in order.
     #[must_use]
-    pub fn updates(&self) -> Vec<(AcpSessionId, SessionUpdate)> {
+    pub fn updates(&self) -> Vec<(SessionId, SessionUpdate)> {
         self.updates.lock().expect("notifier poisoned").clone()
     }
 
@@ -317,7 +317,7 @@ impl RecordingNotifier {
 impl SessionNotifier for RecordingNotifier {
     async fn notify(
         &self,
-        session: &AcpSessionId,
+        session: &SessionId,
         update: SessionUpdate,
     ) -> Result<(), rootcause::Report> {
         self.updates

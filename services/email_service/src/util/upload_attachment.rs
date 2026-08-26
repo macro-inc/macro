@@ -150,8 +150,9 @@ async fn upload_document_attachment(
     )
     .await?;
 
-    // 4. Upload the attachment data to the presigned URL.
-    upload_data_to_presigned_url(&dss_response, attachment_data, &base64_hash).await?;
+    if dss_response.data.document_response.presigned_url.is_some() {
+        upload_data_to_presigned_url(&dss_response, attachment_data, &base64_hash).await?;
+    }
 
     // 5. Get document id
     let document_id = dss_response

@@ -22,12 +22,13 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession};
 use agent_session::domain::ports::{AgentSessionRepo, ExternalSessionRepo};
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use cursor_cloud_agents::domain::model::{
-    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice,
+    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice,
 };
 use cursor_cloud_agents::domain::ports::{CursorAgents, RepoResolver, RunStream};
 use cursor_cloud_agents::domain::service::CursorSessionService;
@@ -130,7 +131,7 @@ pub struct CursorContainerManager<Sessions, Keys> {
 /// it — so each is optional on its own; see [`CursorContainerManager::resume`].
 struct RestoredCursorSession {
     /// The ACP session id the harness will name in `session/load`.
-    acp_session: AcpSessionId,
+    acp_session: SessionId,
     /// The Cursor agent, when one was ever minted.
     agent: Option<CursorAgentId>,
     /// The model id the session last reported, from the projected column.
@@ -294,7 +295,7 @@ where
                     .await?
                     .map(|external| CursorAgentId::new(external.external_id));
                 Some(RestoredCursorSession {
-                    acp_session: AcpSessionId::new(acp.0.as_ref()),
+                    acp_session: acp.clone(),
                     agent,
                     // The projected model column. It round-trips a picked
                     // model back into the wrapper — and for a session that

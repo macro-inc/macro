@@ -26,13 +26,12 @@ mod test;
 use crate::domain::error::SessionError;
 use crate::domain::event::{CursorEvent, InteractionUpdate};
 use crate::domain::model::{
-    AcpSessionId, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
-    RunStatus,
+    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::translate::TranslateMachine;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, ContentChunk, SessionUpdate, StopReason, TextContent,
+    ContentBlock, ContentChunk, SessionId, SessionUpdate, StopReason, TextContent,
 };
 use futures::StreamExt as _;
 use futures::pin_mut;
@@ -150,7 +149,7 @@ pub struct CursorSessionService<Cursor, Notifier, Repos> {
     cursor: Cursor,
     notifier: Notifier,
     repos: Repos,
-    sessions: Mutex<HashMap<AcpSessionId, Arc<Session>>>,
+    sessions: Mutex<HashMap<SessionId, Arc<Session>>>,
     /// Monotonic counter for minting session ids without a clock or RNG.
     next_session: Mutex<u64>,
     /// A model id this deployment pins, applied to every new session. `None`
@@ -197,7 +196,7 @@ where
     /// The repository is resolved now rather than at first prompt so the
     /// warning about an unlisted (repo-less) session surfaces at `session/new`
     /// time, when the user can still do something about it.
-    pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> AcpSessionId {
+    pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> SessionId {
         let repo = self.repos.resolve(cwd);
         if repo.is_none() {
             tracing::warn!(
@@ -222,7 +221,7 @@ where
             let candidate = {
                 let mut next = self.next_session.lock().expect("session counter poisoned");
                 *next += 1;
-                AcpSessionId::new(format!("cursor-acp-{next}"))
+                SessionId::new(format!("cursor-acp-{next}"))
             };
             if !sessions.contains_key(&candidate) {
                 break candidate;
@@ -254,7 +253,7 @@ where
     /// the stream — so our own record is the only answer available.
     pub async fn session_model_id(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
     ) -> Result<Option<String>, SessionError> {
         Ok(self
             .effective_model(session_id)
@@ -270,7 +269,7 @@ where
     /// at the next prompt.
     pub async fn set_model(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         model_id: &str,
     ) -> Result<(), SessionError> {
         let session = self.session(session_id)?;
@@ -300,7 +299,7 @@ where
     /// happens once per session.
     async fn effective_model(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
     ) -> Result<Option<ModelChoice>, SessionError> {
         let session = self.session(session_id)?;
         if let Some(model) = session
@@ -371,7 +370,7 @@ where
     /// Driven by `session/load`: the list belongs to the client and the
     /// protocol restates it there, which is how a restored process — whose
     /// host never persisted it — learns it again.
-    pub fn set_mcp_servers(&self, session_id: &AcpSessionId, mcp_servers: Vec<McpServer>) {
+    pub fn set_mcp_servers(&self, session_id: &SessionId, mcp_servers: Vec<McpServer>) {
         if let Ok(session) = self.session(session_id) {
             session
                 .state
@@ -387,7 +386,7 @@ where
     #[tracing::instrument(skip(self, prompt), err)]
     pub async fn prompt(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         prompt: &str,
     ) -> Result<StopReason, SessionError> {
         let session = self.session(session_id)?;
@@ -495,7 +494,7 @@ where
     /// no active turn is a no-op rather than an error, because the turn may
     /// have ended while the cancel was in flight.
     #[tracing::instrument(skip(self), err)]
-    pub async fn cancel(&self, session_id: &AcpSessionId) -> Result<(), SessionError> {
+    pub async fn cancel(&self, session_id: &SessionId) -> Result<(), SessionError> {
         let session = self.session(session_id)?;
         let target = {
             let mut state = session.state.lock().expect("session state poisoned");
@@ -520,7 +519,7 @@ where
     ///
     /// The bool is what lets `session/close` answer a client that named a
     /// session this agent never had, rather than acknowledging a no-op.
-    pub fn close(&self, session_id: &AcpSessionId) -> bool {
+    pub fn close(&self, session_id: &SessionId) -> bool {
         self.sessions
             .lock()
             .expect("session map poisoned")
@@ -542,7 +541,7 @@ where
     /// with fresh ids because [`Self::new_session`] skips occupied ids.
     pub fn restore_session(
         &self,
-        id: AcpSessionId,
+        id: SessionId,
         agent: Option<CursorAgentId>,
         repo: Option<RepoUrl>,
         model_id: Option<String>,
@@ -569,7 +568,7 @@ where
     /// loading is a lookup, not a fetch, because restoring state into the
     /// process is [`Self::restore_session`]'s job and happens before serving.
     #[must_use]
-    pub fn has_session(&self, session_id: &AcpSessionId) -> bool {
+    pub fn has_session(&self, session_id: &SessionId) -> bool {
         self.sessions
             .lock()
             .expect("session map poisoned")
@@ -586,7 +585,7 @@ where
     /// answer.
     async fn stream_turn(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         run: &CursorRunId,
@@ -784,7 +783,7 @@ where
     /// Callers hold the session's turn gate.
     async fn backfill_foreign_runs(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
@@ -834,7 +833,7 @@ where
     /// recorded final text when the stream cannot be had.
     async fn mirror_foreign_run(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         run: &CursorRunId,
@@ -946,7 +945,7 @@ where
     /// outcome, which is the part that must not be lost.
     async fn poll_turn(
         &self,
-        session_id: &AcpSessionId,
+        session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         run: &CursorRunId,
@@ -1028,7 +1027,7 @@ where
     /// drove a run (no watermark to mirror from). Failures are logged per
     /// session and never stop the sweep.
     pub async fn sync_foreign_runs(&self) {
-        let sessions: Vec<(AcpSessionId, Arc<Session>)> = self
+        let sessions: Vec<(SessionId, Arc<Session>)> = self
             .sessions
             .lock()
             .expect("session map poisoned")
@@ -1057,7 +1056,7 @@ where
         }
     }
 
-    fn session(&self, id: &AcpSessionId) -> Result<Arc<Session>, SessionError> {
+    fn session(&self, id: &SessionId) -> Result<Arc<Session>, SessionError> {
         self.sessions
             .lock()
             .expect("session map poisoned")
