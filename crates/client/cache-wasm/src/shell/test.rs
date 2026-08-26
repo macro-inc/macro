@@ -298,8 +298,11 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
         ))
         .await,
     );
-    assert_eq!(selected[0]["recordKey"], "GraphqlSoupDocument:doc-1");
-    assert_eq!(selected[0]["record"]["id"], "doc-1");
+    assert_eq!(
+        selected["records"][0]["recordKey"],
+        "GraphqlSoupDocument:doc-1"
+    );
+    assert_eq!(selected["records"][0]["record"]["id"], "doc-1");
 
     let variants: serde_json::Value = from_js(
         resolved(engine.inspect_query_variants(
@@ -348,9 +351,12 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
     );
     assert_eq!(read["kind"], "hit");
 
-    let affected: Vec<String> =
+    let affected: serde_json::Value =
         from_js(resolved(engine.invalidate_keys(vec!["GraphqlSoupDocument:doc-1".into()])).await);
-    assert_eq!(affected, ["tab:z", "tab:a"]);
+    assert_eq!(
+        affected["affectedOps"],
+        serde_json::json!(["tab:z", "tab:a"])
+    );
 
     resolved(engine.delete_keys(vec!["GraphqlSoupDocument:doc-1".into()])).await;
     let read: serde_json::Value = from_js(
