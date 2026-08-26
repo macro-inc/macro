@@ -4,8 +4,12 @@ export type AppLayoutCapabilities = {
   usesMessagesWorkspace: boolean;
   usesBrainWorkspace: boolean;
   usesCalendarWorkspace: boolean;
-  /** App chrome is a horizontal bar above the splits instead of a sidebar. */
-  usesTopBar: boolean;
+  /**
+   * The app chrome — V3's top bar or V4's rail — owns search, create and view
+   * switching, so a lone split drops its duplicate chrome and the in-view
+   * tabs give up Tab and the digits.
+   */
+  chromeOwnsViewControls: boolean;
   /**
    * Splits run edge to edge and are divided by a hairline seam rather than
    * floating as rounded, shadowed cards over the page.
@@ -46,7 +50,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: false,
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
-      usesTopBar: false,
+      chromeOwnsViewControls: false,
       flatSplitSeams: false,
       compactSplitHeader: false,
       removesSplitContentLeftPadding: false,
@@ -63,7 +67,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: true,
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
-      usesTopBar: false,
+      chromeOwnsViewControls: false,
       flatSplitSeams: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
@@ -84,7 +88,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: true,
       usesBrainWorkspace: true,
       usesCalendarWorkspace: true,
-      usesTopBar: false,
+      chromeOwnsViewControls: false,
       flatSplitSeams: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
@@ -107,7 +111,30 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesMessagesWorkspace: true,
       usesBrainWorkspace: true,
       usesCalendarWorkspace: true,
-      usesTopBar: true,
+      chromeOwnsViewControls: true,
+      flatSplitSeams: true,
+      compactSplitHeader: true,
+      removesSplitContentLeftPadding: true,
+    },
+    contentOwnedSplitChrome: V2_CONTENT_OWNED_CHROME,
+    experimentalViewNames: {
+      crm: 'CRM',
+      library: 'Drive',
+      machines: 'Brain',
+      messages: 'Chat',
+    },
+  },
+  {
+    id: 'experimental-v4',
+    label: 'Experimental v4',
+    splitPanelRenderer: 'v2-composed',
+    capabilities: {
+      experimentalSurfaces: true,
+      usesNewInbox: true,
+      usesMessagesWorkspace: true,
+      usesBrainWorkspace: true,
+      usesCalendarWorkspace: true,
+      chromeOwnsViewControls: true,
       flatSplitSeams: true,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,

@@ -372,10 +372,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   };
 
   /**
-   * A top bar owns Tab and the digits for switching app views, so the in-view
-   * tabs give those keys up rather than shadowing them from the closer scope.
+   * V3-style app chrome owns Tab and the digits for switching app views, so
+   * the in-view tabs give those keys up rather than shadowing them from the
+   * closer scope.
    */
-  const tabKeysOwnedHere = () => !activeAppLayout().capabilities.usesTopBar;
+  const tabKeysOwnedHere = () =>
+    !activeAppLayout().capabilities.chromeOwnsViewControls;
 
   const tabKeysNavigable = () => tabKeysOwnedHere() && getTabKeys().length > 1;
 

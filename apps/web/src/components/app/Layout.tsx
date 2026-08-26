@@ -366,10 +366,16 @@ function LayoutInner(props: RouteSectionProps) {
     () => isSidebarVisible() && !usesTopBar() && sidebarState() === 'slim'
   );
   /**
-   * The sidebar normally hosts call controls, so they float once it is slim —
-   * and always under the top bar, which has no room for them.
+   * The classic sidebar hosts the call controls, so they float once it is
+   * slim — and always under custom layout chrome (the top bar, or the V2/V4
+   * sidebars), none of which carries them.
    */
-  const callWidgetsFloat = createMemo(() => usesTopBar() || sidebarCollapsed());
+  const callWidgetsFloat = createMemo(
+    () =>
+      sidebarCollapsed() ||
+      (isSidebarVisible() && !!activeAppLayoutSurfaces()?.AppSidebar) ||
+      usesTopBar()
+  );
   const activeCallWidgetVisible = createMemo(
     () => callWidgetsFloat() && !!callCtx?.isInCall() && !callCtx?.isCallPage()
   );
