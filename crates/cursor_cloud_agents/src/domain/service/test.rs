@@ -630,6 +630,55 @@ async fn cancel_on_a_restored_session_finds_the_run_from_cursor() {
     );
 }
 
+/// The fallback lookup cancels every run it finds in progress, not just the
+/// first — Cursor documents one active run per agent, but that invariant is
+/// not enforced client-side, and cancelling one leaked run is cheaper than
+/// missing it.
+#[tokio::test]
+async fn cancel_on_a_restored_session_cancels_every_run_in_progress() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        AcpSessionId::new("cursor-acp-10"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+    );
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-creating"),
+            status: RunStatus::Creating,
+        },
+        RunListing {
+            id: CursorRunId::new("run-running"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+
+    service
+        .cancel(&AcpSessionId::new("cursor-acp-10"))
+        .await
+        .expect("cancel works");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![
+            CursorCall::CancelRun(
+                CursorAgentId::new("bc-restored"),
+                CursorRunId::new("run-creating"),
+            ),
+            CursorCall::CancelRun(
+                CursorAgentId::new("bc-restored"),
+                CursorRunId::new("run-running"),
+            ),
+        ]
+    );
+}
+
 /// A restored session with no run currently going is a no-op, not an error —
 /// the fallback lookup found nothing to cancel.
 #[tokio::test]

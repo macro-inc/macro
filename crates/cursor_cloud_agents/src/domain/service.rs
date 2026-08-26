@@ -524,33 +524,38 @@ where
         let Some(agent) = agent else {
             return Ok(());
         };
-        let run = match active_run {
-            Some(run) => Some(run),
-            None => self.current_run(&agent).await,
+        let runs = match active_run {
+            Some(run) => vec![run],
+            None => self.current_runs(&agent).await,
         };
-        if let Some(run) = run {
+        for run in runs {
             self.cursor.cancel_run(&agent, &run).await?;
         }
         Ok(())
     }
 
-    /// The agent's run still in progress, if any, per Cursor's own record.
+    /// The agent's runs still in progress, per Cursor's own record.
     ///
     /// The fallback [`Self::cancel`] takes when this process has no memory of
     /// one: best-effort, like the remote cancel itself, so a lookup failure
     /// costs the remote cancel, never the local one that already fired.
-    async fn current_run(&self, agent: &CursorAgentId) -> Option<CursorRunId> {
+    /// Cursor documents one active run per agent (see
+    /// [`Self::create_run_when_free`]), but that is a server-side invariant
+    /// this client does not enforce, so every match is cancelled rather than
+    /// just the first — cheap insurance against it ever slipping.
+    async fn current_runs(&self, agent: &CursorAgentId) -> Vec<CursorRunId> {
         let listings = match self.cursor.list_runs(agent).await {
             Ok(listings) => listings,
             Err(error) => {
                 tracing::warn!(%agent, %error, "could not list runs to find one to cancel");
-                return None;
+                return Vec::new();
             }
         };
         listings
             .into_iter()
-            .find(|listing| matches!(listing.status, RunStatus::Creating | RunStatus::Running))
+            .filter(|listing| matches!(listing.status, RunStatus::Creating | RunStatus::Running))
             .map(|listing| listing.id)
+            .collect()
     }
 
     /// Drop a session, reporting whether it existed. Any active run keeps
