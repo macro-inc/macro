@@ -24,6 +24,7 @@ import {
   $isDocumentMentionNode,
   $isMentionNode,
   $isWatermarkNode,
+  AGENT_INTERNAL_TRANSFORMERS,
   ALL_TRANSFORMERS,
   EXTERNAL_TRANSFORMERS,
   INITIALIZE_LOCAL_STATUS,
@@ -310,6 +311,7 @@ const weakTransformersByEditor = new WeakMap<
     internal: Transformer[];
     external: Transformer[];
     both: Transformer[];
+    agentInternal: Transformer[];
   }
 >();
 
@@ -330,7 +332,8 @@ export function setEditorStateFromMarkdown(
   target: 'external' | 'internal' | 'both' = 'internal',
   preserveNewLines = false,
   node?: ElementNode,
-  inUpdate = false
+  inUpdate = false,
+  allowAgentContext = false
 ) {
   if (!weakTransformersByEditor.has(editor)) {
     weakTransformersByEditor.set(editor, {
@@ -339,9 +342,14 @@ export function setEditorStateFromMarkdown(
       ),
       internal: [...ALL_TRANSFORMERS].filter(getEditorFilterFunction(editor)),
       both: [...ALL_TRANSFORMERS].filter(getEditorFilterFunction(editor)),
+      agentInternal: [...AGENT_INTERNAL_TRANSFORMERS].filter(
+        getEditorFilterFunction(editor)
+      ),
     });
   }
-  const transformers = weakTransformersByEditor.get(editor)![target];
+  const transformers = allowAgentContext
+    ? weakTransformersByEditor.get(editor)!.agentInternal
+    : weakTransformersByEditor.get(editor)![target];
 
   if (!inUpdate) {
     editor.update(() => {

@@ -52,7 +52,8 @@ async fn only_the_first_prompt_is_selected_for_automatic_naming() {
     let session = test_session();
     repo.insert_session(test_agent_session(session));
     let folds = FoldedMessageService::new(repo.clone());
-    let mut prompt = AgentAction::prompt("composed prompt with private context");
+    let mut prompt =
+        AgentAction::prompt("<m-agent-context>private</m-agent-context>\n\nfix the flaky tests");
     let AgentAction::Prompt(prompt_action) = &mut prompt else {
         unreachable!("the test constructed a prompt");
     };

@@ -9,7 +9,10 @@ import {
   $updateAllNodeIds,
   type NodeIdMappings,
 } from '../plugins/nodeIdPlugin';
-import { ALL_TRANSFORMERS } from '../transformers';
+import {
+  AGENT_INTERNAL_TRANSFORMERS,
+  ALL_TRANSFORMERS,
+} from '../transformers';
 
 function createNodeIdMappings(): NodeIdMappings {
   return {
@@ -24,7 +27,8 @@ function createNodeIdMappings(): NodeIdMappings {
  * migration path used by the app.
  */
 export function markdownToSerializedEditorStateWithIds(
-  markdown: string
+  markdown: string,
+  allowAgentContext = false
 ): SerializedEditorState {
   const editor = createHeadlessEditor({
     nodes: [...SupportedNodeTypes, ...NodeReplacements],
@@ -33,7 +37,10 @@ export function markdownToSerializedEditorStateWithIds(
 
   editor.update(
     () => {
-      $convertFromMarkdownString(markdown, ALL_TRANSFORMERS);
+      $convertFromMarkdownString(
+        markdown,
+        allowAgentContext ? AGENT_INTERNAL_TRANSFORMERS : ALL_TRANSFORMERS
+      );
     },
     { discrete: true }
   );
@@ -54,11 +61,16 @@ export function markdownToSerializedEditorStateWithIds(
  * two document versions by their rendered markdown.
  */
 export function serializedEditorStateToMarkdown(
-  state: SerializedEditorState
+  state: SerializedEditorState,
+  allowAgentContext = false
 ): string {
   const editor = createHeadlessEditor({
     nodes: [...SupportedNodeTypes, ...NodeReplacements],
   });
   const parsed = editor.parseEditorState(state);
-  return parsed.read(() => $convertToMarkdownString(ALL_TRANSFORMERS));
+  return parsed.read(() =>
+    $convertToMarkdownString(
+      allowAgentContext ? AGENT_INTERNAL_TRANSFORMERS : ALL_TRANSFORMERS
+    )
+  );
 }

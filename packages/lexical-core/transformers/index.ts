@@ -175,3 +175,10 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   ...CUSTOM_TRANSFORMERS,
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
+
+/** Internal parsing for trusted agent-session prompts enriched by the harness. */
+export const AGENT_INTERNAL_TRANSFORMERS: Transformer[] = [
+  ...ALL_TRANSFORMERS.slice(0, -1),
+  I_AGENT_CONTEXT,
+  UNKNOWN_MENTION,
+];
