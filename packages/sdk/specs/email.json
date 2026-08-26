@@ -4475,7 +4475,7 @@
           },
           "isSelf": {
             "type": "boolean",
-            "description": "Whether this attendee is one of the viewing requester's inboxes.\n\nOutbound projections use the requester's owned inboxes only.\nPersisted rows keep the provider's flag, which reminder decline reads."
+            "description": "Whether this attendee is one of the viewing requester's inboxes."
           },
           "responseStatus": {
             "$ref": "#/components/schemas/AttendeeResponseStatus",

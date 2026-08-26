@@ -1225,9 +1225,6 @@ export type CalendarAttendee = {
     isOrganizer: boolean;
     /**
      * Whether this attendee is one of the viewing requester's inboxes.
-     *
-     * Outbound projections use the requester's owned inboxes only.
-     * Persisted rows keep the provider's flag, which reminder decline reads.
      */
     isSelf: boolean;
     /**
