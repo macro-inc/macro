@@ -1,4 +1,4 @@
-import Funnel from '@phosphor-icons/core/regular/funnel.svg';
+import Funnel from '@lucide/funnel.svg';
 import type { ToolSenderPolicy } from '@service-cognition/generated/tools/types';
 import { createSignal } from 'solid-js';
 import { BaseTool } from './BaseTool';
