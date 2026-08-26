@@ -47,9 +47,14 @@ const WINDOW_SETTLE_MS = 250;
  * reads as the same kind of thing hovering over the page — `bg-surface` is the
  * page's own color and would disappear into it.
  */
-function DockPill(props: ParentProps) {
+function DockPill(props: ParentProps<{ class?: string }>) {
   return (
-    <div class="glass-lg pointer-events-auto flex items-center gap-0.5 rounded-full bg-(--color-menu-glass) p-1.5">
+    <div
+      class={cn(
+        'glass-lg pointer-events-auto flex items-center gap-0.5 rounded-full bg-(--color-menu-glass) p-1.5',
+        props.class
+      )}
+    >
       {props.children}
     </div>
   );
@@ -281,65 +286,18 @@ export function ExperimentalAppBottomBar() {
 
   return (
     // The row is the lane the splits reserve (`--app-dock-lane`), and it only
-    // takes presses where a pill actually is.
+    // takes presses where a pill actually is. What you do next pins to the
+    // left, the places sit in the middle, and what you have open pins to the
+    // right — a content-sized center column between two even ones, so the
+    // views stay screen-centered however wide the pills beside them grow.
     <div
-      class="pointer-events-none fixed inset-x-0 bottom-0 z-float flex justify-center gap-2 pb-3"
+      class="pointer-events-none fixed inset-x-0 bottom-0 z-float grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-4 pb-3"
       style={{ height: 'var(--app-dock-lane)' }}
     >
-      <DockPill>
-        <Tooltip label="Home" placement="top">
-          <button
-            type="button"
-            aria-label="Home"
-            class="flex size-9 shrink-0 items-center justify-center rounded-full text-accent outline-none transition-colors hover:bg-ink/8 focus-visible:ring-2 focus-visible:ring-accent/40"
-            {...pressHandlers(() => navigate(DEFAULT_ROUTE))}
-          >
-            <LogoIcon class="size-5" />
-          </button>
-        </Tooltip>
-        <span class="mx-1 h-5 w-px shrink-0 bg-edge-muted" aria-hidden="true" />
-        <nav aria-label="App views" class="flex items-center gap-0.5">
-          <For each={navigation.visibleViews()}>
-            {(destination) => (
-              <DockButton
-                label={destination.label}
-                ariaLabel={
-                  unreadCount(destination) > 0
-                    ? `${destination.label}, ${unreadCount(destination)} unread`
-                    : destination.label
-                }
-                icon={destination.icon}
-                activeIcon={destination.filledIcon}
-                active={navigation.isActive(destination)}
-                unread={unreadCount(destination)}
-                onPress={(event) =>
-                  navigation.openView(destination, { newSplit: event.shiftKey })
-                }
-              />
-            )}
-          </For>
-        </nav>
-      </DockPill>
-
-      <Show when={dockWindows().length > 0}>
-        <DockPill>
-          <For each={dockWindows()}>
-            {(window) => (
-              <DockWindowTab
-                window={window}
-                active={activeWindowKey() === window.key}
-                onOpen={() => openWindow(window)}
-                onClose={() => closeWindow(window)}
-              />
-            )}
-          </For>
-        </DockPill>
-      </Show>
-
       {/* Create, search and the companion splits ride outside the row of
           views, the way Fey detaches its search: the row is where you are,
           these are what you do next. */}
-      <DockPill>
+      <DockPill class="col-start-1 justify-self-start">
         <For each={CHROME_SPLIT_DESTINATIONS}>
           {(destination) => (
             <DockButton
@@ -405,6 +363,56 @@ export function ExperimentalAppBottomBar() {
           </button>
         </Tooltip>
       </DockPill>
+
+      <DockPill class="col-start-2 justify-self-center">
+        <Tooltip label="Home" placement="top">
+          <button
+            type="button"
+            aria-label="Home"
+            class="flex size-9 shrink-0 items-center justify-center rounded-full text-accent outline-none transition-colors hover:bg-ink/8 focus-visible:ring-2 focus-visible:ring-accent/40"
+            {...pressHandlers(() => navigate(DEFAULT_ROUTE))}
+          >
+            <LogoIcon class="size-5" />
+          </button>
+        </Tooltip>
+        <span class="mx-1 h-5 w-px shrink-0 bg-edge-muted" aria-hidden="true" />
+        <nav aria-label="App views" class="flex items-center gap-0.5">
+          <For each={navigation.visibleViews()}>
+            {(destination) => (
+              <DockButton
+                label={destination.label}
+                ariaLabel={
+                  unreadCount(destination) > 0
+                    ? `${destination.label}, ${unreadCount(destination)} unread`
+                    : destination.label
+                }
+                icon={destination.icon}
+                activeIcon={destination.filledIcon}
+                active={navigation.isActive(destination)}
+                unread={unreadCount(destination)}
+                onPress={(event) =>
+                  navigation.openView(destination, { newSplit: event.shiftKey })
+                }
+              />
+            )}
+          </For>
+        </nav>
+      </DockPill>
+
+      <Show when={dockWindows().length > 0}>
+        <DockPill class="col-start-3 justify-self-end">
+          <For each={dockWindows()}>
+            {(window) => (
+              <DockWindowTab
+                window={window}
+                active={activeWindowKey() === window.key}
+                onOpen={() => openWindow(window)}
+                onClose={() => closeWindow(window)}
+              />
+            )}
+          </For>
+        </DockPill>
+      </Show>
     </div>
   );
 }
