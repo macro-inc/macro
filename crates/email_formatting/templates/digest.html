@@ -21,16 +21,8 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..500&display=swap" rel="stylesheet">
     
-    <style type="text/css">
-      @font-face {
-        src: url("https://pub-4030931feb3e4212b2ac93166a411ea7.r2.dev/berkley.woff2")
-          format("woff2");
-        font-family: "Berkeley Mono";
-        font-display: fallback;
-      }
-    </style>
   </head>
   <body
     style="
@@ -44,9 +36,7 @@
     <div style="padding: 60px 20px; width: 100%">
       <div
         style="
-          font-family:
-            &quot;Berkeley Mono&quot;, &quot;Courier New&quot;, Courier,
-            monospace;
+          font-family: &quot;Inter&quot;, sans-serif;
           background-color: #fcfcfc;
           border: 1px solid #e0e0e0;
           box-sizing: border-box;
@@ -65,13 +55,25 @@
             box-sizing: border-box;
             line-height: 60px;
             font-size: 18px;
-            padding: 0 20px;
+            /* 26px left so the logo's center (26 + 15) matches the notif
+               bullets' center (20 + 17 + 4 = 41px) */
+            padding: 0 20px 0 26px;
             height: 60px;
             width: 100%;
             font-family: &quot;Inter&quot;, sans-serif;
           "
         >
-          You have {{ total_count }} new {% if total_count == 1 %}notification{%
+          <img
+            src="https://macro.com/app/macro-logo-orange.png"
+            width="30"
+            height="20"
+            alt=""
+            style="
+              vertical-align: middle;
+              margin-right: 10px;
+              border: 0;
+            "
+          />You have {{ total_count }} new {% if total_count == 1 %}notification{%
           else %}notifications{% endif %}
         </div>
         <hr
@@ -161,6 +163,7 @@
                       color: #090909;
                       font-size: 16px;
                       font-family: &quot;Inter&quot;, sans-serif;
+                      font-weight: 400;
                       line-height: 1.4;
                       word-wrap: break-word;
                       overflow-wrap: break-word;
@@ -222,19 +225,16 @@
           >
             <tbody>
               <tr>
-                <td style="vertical-align: bottom; width: 50%">
+                <td style="text-align: center">
                   <a
                     style="
-                      font-family:
-                        &quot;Berkeley Mono&quot;, &quot;Courier New&quot;,
-                        Courier, monospace;
+                      font-family: &quot;Inter&quot;, sans-serif;
                       background-color: #ff8f00;
                       text-decoration: none;
                       display: inline-block;
                       white-space: nowrap;
                       border-radius: 2px;
-                      width: min-content;
-                      padding: 4px 10px;
+                      padding: 8px 48px;
                       color: #090909;
                     "
                     href="https://macro.com"
@@ -242,25 +242,6 @@
                   >
                     View in Macro
                   </a>
-                </td>
-                <td
-                  style="
-                    vertical-align: top;
-                    text-align: right;
-                    padding: 0;
-                    width: 50%;
-                  "
-                >
-                  <img
-                    src="https://static-file-service.macro.com/file/b911aba9-94a6-435c-aa16-8404739f13b0"
-                    style="
-                      -ms-interpolation-mode: bicubic;
-                      line-height: 100%;
-                      outline: none;
-                      width: 60px;
-                      border: 0;
-                    "
-                  />
                 </td>
               </tr>
             </tbody>

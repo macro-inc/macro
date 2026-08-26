@@ -43,6 +43,7 @@ import { Appearance } from './Appearance';
 import { ConnectedAccounts } from './ConnectedAccounts';
 import { Crm } from './Crm';
 import { MobileApp } from './MobileApp';
+import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
 import { Team } from './Team';
@@ -388,6 +389,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   <Suspense>
                     <Account />
                   </Suspense>
+                </Show>
+                <Show when={isCurrentTab('Notifications')}>
+                  <Notifications />
                 </Show>
                 <Show when={isCurrentTab('Billing')}>
                   <Suspense>

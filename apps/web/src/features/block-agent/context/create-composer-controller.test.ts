@@ -9,6 +9,7 @@
 
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ControlOutcome } from '../state/control-message';
 import {
   createComposerController,
   TURN_OBSERVE_TIMEOUT_MS,
@@ -25,7 +26,12 @@ vi.mock('@service-agent-harness/client', () => ({
     control: vi.fn(async (sessionId: string, action: unknown) => {
       control.calls.push({ sessionId, action });
       if (control.outcome === 'reject') throw new Error('network');
-      return { isErr: () => control.outcome === 'err' };
+      return {
+        isErr: () => control.outcome === 'err',
+        // The action id the endpoint returns — the fold's `requestId` for
+        // the folded message this action derives. One per call, in order.
+        value: `action-${control.calls.length - 1}`,
+      };
     }),
   },
 }));
@@ -52,11 +58,29 @@ function setup(options?: {
     'sessionId' in (options ?? {}) ? options?.sessionId : 'session-1'
   );
   const [model, setModel] = createSignal<string | null>(options?.model ?? null);
+  // The fold's per-action outcomes, keyed by the id `control` returned.
+  const [outcomes, setOutcomes] = createSignal<Record<string, ControlOutcome>>(
+    {}
+  );
+  const resolveControl = (requestId: string, outcome: ControlOutcome) =>
+    setOutcomes((current) => ({ ...current, [requestId]: outcome }));
   const { controller, dispose } = createRoot((dispose) => ({
-    controller: createComposerController({ sessionId, working, model }),
+    controller: createComposerController({
+      sessionId,
+      working,
+      model,
+      controlOutcome: (requestId) => outcomes()[requestId],
+    }),
     dispose,
   }));
-  return { controller, setWorking, setSessionId, setModel, dispose };
+  return {
+    controller,
+    setWorking,
+    setSessionId,
+    setModel,
+    resolveControl,
+    dispose,
+  };
 }
 
 beforeEach(() => {
@@ -329,6 +353,68 @@ describe('a model change in flight', () => {
     await flush();
 
     expect(controller.changingModel()).toBeUndefined();
+    dispose();
+  });
+
+  it('clears when the runtime rejects the change', async () => {
+    const { controller, resolveControl, dispose } = setup({
+      model: 'old-model',
+    });
+    controller.setModel('new-model');
+    await flush();
+    expect(controller.changingModel()).toBe('new-model');
+
+    // The runtime refuses: the fold resolves this action's control outcome,
+    // the model never moves. The pending state must release on it alone.
+    resolveControl('action-0', {
+      kind: 'rejected',
+      message: 'no provider serves it',
+    });
+    await flush();
+
+    expect(controller.changingModel()).toBeUndefined();
+    dispose();
+  });
+
+  it("ignores another action's rejection", async () => {
+    const { controller, resolveControl, dispose } = setup({
+      model: 'old-model',
+    });
+    // An earlier change was refused before this request.
+    controller.setModel('new-model');
+    await flush();
+    controller.setModel('new-model');
+    await flush();
+
+    // The first action's rejection must not answer the second request…
+    resolveControl('action-0', { kind: 'rejected', message: 'refused' });
+    await flush();
+    expect(controller.changingModel()).toBe('new-model');
+
+    // …but its own does.
+    resolveControl('action-1', { kind: 'rejected', message: 'refused again' });
+    await flush();
+
+    expect(controller.changingModel()).toBeUndefined();
+    dispose();
+  });
+
+  it('keeps waiting while its own action is pending or accepted', async () => {
+    const { controller, resolveControl, dispose } = setup({
+      model: 'old-model',
+    });
+    controller.setModel('new-model');
+    await flush();
+
+    resolveControl('action-0', { kind: 'pending' });
+    await flush();
+    expect(controller.changingModel()).toBe('new-model');
+
+    // Accepted alone is not the end of the wait — the fold's `model` moving
+    // is (the accepted response carries it) — so the pending state holds.
+    resolveControl('action-0', { kind: 'accepted' });
+    await flush();
+    expect(controller.changingModel()).toBe('new-model');
     dispose();
   });
 });

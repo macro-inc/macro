@@ -752,6 +752,12 @@ if (DEV_MODE_ENV) {
       () => import('@core/component/LexicalMarkdown/builder/BuilderTestPage')
     )
   );
+  registerComponent(
+    'collab-surface-demo',
+    withAuth(
+      lazy(() => import('@core/collab-surface/debug/CollabSurfaceDemoPage'))
+    )
+  );
 }
 
 // Icon gallery

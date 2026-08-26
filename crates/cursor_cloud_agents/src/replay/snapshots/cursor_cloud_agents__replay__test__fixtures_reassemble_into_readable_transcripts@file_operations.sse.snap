@@ -1,0 +1,25 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 237
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/file_operations.sse
+---
+
+--- thinking ---
+I will create a file at /tmp/probe/a.txt containing "hello", read it back, rename it to /tmp/probe/b.txt, and delete it. All operations will use dedicated file tools rather than shell commands.
+
+There is no dedicated rename tool. I will copy the file to the new path with Write and remove the original with Delete.
+--- assistant ---
+I'll create `/tmp/probe/a.txt`, read it back, rename it to `b.txt`, then delete it — using file tools only, with no git or PR steps.
+--- thinking ---
+Created the file successfully. Now reading it back.The file was created and read back successfully. Now renaming it to /tmp/probe/b.txt.
+
+No dedicated rename tool exists. I'll copy the file to the new path and delete the original.
+--- assistant ---
+The file contains `hello`. I’ll copy that to `/tmp/probe/b.txt` and remove `/tmp/probe/a.txt` to rename it, then delete `b.txt`.
+--- thinking ---
+Deleting a.txt and then b.txt.The file was renamed to b.txt and then deleted.Created /tmp/probe/a.txt with "hello", read it back, renamed it to /tmp/probe/b.txt, and deleted it. No commits, pushes, or pull requests were made.
+
+No rename tool was available, so the rename was done by writing the new file and deleting the old one.
+--- assistant ---
+Created `/tmp/probe/a.txt` with `hello`, read it back successfully, renamed it to `/tmp/probe/b.txt` (write + delete, since there is no dedicated rename tool), then deleted `/tmp/probe/b.txt`. No commit, push, or PR.

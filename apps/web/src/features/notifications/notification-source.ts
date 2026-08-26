@@ -5,6 +5,10 @@ import {
 import type { Entity } from '@core/types';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
+  useMuteItemMutation,
+  useUnmuteItemMutation,
+} from '@queries/notification/unsubscribes';
+import {
   optimisticInsertNotification,
   type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
@@ -12,7 +16,6 @@ import {
   useUserNotificationsQuery,
 } from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
-import { notificationServiceClient } from '@service-notification/client';
 import type {
   ConnGatewayNotificationPayload,
   NotifEvent,
@@ -148,6 +151,8 @@ export function createNotificationSource(
     limit: QUERY_LIMIT,
   }));
   const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: QUERY_LIMIT });
+  const muteItem = useMuteItemMutation();
+  const unmuteItem = useUnmuteItemMutation();
 
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
@@ -405,21 +410,17 @@ export function createNotificationSource(
   };
 
   const muteEntity = async (entity: Entity) => {
-    await notificationServiceClient.unsubscribeItem({
+    await muteItem.mutateAsync({
       item_id: entity.id,
       item_type: entity.type,
     });
-
-    await mutedEntitiesQuery.refetch();
   };
 
   const unmuteEntity = async (entity: Entity) => {
-    await notificationServiceClient.removeUnsubscribeItem({
+    await unmuteItem.mutateAsync({
       item_id: entity.id,
       item_type: entity.type,
     });
-
-    await mutedEntitiesQuery.refetch();
   };
 
   const subscribe = (subscribeFn: SubscribeFn) => {

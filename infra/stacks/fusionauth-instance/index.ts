@@ -66,7 +66,7 @@ const passwordlessEmailTemplate = new FusionAuthEMail(
       './templates/passwordless_email_template.html',
       'utf-8'
     ),
-    defaultTextTemplate: 'Your login code is: ${code}',
+    defaultTextTemplate: 'Here is your temporary login code: ${code}',
     defaultFromName: 'Macro',
   },
   { provider: fusionAuthProvider }

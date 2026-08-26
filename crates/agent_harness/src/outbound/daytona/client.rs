@@ -347,6 +347,11 @@ impl DaytonaClient {
     }
 
     /// Stop a running sandbox without deleting it.
+    ///
+    /// A sandbox Daytona no longer knows (404) counts as stopped: it is
+    /// already in the state the caller asked for, and treating it as a
+    /// failure puts the idle reaper into an endless retry loop against a
+    /// sandbox that was deleted out from under it.
     #[tracing::instrument(err, skip(self))]
     pub async fn stop(&self, sandbox_id: &str) -> Result<()> {
         let operation = "stop sandbox";
@@ -358,7 +363,7 @@ impl DaytonaClient {
             .await
             .map_err(|source| DaytonaError::Request { operation, source })?;
         let status = response.status();
-        if status.is_success() {
+        if status.is_success() || status == reqwest::StatusCode::NOT_FOUND {
             return Ok(());
         }
         let body = response
@@ -438,16 +443,34 @@ impl DaytonaClient {
     }
 
     /// Destroy a sandbox.
+    ///
+    /// A sandbox Daytona no longer knows (404) counts as deleted — already
+    /// the state the caller asked for — so a repeated delete (or one racing
+    /// Daytona's own cleanup) cannot park the sandbox in the failed-stop
+    /// retry queue forever.
     #[tracing::instrument(err, skip(self))]
     pub async fn delete(&self, sandbox_id: &str) -> Result<()> {
-        let _: serde::de::IgnoredAny = self
-            .json(
-                self.http
-                    .delete(format!("{}/sandbox/{sandbox_id}", self.base)),
-                "delete sandbox",
-            )
-            .await?;
-        Ok(())
+        let operation = "delete sandbox";
+        let response = self
+            .http
+            .delete(format!("{}/sandbox/{sandbox_id}", self.base))
+            .bearer_auth(self.api_key.expose())
+            .send()
+            .await
+            .map_err(|source| DaytonaError::Request { operation, source })?;
+        let status = response.status();
+        if status.is_success() || status == reqwest::StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        let body = response
+            .text()
+            .await
+            .map_err(|source| DaytonaError::ReadResponse { operation, source })?;
+        Err(DaytonaError::Api {
+            operation,
+            status,
+            body,
+        })
     }
 
     /// Poll the sidecar readiness endpoint until it succeeds.

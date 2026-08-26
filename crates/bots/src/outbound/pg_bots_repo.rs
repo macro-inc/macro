@@ -380,6 +380,11 @@ impl BotRepo for PgBotsRepo {
     }
 
     async fn get_bot(&self, bot_id: BotId) -> Result<Option<Bot>, Self::Err> {
+        // First-party bots are compile-time constants with no row, so they are
+        // answered from the registry rather than looked up and missed.
+        if let Some(system) = bot_id::system_bot(bot_id) {
+            return Ok(Some(Bot::system(system)));
+        }
         let row = sqlx::query_as!(
             BotRow,
             r#"
