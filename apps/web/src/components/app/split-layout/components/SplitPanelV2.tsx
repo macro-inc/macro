@@ -179,6 +179,12 @@ export function SplitPanelV2(props: SplitPanelProps) {
     () => isSoloSettings() || contentOwnsSplitChrome()
   );
 
+  /**
+   * Flat layouts separate splits with the zone's hairline seam instead of
+   * floating cards, so the panel drops its rounding, border and shadow.
+   */
+  const flatSeams = () => activeAppLayout().capabilities.flatSplitSeams;
+
   const splitFocusStyling = () =>
     !isTouchDevice() &&
     props.active &&
@@ -317,10 +323,14 @@ export function SplitPanelV2(props: SplitPanelProps) {
                 'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
                 splitUnfocusedStyling() && 'split-panel-inactive',
                 {
-                  'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
-                  'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
-                  'border-solid!': previewPairFocusStyling() && props.active,
-                  'border-dashed!': previewPairFocusStyling() && !props.active,
+                  'shadow-sm shadow-drop-shadow/50':
+                    splitUnfocusedStyling() && !flatSeams(),
+                  'shadow-2xl shadow-drop-shadow':
+                    splitFocusStyling() && !flatSeams(),
+                  'border-solid!':
+                    !flatSeams() && previewPairFocusStyling() && props.active,
+                  'border-dashed!':
+                    !flatSeams() && previewPairFocusStyling() && !props.active,
                   // Drawer look: both members square their seam corners. The
                   // seam border always belongs to the Controller — the
                   // Viewer's seam edge stays borderless so the line never
@@ -330,8 +340,10 @@ export function SplitPanelV2(props: SplitPanelProps) {
                   // shorthand).
                   'rounded-l-none border-l-0!': tuckedBehindController(),
                   'rounded-r-none': hasTuckedViewer(),
-                }
+                },
+                flatSeams() && 'rounded-none'
               )}
+              hideBorder={flatSeams()}
               depth={isTouchDevice() ? 0 : 1}
             >
               <Panel.Header

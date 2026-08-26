@@ -1,5 +1,6 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
@@ -403,13 +404,20 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     return defaultIdx !== -1 ? defaultIdx : 0;
   };
 
+  /**
+   * A top bar owns Tab for switching app views, so the in-view tabs give the
+   * key up rather than shadowing it from the closer scope.
+   */
+  const tabKeysNavigable = () =>
+    getTabKeys().length > 1 && !activeAppLayout().capabilities.usesTopBar;
+
   // tab - Next tab
   registerHotkey({
     hotkey: ['tab'],
     scopeId,
     hotkeyToken: TOKENS.soup.tabs.next,
     description: 'Next tab',
-    condition: () => getTabKeys().length > 1,
+    condition: tabKeysNavigable,
     keyDownHandler: () => {
       const view = currentView();
       if (!view) return false;
@@ -426,7 +434,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     scopeId,
     hotkeyToken: TOKENS.soup.tabs.prev,
     description: 'Previous tab',
-    condition: () => getTabKeys().length > 1,
+    condition: tabKeysNavigable,
     keyDownHandler: () => {
       const view = currentView();
       if (!view) return false;

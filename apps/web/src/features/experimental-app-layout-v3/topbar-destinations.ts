@@ -61,10 +61,28 @@ const componentDestination = (
   };
 };
 
+/** Full-screen from the center row, or alongside a view from the right. */
+const CALENDAR_DESTINATION: TopBarDestination = {
+  id: 'calendar',
+  label: 'Calendar',
+  content: { type: 'calendar', id: CALENDAR_BLOCK_ID },
+  path: `/calendar/${CALENDAR_BLOCK_ID}`,
+  icon: CalendarIcon,
+  filledIcon: CalendarFilledIcon,
+};
+
+const AI_CHAT_DESTINATION: TopBarDestination = {
+  id: 'ai-chat',
+  label: 'AI chat',
+  content: { type: 'component', id: 'chat-workspace' },
+  path: '/chat',
+  icon: AiChatIcon,
+  filledIcon: AiChatFilledIcon,
+};
+
 /**
  * The views that sit in the middle of the bar, in Facebook's "one row of
- * primary destinations" order. Calendar and AI chat are deliberately absent:
- * they open alongside the current view from the right cluster instead.
+ * primary destinations" order.
  */
 export const TOP_BAR_VIEWS: readonly TopBarDestination[] = [
   componentDestination({
@@ -106,6 +124,7 @@ export const TOP_BAR_VIEWS: readonly TopBarDestination[] = [
     icon: TasksIcon,
     filledIcon: TasksFilledIcon,
   }),
+  CALENDAR_DESTINATION,
   {
     id: 'brain',
     label: 'Brain',
@@ -126,26 +145,17 @@ export const TOP_BAR_VIEWS: readonly TopBarDestination[] = [
 
 /** Opened as their own split from the right of the bar. */
 export const TOP_BAR_SPLIT_DESTINATIONS: readonly TopBarDestination[] = [
-  {
-    id: 'ai-chat',
-    label: 'AI chat',
-    content: { type: 'component', id: 'chat-workspace' },
-    path: '/chat',
-    icon: AiChatIcon,
-    filledIcon: AiChatFilledIcon,
-  },
-  {
-    id: 'calendar',
-    label: 'Calendar',
-    content: { type: 'calendar', id: CALENDAR_BLOCK_ID },
-    path: `/calendar/${CALENDAR_BLOCK_ID}`,
-    icon: CalendarIcon,
-    filledIcon: CalendarFilledIcon,
-  },
+  AI_CHAT_DESTINATION,
+  CALENDAR_DESTINATION,
 ];
 
-/** The Gmail-style app grid lists every destination the bar can reach. */
+/**
+ * The Gmail-style app grid lists every destination the bar can reach, once
+ * each — Calendar answers to both the center row and the right cluster.
+ */
 export const TOP_BAR_SUB_APPS: readonly TopBarDestination[] = [
   ...TOP_BAR_VIEWS,
-  ...TOP_BAR_SPLIT_DESTINATIONS,
+  ...TOP_BAR_SPLIT_DESTINATIONS.filter(
+    (destination) => !TOP_BAR_VIEWS.includes(destination)
+  ),
 ];

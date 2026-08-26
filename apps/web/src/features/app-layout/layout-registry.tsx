@@ -6,6 +6,11 @@ export type AppLayoutCapabilities = {
   usesCalendarWorkspace: boolean;
   /** App chrome is a horizontal bar above the splits instead of a sidebar. */
   usesTopBar: boolean;
+  /**
+   * Splits run edge to edge and are divided by a hairline seam rather than
+   * floating as rounded, shadowed cards over the page.
+   */
+  flatSplitSeams: boolean;
   compactSplitHeader: boolean;
   removesSplitContentLeftPadding: boolean;
 };
@@ -42,6 +47,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
       usesTopBar: false,
+      flatSplitSeams: false,
       compactSplitHeader: false,
       removesSplitContentLeftPadding: false,
     },
@@ -58,6 +64,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesBrainWorkspace: false,
       usesCalendarWorkspace: false,
       usesTopBar: false,
+      flatSplitSeams: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
@@ -78,6 +85,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesBrainWorkspace: true,
       usesCalendarWorkspace: true,
       usesTopBar: false,
+      flatSplitSeams: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
@@ -100,6 +108,7 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesBrainWorkspace: true,
       usesCalendarWorkspace: true,
       usesTopBar: true,
+      flatSplitSeams: true,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
