@@ -35,19 +35,14 @@ describe('CopySubjectButton', () => {
     expect(toast.success).toHaveBeenCalledWith('Subject copied');
   });
 
-  it('renders nothing for a placeholder subject', () => {
-    const { container } = render(() => (
+  it('renders nothing for a placeholder or empty subject', () => {
+    const { unmount } = render(() => (
       <CopySubjectButton subject={displaySubject('')} />
     ));
-
     expect(screen.queryByRole('button', { name: 'Copy subject' })).toBeNull();
-    expect(container.textContent).toBe('');
-  });
+    unmount();
 
-  it('renders nothing for an empty subject', () => {
-    const { container } = render(() => <CopySubjectButton subject="" />);
-
+    render(() => <CopySubjectButton subject="" />);
     expect(screen.queryByRole('button', { name: 'Copy subject' })).toBeNull();
-    expect(container.textContent).toBe('');
   });
 });

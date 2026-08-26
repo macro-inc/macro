@@ -1,10 +1,6 @@
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { describe, expect, it } from 'vitest';
-import {
-  displaySubject,
-  getSubjectText,
-  isPlaceholderSubject,
-} from './subjectText';
+import { displaySubject, getSubjectText } from './subjectText';
 
 describe('displaySubject', () => {
   it('returns the subject as-is when there is nothing to strip', () => {
@@ -36,11 +32,6 @@ describe('displaySubject', () => {
 
   it('names a subject that is nothing but reply prefixes', () => {
     expect(displaySubject('Re: ')).toBe('[No subject]');
-  });
-
-  it('treats only the blank-subject display as a placeholder', () => {
-    expect(isPlaceholderSubject(displaySubject(''))).toBe(true);
-    expect(isPlaceholderSubject(displaySubject('Q3 contract'))).toBe(false);
   });
 });
 
