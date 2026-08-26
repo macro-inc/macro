@@ -58,16 +58,9 @@ async fn test_dynamic_query_notification_seen_filters_by_is_read(
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let unread_filter = Arc::new(Expr::Literal(EmailLiteral::NotificationSeen(false)));
     let unread_query = Query::new(None, SimpleSortMethod::UpdatedAt, unread_filter);
-    let unread_results = dynamic::dynamic_email_thread_cursor(
-        &pool,
-        &[link_id],
-        50,
-        &view,
-        unread_query,
-        "",
-        None,
-    )
-    .await?;
+    let unread_results =
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, unread_query, "", None)
+            .await?;
 
     assert!(
         unread_results.iter().all(|r| !r.is_read),
