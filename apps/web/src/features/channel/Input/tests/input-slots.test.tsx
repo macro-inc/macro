@@ -2,8 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { render as renderBare, screen } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
+import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
@@ -25,6 +27,10 @@ vi.hoisted(() => {
 vi.mock('@core/util/upload', () => ({
   chatRuleset: {},
   uploadFile: vi.fn(),
+}));
+
+vi.mock('@core/cursor/flag', () => ({
+  useCursorAgentsAccess: () => () => true,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -205,6 +211,22 @@ const baseInput: InputData = {
   hasPendingAttachments: false,
   attachments: [],
 };
+
+/**
+ * `ChannelInput` reads the stored Cursor API key status to decide whether to
+ * offer `@cursor` in the mention typeahead, so it needs a query client even
+ * though none of these tests care about that entry. Shadowing `render` keeps
+ * every call site below unchanged.
+ */
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+function render(ui: () => JSX.Element) {
+  return renderBare(() => (
+    <QueryClientProvider client={testQueryClient}>{ui()}</QueryClientProvider>
+  ));
+}
 
 describe('Input slots', () => {
   it('renders the default action composition and wires handlers through context', async () => {

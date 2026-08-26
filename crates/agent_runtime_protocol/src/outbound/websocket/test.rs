@@ -241,3 +241,90 @@ async fn role_connections_run_over_a_runtime_initiated_websocket() {
 
     server_handle.abort();
 }
+
+/// A socket that accepts everything written to it and never says anything
+/// back: the half-open connection this pump's pings exist to catch, where
+/// writes keep succeeding into a peer that will never answer again.
+struct StalledSocket {
+    sent: futures::channel::mpsc::UnboundedSender<TungsteniteMessage>,
+}
+
+impl futures::Sink<TungsteniteMessage> for StalledSocket {
+    type Error = futures::channel::mpsc::SendError;
+
+    fn poll_ready(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::pin::Pin::new(&mut self.get_mut().sent).poll_ready(context)
+    }
+
+    fn start_send(
+        self: std::pin::Pin<&mut Self>,
+        item: TungsteniteMessage,
+    ) -> Result<(), Self::Error> {
+        std::pin::Pin::new(&mut self.get_mut().sent).start_send(item)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::pin::Pin::new(&mut self.get_mut().sent).poll_flush(context)
+    }
+
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::pin::Pin::new(&mut self.get_mut().sent).poll_close(context)
+    }
+}
+
+impl futures::Stream for StalledSocket {
+    type Item = Result<TungsteniteMessage, futures::channel::mpsc::SendError>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        std::task::Poll::Pending
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_idle_socket_is_pinged_rather_than_left_to_rot() {
+    let (sent, mut frames) = futures::channel::mpsc::unbounded();
+    let (_outgoing, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming, _incoming_rx) = mpsc::unbounded_channel::<ToServerMessage>();
+    tokio::spawn(run_pump(StalledSocket { sent }, outgoing_rx, incoming));
+
+    // Nothing has been asked of this connection, which is exactly when a
+    // dead one used to go unnoticed.
+    tokio::time::sleep(PING_INTERVAL + Duration::from_millis(100)).await;
+
+    let first = frames.next().await.expect("the pump should ping");
+    assert!(
+        matches!(first, TungsteniteMessage::Ping(_)),
+        "an idle pump's first frame should be a ping, got {first:?}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_socket_that_stops_answering_pings_is_closed() {
+    let (sent, _frames) = futures::channel::mpsc::unbounded();
+    let (_outgoing, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming, mut incoming_rx) = mpsc::unbounded_channel::<ToServerMessage>();
+    tokio::spawn(run_pump(StalledSocket { sent }, outgoing_rx, incoming));
+
+    // The pump dropping its sender is what every layer above reads as the
+    // connection ending, so awaiting that is awaiting the teardown itself -
+    // no polling for a state change.
+    let ended = timeout(SILENCE_TIMEOUT * 2, incoming_rx.recv())
+        .await
+        .expect("a silent socket should be given up on, not waited on forever");
+    assert!(
+        ended.is_none(),
+        "the pump should close its inbound channel when the peer goes quiet"
+    );
+}

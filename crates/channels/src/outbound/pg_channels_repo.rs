@@ -647,7 +647,19 @@ async fn load_bot_display_names(
     if bot_ids.is_empty() {
         return Ok(HashMap::new());
     }
-    let uuids: Vec<Uuid> = bot_ids.iter().map(|bot_id| bot_id.as_uuid()).collect();
+    // First-party bots have no row; their names come from the registry.
+    let mut names: HashMap<BotId, String> = bot_ids
+        .iter()
+        .filter_map(|bot_id| bot_id::system_bot(*bot_id).map(|bot| (*bot_id, bot.name.to_owned())))
+        .collect();
+    let uuids: Vec<Uuid> = bot_ids
+        .iter()
+        .filter(|bot_id| !bot_id::is_system_bot(**bot_id))
+        .map(|bot_id| bot_id.as_uuid())
+        .collect();
+    if uuids.is_empty() {
+        return Ok(names);
+    }
     let rows = sqlx::query!(
         r#"
         SELECT id, name
@@ -658,10 +670,11 @@ async fn load_bot_display_names(
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| (BotId::new_from_uuid(row.id), row.name))
-        .collect())
+    names.extend(
+        rows.into_iter()
+            .map(|row| (BotId::new_from_uuid(row.id), row.name)),
+    );
+    Ok(names)
 }
 
 async fn load_user_display_names(
@@ -3885,7 +3898,29 @@ impl ChannelRepo for PgChannelsRepo {
             return Ok(HashMap::new());
         }
 
-        let ids: Vec<Uuid> = bot_ids.iter().map(|id| id.as_uuid()).collect();
+        // First-party bots have no row; their profiles come from the registry.
+        let mut profiles: HashMap<BotId, BotSenderProfile> = bot_ids
+            .iter()
+            .filter_map(|id| {
+                bot_id::system_bot(*id).map(|bot| {
+                    (
+                        *id,
+                        BotSenderProfile {
+                            name: bot.name.to_owned(),
+                            avatar_url: None,
+                        },
+                    )
+                })
+            })
+            .collect();
+        let ids: Vec<Uuid> = bot_ids
+            .iter()
+            .filter(|id| !bot_id::is_system_bot(**id))
+            .map(|id| id.as_uuid())
+            .collect();
+        if ids.is_empty() {
+            return Ok(profiles);
+        }
         // Soft-deleted bots are included on purpose so historical messages
         // keep their sender identity.
         let rows = sqlx::query!(
@@ -3900,17 +3935,15 @@ impl ChannelRepo for PgChannelsRepo {
         .await
         .context("unable to fetch bot profiles")?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| {
-                (
-                    BotId::new_from_uuid(row.id),
-                    BotSenderProfile {
-                        name: row.name,
-                        avatar_url: row.avatar_url,
-                    },
-                )
-            })
-            .collect())
+        profiles.extend(rows.into_iter().map(|row| {
+            (
+                BotId::new_from_uuid(row.id),
+                BotSenderProfile {
+                    name: row.name,
+                    avatar_url: row.avatar_url,
+                },
+            )
+        }));
+        Ok(profiles)
     }
 }

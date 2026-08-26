@@ -43,6 +43,7 @@ import { scrollToMessage } from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailParticipants } from './EmailParticipants';
+import { EmailThreadTitle } from './EmailThreadTitle';
 import { openEmailReplyComposerForMessage } from './emailReplyActions';
 import { MessageList } from './MessageList';
 import { MobileEmailComposeDrawer } from './MobileEmailComposeDrawer';
@@ -752,9 +753,11 @@ function EmailContent(props: EmailViewProps) {
                         }}
                       >
                         <div class="h-12" />
-                        <h1 class="ph-no-capture text-2xl font-semibold text-ink pb-1.5 tracking-tight text-balance">
-                          {props.title}
-                        </h1>
+                        <EmailThreadTitle
+                          title={props.title}
+                          copyReveal="hover"
+                          class="text-2xl pb-1.5"
+                        />
                         <div class="pb-2.5">
                           <EmailParticipants />
                         </div>

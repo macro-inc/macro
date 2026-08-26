@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\"\n            FROM agent_session\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY created_at DESC\n            LIMIT 1\n            ",
+  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY agent_session.created_at DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -87,6 +87,26 @@
         "ordinal": 16,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 17,
+        "name": "external_provider?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "external_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "external_name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "external_url?",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -112,8 +132,12 @@
       true,
       false,
       false,
-      null
+      null,
+      false,
+      false,
+      true,
+      true
     ]
   },
-  "hash": "e704ea1b7a9e9668b11c8b59f537a88cec7bb843b1133cd55ff9b414093b70eb"
+  "hash": "040b43c242db0706989c48b8eaa72c02b649035b1749e7c8494c1fba5b98100d"
 }

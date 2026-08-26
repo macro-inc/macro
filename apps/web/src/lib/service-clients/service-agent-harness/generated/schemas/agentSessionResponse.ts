@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
+import type { AgentSessionResponseExternal } from './agentSessionResponseExternal';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
@@ -24,6 +25,7 @@ export interface AgentSessionResponse {
   botId: string;
   /** When the session was created. */
   createdAt: string;
+  external?: AgentSessionResponseExternal;
   /** Harness slug. */
   harness: string;
   /** The session id. */

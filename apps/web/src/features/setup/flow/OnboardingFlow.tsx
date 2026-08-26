@@ -1,7 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { FEATURED_MCP_SERVERS } from '@core/component/AI/constant/mcpServers';
-import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import LogoIcon from '@icon/macro-logo.svg';
 import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
@@ -29,12 +28,10 @@ import type { ModuleLogo, ModuleState } from '../Module';
 import { MODULE_LOGOS } from '../moduleLogos';
 import { BrandHandoff, type BrandHandoffSource } from './BrandHandoff';
 import { BuildingStep, type ConnectedTools } from './BuildingStep';
-import { ConnectorCatalogStep } from './ConnectorCatalogStep';
 import { ConnectorStep } from './ConnectorStep';
 import { createFlowFinish } from './createFlowFinish';
 import { EmailStep } from './EmailStep';
 import {
-  ONBOARDING_CATALOG_STEP_KEY,
   ONBOARDING_CONNECTORS_FEATURE_FLAG,
   type OnboardingConnectorServerName,
   resolveOnboardingConnectorNames,
@@ -145,11 +142,8 @@ const CONNECTOR_COPY: Record<string, ConnectorStepCopy> = {
 function buildSteps(
   connectorNames: readonly OnboardingConnectorServerName[],
   connectedTools: () => ConnectedTools,
-  onBuildingDone: (source: BrandHandoffSource | null) => void,
-  /** Whether to offer the searchable catalog after the curated connectors. */
-  includeCatalog: boolean
+  onBuildingDone: (source: BrandHandoffSource | null) => void
 ): StepDef[] {
-  const curatedSlugs: string[] = [];
   const connectorSteps: StepDef[] = connectorNames.flatMap((name) => {
     const server = FEATURED_MCP_SERVERS.find(
       (candidate) => candidate.server_name === name
@@ -157,7 +151,6 @@ function buildSteps(
     const copy = CONNECTOR_COPY[name];
     if (!server || !copy) return [];
     const logo = connectorLogo(name);
-    curatedSlugs.push(server.app_slug);
     return [
       {
         key: `connect-${name.toLowerCase()}`,
@@ -191,25 +184,6 @@ function buildSteps(
       ),
     },
     ...connectorSteps,
-    // Only on the Pipedream stack: the native stack has no catalog to
-    // browse, just the presets the curated steps already offered.
-    ...(includeCatalog
-      ? [
-          {
-            key: ONBOARDING_CATALOG_STEP_KEY,
-            title: 'Connect anything else',
-            subtitle:
-              "Macro's agent can work in any of these tools. Connect the ones your team lives in — you can add more later in Settings.",
-            render: (controls: StepControls) => (
-              <ConnectorCatalogStep
-                curatedSlugs={curatedSlugs}
-                onContinue={controls.next}
-                onSkip={controls.skip}
-              />
-            ),
-          } satisfies StepDef,
-        ]
-      : []),
     {
       key: 'team',
       title: 'Macro is meant for teams',
@@ -354,14 +328,12 @@ function FlowContent() {
   };
 
   const connectorConfig = useFeatureFlag(ONBOARDING_CONNECTORS_FEATURE_FLAG);
-  const pipedreamMcp = usePipedreamMcpFlag();
   const steps = createMemo(() => {
     const config = connectorConfig();
     return buildSteps(
       resolveOnboardingConnectorNames(config.enabled, config.payload),
       connectedTools,
-      startBrandHandoff,
-      pipedreamMcp()
+      startBrandHandoff
     );
   });
 

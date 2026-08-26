@@ -1,0 +1,69 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 237
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/list_and_delete.sse
+---
+
+--- thinking ---
+Listing the top-level directories of this repository.
+
+Next steps: read the first 20 lines of Cargo.toml, delete docs/PROBE.md if it exists, and avoid committing, pushing, or opening a PR.
+--- assistant ---
+I'll list the repo's top-level directories, read the first 20 lines of `Cargo.toml`, then delete `docs/PROBE.md` if it's present. No commit, push, or PR.
+--- thinking ---
+The initial glob search was recursive rather than a true top-level directory listing.
+
+Using `ls` to list top-level directories. The docs/PROBE.md file does not exist, but I will still attempt to delete it as requested.
+--- assistant ---
+Glob listed files recursively rather than just top-level dirs, so I’ll list the repo root with `ls` and then try deleting `docs/PROBE.md`.
+--- thinking ---
+I listed the top-level directories using ls.
+
+I extracted the top-level directories from the ls output. I read the first 20 lines of Cargo.toml. The file docs/PROBE.md does not exist, so no deletion was needed. I will not commit, push, or open a pull request.All requested information is ready.
+--- assistant ---
+Listed the repo root, read `Cargo.toml`, and attempted the delete. No commit, push, or PR.
+
+**Top-level directories**
+
+- `apps`
+- `crates`
+- `docker`
+- `docs`
+- `infra`
+- `nix`
+- `nix-support`
+- `node_modules`
+- `packages`
+- `rules`
+- `services`
+- `static_assets`
+- `target`
+- `tooling`
+
+**First 20 lines of `Cargo.toml`**
+
+```1:20:/workspace/Cargo.toml
+[workspace]
+resolver = "2"
+
+members = [
+  "crates/activity",
+  "crates/agent", "crates/agent_fold",
+  "crates/agent_harness",
+  "crates/agent_runtime_protocol", "crates/agent_session",
+  "crates/agent_trigger",
+  "crates/ai_projections",
+  "crates/ai_usage",
+  "crates/bot_id",
+  "crates/bots",
+  "crates/broadcast",
+  "crates/calendar_events",
+  "crates/channel_bots",
+  "crates/client/cache-core",
+  "crates/client/cache-turso",
+  "crates/client/cache-wasm",
+  "crates/client/turso-opfs",
+```
+
+**Delete:** `docs/PROBE.md` was not present (`File not found`).

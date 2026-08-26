@@ -1,5 +1,5 @@
 //! Frontend dev-server orchestration: generate the instance env, wait for the
-//! backend to be reachable through the proxy, then launch `bun run dev` pointed
+//! backend to be reachable through the proxy, then launch Vite pointed
 //! at the proxy origin.
 
 use std::io::Read;
@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
 
-/// The app dir where `bun run dev` runs.
+/// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
 }
@@ -165,11 +165,13 @@ impl Frontend {
     /// moment the processes die. Then reap `bun` and join the drain threads (their
     /// pipes close, so they exit).
     pub fn shutdown(&mut self) {
-        let pgid = self.child.id() as i32;
-        // SAFETY: a plain `kill(2)`; an invalid/already-dead group is a harmless
-        // ESRCH. The negative pid targets the whole process group.
-        unsafe {
-            libc::kill(-pgid, libc::SIGKILL);
+        if matches!(self.child.try_wait(), Ok(None)) {
+            let pgid = self.child.id() as i32;
+            // SAFETY: a plain `kill(2)`; an invalid/already-dead group is a harmless
+            // ESRCH. The negative pid targets the whole process group.
+            unsafe {
+                libc::kill(-pgid, libc::SIGKILL);
+            }
         }
         let _ = self.child.wait();
         for h in self.drains.drain(..) {
@@ -185,6 +187,12 @@ impl Frontend {
         }
         let buf = self.captured.lock().unwrap_or_else(|e| e.into_inner());
         tail_str(&String::from_utf8_lossy(&buf), lines)
+    }
+}
+
+impl Drop for Frontend {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 
@@ -231,12 +239,19 @@ pub fn start(
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
+    let mut prepare = Command::new("bash");
+    prepare.current_dir(app_dir()).args([
+        "-lc",
+        "just ensure-cache-wasm && just ensure-agent-fold-wasm",
+    ]);
+    stage.run("Preparing frontend dependencies", &mut prepare)?;
+
     let mut cmd = Command::new("bun");
     cmd.current_dir(app_dir())
-        .args(["run", "--bun", "dev"])
-        // Run bun (and the Vite child it spawns) in its OWN process group, so
-        // `shutdown` can signal the whole group — killing just `bun` would orphan
-        // Vite and leave the port held. (0 = "new group led by the child".)
+        .arg(repo_root().join("node_modules/vite/bin/vite.js"))
+        .args(["-c", "vite.config.ts"])
+        // Run Vite directly in its OWN process group. Avoiding the `bun run`
+        // package-script wrapper keeps the listener in the process we own.
         .process_group(0)
         // Open-but-empty stdin (piped, held open, never written): vite sees a
         // non-TTY stdin so it won't bind its own keypress shortcuts (no fight

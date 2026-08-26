@@ -13,7 +13,7 @@ use model::document::{FileType, FileTypeExt};
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
-use crate::domain::models::{CreateDocumentRepoArgs, DocumentError};
+use crate::domain::models::{CreateDocumentRepoArgs, DocumentError, ImportEmailAttachmentRepoArgs};
 use crate::domain::ports::DocumentService;
 use crate::domain::response::CreateDocumentResponse;
 
@@ -96,7 +96,6 @@ pub async fn create_document_handler<
         file_type,
         project_id: req.project_id,
         team_id,
-        email_attachment_id: req.email_attachment_id,
         created_at: req.created_at,
         sub_type: req
             .is_task
@@ -105,14 +104,24 @@ pub async fn create_document_handler<
         attribution: None,
     };
 
-    let response_data = state
-        .service
-        .create_document(
-            user.authorization.user.macro_user_id.clone(),
-            args,
-            req.job_id,
-        )
-        .await?;
+    let user_id = user.authorization.user.macro_user_id.clone();
+    let response_data = if let Some(email_attachment_id) = req.email_attachment_id {
+        state
+            .service
+            .import_email_attachment(
+                user_id,
+                ImportEmailAttachmentRepoArgs {
+                    email_attachment_id,
+                    create: args,
+                },
+            )
+            .await?
+    } else {
+        state
+            .service
+            .create_document(user_id, args, req.job_id)
+            .await?
+    };
 
     Ok(Json(CreateDocumentResponse {
         error: false,

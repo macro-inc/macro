@@ -6,7 +6,9 @@ use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use macro_event_broker::{EventBrokerError, MacroEvent as _, MacroEventBroker};
 
 use super::broker_events::AgentTriggerEventName;
-use super::service::{AgentBotLookup, AgentTriggerService};
+use super::service::{
+    AgentBotLookup, AgentTriggerService, ImplicitTriggerJudge, ReplyDetector, ThreadHistory,
+};
 
 /// Failure while evaluating or publishing one channel event.
 #[derive(Debug, thiserror::Error)]
@@ -26,14 +28,17 @@ pub enum ProcessChannelEventError {
 ///
 /// Transport adapters retain ownership of decode and offset commit so their
 /// `kafka.process` span can cover the complete record lifecycle.
-pub async fn process_channel_event<Repo, Bots, Broker>(
-    trigger: &AgentTriggerService<Repo, Bots>,
+pub async fn process_channel_event<Repo, Bots, Replies, Judge, History, Broker>(
+    trigger: &AgentTriggerService<Repo, Bots, Replies, Judge, History>,
     publisher: &Broker,
     event: &ChannelMacroEvent,
 ) -> Result<(), ProcessChannelEventError>
 where
     Repo: AgentSessionRepo,
     Bots: AgentBotLookup,
+    Replies: ReplyDetector,
+    Judge: ImplicitTriggerJudge,
+    History: ThreadHistory,
     Broker: MacroEventBroker,
 {
     let ChannelTopicEvent::MessagePosted(posted) = &event.event().event else {

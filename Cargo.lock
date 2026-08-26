@@ -210,6 +210,8 @@ dependencies = [
  "channel_sender",
  "channels",
  "chrono",
+ "cursor_api_key",
+ "cursor_cloud_agents",
  "dashmap",
  "futures",
  "kafka_util",
@@ -249,6 +251,7 @@ dependencies = [
  "ai_tools",
  "ai_usage",
  "anyhow",
+ "aws-sdk-kms",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -257,6 +260,8 @@ dependencies = [
  "channels",
  "connection_gateway_client",
  "contacts",
+ "cursor_api_key",
+ "cursor_cloud_agents",
  "database_env_vars",
  "entity_access",
  "kafka_util",
@@ -384,11 +389,15 @@ dependencies = [
 name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
+ "agent",
  "agent_session",
+ "ai_usage",
+ "anyhow",
  "bot_id",
  "channel_sender",
  "channels",
  "chrono",
+ "lexical_client",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -409,15 +418,18 @@ version = "0.1.0"
 dependencies = [
  "agent_session",
  "agent_trigger",
+ "ai_usage",
  "anyhow",
  "bots",
  "channels",
  "database_env_vars",
  "kafka_util",
+ "lexical_client",
  "macro_config",
  "macro_entrypoint",
  "macro_env_var",
  "macro_event_broker",
+ "macro_service_urls",
  "rdkafka",
  "serde_json",
  "sqlx",
@@ -1457,6 +1469,7 @@ dependencies = [
  "contacts",
  "cookie",
  "cool_asserts",
+ "cursor_api_key",
  "database_env_vars",
  "decode_jwt",
  "document_storage_service_client",
@@ -4326,6 +4339,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e"
 dependencies = [
  "cmov",
+]
+
+[[package]]
+name = "cursor_api_key"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-sdk-kms",
+ "chrono",
+ "macro_db_migrator",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "cursor_cloud_agents"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "futures",
+ "insta",
+ "macro_env_var",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sse-core",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -8278,6 +8329,7 @@ dependencies = [
  "console 0.16.4",
  "globset",
  "once_cell",
+ "serde",
  "similar",
  "tempfile",
  "walkdir",
@@ -15288,6 +15340,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sse-core"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28f4c044039e70ba5724b7e9dacf9fb610394773d15df2bb629170ca30391c88"
+dependencies = [
+ "bytes",
+ "memchr",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "sse-stream"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18072,6 +18135,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bitflags 2.11.1",
+ "bstr",
  "byteorder",
  "bytes",
  "bzip2",
@@ -18181,6 +18245,7 @@ dependencies = [
  "subtle",
  "syn 1.0.109",
  "syn 2.0.117",
+ "syn 3.0.3",
  "sync_wrapper",
  "thiserror 2.0.18",
  "time",
@@ -18298,6 +18363,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-dynamodb",
+ "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "bollard",

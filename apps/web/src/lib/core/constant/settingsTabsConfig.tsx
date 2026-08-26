@@ -1,5 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BotIcon from '@icon/wide-bot.svg';
+import BellIcon from '@phosphor/bell-simple.svg';
 import BugIcon from '@phosphor/bug.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
@@ -22,6 +23,8 @@ import {
   ENABLE_APP_STORE_QR_CODE,
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
+  ENABLE_NOTIFICATION_SETTINGS_FLAG,
+  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -50,6 +53,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'General',
     items: [
       { tab: 'Account', label: 'Account', icon: UserIconPhosphor },
+      { tab: 'Notifications', label: 'Notifications', icon: BellIcon },
       { tab: 'Billing', label: 'Billing', icon: CreditCardIcon },
       { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
       { tab: 'Mobile App', label: 'Mobile App', icon: DeviceMobileIcon },
@@ -88,6 +92,7 @@ const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
  */
 const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',
+  Notifications: 'notifications',
   Billing: 'billing',
   Subscription: 'subscription',
   Organization: 'organization',
@@ -147,6 +152,12 @@ export const useSettingsTabAvailable = () => {
   const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
     enabledOverride: ENABLE_CRM_OVERRIDE,
   });
+  const notificationSettingsFlag = useFeatureFlag(
+    ENABLE_NOTIFICATION_SETTINGS_FLAG,
+    {
+      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+    }
+  );
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
@@ -155,6 +166,8 @@ export const useSettingsTabAvailable = () => {
       case 'Account':
       case 'Billing':
         return true;
+      case 'Notifications':
+        return notificationSettingsFlag().enabled;
       case 'Team':
       case 'Tags':
         return true;
