@@ -4,13 +4,14 @@ const mocks = vi.hoisted(() => ({
   remindersEnabled: true,
   calendarUiEnabled: true,
   calendarSearchEnabled: true,
+  snippetsEnabled: true,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_CALENDAR_UI: () => mocks.calendarUiEnabled,
   ENABLE_CALENDAR_SEARCH_UI: () => mocks.calendarSearchEnabled,
   ENABLE_REMINDERS: () => mocks.remindersEnabled,
-  ENABLE_SNIPPETS: () => true,
+  ENABLE_SNIPPETS: () => mocks.snippetsEnabled,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE: false,
 }));
 
@@ -18,9 +19,11 @@ afterEach(() => {
   mocks.remindersEnabled = true;
   mocks.calendarUiEnabled = true;
   mocks.calendarSearchEnabled = true;
+  mocks.snippetsEnabled = true;
 });
 
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import { compileToAst, queryStateFrom } from '../filters/filter-store/compile';
 import { VIEW_TAB_LISTS } from '../soup-view/tab-lists';
 import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
@@ -45,6 +48,41 @@ describe('mail view presets', () => {
       ).not.toContain('no-drafts');
     }
   });
+});
+
+describe('documents view GraphQL input contract', () => {
+  const context = { userId: 'macro|phase-0@example.com', isTeamAdmin: false };
+  const tabs = ['owned', 'shared', 'attachments', 'all'] as const;
+
+  it.each([true, false])(
+    'captures every production tab with snippets enabled=%s',
+    (snippetsEnabled) => {
+      mocks.snippetsEnabled = snippetsEnabled;
+
+      const inputs = Object.fromEntries(
+        tabs.map((tab) => {
+          const preset = getViewPreset('documents', tab, context);
+          if (!preset) throw new Error(`missing documents/${tab} preset`);
+
+          return [
+            tab,
+            makeGraphqlSoupInput({
+              params: {
+                limit: 100,
+                sort_method: preset.sortMethod ?? 'updated_at',
+                ...(preset.sortDirection
+                  ? { sort_direction: preset.sortDirection }
+                  : {}),
+              },
+              body: compileToAst(queryStateFrom(preset.filters)),
+            }),
+          ];
+        })
+      );
+
+      expect(inputs).toMatchSnapshot();
+    }
+  );
 });
 
 describe('task view presets', () => {
