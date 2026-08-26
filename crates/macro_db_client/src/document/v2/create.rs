@@ -508,6 +508,36 @@ mod tests {
         );
     }
 
+    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
+    async fn legacy_create_rejects_email_attachment_relations(pool: Pool<Postgres>) {
+        let result = create_document(
+            &pool,
+            CreateDocumentArgs {
+                id: None,
+                sha: "sha",
+                document_name: "attachment.pdf",
+                user_id: MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
+                file_type: Some(FileType::Pdf),
+                project_id: None,
+                project_name: None,
+                share_permission: &SharePermissionV2::new_document_share_permission(
+                    Some(FileType::Pdf),
+                    None,
+                ),
+                skip_history: false,
+                email_attachment_id: Some(Uuid::new_v4()),
+                created_at: None,
+                is_task: false,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "legacy document creation cannot create document_email relations; use the document service"
+        );
+    }
+
     // should return appropriate error if we try to insert a document with a duplicate ID
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
     async fn test_insert_document_with_duplicate_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
