@@ -1,6 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import type { ChromeDestination } from '@app/features/app-layout/chrome/chrome-destinations';
-import { CHROME_SPLIT_DESTINATIONS } from '@app/features/app-layout/chrome/chrome-destinations';
 import {
   createAfterPaintRunner,
   createChromeNavigation,
@@ -14,14 +13,10 @@ import { registerChromeViewHotkeys } from '@app/features/app-layout/chrome/chrom
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { useSettingsState } from '@core/constant/SettingsState';
 import LogoIcon from '@icon/macro-logo.svg';
-import GridIcon from '@phosphor/dots-nine.svg';
-import GearIcon from '@phosphor/gear.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { useNavigate } from '@solidjs/router';
-import { cn, Dropdown, Tooltip } from '@ui';
+import { cn, Tooltip } from '@ui';
 import type { Component, JSX, ParentProps } from 'solid-js';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -47,14 +42,9 @@ const WINDOW_SETTLE_MS = 250;
  * reads as the same kind of thing hovering over the page — `bg-surface` is the
  * page's own color and would disappear into it.
  */
-function DockPill(props: ParentProps<{ class?: string }>) {
+function DockPill(props: ParentProps) {
   return (
-    <div
-      class={cn(
-        'glass-lg pointer-events-auto flex items-center gap-0.5 rounded-full bg-(--color-menu-glass) p-1.5',
-        props.class
-      )}
-    >
+    <div class="glass-lg pointer-events-auto flex items-center gap-0.5 rounded-full bg-(--color-menu-glass) p-1.5">
       {props.children}
     </div>
   );
@@ -213,8 +203,6 @@ export function ExperimentalAppBottomBar() {
     views: 'page',
   });
   const navigate = useNavigate();
-  const { openSettings } = useSettingsState();
-  const [appsOpen, setAppsOpen] = createSignal(false);
   const unreadCounts = createChromeUnreadCounts();
   const unreadCount = (destination: ChromeDestination) =>
     unreadCounts().get(destination.id) ?? 0;
@@ -279,92 +267,14 @@ export function ExperimentalAppBottomBar() {
     for (const registration of viewHotkeys) registration.dispose();
   });
 
-  const openInNewTab = (destination: ChromeDestination) => {
-    setAppsOpen(false);
-    navigation.openInNewTab(destination);
-  };
-
   return (
     // The row is the lane the splits reserve (`--app-dock-lane`), and it only
-    // takes presses where a pill actually is. What you do next pins to the
-    // left, the places sit in the middle, and what you have open pins to the
-    // right — a content-sized center column between two even ones, so the
-    // views stay screen-centered however wide the pills beside them grow.
+    // takes presses where a pill actually is.
     <div
-      class="pointer-events-none fixed inset-x-0 bottom-0 z-float grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-4 pb-3"
+      class="pointer-events-none fixed inset-x-0 bottom-0 z-float flex justify-center gap-2 pb-3"
       style={{ height: 'var(--app-dock-lane)' }}
     >
-      {/* Create, search and the companion splits ride outside the row of
-          views, the way Fey detaches its search: the row is where you are,
-          these are what you do next. */}
-      <DockPill class="col-start-1 justify-self-start">
-        <For each={CHROME_SPLIT_DESTINATIONS}>
-          {(destination) => (
-            <DockButton
-              label={`Open ${destination.label} in a split`}
-              icon={destination.icon}
-              onPress={() => navigation.openAsSplit(destination)}
-            />
-          )}
-        </For>
-        <Dropdown open={appsOpen()} onOpenChange={setAppsOpen} placement="top">
-          <Tooltip label="Macro apps" placement="top">
-            <Dropdown.Trigger
-              size="icon-md"
-              variant="ghost"
-              class="!size-9 shrink-0 rounded-full px-0 text-ink-muted"
-              aria-label="Macro apps"
-            >
-              <GridIcon class="size-5" />
-            </Dropdown.Trigger>
-          </Tooltip>
-          <Dropdown.Content class="w-72">
-            <Dropdown.Group class="grid grid-cols-3 gap-1 p-2">
-              <For each={navigation.visibleSubApps()}>
-                {(destination) => (
-                  <Dropdown.Item
-                    class="flex h-auto flex-col items-center gap-1.5 rounded-lg px-1 py-3 text-center"
-                    onSelect={() => openInNewTab(destination)}
-                  >
-                    <Dynamic
-                      component={destination.icon}
-                      class="size-6 text-ink"
-                    />
-                    <span class="w-full truncate text-xs text-ink-muted">
-                      {destination.label}
-                    </span>
-                  </Dropdown.Item>
-                )}
-              </For>
-            </Dropdown.Group>
-          </Dropdown.Content>
-        </Dropdown>
-        <DockButton
-          label="Settings"
-          icon={GearIcon}
-          onPress={() => openSettings('Account')}
-        />
-        <span class="mx-1 h-5 w-px shrink-0 bg-edge-muted" aria-hidden="true" />
-        <SidebarCreateMenu
-          isSlim={() => true}
-          variant="icon"
-          icon="plus"
-          placement="top-end"
-          onAgentSelect={() => navigate('/chat')}
-        />
-        <Tooltip label="Search Macro" shortcut="cmd+k" placement="top">
-          <button
-            type="button"
-            aria-label="Search Macro"
-            class="flex size-9 shrink-0 items-center justify-center rounded-full text-ink-muted outline-none transition-colors hover:bg-ink/5 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
-            {...pressHandlers(navigation.openSearch)}
-          >
-            <SearchIcon class="size-5" />
-          </button>
-        </Tooltip>
-      </DockPill>
-
-      <DockPill class="col-start-2 justify-self-center">
+      <DockPill>
         <Tooltip label="Home" placement="top">
           <button
             type="button"
@@ -400,7 +310,7 @@ export function ExperimentalAppBottomBar() {
       </DockPill>
 
       <Show when={dockWindows().length > 0}>
-        <DockPill class="col-start-3 justify-self-end">
+        <DockPill>
           <For each={dockWindows()}>
             {(window) => (
               <DockWindowTab
@@ -413,6 +323,18 @@ export function ExperimentalAppBottomBar() {
           </For>
         </DockPill>
       </Show>
+
+      {/* Create rides outside the row of views: the row is where you are,
+          this is what you make next. */}
+      <DockPill>
+        <SidebarCreateMenu
+          isSlim={() => true}
+          variant="icon"
+          icon="plus"
+          placement="top-end"
+          onAgentSelect={() => navigate('/chat')}
+        />
+      </DockPill>
     </div>
   );
 }
