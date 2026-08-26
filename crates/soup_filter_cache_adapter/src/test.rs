@@ -19,6 +19,7 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
     );
     assert_eq!(mutations.len(), 1);
     let OptimisticProjectionMutation::Patch {
+        profile,
         exact,
         integers,
         sorts,
@@ -27,6 +28,7 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
     else {
         panic!("partial optimistic Soup entity should compile to a patch");
     };
+    assert_eq!(profile, &vocabulary::profile_v2());
     assert!(
         exact
             .iter()
@@ -41,6 +43,36 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
             .any(|fact| { fact.attribute == vocabulary::updated_at() && fact.value == 123_000 })
     );
 
+    let document_create = optimistic_projection_mutations(
+        &serde_json::json!({
+            "create": {
+                "__typename": "GraphqlSoupDocument",
+                "id": "00000000-0000-0000-0000-000000000002",
+                "ownerId": "user-1",
+                "projectId": null,
+                "fileType": "md",
+                "subType": null,
+                "createdAt": "2025-01-01T00:00:00.000001Z"
+            }
+        }),
+        456,
+    );
+    let [OptimisticProjectionMutation::Patch { profile, exact, .. }] = document_create.as_slice()
+    else {
+        panic!("a document create without an attachment fact must patch, not claim completeness");
+    };
+    assert_eq!(profile, &vocabulary::profile_v2());
+    assert!(
+        exact
+            .iter()
+            .any(|patch| patch.attribute == vocabulary::document_sub_type())
+    );
+    assert!(
+        exact
+            .iter()
+            .all(|patch| patch.attribute != vocabulary::email_attachment())
+    );
+
     let complete = optimistic_projection_mutations(
         &serde_json::json!({
             "create": {
@@ -53,10 +85,10 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
         }),
         456,
     );
-    assert!(matches!(
-        complete.as_slice(),
-        [OptimisticProjectionMutation::Replace(_)]
-    ));
+    let [OptimisticProjectionMutation::Replace(complete)] = complete.as_slice() else {
+        panic!("a project optimistic create has every required v2 fact");
+    };
+    assert_eq!(complete.profile, vocabulary::profile_v2());
 
     let deletion = optimistic_projection_mutations(
         &serde_json::json!({
@@ -377,8 +409,7 @@ fn production_documents_filters(document_filter: serde_json::Value) -> serde_jso
     })
 }
 
-#[test]
-fn production_documents_presets_are_characterized_as_unsupported_in_v1() {
+fn production_documents_filter_cases() -> Vec<(&'static str, serde_json::Value)> {
     let owner = "macro|phase-0@example.com";
     let not_task = serde_json::json!({
         "not": { "literal": { "subType": "TASK" } }
@@ -391,8 +422,9 @@ fn production_documents_presets_are_characterized_as_unsupported_in_v1() {
             }
         }
     });
+    let attachments = serde_json::json!({ "literal": { "isEmailAttachment": true } });
 
-    let cases = [
+    vec![
         (
             "owned/snippets-on",
             serde_json::json!({
@@ -449,27 +481,60 @@ fn production_documents_presets_are_characterized_as_unsupported_in_v1() {
                 }
             }),
         ),
-        (
-            "attachments",
-            serde_json::json!({ "literal": { "isEmailAttachment": true } }),
-        ),
+        ("attachments/snippets-on", attachments.clone()),
+        ("attachments/snippets-off", attachments),
         ("all/snippets-on", not_task),
         ("all/snippets-off", not_task_or_snippet),
-    ];
+    ]
+}
 
-    for (name, document_filter) in cases {
-        let outcome = compile_filter_request(
-            production_documents_filters(document_filter),
+#[test]
+fn production_documents_presets_compile_for_created_and_updated_sorts() {
+    for (sort_method, sort_attribute) in [
+        ("CREATED_AT", vocabulary::created_at()),
+        ("UPDATED_AT", vocabulary::updated_at()),
+    ] {
+        for (sort_direction, direction) in
+            [("ASC", SortDirection::Asc), ("DESC", SortDirection::Desc)]
+        {
+            for (name, document_filter) in production_documents_filter_cases() {
+                let outcome = compile_filter_request(
+                    production_documents_filters(document_filter),
+                    sort_method,
+                    sort_direction,
+                    100,
+                )
+                .unwrap_or_else(|error| panic!("{name} should materialize: {error}"));
+                let SoupFilterCompileOutcome::Supported(query) = outcome else {
+                    panic!("{name} must be soup-flat-v2 eligible");
+                };
+                assert_eq!(query.as_query().profile, vocabulary::profile_v2(), "{name}");
+                assert_eq!(query.as_query().sort_attribute, sort_attribute, "{name}");
+                assert_eq!(query.as_query().sort_direction, direction, "{name}");
+                assert_eq!(query.as_query().tie_break_direction, direction, "{name}");
+            }
+        }
+    }
+}
+
+#[test]
+fn production_documents_presets_keep_unsupported_siblings_all_or_network() {
+    let with_unsupported_sibling = serde_json::json!({
+        "and": {
+            "left": { "literal": { "isEmailAttachment": false } },
+            "right": { "literal": { "importance": true } }
+        }
+    });
+    assert!(matches!(
+        compile_filter_request(
+            production_documents_filters(with_unsupported_sibling),
             "UPDATED_AT",
             "DESC",
             100,
         )
-        .unwrap_or_else(|error| panic!("{name} should materialize: {error}"));
-        assert!(
-            matches!(outcome, SoupFilterCompileOutcome::Unsupported),
-            "{name} unexpectedly became soup-flat-v1 eligible"
-        );
-    }
+        .unwrap(),
+        SoupFilterCompileOutcome::Unsupported
+    ));
 }
 
 #[derive(Debug, Deserialize)]

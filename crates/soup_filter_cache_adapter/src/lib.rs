@@ -10,7 +10,7 @@ use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
 use indexmap::IndexMap;
 use item_filter_index::{
-    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v1, vocabulary,
+    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v2, vocabulary,
 };
 use predicate_index::{
     ExactAttributePatch, ExactValue, IndexDocument, OptimisticProjectionMutation, RecordKey,
@@ -59,7 +59,7 @@ pub fn compile_filter_request(
             ));
         }
     };
-    compile_soup_flat_v1(
+    compile_soup_flat_v2(
         &ast,
         SoupFlatRequest {
             sort,
@@ -334,7 +334,7 @@ pub fn optimistic_projection_mutations(
                             key_text,
                             OptimisticProjectionMutation::Delete {
                                 record_key,
-                                profile: vocabulary::profile(),
+                                profile: vocabulary::profile_v2(),
                                 partition,
                             },
                         );
@@ -356,7 +356,7 @@ pub fn optimistic_projection_mutations(
                         )
                         .unwrap_or(OptimisticProjectionMutation::Unknown {
                             record_key,
-                            profile: vocabulary::profile(),
+                            profile: vocabulary::profile_v2(),
                             partition,
                             affected_attributes: Vec::new(),
                         });
@@ -389,7 +389,7 @@ pub fn dirty_projection_mutations(keys: &[String]) -> Vec<ProjectionMutation> {
             let partition = projection_partition(typename)?;
             Some(ProjectionMutation::MarkIncomplete {
                 record_key: RecordKey::new(key.clone()).ok()?,
-                profile: vocabulary::profile(),
+                profile: vocabulary::profile_v2(),
                 partition,
                 kind: ProjectionIncompleteKind::Dirty,
             })
@@ -529,16 +529,19 @@ fn optimistic_projection_for_object(
     object: &serde_json::Map<String, serde_json::Value>,
     created_at_ms: i64,
 ) -> Option<OptimisticProjectionMutation> {
-    if let Some(document) = direct_projection_for_object(
-        record_key.clone(),
-        partition.clone(),
-        object,
-        Some(created_at_ms),
-    ) {
+    let kind = projection_kind(&partition)?;
+    if kind != SoupFlatEntityKind::Document
+        && let Some(mut document) = direct_projection_for_object(
+            record_key.clone(),
+            partition.clone(),
+            object,
+            Some(created_at_ms),
+        )
+    {
+        document.profile = vocabulary::profile_v2();
         return Some(OptimisticProjectionMutation::Replace(document));
     }
 
-    let kind = projection_kind(&partition)?;
     let project_field = if kind == SoupFlatEntityKind::Project {
         "parentId"
     } else {
@@ -548,8 +551,8 @@ fn optimistic_projection_for_object(
         Some(value) => graphql_timestamp(value)?,
         None => chrono::DateTime::from_timestamp_millis(created_at_ms)?,
     };
-    patch_direct_fields(DirectProjectionPatchInput {
-        record_key,
+    let patch = patch_direct_fields(DirectProjectionPatchInput {
+        record_key: record_key.clone(),
         kind,
         owner: match object.get("ownerId") {
             Some(value) => Some(value.as_str()?.to_owned()),
@@ -573,7 +576,32 @@ fn optimistic_projection_for_object(
         },
         updated_at: Some(updated_at),
     })
-    .ok()
+    .ok()?;
+    let OptimisticProjectionMutation::Patch {
+        mut exact,
+        integers,
+        sorts,
+        ..
+    } = patch
+    else {
+        return None;
+    };
+    if kind == SoupFlatEntityKind::Document
+        && let Some(value) = object.get("subType")
+    {
+        exact.push(ExactAttributePatch {
+            attribute: vocabulary::document_sub_type(),
+            values: document_sub_type_values(value).ok()?,
+        });
+    }
+    Some(OptimisticProjectionMutation::Patch {
+        record_key,
+        profile: vocabulary::profile_v2(),
+        partition,
+        exact,
+        integers,
+        sorts,
+    })
 }
 
 fn projection_kind(partition: &Token) -> Option<SoupFlatEntityKind> {

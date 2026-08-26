@@ -28,16 +28,18 @@ fn request() -> SoupFlatRequest {
 }
 
 fn excluded_deferred_partitions() -> EntityFilterAst {
-    let mut ast = EntityFilterAst::default();
-    ast.calendar_event_filter = Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil()))));
+    let mut ast = EntityFilterAst {
+        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
+        channel_filter: Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil())))),
+        channel_thread_filter: Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(
+            Uuid::nil(),
+        )))),
+        call_filter: Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil())))),
+        crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+        foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil())))),
+        ..EntityFilterAst::default()
+    };
     ast.email_filter.tree = Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))));
-    ast.channel_filter = Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))));
-    ast.channel_thread_filter = Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(
-        Uuid::nil(),
-    ))));
-    ast.call_filter = Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))));
-    ast.crm_company_filter = Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil()))));
-    ast.foreign_entity_filter = Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))));
     ast
 }
 
@@ -75,12 +77,13 @@ fn compiles_complete_supported_forest_after_eligibility() {
 }
 
 #[test]
-fn production_documents_membership_literals_are_explicitly_unsupported_in_v1() {
+fn production_documents_membership_literals_require_and_compile_in_v2() {
     for literal in [
         DocumentLiteral::IsEmailAttachment(false),
         DocumentLiteral::IsEmailAttachment(true),
         DocumentLiteral::SubType(DocumentSubType::Task),
         DocumentLiteral::SubType(DocumentSubType::Snippet),
+        DocumentLiteral::SubType(DocumentSubType::Skill),
     ] {
         let mut ast = excluded_deferred_partitions();
         ast.document_filter = Some(Arc::new(Expr::val(literal)));
@@ -88,28 +91,92 @@ fn production_documents_membership_literals_are_explicitly_unsupported_in_v1() {
             compile_soup_flat_v1(&ast, request()).unwrap(),
             LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
         );
+        let LocalCompileOutcome::Supported(query) = compile_soup_flat_v2(&ast, request()).unwrap()
+        else {
+            panic!("v2 document membership literal fell back");
+        };
+        assert_eq!(query.as_query().profile, vocabulary::profile_v2());
     }
 }
 
 #[test]
-fn unsupported_supported_partition_literals_never_disappear() {
+fn v2_subtype_and_attachment_preserve_direct_and_or_not_shapes() {
+    let mut ast = excluded_deferred_partitions();
+    ast.document_filter = Some(Arc::new(Expr::and(
+        Expr::val(DocumentLiteral::SubType(DocumentSubType::Task)),
+        Expr::or(
+            Expr::val(DocumentLiteral::IsEmailAttachment(true)),
+            Expr::is_not(Expr::val(DocumentLiteral::SubType(
+                DocumentSubType::Snippet,
+            ))),
+        ),
+    )));
+
+    let LocalCompileOutcome::Supported(query) = compile_soup_flat_v2(&ast, request()).unwrap()
+    else {
+        panic!("supported v2 Boolean tree fell back");
+    };
+    assert_eq!(
+        query.as_query().partitions[0].predicate,
+        PredicateExpr::And(
+            Box::new(PredicateExpr::Exact {
+                attribute: vocabulary::document_sub_type(),
+                value: ExactValue::utf8("task").unwrap(),
+            }),
+            Box::new(PredicateExpr::Or(
+                Box::new(PredicateExpr::Exact {
+                    attribute: vocabulary::email_attachment(),
+                    value: ExactValue::new([1]).unwrap(),
+                }),
+                Box::new(PredicateExpr::Not(Box::new(PredicateExpr::Exact {
+                    attribute: vocabulary::document_sub_type(),
+                    value: ExactValue::utf8("snippet").unwrap(),
+                }))),
+            )),
+        )
+    );
+
+    let mut ast = excluded_deferred_partitions();
+    ast.document_filter = Some(Arc::new(Expr::val(DocumentLiteral::IsEmailAttachment(
+        false,
+    ))));
+    let LocalCompileOutcome::Supported(query) = compile_soup_flat_v2(&ast, request()).unwrap()
+    else {
+        panic!("direct v2 attachment literal fell back");
+    };
+    assert_eq!(
+        query.as_query().partitions[0].predicate,
+        PredicateExpr::Exact {
+            attribute: vocabulary::email_attachment(),
+            value: ExactValue::new([0]).unwrap(),
+        }
+    );
+}
+
+#[test]
+fn unsupported_supported_partition_literals_force_v1_and_v2_network_fallback() {
     for expression in [
         Expr::and(
-            Expr::val(DocumentLiteral::Id(Uuid::nil())),
+            Expr::val(DocumentLiteral::IsEmailAttachment(false)),
             Expr::val(DocumentLiteral::Importance(true)),
         ),
         Expr::or(
-            Expr::val(DocumentLiteral::Id(Uuid::nil())),
+            Expr::val(DocumentLiteral::SubType(DocumentSubType::Task)),
             Expr::val(DocumentLiteral::Importance(true)),
         ),
         Expr::is_not(Expr::val(DocumentLiteral::Importance(true))),
     ] {
         let mut ast = excluded_deferred_partitions();
         ast.document_filter = Some(Arc::new(expression));
-        assert_eq!(
+        for outcome in [
             compile_soup_flat_v1(&ast, request()).unwrap(),
-            LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
-        );
+            compile_soup_flat_v2(&ast, request()).unwrap(),
+        ] {
+            assert_eq!(
+                outcome,
+                LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
+            );
+        }
     }
 }
 

@@ -1,6 +1,6 @@
 # Server-Minted Soup Cache Projection Plan
 
-Status: **Phases 0-4 implemented; Phase 5 not started**
+Status: **Phases 0-5 implemented; Phase 6 next**
 
 ## Implementation status
 
@@ -9,7 +9,8 @@ Status: **Phases 0-4 implemented; Phase 5 not started**
 - [x] Phase 2: `soup-flat-v2` profile validation and typed supplement wire. The complete profile retains v1 facts and adds subtype plus an explicit Boolean attachment posting, while capsule-v1 contains only the server-owned attachment Boolean and defensive target-profile/record-key/partition bindings. Native and WASM-reachable adapter golden fixtures pass.
 - [x] Phase 3: emit supplements from `GraphqlSoupEntity`. The nullable argument-free opaque scalar is implemented by every concrete Soup entity, but only documents with authoritative relation hydration return a capsule. Projects, chats, unsupported variants, and unenriched constructors return `null`. `SoupItemFields` selects the scalar with `@cacheOnly`; the composed SDL, generated client document, shared-interface contract, flat-page emission, unsupported-variant, and realtime loader tests are updated.
 - [x] Phase 4: atomically compose server supplements with direct response facts. The Soup WASM composition edge follows the selected GraphQL response shape, derives direct facts including subtype, decodes and binds each Document attachment supplement, validates one complete `soup-flat-v2` projection, and emits its replacement alongside normalized writes. A bounded generic authoritative patch lifecycle preserves unmentioned server-owned facts across partial mutation responses; missing bases remain explicitly incomplete. Cache-core optimistic settlement, in-memory storage, and Turso use the same patch semantics, with transaction rollback and mutation/subscription ordering coverage in native and real browser WASM tests.
-- [ ] Phases 5-6: not started; delegated recursively after each verified phase.
+- [x] Phase 5: compile Documents predicates and switch local authority. The browser compiler now targets `soup-flat-v2`, maps canonical subtype and explicit attachment literals through direct/And/Or/Not trees, and retains all-or-network fallback for any unsupported sibling. Every captured Owned, Shared, Attachments, and All shape is eligible for Created/Updated ascending or descending sorts with exact snippets-on/off behavior. Optimistic and dirty Soup mutations now compose in the v2 scope without fabricating attachment state, and compatibility epoch 2 explicitly clears stale v1 authority. A real Chrome WASM/Turso test establishes a network page at revision R, applies ordinary, shared, attachment, task, and snippet `SoupUpdated` supplements at R+1, and proves exact local preset membership without another Soup query response.
+- [ ] Phase 6: backfill, rollout, and observability; delegated recursively after this verified phase.
 
 ## Objective
 

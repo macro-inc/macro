@@ -1,4 +1,4 @@
-//! `soup-flat-v1` eligibility and compilation into the generic predicate IR.
+//! Versioned flat Soup eligibility and compilation into the generic predicate IR.
 #![deny(missing_docs)]
 
 use filter_ast::Expr;
@@ -16,8 +16,8 @@ use item_filters::ast::{
     project::ProjectLiteral,
 };
 use predicate_index::{
-    ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, RangeBound, SortDirection, Token,
-    ValidatedIndexQuery, ValidationError, utc_timestamp_micros,
+    ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
+    Token, ValidatedIndexQuery, ValidationError, utc_timestamp_micros,
 };
 use thiserror::Error;
 use uuid::Uuid;
@@ -113,7 +113,7 @@ pub enum SoupIndexSort {
     CreatedAt,
     /// Update timestamp.
     UpdatedAt,
-    /// A server sort not supported by `soup-flat-v1`.
+    /// A server sort not supported by the local flat Soup profiles.
     Unsupported,
 }
 
@@ -171,8 +171,21 @@ pub enum CompileError {
     Validation(#[from] ValidationError),
 }
 
-/// Check the complete materialized forest and request options without compiling leaves.
+/// Check the complete materialized forest against the direct-field v1 profile.
 pub fn check_soup_flat_v1(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
+    check_soup_flat(ast, request, supported_document_literal_v1)
+}
+
+/// Check the complete materialized forest against the server-minted v2 profile.
+pub fn check_soup_flat_v2(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
+    check_soup_flat(ast, request, supported_document_literal_v2)
+}
+
+fn check_soup_flat(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+    supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
+) -> Eligibility {
     if request.has_cursor {
         return Eligibility::Unsupported(UnsupportedReason::Cursor);
     }
@@ -248,12 +261,44 @@ pub fn check_soup_flat_v1(ast: &EntityFilterAst, request: SoupFlatRequest) -> El
     Eligibility::Supported
 }
 
-/// Compile a request only after complete-profile eligibility succeeds.
+/// Compile a request against the direct-field v1 profile.
 pub fn compile_soup_flat_v1(
     ast: &EntityFilterAst,
     request: SoupFlatRequest,
 ) -> Result<LocalCompileOutcome, CompileError> {
-    if let Eligibility::Unsupported(reason) = check_soup_flat_v1(ast, request) {
+    compile_soup_flat(
+        ast,
+        request,
+        vocabulary::profile(),
+        supported_document_literal_v1,
+        compile_document_literal_v1,
+    )
+}
+
+/// Compile a request against the server-minted v2 profile.
+pub fn compile_soup_flat_v2(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+) -> Result<LocalCompileOutcome, CompileError> {
+    compile_soup_flat(
+        ast,
+        request,
+        vocabulary::profile_v2(),
+        supported_document_literal_v2,
+        compile_document_literal_v2,
+    )
+}
+
+fn compile_soup_flat(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+    profile: Profile,
+    supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
+    compile_document_literal: impl Fn(&DocumentLiteral) -> Result<PredicateExpr, CompileError> + Copy,
+) -> Result<LocalCompileOutcome, CompileError> {
+    if let Eligibility::Unsupported(reason) =
+        check_soup_flat(ast, request, supported_document_literal)
+    {
         return Ok(LocalCompileOutcome::Unsupported(reason));
     }
 
@@ -263,7 +308,7 @@ pub fn compile_soup_flat_v1(
         SoupIndexSort::Unsupported => unreachable!("eligibility checked sort"),
     };
     let query = IndexQuery {
-        profile: vocabulary::profile(),
+        profile,
         partitions: vec![
             PartitionPredicate {
                 partition: vocabulary::document_partition(),
@@ -321,7 +366,7 @@ fn supported_expr<T>(expr: Option<&Expr<T>>, supported: impl Fn(&T) -> bool + Co
     }
 }
 
-fn supported_document_literal(literal: &DocumentLiteral) -> bool {
+fn supported_document_literal_v1(literal: &DocumentLiteral) -> bool {
     matches!(
         literal,
         DocumentLiteral::Id(_)
@@ -331,6 +376,14 @@ fn supported_document_literal(literal: &DocumentLiteral) -> bool {
             | DocumentLiteral::CreatedAt(_)
             | DocumentLiteral::UpdatedAt(_)
     )
+}
+
+fn supported_document_literal_v2(literal: &DocumentLiteral) -> bool {
+    supported_document_literal_v1(literal)
+        || matches!(
+            literal,
+            DocumentLiteral::SubType(_) | DocumentLiteral::IsEmailAttachment(_)
+        )
 }
 
 fn supported_project_literal(literal: &ProjectLiteral) -> bool {
@@ -374,7 +427,18 @@ fn compile_expr<T>(
     })
 }
 
-fn compile_document_literal(literal: &DocumentLiteral) -> Result<PredicateExpr, CompileError> {
+fn compile_document_literal_v1(literal: &DocumentLiteral) -> Result<PredicateExpr, CompileError> {
+    compile_document_literal(literal, false)
+}
+
+fn compile_document_literal_v2(literal: &DocumentLiteral) -> Result<PredicateExpr, CompileError> {
+    compile_document_literal(literal, true)
+}
+
+fn compile_document_literal(
+    literal: &DocumentLiteral,
+    supports_v2_facts: bool,
+) -> Result<PredicateExpr, CompileError> {
     Ok(match literal {
         DocumentLiteral::Id(id) => exact_uuid(vocabulary::id(), id),
         DocumentLiteral::FileType(file_type) => {
@@ -384,6 +448,14 @@ fn compile_document_literal(literal: &DocumentLiteral) -> Result<PredicateExpr, 
         DocumentLiteral::Owner(owner) => {
             return exact_utf8(vocabulary::owner(), owner.to_string());
         }
+        DocumentLiteral::SubType(sub_type) if supports_v2_facts => {
+            return exact_utf8(vocabulary::document_sub_type(), sub_type.to_string());
+        }
+        DocumentLiteral::IsEmailAttachment(value) if supports_v2_facts => PredicateExpr::Exact {
+            attribute: vocabulary::email_attachment(),
+            value: ExactValue::new([u8::from(*value)])
+                .expect("canonical Boolean exact value is bounded"),
+        },
         DocumentLiteral::CreatedAt(date) => date_expr(vocabulary::created_at(), date),
         DocumentLiteral::UpdatedAt(date) => date_expr(vocabulary::updated_at(), date),
         _ => unreachable!("eligibility checked document literal"),

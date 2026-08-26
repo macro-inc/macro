@@ -61,21 +61,17 @@ const OPTIMISTIC_DOCUMENT_MUTATION: &str = r#"mutation RenameEntities($inputs: [
     }
 }"#;
 
-const SOUP_UPDATES_SUBSCRIPTION: &str = r#"subscription SoupUpdates {
-    soupUpdates {
-        __typename
-        ... on SoupUpdated {
-            item {
+const SOUP_WITH_PROJECTION_QUERY: &str = r#"query SoupWithProjection($input: SoupInput!) {
+    user {
+        id
+        soup(input: $input) {
+            nextCursor
+            items {
                 __typename
                 id
+                cacheProjection @cacheOnly
                 displayName
-                ... on GraphqlSoupDocument {
-                    ownerId
-                    projectId
-                    fileType
-                    createdAt
-                    updatedAt
-                }
+                ... on GraphqlSoupDocument { ownerId }
             }
         }
     }
@@ -219,70 +215,102 @@ fn mutation_variables() -> serde_json::Value {
     }})
 }
 
-fn realtime_document_data(document_id: &str) -> serde_json::Value {
-    serde_json::json!({
-        "soupUpdates": [{
-            "__typename": "SoupUpdated",
-            "item": {
-                "__typename": "GraphqlSoupDocument",
-                "id": document_id,
-                "displayName": "Realtime document",
-                "ownerId": "macro|user@example.com",
-                "projectId": null,
-                "fileType": "md",
-                "createdAt": "2026-01-01T00:00:00.000Z",
-                "updatedAt": "2026-01-02T00:00:00.000Z"
-            }
-        }]
-    })
+fn uuid_exact_value(document_id: &str) -> ExactValue {
+    let hex = document_id
+        .bytes()
+        .filter(|byte| *byte != b'-')
+        .collect::<Vec<_>>();
+    let bytes = hex
+        .chunks_exact(2)
+        .map(|pair| {
+            u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16)
+                .expect("test document id is a UUID")
+        })
+        .collect::<Vec<_>>();
+    ExactValue::new(bytes).unwrap()
 }
 
-fn v2_document_capsule(document_id: &str, is_email_attachment: bool) -> String {
+fn v2_document_capsule(
+    document_id: &str,
+    owner: &str,
+    is_email_attachment: bool,
+    sub_type: Option<&str>,
+    updated_at: i64,
+) -> String {
     let token = |value| Token::new(value).unwrap();
+    let mut exact_facts = vec![
+        ExactFact {
+            attribute: token("email-attachment"),
+            value: ExactValue::new([u8::from(is_email_attachment)]).unwrap(),
+        },
+        ExactFact {
+            attribute: token("file-type"),
+            value: ExactValue::utf8("md").unwrap(),
+        },
+        ExactFact {
+            attribute: token("id"),
+            value: uuid_exact_value(document_id),
+        },
+        ExactFact {
+            attribute: token("owner"),
+            value: ExactValue::utf8(owner).unwrap(),
+        },
+    ];
+    if let Some(sub_type) = sub_type {
+        exact_facts.push(ExactFact {
+            attribute: token("document-sub-type"),
+            value: ExactValue::utf8(sub_type).unwrap(),
+        });
+    }
     let document = IndexDocument {
         record_key: RecordKey::new(format!("GraphqlSoupDocument:{document_id}")).unwrap(),
         profile: Profile::new(token("soup-flat-v2")),
         partition: token("document"),
-        exact_facts: vec![
-            ExactFact {
-                attribute: token("email-attachment"),
-                value: ExactValue::new([u8::from(is_email_attachment)]).unwrap(),
-            },
-            ExactFact {
-                attribute: token("file-type"),
-                value: ExactValue::utf8("md").unwrap(),
-            },
-            ExactFact {
-                attribute: token("id"),
-                value: ExactValue::new([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]).unwrap(),
-            },
-            ExactFact {
-                attribute: token("owner"),
-                value: ExactValue::utf8("macro|user@example.com").unwrap(),
-            },
-        ],
+        exact_facts,
         integer_facts: vec![
             IntegerFact {
                 attribute: token("created-at"),
-                value: 1,
+                value: updated_at - 1,
             },
             IntegerFact {
                 attribute: token("updated-at"),
-                value: 2,
+                value: updated_at,
             },
         ],
         sort_facts: vec![
             IntegerFact {
                 attribute: token("created-at"),
-                value: 1,
+                value: updated_at - 1,
             },
             IntegerFact {
                 attribute: token("updated-at"),
-                value: 2,
+                value: updated_at,
             },
         ],
     };
     encode_cache_projection(&document).unwrap()
+}
+
+fn projected_document_item(
+    document_id: &str,
+    owner: &str,
+    is_email_attachment: bool,
+    sub_type: Option<&str>,
+    updated_at: i64,
+) -> serde_json::Value {
+    serde_json::json!({
+        "__typename": "GraphqlSoupDocument",
+        "id": document_id,
+        "cacheProjection": v2_document_capsule(
+            document_id,
+            owner,
+            is_email_attachment,
+            sub_type,
+            updated_at,
+        ),
+        "displayName": format!("Document {document_id}"),
+        "ownerId": owner,
+    })
 }
 
 fn projected_realtime_document_data(
@@ -292,13 +320,13 @@ fn projected_realtime_document_data(
     serde_json::json!({
         "soupUpdates": [{
             "__typename": "SoupUpdated",
-            "item": {
-                "__typename": "GraphqlSoupDocument",
-                "id": document_id,
-                "cacheProjection": v2_document_capsule(document_id, is_email_attachment),
-                "displayName": "Realtime document",
-                "ownerId": "macro|user@example.com"
-            }
+            "item": projected_document_item(
+                document_id,
+                "macro|user@example.com",
+                is_email_attachment,
+                None,
+                2,
+            ),
         }]
     })
 }
@@ -476,7 +504,13 @@ fn production_documents_preset_filters() -> Vec<(&'static str, serde_json::Value
             })),
         ),
         (
-            "attachments",
+            "attachments/snippets-on",
+            documents_preset_filter(
+                serde_json::json!({ "literal": { "isEmailAttachment": true } }),
+            ),
+        ),
+        (
+            "attachments/snippets-off",
             documents_preset_filter(
                 serde_json::json!({ "literal": { "isEmailAttachment": true } }),
             ),
@@ -623,78 +657,110 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
 }
 
 #[wasm_bindgen_test(async)]
-async fn realtime_soup_items_are_locally_filterable_without_a_query_fetch() {
-    const SCOPE: &str = "cache-wasm-realtime-local-filter";
-    const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000001";
+async fn soup_updated_v2_capsules_advance_revision_and_recompute_documents_presets_locally() {
+    const SCOPE: &str = "cache-wasm-realtime-documents-v2";
+    const OWNER: &str = "macro|user@example.com";
+    const OTHER_OWNER: &str = "macro|shared@example.com";
+    const INITIAL: &str = "00000000-0000-0000-0000-000000000001";
+    const ORDINARY: &str = "00000000-0000-0000-0000-000000000002";
+    const SHARED: &str = "00000000-0000-0000-0000-000000000003";
+    const ATTACHMENT: &str = "00000000-0000-0000-0000-000000000004";
+    const TASK: &str = "00000000-0000-0000-0000-000000000005";
+    const SNIPPET: &str = "00000000-0000-0000-0000-000000000006";
+    let key = |id| format!("GraphqlSoupDocument:{id}");
     let engine = fresh_engine(SCOPE).await;
 
-    resolved(engine.write_query(
-        write_context(None),
-        SOUP_UPDATES_SUBSCRIPTION.into(),
-        Some("SoupUpdates".into()),
-        js(serde_json::json!({})),
-        js(realtime_document_data(DOCUMENT_ID)),
-        None,
-    ))
-    .await;
-
-    // This asks only the local predicate index; no Soup query response has
-    // been fetched or written before the realtime item is returned.
-    let filtered: serde_json::Value =
-        from_js(resolved(engine.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
-    assert_eq!(
-        filtered,
-        serde_json::json!({
-            "kind": "complete",
-            "revision": "1",
-            "keys": [format!("GraphqlSoupDocument:{DOCUMENT_ID}")],
-            "optimistic": false
-        })
+    let network_write: serde_json::Value = from_js(
+        resolved(engine.write_query(
+            write_context(None),
+            SOUP_WITH_PROJECTION_QUERY.into(),
+            Some("SoupWithProjection".into()),
+            js(serde_json::json!({ "input": { "limit": 100 } })),
+            js(serde_json::json!({
+                "user": {
+                    "id": "user-1",
+                    "soup": {
+                        "nextCursor": null,
+                        "items": [projected_document_item(INITIAL, OWNER, false, None, 10)]
+                    }
+                }
+            })),
+            Some("user-1".into()),
+        ))
+        .await,
     );
+    assert_eq!(network_write["revision"], "1");
+
+    let updates = [
+        projected_document_item(ORDINARY, OWNER, false, None, 20),
+        projected_document_item(SHARED, OTHER_OWNER, false, None, 30),
+        projected_document_item(ATTACHMENT, OWNER, true, None, 40),
+        projected_document_item(TASK, OWNER, false, Some("task"), 50),
+        projected_document_item(SNIPPET, OWNER, false, Some("snippet"), 60),
+    ]
+    .into_iter()
+    .map(|item| serde_json::json!({ "__typename": "SoupUpdated", "item": item }))
+    .collect::<Vec<_>>();
+    let subscription_write: serde_json::Value = from_js(
+        resolved(engine.write_query(
+            write_context(None),
+            SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+            Some("SoupUpdatesWithProjection".into()),
+            js(serde_json::json!({})),
+            js(serde_json::json!({ "soupUpdates": updates })),
+            None,
+        ))
+        .await,
+    );
+    assert_eq!(subscription_write["revision"], "2");
+
+    // After the one initial Soup response, every membership result below is
+    // recomputed only through the real WASM/Turso predicate index. No second
+    // Soup query response is executed or written after the subscription.
+    for (name, request) in production_documents_preset_filters() {
+        let expected = match name {
+            "owned/snippets-on" => vec![key(SNIPPET), key(ORDINARY), key(INITIAL)],
+            "owned/snippets-off" => vec![key(ORDINARY), key(INITIAL)],
+            "shared/snippets-on" | "shared/snippets-off" => vec![key(SHARED)],
+            "attachments/snippets-on" | "attachments/snippets-off" => {
+                vec![key(ATTACHMENT)]
+            }
+            "all/snippets-on" => vec![
+                key(SNIPPET),
+                key(ATTACHMENT),
+                key(SHARED),
+                key(ORDINARY),
+                key(INITIAL),
+            ],
+            "all/snippets-off" => {
+                vec![key(ATTACHMENT), key(SHARED), key(ORDINARY), key(INITIAL)]
+            }
+            _ => panic!("unexpected Documents preset fixture {name}"),
+        };
+        let filtered: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request))).await);
+        assert_eq!(
+            filtered,
+            serde_json::json!({
+                "kind": "complete",
+                "revision": "2",
+                "keys": expected,
+                "optimistic": false,
+            }),
+            "{name}"
+        );
+    }
 
     let selected: serde_json::Value = from_js(
         resolved(engine.read_records_by_keys(
             REALTIME_DOCUMENT_FRAGMENT.into(),
             "RealtimeDocument".into(),
-            js(filtered["keys"].clone()),
+            js(serde_json::json!([key(ORDINARY)])),
         ))
         .await,
     );
-    assert_eq!(selected["revision"], "1");
-    assert_eq!(selected["records"][0]["record"]["id"], DOCUMENT_ID);
-    assert_eq!(
-        selected["records"][0]["record"]["displayName"],
-        "Realtime document"
-    );
-
-    close_and_destroy(&engine, SCOPE).await;
-}
-
-#[wasm_bindgen_test(async)]
-async fn realtime_soup_item_cannot_satisfy_documents_presets_without_derived_facts() {
-    const SCOPE: &str = "cache-wasm-realtime-documents-preset-gap";
-    const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000006";
-    let engine = fresh_engine(SCOPE).await;
-
-    resolved(engine.write_query(
-        write_context(None),
-        SOUP_UPDATES_SUBSCRIPTION.into(),
-        Some("SoupUpdates".into()),
-        js(serde_json::json!({})),
-        js(realtime_document_data(DOCUMENT_ID)),
-        None,
-    ))
-    .await;
-
-    for (name, request) in production_documents_preset_filters() {
-        let filtered: serde_json::Value =
-            from_js(resolved(engine.entity_filter(js(request))).await);
-        assert_eq!(
-            filtered,
-            serde_json::json!({ "kind": "unsupported" }),
-            "{name} must remain an explicit soup-flat-v1 fallback until v2 facts arrive"
-        );
-    }
+    assert_eq!(selected["revision"], "2");
+    assert_eq!(selected["records"][0]["record"]["id"], ORDINARY);
 
     close_and_destroy(&engine, SCOPE).await;
 }
@@ -790,10 +856,20 @@ async fn capsule_and_partial_mutation_ordering_preserve_complete_server_facts() 
 }
 
 #[wasm_bindgen_test(async)]
-async fn optimistic_soup_item_is_filterable_after_enqueue_reopen_and_rollback() {
+async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
     const SCOPE: &str = "cache-wasm-optimistic-local-filter";
     const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000002";
     let engine = fresh_engine(SCOPE).await;
+
+    resolved(engine.write_query(
+        write_context(None),
+        SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+        Some("SoupUpdatesWithProjection".into()),
+        js(serde_json::json!({})),
+        js(projected_realtime_document_data(DOCUMENT_ID, false)),
+        None,
+    ))
+    .await;
 
     let enqueue: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
@@ -852,7 +928,10 @@ async fn optimistic_soup_item_is_filterable_after_enqueue_reopen_and_rollback() 
     .await;
     let filtered: serde_json::Value =
         from_js(resolved(reopened.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
-    assert_eq!(filtered["keys"], serde_json::json!([]));
+    assert_eq!(
+        filtered["keys"],
+        serde_json::json!([format!("GraphqlSoupDocument:{DOCUMENT_ID}")])
+    );
     assert_eq!(filtered["optimistic"], false);
 
     close_and_destroy(&reopened, SCOPE).await;
