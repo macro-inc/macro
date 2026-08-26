@@ -218,6 +218,18 @@ const CAPSULE_SUBSCRIPTION: &str = r#"subscription Capsule {
     }
 }"#;
 
+const CAPSULE_BACKFILL: &str = r#"query SoupBackfill {
+    user {
+        soup(input: { initial: { limit: 1 } }) {
+            items {
+                __typename
+                id
+                cacheProjection @cacheOnly
+            }
+        }
+    }
+}"#;
+
 fn capsule_subscription_data(id: &str, capsule: serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "soupUpdates": [{
@@ -233,7 +245,7 @@ fn capsule_subscription_data(id: &str, capsule: serde_json::Value) -> serde_json
 
 #[test]
 fn selected_capsules_replace_v2_and_bind_to_the_surrounding_entity() {
-    let mutations = authoritative_projection_mutations(
+    let batch = authoritative_projection_batch(
         CAPSULE_SUBSCRIPTION,
         Some("Capsule"),
         &capsule_subscription_data(
@@ -242,11 +254,22 @@ fn selected_capsules_replace_v2_and_bind_to_the_surrounding_entity() {
         ),
     )
     .unwrap();
-    let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
+    let [ProjectionMutation::Replace(document)] = batch.mutations.as_slice() else {
         panic!("valid selected capsule must replace authority");
     };
     assert_eq!(document.profile, vocabulary::profile_v2());
     assert_eq!(document.partition, vocabulary::document_partition());
+    let telemetry = batch.telemetry.expect("selected capsule is observable");
+    assert_eq!(telemetry.operation, "other");
+    assert_eq!(telemetry.requested_count, 1);
+    assert_eq!(telemetry.present_count, 1);
+    assert_eq!(telemetry.complete_count, 1);
+    assert_eq!(telemetry.capsule_count, 1);
+    assert_eq!(
+        telemetry.capsule_bytes,
+        u64::try_from(ORDINARY_DOCUMENT_CAPSULE.len()).unwrap()
+    );
+    assert_eq!(telemetry.fact_count, 8);
 
     for (name, data, expected_kind) in [
         (
@@ -299,6 +322,50 @@ fn selected_capsules_replace_v2_and_bind_to_the_surrounding_entity() {
             "{name}: {mutations:?}"
         );
     }
+}
+
+#[test]
+fn backfill_rejects_incomplete_capsules_before_planning_any_write() {
+    let data = |cache_projection: serde_json::Value| {
+        serde_json::json!({
+            "user": {
+                "soup": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": "00000000-0000-0000-0000-000000000001",
+                        "cacheProjection": cache_projection
+                    }]
+                }
+            }
+        })
+    };
+
+    for value in [
+        serde_json::Value::Null,
+        serde_json::Value::String("not-base64".to_owned()),
+    ] {
+        let error =
+            authoritative_projection_batch(CAPSULE_BACKFILL, Some("SoupBackfill"), &data(value))
+                .expect_err("an incomplete backfill page must not reach storage");
+        assert_eq!(
+            error.to_string(),
+            "SoupBackfill page contains an incomplete required cache projection"
+        );
+    }
+
+    let batch = authoritative_projection_batch(
+        CAPSULE_BACKFILL,
+        Some("SoupBackfill"),
+        &data(serde_json::Value::String(
+            ORDINARY_DOCUMENT_CAPSULE.to_owned(),
+        )),
+    )
+    .expect("a complete backfill page is ingestible");
+    assert!(matches!(
+        batch.mutations.as_slice(),
+        [ProjectionMutation::Replace(_)]
+    ));
+    assert_eq!(batch.telemetry.unwrap().operation, "backfill");
 }
 
 #[test]
@@ -517,6 +584,218 @@ fn production_documents_presets_compile_for_created_and_updated_sorts() {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn differential_document(
+    id: &str,
+    owner: &str,
+    is_email_attachment: bool,
+    sub_type: Option<&str>,
+    sort_value: i64,
+) -> IndexDocument {
+    let id = uuid::Uuid::parse_str(id).unwrap();
+    let mut exact_facts = vec![
+        predicate_index::ExactFact {
+            attribute: vocabulary::id(),
+            value: ExactValue::new(id.as_bytes()).unwrap(),
+        },
+        predicate_index::ExactFact {
+            attribute: vocabulary::owner(),
+            value: ExactValue::utf8(owner).unwrap(),
+        },
+        predicate_index::ExactFact {
+            attribute: vocabulary::email_attachment(),
+            value: ExactValue::new([u8::from(is_email_attachment)]).unwrap(),
+        },
+    ];
+    if let Some(sub_type) = sub_type {
+        exact_facts.push(predicate_index::ExactFact {
+            attribute: vocabulary::document_sub_type(),
+            value: ExactValue::utf8(sub_type).unwrap(),
+        });
+    }
+    IndexDocument {
+        record_key: RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap(),
+        profile: vocabulary::profile_v2(),
+        partition: vocabulary::document_partition(),
+        exact_facts,
+        integer_facts: vec![
+            predicate_index::IntegerFact {
+                attribute: vocabulary::created_at(),
+                value: sort_value,
+            },
+            predicate_index::IntegerFact {
+                attribute: vocabulary::updated_at(),
+                value: sort_value + 100,
+            },
+        ],
+        sort_facts: vec![
+            predicate_index::IntegerFact {
+                attribute: vocabulary::created_at(),
+                value: sort_value,
+            },
+            predicate_index::IntegerFact {
+                attribute: vocabulary::updated_at(),
+                value: sort_value + 100,
+            },
+        ],
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn production_documents_membership_matches_postgres_fixture_reference_and_real_turso() {
+    use cache_core::predicate::{PredicateIndexStorage, PredicateQueryResult};
+    use cache_core::store::Storage;
+    use std::collections::BTreeSet;
+
+    pollster::block_on(async {
+        let owner = "macro|phase-0@example.com";
+        let documents = vec![
+            differential_document(
+                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                owner,
+                true,
+                Some("task"),
+                1,
+            ),
+            differential_document(
+                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                owner,
+                true,
+                Some("task"),
+                2,
+            ),
+            differential_document(
+                "dddddddd-dddd-dddd-dddd-dddddddddddd",
+                "macro|shared@example.com",
+                false,
+                None,
+                3,
+            ),
+            differential_document(
+                "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+                owner,
+                false,
+                Some("snippet"),
+                4,
+            ),
+            differential_document(
+                "ffffffff-ffff-ffff-ffff-ffffffffffff",
+                owner,
+                false,
+                None,
+                5,
+            ),
+        ];
+        let mut storage =
+            cache_turso::TursoStorage::open_in_memory("soup-v2-production-shape-differential")
+                .unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                documents
+                    .iter()
+                    .cloned()
+                    .map(ProjectionMutation::Replace)
+                    .collect(),
+            )
+            .await
+            .unwrap();
+
+        let ids = |values: &[&str]| {
+            values
+                .iter()
+                .map(|id| format!("GraphqlSoupDocument:{id}"))
+                .collect::<BTreeSet<_>>()
+        };
+        let expected = BTreeMap::from([
+            (
+                "owned/snippets-on",
+                ids(&[
+                    "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+                    "ffffffff-ffff-ffff-ffff-ffffffffffff",
+                ]),
+            ),
+            (
+                "owned/snippets-off",
+                ids(&["ffffffff-ffff-ffff-ffff-ffffffffffff"]),
+            ),
+            (
+                "shared/snippets-on",
+                ids(&["dddddddd-dddd-dddd-dddd-dddddddddddd"]),
+            ),
+            (
+                "shared/snippets-off",
+                ids(&["dddddddd-dddd-dddd-dddd-dddddddddddd"]),
+            ),
+            (
+                "attachments/snippets-on",
+                ids(&[
+                    "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                ]),
+            ),
+            (
+                "attachments/snippets-off",
+                ids(&[
+                    "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                    "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                ]),
+            ),
+            (
+                "all/snippets-on",
+                ids(&[
+                    "dddddddd-dddd-dddd-dddd-dddddddddddd",
+                    "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+                    "ffffffff-ffff-ffff-ffff-ffffffffffff",
+                ]),
+            ),
+            (
+                "all/snippets-off",
+                ids(&[
+                    "dddddddd-dddd-dddd-dddd-dddddddddddd",
+                    "ffffffff-ffff-ffff-ffff-ffffffffffff",
+                ]),
+            ),
+        ]);
+
+        for sort_method in ["CREATED_AT", "UPDATED_AT"] {
+            for sort_direction in ["ASC", "DESC"] {
+                for (name, filter) in production_documents_filter_cases() {
+                    let SoupFilterCompileOutcome::Supported(query) = compile_filter_request(
+                        production_documents_filters(filter),
+                        sort_method,
+                        sort_direction,
+                        100,
+                    )
+                    .unwrap() else {
+                        panic!("{name} unexpectedly fell back");
+                    };
+                    let reference = predicate_index::evaluate_reference(&query, &documents)
+                        .into_iter()
+                        .map(|hit| hit.record_key.as_str().to_owned())
+                        .collect::<Vec<_>>();
+                    let PredicateQueryResult::Complete(turso) =
+                        storage.query_predicate_index(&query).await.unwrap()
+                    else {
+                        panic!("{name} Turso scope is incomplete");
+                    };
+                    let turso = turso
+                        .into_iter()
+                        .map(|key| key.as_str().to_owned())
+                        .collect::<Vec<_>>();
+                    assert_eq!(turso, reference, "{name}/{sort_method}/{sort_direction}");
+                    assert_eq!(
+                        reference.into_iter().collect::<BTreeSet<_>>(),
+                        expected[name],
+                        "authoritative PostgreSQL fixture membership for {name}"
+                    );
+                }
+            }
+        }
+    });
+}
+
 #[test]
 fn production_documents_presets_keep_unsupported_siblings_all_or_network() {
     let with_unsupported_sibling = serde_json::json!({
@@ -533,7 +812,7 @@ fn production_documents_presets_keep_unsupported_siblings_all_or_network() {
             100,
         )
         .unwrap(),
-        SoupFilterCompileOutcome::Unsupported
+        SoupFilterCompileOutcome::Unsupported(_)
     ));
 }
 

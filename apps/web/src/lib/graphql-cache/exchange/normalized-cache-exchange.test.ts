@@ -273,7 +273,7 @@ function makeFakeHost(): FakeHost {
       return { documents: [], nextCursor: null };
     },
     async entityFilter() {
-      return { kind: 'unsupported' };
+      return { kind: 'unsupported', reason: 'cache-disabled' };
     },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({

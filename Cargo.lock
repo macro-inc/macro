@@ -15038,10 +15038,12 @@ name = "soup-filter-cache-adapter"
 version = "0.1.0"
 dependencies = [
  "cache-core",
+ "cache-turso",
  "chrono",
  "graphql_soup_filter_input",
  "indexmap 2.14.0",
  "item-filter-index",
+ "pollster",
  "predicate-index",
  "serde",
  "serde_json",

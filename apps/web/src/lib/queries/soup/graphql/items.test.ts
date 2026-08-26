@@ -34,7 +34,7 @@ const makeGraphqlSoupInputMock = vi.hoisted(() => vi.fn());
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     error: vi.fn(),
-    span: vi.fn(() => ({ setAttr: vi.fn(), end: vi.fn() })),
+    anonymousSpan: vi.fn(() => ({ setAttr: vi.fn(), end: vi.fn() })),
   },
 }));
 
@@ -52,6 +52,7 @@ vi.mock('@app/lib/graphql-cache', () => ({
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: getGraphqlSoupClientMock,
   getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
+  graphqlSoupProjectionSupported: () => true,
   mapGraphqlSoupItem: vi.fn((item) => item),
   mapGraphqlSoupPage: mapGraphqlSoupPageMock,
 }));

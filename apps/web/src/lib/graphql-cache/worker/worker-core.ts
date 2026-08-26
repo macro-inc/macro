@@ -16,6 +16,7 @@ import type {
   ReadRecordsByKeysResult,
   ReadResult,
   SearchCachePage,
+  SoupProjectionTelemetry,
   WriteResult,
 } from '../protocol';
 import { parseCacheRevision } from '../protocol';
@@ -82,6 +83,15 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 
 function isQueryDataWrite(request: CacheRequest): boolean {
   return request.kind === 'write' || request.kind === 'hydrate';
+}
+
+function soupOperationForName(
+  operationName: string | undefined
+): SoupProjectionTelemetry['operation'] | undefined {
+  if (operationName?.startsWith('SoupBackfill')) return 'backfill';
+  if (operationName?.startsWith('SoupUpdates')) return 'updates';
+  if (operationName?.startsWith('Soup')) return 'soup';
+  return undefined;
 }
 
 function revisionAdvancementCategory(
@@ -206,6 +216,31 @@ export class CacheWorkerCore {
     try {
       const result = await this.enqueue(request);
       const durationMs = this.now() - startedAt;
+      if (request.kind === 'entity-filter') {
+        const filter = result as EntityFilterCacheResult;
+        this.telemetry.record({
+          name: 'graphql_cache.soup_filter',
+          operationCategory: 'read',
+          outcome: 'success',
+          errorCode: 'none',
+          soupFilterOutcome: filter.kind,
+          ...(filter.kind === 'unsupported'
+            ? { soupUnsupportedReason: filter.reason }
+            : {}),
+          durationMs,
+        });
+      }
+      if (
+        (request.kind === 'write' || request.kind === 'hydrate') &&
+        typeof result === 'object' &&
+        result !== null &&
+        'soupProjectionTelemetry' in result
+      ) {
+        const projection = (result as WriteResult).soupProjectionTelemetry;
+        if (projection) {
+          this.recordSoupProjectionTelemetry(projection);
+        }
+      }
       const revisionCategory = revisionAdvancementCategory(request);
       if (revisionCategory !== undefined) {
         this.telemetry.record({
@@ -265,6 +300,19 @@ export class CacheWorkerCore {
     } catch (error) {
       const durationMs = this.now() - startedAt;
       const errorCode = classifyCacheError(error);
+      if (request.kind === 'write' || request.kind === 'hydrate') {
+        const soupOperation = soupOperationForName(request.operationName);
+        if (soupOperation !== undefined) {
+          this.telemetry.record({
+            name: 'graphql_cache.soup_projection',
+            operationCategory: 'write',
+            outcome: 'error',
+            errorCode,
+            soupOperation,
+            durationMs,
+          });
+        }
+      }
       this.telemetry.record({
         name: 'graphql_cache.engine_request',
         operationCategory: category,
@@ -291,6 +339,31 @@ export class CacheWorkerCore {
       this.activeRequestHandlers -= 1;
       this.resolveDrainWaitersIfIdle();
     }
+  }
+
+  private recordSoupProjectionTelemetry(
+    projection: SoupProjectionTelemetry
+  ): void {
+    this.telemetry.record({
+      name: 'graphql_cache.soup_projection',
+      operationCategory: 'write',
+      outcome: 'success',
+      errorCode: 'none',
+      soupOperation: projection.operation,
+      durationMs: projection.decodeDurationMicros / 1_000,
+      bytes: projection.capsuleBytes,
+      count: projection.capsuleCount,
+      factCount: projection.factCount,
+      requestedCount: projection.requestedCount,
+      presentCount: projection.presentCount,
+      nullCount: projection.nullCount,
+      absentCount: projection.absentCount,
+      completeCount: projection.completeCount,
+      missingCount: projection.missingCount,
+      incompatibleCount: projection.incompatibleCount,
+      mismatchedKeyCount: projection.mismatchedKeyCount,
+      unsupportedProfileCount: projection.unsupportedProfileCount,
+    });
   }
 
   /** Stops admission, drains every earlier request/response, then closes OPFS. */

@@ -21,8 +21,8 @@ use cache_turso::{
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
-    dirty_projection_mutations, optimistic_projection_mutations,
+    SoupFilterCompileOutcome, SoupProjectionTelemetry, authoritative_projection_batch,
+    compile_filter_request, dirty_projection_mutations, optimistic_projection_mutations,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -145,6 +145,8 @@ struct JsWriteResult {
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    soup_projection_telemetry: Option<SoupProjectionTelemetry>,
 }
 
 #[derive(Serialize)]
@@ -156,6 +158,8 @@ struct JsHydrationWriteResult {
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
     data: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    soup_projection_telemetry: Option<SoupProjectionTelemetry>,
 }
 
 #[derive(Deserialize)]
@@ -276,7 +280,9 @@ enum JsEntityFilterResult {
         keys: Vec<String>,
         optimistic: bool,
     },
-    Unsupported,
+    Unsupported {
+        reason: &'static str,
+    },
     Incomplete {
         revision: String,
     },
@@ -301,7 +307,11 @@ struct JsRevisionResult {
     revision: String,
 }
 
-fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
+fn js_write_result(
+    result: WriteResult,
+    ops: &OpInterner,
+    soup_projection_telemetry: Option<SoupProjectionTelemetry>,
+) -> JsWriteResult {
     JsWriteResult {
         revision: result.revision.to_string(),
         changed: result
@@ -312,6 +322,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
+        soup_projection_telemetry,
     }
 }
 
@@ -901,7 +912,11 @@ impl CacheEngine {
             )
             .map_err(err_js)?;
             let result = match outcome {
-                SoupFilterCompileOutcome::Unsupported => JsEntityFilterResult::Unsupported,
+                SoupFilterCompileOutcome::Unsupported(reason) => {
+                    JsEntityFilterResult::Unsupported {
+                        reason: reason.telemetry_code(),
+                    }
+                }
                 SoupFilterCompileOutcome::Supported(query) => {
                     let result = state.engine_mut()?.query_predicate_index(&query).await;
                     let result = state.engine_result(result)?;
@@ -965,8 +980,8 @@ impl CacheEngine {
                 let op_id = ops.borrow_mut().intern(&registration.op_id);
                 (op_id, registration.entity_resolvers)
             });
-            let projections =
-                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
+            let projection_batch =
+                authoritative_projection_batch(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
             let result = state
                 .engine_mut()?
@@ -985,11 +1000,15 @@ impl CacheEngine {
                         data: &data,
                         identity: identity.as_deref(),
                     },
-                    projections,
+                    projection_batch.mutations,
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&js_write_result(result, &ops.borrow()))
+            to_js(&js_write_result(
+                result,
+                &ops.borrow(),
+                projection_batch.telemetry,
+            ))
         })
     }
 
@@ -1011,8 +1030,8 @@ impl CacheEngine {
             state.ensure_callable()?;
             let variables = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let projections =
-                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
+            let projection_batch =
+                authoritative_projection_batch(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
             let result = state
                 .engine_mut()?
@@ -1022,7 +1041,7 @@ impl CacheEngine {
                     &variables,
                     &data,
                     identity.as_deref(),
-                    projections,
+                    projection_batch.mutations,
                 )
                 .await;
             let result = state.engine_result(result)?;
@@ -1038,6 +1057,7 @@ impl CacheEngine {
                 reset: result.write_result.reset,
                 revalidations: result.write_result.revalidations,
                 data: result.data,
+                soup_projection_telemetry: projection_batch.telemetry,
             })
         })
     }
@@ -1252,8 +1272,8 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let projections =
-                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
+            let projection_batch =
+                authoritative_projection_batch(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
             let result = state
                 .engine_mut()?
@@ -1264,11 +1284,15 @@ impl CacheEngine {
                     operation_name.as_deref(),
                     &vars,
                     &data,
-                    projections,
+                    projection_batch.mutations,
                 )
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&js_write_result(result, &ops.borrow()))
+            to_js(&js_write_result(
+                result,
+                &ops.borrow(),
+                projection_batch.telemetry,
+            ))
         })
     }
 
@@ -1296,7 +1320,7 @@ impl CacheEngine {
                 .rollback_optimistic_write(transaction, claim)
                 .await;
             let result = state.engine_result(result)?;
-            to_js(&js_write_result(result, &ops.borrow()))
+            to_js(&js_write_result(result, &ops.borrow(), None))
         })
     }
 
@@ -1362,7 +1386,7 @@ impl CacheEngine {
             let mut state = state.lock().await;
             let result = state.engine_mut()?.refresh_optimistic_queue().await;
             let result = state.engine_result(result)?;
-            to_js(&js_write_result(result, &ops.borrow()))
+            to_js(&js_write_result(result, &ops.borrow(), None))
         })
     }
 

@@ -92,8 +92,35 @@ export type EntityFilterCacheResult =
       keys: string[];
       optimistic: boolean;
     }
-  | { kind: 'unsupported' }
+  | {
+      kind: 'unsupported';
+      reason:
+        | 'partition'
+        | 'literal'
+        | 'global-properties'
+        | 'sort'
+        | 'cursor'
+        | 'cache-disabled';
+    }
   | { kind: 'incomplete'; revision: CacheRevision };
+
+/** Payload-free diagnostics emitted by Soup capsule composition in WASM. */
+export type SoupProjectionTelemetry = {
+  operation: 'soup' | 'backfill' | 'updates' | 'other';
+  requestedCount: number;
+  presentCount: number;
+  nullCount: number;
+  absentCount: number;
+  completeCount: number;
+  missingCount: number;
+  incompatibleCount: number;
+  mismatchedKeyCount: number;
+  unsupportedProfileCount: number;
+  capsuleCount: number;
+  capsuleBytes: number;
+  factCount: number;
+  decodeDurationMicros: number;
+};
 
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
@@ -305,6 +332,8 @@ export type HydrationResult =
 export type WriteResult = {
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
+  /** Anonymous Soup capsule diagnostics, absent for unrelated writes. */
+  soupProjectionTelemetry?: SoupProjectionTelemetry;
   /** Entity keys whose records changed. */
   changed: string[];
   /** Registered operation ids affected by the change (origin excluded). */

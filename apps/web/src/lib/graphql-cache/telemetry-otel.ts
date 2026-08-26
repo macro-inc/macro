@@ -49,6 +49,18 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         if (event.revisionCategory !== undefined) {
           span.setAttr('cache.revision_category', event.revisionCategory);
         }
+        if (event.soupOperation !== undefined) {
+          span.setAttr('cache.soup_operation', event.soupOperation);
+        }
+        if (event.soupFilterOutcome !== undefined) {
+          span.setAttr('cache.soup_filter_outcome', event.soupFilterOutcome);
+        }
+        if (event.soupUnsupportedReason !== undefined) {
+          span.setAttr(
+            'cache.soup_unsupported_reason',
+            event.soupUnsupportedReason
+          );
+        }
         if (event.resetAttempt !== undefined) {
           span.setAttr('cache.reset_attempt', event.resetAttempt);
         }
@@ -67,6 +79,39 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
         }
         if (event.ratio !== undefined) span.setAttr('cache.ratio', event.ratio);
         if (event.count !== undefined) span.setAttr('cache.count', event.count);
+        if (event.factCount !== undefined) {
+          span.setAttr('cache.fact_count', event.factCount);
+        }
+        if (event.requestedCount !== undefined) {
+          span.setAttr('cache.requested_count', event.requestedCount);
+        }
+        if (event.presentCount !== undefined) {
+          span.setAttr('cache.present_count', event.presentCount);
+        }
+        if (event.nullCount !== undefined) {
+          span.setAttr('cache.null_count', event.nullCount);
+        }
+        if (event.absentCount !== undefined) {
+          span.setAttr('cache.absent_count', event.absentCount);
+        }
+        if (event.completeCount !== undefined) {
+          span.setAttr('cache.complete_count', event.completeCount);
+        }
+        if (event.missingCount !== undefined) {
+          span.setAttr('cache.missing_count', event.missingCount);
+        }
+        if (event.incompatibleCount !== undefined) {
+          span.setAttr('cache.incompatible_count', event.incompatibleCount);
+        }
+        if (event.mismatchedKeyCount !== undefined) {
+          span.setAttr('cache.mismatched_key_count', event.mismatchedKeyCount);
+        }
+        if (event.unsupportedProfileCount !== undefined) {
+          span.setAttr(
+            'cache.unsupported_profile_count',
+            event.unsupportedProfileCount
+          );
+        }
         if (event.sampleRate !== undefined) {
           span.setAttr('cache.sample_rate', event.sampleRate);
         }

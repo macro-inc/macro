@@ -77,6 +77,22 @@ const SOUP_WITH_PROJECTION_QUERY: &str = r#"query SoupWithProjection($input: Sou
     }
 }"#;
 
+const SOUP_BACKFILL_WITH_PROJECTION_QUERY: &str = r#"query SoupBackfill($input: SoupInput!) {
+    user {
+        id
+        soup(input: $input) {
+            nextCursor
+            items {
+                __typename
+                id
+                cacheProjection @cacheOnly
+                displayName
+                ... on GraphqlSoupDocument { ownerId }
+            }
+        }
+    }
+}"#;
+
 const SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION: &str = r#"subscription SoupUpdatesWithProjection {
     soupUpdates {
         __typename
@@ -761,6 +777,95 @@ async fn soup_updated_v2_capsules_advance_revision_and_recompute_documents_prese
     );
     assert_eq!(selected["revision"], "2");
     assert_eq!(selected["records"][0]["record"]["id"], ORDINARY);
+
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn backfill_capsule_failure_does_not_commit_or_advance_revision() {
+    const SCOPE: &str = "cache-wasm-backfill-capsule-checkpoint";
+    const FIRST: &str = "00000000-0000-0000-0000-000000000001";
+    const INVALID: &str = "00000000-0000-0000-0000-000000000002";
+    let engine = fresh_engine(SCOPE).await;
+
+    let hydrated: serde_json::Value = from_js(
+        resolved(engine.hydrate_query(
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            js(serde_json::json!({ "input": { "initial": { "limit": 1 } } })),
+            js(serde_json::json!({
+                "user": {
+                    "id": "user-1",
+                    "soup": {
+                        "nextCursor": "next",
+                        "items": [projected_document_item(
+                            FIRST,
+                            "macro|user@example.com",
+                            false,
+                            None,
+                            10,
+                        )]
+                    }
+                }
+            })),
+            Some("user-1".into()),
+        ))
+        .await,
+    );
+    assert_eq!(hydrated["revision"], "1");
+    assert_eq!(hydrated["soupProjectionTelemetry"]["operation"], "backfill");
+    assert_eq!(hydrated["soupProjectionTelemetry"]["completeCount"], 1);
+
+    let error = JsFuture::from(engine.hydrate_query(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        js(serde_json::json!({ "input": { "initial": { "limit": 1 } } })),
+        js(serde_json::json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "nextCursor": null,
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": INVALID,
+                        "cacheProjection": null,
+                        "displayName": "Invalid backfill item",
+                        "ownerId": "macro|user@example.com"
+                    }]
+                }
+            }
+        })),
+        Some("user-1".into()),
+    ))
+    .await
+    .expect_err("invalid required backfill capsule rejects before storage");
+    let message = js_sys::Reflect::get(&error, &JsValue::from_str("message"))
+        .expect("Error.message")
+        .as_string()
+        .expect("message is a string");
+    assert_eq!(
+        message,
+        "SoupBackfill page contains an incomplete required cache projection"
+    );
+    assert_eq!(
+        resolved(engine.current_revision())
+            .await
+            .as_string()
+            .unwrap(),
+        "1"
+    );
+
+    let selected: serde_json::Value = from_js(
+        resolved(engine.read_records_by_keys(
+            REALTIME_DOCUMENT_FRAGMENT.into(),
+            "RealtimeDocument".into(),
+            js(serde_json::json!([format!(
+                "GraphqlSoupDocument:{INVALID}"
+            )])),
+        ))
+        .await,
+    );
+    assert!(selected["records"].as_array().unwrap().is_empty());
 
     close_and_destroy(&engine, SCOPE).await;
 }
