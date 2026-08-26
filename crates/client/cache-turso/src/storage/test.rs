@@ -469,6 +469,63 @@ fn enqueue_atomically_replaces_one_effective_shadow_per_key() {
 }
 
 #[test]
+fn incomplete_optimistic_projection_kinds_survive_persistence_and_reload() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("shadow-incomplete-kinds").unwrap();
+        let kinds = [
+            ProjectionIncompleteKind::Dirty,
+            ProjectionIncompleteKind::Missing,
+            ProjectionIncompleteKind::IncompatibleVersion,
+        ];
+        let keys = (1..=3)
+            .map(|index| PredicateRecordKey::new(format!("Thing:{index}")).unwrap())
+            .collect::<Vec<_>>();
+        let projections = keys
+            .iter()
+            .zip(kinds.iter().copied())
+            .map(|(record_key, kind)| PendingOptimisticProjection {
+                state: OptimisticProjectionState::Incomplete {
+                    record_key: record_key.clone(),
+                    profile: Profile::new(Token::new("profile-v1").unwrap()),
+                    partition: Token::new("thing").unwrap(),
+                    kind,
+                },
+                uncertainty: OptimisticUncertainty::default(),
+            })
+            .collect();
+        let owner = storage
+            .enqueue_mutation_with_shadow(queued("Incomplete"), projections)
+            .await
+            .unwrap();
+
+        let rows = driver::query(
+            &storage.connection(),
+            "SELECT state, incomplete_kind FROM optimistic_index_documents ORDER BY record_key",
+            Vec::new(),
+        )
+        .unwrap();
+        for (row, kind) in rows.iter().zip(kinds) {
+            assert_eq!(required_i64(row, 0).unwrap(), 2);
+            assert_eq!(required_i64(row, 1).unwrap(), projection_state_code(kind));
+        }
+
+        let loaded = storage.load_optimistic_projections(&keys).await.unwrap();
+        for ((projection, record_key), kind) in loaded.into_iter().zip(&keys).zip(kinds) {
+            let projection = projection.unwrap();
+            assert_eq!(projection.owner, owner);
+            assert!(matches!(
+                projection.state,
+                OptimisticProjectionState::Incomplete {
+                    record_key: loaded_key,
+                    kind: loaded_kind,
+                    ..
+                } if loaded_key == *record_key && loaded_kind == kind
+            ));
+        }
+    });
+}
+
+#[test]
 fn settlement_fences_queue_identity_and_atomically_replaces_affected_shadows() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("shadow-settlement").unwrap();

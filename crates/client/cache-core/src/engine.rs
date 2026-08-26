@@ -1543,6 +1543,9 @@ impl<S: Storage> Engine<S> {
             affected_keys,
             replacements,
         };
+        if reconciliation.expected_queue.first().copied() != Some(transaction) {
+            return Err(EngineError::StaleMutationClaim(transaction));
+        }
         reconciliation
             .validate(transaction)
             .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;

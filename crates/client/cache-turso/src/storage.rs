@@ -42,7 +42,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 9;
+pub const STORAGE_SCHEMA_VERSION: u32 = 10;
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,7 +70,7 @@ const CREATE_SCHEMA: [&str; 27] = [
     "CREATE INDEX integer_facts_lookup_idx ON integer_facts(attribute, value, document_id)",
     "CREATE TABLE sort_facts (document_id INTEGER NOT NULL, attribute TEXT NOT NULL, value INTEGER NOT NULL, PRIMARY KEY (document_id, attribute), FOREIGN KEY (document_id) REFERENCES index_documents(id) ON DELETE CASCADE)",
     "CREATE INDEX sort_facts_lookup_idx ON sort_facts(attribute, value, document_id)",
-    "CREATE TABLE optimistic_index_documents (id INTEGER PRIMARY KEY, owner_mutation_id INTEGER NOT NULL, record_key TEXT NOT NULL, profile TEXT NOT NULL, partition TEXT NOT NULL, state INTEGER NOT NULL, FOREIGN KEY (owner_mutation_id) REFERENCES optimistic_layers(mutation_id) ON DELETE CASCADE)",
+    "CREATE TABLE optimistic_index_documents (id INTEGER PRIMARY KEY, owner_mutation_id INTEGER NOT NULL, record_key TEXT NOT NULL, profile TEXT NOT NULL, partition TEXT NOT NULL, state INTEGER NOT NULL, incomplete_kind INTEGER, FOREIGN KEY (owner_mutation_id) REFERENCES optimistic_layers(mutation_id) ON DELETE CASCADE)",
     "CREATE UNIQUE INDEX optimistic_index_documents_record_key_idx ON optimistic_index_documents(record_key)",
     "CREATE INDEX optimistic_index_documents_owner_idx ON optimistic_index_documents(owner_mutation_id, id)",
     "CREATE INDEX optimistic_index_documents_scope_idx ON optimistic_index_documents(profile, partition, state, id)",
@@ -113,7 +113,7 @@ const ANY_LAYER_SELECT: &str = "SELECT mutation_id FROM optimistic_layers LIMIT 
 const CLAIM_SELECT: &str = "SELECT lease_owner, lease_generation FROM mutation_queue WHERE id = ?1";
 const REQUIRE_LAYER_SELECT: &str = "SELECT 1 FROM optimistic_layers WHERE mutation_id = ?1";
 const QUEUE_DIAGNOSTICS_SELECT: &str = "SELECT COUNT(*), MIN(created_at_ms) FROM mutation_queue";
-const OPTIMISTIC_INDEX_DOCUMENT_INSERT: &str = "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id";
+const OPTIMISTIC_INDEX_DOCUMENT_INSERT: &str = "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state, incomplete_kind) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id";
 const OPTIMISTIC_INDEX_DOCUMENT_DELETE: &str =
     "DELETE FROM optimistic_index_documents WHERE record_key = ?1";
 const OPTIMISTIC_EXACT_FACT_INSERT: &str =
@@ -1529,6 +1529,7 @@ fn insert_optimistic_projection(
     state: OptimisticProjectionState,
     uncertainty: OptimisticUncertainty,
 ) -> Result<(), TursoStorageError> {
+    let (state_code, incomplete_kind_code) = optimistic_projection_state_code(&state);
     let rows = driver::query(
         connection,
         OPTIMISTIC_INDEX_DOCUMENT_INSERT,
@@ -1537,7 +1538,8 @@ fn insert_optimistic_projection(
             text(state.record_key().as_str()),
             text(state.profile().token().as_str()),
             text(state.partition().as_str()),
-            Value::from_i64(optimistic_projection_state_code(&state)),
+            Value::from_i64(state_code),
+            optional_i64(incomplete_kind_code),
         ],
     )?;
     let document_id = match rows.as_slice() {
@@ -1622,13 +1624,18 @@ fn write_optimistic_uncertainty(
     Ok(())
 }
 
-fn optimistic_projection_state_code(state: &OptimisticProjectionState) -> i64 {
+fn optimistic_projection_state_code(state: &OptimisticProjectionState) -> (i64, Option<i64>) {
     match state {
-        OptimisticProjectionState::Complete(_) => OptimisticIndexDocumentState::Complete as i64,
-        OptimisticProjectionState::Deleted { .. } => OptimisticIndexDocumentState::Deleted as i64,
-        OptimisticProjectionState::Incomplete { .. } => {
-            OptimisticIndexDocumentState::Incomplete as i64
+        OptimisticProjectionState::Complete(_) => {
+            (OptimisticIndexDocumentState::Complete as i64, None)
         }
+        OptimisticProjectionState::Deleted { .. } => {
+            (OptimisticIndexDocumentState::Deleted as i64, None)
+        }
+        OptimisticProjectionState::Incomplete { kind, .. } => (
+            OptimisticIndexDocumentState::Incomplete as i64,
+            Some(projection_state_code(*kind)),
+        ),
     }
 }
 
@@ -1838,14 +1845,14 @@ fn load_optimistic_projections(
     let rows = driver::query(
         connection,
         &format!(
-            "SELECT id, owner_mutation_id, record_key, profile, partition, state FROM optimistic_index_documents WHERE record_key IN ({placeholders})"
+            "SELECT id, owner_mutation_id, record_key, profile, partition, state, incomplete_kind FROM optimistic_index_documents WHERE record_key IN ({placeholders})"
         ),
         keys.iter().map(|key| text(key.as_str())).collect(),
     )?;
     let mut by_id = HashMap::with_capacity(rows.len());
     let mut projections = HashMap::with_capacity(rows.len());
     for row in rows {
-        if row.len() != 6 {
+        if row.len() != 7 {
             return Err(invariant());
         }
         let id = required_i64(&row, 0)?;
@@ -1854,8 +1861,12 @@ fn load_optimistic_projections(
             PredicateRecordKey::new(required_text(&row, 2)?).map_err(|_| invariant())?;
         let profile = Profile::new(Token::new(required_text(&row, 3)?).map_err(|_| invariant())?);
         let partition = Token::new(required_text(&row, 4)?).map_err(|_| invariant())?;
+        let incomplete_kind = nullable_i64(&row, 6)?;
         let state = match OptimisticIndexDocumentState::try_from(required_i64(&row, 5)?)? {
             OptimisticIndexDocumentState::Complete => {
+                if incomplete_kind.is_some() {
+                    return Err(invariant());
+                }
                 OptimisticProjectionState::Complete(predicate_index::IndexDocument {
                     record_key: record_key.clone(),
                     profile,
@@ -1865,16 +1876,21 @@ fn load_optimistic_projections(
                     sort_facts: Vec::new(),
                 })
             }
-            OptimisticIndexDocumentState::Deleted => OptimisticProjectionState::Deleted {
-                record_key: record_key.clone(),
-                profile,
-                partition,
-            },
+            OptimisticIndexDocumentState::Deleted => {
+                if incomplete_kind.is_some() {
+                    return Err(invariant());
+                }
+                OptimisticProjectionState::Deleted {
+                    record_key: record_key.clone(),
+                    profile,
+                    partition,
+                }
+            }
             OptimisticIndexDocumentState::Incomplete => OptimisticProjectionState::Incomplete {
                 record_key: record_key.clone(),
                 profile,
                 partition,
-                kind: ProjectionIncompleteKind::Dirty,
+                kind: projection_incomplete_kind(incomplete_kind.ok_or_else(invariant)?)?,
             },
         };
         if by_id.insert(id, record_key.clone()).is_some()
@@ -2881,6 +2897,13 @@ const OPTIMISTIC_INDEX_DOCUMENT_COLUMNS: &[ColumnSpec] = &[
         default_zero: false,
         primary_key_position: 0,
     },
+    ColumnSpec {
+        name: "incomplete_kind",
+        declared_type: "INTEGER",
+        not_null: false,
+        default_zero: false,
+        primary_key_position: 0,
+    },
 ];
 
 const OPTIMISTIC_UNCERTAIN_ATTRIBUTE_COLUMNS: &[ColumnSpec] = &[
@@ -3827,15 +3850,25 @@ fn validate_optimistic_shadow_consistency(
     }
     for row in driver::query(
         connection,
-        "SELECT state FROM optimistic_index_documents",
+        "SELECT state, incomplete_kind FROM optimistic_index_documents",
         Vec::new(),
     )
     .map_err(TursoStorageError::initialization)?
     {
-        if row.len() != 1 {
+        if row.len() != 2 {
             return Err(invariant());
         }
-        OptimisticIndexDocumentState::try_from(required_i64(&row, 0)?)?;
+        let incomplete_kind = nullable_i64(&row, 1)?;
+        match OptimisticIndexDocumentState::try_from(required_i64(&row, 0)?)? {
+            OptimisticIndexDocumentState::Complete | OptimisticIndexDocumentState::Deleted => {
+                if incomplete_kind.is_some() {
+                    return Err(invariant());
+                }
+            }
+            OptimisticIndexDocumentState::Incomplete => {
+                projection_incomplete_kind(incomplete_kind.ok_or_else(invariant)?)?;
+            }
+        }
     }
     if !driver::query(
         connection,
