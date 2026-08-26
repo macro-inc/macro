@@ -407,10 +407,12 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   // (the mark-done / mark-not-done action paths toast on their own).
   const archiveMutation = useUndoableArchiveThreadMutation({
     onPushed: (handle, params) => {
+      params.onUndoHandle?.(handle);
       const message = params.archive ? 'Marked as done' : 'Marked as not done';
       let toastId: number | undefined;
 
       const showToast = () => {
+        if (params.silent) return;
         toastId = toast.success(message, {
           actions: [
             {
@@ -645,11 +647,16 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
         )
       );
     } else {
-      // No soup entity to drive mark-done from: archive directly.
+      // No soup entity to drive mark-done from (e.g. the thread was opened
+      // directly, so no soup list or cache exists): archive directly, still
+      // honoring the caller's silent/undo-handle options — undo-send depends
+      // on the handle to reverse this archive.
       archiveMutation.mutate({
         threadId: thread.db_id,
         archive: true,
         linkId: toHeaderLinkId(thread.link_id),
+        silent: markDoneOpts.silent,
+        onUndoHandle: markDoneOpts.onUndoHandle,
       });
     }
 

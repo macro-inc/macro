@@ -5,17 +5,20 @@
 
 import { match } from 'ts-pattern';
 import type {
+  AffectedOperationsResult,
   CachePush,
   CacheRequest,
   CacheResponse,
+  CacheRevisionResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheResult,
   HydrationResult,
+  ReadRecordsByKeysResult,
   ReadResult,
   SearchCachePage,
-  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
+import { parseCacheRevision } from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
@@ -79,6 +82,28 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 
 function isQueryDataWrite(request: CacheRequest): boolean {
   return request.kind === 'write' || request.kind === 'hydrate';
+}
+
+function revisionAdvancementCategory(
+  request: CacheRequest
+):
+  | 'authoritative-write'
+  | 'optimistic-enqueue'
+  | 'optimistic-commit'
+  | 'optimistic-rollback'
+  | 'external-invalidation'
+  | 'deletion'
+  | 'clear'
+  | undefined {
+  return match(request.kind)
+    .with('write', 'hydrate', () => 'authoritative-write' as const)
+    .with('enqueue-optimistic-mutation', () => 'optimistic-enqueue' as const)
+    .with('commit-optimistic-write', () => 'optimistic-commit' as const)
+    .with('rollback-optimistic-write', () => 'optimistic-rollback' as const)
+    .with('invalidate', () => 'external-invalidation' as const)
+    .with('delete-records', () => 'deletion' as const)
+    .with('clear', () => 'clear' as const)
+    .otherwise(() => undefined);
 }
 
 function requestPriority(request: CacheRequest): number {
@@ -181,6 +206,16 @@ export class CacheWorkerCore {
     try {
       const result = await this.enqueue(request);
       const durationMs = this.now() - startedAt;
+      const revisionCategory = revisionAdvancementCategory(request);
+      if (revisionCategory !== undefined) {
+        this.telemetry.record({
+          name: 'graphql_cache.revision_advance',
+          operationCategory: category,
+          outcome: 'success',
+          errorCode: 'none',
+          revisionCategory,
+        });
+      }
       this.telemetry.record({
         name: 'graphql_cache.engine_request',
         operationCategory: category,
@@ -385,6 +420,9 @@ export class CacheWorkerCore {
         await this.init(request.scope, request.hotCapacity);
         return null;
       })
+      .with({ kind: 'current-revision' }, async () => {
+        return parseCacheRevision(await this.requireEngine().currentRevision());
+      })
       .with({ kind: 'read' }, async (request) => {
         const engine = this.requireEngine();
         const result: ReadResult = await engine.readQuery(
@@ -397,13 +435,16 @@ export class CacheWorkerCore {
         return result;
       })
       .with({ kind: 'read-records-by-keys' }, async (request) => {
-        const result: SelectedRecordByKeyWire[] =
+        const result: ReadRecordsByKeysResult =
           await this.requireEngine().readRecordsByKeys(
             request.document,
             request.fragmentName,
             request.keys
           );
-        return result;
+        return {
+          ...result,
+          revision: parseCacheRevision(result.revision),
+        };
       })
       .with({ kind: 'search' }, async (request) => {
         const result: SearchCachePage = await this.requireEngine().search(
@@ -414,7 +455,9 @@ export class CacheWorkerCore {
       .with({ kind: 'entity-filter' }, async (request) => {
         const result: EntityFilterCacheResult =
           await this.requireEngine().entityFilter(request.request);
-        return result;
+        return result.kind === 'unsupported'
+          ? result
+          : { ...result, revision: parseCacheRevision(result.revision) };
       })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
@@ -429,6 +472,7 @@ export class CacheWorkerCore {
           request.data,
           request.identity
         );
+        result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
         return result;
       })
@@ -440,11 +484,17 @@ export class CacheWorkerCore {
           request.data,
           request.identity
         );
+        result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
-            ? { kind: 'void', reset: result.reset }
-            : { kind: 'data', data: result.data, reset: result.reset };
+            ? { kind: 'void', revision: result.revision, reset: result.reset }
+            : {
+                kind: 'data',
+                data: result.data,
+                revision: result.revision,
+                reset: result.reset,
+              };
         return hydration;
       })
       .with({ kind: 'enqueue-optimistic-mutation' }, async (request) => {
@@ -463,6 +513,7 @@ export class CacheWorkerCore {
             request.nowMs,
             request.leaseExpiresAtMs
           );
+        result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
         return result;
       })
@@ -512,6 +563,7 @@ export class CacheWorkerCore {
           request.variables,
           request.data
         );
+        result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
         this.push({
           kind: 'mutation-settled',
@@ -529,6 +581,7 @@ export class CacheWorkerCore {
           request.leaseOwner,
           request.leaseGeneration
         );
+        result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
         this.push({
           kind: 'mutation-settled',
@@ -542,40 +595,49 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'invalidate' }, async (request) => {
         const engine = this.requireEngine();
-        const affectedOps = await engine.invalidateKeys(request.keys);
+        const result: AffectedOperationsResult = await engine.invalidateKeys(
+          request.keys
+        );
+        result.revision = parseCacheRevision(result.revision);
         this.fanOut(
           {
+            revision: result.revision,
             changed: request.keys,
-            affectedOps,
+            affectedOps: result.affectedOps,
             reset: false,
             revalidations: [],
           },
           true
         );
-        return affectedOps;
+        return result;
       })
       .with({ kind: 'delete-records' }, async (request) => {
         const engine = this.requireEngine();
-        const affectedOps = await engine.deleteKeys(request.keys);
+        const result: AffectedOperationsResult = await engine.deleteKeys(
+          request.keys
+        );
+        result.revision = parseCacheRevision(result.revision);
         this.fanOut(
           {
+            revision: result.revision,
             changed: request.keys,
-            affectedOps,
+            affectedOps: result.affectedOps,
             reset: false,
             revalidations: [],
           },
           true
         );
-        return affectedOps;
+        return result;
       })
       .with({ kind: 'teardown' }, async (request) => {
         await this.requireEngine().teardownOperation(request.opId);
         return null;
       })
       .with({ kind: 'clear' }, async () => {
-        await this.requireEngine().clear();
-        this.push({ kind: 'cache-changed' });
-        return null;
+        const result: CacheRevisionResult = await this.requireEngine().clear();
+        const revision = parseCacheRevision(result.revision);
+        this.push({ kind: 'cache-changed', revision });
+        return revision;
       })
       .exhaustive();
   }
@@ -820,7 +882,7 @@ export class CacheWorkerCore {
       });
     }
     if (cacheChanged) {
-      this.push({ kind: 'cache-changed' });
+      this.push({ kind: 'cache-changed', revision: result.revision });
     }
   }
 

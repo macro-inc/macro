@@ -159,14 +159,14 @@ where
     /// Built per session and dropped with it, rather than held on the manager:
     /// the key belongs to one user, and the sessions of two users must not be
     /// able to reach each other's Cursor accounts through a shared client.
-    async fn client_for(&self, session: &AgentSession) -> Result<CursorClient> {
-        let api_key = self.keys.resolve(&session.owner_id).await?;
-        CursorClient::new(CursorConfig {
-            api_key: ApiKey::new(api_key.expose()),
+    async fn client_for(&self, session: &AgentSession) -> Result<(CursorClient, Option<String>)> {
+        let config = self.keys.resolve(&session.owner_id).await?;
+        let client = CursorClient::new(CursorConfig {
+            api_key: ApiKey::new(config.key.expose()),
             base_url: self.base_url.clone(),
-            // Whatever the user already chose in their own Cursor settings:
-            // Cursor resolves user default -> team default -> system default
-            // when the field is absent, which is what "normal" means here.
+            // The client-level model stays absent: the *session* carries the
+            // model now (the user's default, seeded below via
+            // `with_default_model`, or a per-session pick), applied per run.
             model: None,
             starting_ref: DEFAULT_STARTING_REF.to_owned(),
             record_dir: None,
@@ -177,7 +177,8 @@ where
             // retyping, and the fix is to register the key again.
             tracing::error!(error = %error, session_id = %session.id, "a stored cursor api key is unusable");
             HarnessError::Container("the stored cursor api key is unusable".to_owned())
-        })
+        })?;
+        Ok((client, config.default_model_id))
     }
 
     /// Wire up one session's in-process agent and return our end of its pipe.
@@ -187,6 +188,7 @@ where
     fn serve_session(
         &self,
         client: CursorClient,
+        default_model_id: Option<String>,
         session_id: AgentSessionId,
         restore: Option<RestoredCursorSession>,
     ) -> PipeTransport {
@@ -198,11 +200,13 @@ where
             sessions: self.sessions.clone(),
         };
         let notifier = AcpNotifier::new();
-        let service = Arc::new(CursorSessionService::new(
-            cursor,
-            notifier.clone(),
-            FixedRepo(self.repo.clone()),
-        ));
+        // The user's chosen model seeds the session as its default: a fresh
+        // session starts on it, and a resumed one still prefers whatever it
+        // was actually last using (carried in `restore.model_id`) over this.
+        let service = Arc::new(
+            CursorSessionService::new(cursor, notifier.clone(), FixedRepo(self.repo.clone()))
+                .with_default_model(default_model_id),
+        );
         if let Some(restored) = restore {
             service.restore_session(
                 restored.acp_session,
@@ -274,8 +278,8 @@ where
         // connected an account, and refusing here is what turns "the bot
         // ignored me" into a sentence they can act on.
         let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
-        let client = self.client_for(&session).await?;
-        Ok(self.serve_session(client, command.session_id, None))
+        let (client, default_model_id) = self.client_for(&session).await?;
+        Ok(self.serve_session(client, default_model_id, command.session_id, None))
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
@@ -288,7 +292,7 @@ where
         // agent yet (the next prompt mints one). No acp id at all means the
         // session never opened; serve it fresh, exactly like `spawn`.
         let stored = AgentSessionRepo::get(&self.sessions, session).await?;
-        let client = self.client_for(&stored).await?;
+        let (client, default_model_id) = self.client_for(&stored).await?;
         let restore = match &stored.acp_session_id {
             Some(acp) => {
                 let agent = ExternalSessionRepo::get(&self.sessions, session)
@@ -307,7 +311,7 @@ where
             }
             None => None,
         };
-        Ok(self.serve_session(client, session, restore))
+        Ok(self.serve_session(client, default_model_id, session, restore))
     }
 
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
@@ -327,7 +331,7 @@ where
         let stored = AgentSessionRepo::get(&self.sessions, session).await?;
         let agent = CursorAgentId::new(external.external_id);
         match self.client_for(&stored).await {
-            Ok(client) => client
+            Ok((client, _default_model_id)) => client
                 .archive_agent(&agent)
                 .await
                 .map_err(|error| HarnessError::Container(error.to_string()))?,

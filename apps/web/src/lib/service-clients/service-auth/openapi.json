@@ -146,6 +146,126 @@
         }
       }
     },
+    "/cursor-api-key/default-model": {
+      "put": {
+        "tags": ["crate::api::cursor_api_key::put_cursor_default_model"],
+        "summary": "Choose the model this user's `@cursor` sessions start on.",
+        "description": "Stores the id only; its parameters are resolved from Cursor's own default\nvariant at session start. Not validated against the live model list here —\nthe settings dropdown offers only real ids, and a stale id degrades to the\ndeployment default at spawn rather than failing, so a round trip to Cursor\non every save would buy nothing.",
+        "operationId": "put_cursor_default_model",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutCursorDefaultModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorApiKeyStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cursor-api-key/models": {
+      "get": {
+        "tags": ["crate::api::cursor_api_key::list_cursor_models"],
+        "summary": "List the models the caller's Cursor account offers.",
+        "description": "Reached only from the settings dropdown, so it decrypts the user's own key\nand asks Cursor directly — the list is per-account and changes, so there is\nnothing to cache statically. Reuses the harness's Cursor client rather than\nreimplementing the `/v1/models` parse, keeping one source of truth for what\na model is.",
+        "operationId": "list_cursor_models",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorModelsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/fusionauth/verify/{verification_id}": {
       "get": {
         "tags": ["email::verify_fusionauth_user_email"],
@@ -3791,6 +3911,10 @@
         "description": "What settings needs to render the Cursor connection.\n\nDeliberately thin. `registered` drives the whole UI; `updatedAt` lets it say\nwhen the key was last replaced, which is the only thing a user can check\nagainst their own memory when a session starts failing.\n\nDeliberately *not* reporting anything about the deployment itself. That is\noperator information: a user who sees it cannot act on it, and a service\nthat cannot reach KMS does not start.",
         "required": ["registered"],
         "properties": {
+          "defaultModelId": {
+            "type": ["string", "null"],
+            "description": "The Cursor model id this user's sessions start on, when they have\nchosen one. `None` means the deployment default is in effect — the\nsettings dropdown shows that as its resting value."
+          },
           "registered": {
             "type": "boolean",
             "description": "Whether this user has a key stored."
@@ -3799,6 +3923,35 @@
             "type": ["string", "null"],
             "format": "date-time",
             "description": "When the stored key was last replaced, if there is one."
+          }
+        }
+      },
+      "CursorModelOption": {
+        "type": "object",
+        "description": "One model the settings dropdown can offer.\n\nJust id and name: the dropdown lists models, not the hundreds of parameter\nvariants each carries. The chosen id's parameters are resolved to Cursor's\ndefault variant at session start.",
+        "required": ["id", "displayName"],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "The human-readable name, e.g. `Cursor Grok 4.6`."
+          },
+          "id": {
+            "type": "string",
+            "description": "The id to store and send, e.g. `grok-4.6`."
+          }
+        }
+      },
+      "CursorModelsResponse": {
+        "type": "object",
+        "description": "The models this account may choose from.",
+        "required": ["models"],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CursorModelOption"
+            },
+            "description": "The offered models, in the order Cursor returned them."
           }
         }
       },
@@ -4585,6 +4738,16 @@
           "apiKey": {
             "type": "string",
             "description": "A `crsr_…` Cursor API key."
+          }
+        }
+      },
+      "PutCursorDefaultModelRequest": {
+        "type": "object",
+        "description": "The model the user chose for their sessions.",
+        "properties": {
+          "modelId": {
+            "type": ["string", "null"],
+            "description": "A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and\nfall back to the deployment default."
           }
         }
       },

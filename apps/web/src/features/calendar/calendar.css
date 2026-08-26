@@ -469,18 +469,21 @@
 	.fc-event:not(.fc-daygrid-dot-event):not(
 		:has(.calendar-event-content-selected)
 	):has([data-response-status="accepted"]) {
-	--fc-event-bg-color: var(--color-panel);
+	--fc-event-bg-color: var(--color-surface);
 	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
-	--fc-event-text-color: var(--color-ink-muted);
 	background-image: linear-gradient(
-		to left,
 		color-mix(
 			in oklch,
-			var(--event-calendar-color, var(--color-calendar)) 80%,
+			var(--event-calendar-color, var(--color-calendar)) 25%,
 			transparent
 		),
-		transparent 60%
+		color-mix(
+			in oklch,
+			var(--event-calendar-color, var(--color-calendar)) 25%,
+			transparent
+		)
 	);
+	--fc-event-text-color: var(--color-ink-muted);
 }
 
 .calendar-view

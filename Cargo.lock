@@ -1470,6 +1470,7 @@ dependencies = [
  "cookie",
  "cool_asserts",
  "cursor_api_key",
+ "cursor_cloud_agents",
  "database_env_vars",
  "decode_jwt",
  "document_storage_service_client",

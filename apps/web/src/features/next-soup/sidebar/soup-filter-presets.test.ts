@@ -30,6 +30,18 @@ describe('mail view presets', () => {
       expect(getViewPreset('mail', tab)?.groupBy).toBe('date');
     }
   });
+
+  it('keeps threads with saved drafts in every thread-listing tab', () => {
+    // A saved draft becomes the thread's latest message, flipping the
+    // entity's isDraft on. Filtering on 'no-drafts' would eject the whole
+    // conversation from its tab, leaving it visible only under Drafts.
+    for (const tab of mailTabs.filter((tab) => tab !== 'drafts')) {
+      expect(
+        getViewPreset('mail', tab)?.clientFilters.and,
+        `mail '${tab}' tab must not exclude drafted threads`
+      ).not.toContain('no-drafts');
+    }
+  });
 });
 
 describe('task view presets', () => {

@@ -71,6 +71,9 @@ pub async fn handler(
 
     Ok(Json(CursorApiKeyStatus {
         registered: true,
+        // Carried through: pasting a rotated key does not reset the model,
+        // and the store preserves it, so the response reflects that.
+        default_model_id: stored.default_model_id,
         updated_at: Some(stored.updated_at),
     }))
 }

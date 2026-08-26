@@ -806,7 +806,7 @@ export const listOccurrencesResponse = zod
                       isSelf: zod
                         .boolean()
                         .describe(
-                          'Whether this attendee represents the connected account.'
+                          "Whether this attendee is one of the viewing requester's inboxes.\n\nOutbound projections use the requester's owned inboxes only.\nPersisted rows keep the provider's flag, which reminder decline reads."
                         ),
                       responseStatus: zod
                         .enum([

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CacheHost } from './host/types';
 
-function hostWithClear(clear: () => Promise<void>): CacheHost {
-  return { clear } as CacheHost;
+function hostWithClear(clear: () => Promise<unknown>): CacheHost {
+  return { clear } as unknown as CacheHost;
 }
 
 describe('clearRegisteredCaches', () => {

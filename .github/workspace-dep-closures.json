@@ -988,6 +988,7 @@
       "crates/cowlike",
       "crates/crm",
       "crates/cursor_api_key",
+      "crates/cursor_cloud_agents",
       "crates/database_env_vars",
       "crates/decode_jwt",
       "crates/document_storage_service_client",

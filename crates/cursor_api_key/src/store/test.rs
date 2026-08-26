@@ -16,7 +16,7 @@ fn encrypted(seed: u8) -> EncryptedCursorApiKey {
 /// The table's foreign key means a key needs a real user to belong to.
 ///
 /// A Macro user is two rows: `macro_user` holds the identity and `"User"` the
-/// profile that references it. `cursor_api_keys` keys on `"User"."id"`, the
+/// profile that references it. `cursor_configs` keys on `"User"."id"`, the
 /// text id that `MacroUserIdStr` carries — not the `macro_user_id` uuid.
 async fn insert_user(pool: &Pool<Postgres>, user_id: &str) -> anyhow::Result<()> {
     let email = format!("{user_id}@example.com");
@@ -145,5 +145,64 @@ async fn a_key_for_an_unknown_user_is_refused(pool: Pool<Postgres>) -> anyhow::R
             .await
             .is_err()
     );
+    Ok(())
+}
+
+/// A freshly registered key has no default model: the user gets the
+/// deployment's built-in default until they choose one.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_new_key_has_no_default_model(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, USER_ID).await?;
+    let stored = upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+    assert_eq!(stored.default_model_id, None);
+    Ok(())
+}
+
+/// The chosen model round-trips, and clearing it with `None` reverts to the
+/// deployment default.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_default_model_round_trips_and_clears(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, USER_ID).await?;
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+
+    assert!(set_default_model_id(&pool, USER_ID, Some("grok-4.6")).await?);
+    assert_eq!(
+        get_cursor_api_key(&pool, USER_ID)
+            .await?
+            .expect("present")
+            .default_model_id
+            .as_deref(),
+        Some("grok-4.6")
+    );
+
+    assert!(set_default_model_id(&pool, USER_ID, None).await?);
+    assert_eq!(
+        get_cursor_api_key(&pool, USER_ID)
+            .await?
+            .expect("present")
+            .default_model_id,
+        None
+    );
+    Ok(())
+}
+
+/// Rotating the key leaves the chosen model alone — a new paste is not a reset.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rotating_the_key_keeps_the_default_model(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, USER_ID).await?;
+    upsert_cursor_api_key(&pool, USER_ID, &encrypted(1)).await?;
+    set_default_model_id(&pool, USER_ID, Some("claude-opus-5")).await?;
+
+    let rotated = upsert_cursor_api_key(&pool, USER_ID, &encrypted(2)).await?;
+    assert_eq!(rotated.default_model_id.as_deref(), Some("claude-opus-5"));
+    Ok(())
+}
+
+/// Choosing a model before connecting is not an error, just a no-op: there is
+/// no row to hold it, and no session would use it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn setting_a_model_without_a_key_is_a_noop(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    insert_user(&pool, USER_ID).await?;
+    assert!(!set_default_model_id(&pool, USER_ID, Some("grok-4.6")).await?);
     Ok(())
 }

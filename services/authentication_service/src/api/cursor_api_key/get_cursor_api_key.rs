@@ -38,6 +38,7 @@ pub async fn handler(
 
     Ok(Json(CursorApiKeyStatus {
         registered: stored.is_some(),
+        default_model_id: stored.as_ref().and_then(|s| s.default_model_id.clone()),
         updated_at: stored.map(|stored| stored.updated_at),
     }))
 }

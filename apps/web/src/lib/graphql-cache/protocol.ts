@@ -14,6 +14,32 @@ import type { EntityResolverWire } from './exchange/entity-resolvers';
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+/** Opaque in-memory revision of one live cache engine generation. */
+export type CacheRevision = string & {
+  readonly __cacheRevision: unique symbol;
+};
+
+const MAX_CACHE_REVISION = 18_446_744_073_709_551_615n;
+
+/** Validates the canonical unsigned-decimal Rust `u64` wire representation. */
+export function isCacheRevision(value: unknown): value is CacheRevision {
+  return (
+    typeof value === 'string' &&
+    /^(0|[1-9][0-9]*)$/.test(value) &&
+    BigInt(value) <= MAX_CACHE_REVISION
+  );
+}
+
+/** Parses an untrusted cache revision at protocol ingress. */
+export function parseCacheRevision(value: unknown): CacheRevision {
+  if (!isCacheRevision(value)) {
+    throw new TypeError('invalid cache revision');
+  }
+  return value;
+}
+
+export const INITIAL_CACHE_REVISION = '0' as CacheRevision;
+
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
@@ -60,9 +86,14 @@ export type EntityFilterCacheArgs = {
 };
 
 export type EntityFilterCacheResult =
-  | { kind: 'complete'; keys: string[]; optimistic: boolean }
+  | {
+      kind: 'complete';
+      revision: CacheRevision;
+      keys: string[];
+      optimistic: boolean;
+    }
   | { kind: 'unsupported' }
-  | { kind: 'incomplete' };
+  | { kind: 'incomplete'; revision: CacheRevision };
 
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
@@ -76,6 +107,20 @@ export type ReadRecordsByKeysArgs = {
 export type SelectedRecordByKeyWire = {
   recordKey: string;
   record: unknown;
+};
+
+export type ReadRecordsByKeysResult = {
+  revision: CacheRevision;
+  records: SelectedRecordByKeyWire[];
+};
+
+export type AffectedOperationsResult = {
+  revision: CacheRevision;
+  affectedOps: string[];
+};
+
+export type CacheRevisionResult = {
+  revision: CacheRevision;
 };
 
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
@@ -254,10 +299,12 @@ export type CachedQueryInstanceWire = CachedQueryVariantWire & {
 };
 
 export type HydrationResult =
-  | { kind: 'data'; data: unknown }
-  | { kind: 'void' };
+  | { kind: 'data'; data: unknown; revision: CacheRevision }
+  | { kind: 'void'; revision: CacheRevision };
 
 export type WriteResult = {
+  /** Effective-view revision installed by this logical mutation. */
+  revision: CacheRevision;
   /** Entity keys whose records changed. */
   changed: string[];
   /** Registered operation ids affected by the change (origin excluded). */
@@ -322,6 +369,7 @@ export type MutationSettlement =
 
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
+  | { kind: 'current-revision' }
   | {
       kind: 'read';
       opId?: string;
@@ -479,7 +527,7 @@ export type CachePush =
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
     }
-  | { kind: 'cache-changed' }
+  | { kind: 'cache-changed'; revision: CacheRevision }
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -554,7 +602,10 @@ export function isCachePush(value: unknown): value is CachePush {
         isWireStringArray(value.keys)
       );
     case 'cache-changed':
-      return hasOnlyWireKeys(value, ['kind']);
+      return (
+        hasOnlyWireKeys(value, ['kind', 'revision']) &&
+        isCacheRevision(value.revision)
+      );
     case 'mutation-settled': {
       const settlement = value.settlement;
       if (

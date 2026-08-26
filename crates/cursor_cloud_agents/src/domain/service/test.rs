@@ -1,11 +1,11 @@
 use super::*;
 use crate::domain::error::SessionError;
-use crate::domain::event::{CursorEvent, InteractionUpdate};
+use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent, Truncation};
 use crate::domain::model::{
     McpHeader, McpServer, McpTransport, RepoUrl, RunListing, RunOutcome, RunStatus,
 };
 use crate::testing::{CursorCall, FakeCursor, FixedRepos, RecordingNotifier};
-use agent_client_protocol::schema::v1::{SessionUpdate, StopReason};
+use agent_client_protocol::schema::v1::{SessionUpdate, StopReason, ToolCallStatus};
 use std::path::Path;
 
 type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedRepos>;
@@ -158,6 +158,51 @@ async fn cancel_ends_the_turn_while_the_stream_stays_open() {
     // turn, so the turn ended itself. The sender reads as closed from here on
     // precisely because the turn dropped the stream rather than draining it.
     assert_eq!(notifier.updates().len(), 1);
+}
+
+/// A tool call still running when the client cancels never gets Cursor's own
+/// terminal event — the stream is abandoned, not drained — so it must be
+/// closed out locally rather than left rendering "in progress" forever.
+#[tokio::test]
+async fn cancel_mid_tool_call_closes_it_as_failed() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    events
+        .send(CursorEvent::ToolCall(ToolCallEvent {
+            call_id: "call-1".to_owned(),
+            name: "run_terminal_cmd".to_owned(),
+            status: Some("running".to_owned()),
+            args: None,
+            result: None,
+            truncated: Truncation::default(),
+        }))
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    service.cancel(&session).await.expect("cancel works");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+
+    let closing = notifier
+        .updates()
+        .into_iter()
+        .find_map(|(_, update)| match update {
+            SessionUpdate::ToolCallUpdate(update) if &*update.tool_call_id.0 == "call-1" => {
+                Some(update)
+            }
+            _ => None,
+        })
+        .expect("the open call was closed out");
+    assert_eq!(closing.fields.status, Some(ToolCallStatus::Failed));
 }
 
 /// A cancel while the prompt is still queued behind someone else's run ends the
@@ -545,6 +590,118 @@ async fn a_restored_session_prompts_its_existing_agent() {
             None
         )]
     );
+}
+
+/// A restored session has no in-memory `active_run` — this process never
+/// drove the run itself — so cancelling it must fall back to asking Cursor
+/// which run is current instead of silently skipping the remote cancel.
+#[tokio::test]
+async fn cancel_on_a_restored_session_finds_the_run_from_cursor() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-7"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+    );
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-in-flight"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-7"))
+        .await
+        .expect("cancel works");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![CursorCall::CancelRun(
+            CursorAgentId::new("bc-restored"),
+            CursorRunId::new("run-in-flight"),
+        )]
+    );
+}
+
+/// The fallback lookup cancels every run it finds in progress, not just the
+/// first — Cursor documents one active run per agent, but that invariant is
+/// not enforced client-side, and cancelling one leaked run is cheaper than
+/// missing it.
+#[tokio::test]
+async fn cancel_on_a_restored_session_cancels_every_run_in_progress() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-10"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+    );
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-creating"),
+            status: RunStatus::Creating,
+        },
+        RunListing {
+            id: CursorRunId::new("run-running"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-10"))
+        .await
+        .expect("cancel works");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![
+            CursorCall::CancelRun(
+                CursorAgentId::new("bc-restored"),
+                CursorRunId::new("run-creating"),
+            ),
+            CursorCall::CancelRun(
+                CursorAgentId::new("bc-restored"),
+                CursorRunId::new("run-running"),
+            ),
+        ]
+    );
+}
+
+/// A restored session with no run currently going is a no-op, not an error —
+/// the fallback lookup found nothing to cancel.
+#[tokio::test]
+async fn cancel_on_a_restored_session_with_no_run_going_is_a_no_op() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-8"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+    );
+
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-old"),
+        status: RunStatus::Finished,
+    }]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-8"))
+        .await
+        .expect("cancel works");
+
+    assert!(cursor.calls().is_empty());
 }
 
 /// Fresh ids skip over restored ones instead of replacing a live session.

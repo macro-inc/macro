@@ -77,6 +77,7 @@ import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
 import type { UndoHandle } from '@queries/undo';
 import { emailClient } from '@service-email/client';
 import type {
+  ApiDraftInput,
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
@@ -106,12 +107,18 @@ import {
   clearEmailBody,
   hasDraftContent,
   prepareEmailBody,
+  prepareEmailBodyFromHtml,
   prepareMacroBody,
   registerToggleAppendedThread,
   TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
+import {
+  endUndoSend,
+  tryBeginUndoSend,
+  unscheduleWithRetry,
+} from '../util/undoSendGuard';
 import { SignaturePreview } from './compose/SignaturePreview';
 import {
   type EmailRecipient,
@@ -191,6 +198,15 @@ type UndoReplySnapshot = {
   bodyHtml: string;
   attachments: DraftFormAttachment[];
   includeSignature: boolean;
+  /** Whether the quoted thread was appended in the editor at send time.
+   * Restored so the quoted-text toggle matches the restored body — otherwise
+   * it reads as "not appended" and appends a duplicate quote block. */
+  replyAppended: boolean;
+  /** Draft payload for restoring the server-side draft on undo. The
+   * unscheduled message keeps the sent body (appended reply chain, injected
+   * signature), so undo re-saves the draft with the pre-send content —
+   * bodyHtml above, prepared at undo time, fills body_html. */
+  draftRestore: ApiDraftInput;
 };
 // Set on send, persists across navigation, only consumed by undoSend.
 let undoSendSnapshot: UndoReplySnapshot | null = null;
@@ -353,8 +369,12 @@ export function BaseInput(props: {
   // Gmail-style sizing: the composer opens compact and grows to the full cap
   // once the user scrolls the content
   const [composerExpanded, setComposerExpanded] = createSignal(false);
-  // Appended quoted thread starts hidden behind a "⋯" pill (desktop)
-  const [quoteCollapsed, setQuoteCollapsed] = createSignal(true);
+  // Appended quoted thread starts hidden behind a "⋯" pill (desktop). A
+  // draft reloaded with the quote already appended opens expanded instead —
+  // that's how the composer looked when the draft was saved.
+  const [quoteCollapsed, setQuoteCollapsed] = createSignal(
+    !form().replyAppended()
+  );
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -423,6 +443,9 @@ export function BaseInput(props: {
         form().attachments.add(attachment);
       }
       setIncludeSignature(restoredSnapshot.includeSignature);
+      form().setReplyAppended(restoredSnapshot.replyAppended);
+      // Reopen with the quote visible, as it was when the send was undone.
+      if (restoredSnapshot.replyAppended) setQuoteCollapsed(false);
     });
   }
 
@@ -438,6 +461,9 @@ export function BaseInput(props: {
       form().attachments.add(attachment);
     }
     setIncludeSignature(snapshot.includeSignature);
+    form().setReplyAppended(snapshot.replyAppended);
+    // Reopen with the quote visible, as it was when the send was undone.
+    if (snapshot.replyAppended) setQuoteCollapsed(false);
   };
   onCleanup(() => {
     restoreUndoCallback = null;
@@ -466,24 +492,49 @@ export function BaseInput(props: {
   let markDoneUndoHandle: UndoHandle | undefined;
   let pendingMarkDoneNavigationTargetId: string | undefined;
 
-  const undoSend = async (draftId: string) => {
+  // linkId is the X-Email-Link-Id header value the send itself used, resolved
+  // at send time. Undo can fire after navigation has disposed this component's
+  // reactive state (mark-done navigates away).
+  const undoSend = async (draftId: string, linkId: string | undefined) => {
+    if (!tryBeginUndoSend(draftId)) return;
     try {
-      const result = await emailClient.unscheduleMessage(
-        { draftID: draftId },
-        headerLinkId()
-      );
+      const result = await unscheduleWithRetry(draftId, linkId);
       // A non-2xx response comes back as an Err Result (it doesn't throw), so
       // bail before reverting the send appearance in the UI.
       if (result.isErr()) {
-        toast.failure('Failed to undo send');
+        endUndoSend(draftId);
+        Telemetry.error(
+          new Error(
+            `Failed to undo send for draft ${draftId}: ${result.error
+              .map((e) => `${e.code}: ${e.message}`)
+              .join(', ')}`
+          )
+        );
+        // 400 is the backend's "already sent" — the undo window has passed.
+        const alreadySent = result.error.some(
+          (e) => e.code === 'HTTP_ERROR' && e.message.includes('status: 400')
+        );
+        toast.failure(
+          alreadySent
+            ? 'Too late to undo — the email was already sent'
+            : 'Failed to undo send'
+        );
         return;
       }
       queryClient.invalidateQueries({
         queryKey: emailKeys.previews._def,
       });
 
-      // Remove the sent message from the thread cache so it disappears from the list.
-      const threadId = ctx.thread()?.db_id;
+      let snapshot: UndoReplySnapshot | null = null;
+      if (undoSendSnapshot?.draftId === draftId) {
+        snapshot = undoSendSnapshot;
+        undoSendSnapshot = null;
+      }
+
+      // Remove the sent message from the thread cache so it disappears from
+      // the list. Prefer the snapshot's threadId (send-time captured value), survives navigation; the context
+      // read covers snapshotless undos in a still-mounted thread.
+      const threadId = snapshot?.threadId ?? ctx.thread()?.db_id;
       if (threadId) {
         queryClient.setQueryData(
           emailKeys.threadMessages(threadId).queryKey,
@@ -504,8 +555,26 @@ export function BaseInput(props: {
         markThreadDraftSaved(threadId);
       }
 
-      const snapshot = undoSendSnapshot;
-      undoSendSnapshot = null;
+      // The unscheduled message still carries the sent body — appended reply
+      // chain and injected signature included — so overwrite the server-side
+      // draft with the pre-send content before anything loads it into a
+      // composer (thread revisit, refetch, next session).
+      if (snapshot) {
+        const prepared = prepareEmailBodyFromHtml(snapshot.bodyHtml);
+        const saveResult = await emailClient.createDraft(
+          {
+            draft: { ...snapshot.draftRestore, body_html: prepared.bodyHtml },
+          },
+          linkId
+        );
+        if (saveResult.isErr()) {
+          // Non-fatal: the composer restores from the snapshot either way,
+          // and the next draft autosave overwrites the stale body.
+          Telemetry.error(
+            new Error('Failed to restore draft body after undo-send')
+          );
+        }
+      }
 
       if (snapshot && restoreUndoCallback) {
         // A live BaseInput is mounted — restore after reactive updates from
@@ -535,19 +604,28 @@ export function BaseInput(props: {
 
       toast.success('Send cancelled');
       invalidateSoupEntity(draftId);
-    } catch {
+    } catch (e) {
+      endUndoSend(draftId);
+      Telemetry.error(
+        e instanceof Error
+          ? e
+          : new Error(`Failed to undo send for draft ${draftId}`)
+      );
       toast.failure('Failed to undo send');
     }
   };
 
   const sendMutation = useSendMessageMutation({
-    onSuccess: async ({ message }) => {
+    onSuccess: async ({ message }, vars) => {
       // Cancel the post-reset save scheduled by sendEmail's resetState() and
       // re-enable autosave for any future edits in this BaseInput instance
       // (covers new-message flows where replyingTo never changes).
       if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
       pendingSend = false;
       const draftId = message.db_id;
+      // This send opens a fresh undo cycle for the draft id.
+      if (draftId) endUndoSend(draftId);
+      const sendLinkId = vars.linkId;
       const toastId = toast.success('Email sent', {
         actions: draftId
           ? [
@@ -556,7 +634,7 @@ export function BaseInput(props: {
                 icon: ArrowCounterClockwise,
                 onClick: () => {
                   if (toastId != null) toast.dismiss(toastId);
-                  void undoSend(draftId);
+                  void undoSend(draftId, sendLinkId);
                 },
               },
             ]
@@ -1049,6 +1127,18 @@ export function BaseInput(props: {
           bodyHtml: snapshotHtml,
           attachments: [...form().attachments.list()],
           includeSignature: includeSignature(),
+          replyAppended: form().replyAppended(),
+          draftRestore: {
+            bcc,
+            cc,
+            db_id: snapshotDraftId,
+            provider_id: props.draft?.provider_id,
+            provider_thread_id: currentThread?.provider_id,
+            replying_to_id: props.replyingTo()?.db_id,
+            subject: form().subject(),
+            thread_db_id: currentThread?.db_id,
+            to,
+          },
         };
       }
     }
@@ -1978,7 +2068,7 @@ export function BaseInput(props: {
         <div
           ref={setScrollContainer}
           class={cn(
-            'relative min-h-18 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
+            'relative min-h-8 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
             isMobileDrawer()
               ? 'max-h-none flex-1 overflow-visible px-5 pt-6 pb-4'
               : cn(
@@ -2055,55 +2145,6 @@ export function BaseInput(props: {
             refFn={(el) => props.markdownDomRef?.(el)}
             onConnect={handleEditorConnect}
           />
-          <Show when={form().replyAppended() && quoteCollapsed()}>
-            <div class="flex items-center py-1.5">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-                tooltip="Show quoted text"
-                onclick={(e: MouseEvent) => {
-                  e.stopPropagation();
-                  setQuoteCollapsed(false);
-                  setComposerExpanded(true);
-                }}
-              >
-                <DotsThree />
-              </Button>
-            </div>
-          </Show>
-          <Show
-            when={
-              props.replyingTo() &&
-              // The collapse pill above already covers this state
-              !(form().replyAppended() && quoteCollapsed())
-            }
-          >
-            <div
-              class="shrink-0 pt-1"
-              data-corvu-no-drag=""
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Tooltip
-                label={
-                  form().replyAppended()
-                    ? 'Hide quoted text'
-                    : 'Show quoted text'
-                }
-              >
-                <KToggleButton
-                  as={Button}
-                  variant="ghost"
-                  size="icon-sm"
-                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
-                  pressed={form().replyAppended()}
-                  onChange={toggleQuotedText}
-                >
-                  <DotsThree />
-                </KToggleButton>
-              </Tooltip>
-            </div>
-          </Show>
           <Show when={!hasPaidAccess()}>
             <div class="text-ink/50 mt-[1lh]" data-watermark>
               <MacroSignatureButton />
@@ -2121,6 +2162,56 @@ export function BaseInput(props: {
             )}
           </Show>
         </div>
+        {/* Quoted-text controls live below the scroll area so they stay
+            anchored to the composer bottom instead of scrolling with (and
+            floating over) tall content. */}
+        <Show when={form().replyAppended() && quoteCollapsed()}>
+          <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
+              tooltip="Show quoted text"
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                setQuoteCollapsed(false);
+                setComposerExpanded(true);
+              }}
+            >
+              <DotsThree />
+            </Button>
+          </div>
+        </Show>
+        <Show
+          when={
+            props.replyingTo() &&
+            // The collapse pill above already covers this state
+            !(form().replyAppended() && quoteCollapsed())
+          }
+        >
+          <div
+            class="shrink-0 pt-1"
+            data-corvu-no-drag=""
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Tooltip
+              label={
+                form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
+              }
+            >
+              <KToggleButton
+                as={Button}
+                variant="ghost"
+                size="icon-sm"
+                class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
+                pressed={form().replyAppended()}
+                onChange={toggleQuotedText}
+              >
+                <DotsThree />
+              </KToggleButton>
+            </Tooltip>
+          </div>
+        </Show>
         <Show when={!isMobileDrawer()}>
           {/* Below the scroll area so quoted email content can never overlap it */}
           <AttachmentsRow class="px-4" />

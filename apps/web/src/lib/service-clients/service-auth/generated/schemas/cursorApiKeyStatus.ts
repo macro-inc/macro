@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CursorApiKeyStatusDefaultModelId } from './cursorApiKeyStatusDefaultModelId';
 import type { CursorApiKeyStatusUpdatedAt } from './cursorApiKeyStatusUpdatedAt';
 
 /**
@@ -18,6 +19,10 @@ operator information: a user who sees it cannot act on it, and a service
 that cannot reach KMS does not start.
  */
 export interface CursorApiKeyStatus {
+  /** The Cursor model id this user's sessions start on, when they have
+chosen one. `None` means the deployment default is in effect — the
+settings dropdown shows that as its resting value. */
+  defaultModelId?: CursorApiKeyStatusDefaultModelId;
   /** Whether this user has a key stored. */
   registered: boolean;
   /** When the stored key was last replaced, if there is one. */

@@ -2312,19 +2312,80 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
     assert_eq!(target.calendar_id, provider.1);
     assert_eq!(target.provider_calendar_id, "primary");
     assert_eq!(target.owner_id, owner_id);
+    let inbox = format!("calendar-{link_id}@example.com");
     assert_eq!(target.token_identity.provider, "GMAIL");
+    assert_eq!(target.token_identity.email_address, inbox);
+    assert!(
+        target
+            .actor
+            .as_ref()
+            .is_some_and(|actor| actor.matches(&inbox))
+    );
 
     let delegated = repo
         .get_event_mutation_target(delegate_id, event_id)
         .await
-        .unwrap();
-    assert!(delegated.is_some(), "delegate sees the mutation target");
+        .unwrap()
+        .expect("delegate sees the mutation target");
+    assert_eq!(delegated.token_identity.email_address, inbox);
+    assert!(
+        delegated.actor.is_none(),
+        "a delegate without their own inbox has no actor"
+    );
 
     let hidden = repo
         .get_event_mutation_target(stranger_id, event_id)
         .await
         .unwrap();
     assert!(hidden.is_none(), "stranger cannot see the mutation target");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn creation_target_actor_is_owned_inboxes_not_the_calendar_inbox(pool: PgPool) {
+    let owner_id = "macro|calendar-create-actor@example.com";
+    let delegate_id = "macro|calendar-create-delegate@example.com";
+    insert_user(&pool, owner_id).await;
+    insert_user(&pool, delegate_id).await;
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    grant_and_provider_ids(&repo, link_id).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+        VALUES ($1, $2, $3)
+        "#,
+        delegate_id,
+        owner_id,
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let inbox = format!("calendar-{link_id}@example.com");
+    let owner = repo
+        .get_creation_target(owner_id, None, None)
+        .await
+        .unwrap()
+        .expect("owner resolves a creation target");
+    assert_eq!(owner.token_identity.email_address, inbox);
+    assert!(
+        owner
+            .actor
+            .as_ref()
+            .is_some_and(|actor| actor.matches(&inbox))
+    );
+
+    let delegated = repo
+        .get_creation_target(delegate_id, None, None)
+        .await
+        .unwrap()
+        .expect("delegate resolves a creation target");
+    assert_eq!(delegated.token_identity.email_address, inbox);
+    assert!(
+        delegated.actor.is_none(),
+        "a delegate without their own inbox has no actor"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
