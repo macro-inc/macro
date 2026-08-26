@@ -321,7 +321,9 @@ export function SplitPanelV2(props: SplitPanelProps) {
             <Panel
               class={cn(
                 'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
-                splitUnfocusedStyling() && 'split-panel-inactive',
+                splitUnfocusedStyling() &&
+                  !flatSeams() &&
+                  'split-panel-inactive',
                 {
                   'shadow-sm shadow-drop-shadow/50':
                     splitUnfocusedStyling() && !flatSeams(),
@@ -341,10 +343,13 @@ export function SplitPanelV2(props: SplitPanelProps) {
                   'rounded-l-none border-l-0!': tuckedBehindController(),
                   'rounded-r-none': hasTuckedViewer(),
                 },
-                flatSeams() && 'rounded-none'
+                // Depth 0 plus the flat panel semantic puts the split on the
+                // page's own level — the exact background the top bar paints
+                // — and every surface inside re-derives one step down with it.
+                flatSeams() && 'rounded-none split-panel-flat'
               )}
               hideBorder={flatSeams()}
-              depth={isTouchDevice() ? 0 : 1}
+              depth={isTouchDevice() || flatSeams() ? 0 : 1}
             >
               <Panel.Header
                 class={cn(

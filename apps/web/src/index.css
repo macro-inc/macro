@@ -181,6 +181,14 @@ body.tauri-ios {
   --layer-lift: var(--color-surface-4);
 }
 
+/* A flat split is not a card lifted off the page: it paints the page's own
+   surface, so `bg-panel` inside it has to mean that surface too. Scoping the
+   semantic rather than overriding the one element carries the change to every
+   nested consumer — the view roots that repaint the whole split included. */
+.split-panel-flat {
+  --color-panel: var(--color-surface);
+}
+
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
    inactive split chrome instead of only tinting the outer panel element. */
 .split-panel-inactive {
