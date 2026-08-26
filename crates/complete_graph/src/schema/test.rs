@@ -75,6 +75,10 @@ struct CountingSoupService {
     grouped_calls: Arc<AtomicUsize>,
 }
 
+fn soup_document(id: Uuid) -> SoupItem<()> {
+    grouped_document(id).map_extra(|_| ())
+}
+
 fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesField> {
     SoupItem::Document(SoupDocument {
         id,
@@ -127,6 +131,33 @@ impl SoupService for CountingSoupService {
             return Ok(soup::domain::ports::SoupOutput::Simple(page));
         }
         Err(test_soup_err())
+    }
+
+    async fn get_user_soup_with_projection<T>(
+        &self,
+        req: soup::domain::models::SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+    ) -> Result<
+        soup::domain::ports::SoupOutput<T, soup::domain::models::SoupProjectionHydration>,
+        soup::domain::models::SoupErr,
+    >
+    where
+        soup::domain::models::SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
+        T: Clone + serde::Serialize + Send,
+    {
+        self.get_user_soup(req, team_receipt).await.map(|output| {
+            output.map(|item| {
+                let source = match &item {
+                    SoupItem::Document(_) => soup::domain::models::SoupProjectionSource::Document {
+                        is_email_attachment: false,
+                    },
+                    SoupItem::Project(_) => soup::domain::models::SoupProjectionSource::Project,
+                    SoupItem::Chat(_) => soup::domain::models::SoupProjectionSource::Chat,
+                    _ => soup::domain::models::SoupProjectionSource::Unsupported,
+                };
+                soup::domain::models::SoupProjectionHydration { item, source }
+            })
+        })
     }
 
     async fn get_user_soup_with_properties<T>(
@@ -1022,10 +1053,9 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         receiver: Arc::new(Mutex::new(Some(receiver))),
         subscribed_user: Arc::clone(&subscribed_user),
     };
-    let soup_service = CountingSoupService {
-        return_empty_raw: true,
-        ..Default::default()
-    };
+    let soup_service = CountingSoupService::default();
+    let document_id = Uuid::from_u128(42);
+    soup_service.set_raw_response(vec![soup_document(document_id)]);
     let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
     let schema: SoupSchema<
         CountingSoupService,
@@ -1051,14 +1081,13 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         NoopWebSocketNotificationSubscriptionService,
     );
     let request = async_graphql::Request::new(
-        "subscription { soupUpdates { __typename ... on SoupUpdated { item { id } } ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
+        "subscription { soupUpdates { __typename ... on SoupUpdated { item { id cacheProjection } } ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
     )
     .data(user_id.clone())
     .data(loader);
     let responses = schema.execute_stream(request);
     pin_mut!(responses);
 
-    let document_id = Uuid::from_u128(42);
     sender
         .send(Patch::Updated(
             ModelEntityType::Document.with_entity_string(document_id.to_string()),
@@ -1087,7 +1116,8 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
 
     assert_eq!(updates.len(), 2);
     assert_eq!(updates[0]["__typename"], "SoupUpdated");
-    assert!(updates[0]["item"].is_null());
+    assert_eq!(updates[0]["item"]["id"], document_id.to_string());
+    assert!(updates[0]["item"]["cacheProjection"].is_string());
     assert_eq!(updates[1]["__typename"], "GraphqlCacheDeletion");
     assert_eq!(updates[1]["graphqlTypeName"], "GraphqlSoupDocument");
     assert_eq!(updates[1]["entityId"], document_id.to_string());
@@ -1206,6 +1236,39 @@ async fn soup_passes_team_receipt_to_raw_path() {
         harness.frecency_soup_team_receipts.load(Ordering::SeqCst),
         0
     );
+}
+
+#[tokio::test]
+async fn flat_soup_emits_entity_scoped_cache_projection() {
+    let harness = harness();
+    let document_id = Uuid::from_u128(88);
+    let email_thread_id = Uuid::from_u128(89);
+    harness.soup_service.set_raw_response(vec![
+        soup_document(document_id),
+        soup_email_thread(email_thread_id),
+    ]);
+
+    let response = harness
+        .execute(
+            "{ user { soup(input: {initial: {}}) { items { __typename id cacheProjection } } } }",
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let items = data["user"]["soup"]["items"].as_array().unwrap();
+    let document = items
+        .iter()
+        .find(|item| item["__typename"] == "GraphqlSoupDocument")
+        .unwrap();
+    assert_eq!(document["id"], document_id.to_string());
+    assert!(document["cacheProjection"].is_string());
+    let email = items
+        .iter()
+        .find(|item| item["__typename"] == "GraphqlSoupEmailThread")
+        .unwrap();
+    assert_eq!(email["id"], email_thread_id.to_string());
+    assert!(email["cacheProjection"].is_null());
 }
 
 #[tokio::test]

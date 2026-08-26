@@ -1,13 +1,13 @@
 # Server-Minted Soup Cache Projection Plan
 
-Status: **implementation in progress; Phase 3 underway**
+Status: **Phases 0-3 implemented; Phase 4 not started**
 
 ## Implementation status
 
 - [x] Phase 0: fixtures and contract lock (including the document-email lifecycle audit below).
-- [x] Phase 1: server projection-source hydration. The flat expanded cursor, frecency fallback, and bounded by-ID paths now return authorized item/source pairs from one SQL result; the document relation probe uses `document_email_pkey`. `cargo check -p soup --all-features` and the full Soup test target compilation pass. Database-backed execution and root-level `just prepare_db` remain pending the required migration approval.
+- [x] Phase 1: server projection-source hydration. The flat expanded cursor, frecency fallback, and bounded by-ID paths now return authorized item/source pairs from one SQL result; the document relation probe uses `document_email_pkey`. `cargo check -p soup --all-features` and the full Soup test target compilation pass. Root-level `just prepare_db` was attempted but the local MacroDB is behind (`bot_tokens.token_hash` is missing); database-backed execution and cache refresh therefore remain pending approval to apply local migrations.
 - [x] Phase 2: `soup-flat-v2` projection and wire capsule. The profile retains v1 facts, adds canonical subtype and explicit Boolean attachment postings, enforces strict partition/fact semantics, and uses bounded standard-unpadded-base64/version-byte/postcard capsule-v1 encoding. Native and WASM-reachable adapter golden fixtures pass.
-- [ ] Phase 3: emit capsules from `GraphqlSoupEntity` — **in progress**.
+- [x] Phase 3: emit capsules from `GraphqlSoupEntity`. The nullable argument-free opaque scalar is implemented by every concrete Soup entity, while flat pages and realtime updates use projection-aware service/loader paths and unsupported or unenriched constructors return `null`. `SoupItemFields` selects the scalar with `@cacheOnly`; the composed SDL, generated client document, shared-interface contract, flat-page emission, unsupported-variant, and realtime loader tests are updated.
 - [ ] Phases 4-6: not started; outside the current implementation request.
 
 ## Objective
