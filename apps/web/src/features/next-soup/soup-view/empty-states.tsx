@@ -305,7 +305,7 @@ export function EmptyState(props: {
         <EmptyStatePanel
           graphic={EmptyStateAiGraphic}
           title="No agent sessions yet"
-          description="Mention an agent like @coder in a channel to start a session. Its status, model, and pull request show up here as it works."
+          description="Describe a task above to start one, or mention an agent like @coder in a channel. Its status, model, and pull request show up here as it works."
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />
       </Match>

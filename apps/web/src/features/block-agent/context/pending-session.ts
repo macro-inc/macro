@@ -17,6 +17,7 @@
  */
 
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import type { CreateAgentSessionRequest } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 
 /**
@@ -41,22 +42,32 @@ export function isPlaceholderSessionId(id: string): boolean {
 
 /**
  * Start creating a managed session and return the placeholder to open a block
- * against right now. The POST runs unattended; nothing awaits it.
+ * against right now. The POST runs unattended; nothing awaits it. A `prompt`
+ * in the request is delivered as the session's first turn once its runtime is
+ * up — the agents view's launch composer creates sessions this way.
  */
-export function startPendingSession(): string {
+export function startPendingSession(
+  request: CreateAgentSessionRequest = {}
+): string {
   const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
   const [sessionId, setSessionId] = createSignal<string>();
   const [failed, setFailed] = createSignal(false);
   pending.set(placeholder, { sessionId, failed });
 
   void agentHarnessServiceClient
-    .create({})
+    .create(request)
     .then((result) => {
       if (result.isErr()) {
         setFailed(true);
         return;
       }
       setSessionId(result.value.session.id);
+      // The session exists now — lists that show sessions are stale.
+      // Imported lazily: this module is a leaf the soup cache graph must not
+      // hang off, and the invalidation only matters once a create lands.
+      void import('@queries/soup/normalized-cache')
+        .then(({ invalidateAllSoup }) => invalidateAllSoup())
+        .catch(() => {});
     })
     .catch(() => setFailed(true));
 

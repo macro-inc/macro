@@ -42,6 +42,7 @@ import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-v
 import { AgentListEntity } from '@app/features/next-soup/soup-view/views/agents/AgentListEntity';
 import { ResponsiveAgentListHeader } from '@app/features/next-soup/soup-view/views/agents/AgentListHeader';
 import { AgentGroupHeader } from '@app/features/next-soup/soup-view/views/agents/agent-group-header';
+import { AgentLaunchHero } from '@app/features/next-soup/soup-view/views/agents/agent-launch-hero';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
@@ -1264,6 +1265,13 @@ const SoupViewListContent = (props: SoupViewListProps) => {
               />
             </Show>
             <StaticMarkdownContext>
+              {/* The agents view leads with its launcher: prompt in, session
+                  out. Above the state switch so it stands whether the list is
+                  loading, empty, or populated — hidden only while searching,
+                  when the list below is answering a different question. */}
+              <Show when={isAgentSessionsTab() && !searchText()}>
+                <AgentLaunchHero />
+              </Show>
               <Switch>
                 <Match
                   when={
