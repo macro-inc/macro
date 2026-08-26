@@ -16,7 +16,7 @@ export function MessageFlag(props: MessageFlagProps) {
   return (
     <div
       class={cn(
-        'relative flex h-14 items-center justify-center px-2',
+        'relative flex h-14 mobile:h-16 items-center justify-center px-2',
         props.class
       )}
     >
@@ -26,7 +26,7 @@ export function MessageFlag(props: MessageFlagProps) {
           background masks its middle. */}
       <div
         class={cn(
-          'absolute top-7 h-0 border-t inset-x-0',
+          'absolute top-7 mobile:top-8 h-0 border-t inset-x-0',
           props.highlight ? 'border-accent/40' : 'border-rail'
         )}
       />
