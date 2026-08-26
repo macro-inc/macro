@@ -792,7 +792,7 @@ where
     /// The abandoned stream (see the `Ok(None)` arm above) means Cursor may
     /// still be mid-call and will never get the chance to say how it ended,
     /// so without this the client renders that call running forever.
-    async fn close_open_tool_calls(&self, session_id: &AcpSessionId, session: &Session) {
+    async fn close_open_tool_calls(&self, session_id: &SessionId, session: &Session) {
         let updates = session
             .state
             .lock()
