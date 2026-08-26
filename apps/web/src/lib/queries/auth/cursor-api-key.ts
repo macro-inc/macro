@@ -15,6 +15,7 @@ import { authKeys } from './keys';
  */
 const NOT_CONNECTED: CursorApiKeyStatus = {
   registered: false,
+  defaultModelId: null,
   updatedAt: null,
 };
 
@@ -63,6 +64,44 @@ export function useDisconnectCursorApiKey() {
   return useMutation(() => ({
     mutationFn: async () =>
       throwOnErr(async () => await authServiceClient.deleteCursorApiKey()),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: authKeys.cursorApiKeyStatus.queryKey,
+      });
+    },
+  }));
+}
+
+/**
+ * The models the user's Cursor account offers, for the settings dropdown.
+ *
+ * Enabled only once a key is registered: the endpoint asks Cursor live through
+ * that key, and a keyless account has nothing to list. Kept fresh for a while
+ * — the model roster changes rarely, and a settings visit is not worth a round
+ * trip every time.
+ */
+export function useCursorModelsQuery(enabled: () => boolean) {
+  return useQuery(() => ({
+    queryKey: authKeys.cursorModels.queryKey,
+    queryFn: async () =>
+      throwOnErr(async () => await authServiceClient.listCursorModels()),
+    enabled: enabled(),
+    staleTime: 5 * 60 * 1000,
+  }));
+}
+
+/**
+ * Chooses the model the user's sessions start on.
+ *
+ * Invalidates the status query so the picker reflects the stored choice from
+ * one source of truth, exactly as the key mutations do.
+ */
+export function useSetCursorDefaultModel() {
+  return useMutation(() => ({
+    mutationFn: async (modelId: string) =>
+      throwOnErr(
+        async () => await authServiceClient.putCursorDefaultModel(modelId)
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: authKeys.cursorApiKeyStatus.queryKey,

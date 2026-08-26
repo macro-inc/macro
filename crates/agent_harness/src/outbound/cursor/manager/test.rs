@@ -1,3 +1,4 @@
+use super::super::keys::ResolvedCursorConfig;
 use super::*;
 use crate::domain::model::AgentKind;
 use agent_client_protocol::schema::v1::SessionId;
@@ -143,24 +144,35 @@ impl AgentSessionRepo for StubSessions {
     }
 }
 
-/// A fake Cursor API: create/get/archive/stream, canned. Returns its base url
-/// and the archive-call log.
-async fn fake_cursor_api() -> (String, Arc<Mutex<Vec<String>>>) {
+/// A fake Cursor API: create/get/archive/stream, canned. Returns its base url,
+/// the archive-call log, and the bodies of every `create_agent` POST — the
+/// last being how a test sees which model a spawn asked for.
+async fn fake_cursor_api() -> (
+    String,
+    Arc<Mutex<Vec<String>>>,
+    Arc<Mutex<Vec<serde_json::Value>>>,
+) {
     let archived = Arc::new(Mutex::new(Vec::<String>::new()));
     let archive_log = archived.clone();
+    let created = Arc::new(Mutex::new(Vec::<serde_json::Value>::new()));
+    let create_log = created.clone();
     let app = axum::Router::new()
         .route(
             "/v1/agents",
-            axum::routing::post(|| async {
-                axum::Json(serde_json::json!({
-                    "agent": {
-                        "id": "bc-test-agent",
-                        "name": "Add a health check",
-                        "status": "ACTIVE",
-                        "url": "https://cursor.com/agents/bc-test-agent",
-                    },
-                    "run": { "id": "run-test-1" },
-                }))
+            axum::routing::post(move |axum::Json(body): axum::Json<serde_json::Value>| {
+                let created = created.clone();
+                async move {
+                    created.lock().expect("create log poisoned").push(body);
+                    axum::Json(serde_json::json!({
+                        "agent": {
+                            "id": "bc-test-agent",
+                            "name": "Add a health check",
+                            "status": "ACTIVE",
+                            "url": "https://cursor.com/agents/bc-test-agent",
+                        },
+                        "run": { "id": "run-test-1" },
+                    }))
+                }
             }),
         )
         .route(
@@ -170,6 +182,23 @@ async fn fake_cursor_api() -> (String, Arc<Mutex<Vec<String>>>) {
                     "id": "bc-test-agent",
                     "name": "Add a health check",
                     "url": "https://cursor.com/agents/bc-test-agent",
+                }))
+            }),
+        )
+        .route(
+            "/v1/models",
+            axum::routing::get(|| async {
+                // Enough of the real shape for the wrapper to resolve an id to
+                // its default variant: grok-4.6's default is high + fast.
+                axum::Json(serde_json::json!({
+                    "items": [{
+                        "id": "grok-4.6",
+                        "displayName": "Cursor Grok 4.6",
+                        "variants": [
+                            {"params": [{"id":"effort","value":"low"}], "isDefault": false},
+                            {"params": [{"id":"effort","value":"high"},{"id":"fast","value":"true"}], "isDefault": true},
+                        ],
+                    }],
                 }))
             }),
         )
@@ -245,19 +274,46 @@ async fn fake_cursor_api() -> (String, Arc<Mutex<Vec<String>>>) {
     tokio::spawn(async move {
         axum::serve(listener, app).await.expect("serve");
     });
-    (base_url, archive_log)
+    (base_url, archive_log, create_log)
 }
 
-/// A key source: `Some` for an owner who has connected Cursor, `None` for one
-/// who has not — the state every user starts in.
+/// A config source: `key` is `Some` for an owner who has connected Cursor,
+/// `None` for one who has not — the state every user starts in. `model` is the
+/// default model that owner chose, if any.
 #[derive(Clone, Copy)]
-struct StubKeys(Option<&'static str>);
+struct StubKeys {
+    key: Option<&'static str>,
+    model: Option<&'static str>,
+}
+
+impl StubKeys {
+    /// A connected owner with a well-formed key and no model preference.
+    const fn connected() -> Self {
+        Self {
+            key: Some("crsr_test"),
+            model: None,
+        }
+    }
+
+    /// An owner who has not connected Cursor.
+    const fn absent() -> Self {
+        Self {
+            key: None,
+            model: None,
+        }
+    }
+}
 
 impl CursorApiKeys for StubKeys {
-    async fn resolve(&self, _owner: &MacroUserIdStr<'_>) -> Result<CursorApiKey> {
-        self.0
+    async fn resolve(&self, _owner: &MacroUserIdStr<'_>) -> Result<ResolvedCursorConfig> {
+        let key = self
+            .key
             .map(|key| CursorApiKey::parse(key).expect("a well-formed stub key"))
-            .ok_or(HarnessError::CursorNotConnected)
+            .ok_or(HarnessError::CursorNotConnected)?;
+        Ok(ResolvedCursorConfig {
+            key,
+            default_model_id: self.model.map(str::to_owned),
+        })
     }
 }
 
@@ -265,7 +321,7 @@ fn manager(
     base_url: String,
     sessions: StubSessions,
 ) -> CursorContainerManager<StubSessions, StubKeys> {
-    manager_with_keys(base_url, sessions, StubKeys(Some("crsr_test")))
+    manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
 fn manager_with_keys(
@@ -304,7 +360,7 @@ async fn send_acp(sender: &super::super::pipe::PipeSender, frame: serde_json::Va
 /// answers.
 #[tokio::test]
 async fn spawning_and_prompting_records_the_minted_agent() {
-    let (base_url, _) = fake_cursor_api().await;
+    let (base_url, _, _) = fake_cursor_api().await;
     let sessions = StubSessions::default();
     let session_id = AgentSessionId::new();
     let manager = manager(base_url, sessions.clone());
@@ -370,12 +426,79 @@ async fn spawning_and_prompting_records_the_minted_agent() {
     );
 }
 
+/// A fresh session starts on the owner's configured default model, resolved
+/// to its variant against the live model table — the per-user setting reaching
+/// all the way to the agent Cursor mints.
+#[tokio::test]
+async fn spawn_uses_the_owners_default_model() {
+    let (base_url, _, created) = fake_cursor_api().await;
+    let sessions = StubSessions::default();
+    let session_id = AgentSessionId::new();
+    let manager = manager_with_keys(
+        base_url,
+        sessions,
+        StubKeys {
+            key: Some("crsr_test"),
+            model: Some("grok-4.6"),
+        },
+    );
+
+    let transport = manager
+        .spawn(SpawnContainer {
+            session_id,
+            kind: AgentKind::Cursor,
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            size: SandboxSize::Default,
+        })
+        .await
+        .expect("spawn");
+    let (sender, mut receiver) = transport.split();
+
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}),
+    )
+    .await;
+    next_acp(&mut receiver).await;
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}),
+    )
+    .await;
+    let acp_session = next_acp(&mut receiver).await["result"]["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{
+            "sessionId": acp_session,
+            "prompt": [{"type":"text","text":"go"}],
+        }}),
+    )
+    .await;
+    loop {
+        if next_acp(&mut receiver).await["id"] == 3 {
+            break;
+        }
+    }
+
+    let body = created.lock().expect("create log poisoned")[0].clone();
+    assert_eq!(body["model"]["id"], "grok-4.6");
+    // The default variant's params travel with the id — a bare id is not a
+    // selection Cursor accepts.
+    assert_eq!(
+        body["model"]["params"],
+        serde_json::json!([{"id":"effort","value":"high"},{"id":"fast","value":"true"}])
+    );
+}
+
 /// Resume restores the persisted identity: the harness's `session/load` is
 /// answered, and the next prompt is a follow-up run on the restored agent —
 /// not a fresh agent.
 #[tokio::test]
 async fn resume_restores_the_persisted_identity() {
-    let (base_url, _) = fake_cursor_api().await;
+    let (base_url, _, _) = fake_cursor_api().await;
     let sessions = StubSessions::default();
     let session_id = AgentSessionId::new();
     ExternalSessionRepo::upsert(
@@ -418,7 +541,7 @@ async fn resume_restores_the_persisted_identity() {
 /// refusing left a session every follow-up crashed against (seen live).
 #[tokio::test]
 async fn resume_answers_session_load_even_before_an_agent_was_minted() {
-    let (base_url, _) = fake_cursor_api().await;
+    let (base_url, _, _) = fake_cursor_api().await;
     let sessions = StubSessions::default();
     let session_id = AgentSessionId::new();
     *sessions.acp_session_id.lock().expect("stub poisoned") = Some("cursor-acp-1".to_owned());
@@ -502,7 +625,7 @@ async fn an_idle_pipe_is_shut_down() {
 /// session that never minted an agent tears down without any API call.
 #[tokio::test]
 async fn teardown_archives_and_forgets() {
-    let (base_url, archived) = fake_cursor_api().await;
+    let (base_url, archived, _) = fake_cursor_api().await;
     let sessions = StubSessions::default();
     let session_id = AgentSessionId::new();
     let manager = manager(base_url, sessions.clone());
@@ -541,9 +664,9 @@ async fn teardown_archives_and_forgets() {
 /// everyone, so it is the error most users will ever see.
 #[tokio::test]
 async fn spawning_without_a_registered_key_says_so() {
-    let (base_url, _) = fake_cursor_api().await;
+    let (base_url, _, _) = fake_cursor_api().await;
     let sessions = StubSessions::default();
-    let manager = manager_with_keys(base_url, sessions, StubKeys(None));
+    let manager = manager_with_keys(base_url, sessions, StubKeys::absent());
 
     let refused = manager
         .spawn(SpawnContainer {
@@ -569,10 +692,10 @@ async fn spawning_without_a_registered_key_says_so() {
 /// The alternative is a Macro session nothing can ever remove.
 #[tokio::test]
 async fn teardown_forgets_the_session_even_when_the_key_is_gone() {
-    let (base_url, archived) = fake_cursor_api().await;
+    let (base_url, archived, _) = fake_cursor_api().await;
     let sessions = StubSessions::default();
     let session_id = AgentSessionId::new();
-    let manager = manager_with_keys(base_url, sessions.clone(), StubKeys(None));
+    let manager = manager_with_keys(base_url, sessions.clone(), StubKeys::absent());
 
     ExternalSessionRepo::upsert(
         &sessions,

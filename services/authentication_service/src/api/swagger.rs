@@ -90,6 +90,8 @@ use model::user::{
                 crate::api::cursor_api_key::get_cursor_api_key::handler,
                 crate::api::cursor_api_key::put_cursor_api_key::handler,
                 crate::api::cursor_api_key::delete_cursor_api_key::handler,
+                crate::api::cursor_api_key::list_cursor_models::handler,
+                crate::api::cursor_api_key::put_cursor_default_model::handler,
 
                 /// /github_pull_requests
                 github_pull_requests::handler,
