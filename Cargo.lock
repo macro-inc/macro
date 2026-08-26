@@ -8480,6 +8480,7 @@ name = "item-filter-index"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "document_sub_type",
  "filter_ast",
  "item_filters",
  "predicate-index",
@@ -15031,12 +15032,15 @@ dependencies = [
 name = "soup-filter-cache-adapter"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "cache-core",
  "chrono",
  "graphql_soup_filter_input",
  "indexmap 2.14.0",
  "item-filter-index",
+ "postcard",
  "predicate-index",
+ "serde",
  "serde_json",
  "soup-filter-projection",
  "thiserror 2.0.18",

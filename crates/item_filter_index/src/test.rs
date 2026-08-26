@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use item_filters::ast::{
     CrmScope, EntityFilterAst,
@@ -71,6 +72,23 @@ fn compiles_complete_supported_forest_after_eligibility() {
                         upper: Some(RangeBound::Exclusive(_)),
                     } if attribute == &vocabulary::updated_at()))
     ));
+}
+
+#[test]
+fn production_documents_membership_literals_are_explicitly_unsupported_in_v1() {
+    for literal in [
+        DocumentLiteral::IsEmailAttachment(false),
+        DocumentLiteral::IsEmailAttachment(true),
+        DocumentLiteral::SubType(DocumentSubType::Task),
+        DocumentLiteral::SubType(DocumentSubType::Snippet),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(Expr::val(literal)));
+        assert_eq!(
+            compile_soup_flat_v1(&ast, request()).unwrap(),
+            LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("document"))
+        );
+    }
 }
 
 #[test]

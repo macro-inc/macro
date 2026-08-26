@@ -1,3 +1,8 @@
+use std::collections::BTreeMap;
+
+use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
+use serde::{Deserialize, Serialize};
+
 use super::*;
 
 #[test]
@@ -145,4 +150,329 @@ fn invalid_sort_direction_is_rejected_at_the_soup_boundary() {
     let error = compile_filter_request(serde_json::json!({}), "UPDATED_AT", "SIDEWAYS", 10)
         .expect_err("invalid direction must not reach the generic cache");
     assert_eq!(error.to_string(), "invalid entity-filter sort direction");
+}
+
+fn production_documents_filters(document_filter: serde_json::Value) -> serde_json::Value {
+    const NIL_ID: &str = "00000000-0000-0000-0000-000000000000";
+    serde_json::json!({
+        "calendarEventFilter": { "literal": { "id": NIL_ID } },
+        "documentFilter": document_filter,
+        "projectFilter": { "literal": { "projectId": NIL_ID } },
+        "chatFilter": { "literal": { "chatId": NIL_ID } },
+        "emailFilter": { "tree": { "literal": { "threadId": NIL_ID } } },
+        "channelFilter": { "literal": { "channelId": NIL_ID } },
+        "channelThreadFilter": { "literal": { "threadId": NIL_ID } },
+        "callFilter": { "literal": { "callId": NIL_ID } },
+        "crmCompanyFilter": { "literal": { "id": NIL_ID } },
+        "foreignEntityFilter": { "literal": { "id": NIL_ID } }
+    })
+}
+
+#[test]
+fn production_documents_presets_are_characterized_as_unsupported_in_v1() {
+    let owner = "macro|phase-0@example.com";
+    let not_task = serde_json::json!({
+        "not": { "literal": { "subType": "TASK" } }
+    });
+    let not_task_or_snippet = serde_json::json!({
+        "not": {
+            "or": {
+                "left": { "literal": { "subType": "TASK" } },
+                "right": { "literal": { "subType": "SNIPPET" } }
+            }
+        }
+    });
+
+    let cases = [
+        (
+            "owned/snippets-on",
+            serde_json::json!({
+                "and": {
+                    "left": not_task.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "literal": { "owner": owner } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            }),
+        ),
+        (
+            "owned/snippets-off",
+            serde_json::json!({
+                "and": {
+                    "left": not_task_or_snippet.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "literal": { "owner": owner } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            }),
+        ),
+        (
+            "shared/snippets-on",
+            serde_json::json!({
+                "and": {
+                    "left": not_task.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "not": { "literal": { "owner": owner } } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            }),
+        ),
+        (
+            "shared/snippets-off",
+            serde_json::json!({
+                "and": {
+                    "left": not_task_or_snippet.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "not": { "literal": { "owner": owner } } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            }),
+        ),
+        (
+            "attachments",
+            serde_json::json!({ "literal": { "isEmailAttachment": true } }),
+        ),
+        ("all/snippets-on", not_task),
+        ("all/snippets-off", not_task_or_snippet),
+    ];
+
+    for (name, document_filter) in cases {
+        let outcome = compile_filter_request(
+            production_documents_filters(document_filter),
+            "UPDATED_AT",
+            "DESC",
+            100,
+        )
+        .unwrap_or_else(|error| panic!("{name} should materialize: {error}"));
+        assert!(
+            matches!(outcome, SoupFilterCompileOutcome::Unsupported),
+            "{name} unexpectedly became soup-flat-v1 eligible"
+        );
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct CapsuleFixtureFile {
+    fixture_format: String,
+    transport: CapsuleFixtureTransport,
+    canonical_exact_values: CanonicalExactValues,
+    capsules: Vec<CapsuleFixtureCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapsuleFixtureTransport {
+    base64_variant: String,
+    frame: String,
+    wire_version: u8,
+}
+
+#[derive(Debug, Deserialize)]
+struct CanonicalExactValues {
+    boolean_false_hex: String,
+    boolean_true_hex: String,
+    sub_types: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapsuleFixtureCase {
+    name: String,
+    expected: CapsuleFixtureExpected,
+    capsule: SemanticCapsuleV1,
+    expected_base64: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapsuleFixtureExpected {
+    is_email_attachment: bool,
+    sub_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SemanticCapsuleV1 {
+    profile: String,
+    record_key: String,
+    partition: String,
+    exact_facts: Vec<SemanticExactFact>,
+    integer_facts: Vec<WireIntegerFact>,
+    sort_facts: Vec<WireIntegerFact>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SemanticExactFact {
+    attribute: String,
+    value_hex: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct WireCapsuleV1 {
+    profile: String,
+    record_key: String,
+    partition: String,
+    exact_facts: Vec<WireExactFact>,
+    integer_facts: Vec<WireIntegerFact>,
+    sort_facts: Vec<WireIntegerFact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct WireExactFact {
+    attribute: String,
+    value: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct WireIntegerFact {
+    attribute: String,
+    value: i64,
+}
+
+fn decode_hex(value: &str) -> Vec<u8> {
+    assert!(
+        value.len().is_multiple_of(2),
+        "hex value must be byte-aligned"
+    );
+    (0..value.len())
+        .step_by(2)
+        .map(|index| u8::from_str_radix(&value[index..index + 2], 16).expect("valid fixture hex"))
+        .collect()
+}
+
+fn wire_capsule(fixture: &SemanticCapsuleV1) -> WireCapsuleV1 {
+    WireCapsuleV1 {
+        profile: fixture.profile.clone(),
+        record_key: fixture.record_key.clone(),
+        partition: fixture.partition.clone(),
+        exact_facts: fixture
+            .exact_facts
+            .iter()
+            .map(|fact| WireExactFact {
+                attribute: fact.attribute.clone(),
+                value: decode_hex(&fact.value_hex),
+            })
+            .collect(),
+        integer_facts: fixture.integer_facts.clone(),
+        sort_facts: fixture.sort_facts.clone(),
+    }
+}
+
+#[test]
+fn soup_flat_v2_capsule_golden_fixtures_lock_wire_and_fact_encodings() {
+    let fixtures: CapsuleFixtureFile =
+        serde_json::from_str(include_str!("../testdata/soup-flat-v2-capsules.json"))
+            .expect("valid capsule fixture JSON");
+
+    assert_eq!(fixtures.fixture_format, "semantic-capsule-v1");
+    assert_eq!(fixtures.transport.base64_variant, "RFC4648_STANDARD_NO_PAD");
+    assert_eq!(fixtures.transport.frame, "wire-version-byte-plus-postcard");
+    assert_eq!(fixtures.transport.wire_version, 1);
+    assert_eq!(fixtures.canonical_exact_values.boolean_false_hex, "00");
+    assert_eq!(fixtures.canonical_exact_values.boolean_true_hex, "01");
+    assert_eq!(
+        fixtures.canonical_exact_values.sub_types,
+        BTreeMap::from([
+            ("skill".to_owned(), "736b696c6c".to_owned()),
+            ("snippet".to_owned(), "736e6970706574".to_owned()),
+            ("task".to_owned(), "7461736b".to_owned()),
+        ])
+    );
+
+    let mut missing_goldens = false;
+    for case in fixtures.capsules {
+        assert_eq!(case.capsule.profile, "soup-flat-v2", "{}", case.name);
+        assert_eq!(case.capsule.partition, "document", "{}", case.name);
+
+        let attributes: Vec<&str> = case
+            .capsule
+            .exact_facts
+            .iter()
+            .map(|fact| fact.attribute.as_str())
+            .collect();
+        let mut sorted_attributes = attributes.clone();
+        sorted_attributes.sort_unstable();
+        assert_eq!(
+            attributes, sorted_attributes,
+            "{} exact fact order",
+            case.name
+        );
+
+        let wire = wire_capsule(&case.capsule);
+        let email_attachment = wire
+            .exact_facts
+            .iter()
+            .find(|fact| fact.attribute == "email-attachment")
+            .unwrap_or_else(|| panic!("{} requires explicit attachment state", case.name));
+        assert_eq!(
+            email_attachment.value,
+            vec![u8::from(case.expected.is_email_attachment)],
+            "{} attachment encoding",
+            case.name
+        );
+
+        let sub_type = wire
+            .exact_facts
+            .iter()
+            .find(|fact| fact.attribute == "document-sub-type")
+            .map(|fact| String::from_utf8(fact.value.clone()).expect("UTF-8 subtype"));
+        assert_eq!(sub_type, case.expected.sub_type, "{} subtype", case.name);
+
+        let id = wire
+            .exact_facts
+            .iter()
+            .find(|fact| fact.attribute == "id")
+            .unwrap_or_else(|| panic!("{} requires an id fact", case.name));
+        let (_, record_id) = wire
+            .record_key
+            .rsplit_once(':')
+            .expect("fixture record key has typename and id");
+        assert_eq!(
+            id.value,
+            uuid::Uuid::parse_str(record_id)
+                .expect("fixture UUID")
+                .as_bytes(),
+            "{} UUID bytes",
+            case.name
+        );
+        assert_eq!(
+            wire.integer_facts, wire.sort_facts,
+            "{} timestamp membership and sort facts",
+            case.name
+        );
+
+        let mut framed = vec![fixtures.transport.wire_version];
+        framed.extend(postcard::to_stdvec(&wire).expect("fixture capsule serializes"));
+        let encoded = STANDARD_NO_PAD.encode(&framed);
+        if case.expected_base64.is_empty() {
+            eprintln!("{}={encoded}", case.name);
+            missing_goldens = true;
+        } else {
+            assert_eq!(encoded, case.expected_base64, "{} scalar bytes", case.name);
+            let decoded = STANDARD_NO_PAD
+                .decode(&case.expected_base64)
+                .expect("fixture scalar is base64");
+            assert_eq!(
+                decoded.first().copied(),
+                Some(fixtures.transport.wire_version)
+            );
+            assert_eq!(
+                postcard::from_bytes::<WireCapsuleV1>(&decoded[1..])
+                    .expect("fixture payload is postcard"),
+                wire,
+                "{} postcard round trip",
+                case.name
+            );
+        }
+    }
+
+    assert!(!missing_goldens, "populate expected_base64 fixture values");
 }

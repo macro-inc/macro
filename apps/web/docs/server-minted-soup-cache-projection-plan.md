@@ -266,7 +266,6 @@ Define a dedicated, bounded single-entity wire type rather than serializing cach
 
 ```rust
 struct SoupCacheProjectionCapsuleV1 {
-    wire_version: u16,
     profile: String,
     record_key: String,
     partition: String,
@@ -276,10 +275,16 @@ struct SoupCacheProjectionCapsuleV1 {
 }
 ```
 
-The implementation may use a compact binary encoding wrapped in bounded base64, or a bounded opaque JSON scalar. The format must have:
+The scalar uses RFC 4648 standard unpadded base64 over one framing byte followed by a postcard payload:
 
-- an explicit wire version independent of the profile version;
-- deterministic/canonical encoding;
+```text
+base64_no_pad([wire-version byte] + postcard(SoupCacheProjectionCapsuleV1))
+```
+
+The wire-version byte is outside the postcard value so the decoder can dispatch without first assuming a payload layout. Version 1 is byte `0x01`. Never serialize `IndexDocument` directly; `SoupCacheProjectionCapsuleV1` is a dedicated immutable wire struct whose field order and postcard representation are locked by native/WASM golden fixtures. The format must have:
+
+- an explicit framing version independent of the embedded profile version;
+- deterministic/canonical postcard encoding and RFC 4648 standard base64 without padding;
 - strict decoded-size, fact-count, token-size, and value-size bounds;
 - no physical database IDs;
 - no executable query or SQL fragments;
