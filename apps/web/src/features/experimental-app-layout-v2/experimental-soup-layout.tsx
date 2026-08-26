@@ -1,6 +1,10 @@
 import { DOCS_BASE, LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import type { ListView } from '@app/constants/list-views';
-import { activeAppLayout } from '@app/features/app-layout/layout-state';
+import {
+  splitChromeIsTinted,
+  splitOwnsIdentity,
+  splitOwnsSearch,
+} from '@app/features/app-layout/split-chrome';
 import {
   describeSchedule,
   getDefaultTimezone,
@@ -406,20 +410,6 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       0
     )
   );
-
-  const multipleSplits = () => (layout?.manager.splits().length ?? 0) > 1;
-
-  /**
-   * The top bar already names the active view and owns Create, so a lone
-   * split drops its own title, create button and navigation controls. A
-   * second split brings them back: only then does a header have to say which
-   * view it is, and only then do per-split controls have somewhere to act.
-   */
-  const splitOwnsIdentity = () =>
-    !activeAppLayout().capabilities.usesTopBar || multipleSplits();
-
-  /** One search serves every split under the top bar, so the views drop theirs. */
-  const splitOwnsSearch = () => !activeAppLayout().capabilities.usesTopBar;
 
   const searchPlaceholder = createMemo(() => {
     if (props.view === 'inbox') return 'Search inbox';
@@ -1521,7 +1511,10 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       <div class="flex size-full min-h-0">
         <ExperimentalViewSidebar
           label="Brain navigation"
-          class="mb-0 border-r-0! bg-ink/2 pt-2"
+          class={cn(
+            'mb-0 border-r-0! pt-2',
+            splitChromeIsTinted() && 'bg-ink/2'
+          )}
           collapsed={viewSidebarCollapsed()}
         >
           <SidebarSplitControls />

@@ -1,3 +1,7 @@
+import {
+  splitChromeIsTinted,
+  splitOwnsIdentity,
+} from '@app/features/app-layout/split-chrome';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
@@ -119,7 +123,15 @@ function InboxWorkspaceContent() {
           redistributionPreferredSize={messagesSidebarWidth()}
           target={{ kind: 'px', px: messagesSidebarWidth() }}
         >
-          <section class="flex size-full min-h-0 flex-col bg-ink/2 pb-5 pt-[5.75rem]">
+          <section
+            class={cn(
+              'flex size-full min-h-0 flex-col pb-5',
+              splitChromeIsTinted() && 'bg-ink/2',
+              // Clears the absolutely-positioned workspace header, which is
+              // shorter once it drops its split controls.
+              splitOwnsIdentity() ? 'pt-[5.75rem]' : 'pt-[3.75rem]'
+            )}
+          >
             <div
             class="mx-4 mt-3 grid h-9 shrink-0 grid-cols-3 gap-1 rounded-xl bg-ink/4 p-1"
             role="tablist"

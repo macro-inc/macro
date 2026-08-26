@@ -40,6 +40,7 @@ import {
   type TopBarDestination,
   type TopBarDestinationId,
 } from './topbar-destinations';
+import { createTopBarUnreadCounts, unreadBadgeLabel } from './topbar-unread';
 import { registerTopBarViewHotkeys } from './topbar-view-hotkeys';
 
 /** Ceiling on how long the bar will answer with a press that never lands. */
@@ -84,6 +85,9 @@ export function ExperimentalAppTopBar() {
   const navigate = useNavigate();
   const { openSettings } = useSettingsState();
   const [appsOpen, setAppsOpen] = createSignal(false);
+  const unreadCounts = createTopBarUnreadCounts();
+  const unreadCount = (destination: TopBarDestination) =>
+    unreadCounts().get(destination.id) ?? 0;
   let searchInput: HTMLInputElement | undefined;
 
   /**
@@ -348,7 +352,11 @@ export function ExperimentalAppTopBar() {
             <Tooltip label={destination.label}>
               <button
                 type="button"
-                aria-label={destination.label}
+                aria-label={
+                  unreadCount(destination) > 0
+                    ? `${destination.label}, ${unreadCount(destination)} unread`
+                    : destination.label
+                }
                 aria-current={isActive(destination) ? 'page' : undefined}
                 class={cn(
                   'group/top-bar-view relative flex h-full w-[76px] items-center justify-center px-1 outline-none',
@@ -366,14 +374,26 @@ export function ExperimentalAppTopBar() {
                     'group-focus-visible/top-bar-view:ring-2 group-focus-visible/top-bar-view:ring-accent/40'
                   )}
                 >
-                  <Dynamic
-                    component={
-                      isActive(destination)
-                        ? destination.filledIcon
-                        : destination.icon
-                    }
-                    class="size-6"
-                  />
+                  {/* Wraps the glyph rather than the button so the badge sits
+                      on the icon's corner, not the row's. */}
+                  <span class="relative flex items-center justify-center">
+                    <Dynamic
+                      component={
+                        isActive(destination)
+                          ? destination.filledIcon
+                          : destination.icon
+                      }
+                      class="size-6"
+                    />
+                    <Show when={unreadCount(destination) > 0}>
+                      <span
+                        class="absolute -right-2.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-semibold leading-4 text-surface"
+                        aria-hidden="true"
+                      >
+                        {unreadBadgeLabel(unreadCount(destination))}
+                      </span>
+                    </Show>
+                  </span>
                 </span>
                 <Show when={isActive(destination)}>
                   <span class="pointer-events-none absolute inset-x-0 -bottom-px h-[3px] rounded-t-sm bg-accent" />

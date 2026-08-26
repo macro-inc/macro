@@ -10,6 +10,7 @@ import {
   ActionTypeGlyph,
 } from '@app/features/activity/action-glyph';
 import { ActorName } from '@app/features/activity/actor-name';
+import { splitOwnsIdentity } from '@app/features/app-layout/split-chrome';
 import { ComposedSplitControls } from '@components/app/split-layout/composed/ComposedSplitControls';
 import { ComposedSplitHeader } from '@components/app/split-layout/composed/ComposedSplitHeader';
 import { messagesSidebarWidth } from '@components/app/split-layout/messagesSidebarWidth';
@@ -561,10 +562,14 @@ function ActivityWorkspaceHeader(props: {
             : '100%',
       }}
     >
-      <div class="flex min-h-7 items-center">
-        <ComposedSplitControls />
-      </div>
-      <div class="mt-1 flex min-w-0 items-center">
+      <Show when={splitOwnsIdentity()}>
+        <div class="flex min-h-7 items-center">
+          <ComposedSplitControls />
+        </div>
+      </Show>
+      <div
+        class={cn('flex min-w-0 items-center', splitOwnsIdentity() && 'mt-1')}
+      >
         <button
           type="button"
           class="experimental-v2-view-switch flex w-40 max-w-full items-center justify-between gap-2.5 rounded-xl px-1 py-1 text-ink outline-none transition-colors hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/40"
@@ -670,7 +675,14 @@ export function ExperimentalActivityView(props: ActivityViewSurfaceProps) {
           when={tab() === 'activity'}
           fallback={<ExperimentalInboxWorkspace />}
         >
-        <div class="flex size-full min-h-0 flex-col pt-[5.75rem]">
+        <div
+          class={cn(
+            'flex size-full min-h-0 flex-col',
+            // Clears the absolutely-positioned header, which is shorter once
+            // it drops its split controls.
+            splitOwnsIdentity() ? 'pt-[5.75rem]' : 'pt-[3.75rem]'
+          )}
+        >
           <div class="flex shrink-0 items-center gap-4 px-4 pb-3 @max-[720px]/experimental-activity:gap-2 @max-[760px]/experimental-activity:px-3 @max-[480px]/experimental-activity:px-2">
           <div class="w-full min-w-20 max-w-md">
             <label class="group flex h-10 w-full items-center gap-1 rounded-2xl border border-edge-muted bg-ink/5 px-3 text-sm text-ink-muted hover:bg-ink/7 hover:text-ink focus-within:border-accent focus-within:bg-ink/7 focus-within:text-ink">
