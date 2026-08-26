@@ -948,10 +948,7 @@ fn reset_health_latch_blocks_every_method_without_touching_turso() {
 #[test]
 fn statement_cleanup_failures_are_uncertain_and_begin_cleanup_attempts_rollback() {
     block_on(async {
-        for (name, sql) in [
-            ("begin-reset", "BEGIN IMMEDIATE"),
-            ("write-reset", RECORD_UPSERT),
-        ] {
+        for (name, sql) in [("begin-reset", "BEGIN"), ("write-reset", RECORD_UPSERT)] {
             let database = TursoMemoryDatabase::new(format!("{name}.db"));
             let mut storage = database.open("scope").unwrap();
             driver::clear_control_trace();

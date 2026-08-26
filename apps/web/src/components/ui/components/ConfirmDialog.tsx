@@ -1,3 +1,5 @@
+import { ConfirmDrawer } from '@components/app/mobile/ConfirmDrawer';
+import { isMobile } from '@core/mobile/isMobile';
 import type { JSX } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
@@ -19,10 +21,18 @@ export type ConfirmDialogDisplayProps = {
   children?: JSX.Element;
   confirmLabel?: JSX.Element;
   cancelLabel?: JSX.Element;
-  tone?: 'default' | 'danger';
+  tone?: 'default' | 'danger' | 'success';
+  /** Dialog presentation only; the mobile drawer ignores it. */
   position?: DialogProps['position'];
+  /** Dialog presentation only; the mobile drawer ignores it. */
   class?: string;
 };
+
+const TONE_VARIANT = {
+  default: 'active',
+  danger: 'danger',
+  success: 'success',
+} as const;
 
 export type ConfirmDialogProps = ManagedDialogProps &
   ConfirmDialogDisplayProps & {
@@ -60,7 +70,7 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
           </Button>
           <Button
             type="button"
-            variant={props.tone === 'danger' ? 'danger' : 'active'}
+            variant={TONE_VARIANT[props.tone ?? 'default']}
             depth={2}
             class="rounded-lg"
             onClick={props.onConfirm}
@@ -77,7 +87,10 @@ function resolveProps<P extends object>(source: PropsSource<P>): P {
   return typeof source === 'function' ? source() : source;
 }
 
-/** Opens the shared confirmation dialog and resolves with the user's choice. */
+/**
+ * Opens the shared confirmation UI and resolves with the user's choice —
+ * this dialog on desktop, a bottom drawer (`ConfirmDrawer`) on mobile.
+ */
 export function confirmDialog(
   props: PropsSource<ConfirmDialogDisplayProps>,
   options?: OpenDialogOptions
@@ -86,7 +99,7 @@ export function confirmDialog(
   let handle!: DialogHandle;
 
   handle = openDialog(
-    ConfirmDialog,
+    isMobile() ? ConfirmDrawer : ConfirmDialog,
     () => ({
       ...resolveProps(props),
       onConfirm: () => {

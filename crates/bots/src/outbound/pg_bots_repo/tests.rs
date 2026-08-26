@@ -644,7 +644,11 @@ async fn create_channel_scoped_bot_creates_bot_participant_and_token(
     assert_eq!(created.bot.created_by.as_deref(), Some(USER_OWNER));
     assert_eq!(created.token.bot_id, created.bot.id);
     assert_eq!(created.token.label.as_deref(), Some("Webhook"));
-    assert_eq!(created.token.token, created.bot_token);
+    assert_eq!(
+        created.token.token_prefix,
+        bot_token::token_prefix(&created.bot_token)
+    );
+    assert_ne!(created.token.token_prefix, created.bot_token);
     assert_eq!(
         active_channel_participant_count(&pool, channel_id, created.bot.id).await?,
         1
@@ -767,7 +771,11 @@ async fn revoke_token_prevents_future_authentication(pool: PgPool) -> anyhow::Re
         )
         .await?;
 
-    assert_eq!(created.token.token, created.bearer_token);
+    assert_eq!(
+        created.token.token_prefix,
+        bot_token::token_prefix(&created.bearer_token)
+    );
+    assert_ne!(created.token.token_prefix, created.bearer_token);
 
     let authenticated = service.authenticate_token(&created.bearer_token).await?;
     assert_eq!(authenticated.bot_id, bot.id);
@@ -787,7 +795,7 @@ async fn revoke_token_prevents_future_authentication(pool: PgPool) -> anyhow::Re
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn list_tokens_returns_raw_token_for_manageable_bot(pool: PgPool) -> anyhow::Result<()> {
+async fn list_tokens_returns_prefix_not_raw_secret(pool: PgPool) -> anyhow::Result<()> {
     let service = service(&pool);
     let bot = service
         .create_bot(user_id(USER_OWNER), create_req("listed-token"))
@@ -809,7 +817,8 @@ async fn list_tokens_returns_raw_token_for_manageable_bot(pool: PgPool) -> anyho
     assert_eq!(tokens.len(), 1);
     assert_eq!(tokens[0].id, created.token.id);
     assert_eq!(tokens[0].bot_id, bot.id);
-    assert_eq!(tokens[0].token, created.bearer_token);
+    assert_eq!(tokens[0].token_prefix, created.token.token_prefix);
+    assert_ne!(tokens[0].token_prefix, created.bearer_token);
     assert_eq!(tokens[0].label.as_deref(), Some("Listable"));
 
     Ok(())
@@ -832,15 +841,17 @@ async fn authenticate_channel_token_accepts_migrated_uuid_token(
 
     let token_id = Uuid::new_v4();
     let raw_token = Uuid::new_v4().to_string();
+    let hashed = bot_token::HashedBotToken::from_raw(&raw_token);
     sqlx::query(
         r#"
-        INSERT INTO bot_tokens (id, bot_id, token, label)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO bot_tokens (id, bot_id, token_hash, token_prefix, label)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
     )
     .bind(token_id)
     .bind(bot.id.as_uuid())
-    .bind(&raw_token)
+    .bind(&hashed.hash[..])
+    .bind(&hashed.prefix)
     .bind("migrated row")
     .execute(&pool)
     .await?;
@@ -853,6 +864,20 @@ async fn authenticate_channel_token_accepts_migrated_uuid_token(
     assert_eq!(authenticated.kind, BotKind::Owned);
     assert!(token_last_used_at(&pool, token_id).await?.is_some());
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rust_token_hash_matches_postgres_digest(pool: PgPool) -> anyhow::Result<()> {
+    let raw = "mbot_aabbccddeeff_aabbccddeeffsecret";
+    let rust_hash = bot_token::hash_token(raw);
+    let postgres_hash =
+        sqlx::query_scalar!(r#"SELECT digest(convert_to($1, 'UTF8'), 'sha256')"#, raw,)
+            .fetch_one(&pool)
+            .await?
+            .expect("pgcrypto digest returns bytea");
+
+    assert_eq!(rust_hash.as_slice(), postgres_hash.as_slice());
     Ok(())
 }
 

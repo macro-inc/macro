@@ -15,6 +15,7 @@ import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  CursorApiKeyStatus,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
@@ -152,6 +153,35 @@ export type GithubReauthenticationErrorCode = 'REAUTHENTICATION_REQUIRED';
 /** The team owner's email domain is a generic provider (e.g. gmail.com),
  *  so auto-join cannot be enabled for it. */
 export type ToggleAutoJoinDomainErrorCode = 'GENERIC_DOMAIN_NOT_ALLOWED';
+
+/**
+ * Surfaces the Cursor API key endpoints' own error message instead of a generic
+ * one derived from the status code.
+ *
+ * These endpoints answer with a body that already says what went wrong and is
+ * written to be safe to show a user — "value does not look like a Cursor API
+ * key", "Cursor agents are only available to Macro staff". The default handler
+ * throws that away and reports `HTTP error! status: 403`, which tells the user
+ * nothing they can act on.
+ */
+const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERROR'> =
+  async function handleCursorApiKeyErrorResponse(response) {
+    // Falls back to the status when the body is not the shape we expect: a
+    // failure to parse an error must not replace the error.
+    const message = await response
+      .json()
+      .then((body: unknown) =>
+        typeof body === 'object' && body !== null && 'message' in body
+          ? String((body as { message: unknown }).message)
+          : undefined
+      )
+      .catch(() => undefined);
+
+    return {
+      code: 'CURSOR_API_KEY_ERROR',
+      message: message ?? `HTTP error! status: ${response.status}`,
+    };
+  };
 
 const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
   async function handleGithubErrorResponse(response) {
@@ -516,6 +546,62 @@ export const authServiceClient = {
         }),
       })
     ).map((result) => result.url);
+  },
+
+  /**
+   * Whether the signed-in user has a Cursor API key stored, and whether this
+   * deployment accepts one at all.
+   *
+   * Never returns the key or any part of it — not even masked. There is no
+   * screen that needs it, and a masked key still leaks its length.
+   */
+  async getCursorApiKeyStatus() {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'GET',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Stores a Cursor API key for the signed-in user, replacing any existing one.
+   *
+   * The key is validated on shape alone, so a typo that still starts with
+   * `crsr_` is accepted here and only fails when a session tries to use it.
+   */
+  async putCursorApiKey(apiKey: string) {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey }),
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Forgets the signed-in user's Cursor API key.
+   *
+   * Does not revoke it at Cursor — the key keeps working everywhere else, and
+   * only Cursor can revoke it. The UI has to say so.
+   */
+  async deleteCursorApiKey() {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'DELETE',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
   },
 
   async checkGithubLinkStatus() {

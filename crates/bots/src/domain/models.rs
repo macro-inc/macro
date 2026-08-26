@@ -164,8 +164,8 @@ pub struct BotToken {
     pub id: Uuid,
     /// Owning bot id.
     pub bot_id: BotId,
-    /// Raw bearer token.
-    pub token: String,
+    /// Display prefix of the bearer token. The raw secret is never stored here.
+    pub token_prefix: String,
     /// Optional token label.
     pub label: Option<String>,
     /// Last successful use.

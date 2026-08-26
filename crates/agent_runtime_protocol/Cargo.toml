@@ -24,6 +24,7 @@ serde_json = { workspace = true }
 specta = { workspace = true }
 specta-serde = { workspace = true }
 specta-typescript = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 tokio-tungstenite = { workspace = true, optional = true }

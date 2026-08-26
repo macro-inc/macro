@@ -11,7 +11,8 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { Thought } from '../ui';
+import { isControlMessage } from '../state/control-message';
+import { ActionLine, Thought } from '../ui';
 import { ControlPart } from './parts/ControlPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
@@ -55,15 +56,33 @@ function UserMessage(props: { message: FoldedMessage }) {
 export function Message(props: { message: FoldedMessage }) {
   const inFlight = () =>
     props.message.author.kind === 'agent' && props.message.stop == null;
+  const failure = () =>
+    props.message.stop?.kind === 'failed'
+      ? props.message.stop.message
+      : undefined;
 
   return (
     <Show
-      when={props.message.author.kind === 'user'}
+      when={
+        props.message.author.kind === 'user' && !isControlMessage(props.message)
+      }
       fallback={
         <div class="flex flex-col gap-1 min-w-0">
           <For each={props.message.parts}>
             {(part) => <AgentMessagePart part={part} inFlight={inFlight()} />}
           </For>
+          {/* A turn the runtime errored is something that happened to the
+              session, like a model change or a stop — so it reads as one,
+              at the foot of whatever the agent managed to say first. */}
+          <Show when={failure()}>
+            {(message) => (
+              <ActionLine
+                label={`The agent couldn't answer — ${message()}`}
+                detail={message()}
+                failed
+              />
+            )}
+          </Show>
         </div>
       }
     >

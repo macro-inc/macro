@@ -16,6 +16,7 @@ dependencies = [
  "async-trait",
  "channel_sender",
  "chrono",
+ "chrono-tz",
  "kafka_util",
  "macro_db_migrator",
  "macro_event_broker",
@@ -209,6 +210,8 @@ dependencies = [
  "channel_sender",
  "channels",
  "chrono",
+ "cursor_api_key",
+ "cursor_cloud_agents",
  "dashmap",
  "futures",
  "kafka_util",
@@ -216,6 +219,7 @@ dependencies = [
  "macro_authorization",
  "macro_env_var",
  "macro_event_broker",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -240,10 +244,14 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "agent_harness",
+ "agent_inmem",
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
+ "ai_tools",
+ "ai_usage",
  "anyhow",
+ "aws-sdk-kms",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -252,6 +260,8 @@ dependencies = [
  "channels",
  "connection_gateway_client",
  "contacts",
+ "cursor_api_key",
+ "cursor_cloud_agents",
  "database_env_vars",
  "entity_access",
  "kafka_util",
@@ -267,6 +277,7 @@ dependencies = [
  "macro_event_broker",
  "macro_queues",
  "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "notification",
@@ -276,9 +287,38 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tokio-util",
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_inmem"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "agent-client-protocol",
+ "agent_fold",
+ "agent_runtime_protocol",
+ "agent_session",
+ "ai_tools",
+ "ai_toolset",
+ "ai_usage",
+ "bot_id",
+ "dashmap",
+ "futures",
+ "macro_user_id",
+ "macro_uuid",
+ "memory",
+ "prompt",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -295,6 +335,7 @@ dependencies = [
  "specta",
  "specta-serde",
  "specta-typescript",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -306,9 +347,11 @@ dependencies = [
 name = "agent_session"
 version = "0.1.0"
 dependencies = [
+ "agent",
  "agent-client-protocol",
  "agent_fold",
  "agent_runtime_protocol",
+ "ai_usage",
  "anyhow",
  "axum",
  "bot_id",
@@ -335,6 +378,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
+ "tokio-util",
  "tower 0.5.3",
  "tracing",
  "utoipa",
@@ -345,11 +389,15 @@ dependencies = [
 name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
+ "agent",
  "agent_session",
+ "ai_usage",
+ "anyhow",
  "bot_id",
  "channel_sender",
  "channels",
  "chrono",
+ "lexical_client",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -370,15 +418,18 @@ version = "0.1.0"
 dependencies = [
  "agent_session",
  "agent_trigger",
+ "ai_usage",
  "anyhow",
  "bots",
  "channels",
  "database_env_vars",
  "kafka_util",
+ "lexical_client",
  "macro_config",
  "macro_entrypoint",
  "macro_env_var",
  "macro_event_broker",
+ "macro_service_urls",
  "rdkafka",
  "serde_json",
  "sqlx",
@@ -1418,6 +1469,7 @@ dependencies = [
  "contacts",
  "cookie",
  "cool_asserts",
+ "cursor_api_key",
  "database_env_vars",
  "decode_jwt",
  "document_storage_service_client",
@@ -2646,6 +2698,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bot_token"
+version = "0.1.0"
+dependencies = [
+ "sha2 0.10.9",
+ "workspace-hack",
+]
+
+[[package]]
 name = "bots"
 version = "0.1.0"
 dependencies = [
@@ -2654,6 +2714,7 @@ dependencies = [
  "async-trait",
  "axum",
  "bot_id",
+ "bot_token",
  "channels",
  "chrono",
  "entity_access",
@@ -2926,6 +2987,8 @@ dependencies = [
  "futures",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "model-entity",
  "model_notifications",
@@ -3224,6 +3287,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-retry",
  "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
@@ -3449,6 +3513,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "collab_surface"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "entity_access",
+ "lexical_client",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_sync_service_jwt",
+ "macro_user_id",
+ "macro_uuid",
+ "mockall",
+ "model",
+ "model-entity",
+ "model-error-response",
+ "models_permissions",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "sync_service_client",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-retry",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3632,11 +3728,13 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_tower_layers",
  "macro_user_id",
  "mockall",
  "model",
  "model-entity",
  "models_bulk_upload",
+ "opentelemetry",
  "redis",
  "secretsmanager_client",
  "serde",
@@ -3650,6 +3748,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
  "tungstenite 0.28.0",
  "url",
  "utoipa",
@@ -3664,6 +3763,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "connection_gateway_models",
+ "macro_tower_layers",
  "model-entity",
  "reqwest 0.13.4",
  "serde",
@@ -4239,6 +4339,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d5515a3834141de9eafb9717ad39eea8247b5674e6066c404e8c4b365d2a29e"
 dependencies = [
  "cmov",
+]
+
+[[package]]
+name = "cursor_api_key"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-sdk-kms",
+ "chrono",
+ "macro_db_migrator",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "cursor_cloud_agents"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "futures",
+ "insta",
+ "macro_env_var",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sse-core",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -4879,12 +5017,12 @@ dependencies = [
  "cal",
  "calendar_events",
  "call",
- "channel_bots",
  "channels",
  "chat",
  "chrono",
  "clap",
  "cloudfront_sign",
+ "collab_surface",
  "comms_db_client",
  "complete_graph",
  "connection",
@@ -6767,6 +6905,7 @@ dependencies = [
  "activity",
  "async-graphql",
  "chrono",
+ "chrono-tz",
  "futures",
  "graphql_common",
  "macro_user_id",
@@ -8190,6 +8329,7 @@ dependencies = [
  "console 0.16.4",
  "globset",
  "once_cell",
+ "serde",
  "similar",
  "tempfile",
  "walkdir",
@@ -8538,10 +8678,12 @@ dependencies = [
  "either",
  "macro_env",
  "macro_env_var",
+ "opentelemetry",
  "rdkafka",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "uuid",
  "workspace-hack",
 ]
@@ -8892,6 +9034,7 @@ name = "local_e2e_integration_tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bot_token",
  "futures",
  "local_e2e_test_support",
  "reqwest 0.13.4",
@@ -9204,6 +9347,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "bot_id",
+ "bot_token",
  "constant_time_eq",
  "cookie",
  "http-body-util",
@@ -9504,6 +9648,7 @@ dependencies = [
 name = "macro_tower_layers"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "http 1.4.0",
  "opentelemetry",
  "opentelemetry-http",
@@ -9707,6 +9852,7 @@ dependencies = [
  "model-error-response",
  "oauth2",
  "redis",
+ "regex",
  "reqwest 0.13.4",
  "rmcp",
  "schemars 1.2.1",
@@ -11868,6 +12014,7 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "model-error-response",
+ "regex",
  "reqwest 0.13.4",
  "rmcp",
  "schemars 1.2.1",
@@ -13791,6 +13938,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "axum",
+ "calendar_events",
  "call",
  "channels",
  "chat",
@@ -15192,6 +15340,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sse-core"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28f4c044039e70ba5724b7e9dacf9fb610394773d15df2bb629170ca30391c88"
+dependencies = [
+ "bytes",
+ "memchr",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "sse-stream"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15710,10 +15869,12 @@ dependencies = [
  "channels",
  "chrono",
  "contacts",
+ "database_env_vars",
  "entity_access",
  "generic_email_domains",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_entrypoint",
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
@@ -16472,7 +16633,7 @@ dependencies = [
 [[package]]
 name = "turso_core"
 version = "0.8.0-pre.3"
-source = "git+https://github.com/seanaye/turso?rev=be9acfe9e5e6efb17911af84047e4855cace53a3#be9acfe9e5e6efb17911af84047e4855cace53a3"
+source = "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2"
 dependencies = [
  "aegis",
  "aes",
@@ -16543,7 +16704,7 @@ dependencies = [
 [[package]]
 name = "turso_ext"
 version = "0.8.0-pre.3"
-source = "git+https://github.com/seanaye/turso?rev=be9acfe9e5e6efb17911af84047e4855cace53a3#be9acfe9e5e6efb17911af84047e4855cace53a3"
+source = "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2"
 dependencies = [
  "chrono",
  "getrandom 0.4.2",
@@ -16553,7 +16714,7 @@ dependencies = [
 [[package]]
 name = "turso_macros"
 version = "0.8.0-pre.3"
-source = "git+https://github.com/seanaye/turso?rev=be9acfe9e5e6efb17911af84047e4855cace53a3#be9acfe9e5e6efb17911af84047e4855cace53a3"
+source = "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -16563,7 +16724,7 @@ dependencies = [
 [[package]]
 name = "turso_parser"
 version = "0.8.0-pre.3"
-source = "git+https://github.com/seanaye/turso?rev=be9acfe9e5e6efb17911af84047e4855cace53a3#be9acfe9e5e6efb17911af84047e4855cace53a3"
+source = "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2"
 dependencies = [
  "bitflags 2.11.1",
  "memchr",
@@ -17974,6 +18135,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "bitflags 2.11.1",
+ "bstr",
  "byteorder",
  "bytes",
  "bzip2",
@@ -18083,6 +18245,7 @@ dependencies = [
  "subtle",
  "syn 1.0.109",
  "syn 2.0.117",
+ "syn 3.0.3",
  "sync_wrapper",
  "thiserror 2.0.18",
  "time",
@@ -18200,6 +18363,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-dynamodb",
+ "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "bollard",

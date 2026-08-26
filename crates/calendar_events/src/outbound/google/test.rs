@@ -560,6 +560,32 @@ fn rsvp_patch_updates_only_the_connected_attendee() {
 }
 
 #[test]
+fn google_attendees_write_an_explicit_response_status() {
+    let body = google_attendees_body(&[
+        CalendarAttendeeInput {
+            email: "self@example.com".to_string(),
+            is_optional: false,
+            response_status: Some(AttendeeResponseStatus::Accepted),
+        },
+        CalendarAttendeeInput {
+            email: "guest@example.com".to_string(),
+            is_optional: true,
+            response_status: None,
+        },
+    ]);
+
+    assert_eq!(body[0]["email"], "self@example.com");
+    assert_eq!(body[0]["responseStatus"], "accepted");
+    assert_eq!(body[0]["optional"], false);
+    assert_eq!(body[1]["email"], "guest@example.com");
+    assert_eq!(body[1]["optional"], true);
+    assert!(
+        body[1].get("responseStatus").is_none(),
+        "a guest without a status must keep Google's default"
+    );
+}
+
+#[test]
 fn reminders_round_trip_between_google_and_the_domain() {
     let master: GoogleEvent = serde_json::from_value(serde_json::json!({
         "id": "provider-event",

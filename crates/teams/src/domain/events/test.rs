@@ -138,6 +138,10 @@ fn topic_events() -> Vec<(TeamTopicEvent, Value)> {
             TeamTopicEvent::MemberJoined(TeamMemberJoinedMetadata {
                 team_id: team_id(),
                 member_id: user_id("macro|member@acme.com"),
+                teammate_ids: vec![
+                    user_id("macro|admin@acme.com"),
+                    user_id("macro|owner@acme.com"),
+                ],
                 role: TeamRole::Member,
                 join_method: TeamJoinMethod::InviteAccepted {
                     invite_id: invite_id(),
@@ -149,6 +153,10 @@ fn topic_events() -> Vec<(TeamTopicEvent, Value)> {
                 "metadata": {
                     "team_id": TEAM_ID,
                     "member_id": "macro|member@acme.com",
+                    "teammate_ids": [
+                        "macro|admin@acme.com",
+                        "macro|owner@acme.com"
+                    ],
                     "role": "member",
                     "join_method": {
                         "type": "invite_accepted",
@@ -271,6 +279,30 @@ fn constructors_use_teams_topic_bare_uuid_key_and_schema_version_one() {
         assert!(!event.key().starts_with("team|"));
         assert_eq!(event.topic(), "macro.teams");
         assert_eq!(event.event().schema_version, 1);
+    }
+}
+
+#[test]
+fn member_joined_defaults_missing_teammate_ids() {
+    let payload = json!({
+        "event_id": EVENT_ID,
+        "schema_version": 1,
+        "event_type": "team.member_joined",
+        "metadata": {
+            "team_id": TEAM_ID,
+            "member_id": "macro|member@acme.com",
+            "role": "member",
+            "join_method": { "type": "domain_auto_join" }
+        }
+    });
+
+    let event: Event<TeamTopicEvent> =
+        serde_json::from_value(payload).expect("legacy member_joined is decodable");
+    match event.event {
+        TeamTopicEvent::MemberJoined(metadata) => {
+            assert!(metadata.teammate_ids.is_empty());
+        }
+        other => panic!("expected member_joined, got {other:?}"),
     }
 }
 

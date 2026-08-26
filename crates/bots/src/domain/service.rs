@@ -10,6 +10,7 @@ use super::{
     ports::{BotError, BotRepo, BotService},
     tokens,
 };
+use bot_token::HashedBotToken;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_event_broker::MacroEventBroker;
@@ -199,10 +200,16 @@ where
         let generated_token = tokens::generate_token();
         let (bot, token) = self
             .repo
-            .create_channel_scoped_bot(owner, caller, channel_id, generated_token, req)
+            .create_channel_scoped_bot(
+                owner,
+                caller,
+                channel_id,
+                HashedBotToken::from_raw(&generated_token),
+                req,
+            )
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        let bot_token = token.token.clone();
+        let bot_token = generated_token;
 
         self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
             bot_id: bot.id,
@@ -387,14 +394,13 @@ where
         let generated_token = tokens::generate_token();
         let token = self
             .repo
-            .create_token(bot_id, generated_token, req)
+            .create_token(bot_id, HashedBotToken::from_raw(&generated_token), req)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        let bearer_token = token.token.clone();
 
         Ok(super::models::CreateBotTokenResponse {
             token,
-            bearer_token,
+            bearer_token: generated_token,
         })
     }
 

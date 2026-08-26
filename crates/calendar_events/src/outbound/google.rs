@@ -1471,10 +1471,15 @@ fn google_attendees_body(attendees: &[CalendarAttendeeInput]) -> serde_json::Val
     attendees
         .iter()
         .map(|attendee| {
-            serde_json::json!({
+            let mut entry = serde_json::json!({
                 "email": attendee.email,
                 "optional": attendee.is_optional,
-            })
+            });
+            if let Some(status) = attendee.response_status {
+                entry["responseStatus"] =
+                    serde_json::Value::String(google_response_status(status).to_string());
+            }
+            entry
         })
         .collect()
 }

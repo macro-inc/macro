@@ -16,10 +16,18 @@ pub enum AgentSessionError {
     ThreadSessionExists,
     #[error("the session owner is not a known user")]
     UnknownOwner,
+    #[error("invalid agent session name: {0}")]
+    InvalidName(&'static str),
+    #[error("the caller may not control this agent session")]
+    Forbidden,
     #[error(
         "agent session {0} cannot be restored because the agent supports neither session/resume nor session/load"
     )]
     ResumeUnsupported(AgentSessionId),
+    #[error("agent session {0} action delivery timed out")]
+    DeliveryTimedOut(AgentSessionId),
+    #[error("agent session {0} log persistence timed out")]
+    LogTimedOut(AgentSessionId),
     #[error(transparent)]
     Transport(#[from] TransportError),
     #[error(transparent)]

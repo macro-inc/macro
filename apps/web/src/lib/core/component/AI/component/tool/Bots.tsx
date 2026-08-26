@@ -1,3 +1,4 @@
+import { MintCredential } from '@channel/Bots/MintCredential';
 import Key from '@phosphor-icons/core/regular/key.svg';
 import Link from '@phosphor-icons/core/regular/link.svg';
 import List from '@phosphor-icons/core/regular/list.svg';
@@ -149,28 +150,30 @@ const createBotHandler = createToolRenderer({
               />
               <Show when={setup()}>
                 {(channelSetup) => (
-                  <DetailPanel
-                    details={[
-                      {
-                        label: 'Bearer token',
-                        value: channelSetup().bearerToken,
-                        secret: true,
-                      },
-                      {
-                        label: 'Webhook',
-                        value: channelSetup().webhook.webhookUrl,
-                        secret: true,
-                      },
-                      {
-                        label: 'Channel ID',
-                        value: channelSetup().channelId,
-                      },
-                      {
-                        label: 'Token header',
-                        value: channelSetup().credentialHeader,
-                      },
-                    ]}
-                  />
+                  <div class="flex flex-col gap-2">
+                    <DetailPanel
+                      details={[
+                        {
+                          label: 'Webhook',
+                          value: channelSetup().webhook.webhookUrl,
+                          secret: true,
+                        },
+                        {
+                          label: 'Channel ID',
+                          value: channelSetup().channelId,
+                        },
+                        {
+                          label: 'Token header',
+                          value: channelSetup().credentialHeader,
+                        },
+                      ]}
+                    />
+                    <MintCredential
+                      botId={bot()!.botId}
+                      label={channelSetup().credentialLabel}
+                      expiresAt={channelSetup().credentialExpiresAt}
+                    />
+                  </div>
                 )}
               </Show>
             </div>
@@ -189,7 +192,7 @@ const createBotHandler = createToolRenderer({
             status={
               ctx.response
                 ? setup()
-                  ? 'Created · credential'
+                  ? 'Created · mint token'
                   : 'Created'
                 : undefined
             }
@@ -213,23 +216,21 @@ const issueBotCredentialHandler = createToolRenderer({
         type="call"
         response={
           expanded() && credential() ? (
-            <DetailPanel
-              summary={credential()!.summary}
-              details={[
-                {
-                  label: 'Bearer token',
-                  value: credential()!.bearerToken,
-                  secret: true,
-                },
-                {
-                  label: 'Credential ID',
-                  value: credential()!.tokenId,
-                  secret: true,
-                },
-                { label: 'Label', value: credential()!.label },
-                { label: 'Expires', value: credential()!.expiresAt },
-              ]}
-            />
+            <div class="flex flex-col gap-2">
+              <DetailPanel
+                summary={credential()!.summary}
+                details={[
+                  { label: 'Bot ID', value: credential()!.botId },
+                  { label: 'Label', value: credential()!.label },
+                  { label: 'Expires', value: credential()!.expiresAt },
+                ]}
+              />
+              <MintCredential
+                botId={credential()!.botId}
+                label={credential()!.label}
+                expiresAt={credential()!.expiresAt}
+              />
+            </div>
           ) : undefined
         }
       >
@@ -244,7 +245,7 @@ const issueBotCredentialHandler = createToolRenderer({
             expanded={expanded()}
             onToggle={() => setExpanded((value) => !value)}
             showToggle={!!credential()}
-            status={ctx.response ? 'Sensitive' : undefined}
+            status={ctx.response ? 'Mint token' : undefined}
           />
         </div>
       </BaseTool>

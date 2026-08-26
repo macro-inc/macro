@@ -4,10 +4,7 @@ use super::{
     BOT_WEBHOOK_SCOPE, BOT_WEBHOOK_SCOPE_HEADER, BOT_WEBHOOK_TOKEN_HEADER, BotSummary,
     BotToolContext, BotWebhook, CreatedBotChannelSetup, bot_tool_error,
 };
-use crate::domain::{
-    models::{CreateBotRequest, CreateChannelScopedBotRequest},
-    ports::BotService,
-};
+use crate::domain::{models::CreateBotRequest, ports::BotService};
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
     ToolResult,
@@ -25,7 +22,7 @@ use uuid::Uuid;
 pub struct CreateBotResponse {
     /// Newly created bot.
     pub bot: BotSummary,
-    /// Credential and webhook returned when [`CreateBot::channel_id`] was set.
+    /// Channel webhook and credential proposal returned when [`CreateBot::channel_id`] was set.
     pub channel_setup: Option<CreatedBotChannelSetup>,
     /// Human-readable result summary.
     pub summary: String,
@@ -36,7 +33,7 @@ pub struct CreateBotResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateBot",
-    description = "Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes a one-time bearerToken and that channel's webhook URL. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup."
+    description = "Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes that channel's webhook URL and a credential proposal. The user mints the bearer token from the chat card or bot settings; the secret is never returned in this tool result. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup."
 )]
 pub struct CreateBot {
     /// Team owner; omit for a user-owned bot.
@@ -65,19 +62,19 @@ pub struct CreateBot {
     pub avatar_url: Option<String>,
     /// Optional channel to grant immediately.
     #[schemars(
-        description = "Channel id to grant the new bot access to. Requires current-user channel membership. When set, the tool also mints a credential and returns the channel webhook URL."
+        description = "Channel id to grant the new bot access to. Requires current-user channel membership. When set, the tool also returns the channel webhook URL and a credential proposal the user can mint from the chat card."
     )]
     #[serde(default)]
     pub channel_id: Option<Uuid>,
     /// Optional credential label used only with [`Self::channel_id`].
     #[schemars(
-        description = "Optional label for the credential minted when channelId is set, such as `github-webhook`. Requires channelId."
+        description = "Optional label for the credential the user will mint when channelId is set, such as `github-webhook`. Requires channelId."
     )]
     #[serde(default)]
     pub credential_label: Option<String>,
     /// Optional credential expiry used only with [`Self::channel_id`].
     #[schemars(
-        description = "Optional RFC 3339 expiration for the credential minted when channelId is set. Requires channelId."
+        description = "Optional RFC 3339 expiration for the credential the user will mint when channelId is set. Requires channelId."
     )]
     #[serde(default)]
     pub credential_expires_at: Option<DateTime<Utc>>,
@@ -174,32 +171,47 @@ impl CreateBot {
         Svc: BotService,
         AccessSvc: EntityAccessService,
     {
-        service_context
+        let access = service_context
             .require_channel_member(&request_context, channel_id)
             .await?;
-        let created = service_context
+        let caller = request_context.user_id.clone();
+        let bot = service_context
             .service
-            .create_channel_scoped_bot(
-                request_context.user_id,
-                channel_id,
-                CreateChannelScopedBotRequest {
+            .create_bot(
+                caller.clone(),
+                CreateBotRequest {
                     team_id: self.team_id,
                     name: self.name.clone(),
                     handle: self.handle.clone(),
                     description: self.description.clone(),
                     avatar_url: self.avatar_url.clone(),
-                    token_label: self.credential_label.clone(),
-                    token_expires_at: self.credential_expires_at,
                     has_agent: self.has_agent,
                 },
             )
             .await
             .map_err(|error| bot_tool_error("create bot", error))?;
-        let bot = BotSummary::try_from(created.bot)?;
+        if let Err(error) = service_context
+            .service
+            .add_bot_to_channel(access, bot.id)
+            .await
+        {
+            let _ = service_context
+                .service
+                .delete_bot(caller, bot.id)
+                .await
+                .inspect_err(|cleanup_error| {
+                    tracing::error!(
+                        error=?cleanup_error,
+                        "failed to delete bot after channel grant failed"
+                    );
+                });
+            return Err(bot_tool_error("grant bot channel access", error));
+        }
+        let bot = BotSummary::try_from(bot)?;
         let webhook =
             BotWebhook::for_channel(&service_context.document_storage_service_url, channel_id);
         let summary = format!(
-            "Created bot @{} and granted it access to the channel. Store the bearer token securely; it will not be shown again.",
+            "Created bot @{} and granted it access to the channel. Click the card or open bot settings to create a token. The secret is shown only while that card is open.",
             bot.handle
         );
 
@@ -207,12 +219,12 @@ impl CreateBot {
             bot,
             channel_setup: Some(CreatedBotChannelSetup {
                 channel_id,
-                token_id: created.token.id,
-                bearer_token: created.bot_token,
                 webhook,
                 credential_header: BOT_WEBHOOK_TOKEN_HEADER.to_string(),
                 credential_scope_header: BOT_WEBHOOK_SCOPE_HEADER.to_string(),
                 credential_scope: BOT_WEBHOOK_SCOPE.to_string(),
+                credential_label: self.credential_label.clone(),
+                credential_expires_at: self.credential_expires_at,
             }),
             summary,
         })

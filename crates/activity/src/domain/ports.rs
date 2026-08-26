@@ -7,7 +7,10 @@ use chrono::{DateTime, Utc};
 use model_entity::EntityType;
 use uuid::Uuid;
 
-use super::models::{Activity, ActivityRecord};
+use super::{
+    models::{Activity, ActivityRecord},
+    overview::{ActivityOverview, ActivityWindow},
+};
 
 /// Human-readable metadata for a property referenced by an activity event.
 #[cfg(feature = "ai_tools")]
@@ -111,6 +114,14 @@ pub trait ActivityReads {
         keys: &[(EntityType, String)],
         per_entity_limit: u32,
     ) -> impl Future<Output = Result<EntityActivityMap, Self::Err>> + Send;
+
+    /// Sparse day counts and the top entities for `subject_id` inside one
+    /// local-date window. Counts every stored action, including views.
+    fn subject_overview(
+        &self,
+        subject_id: &str,
+        window: ActivityWindow,
+    ) -> impl Future<Output = Result<ActivityOverview, Self::Err>> + Send;
 
     /// The subject's activity in the half-open interval `[from, to)`, newest
     /// first, capped at `limit`. `truncated` reports whether more matching raw

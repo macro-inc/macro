@@ -24,8 +24,9 @@ use crate::domain::{
         OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarReminderDispatchRepo,
-        CalendarRepository, GoogleCalendarSyncRepository,
+        CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
+        CalendarEventWriteOutcome, CalendarReminderDispatchRepo, CalendarRepository,
+        GoogleCalendarSyncRepository, RetiredCalendarEvent,
     },
 };
 
@@ -207,7 +208,9 @@ impl PgCalendarRepository {
 
     #[cfg(test)]
     async fn upsert_event_fixture(&self, upsert: CalendarEventUpsert) -> Result<Uuid, Report> {
-        self.upsert_event(CalendarEventWrite::Fixture(upsert)).await
+        self.upsert_event(CalendarEventWrite::Fixture(upsert))
+            .await
+            .map(|outcome| outcome.event_id)
     }
 
     #[cfg(test)]
@@ -627,7 +630,10 @@ impl CalendarRepository for PgCalendarRepository {
     }
 
     #[tracing::instrument(skip(self, write), err)]
-    async fn upsert_event(&self, write: CalendarEventWrite) -> Result<Uuid, Report> {
+    async fn upsert_event(
+        &self,
+        write: CalendarEventWrite,
+    ) -> Result<CalendarEventWriteOutcome, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         let upsert = match write {
             CalendarEventWrite::GoogleBackfill {
@@ -685,7 +691,11 @@ impl CalendarRepository for PgCalendarRepository {
                 serde_json::to_value(StoredSourceProjection::from(&upsert)).map_err(report)?;
             if canonical_projection(&row.normalized_payload) == canonical_projection(&incoming) {
                 tx.commit().await.map_err(report)?;
-                return Ok(row.event_id);
+                return Ok(CalendarEventWriteOutcome {
+                    event_id: row.event_id,
+                    owner_id: upsert.event.owner_id.clone(),
+                    change: CalendarEventChange::Unchanged,
+                });
             }
         }
 
@@ -695,7 +705,7 @@ impl CalendarRepository for PgCalendarRepository {
         // Google is the authoritative source when the same RFC UID was first
         // discovered in email. Email can still create/update entities that do
         // not yet have a Google source.
-        let applied_id = sqlx::query_scalar!(
+        let applied = sqlx::query!(
             r#"
             INSERT INTO calendar_events (
                 id, owner_id, source_link_id, ical_uid, title, description, location,
@@ -748,7 +758,9 @@ impl CalendarRepository for PgCalendarRepository {
                     AND EXCLUDED.canonical_source_updated_at
                         >= calendar_events.canonical_source_updated_at
                 )
-            RETURNING id
+            -- `xmax = 0` distinguishes the INSERT from the DO UPDATE: a
+            -- freshly inserted row carries no updating transaction id.
+            RETURNING id, (xmax = 0) AS "inserted!"
             "#,
             proposed_id,
             &upsert.event.owner_id,
@@ -785,24 +797,37 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
-        let event_id = match applied_id {
-            Some(id) => id,
-            None => sqlx::query_scalar!(
-                "SELECT id FROM calendar_events WHERE owner_id = $1 AND source_link_id = $2 AND ical_uid = $3",
-                &upsert.event.owner_id,
-                source_link_id,
-                &upsert.event.ical_uid,
-            )
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(report)?,
+        // No returned row means the sequence guard rejected the write as
+        // stale: the source is still recorded below, but the canonical row and
+        // its projections are untouched.
+        let (event_id, change) = match &applied {
+            Some(row) => (
+                row.id,
+                if row.inserted {
+                    CalendarEventChange::Created
+                } else {
+                    CalendarEventChange::Updated
+                },
+            ),
+            None => (
+                sqlx::query_scalar!(
+                    "SELECT id FROM calendar_events WHERE owner_id = $1 AND source_link_id = $2 AND ical_uid = $3",
+                    &upsert.event.owner_id,
+                    source_link_id,
+                    &upsert.event.ical_uid,
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(report)?,
+                CalendarEventChange::Unchanged,
+            ),
         };
 
         persist_source(&mut tx, event_id, &upsert).await?;
 
         // Only the source selected as canonical replaces projections and
         // attendees. Lower-sequence/stale sources are still recorded above.
-        if applied_id.is_some() {
+        if applied.is_some() {
             replace_attendees(&mut tx, event_id, &upsert.event.attendees).await?;
             replace_overrides(&mut tx, event_id, &upsert.overrides).await?;
             replace_occurrences(
@@ -825,7 +850,11 @@ impl CalendarRepository for PgCalendarRepository {
         }
 
         tx.commit().await.map_err(report)?;
-        Ok(event_id)
+        Ok(CalendarEventWriteOutcome {
+            event_id,
+            owner_id: upsert.event.owner_id.clone(),
+            change,
+        })
     }
 
     #[tracing::instrument(skip(self, requester_id, range), err)]
@@ -1148,7 +1177,8 @@ impl CalendarRepository for PgCalendarRepository {
         account_id: Uuid,
         sync: GoogleCalendarSyncSnapshot,
         events_upserted: usize,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        let mut retired = Vec::new();
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
@@ -1201,7 +1231,9 @@ impl CalendarRepository for PgCalendarRepository {
             .await
             .map_err(report)?;
             for event_id in affected_event_ids {
-                restore_best_source_or_delete(&mut tx, event_id).await?;
+                if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                    retired.push(outcome);
+                }
             }
         }
 
@@ -1227,7 +1259,9 @@ impl CalendarRepository for PgCalendarRepository {
             .await
             .map_err(report)?;
             for event_id in affected_event_ids {
-                restore_best_source_or_delete(&mut tx, event_id).await?;
+                if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                    retired.push(outcome);
+                }
             }
         }
 
@@ -1286,7 +1320,8 @@ impl CalendarRepository for PgCalendarRepository {
             ));
         }
 
-        tx.commit().await.map_err(report)
+        tx.commit().await.map_err(report)?;
+        Ok(retired)
     }
 
     #[tracing::instrument(skip(self, channel), fields(job_id = %key.job_id), err)]
@@ -1398,7 +1433,8 @@ impl CalendarRepository for PgCalendarRepository {
         lease_token: Uuid,
         account_id: Uuid,
         calendar_ids: Vec<Uuid>,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        let mut retired = Vec::new();
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
@@ -1424,7 +1460,9 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         for event_id in affected_event_ids {
-            restore_best_source_or_delete(&mut tx, event_id).await?;
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                retired.push(outcome);
+            }
         }
 
         sqlx::query!(
@@ -1462,7 +1500,8 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
-        tx.commit().await.map_err(report)
+        tx.commit().await.map_err(report)?;
+        Ok(retired)
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -1672,7 +1711,7 @@ impl CalendarRepository for PgCalendarRepository {
         account_id: Uuid,
         calendar_id: Uuid,
         provider_event_id: &str,
-    ) -> Result<(), Report> {
+    ) -> Result<Vec<RetiredCalendarEvent>, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         let cancelled = [provider_event_id.to_string()];
         // A deleted recurring master retires its expanded instances via
@@ -1700,10 +1739,14 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
+        let mut retired = Vec::new();
         for event_id in affected_event_ids {
-            restore_best_source_or_delete(&mut tx, event_id).await?;
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                retired.push(outcome);
+            }
         }
-        tx.commit().await.map_err(report)
+        tx.commit().await.map_err(report)?;
+        Ok(retired)
     }
 }
 
@@ -2219,6 +2262,15 @@ async fn clear_calendar_opt_out_tx(
     Ok(())
 }
 
+/// Retirements here are deliberately **not** returned for publication.
+///
+/// Both callers — a grant that lost its calendar scopes, and an explicit
+/// disconnect — purge every event on the inbox at once, so per-event `Deleted`
+/// topic messages would fan out to one message per event in the account.
+/// Search documents for those events are consequently left stale; they are
+/// invisible rather than leaked, because enrichment re-reads visibility from
+/// Postgres and drops a hit whose row is gone. Removing them wants a
+/// purge-by-owner operation, not this path.
 async fn disable_google_calendar_capability_tx(
     tx: &mut Transaction<'_, Postgres>,
     email_link_id: Uuid,
@@ -2457,13 +2509,17 @@ async fn persist_source(
     Ok(())
 }
 
+/// Rewrite an event from its next-best remaining source, or delete it when no
+/// source is left, reporting which happened.
+///
+/// `None` means the row was already gone before this call.
 async fn restore_best_source_or_delete(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
-) -> Result<(), Report> {
+) -> Result<Option<RetiredCalendarEvent>, Report> {
     let identity = sqlx::query!(
         r#"
-        SELECT source_link_id, ical_uid
+        SELECT source_link_id, ical_uid, owner_id
         FROM calendar_events
         WHERE id = $1
         "#,
@@ -2473,7 +2529,7 @@ async fn restore_best_source_or_delete(
     .await
     .map_err(report)?;
     let Some(identity) = identity else {
-        return Ok(());
+        return Ok(None);
     };
     let reconciliation_lock =
         event_reconciliation_lock(identity.source_link_id, &identity.ical_uid);
@@ -2507,7 +2563,11 @@ async fn restore_best_source_or_delete(
             .execute(&mut **tx)
             .await
             .map_err(report)?;
-        return Ok(());
+        return Ok(Some(RetiredCalendarEvent {
+            event_id,
+            owner_id: identity.owner_id,
+            deleted: true,
+        }));
     };
 
     let projection: StoredSourceProjection =
@@ -2591,7 +2651,12 @@ async fn restore_best_source_or_delete(
         &projection.event.reminders,
         calendar.as_ref(),
     )
-    .await
+    .await?;
+    Ok(Some(RetiredCalendarEvent {
+        event_id,
+        owner_id: identity.owner_id,
+        deleted: false,
+    }))
 }
 
 async fn replace_attendees(

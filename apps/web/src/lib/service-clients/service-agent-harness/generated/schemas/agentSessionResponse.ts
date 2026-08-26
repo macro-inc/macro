@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
+import type { AgentSessionResponseExternal } from './agentSessionResponseExternal';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
+import type { SandboxSize } from './sandboxSize';
 import type { SessionStatusDto } from './sessionStatusDto';
 
 /**
@@ -23,6 +25,7 @@ export interface AgentSessionResponse {
   botId: string;
   /** When the session was created. */
   createdAt: string;
+  external?: AgentSessionResponseExternal;
   /** Harness slug. */
   harness: string;
   /** The session id. */
@@ -31,12 +34,16 @@ export interface AgentSessionResponse {
   model: string;
   /** When the session was last modified. */
   modifiedAt: string;
+  /** User-facing session name. */
+  name: string;
   /** The exact message that invoked the bot, if any. */
   originatingMessageId?: AgentSessionResponseOriginatingMessageId;
   /** The user who created and owns the session. */
   ownerId: string;
   /** The repository the session works with, when one was stated. */
   repoUrl?: AgentSessionResponseRepoUrl;
+  /** Compute tier of the managed sandbox. */
+  sandboxSize: SandboxSize;
   /** The session's status. */
   status: SessionStatusDto;
   /** The channel `thread_id` lives in, when the session was spawned from a

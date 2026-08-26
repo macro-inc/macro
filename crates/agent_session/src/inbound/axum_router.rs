@@ -2,8 +2,8 @@
 //!
 //! Every route authenticates its caller and then authorizes them with
 //! [`AgentSessionAccessLevelExtractor`], checked before the handler body
-//! runs: viewing a session or its log needs `View`, controlling or deleting
-//! one needs `Owner`. Permission comes from the session's own `entity_access`
+//! runs: viewing a session or its log needs `View`; renaming, controlling, or
+//! deleting one needs `Owner`. Permission comes from the session's own `entity_access`
 //! rows - the owner with owner access, the mention's channel as editor - never
 //! from any channel the session was once rendered in. Handlers only map
 //! transport DTOs to domain types and call the [`AgentSessionService`]; they
@@ -24,7 +24,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
 };
 use chrono::DateTime;
 use chrono::Utc;
@@ -32,8 +32,8 @@ use entity_access::domain::models::{OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrBot,
-    UserOrBotAuthorization,
+    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrBot, UserOrBotAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -42,11 +42,12 @@ use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, Message, SessionBot, SessionStatus, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, ExternalSession, Message, SandboxSize, SessionBot, SessionStatus,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent, ExternalSessionOpener,
-    OpenExternalAgentSession, SessionThread,
+    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent,
+    OpenExternalAgentSession, OpenManagedSession, SessionOpener, SessionThread,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -175,6 +176,10 @@ where
             "/{session_id}/log",
             get(get_agent_session_log_handler::<T, Access, Auth>),
         )
+        .route(
+            "/{session_id}/name",
+            put(rename_agent_session_handler::<T, Access, Auth>),
+        )
         .with_state(state)
 }
 
@@ -201,6 +206,29 @@ where
             "/{session_id}/control",
             post(control_agent_session_handler::<R, Access, Auth>),
         )
+        .route(
+            "/{session_id}/sandbox-size",
+            put(put_agent_session_sandbox_size_handler::<R, Access, Auth>),
+        )
+        .with_state(state)
+}
+
+/// Build the caller-default sandbox size router. Mount at `/agent-sandbox-size`.
+pub fn agent_sandbox_size_router<T, Access, Auth, S>(
+    state: AgentSessionRouterState<T, Access, Auth>,
+) -> Router<S>
+where
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/agent-sandbox-size",
+            get(get_agent_sandbox_size_handler::<T, Access, Auth>)
+                .put(put_agent_sandbox_size_handler::<T, Access, Auth>),
+        )
         .with_state(state)
 }
 
@@ -220,8 +248,13 @@ impl From<AgentSessionError> for AgentSessionApiError {
 impl IntoResponse for AgentSessionApiError {
     fn into_response(self) -> Response {
         match self {
+            Self::Domain(AgentSessionError::Forbidden) => {
+                (StatusCode::FORBIDDEN, "forbidden").into_response()
+            }
             Self::Domain(error) => {
-                tracing::error!(error = ?error, "agent session request failed");
+                if let AgentSessionError::InvalidName(message) = error {
+                    return (StatusCode::BAD_REQUEST, Json(message)).into_response();
+                }
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
             }
         }
@@ -265,6 +298,13 @@ impl From<SessionStatusDto> for SessionStatus {
     }
 }
 
+/// Request body for renaming an agent session.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RenameAgentSessionRequest {
+    /// New user-facing name. Leading and trailing whitespace is discarded.
+    pub name: String,
+}
+
 /// Request body for a control operation on a live session.
 ///
 /// A wrapper around the operation rather than the bare enum so that fields
@@ -289,6 +329,8 @@ pub struct ControlRequest {
 pub struct AgentSessionResponse {
     /// The session id.
     pub id: Uuid,
+    /// User-facing session name.
+    pub name: String,
     /// The user who created and owns the session.
     pub owner_id: String,
     /// The root message of the thread the session was created from, if any.
@@ -309,20 +351,51 @@ pub struct AgentSessionResponse {
     pub repo_url: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
+    /// Compute tier of the managed sandbox.
+    pub sandbox_size: SandboxSize,
     /// The ACP session id, if one exists.
     pub acp_session_id: Option<String>,
     /// The session's status.
     pub status: SessionStatusDto,
+    /// The external provider serving this session, when one does. Absent for
+    /// sandboxed sessions, so existing payloads are byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external: Option<ExternalSessionResponse>,
     /// When the session was created.
     pub created_at: DateTime<Utc>,
     /// When the session was last modified.
     pub modified_at: DateTime<Utc>,
 }
 
+/// The provider-side identity of an externally-served session.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalSessionResponse {
+    /// Which provider serves the session, e.g. `cursor`.
+    pub provider: String,
+    /// The provider's display name for the agent, when it reported one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The agent's page on the provider's site, for a client to link out to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+impl From<ExternalSession> for ExternalSessionResponse {
+    fn from(external: ExternalSession) -> Self {
+        Self {
+            provider: external.provider,
+            name: external.external_name,
+            url: external.external_url,
+        }
+    }
+}
+
 impl From<AgentSession> for AgentSessionResponse {
     fn from(session: AgentSession) -> Self {
         Self {
             id: session.id.as_uuid(),
+            name: session.name,
             owner_id: session.owner_id.to_string(),
             thread_id: session.thread_id,
             thread_channel_id: session.thread_channel_id,
@@ -332,7 +405,9 @@ impl From<AgentSession> for AgentSessionResponse {
             harness: session.harness,
             repo_url: session.repo_url,
             workspace: session.workspace,
+            sandbox_size: session.sandbox_size,
             acp_session_id: session.acp_session_id.map(|id| id.to_string()),
+            external: session.external.map(Into::into),
             status: session.status.into(),
             created_at: session.created_at,
             modified_at: session.modified_at,
@@ -373,6 +448,40 @@ pub async fn get_agent_session_handler<
 }
 
 #[utoipa::path(
+    put,
+    path = "/agent-sessions/{session_id}/name",
+    tag = "agent-sessions",
+    operation_id = "rename_agent_session",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    request_body = RenameAgentSessionRequest,
+    responses(
+        (status = 204),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Rename an agent session.
+#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
+pub async fn rename_agent_session_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    Path(session_id): Path<Uuid>,
+    Json(request): Json<RenameAgentSessionRequest>,
+) -> Result<StatusCode, AgentSessionApiError> {
+    state
+        .service
+        .rename_session(&access.entity_access_receipt, &request.name)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
     post,
     path = "/agent-sessions/{session_id}/control",
     tag = "agent-sessions",
@@ -393,7 +502,11 @@ pub async fn get_agent_session_handler<
 /// Perform a control operation on a live agent session.
 #[tracing::instrument(
     skip_all,
-    fields(actor = %caller.acting_entity(), session_id = %session_id),
+    fields(
+        actor = %caller.acting_entity(),
+        session_id = %session_id,
+        agent.action.name = req.action.as_ref(),
+    ),
     err(Debug)
 )]
 pub async fn control_agent_session_handler<
@@ -456,6 +569,109 @@ pub async fn delete_agent_session_handler<
         .await?;
 
     Ok(StatusCode::OK)
+}
+
+/// Request or response body for a named sandbox size.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SandboxSizeBody {
+    /// Named compute tier.
+    pub size: SandboxSize,
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-sessions/{session_id}/sandbox-size",
+    tag = "agent-sessions",
+    operation_id = "put_agent_session_sandbox_size",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    request_body = SandboxSizeBody,
+    responses(
+        (status = 200, body = SandboxSizeBody),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Resize this session's sandbox and remember the size as the owner's default.
+#[tracing::instrument(skip_all, fields(session_id = %session_id, size = %req.size), err(Debug))]
+pub async fn put_agent_session_sandbox_size_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    Path(session_id): Path<Uuid>,
+    Json(req): Json<SandboxSizeBody>,
+) -> Result<Json<SandboxSizeBody>, AgentSessionApiError> {
+    state
+        .recipient
+        .set_sandbox_size(AgentSessionId::new_from_uuid(session_id), req.size)
+        .await?;
+    Ok(Json(req))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sandbox-size",
+    tag = "agent-sessions",
+    operation_id = "get_agent_sandbox_size",
+    responses(
+        (status = 200, body = SandboxSizeBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Read the caller's default sandbox size for new `@coder` sessions.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn get_agent_sandbox_size_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+) -> Result<Json<SandboxSizeBody>, AgentSessionApiError> {
+    let size = state
+        .service
+        .user_sandbox_size(&caller.authorization.user.macro_user_id)
+        .await?;
+    Ok(Json(SandboxSizeBody { size }))
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-sandbox-size",
+    tag = "agent-sessions",
+    operation_id = "put_agent_sandbox_size",
+    request_body = SandboxSizeBody,
+    responses(
+        (status = 200, body = SandboxSizeBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Set the caller's default sandbox size for the next `@coder` mention.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), size = %req.size),
+    err(Debug)
+)]
+pub async fn put_agent_sandbox_size_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    Json(req): Json<SandboxSizeBody>,
+) -> Result<Json<SandboxSizeBody>, AgentSessionApiError> {
+    state
+        .service
+        .set_user_sandbox_size(&caller.authorization.user.macro_user_id, req.size)
+        .await?;
+    Ok(Json(req))
 }
 
 /// One entry of a session's protocol log.
@@ -648,7 +864,7 @@ pub fn agent_session_create_router<Opener, Bots, Auth, S>(
     state: CreateSessionState<Opener, Bots, Auth>,
 ) -> Router<S>
 where
-    Opener: ExternalSessionOpener,
+    Opener: SessionOpener,
     Bots: BotDirectory,
     Auth: MacroAuthorizationService,
     S: Clone + Send + Sync + 'static,
@@ -663,16 +879,32 @@ where
 
 /// Request body for `POST /agent-sessions`.
 ///
+/// Carries two shapes, told apart by `workspace`. Naming one asks for an
+/// external session: the runtime is the bot operator's, so the caller has to
+/// say which bot and which directory, and must own that bot. Omitting it asks
+/// for a managed session, whose sandbox this deployment provisions from its
+/// own configuration - which is why the fields describing someone else's
+/// runtime must be omitted along with it rather than quietly ignored. Mixing
+/// the two is refused rather than guessed at, so that no request can reach the
+/// managed path carrying a bot the caller was never entitled to name.
+///
 /// Clients serialize this, so both derives are used.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
     /// Bot the session runs for. Bot callers may omit it (their own identity
     /// is used) and must not name another bot; user callers must supply a
-    /// bot they own.
+    /// bot they own. External sessions only: a managed session runs as the
+    /// bot its deployment is configured for.
     pub bot_id: Option<Uuid>,
-    /// Absolute directory the bot's harness runs in on its runtime.
-    pub workspace: String,
+    /// Absolute directory the bot's harness runs in on its runtime. Present
+    /// for an external session, absent for a managed one, which runs in the
+    /// path baked into its image.
+    pub workspace: Option<String>,
+    /// First prompt to deliver once the session is running. Managed sessions
+    /// only - an external runtime sends its own first prompt through the
+    /// control endpoint. Omitted, the session opens idle.
+    pub prompt: Option<String>,
     /// Repository nominally checked out at `workspace`. Informational and
     /// optional: having it cloned there is the runtime operator's job.
     pub repo_url: Option<String>,
@@ -756,6 +988,8 @@ pub enum CreateSessionApiError {
     UnparseableOwner,
     /// The workspace is not an acceptable path.
     InvalidWorkspace(&'static str),
+    /// The request mixed the managed and external shapes.
+    MixedSessionShape,
     /// The thread already routes to a session; carries it for recovery.
     ThreadSessionExists {
         /// The existing session, when it could be resolved.
@@ -800,6 +1034,12 @@ impl IntoResponse for CreateSessionApiError {
                 "owner is not a user id".to_owned(),
             ),
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
+            Self::MixedSessionShape => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "a managed session takes only a prompt; naming a workspace, bot, repo, \
+                 owner or thread asks for an external one"
+                    .to_owned(),
+            ),
             Self::ThreadSessionExists { session_id } => {
                 let body = ThreadSessionExistsResponse {
                     message: THREAD_SESSION_EXISTS_MESSAGE.to_owned(),
@@ -910,7 +1150,7 @@ fn resolve_owner(
 /// first prompt through the control endpoint.
 #[tracing::instrument(skip_all, err(Debug))]
 pub async fn create_agent_session_handler<
-    Opener: ExternalSessionOpener,
+    Opener: SessionOpener,
     Bots: BotDirectory,
     Auth: MacroAuthorizationService,
 >(
@@ -918,6 +1158,40 @@ pub async fn create_agent_session_handler<
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Json(request): Json<CreateAgentSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
+    // No workspace means the managed shape. It shares this route but not its
+    // authorization: nothing about which bot runs the session is the caller's
+    // to say, so the bot-ownership checks below have nothing to check and are
+    // skipped. That is only sound while the request carries none of the
+    // external fields, which is what this refuses.
+    let Some(workspace) = request.workspace else {
+        if request.bot_id.is_some()
+            || request.repo_url.is_some()
+            || request.thread.is_some()
+            || request.owner.is_some()
+        {
+            return Err(CreateSessionApiError::MixedSessionShape);
+        }
+        let owner = resolve_owner(&caller.authorization, None)?;
+        let session = state
+            .opener
+            .open_managed_session(OpenManagedSession {
+                owner,
+                prompt: request.prompt,
+            })
+            .await?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(CreateAgentSessionResponse {
+                session: session.into(),
+            }),
+        ));
+    };
+
+    // An external runtime sends its own first prompt through the control
+    // endpoint, so accepting one here would silently drop it.
+    if request.prompt.is_some() {
+        return Err(CreateSessionApiError::MixedSessionShape);
+    }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
 
     let BotFacts {
@@ -944,7 +1218,7 @@ pub async fn create_agent_session_handler<
         return Err(CreateSessionApiError::NotYourBot);
     }
 
-    validate_workspace(&request.workspace)?;
+    validate_workspace(&workspace)?;
     let owner = resolve_owner(&caller.authorization, request.owner)?;
 
     let thread = request.thread.map(|thread| SessionThread {
@@ -957,7 +1231,7 @@ pub async fn create_agent_session_handler<
         .opener
         .open_external_session(OpenExternalAgentSession {
             bot_id,
-            workspace: request.workspace,
+            workspace,
             repo_url: request.repo_url,
             owner,
             thread: thread.clone(),

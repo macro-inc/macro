@@ -404,7 +404,8 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
             upsert: google,
         })
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
 
     let downgraded = repo
         .apply_google_grant(
@@ -883,7 +884,8 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
         upsert: google.clone(),
     })
     .await
-    .unwrap();
+    .unwrap()
+    .event_id;
 
     sqlx::query!(
         r#"
@@ -2240,7 +2242,8 @@ async fn user_mutation_write_persists_a_google_echo_without_a_lease(pool: PgPool
     let event_id = repo
         .upsert_event(CalendarEventWrite::UserMutation(upsert))
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
 
     let row = sqlx::query!(
         r#"
@@ -2280,7 +2283,8 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
             1,
         )))
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
     sqlx::query!(
         r#"
         INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
@@ -2455,7 +2459,8 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
     let event_id = repo
         .upsert_event(CalendarEventWrite::UserMutation(primary_copy))
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
     let mut team_copy = timed_upsert(
         owner_id,
         link_id,
@@ -2475,7 +2480,8 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
     });
     repo.upsert_event(CalendarEventWrite::UserMutation(team_copy))
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
 
     repo.remove_google_source(account_id, primary_id, "provider-shared-remove@example.com")
         .await
@@ -2971,7 +2977,8 @@ async fn conference_provider_round_trips_through_persistence(pool: PgPool) {
     upsert.event.conference_provider = Some(ConferenceProvider::GoogleMeet);
     repo.upsert_event(CalendarEventWrite::UserMutation(upsert))
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
 
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
     let ends_at = starts_at + Duration::days(2);
@@ -3089,7 +3096,8 @@ async fn connected_calendar(
             ),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .event_id;
     sqlx::query!(
         r#"
         INSERT INTO calendar_event_reminder_deliveries (

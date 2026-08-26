@@ -1,4 +1,8 @@
 import {
+  CURSOR_BOT_NAME,
+  CURSOR_BOT_PRINCIPAL_ID,
+} from '@core/constant/cursorAgent';
+import {
   MACRO_AGENT_NAME,
   MACRO_AGENT_PRINCIPAL_ID,
 } from '@core/constant/macroAgent';
@@ -44,5 +48,18 @@ export function macroCoderMentionUser(): IUser {
     id: MACRO_CODER_PRINCIPAL_ID,
     name: MACRO_CODER_NAME,
     email: MACRO_CODER_NAME,
+  };
+}
+
+/**
+ * The Cursor bot as a synthetic mention user, exactly like
+ * [`macroCoderMentionUser`]. Mentioning it opens an agent session served by
+ * a Cursor cloud agent.
+ */
+export function cursorMentionUser(): IUser {
+  return {
+    id: CURSOR_BOT_PRINCIPAL_ID,
+    name: CURSOR_BOT_NAME,
+    email: CURSOR_BOT_NAME,
   };
 }

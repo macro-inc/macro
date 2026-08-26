@@ -1,13 +1,14 @@
 use std::time::Duration;
 
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 
 use super::docker::{ContainerRef, Docker, RunSpec};
 use super::errors::LocalError;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
-use crate::outbound::daytona::GithubToken;
+use crate::domain::sandbox::{SandboxResizeEffect, create_only_resize_effect};
+use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
 use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
 
@@ -27,6 +28,8 @@ pub struct LocalSettings {
     pub network: String,
     /// Token with read access to the repository cloned into sandboxes.
     pub github_token: GithubToken,
+    /// Key sandboxes run Anthropic models with.
+    pub anthropic_api_key: AnthropicApiKey,
 }
 
 /// Hands out containers on the local Docker daemon.
@@ -45,6 +48,7 @@ pub struct LocalContainerManager {
     image: String,
     network: String,
     github_token: GithubToken,
+    anthropic_api_key: AnthropicApiKey,
 }
 
 impl LocalContainerManager {
@@ -56,12 +60,14 @@ impl LocalContainerManager {
             image,
             network,
             github_token,
+            anthropic_api_key,
         } = settings;
         Self {
             docker: Docker::new(docker_binary),
             image,
             network,
             github_token,
+            anthropic_api_key,
         }
     }
 
@@ -194,7 +200,11 @@ impl ContainerManager for LocalContainerManager {
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         let SpawnContainer {
             session_id,
+            // Routing already consumed the kind; every spawn that reaches
+            // the local provider is a sandbox spawn.
+            kind: _,
             repo_url,
+            size: _,
         } = command;
 
         if !self
@@ -224,7 +234,7 @@ impl ContainerManager for LocalContainerManager {
             image: self.image.clone(),
             name: container_name(session_id),
             labels: vec![(SESSION_LABEL.to_owned(), session_id.to_string())],
-            env: sandbox_env(repo_url, &self.github_token),
+            env: sandbox_env(repo_url, &self.github_token, &self.anthropic_api_key),
             network: self.network.clone(),
         };
         let container = self.docker.run(&spec).await.map_err(unavailable)?;
@@ -237,6 +247,16 @@ impl ContainerManager for LocalContainerManager {
                 Err(error)
             }
         }
+    }
+
+    fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
+        create_only_resize_effect(from, to)
+    }
+
+    async fn resize(&self, _session: AgentSessionId, _size: SandboxSize) -> Result<()> {
+        Err(HarnessError::Container(
+            "Local Docker containers cannot be resized in place".to_owned(),
+        ))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -278,10 +298,18 @@ fn sidecar_address(container: &ContainerRef) -> String {
     format!("{}:{}", container.name, provision::SIDECAR_PORT)
 }
 
-fn sandbox_env(repo_url: String, github_token: &GithubToken) -> Vec<(String, String)> {
+fn sandbox_env(
+    repo_url: String,
+    github_token: &GithubToken,
+    anthropic_api_key: &AnthropicApiKey,
+) -> Vec<(String, String)> {
     vec![
         ("REPO_URL".to_owned(), repo_url),
         ("GITHUB_TOKEN".to_owned(), github_token.expose().to_owned()),
+        (
+            "ANTHROPIC_API_KEY".to_owned(),
+            anthropic_api_key.expose().to_owned(),
+        ),
     ]
 }
 

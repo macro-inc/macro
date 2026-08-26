@@ -1,0 +1,34 @@
+[package]
+edition = "2024"
+name = "agent_inmem"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent = { path = "../agent" }
+agent-client-protocol = { workspace = true }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_session = { path = "../agent_session" }
+ai_tools = { path = "../ai_tools" }
+ai_toolset = { path = "../ai_toolset" }
+ai_usage = { path = "../ai_usage" }
+dashmap = { workspace = true }
+futures = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+memory = { path = "../memory" }
+prompt = { path = "../prompt" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_fold = { path = "../agent_fold" }
+agent_session = { path = "../agent_session", features = ["test-utils"] }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
+futures = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

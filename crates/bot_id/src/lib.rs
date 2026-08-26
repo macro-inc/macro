@@ -51,6 +51,9 @@ fn bot_id_str(input: &str) -> IResult<&str, BotIdStorage<ArcCowStr<'_>>> {
 }
 
 /// Stable [`BotId`] for the first-party "Macro AI" system bot.
+///
+/// Mentioning it opens an agent session served by the in-process (in-memory)
+/// agent harness, which answers with the Macro product toolset.
 pub const MACRO_AI_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a1a1));
 
@@ -69,9 +72,9 @@ pub const MACRO_SYSTEM_NAME: &str = "Macro System";
 
 /// Stable [`BotId`] for the "Macro Coder" system bot, our coding-agent harness.
 ///
-/// Distinct from [`MACRO_AI_BOT_ID`] on purpose: mentioning Macro AI answers in
-/// chat, while mentioning this one opens a sandboxed agent session, and one id
-/// cannot mean both.
+/// Distinct from [`MACRO_AI_BOT_ID`] on purpose: the Macro bot's sessions run
+/// in-process on the in-memory harness, while this one's run in a provisioned
+/// sandbox, and one id cannot mean both.
 pub const MACRO_CODER_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a9e7));
 
@@ -80,6 +83,20 @@ pub const MACRO_CODER_HANDLE: &str = "coder";
 
 /// Display name for the "Macro Coder" system bot.
 pub const MACRO_CODER_NAME: &str = "Macro Coder";
+
+/// Stable [`BotId`] for the "Cursor" system bot.
+///
+/// Mentioning it opens an agent session like [`MACRO_CODER_BOT_ID`] does, but
+/// the session is served by a Cursor cloud agent rather than a Macro-managed
+/// sandbox.
+pub const CURSOR_BOT_ID: BotId =
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_c5c5));
+
+/// Stable handle for the "Cursor" system bot (used for `@` mentions).
+pub const CURSOR_HANDLE: &str = "cursor";
+
+/// Display name for the "Cursor" system bot.
+pub const CURSOR_NAME: &str = "Cursor";
 
 /// A bot id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -67,6 +67,10 @@ use channels::inbound::axum_router::{
     DeleteEntityMentionResponse, GetAttachmentReferencesResponse, GetMessageWithContextResponse,
     PostActivityRequest,
 };
+use collab_surface::domain::models::SurfaceState;
+use collab_surface::inbound::axum_router::{
+    CollabSurfaceResponse, CollabSurfaceTokenResponse, EnsureCollabSurfaceRequest,
+};
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
@@ -258,6 +262,7 @@ use utoipa::OpenApi;
         // calls
         call::inbound::axum_router::get_or_create_call_handler,
         call::inbound::axum_router::check_active_call_handler,
+        call::inbound::axum_router::get_active_calls_handler,
         call::inbound::axum_router::leave_or_end_call_handler,
         call::inbound::axum_router::get_call_record_handler,
         call::inbound::axum_router::edit_call_record_handler,
@@ -311,6 +316,11 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::get_reminder_handler,
         reminders::inbound::axum_router::update_reminder_handler,
         reminders::inbound::axum_router::delete_reminder_handler,
+        // collab surfaces
+        collab_surface::inbound::axum_router::ensure_surface_handler,
+        collab_surface::inbound::axum_router::get_surface_handler,
+        collab_surface::inbound::axum_router::mint_token_handler,
+        collab_surface::inbound::axum_router::delete_surface_handler,
 
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
@@ -454,6 +464,10 @@ use utoipa::OpenApi;
             ReminderSchedule,
             CreateReminderRequest,
             UpdateReminderRequest,
+            CollabSurfaceResponse,
+            CollabSurfaceTokenResponse,
+            EnsureCollabSurfaceRequest,
+            SurfaceState,
             SoupApiSort,
             SoupPage,
             SoupEnrichedEmailThreadPreview<SoupPropertiesField>,
@@ -553,6 +567,8 @@ use utoipa::OpenApi;
             // Calls
             call::domain::models::CallTokenResponse,
             call::domain::models::CallActiveResponse,
+            call::domain::models::ActiveCallSummary,
+            call::domain::models::ActiveCallsResponse,
             call::domain::models::LeaveCallResponse,
             call::domain::models::TranscriptSegmentRequest,
             call::domain::models::CallRecord,

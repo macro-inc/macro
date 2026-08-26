@@ -452,6 +452,40 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn maybe_get_dm_finds_channel_regardless_of_argument_order(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let user_a = macro_user_id(USER_A);
+    let user_b = macro_user_id(USER_B);
+
+    let created = repo
+        .create_channel(
+            user_a.clone(),
+            None,
+            CreateChannelRequest {
+                name: None,
+                channel_type: ChannelType::DirectMessage,
+                team_id: None,
+                auto_join_team: false,
+                participants: HashSet::from([user_b.clone()]),
+            },
+        )
+        .await
+        .unwrap();
+
+    let forward = repo
+        .maybe_get_dm(user_a.clone(), user_b.clone())
+        .await
+        .unwrap();
+    let reverse = repo.maybe_get_dm(user_b, user_a).await.unwrap();
+
+    assert_eq!(forward, Some(created.id));
+    assert_eq!(reverse, Some(created.id));
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn patch_channel_rename_advances_updated_at(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let before = sqlx::query!(

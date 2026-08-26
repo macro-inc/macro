@@ -5,6 +5,7 @@ use super::models::{
     BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
     CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
 };
+use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
@@ -24,13 +25,13 @@ pub trait BotRepo: Send + Sync + 'static {
         req: CreateBotRequest,
     ) -> impl Future<Output = Result<Bot, Self::Err>> + Send;
 
-    /// Create an owned bot, add it to a channel, and create a token atomically.
+    /// Create an owned bot, add it to a channel, and persist a hashed token atomically.
     fn create_channel_scoped_bot(
         &self,
         owner: BotOwner,
         created_by: MacroUserIdStr<'static>,
         channel_id: Uuid,
-        token: String,
+        token: HashedBotToken,
         req: CreateChannelScopedBotRequest,
     ) -> impl Future<Output = Result<(Bot, BotToken), Self::Err>> + Send;
 
@@ -101,11 +102,11 @@ pub trait BotRepo: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Bot>, Self::Err>> + Send;
 
-    /// Create a token.
+    /// Persist a hashed token. The raw secret must not be passed here.
     fn create_token(
         &self,
         bot_id: BotId,
-        token: String,
+        token: HashedBotToken,
         req: CreateBotTokenRequest,
     ) -> impl Future<Output = Result<BotToken, Self::Err>> + Send;
 
@@ -122,13 +123,13 @@ pub trait BotRepo: Send + Sync + 'static {
         token_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Lookup a token candidate by exact raw token value.
+    /// Lookup a token candidate by hashing the presented raw token.
     fn token_candidate(
         &self,
         token: &str,
     ) -> impl Future<Output = Result<Option<BotTokenCandidate>, Self::Err>> + Send;
 
-    /// Lookup a channel-scoped token candidate by exact raw token value.
+    /// Lookup a channel-scoped token candidate by hashing the presented raw token.
     fn channel_token_candidate(
         &self,
         channel_id: Uuid,

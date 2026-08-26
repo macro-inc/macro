@@ -1,7 +1,7 @@
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
 import { isChannelEntity } from '../../types/entity';
-import { ChannelJoinButton } from './channel';
+import { ChannelActiveCallBadge, ChannelJoinButton } from './channel';
 import { type LayoutProps, RowIndicator } from './shared';
 
 /** Condensed row used for maximum density. */
@@ -32,6 +32,13 @@ export function NarrowCondensedLayout(props: LayoutProps) {
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
         <Entity.Title entity={props.entity} />
+        <Show when={isChannelEntity(props.entity) && props.entity}>
+          {(entity) => (
+            <span class="ml-auto shrink-0 flex items-center">
+              <ChannelActiveCallBadge channelId={entity().id} />
+            </span>
+          )}
+        </Show>
         <Show
           when={
             isChannelEntity(props.entity) &&

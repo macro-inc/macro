@@ -229,7 +229,17 @@ impl ConnectorDirectory for PipedreamClient {
         cursor: Option<&str>,
         limit: u32,
     ) -> anyhow::Result<CatalogPage> {
-        let mut query: Vec<(&str, String)> = vec![("limit", limit.to_string())];
+        let mut query: Vec<(&str, String)> = vec![
+            ("limit", limit.to_string()),
+            // `featured_weight` is Pipedream's popularity ordering (the sort
+            // behind pipedream.com/apps); without it the directory comes back
+            // in an order nobody would browse.
+            ("sort_key", "featured_weight".to_owned()),
+            ("sort_direction", "desc".to_owned()),
+            // Apps without actions expose no MCP tools, so there is nothing
+            // to connect them for.
+            ("has_actions", "true".to_owned()),
+        ];
         if let Some(search) = search {
             query.push(("q", search.to_owned()));
         }
@@ -238,7 +248,7 @@ impl ConnectorDirectory for PipedreamClient {
         }
 
         let response = self
-            .authed(self.http.get(self.api("/apps")))
+            .authed(self.http.get(self.api("/connect/apps")))
             .await?
             .query(&query)
             .send()
@@ -267,9 +277,8 @@ impl ConnectorDirectory for PipedreamClient {
             .map(|app| CatalogEntry {
                 app_slug: app.name_slug,
                 display_name: app.name,
-                description: Some(app.description).filter(|d| !d.is_empty()),
+                description: app.description.filter(|d| !d.is_empty()),
                 icon_url: Some(app.img_src).filter(|u| u.starts_with("https://")),
-                priority: false,
             })
             .collect();
 
@@ -362,8 +371,9 @@ struct PageInfo {
 struct AppResponse {
     name_slug: String,
     name: String,
+    // Nullable in the API, not just omissible.
     #[serde(default)]
-    description: String,
+    description: Option<String>,
     #[serde(default)]
     auth_type: Option<String>,
     #[serde(default)]

@@ -1,4 +1,6 @@
 use super::*;
+use crate::domain::model::DEFAULT_AGENT_SESSION_NAME;
+use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
 use bots::domain::models::{BotOwner, CreateBotRequest};
@@ -90,6 +92,7 @@ fn new_session(
         harness: "claude-code".to_string(),
         repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
+        sandbox_size: SandboxSize::Default,
     }
 }
 
@@ -172,17 +175,21 @@ async fn create_and_get_round_trips(pool: PgPool) {
 
     let created = create_session(&repo, params).await;
 
-    let session = repo.get(id).await.expect("get agent session");
+    let session = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get agent session");
     assert_eq!(created.id, id);
     assert_eq!(created.created_at, session.created_at);
     assert_eq!(created.modified_at, session.modified_at);
     assert_eq!(session.id, id);
+    assert_eq!(session.name, DEFAULT_AGENT_SESSION_NAME);
     assert_eq!(session.bot_id, bot_id);
     assert_eq!(
         session.owner_id.to_string(),
         "macro|agent-session-owner@example.com"
     );
     assert_eq!(session.thread_id, None);
+    assert_eq!(session.sandbox_size, SandboxSize::Default);
     assert!(matches!(session.status, SessionStatus::NoMessages));
 }
 
@@ -199,7 +206,9 @@ async fn set_acp_session_id_updates_only_the_resume_identity(pool: PgPool) {
         .await
         .expect("persist ACP session id");
 
-    let updated = repo.get(id).await.expect("get updated agent session");
+    let updated = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get updated agent session");
     assert_eq!(
         updated.acp_session_id,
         Some(SessionId::from("acp-session-1"))
@@ -219,14 +228,149 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
         .id;
 
     repo.set_model(id, "opus").await.expect("persist model");
-    assert_eq!(repo.get(id).await.expect("get session").model, "opus");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .model,
+        "opus"
+    );
 
     // Idempotent: restating the same model succeeds and changes nothing.
-    let modified_at = repo.get(id).await.expect("get session").modified_at;
+    let modified_at = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get session")
+        .modified_at;
     repo.set_model(id, "opus").await.expect("restate model");
     assert_eq!(
-        repo.get(id).await.expect("get session").modified_at,
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .modified_at,
         modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_name_updates_only_the_name(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    repo.set_name(id, "Fix Flaky Tests")
+        .await
+        .expect("persist name");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .name,
+        "Fix Flaky Tests"
+    );
+
+    let modified_at = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get session")
+        .modified_at;
+    repo.set_name(id, "Fix Flaky Tests")
+        .await
+        .expect("restate name");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .modified_at,
+        modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_name_errors_for_missing_session(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool);
+
+    assert!(
+        repo.set_name(AgentSessionId::new(), "Missing Session")
+            .await
+            .is_err()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn generated_name_only_replaces_the_default(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    assert!(
+        repo.set_name_if_default(id, "Generated Name")
+            .await
+            .expect("set generated name")
+    );
+    repo.set_name(id, "Manual Name")
+        .await
+        .expect("set manual name");
+    assert!(
+        !repo
+            .set_name_if_default(id, "Late Generated Name")
+            .await
+            .expect("skip generated name")
+    );
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .name,
+        "Manual Name"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let owner = user_id(OWNER);
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    assert_eq!(
+        repo.user_sandbox_size(&owner)
+            .await
+            .expect("missing default"),
+        SandboxSize::Default
+    );
+
+    repo.set_sandbox_size(id, SandboxSize::Large)
+        .await
+        .expect("persist session size");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .sandbox_size,
+        SandboxSize::Large
+    );
+
+    repo.set_user_sandbox_size(&owner, SandboxSize::Small)
+        .await
+        .expect("persist user default");
+    assert_eq!(
+        repo.user_sandbox_size(&owner).await.expect("user default"),
+        SandboxSize::Small
+    );
+
+    repo.set_user_sandbox_size(&owner, SandboxSize::Large)
+        .await
+        .expect("upsert user default");
+    assert_eq!(
+        repo.user_sandbox_size(&owner)
+            .await
+            .expect("upserted default"),
+        SandboxSize::Large
     );
 }
 
@@ -235,7 +379,7 @@ async fn get_missing_session_errors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool);
     let missing = AgentSessionId::new();
 
-    assert!(repo.get(missing).await.is_err());
+    assert!(AgentSessionRepo::get(&repo, missing).await.is_err());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -245,9 +389,11 @@ async fn delete_removes_session(pool: PgPool) {
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let id = session.id;
 
-    repo.delete(id).await.expect("delete agent session");
+    AgentSessionRepo::delete(&repo, id)
+        .await
+        .expect("delete agent session");
 
-    assert!(repo.get(id).await.is_err());
+    assert!(AgentSessionRepo::get(&repo, id).await.is_err());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -273,8 +419,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     .await
     .expect("create first log entry");
 
-    let session = repo
-        .get(session_id)
+    let session = AgentSessionRepo::get(&repo, session_id)
         .await
         .expect("get session after system event");
     assert!(matches!(
@@ -358,6 +503,60 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
         .await
         .expect("look up an unrelated thread");
     assert!(matches!(wrong_thread, ChannelSession::None));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_a = create_test_bot(&pool).await;
+    let bot_b = create_test_bot(&pool).await;
+    let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
+    let older = create_session(
+        &repo,
+        new_session(bot_a, Some(thread), Some(originating_message)),
+    )
+    .await;
+    let newer = create_session(
+        &repo,
+        new_session(bot_b, Some(thread), Some(originating_message)),
+    )
+    .await;
+    create_session(&repo, new_session(bot_a, None, None)).await;
+    ExternalSessionRepo::upsert(&repo, newer.id, cursor_external("bc-thread"))
+        .await
+        .expect("attach an external identity");
+
+    let found = repo
+        .find_all_for_thread(thread)
+        .await
+        .expect("list sessions on the thread");
+    assert_eq!(found.len(), 2);
+    assert!(found.iter().any(|session| session.id == newer.id));
+    assert!(found.iter().any(|session| session.id == older.id));
+    assert!(
+        found
+            .windows(2)
+            .all(|pair| pair[0].created_at >= pair[1].created_at)
+    );
+    let with_external = found
+        .iter()
+        .find(|session| session.id == newer.id)
+        .expect("the newer session is on the thread");
+    assert_eq!(with_external.external, Some(cursor_external("bc-thread")));
+    assert!(
+        found
+            .iter()
+            .find(|session| session.id == older.id)
+            .expect("the older session is on the thread")
+            .external
+            .is_none()
+    );
+
+    let empty = repo
+        .find_all_for_thread(macro_uuid::generate_uuid_v7())
+        .await
+        .expect("list an unrelated thread");
+    assert!(empty.is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -537,4 +736,108 @@ async fn delete_removes_the_session_grants(pool: PgPool) {
     .expect("count the session's grants");
 
     assert_eq!(remaining, 0);
+}
+
+fn cursor_external(agent: &str) -> ExternalSession {
+    ExternalSession {
+        provider: "cursor".to_string(),
+        external_id: agent.to_string(),
+        external_name: Some("Add README".to_string()),
+        external_url: Some(format!("https://cursor.com/agents/{agent}")),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn external_session_round_trips_and_upsert_replaces(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    insert_user(&pool, OWNER).await;
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get"),
+        None
+    );
+
+    ExternalSessionRepo::upsert(&repo, session.id, cursor_external("bc-1"))
+        .await
+        .expect("first upsert");
+    // Re-learning the identity must replace, not fail: the manager writes on
+    // every agent creation and a retried turn writes the same row again.
+    let renamed = ExternalSession {
+        external_name: Some("Add README and tests".to_string()),
+        ..cursor_external("bc-1")
+    };
+    ExternalSessionRepo::upsert(&repo, session.id, renamed.clone())
+        .await
+        .expect("second upsert");
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get"),
+        Some(renamed.clone())
+    );
+    // The identity rides along on the session read itself, which is what the
+    // HTTP response is built from.
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get session")
+            .external,
+        Some(renamed)
+    );
+
+    ExternalSessionRepo::delete(&repo, session.id)
+        .await
+        .expect("delete");
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get"),
+        None
+    );
+    // Deleting a session that has no external row is already the asked-for
+    // state.
+    ExternalSessionRepo::delete(&repo, session.id)
+        .await
+        .expect("idempotent delete");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn two_sessions_cannot_claim_the_same_external_agent(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    insert_user(&pool, OWNER).await;
+    let bot_id = create_test_bot(&pool).await;
+    let (_channel, thread, message) = insert_originating_thread_fixture(&pool).await;
+    let first = create_session(&repo, new_session(bot_id, None, None)).await;
+    let second = create_session(&repo, new_session(bot_id, Some(thread), Some(message))).await;
+
+    ExternalSessionRepo::upsert(&repo, first.id, cursor_external("bc-1"))
+        .await
+        .expect("first claim");
+    let conflict = ExternalSessionRepo::upsert(&repo, second.id, cursor_external("bc-1")).await;
+    assert!(conflict.is_err(), "second claim of bc-1 must be refused");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_a_session_cascades_its_external_row(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    insert_user(&pool, OWNER).await;
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    ExternalSessionRepo::upsert(&repo, session.id, cursor_external("bc-1"))
+        .await
+        .expect("upsert");
+
+    AgentSessionRepo::delete(&repo, session.id)
+        .await
+        .expect("delete session");
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get"),
+        None
+    );
 }

@@ -161,7 +161,8 @@ TypeScript · `[ui]` UI / UX conventions
 
 - **FE-01** `[data]` Never call a service client outside the `queries` package — UI code
   calling an endpoint directly is usually re-fetching data an existing query already
-  caches. (#3750, #3961 · also: AGENTS.md)
+  caches. (#3750, #3961 · enforced: ast-grep `ts-no-service-client-outside-queries` +
+  `tsx-no-service-client-outside-queries`, warning · also: AGENTS.md)
 - **FE-02** `[data]` Every query module has a `keys.ts` structured like the existing
   ones. (#3710)
 - **FE-03** `[data]` Conditional fetching uses a debounced signal passed to TanStack
@@ -236,3 +237,8 @@ TypeScript · `[ui]` UI / UX conventions
   If none exists below the app root, or the nearest one is far outside the component's
   own UI scope (e.g. the route-level boundary in `apps/web/src/routes/Root.tsx`, whose
   fallback blanks unrelated UI), flag it and ask which boundary is intended.
+- **FE-30** `[ui]` Never hoist Tailwind class strings into named constants
+  (`const DAY_CELL_CLASS = '...'`) — shared markup+styling is a component; a class
+  string can't carry structure, props, or behavior. Extract a component, or inline the
+  literal at its single use; styling variants are component props, not exported
+  strings. (enforced: ast-grep `tsx-no-class-string-consts`, warning)

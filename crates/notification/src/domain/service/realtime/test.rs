@@ -100,20 +100,20 @@ async fn distributes_notifications_to_owner_subscriptions() {
         2 + MAX_RECEIVE_ATTEMPTS,
         "a successful notification resets the receive retry strategy"
     );
-    let NotificationSubscriptionUpdate::Updated(one_first) =
+    let NotificationSubscriptionUpdate::New(one_first) =
         one_first.recv().await.expect("first subscriber receives")
     else {
-        panic!("expected notification update");
+        panic!("expected new notification");
     };
-    let NotificationSubscriptionUpdate::Updated(one_second) =
+    let NotificationSubscriptionUpdate::New(one_second) =
         one_second.recv().await.expect("second subscriber receives")
     else {
-        panic!("expected notification update");
+        panic!("expected new notification");
     };
-    let NotificationSubscriptionUpdate::Updated(two) =
+    let NotificationSubscriptionUpdate::New(two) =
         two_receiver.recv().await.expect("other user receives")
     else {
-        panic!("expected notification update");
+        panic!("expected new notification");
     };
     assert_eq!(one_first.notification_metadata.kind, "channel_mention");
     assert_eq!(two.notification_metadata.kind, "channel_mention");
@@ -227,10 +227,10 @@ async fn ignores_notifications_without_subscribers() {
     .expect("consumer task joins")
     .expect_err("fake consumer eventually stops");
 
-    let NotificationSubscriptionUpdate::Updated(notification) =
+    let NotificationSubscriptionUpdate::New(notification) =
         receiver.recv().await.expect("subscriber receives")
     else {
-        panic!("expected notification update");
+        panic!("expected new notification");
     };
     assert_eq!(notification.notification_metadata.kind, "test");
 }

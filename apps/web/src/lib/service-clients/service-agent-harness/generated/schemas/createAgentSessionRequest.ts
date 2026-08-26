@@ -6,18 +6,30 @@
  */
 import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequestBotId';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
+import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
 import type { CreateAgentSessionRequestRepoUrl } from './createAgentSessionRequestRepoUrl';
 import type { CreateAgentSessionRequestThread } from './createAgentSessionRequestThread';
+import type { CreateAgentSessionRequestWorkspace } from './createAgentSessionRequestWorkspace';
 
 /**
  * Request body for `POST /agent-sessions`.
+
+Carries two shapes, told apart by `workspace`. Naming one asks for an
+external session: the runtime is the bot operator's, so the caller has to
+say which bot and which directory, and must own that bot. Omitting it asks
+for a managed session, whose sandbox this deployment provisions from its
+own configuration - which is why the fields describing someone else's
+runtime must be omitted along with it rather than quietly ignored. Mixing
+the two is refused rather than guessed at, so that no request can reach the
+managed path carrying a bot the caller was never entitled to name.
 
 Clients serialize this, so both derives are used.
  */
 export interface CreateAgentSessionRequest {
   /** Bot the session runs for. Bot callers may omit it (their own identity
 is used) and must not name another bot; user callers must supply a
-bot they own. */
+bot they own. External sessions only: a managed session runs as the
+bot its deployment is configured for. */
   botId?: CreateAgentSessionRequestBotId;
   /** The user who owns the session. Ignored for user callers, who always
 own their own sessions; required for bot callers without verified
@@ -27,10 +39,16 @@ For bot callers this is a claim, not a verified fact: it is scoped to
 the bot's own sessions, but the named user owns the session on the
 bot's say-so. */
   owner?: CreateAgentSessionRequestOwner;
+  /** First prompt to deliver once the session is running. Managed sessions
+only - an external runtime sends its own first prompt through the
+control endpoint. Omitted, the session opens idle. */
+  prompt?: CreateAgentSessionRequestPrompt;
   /** Repository nominally checked out at `workspace`. Informational and
 optional: having it cloned there is the runtime operator's job. */
   repoUrl?: CreateAgentSessionRequestRepoUrl;
   thread?: CreateAgentSessionRequestThread;
-  /** Absolute directory the bot's harness runs in on its runtime. */
-  workspace: string;
+  /** Absolute directory the bot's harness runs in on its runtime. Present
+for an external session, absent for a managed one, which runs in the
+path baked into its image. */
+  workspace?: CreateAgentSessionRequestWorkspace;
 }

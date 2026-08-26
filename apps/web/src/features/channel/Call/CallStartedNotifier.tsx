@@ -261,6 +261,9 @@ export function CallStartedNotifier() {
       if (resolution.answeredBy !== userId()) return;
       stopCallRinger(resolution.callId);
       closeCallNotification(resolution.callId);
+      // The creator's other devices never receive call_started; a refetch
+      // picks the now-answered call up for their active-call badges.
+      void invalidateActiveCallQueries();
       return;
     }
 

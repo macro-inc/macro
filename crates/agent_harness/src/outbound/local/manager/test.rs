@@ -1,5 +1,5 @@
 use super::*;
-use crate::outbound::daytona::GithubToken;
+use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
 
 /// One container per session, so a resume finds exactly one and `docker ps`
 /// says which session it belongs to.
@@ -22,13 +22,16 @@ fn a_sidecar_is_dialed_by_container_name() {
     );
 }
 
-/// Same clone credentials Daytona injects, so the readiness recipe is
-/// exercised against the same environment a deployed sandbox sees.
+/// Same credentials Daytona injects, so the readiness recipe is exercised
+/// against the same environment a deployed sandbox sees. The Anthropic key
+/// is what activates the one model provider `container/opencode.json`
+/// enables.
 #[test]
-fn sandbox_env_carries_the_repo_and_github_token() {
+fn sandbox_env_carries_the_repo_and_credentials() {
     let env = sandbox_env(
         "https://github.com/macro-inc/macro".to_owned(),
         &GithubToken::new("test-token".to_owned()),
+        &AnthropicApiKey::new("test-anthropic-key".to_owned()),
     );
 
     assert!(env.contains(&(
@@ -36,4 +39,8 @@ fn sandbox_env_carries_the_repo_and_github_token() {
         "https://github.com/macro-inc/macro".to_owned()
     )));
     assert!(env.contains(&("GITHUB_TOKEN".to_owned(), "test-token".to_owned())));
+    assert!(env.contains(&(
+        "ANTHROPIC_API_KEY".to_owned(),
+        "test-anthropic-key".to_owned()
+    )));
 }

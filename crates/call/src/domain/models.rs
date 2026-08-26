@@ -156,6 +156,33 @@ pub struct CallActiveResponse {
     pub created_at: DateTime<Utc>,
 }
 
+/// A currently active call, as returned by the batch active-calls listing.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveCallSummary {
+    /// The call identifier.
+    pub call_id: Uuid,
+    /// The channel this call belongs to.
+    pub channel_id: Uuid,
+    /// User who created the call.
+    pub created_by: String,
+    /// When the call was created.
+    pub created_at: DateTime<Utc>,
+    /// Number of active participants. Always >= 1 — calls with no active
+    /// participants (e.g. orphaned by a dropped RTC webhook) are excluded.
+    pub participant_count: i64,
+}
+
+/// Response listing all active calls in channels the caller is a member of.
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveCallsResponse {
+    /// The active calls, newest first.
+    pub calls: Vec<ActiveCallSummary>,
+}
+
 /// Configuration for S3 egress output.
 #[derive(Clone)]
 pub struct EgressS3Config {

@@ -13,7 +13,11 @@ export const LOCAL_ONLY = !!import.meta.hot;
 
 type FeatureFlagValue = 'true' | 'false' | undefined;
 
-function getFeatureFlagOverride(flagName: string): boolean | undefined {
+/**
+ * Reads a `VITE_<flagName>` env override. Returns `undefined` when unset, so
+ * callers can fall through to PostHog rather than forcing the flag off.
+ */
+export function getFeatureFlagOverride(flagName: string): boolean | undefined {
   const envKey = `VITE_${flagName}` as const;
   const value = import.meta.env[envKey] as FeatureFlagValue;
 
@@ -494,7 +498,7 @@ const parseBooleanOverride = (value: unknown): boolean | undefined =>
 /** Controls the cache-warming GraphQL soup backfill. */
 export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
   'ENABLE_GRAPHQL_BACKFILL',
-  false
+  true
 );
 
 /** Independent emergency stop. Any true env/PostHog source wins. */
@@ -678,6 +682,22 @@ export function ENABLE_CHAT_V3_AGENTS(): boolean {
   );
 }
 
+// The `@cursor` mention entry: agent sessions served by Cursor cloud agents
+// on Macro's Cursor account. PostHog-gated per user; the backend additionally
+// restricts these sessions to @macro.com senders. Override with
+// VITE_ENABLE_CURSOR_AGENTS.
+export const ENABLE_CURSOR_AGENTS_FLAG = 'enable-cursor-agents';
+export const ENABLE_CURSOR_AGENTS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CURSOR_AGENTS') ??
+  (DEV_MODE_ENV ? true : undefined);
+export function ENABLE_CURSOR_AGENTS(): boolean {
+  if (ENABLE_CURSOR_AGENTS_OVERRIDE !== undefined) {
+    return ENABLE_CURSOR_AGENTS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_CURSOR_AGENTS_FLAG) ?? false;
+}
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;
@@ -685,4 +705,13 @@ export function ENABLE_CHAT_V3_AGENTS(): boolean {
 export const ENABLE_RECENT_VIEW_FLAG = 'enable-recent-view';
 export const ENABLE_RECENT_VIEW_OVERRIDE =
   getFeatureFlagOverride('ENABLE_RECENT_VIEW') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// Settings › Notifications: the dedicated preferences tab (delivery, per-type
+// opt-outs, muted items). When off, the tab is hidden and Account keeps the
+// existing desktop/mobile toggle. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_NOTIFICATION_SETTINGS.
+export const ENABLE_NOTIFICATION_SETTINGS_FLAG = 'enable-notification-settings';
+export const ENABLE_NOTIFICATION_SETTINGS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_NOTIFICATION_SETTINGS') ??
   (DEV_MODE_ENV ? true : undefined);

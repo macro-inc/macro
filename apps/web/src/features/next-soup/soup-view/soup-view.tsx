@@ -49,6 +49,7 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  markChannelTargetSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -416,12 +417,18 @@ export const SoupView = (props: SoupViewProps) => {
     });
   });
 
-  // Fresh preview-default views engage as soon as the layout can form a pair,
+  // Preview-default views engage as soon as the layout can form a pair,
   // without waiting for rows. useSoupPreviewAvailability owns disengagement: a
   // settled result with no previewable rows only suspends the pair and
   // re-engages once an entity arrives, so an initially empty view still lands
   // in preview mode. Resolving here keeps a manual exit from being undone by
   // later Soup updates.
+  //
+  // The preference alone decides engagement, independent of navigation cause:
+  // navigating the Controller away dissolves its Preview Pair, so an entry
+  // restored via history back/forward has no pair left to revive and must
+  // re-engage here like a fresh arrival. Manual toggles write the preference,
+  // which keeps an explicit exit from being resurrected by history navigation.
   let initialPreviewResolved = false;
   createEffect(() => {
     if (initialPreviewResolved) return;
@@ -429,10 +436,7 @@ export const SoupView = (props: SoupViewProps) => {
       initialPreviewResolved = true;
       return;
     }
-    if (
-      panel.handle.lastNavigationCause() !== 'fresh' ||
-      panel.handle.isViewerSplit()
-    ) {
+    if (panel.handle.isViewerSplit()) {
       initialPreviewResolved = true;
       return;
     }
@@ -964,6 +968,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Join button (or, in preview, the Viewer's Join prompt) is the only
       // affordance.
       if (!isNonMemberChannelEntity(entity)) {
+        markChannelTargetSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
       }
       return;
@@ -990,6 +995,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Single click: focus the row AND open it in the Preview Pair's Viewer.
       // The openWithSplit redirect keeps the Viewer unfocused so keyboard
       // navigation stays in this list.
+      if (!isNonMemberChannelEntity(entity)) {
+        markChannelTargetSeenOnOpen(entity, notificationSource);
+      }
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
 
@@ -1003,6 +1011,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     }
 
     const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
+
+    if (!isNonMemberChannelEntity(entity)) {
+      markChannelTargetSeenOnOpen(entity, notificationSource);
+    }
 
     try {
       await openEntityInSplitFromUnifiedList(entity, {

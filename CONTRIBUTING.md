@@ -44,7 +44,11 @@ No generated boilerplate, no exhaustive file-by-file change lists.
 
 ## Development setup
 
-See [docs/RUNNING_LOCALLY.md](docs/RUNNING_LOCALLY.md) for running the full app locally.
+You do not need the local stack if you only change the frontend.
+
+If you only change the frontend, run the [frontend against hosted services](docs/RUNNING_LOCALLY.md#run-the-frontend-against-hosted-services).
+
+If you change a backend service, the database, or behavior that must stay on your machine, [run the local stack](docs/RUNNING_LOCALLY.md#run-the-local-stack).
 
 ## Before you push
 

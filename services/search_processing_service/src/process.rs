@@ -1,3 +1,4 @@
+pub(crate) mod calendar_event;
 pub(crate) mod call;
 pub(crate) mod channel;
 pub(crate) mod chat;
@@ -134,6 +135,20 @@ pub async fn process_message(
         }
         SearchQueueMessage::UpsertProject(message) => {
             project::upsert_project(&ctx.opensearch_client, &ctx.db, &message).await?;
+        }
+        SearchQueueMessage::UpsertCalendarEvent(message) => {
+            // Logged rather than silent: running the calendar backfill against
+            // an environment where the flag is off should say why nothing
+            // happened instead of reporting a successful no-op.
+            if ctx.calendar_search_enabled {
+                calendar_event::upsert_calendar_event(&ctx.opensearch_client, &ctx.db, &message)
+                    .await?;
+            } else {
+                tracing::info!(
+                    event_id = message.event_id,
+                    "calendar search is disabled; not indexing calendar event"
+                );
+            }
         }
     }
 

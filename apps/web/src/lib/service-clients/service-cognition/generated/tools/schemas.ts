@@ -180,6 +180,7 @@ export const ContentSearch = z.object({
         'channels',
         'projects',
         'call_records',
+        'calendar_events',
       ])
     )
     .optional(),
@@ -667,6 +668,120 @@ export const SearchToolResponse = z.object({
               }),
               z.object({ type: z.literal('company') })
             ),
+            z.intersection(
+              z.object({
+                metadata: z
+                  .union([
+                    z.object({
+                      createdAt: z.string().datetime({ offset: true }),
+                      updatedAt: z.string().datetime({ offset: true }),
+                      status: z.string(),
+                      time: z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.object({
+                            startsAt: z.string().datetime({ offset: true }),
+                            endsAt: z.string().datetime({ offset: true }),
+                            timeZone: z
+                              .union([z.string(), z.null()])
+                              .optional(),
+                            kind: z.literal('timed'),
+                          }),
+                          z.object({
+                            startDate: z.string().date(),
+                            endDate: z.string().date(),
+                            kind: z.literal('allDay'),
+                          }),
+                        ];
+                        const errors = schemas.reduce<z.ZodError[]>(
+                          (errors, schema) =>
+                            ((result) =>
+                              result.error
+                                ? [...errors, result.error]
+                                : errors)(schema.safeParse(x)),
+                          []
+                        );
+                        if (schemas.length - errors.length !== 1) {
+                          ctx.addIssue({
+                            path: ctx.path,
+                            code: 'invalid_union',
+                            unionErrors: errors,
+                            message: 'Invalid input: Should pass single schema',
+                          });
+                        }
+                      }),
+                      isRecurring: z.boolean(),
+                      occurrence: z
+                        .union([
+                          z.object({
+                            occurrenceKey: z.string(),
+                            time: z.any().superRefine((x, ctx) => {
+                              const schemas = [
+                                z.object({
+                                  startsAt: z
+                                    .string()
+                                    .datetime({ offset: true }),
+                                  endsAt: z.string().datetime({ offset: true }),
+                                  timeZone: z
+                                    .union([z.string(), z.null()])
+                                    .optional(),
+                                  kind: z.literal('timed'),
+                                }),
+                                z.object({
+                                  startDate: z.string().date(),
+                                  endDate: z.string().date(),
+                                  kind: z.literal('allDay'),
+                                }),
+                              ];
+                              const errors = schemas.reduce<z.ZodError[]>(
+                                (errors, schema) =>
+                                  ((result) =>
+                                    result.error
+                                      ? [...errors, result.error]
+                                      : errors)(schema.safeParse(x)),
+                                []
+                              );
+                              if (schemas.length - errors.length !== 1) {
+                                ctx.addIssue({
+                                  path: ctx.path,
+                                  code: 'invalid_union',
+                                  unionErrors: errors,
+                                  message:
+                                    'Invalid input: Should pass single schema',
+                                });
+                              }
+                            }),
+                          }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      conferenceUrl: z.union([z.string(), z.null()]).optional(),
+                      isReadOnly: z.boolean(),
+                    }),
+                    z.null(),
+                  ])
+                  .optional(),
+                id: z.string().uuid(),
+                name: z.string(),
+                owner_id: z.string(),
+                updated_at: z.string().datetime({ offset: true }),
+                created_at: z.string().datetime({ offset: true }),
+                calendar_event_search_results: z.array(
+                  z.object({
+                    highlight: z.object({
+                      name: z.union([z.string(), z.null()]).optional(),
+                      content: z.array(z.string()).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      bcc: z.array(z.string()).optional(),
+                    }),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
+              }),
+              z.object({ type: z.literal('calendarEvent') })
+            ),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
             (errors, schema) =>
@@ -736,8 +851,6 @@ export const CreateBotResponse = z.object({
     .union([
       z.object({
         channelId: z.string().uuid(),
-        tokenId: z.string().uuid(),
-        bearerToken: z.string(),
         webhook: z.object({
           channelId: z.string().uuid(),
           channelName: z.union([z.string(), z.null()]).optional(),
@@ -746,6 +859,10 @@ export const CreateBotResponse = z.object({
         credentialHeader: z.string(),
         credentialScopeHeader: z.string(),
         credentialScope: z.string(),
+        credentialLabel: z.union([z.string(), z.null()]).optional(),
+        credentialExpiresAt: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
       }),
       z.null(),
     ])
@@ -1516,8 +1633,6 @@ export const IssueBotCredential = z.object({
 
 export const IssueBotCredentialResponse = z.object({
   botId: z.string().uuid(),
-  tokenId: z.string().uuid(),
-  bearerToken: z.string(),
   label: z.union([z.string(), z.null()]).optional(),
   expiresAt: z
     .union([z.string().datetime({ offset: true }), z.null()])
@@ -2509,6 +2624,7 @@ export const NameSearch = z.object({
         'channels',
         'projects',
         'call_records',
+        'calendar_events',
       ])
     )
     .optional(),

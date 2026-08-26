@@ -41,8 +41,30 @@ export type SessionStatusController = {
   status: Accessor<SessionStatus>;
 };
 
+/**
+ * Whether the runtime is gone, in either shape the status can take.
+ *
+ * The GET snapshot reports it as its own kind; a live frame always arrives
+ * as `{ kind: 'event', event: 'disconnected' }`, because the projection
+ * keeps the wire name. Reading only the former is how a live disconnect gets
+ * missed — which left `working` latched on and the composer waiting on a
+ * runtime that had gone away.
+ */
+export function isDisconnected(status: SessionStatus): boolean {
+  return (
+    status.kind === 'disconnected' ||
+    (status.kind === 'event' && status.event === 'disconnected')
+  );
+}
+
+/**
+ * `sessionId` is absent until a just-created session's `POST` lands
+ * (`pending-session.ts`). There is no log to follow before then, so the
+ * controller holds its initial `no_messages` — which the pill reads as
+ * "Starting" — and subscribes once there is something to subscribe to.
+ */
 export function createSessionStatusController(options: {
-  sessionId: Accessor<string>;
+  sessionId: Accessor<string | undefined>;
   /** The GET snapshot's status, absent until the session loads. */
   seed: Accessor<SessionStatus | undefined>;
 }): SessionStatusController {
@@ -60,16 +82,15 @@ export function createSessionStatusController(options: {
   });
 
   createEffect(() => {
+    const id = options.sessionId();
+    if (!id) return;
     live = false;
-    const unsubscribe = subscribeAgentSessionLog(
-      options.sessionId(),
-      (event) => {
-        const next = statusFromEntry(event);
-        if (!next) return;
-        live = true;
-        setStatus(next);
-      }
-    );
+    const unsubscribe = subscribeAgentSessionLog(id, (event) => {
+      const next = statusFromEntry(event);
+      if (!next) return;
+      live = true;
+      setStatus(next);
+    });
     onCleanup(unsubscribe);
   });
 

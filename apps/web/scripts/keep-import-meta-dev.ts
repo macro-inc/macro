@@ -3,7 +3,7 @@
  *
  * Vite compiles DEV from NODE_ENV, not MODE, so
  * `MODE=development NODE_ENV=production vite build` would otherwise ship
- * DEV=false. Local-backend bundles (`just stack up`, Fly preview) already set
+ * DEV=false. Local-backend bundles (`just stack up`) already set
  * `VITE_LOCAL_BACKEND_ORIGIN`; hosted `just build-dev` / staging / prod do not.
  *
  * `vite serve` already has DEV=true, so this only applies to `build`.

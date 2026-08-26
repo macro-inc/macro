@@ -30,6 +30,10 @@ pub use domain::models::{
     CallStart, CommonAction, DomainActivity, EntityType, Ingest, ParticipantChange, PropertyChange,
     RecordedAction, VIEW_ACTION_TAGS, activity_id, event_time,
 };
+pub use domain::overview::{
+    ActivityOverview, ActivityOverviewError, ActivityWindow, ActivityWindowError, DayCount,
+    EntityRank, MAX_ACTIVITY_WINDOW_DAYS, TOP_ENTITY_LIMIT, trailing_year,
+};
 pub use domain::ports::{ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap};
 #[cfg(feature = "ai_tools")]
 pub use domain::{

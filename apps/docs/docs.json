@@ -63,6 +63,7 @@
         "group": "Agents",
         "pages": [
           "AI/recipes",
+          "AI/bring-your-own",
           "AI/mcp/overview",
           {
             "group": "Tool Reference",

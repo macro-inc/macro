@@ -81,7 +81,8 @@ pub async fn run_worker_with_cancellation(
     retry_worker: bool,
     cancellation_token: CancellationToken,
 ) {
-    let calendar_backfills = CalendarBackfillServices::new(db.clone(), redis_client.clone());
+    let calendar_backfills =
+        CalendarBackfillServices::new(db.clone(), redis_client.clone(), macro_event_broker.clone());
     let ctx = PubSubContext {
         db,
         sqs_worker: worker.clone(),

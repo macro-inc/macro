@@ -1,3 +1,4 @@
+import { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
 import { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
@@ -22,6 +23,7 @@ import { MacroEvents } from '../events/receiver';
 import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
 
 export class MacroClient {
+  readonly agentHarness: AgentHarnessSdk;
   readonly auth: AuthSdk;
   readonly cognition: CognitionSdk;
   readonly contacts: ContactsSdk;
@@ -66,6 +68,9 @@ export class MacroClient {
     }
     this.wsVerify = opts.wsVerify;
 
+    this.agentHarness = new AgentHarnessSdk({
+      client: this.makeClient(hosts['agent-harness']),
+    });
     this.auth = new AuthSdk({ client: this.makeClient(hosts.auth) });
     this.cognition = new CognitionSdk({
       client: this.makeClient(hosts.cognition),

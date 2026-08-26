@@ -9,6 +9,7 @@
 // backend adds an endpoint, `just coverage` fails until you wrap it or type
 // it into one of these lists by hand, as a conscious decision.
 
+import type { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import type { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
 import type { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import type { Sdk as ConnectionSdk } from '../../generated/connection/sdk.gen';
@@ -22,6 +23,12 @@ import type { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen
 import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
+export const agentHarnessExcluded =
+  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+
+export const agentHarnessBacklog =
+  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+
 export const authExcluded = [
   'appleLogin',
   'checkGithubLinkStatus',
@@ -32,12 +39,14 @@ export const authExcluded = [
   'createPortalSession',
   'createTeam',
   'createUser',
+  'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
   'deleteTeamInviteHandler',
   'deleteUser',
   'enrichGithubPullRequests',
   'generateEmailLink',
+  'getCursorApiKey',
   'getLegacyUserPermissions',
   'getPermissions',
   'getReferralCode',
@@ -67,6 +76,7 @@ export const authExcluded = [
   'patchUserOnboarding',
   'patchUserTutorial',
   'postProfilePictures',
+  'putCursorApiKey',
   'putProfilePicture',
   'putUserName',
   'refresh',
@@ -83,7 +93,7 @@ export const authExcluded = [
   'verifyEmailLink',
   'verifyFusionauthUserEmail',
   'verifyMergeRequest',
-] as const satisfies readonly (keyof AuthSdk)[];
+];
 
 export const authBacklog = [
   'macroApiToken',
@@ -244,8 +254,11 @@ export const storageExcluded = [
   'callWebhook',
   'checkActiveCall',
   'createChannelScopedBot',
+  'createCollabSurfaceToken',
   'createInstructionsHandler',
   'createViewHandler',
+  'deleteCollabSurface',
+  'ensureCollabSurface',
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',
@@ -254,7 +267,9 @@ export const storageExcluded = [
   'getBatchCallRecordPreview',
   'getBatchChannelPreview',
   'getBatchPreviewHandler',
+  'getActiveCalls',
   'getBatchProjectPreview',
+  'getCollabSurface',
   'getDocumentListHandler',
   'getDocumentLocationV3',
   'getDocumentProcessingResult',
@@ -274,8 +289,8 @@ export const storageExcluded = [
   'ingestTranscript',
   'initializeUserDocuments',
   'installSync',
-  'joinChannelByCode',
   'jobProcessingResultHandler',
+  'joinChannelByCode',
   'leaveOrEndCall',
   'mentionPreviews',
   'patchViewHandler',

@@ -1,0 +1,17 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 239
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/cancelled.sse
+---
+
+--- thinking ---
+I'll list every file in this repository one by one using shell commands.
+
+This is a large Rust workspace with over 80 crates, so the repository likely contains tens of thousands of files. I'll use `find` or a similar command to generate the complete list.
+
+I'll check if this is a git repository first. I'll include all paths, including .git, since the user asked for every single file.
+
+I'll run `find` directly and capture the full output. The listing may be extremely large.
+--- assistant ---
+I'll list every file in the repository with shell commands, starting from the workspace root so the listing is complete.

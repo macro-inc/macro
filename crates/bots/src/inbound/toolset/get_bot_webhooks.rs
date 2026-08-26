@@ -23,7 +23,7 @@ use uuid::Uuid;
 pub struct GetBotWebhooksResponse {
     /// Bot whose webhook URLs were requested.
     pub bot_id: Uuid,
-    /// Header where callers send a bearer token from [`super::IssueBotCredential`].
+    /// Header where callers send a bearer token minted from the chat card or bot settings.
     pub credential_header: String,
     /// Header where callers send [`Self::credential_scope`].
     pub credential_scope_header: String,
@@ -40,7 +40,7 @@ pub struct GetBotWebhooksResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "GetBotWebhooks",
-    description = "Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token from IssueBotCredential or CreateBot in the returned credentialHeader; also send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId."
+    description = "Get the channel-specific webhook URLs for a bot the current user can manage. A bot has one URL per channel it can access. POST message content to a returned webhookUrl and authenticate with a token minted from the chat card or bot settings after IssueBotCredential or CreateBot; send it in the returned credentialHeader and send credentialScope in credentialScopeHeader. If no URLs are returned, add the bot to a channel with ManageBotChannelAccess or recreate it with CreateBot and channelId."
 )]
 pub struct GetBotWebhooks {
     /// Bot to inspect.

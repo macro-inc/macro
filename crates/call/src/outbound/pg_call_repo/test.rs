@@ -301,6 +301,94 @@ async fn get_call_by_room_name_not_found(pool: Pool<Postgres>) -> anyhow::Result
     Ok(())
 }
 
+// -- get_active_calls_for_user -------------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_active_calls_for_user_returns_call_for_channel_member(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let calls = repo
+        .get_active_calls_for_user(USER_C.deref().copied())
+        .await?;
+
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].call_id, CALL1);
+    assert_eq!(calls[0].channel_id, CH1);
+    assert_eq!(calls[0].created_by, USER_A.as_ref());
+    assert_eq!(calls[0].participant_count, 2);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_active_calls_for_user_excludes_non_member_with_direct_call_access(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // user-d has an entity_access row on call1 but is not a channel member.
+    // Visibility is deliberately membership-based so it matches who receives
+    // call_started/call_ended websocket events.
+    let repo = repo(pool);
+    let calls = repo
+        .get_active_calls_for_user(USER_D.deref().copied())
+        .await?;
+
+    assert!(calls.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_active_calls_for_user_excludes_zero_participant_calls(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // A calls row with no active participants is an orphan (e.g. a dropped
+    // RTC webhook) and must not surface as an active call.
+    sqlx::query("UPDATE call_participants SET left_at = now() WHERE call_id = $1")
+        .bind(CALL1)
+        .execute(&pool)
+        .await?;
+
+    let repo = repo(pool);
+    let calls = repo
+        .get_active_calls_for_user(USER_C.deref().copied())
+        .await?;
+
+    assert!(calls.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_active_calls_for_user_excludes_left_channel_members(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2",
+    )
+    .bind(CH1)
+    .bind(USER_C.as_ref())
+    .execute(&pool)
+    .await?;
+
+    let repo = repo(pool);
+    let calls = repo
+        .get_active_calls_for_user(USER_C.deref().copied())
+        .await?;
+
+    assert!(calls.is_empty());
+    Ok(())
+}
+
 // -- add_participant / remove_participant / is_participant ---------------------
 
 #[sqlx::test(

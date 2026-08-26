@@ -17,6 +17,8 @@ export type CalendarEmbedSettings = Omit<
   'showAllDaySlot' | 'useNarrowDayHeaders' | 'useNarrowEventContent'
 > & {
   collapseEmptyAllDaySlot?: boolean;
+  /** Overrides responsive abbreviated weekday headers when provided. */
+  useNarrowDayHeaders?: boolean;
 };
 
 export type CalendarEmbedProps = Omit<CalendarGridProps, 'settings'> & {
@@ -78,10 +80,11 @@ export function CalendarEmbed(props: CalendarEmbedProps) {
           showWeekends: props.settings.showWeekends,
           weekStartsOn: props.settings.weekStartsOn,
           timeFormat: props.settings.timeFormat,
-          useNarrowDayHeaders: isNarrow(),
+          useNarrowDayHeaders: props.settings.useNarrowDayHeaders ?? isNarrow(),
           useNarrowEventContent: isNarrow(),
         }}
         selection={props.selection}
+        emphasizedEventIds={props.emphasizedEventIds}
         eventTimeChangePending={props.eventTimeChangePending}
         onDatesSet={props.onDatesSet}
         onEventTimeChange={props.onEventTimeChange}

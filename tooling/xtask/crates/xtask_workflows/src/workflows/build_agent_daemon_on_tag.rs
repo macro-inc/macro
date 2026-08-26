@@ -22,6 +22,9 @@ use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
 
 use std::collections::HashMap;
 
+#[cfg(test)]
+mod test;
+
 const RESOLVED_REF: &str = "${{ needs.resolve-ref.outputs.ref }}";
 
 /// One published binary.
@@ -93,8 +96,21 @@ pub fn build_agent_daemon_on_tag() -> Workflow {
     for target in LINUX_TARGETS.iter().chain(MACOS_TARGETS) {
         publish = publish.add_needs(job_id(target));
     }
+    // A failed platform must not prevent successful platform artifacts from
+    // reaching the release.
+    publish = publish.cond(Expression::new(publish_when_any_build_succeeded()));
 
     workflow.add_job("publish-daemon", publish)
+}
+
+fn publish_when_any_build_succeeded() -> String {
+    let any_build = LINUX_TARGETS
+        .iter()
+        .chain(MACOS_TARGETS)
+        .map(|target| format!("needs.{}.result == 'success'", job_id(target)))
+        .collect::<Vec<_>>()
+        .join(" || ");
+    format!("!cancelled() && needs.resolve-ref.result == 'success' && ({any_build})")
 }
 
 fn job_id(target: &DaemonTarget) -> String {
@@ -144,16 +160,16 @@ fn resolve_ref_step() -> Step<Run> {
         .add_env(("SELECTED_REF", "${{ github.ref }}"))
 }
 
-/// The Nix dev shell is what carries cargo-zigbuild, zig, and cmake, so the
-/// musl builds go through it rather than a bare rustup toolchain.
+/// The minimal agent-daemon Nix shell carries cargo-zigbuild, zig, and cmake
+/// without realizing unrelated developer tools from the default shell.
 fn linux_job(target: &DaemonTarget) -> Job {
     Job::default()
         .name(format!("Build daemon ({})", target.slug))
         .runs_on(runners::Runner::RustCi.to_string())
         .add_step(steps::checkout_ref(RESOLVED_REF))
         .add_step(steps::mount_cache_volume())
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_dev_shell())
+        .add_step(steps::setup_nix_with_cache())
+        .add_step(steps::setup_dev_shell_named("agent-daemon"))
         // The dev shell points RUSTC_WRAPPER at sccache regardless; this aims
         // it at the shared remote cache so a release build is not a cold
         // compile of the whole dependency graph. It degrades to the local

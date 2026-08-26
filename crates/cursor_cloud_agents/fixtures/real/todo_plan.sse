@@ -1,0 +1,5578 @@
+event: status
+data: {"runId":"run-6522034a-aeaa-4309-a80f-f82cec410454","status":"RUNNING"}
+
+id: 1787345172841-0
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+id: 1787345172855-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-6522034a-aeaa-4309-a80f-f82cec410454","text":"Create a todo list with three items for adding a CI badge to the README, then work through them marking each done as you go. Use your todo/plan tool. You may read files but do not edit, commit, push, or open a PR."}}
+
+id: 1787345174259-0
+event: thinking
+data: {"text":"Planning a three-item"}
+
+id: 1787345174259-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Planning a three-item"}
+
+id: 1787345174305-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345174312-0
+event: thinking
+data: {"text":" todo list for adding"}
+
+id: 1787345174312-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" todo list for adding"}
+
+id: 1787345174395-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345174408-0
+event: thinking
+data: {"text":" a CI badge to the README."}
+
+id: 1787345174408-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" a CI badge to the README."}
+
+id: 1787345174415-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787345174495-0
+event: thinking
+data: {"text":" I'll mark each item"}
+
+id: 1787345174495-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" I'll mark each item"}
+
+id: 1787345174498-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345174590-0
+event: thinking
+data: {"text":" complete as I finish"}
+
+id: 1787345174590-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" complete as I finish"}
+
+id: 1787345174593-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345174669-0
+event: thinking
+data: {"text":" it."}
+
+id: 1787345174669-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" it."}
+
+id: 1787345174672-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345175163-0
+event: thinking
+data: {"text":"\n\nI'll use the TodoWrite"}
+
+id: 1787345175163-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nI'll use the TodoWrite"}
+
+id: 1787345175168-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345175298-0
+event: thinking
+data: {"text":" tool to create the "}
+
+id: 1787345175298-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" tool to create the "}
+
+id: 1787345175302-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345175411-0
+event: thinking
+data: {"text":"task list. I won't edit"}
+
+id: 1787345175411-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"task list. I won't edit"}
+
+id: 1787345175415-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345175543-0
+event: thinking
+data: {"text":" files or push changes."}
+
+id: 1787345175543-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" files or push changes."}
+
+id: 1787345175547-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345176706-0
+event: thinking
+data: {"text":"\n\nI'll read the README"}
+
+id: 1787345176706-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nI'll read the README"}
+
+id: 1787345176790-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345176880-0
+event: thinking
+data: {"text":" and CI configuration"}
+
+id: 1787345176880-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" and CI configuration"}
+
+id: 1787345176913-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345176917-0
+event: thinking
+data: {"text":" files now while creating"}
+
+id: 1787345176917-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" files now while creating"}
+
+id: 1787345176921-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345176925-0
+event: thinking
+data: {"text":" the task list."}
+
+id: 1787345176925-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" the task list."}
+
+id: 1787345176929-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787345176932-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":2674}
+
+id: 1787345176937-0
+event: assistant
+data: {"text":"I'll"}
+
+id: 1787345176937-0
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+id: 1787345176973-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345176984-0
+event: assistant
+data: {"text":" create"}
+
+id: 1787345176984-0
+event: interaction_update
+data: {"type":"text-delta","text":" create"}
+
+id: 1787345176988-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345176991-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345176991-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345176995-0
+event: assistant
+data: {"text":" three"}
+
+id: 1787345176995-0
+event: interaction_update
+data: {"type":"text-delta","text":" three"}
+
+id: 1787345176999-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345177016-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345177016-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345177021-0
+event: assistant
+data: {"text":"item"}
+
+id: 1787345177021-0
+event: interaction_update
+data: {"type":"text-delta","text":"item"}
+
+id: 1787345177024-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177028-0
+event: assistant
+data: {"text":" todo"}
+
+id: 1787345177028-0
+event: interaction_update
+data: {"type":"text-delta","text":" todo"}
+
+id: 1787345177032-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177045-0
+event: assistant
+data: {"text":" list"}
+
+id: 1787345177045-0
+event: interaction_update
+data: {"type":"text-delta","text":" list"}
+
+id: 1787345177049-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345177052-0
+event: assistant
+data: {"text":" for"}
+
+id: 1787345177052-0
+event: interaction_update
+data: {"type":"text-delta","text":" for"}
+
+id: 1787345177056-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177059-0
+event: assistant
+data: {"text":" adding"}
+
+id: 1787345177059-0
+event: interaction_update
+data: {"type":"text-delta","text":" adding"}
+
+id: 1787345177063-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177066-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345177066-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345177070-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177077-0
+event: assistant
+data: {"text":" CI"}
+
+id: 1787345177077-0
+event: interaction_update
+data: {"type":"text-delta","text":" CI"}
+
+id: 1787345177081-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177084-0
+event: assistant
+data: {"text":" badge"}
+
+id: 1787345177084-0
+event: interaction_update
+data: {"type":"text-delta","text":" badge"}
+
+id: 1787345177087-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177091-0
+event: assistant
+data: {"text":","}
+
+id: 1787345177091-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345177095-0
+event: assistant
+data: {"text":" then"}
+
+id: 1787345177095-0
+event: interaction_update
+data: {"type":"text-delta","text":" then"}
+
+id: 1787345177099-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345177102-0
+event: assistant
+data: {"text":" work"}
+
+id: 1787345177102-0
+event: interaction_update
+data: {"type":"text-delta","text":" work"}
+
+id: 1787345177106-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177109-0
+event: assistant
+data: {"text":" through"}
+
+id: 1787345177109-0
+event: interaction_update
+data: {"type":"text-delta","text":" through"}
+
+id: 1787345177114-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345177119-0
+event: assistant
+data: {"text":" each"}
+
+id: 1787345177119-0
+event: interaction_update
+data: {"type":"text-delta","text":" each"}
+
+id: 1787345177122-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177126-0
+event: assistant
+data: {"text":" item"}
+
+id: 1787345177126-0
+event: interaction_update
+data: {"type":"text-delta","text":" item"}
+
+id: 1787345177135-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177138-0
+event: assistant
+data: {"text":" by"}
+
+id: 1787345177138-0
+event: interaction_update
+data: {"type":"text-delta","text":" by"}
+
+id: 1787345177176-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177182-0
+event: assistant
+data: {"text":" reading"}
+
+id: 1787345177182-0
+event: interaction_update
+data: {"type":"text-delta","text":" reading"}
+
+id: 1787345177185-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345177189-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345177189-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345177194-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177198-0
+event: assistant
+data: {"text":" repo"}
+
+id: 1787345177198-0
+event: interaction_update
+data: {"type":"text-delta","text":" repo"}
+
+id: 1787345177201-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177205-0
+event: assistant
+data: {"text":" only"}
+
+id: 1787345177205-0
+event: interaction_update
+data: {"type":"text-delta","text":" only"}
+
+id: 1787345177208-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345177212-0
+event: assistant
+data: {"text":"—"}
+
+id: 1787345177212-0
+event: interaction_update
+data: {"type":"text-delta","text":"—"}
+
+id: 1787345177215-0
+event: assistant
+data: {"text":"no"}
+
+id: 1787345177215-0
+event: interaction_update
+data: {"type":"text-delta","text":"no"}
+
+id: 1787345177219-0
+event: assistant
+data: {"text":" edits"}
+
+id: 1787345177219-0
+event: interaction_update
+data: {"type":"text-delta","text":" edits"}
+
+id: 1787345177222-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345177227-0
+event: assistant
+data: {"text":","}
+
+id: 1787345177227-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345177231-0
+event: assistant
+data: {"text":" commits"}
+
+id: 1787345177231-0
+event: interaction_update
+data: {"type":"text-delta","text":" commits"}
+
+id: 1787345177234-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345177238-0
+event: assistant
+data: {"text":","}
+
+id: 1787345177238-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345177243-0
+event: assistant
+data: {"text":" or"}
+
+id: 1787345177243-0
+event: interaction_update
+data: {"type":"text-delta","text":" or"}
+
+id: 1787345177246-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177250-0
+event: assistant
+data: {"text":" P"}
+
+id: 1787345177250-0
+event: interaction_update
+data: {"type":"text-delta","text":" P"}
+
+id: 1787345177253-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345177257-0
+event: assistant
+data: {"text":"Rs"}
+
+id: 1787345177257-0
+event: interaction_update
+data: {"type":"text-delta","text":"Rs"}
+
+id: 1787345177262-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345177262-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345177269-0
+event: interaction_update
+data: {"type":"token-delta","tokens":80}
+
+id: 1787345177274-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345177278-0
+event: interaction_update
+data: {"type":"token-delta","tokens":12}
+
+id: 1787345178052-0
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","name":"todo_write","status":"running"}
+
+id: 1787345178052-1
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","name":"todo_write","status":"running","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178035","updatedAt":"1787345178035"}]}}
+
+id: 1787345178052-1
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"inProgress"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-1-fedb"}
+
+id: 1787345178052-2
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","name":"todo_write","status":"running","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178035","updatedAt":"1787345178035"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_PENDING","createdAt":"1787345178035","updatedAt":"1787345178035"}]}}
+
+id: 1787345178052-2
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"inProgress"},{"content":"Determine README placement and markdown for the CI badge","status":"pending"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-1-fedb"}
+
+id: 1787345178052-3
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","name":"todo_write","status":"running","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178035","updatedAt":"1787345178035"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_PENDING","createdAt":"1787345178035","updatedAt":"1787345178035"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_PENDING","createdAt":"1787345178035","updatedAt":"1787345178035"}]}}
+
+id: 1787345178052-3
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"inProgress"},{"content":"Determine README placement and markdown for the CI badge","status":"pending"},{"content":"Record the exact README change to make (without applying it)","status":"pending"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-1-fedb"}
+
+id: 1787345178052-4
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","name":"todo_write","status":"running","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178035","updatedAt":"1787345178035"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_PENDING","createdAt":"1787345178035","updatedAt":"1787345178035"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_PENDING","createdAt":"1787345178035","updatedAt":"1787345178035"}]}}
+
+id: 1787345178052-4
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"inProgress"},{"content":"Determine README placement and markdown for the CI badge","status":"pending"},{"content":"Record the exact README change to make (without applying it)","status":"pending"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-1-fedb"}
+
+id: 1787345178055-0
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-2\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_2","name":"file_search","status":"running"}
+
+id: 1787345178060-0
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","name":"todo_write","status":"completed","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178035","updatedAt":"1787345178035"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_PENDING","createdAt":"1787345178035","updatedAt":"1787345178035"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_PENDING","createdAt":"1787345178035","updatedAt":"1787345178035"}]},"result":{"success":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345178058"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_PENDING","createdAt":"1787345178058","updatedAt":"1787345178058"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_PENDING","createdAt":"1787345178058","updatedAt":"1787345178058"}],"totalCount":3}}}
+
+id: 1787345178060-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-0\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"inProgress"},{"content":"Determine README placement and markdown for the CI badge","status":"pending"},{"content":"Record the exact README change to make (without applying it)","status":"pending"}]},"result":{"status":"success","value":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"inProgress"},{"content":"Determine README placement and markdown for the CI badge","status":"pending"},{"content":"Record the exact README change to make (without applying it)","status":"pending"}],"totalCount":3}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-1-fedb"}
+
+id: 1787345178064-0
+event: interaction_update
+data: {"type":"token-delta","tokens":118}
+
+id: 1787345178066-0
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-2\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_2","name":"file_search","status":"running","args":{"globPattern":".github/workflows/*.{yml,yaml}"}}
+
+id: 1787345178066-0
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-2\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_2","toolCall":{"type":"glob","args":{"globPattern":".github/workflows/*.{yml,yaml}"}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-0-cr0m"}
+
+id: 1787345178082-0
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-1\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_1","name":"file_search","status":"running"}
+
+id: 1787345178082-1
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-1\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_1","name":"file_search","status":"running","args":{"globPattern":"README*"}}
+
+id: 1787345178082-1
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-1\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_1","toolCall":{"type":"glob","args":{"globPattern":"README*"}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-0-3cik"}
+
+id: 1787345178214-0
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-1\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_1","name":"file_search","status":"completed","args":{"globPattern":"README*"},"result":{"success":{"files":["./packages/collaboration/README.md","./packages/collaboration/src/websocket/README.md","./services/unfurl_service/README.md","./packages/lexical-core/README.md","./services/sync-service/README.md","./services/email_scheduled_handler/README.md","./packages/sdk/README.md","./services/document_storage_service/README.md","./services/search_processing_service/README.md","./packages/loro-mirror/README.md","./services/contacts_service/README.md","./README.md","./services/email_refresh_handler/README.md","./services/sha_cleanup_worker/README.md","./services/bots/stripe-payment-bot/README.md","./services/mcp_auth_proxy/README.md","./services/bots/anthropic-status-bot/README.md","./services/document_cognition_service/README.md","./services/delete_chat_handler/README.md","./apps/web/tauri/src-tauri/README.md","./services/email_service/src/bin/cleanup_unused_sfs/README.md","./services/email_service/src/bin/find_used_sfs_ids/README.md","./services/email_service/src/bin/backfill_gmail_attachments/README.md","./services/email_service/src/bin/backfill_contacts/README.md","./services/email_service/src/bin/find_unused_sfs_ids/README.md","./services/email_service/src/bin/backfill_sfs_attachments/README.md","./services/convert_service/load-test/README.md","./services/document_cognition_service/load-test/README.md","./services/convert_service/helpers/README.md","./services/document_text_extractor/README.md","./services/deleted_item_poller/README.md","./services/email_sfs_delete_handler/README.md","./services/notification_service/README.md","./services/docx_unzip_handler/README.md","./services/connection_gateway/README.md","./services/lexical-service/README.md","./services/organization_retention_handler/README.md","./services/user_link_cleanup_handler/README.md","./services/cla-worker/README.md","./services/worker_trigger/README.md","./apps/web/src/features/block-image/README.md","./apps/web/README.md","./apps/web/src/features/block-chat/README.md","./services/email_suppression_handler/README.md","./apps/web/src/features/block-canvas/README.md","./infra/stacks/fusion-auth/README.md","./infra/stacks/fusionauth-instance/README.md","./apps/web/src/features/block-md/README.md","./infra/stacks/opensearch/README.md","./infra/stacks/opensearch/helpers/README.md","./infra/stacks/cloud-storage-cache/README.md","./infra/stacks/web-app/README.md","./infra/preview/README.md","./infra/README.md","./apps/web/src/features/block-code/README.md","./apps/web/src/features/entity/README.md","./apps/web/src/features/block-project/README.md","./apps/web/src/features/property/README.md","./apps/docs/README.md","./tooling/seed_cli/README.md","./tooling/seed_cli/src/entity/email/README.md","./crates/client/README.md","./crates/client/turso-opfs/README.md","./apps/web/src/lib/service-clients/service-cognition/README.md","./apps/web/src/components/app/split-layout/README.md","./apps/web/src/lib/service-clients/service-connection/README.md","./crates/mcp_client/src/domain/provider_registry/slack/README.md","./apps/web/src/lib/service-clients/service-sync/README.md","./crates/opensearch_query_builder/README.md","./apps/web/src/lib/filesystem/README.md","./crates/properties_service/README.md","./apps/web/src/lib/core/README.md","./crates/chat/README.md","./crates/properties/README.md","./crates/comms_db_client/README.md","./crates/notification_db_client/README.md","./crates/macro_db_client/README.md","./apps/web/src/lib/core/component/AI/component/tool/ReadMetadata.tsx","./crates/teams/README.md","./crates/email_db_client/README.md","./crates/webhook/README.md","./crates/kafka_util/README.md","./crates/local_e2e_test_support/README.md","./crates/soup_realtime/README.md","./crates/integration_tests/local_e2e/README.md","./crates/opensearch_client/README.md","./crates/bots/README.md","./crates/anthropic/README.md"],"totalFiles":88}}}
+
+id: 1787345178214-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-1\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_1","toolCall":{"type":"glob","args":{"globPattern":"README*"},"result":{"status":"success","value":{"files":["./packages/collaboration/README.md","./packages/collaboration/src/websocket/README.md","./services/unfurl_service/README.md","./packages/lexical-core/README.md","./services/sync-service/README.md","./services/email_scheduled_handler/README.md","./packages/sdk/README.md","./services/document_storage_service/README.md","./services/search_processing_service/README.md","./packages/loro-mirror/README.md","./services/contacts_service/README.md","./README.md","./services/email_refresh_handler/README.md","./services/sha_cleanup_worker/README.md","./services/bots/stripe-payment-bot/README.md","./services/mcp_auth_proxy/README.md","./services/bots/anthropic-status-bot/README.md","./services/document_cognition_service/README.md","./services/delete_chat_handler/README.md","./apps/web/tauri/src-tauri/README.md","./services/email_service/src/bin/cleanup_unused_sfs/README.md","./services/email_service/src/bin/find_used_sfs_ids/README.md","./services/email_service/src/bin/backfill_gmail_attachments/README.md","./services/email_service/src/bin/backfill_contacts/README.md","./services/email_service/src/bin/find_unused_sfs_ids/README.md","./services/email_service/src/bin/backfill_sfs_attachments/README.md","./services/convert_service/load-test/README.md","./services/document_cognition_service/load-test/README.md","./services/convert_service/helpers/README.md","./services/document_text_extractor/README.md","./services/deleted_item_poller/README.md","./services/email_sfs_delete_handler/README.md","./services/notification_service/README.md","./services/docx_unzip_handler/README.md","./services/connection_gateway/README.md","./services/lexical-service/README.md","./services/organization_retention_handler/README.md","./services/user_link_cleanup_handler/README.md","./services/cla-worker/README.md","./services/worker_trigger/README.md","./apps/web/src/features/block-image/README.md","./apps/web/README.md","./apps/web/src/features/block-chat/README.md","./services/email_suppression_handler/README.md","./apps/web/src/features/block-canvas/README.md","./infra/stacks/fusion-auth/README.md","./infra/stacks/fusionauth-instance/README.md","./apps/web/src/features/block-md/README.md","./infra/stacks/opensearch/README.md","./infra/stacks/opensearch/helpers/README.md","./infra/stacks/cloud-storage-cache/README.md","./infra/stacks/web-app/README.md","./infra/preview/README.md","./infra/README.md","./apps/web/src/features/block-code/README.md","./apps/web/src/features/entity/README.md","./apps/web/src/features/block-project/README.md","./apps/web/src/features/property/README.md","./apps/docs/README.md","./tooling/seed_cli/README.md","./tooling/seed_cli/src/entity/email/README.md","./crates/client/README.md","./crates/client/turso-opfs/README.md","./apps/web/src/lib/service-clients/service-cognition/README.md","./apps/web/src/components/app/split-layout/README.md","./apps/web/src/lib/service-clients/service-connection/README.md","./crates/mcp_client/src/domain/provider_registry/slack/README.md","./apps/web/src/lib/service-clients/service-sync/README.md","./crates/opensearch_query_builder/README.md","./apps/web/src/lib/filesystem/README.md","./crates/properties_service/README.md","./apps/web/src/lib/core/README.md","./crates/chat/README.md","./crates/properties/README.md","./crates/comms_db_client/README.md","./crates/notification_db_client/README.md","./crates/macro_db_client/README.md","./apps/web/src/lib/core/component/AI/component/tool/ReadMetadata.tsx","./crates/teams/README.md","./crates/email_db_client/README.md","./crates/webhook/README.md","./crates/kafka_util/README.md","./crates/local_e2e_test_support/README.md","./crates/soup_realtime/README.md","./crates/integration_tests/local_e2e/README.md","./crates/opensearch_client/README.md","./crates/bots/README.md","./crates/anthropic/README.md"],"totalFiles":88,"clientTruncated":false,"ripgrepTruncated":false}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-0-3cik"}
+
+id: 1787345178219-0
+event: interaction_update
+data: {"type":"token-delta","tokens":968}
+
+id: 1787345178220-0
+event: tool_call
+data: {"callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-2\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_2","name":"file_search","status":"completed","args":{"globPattern":".github/workflows/*.{yml,yaml}"},"result":{"success":{"files":["./.github/workflows/check_generated.yml","./.github/workflows/deploy_cla_worker.yml","./.github/workflows/preview-fly-cleanup.yml","./.github/workflows/build_dmg_on_tag.yml","./.github/workflows/sdk-check.yml","./.github/workflows/deploy-lexical-service.yml","./.github/workflows/assign-labels.yml","./.github/workflows/code_check_infra.yml","./.github/workflows/deploy_web_app.yml","./.github/workflows/deploy-pulumi-stack.yml","./.github/workflows/web-app-check-main.yml","./.github/workflows/cargo_deny.yml","./.github/workflows/deploy-service-generic.yml","./.github/workflows/deploy_ai_editing_worker.yml","./.github/workflows/cargo_workspace_dependency_check.yml","./.github/workflows/deploy_all_services.yml","./.github/workflows/deploy_preview.yml","./.github/workflows/build_desktop_on_tag.yml","./.github/workflows/build-rust-ci-image.yml","./.github/workflows/check_node_modules_nix.yml","./.github/workflows/build_agent_daemon_on_tag.yml","./.github/workflows/code_check_cloud_storage.yml","./.github/workflows/deploy_sync_service.yml","./.github/workflows/deploy_fusionauth_instance.yml","./.github/workflows/ensure_daytona_snapshot.yml","./.github/workflows/release-production.yml","./.github/workflows/deploy_on_push.yml","./.github/workflows/migrate-macro-db.yml","./.github/workflows/cla.yml","./.github/workflows/build_appimage_on_tag.yml","./.github/workflows/code_check_conventions.yml","./.github/workflows/reusable_deploy_service.yml","./.github/workflows/push_local_stack_binaries.yml","./.github/workflows/reusable_preview_service.yml","./.github/workflows/assign-author.yml","./.github/workflows/docs-check.yml","./.github/workflows/preview-fly.yml","./.github/workflows/cleanup_preview.yml","./.github/workflows/cancel_stuck_cloud_storage_deploys.yml","./.github/workflows/pulumi_preview_pr.yml"],"totalFiles":40}}}
+
+id: 1787345178220-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-20b10124-a135-422e-bcc8-2420998ff34e-2\nfc_d7b53244-54e0-9efd-97ee-35b881075df0_2","toolCall":{"type":"glob","args":{"globPattern":".github/workflows/*.{yml,yaml}"},"result":{"status":"success","value":{"files":["./.github/workflows/check_generated.yml","./.github/workflows/deploy_cla_worker.yml","./.github/workflows/preview-fly-cleanup.yml","./.github/workflows/build_dmg_on_tag.yml","./.github/workflows/sdk-check.yml","./.github/workflows/deploy-lexical-service.yml","./.github/workflows/assign-labels.yml","./.github/workflows/code_check_infra.yml","./.github/workflows/deploy_web_app.yml","./.github/workflows/deploy-pulumi-stack.yml","./.github/workflows/web-app-check-main.yml","./.github/workflows/cargo_deny.yml","./.github/workflows/deploy-service-generic.yml","./.github/workflows/deploy_ai_editing_worker.yml","./.github/workflows/cargo_workspace_dependency_check.yml","./.github/workflows/deploy_all_services.yml","./.github/workflows/deploy_preview.yml","./.github/workflows/build_desktop_on_tag.yml","./.github/workflows/build-rust-ci-image.yml","./.github/workflows/check_node_modules_nix.yml","./.github/workflows/build_agent_daemon_on_tag.yml","./.github/workflows/code_check_cloud_storage.yml","./.github/workflows/deploy_sync_service.yml","./.github/workflows/deploy_fusionauth_instance.yml","./.github/workflows/ensure_daytona_snapshot.yml","./.github/workflows/release-production.yml","./.github/workflows/deploy_on_push.yml","./.github/workflows/migrate-macro-db.yml","./.github/workflows/cla.yml","./.github/workflows/build_appimage_on_tag.yml","./.github/workflows/code_check_conventions.yml","./.github/workflows/reusable_deploy_service.yml","./.github/workflows/push_local_stack_binaries.yml","./.github/workflows/reusable_preview_service.yml","./.github/workflows/assign-author.yml","./.github/workflows/docs-check.yml","./.github/workflows/preview-fly.yml","./.github/workflows/cleanup_preview.yml","./.github/workflows/cancel_stuck_cloud_storage_deploys.yml","./.github/workflows/pulumi_preview_pr.yml"],"totalFiles":40,"clientTruncated":false,"ripgrepTruncated":false}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-0-cr0m"}
+
+id: 1787345178226-0
+event: interaction_update
+data: {"type":"token-delta","tokens":466}
+
+id: 1787345178793-0
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":5944}
+
+id: 1787345179032-0
+event: interaction_update
+data: {"type":"step-started","stepId":94}
+
+id: 1787345180485-0
+event: thinking
+data: {"text":"Found the README and"}
+
+id: 1787345180485-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Found the README and"}
+
+id: 1787345180488-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345180493-0
+event: thinking
+data: {"text":" CI workflow files."}
+
+id: 1787345180493-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" CI workflow files."}
+
+id: 1787345180497-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787345180500-0
+event: thinking
+data: {"text":"\n\nIdentified `code_check_cloud_storage.yml`"}
+
+id: 1787345180500-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nIdentified `code_check_cloud_storage.yml`"}
+
+id: 1787345180505-0
+event: interaction_update
+data: {"type":"token-delta","tokens":11}
+
+id: 1787345180509-0
+event: thinking
+data: {"text":" as the primary CI workflow."}
+
+id: 1787345180509-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" as the primary CI workflow."}
+
+id: 1787345180512-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787345180515-0
+event: thinking
+data: {"text":" Checking the git remote"}
+
+id: 1787345180515-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" Checking the git remote"}
+
+id: 1787345180519-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345180523-0
+event: thinking
+data: {"text":" URL."}
+
+id: 1787345180523-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" URL."}
+
+id: 1787345180526-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180530-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":45}
+
+id: 1787345180534-0
+event: assistant
+data: {"text":"I"}
+
+id: 1787345180534-0
+event: interaction_update
+data: {"type":"text-delta","text":"I"}
+
+id: 1787345180538-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180542-0
+event: assistant
+data: {"text":" found"}
+
+id: 1787345180542-0
+event: interaction_update
+data: {"type":"text-delta","text":" found"}
+
+id: 1787345180545-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180549-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345180549-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345180552-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180556-0
+event: assistant
+data: {"text":" root"}
+
+id: 1787345180556-0
+event: interaction_update
+data: {"type":"text-delta","text":" root"}
+
+id: 1787345180559-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180563-0
+event: assistant
+data: {"text":" README"}
+
+id: 1787345180563-0
+event: interaction_update
+data: {"type":"text-delta","text":" README"}
+
+id: 1787345180574-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345180578-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345180578-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345180584-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180588-0
+event: assistant
+data: {"text":" Git"}
+
+id: 1787345180588-0
+event: interaction_update
+data: {"type":"text-delta","text":" Git"}
+
+id: 1787345180595-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180601-0
+event: assistant
+data: {"text":"Hub"}
+
+id: 1787345180601-0
+event: interaction_update
+data: {"type":"text-delta","text":"Hub"}
+
+id: 1787345180606-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180610-0
+event: assistant
+data: {"text":" workflows"}
+
+id: 1787345180610-0
+event: interaction_update
+data: {"type":"text-delta","text":" workflows"}
+
+id: 1787345180614-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345180619-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345180619-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345180623-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180627-0
+event: assistant
+data: {"text":" Next"}
+
+id: 1787345180627-0
+event: interaction_update
+data: {"type":"text-delta","text":" Next"}
+
+id: 1787345180630-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180635-0
+event: assistant
+data: {"text":" I’ll"}
+
+id: 1787345180635-0
+event: interaction_update
+data: {"type":"text-delta","text":" I’ll"}
+
+id: 1787345180639-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180642-0
+event: assistant
+data: {"text":" identify"}
+
+id: 1787345180642-0
+event: interaction_update
+data: {"type":"text-delta","text":" identify"}
+
+id: 1787345180646-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345180650-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345180650-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345180654-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180657-0
+event: assistant
+data: {"text":" primary"}
+
+id: 1787345180657-0
+event: interaction_update
+data: {"type":"text-delta","text":" primary"}
+
+id: 1787345180661-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345180664-0
+event: assistant
+data: {"text":" CI"}
+
+id: 1787345180664-0
+event: interaction_update
+data: {"type":"text-delta","text":" CI"}
+
+id: 1787345180668-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180672-0
+event: assistant
+data: {"text":" workflow"}
+
+id: 1787345180672-0
+event: interaction_update
+data: {"type":"text-delta","text":" workflow"}
+
+id: 1787345180675-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345180679-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345180679-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345180682-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180686-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345180686-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345180689-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180694-0
+event: assistant
+data: {"text":" badge"}
+
+id: 1787345180694-0
+event: interaction_update
+data: {"type":"text-delta","text":" badge"}
+
+id: 1787345180697-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345180701-0
+event: assistant
+data: {"text":" URL"}
+
+id: 1787345180701-0
+event: interaction_update
+data: {"type":"text-delta","text":" URL"}
+
+id: 1787345180704-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345180708-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345180708-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345180713-0
+event: interaction_update
+data: {"type":"token-delta","tokens":11}
+
+id: 1787345180717-0
+event: interaction_update
+data: {"type":"token-delta","tokens":19}
+
+id: 1787345180721-0
+event: interaction_update
+data: {"type":"token-delta","tokens":23}
+
+id: 1787345180724-0
+event: interaction_update
+data: {"type":"token-delta","tokens":27}
+
+id: 1787345181016-0
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-3\nfc_192d9881-3315-9c09-8467-812c167c70d1_0","name":"read_file","status":"running"}
+
+id: 1787345181016-1
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-4\nfc_192d9881-3315-9c09-8467-812c167c70d1_1","name":"read_file","status":"running"}
+
+id: 1787345181016-2
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2","name":"grep_search","status":"running"}
+
+id: 1787345181016-3
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-3\nfc_192d9881-3315-9c09-8467-812c167c70d1_0","name":"read_file","status":"running","args":{"path":"/workspace/README.md","limit":80}}
+
+id: 1787345181016-3
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-3\nfc_192d9881-3315-9c09-8467-812c167c70d1_0","toolCall":{"type":"read","args":{"path":"/workspace/README.md"}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-5-tawt"}
+
+id: 1787345181016-4
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-4\nfc_192d9881-3315-9c09-8467-812c167c70d1_1","name":"read_file","status":"running","args":{"path":"/workspace/.github/workflows/code_check_cloud_storage.yml","limit":40}}
+
+id: 1787345181016-4
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-4\nfc_192d9881-3315-9c09-8467-812c167c70d1_1","toolCall":{"type":"read","args":{"path":"/workspace/.github/workflows/code_check_cloud_storage.yml"}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-6-2w2e"}
+
+id: 1787345181016-5
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2","name":"grep_search","status":"running","args":{"pattern":"badge|github.com/.*/actions","path":"/workspace/README.md","glob":"README.md","caseInsensitive":false,"multiline":false,"toolCallId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2","offset":0}}
+
+id: 1787345181016-5
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2","toolCall":{"type":"grep","args":{"pattern":"badge|github.com/.*/actions","path":"/workspace/README.md","glob":"README.md","offset":0}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-7-m8ef"}
+
+id: 1787345181017-0
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6\nfc_192d9881-3315-9c09-8467-812c167c70d1_3","name":"run_terminal_cmd","status":"running","args":{"command":"git remote -v && git rev-parse --abbrev-ref HEAD","timeout":600000,"toolCallId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6\nfc_192d9881-3315-9c09-8467-812c167c70d1_3","simpleCommands":["git","git"],"parsingResult":{"executableCommands":[{"name":"git","args":[{"type":"word","value":"remote"},{"type":"word","value":"-v"}],"fullText":"git remote -v"},{"name":"git","args":[{"type":"word","value":"rev-parse"},{"type":"word","value":"--abbrev-ref"},{"type":"word","value":"HEAD"}],"fullText":"git rev-parse --abbrev-ref HEAD"}]},"fileOutputThresholdBytes":"40000","timeoutBehavior":"TIMEOUT_BEHAVIOR_BACKGROUND","hardTimeout":86400000,"description":"Get git remote URL and branch","closeStdin":true,"conversationId":"bc-44fac838-ffed-4477-930b-0cc824c83a5b"}}
+
+id: 1787345181017-0
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6\nfc_192d9881-3315-9c09-8467-812c167c70d1_3","toolCall":{"type":"shell","args":{"command":"git remote -v && git rev-parse --abbrev-ref HEAD","timeout":600000}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-8-koue"}
+
+id: 1787345181059-0
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2","name":"grep_search","status":"completed","args":{"pattern":"badge|github.com/.*/actions","path":"/workspace/README.md","glob":"README.md","caseInsensitive":false,"multiline":false,"toolCallId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2","offset":0},"result":{"success":{"pattern":"badge|github.com/.*/actions","path":"/workspace/README.md","outputMode":"content","workspaceResults":{"/workspace":{"content":{"matches":[{"file":"README.md","matches":[{"lineNumber":232,"content":"<img width=\"520\" alt=\"ISO 27001 and SOC 2 Type II badges\" src=\".github/readme/security-badges.svg\" />"}]}],"totalLines":1,"totalMatchedLines":1}}}}}}
+
+id: 1787345181059-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-5\nfc_192d9881-3315-9c09-8467-812c167c70d1_2","toolCall":{"type":"grep","args":{"pattern":"badge|github.com/.*/actions","path":"/workspace/README.md","glob":"README.md","offset":0},"result":{"status":"success","value":{"workspaceResults":{"/workspace":{"type":"content","output":{"matches":[{"file":"README.md"}],"totalMatches":0}}}}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-7-m8ef"}
+
+id: 1787345181061-0
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-4\nfc_192d9881-3315-9c09-8467-812c167c70d1_1","name":"read_file","status":"completed","args":{"path":"/workspace/.github/workflows/code_check_cloud_storage.yml","limit":40},"result":{"success":{"content":"# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs\nname: cloud storage code check\nenv:\n  CARGO_INCREMENTAL: '0'\n  CARGO_TERM_COLOR: always\n  CARGO_PROFILE_DEV_DEBUG: limited\n  CARGO_PROFILE_TEST_DEBUG: limited\n  RUST_BACKTRACE: '1'\n  RUSTFLAGS: '-C link-arg=-fuse-ld=lld'\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-small\n    outputs:\n      should_run: ${{ steps.filter.outputs.should_run }}\n      nextest_filter: ${{ steps.nextest-filter.outputs.nextest_filter }}\n      doppler_config_bins: ${{ steps.doppler-bins.outputs.doppler_config_bins }}\n    steps:\n    - name: Checkout\n      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd\n      with:\n        clean: 'false'\n        fetch-depth: '0'\n        persist-credentials: 'false'\n    - name: Setup Rust\n      uses: './.github/actions/setup-rust'\n      with:\n        sccache: 'false'\n        rust-cache: 'false'\n    - id: filter\n      name: Filter changed paths","totalLines":385,"fileSize":15568,"path":"/workspace/.github/workflows/code_check_cloud_storage.yml","readRange":{"startLine":1,"endLine":40}}}}
+
+id: 1787345181061-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-4\nfc_192d9881-3315-9c09-8467-812c167c70d1_1","toolCall":{"type":"read","args":{"path":"/workspace/.github/workflows/code_check_cloud_storage.yml"},"result":{"status":"success","value":{"content":"# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_cloud_storage.rs\nname: cloud storage code check\nenv:\n  CARGO_INCREMENTAL: '0'\n  CARGO_TERM_COLOR: always\n  CARGO_PROFILE_DEV_DEBUG: limited\n  CARGO_PROFILE_TEST_DEBUG: limited\n  RUST_BACKTRACE: '1'\n  RUSTFLAGS: '-C link-arg=-fuse-ld=lld'\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-small\n    outputs:\n      should_run: ${{ steps.filter.outputs.should_run }}\n      nextest_filter: ${{ steps.nextest-filter.outputs.nextest_filter }}\n      doppler_config_bins: ${{ steps.doppler-bins.outputs.doppler_config_bins }}\n    steps:\n    - name: Checkout\n      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd\n      with:\n        clean: 'false'\n        fetch-depth: '0'\n        persist-credentials: 'false'\n    - name: Setup Rust\n      uses: './.github/actions/setup-rust'\n      with:\n        sccache: 'false'\n        rust-cache: 'false'\n    - id: filter\n      name: Filter changed paths","totalLines":385,"fileSize":15568}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-6-2w2e"}
+
+id: 1787345181063-0
+event: interaction_update
+data: {"type":"token-delta","tokens":46}
+
+id: 1787345181065-0
+event: interaction_update
+data: {"type":"token-delta","tokens":309}
+
+id: 1787345181247-0
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-3\nfc_192d9881-3315-9c09-8467-812c167c70d1_0","name":"read_file","status":"completed","args":{"path":"/workspace/README.md","limit":80},"result":{"success":{"content":"<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>\n    ·\n    <a href=\"mailto:teo@macro.com\">Hiring</a>\n  </p>\n</div>\n\n<br />\n\nMacro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.\n\n<br />\n\n# Why Macro\n\nWe built Macro because we wanted a single operating system for our startup. There are many good software products, and we used them all — Slack, Linear, Notion, HubSpot, and Superhuman — but they don't work together as one system. As we scaled our last venture to ~20 people things started to break: every team got their own tools and the company was held together by MCP and Zapier. The company was not computable. It was chaotic.\n\nMacro is a complete redesign of work software from the ground up as a single system.\n\nDesigned by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their \"operating system\".\n\n<br />\n\n# Features\n\nMacro is composed of 'blocks' designed to be modular, extensible, and work together like Lego. For each block, we studied the best prior art and tried to make it even better.\n\nEach surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.\n\n| Block         | Docs                                                      | What it does                                                                  |\n| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |\n| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |\n| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |\n| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |\n| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |\n| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |\n| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |\n| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |\n| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |\n| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |\n| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |\n\n<br />\n\n# **Multiple email inboxes** w/ good AI tools, integrated CRM\n\nMacro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:\n\n1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.\n2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.\n3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.\n\n![Macro email thread with actions, tags, and properties in the sidebar](.github/readme/email-thread.png)\n\n4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.\n5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.\n\nMacro Mail lives in the same interface as channels, docs, tasks, and code. From any email, hit \"task\" to create a linked task, e.g. a ticket for an engineer from a customer support email. @mention emails in documents, e.g. @Re: Contract Signature.eml inside of Todos.md. In Macro, your email is brought into the fold with all of your tools, and your team, in the same permissions system: just hit `Share` to share an email to any DM or channel — no need to screenshot.\n\n[Email docs &rarr;](https://docs.macro.com/product/email)\n\n<br />","totalLines":266,"fileSize":19987,"path":"/workspace/README.md","readRange":{"startLine":1,"endLine":80}}}}
+
+id: 1787345181247-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-3\nfc_192d9881-3315-9c09-8467-812c167c70d1_0","toolCall":{"type":"read","args":{"path":"/workspace/README.md"},"result":{"status":"success","value":{"content":"<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>\n    ·\n    <a href=\"mailto:teo@macro.com\">Hiring</a>\n  </p>\n</div>\n\n<br />\n\nMacro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.\n\n<br />\n\n# Why Macro\n\nWe built Macro because we wanted a single operating system for our startup. There are many good software products, and we used them all — Slack, Linear, Notion, HubSpot, and Superhuman — but they don't work together as one system. As we scaled our last venture to ~20 people things started to break: every team got their own tools and the company was held together by MCP and Zapier. The company was not computable. It was chaotic.\n\nMacro is a complete redesign of work software from the ground up as a single system.\n\nDesigned by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their \"operating system\".\n\n<br />\n\n# Features\n\nMacro is composed of 'blocks' designed to be modular, extensible, and work together like Lego. For each block, we studied the best prior art and tried to make it even better.\n\nEach surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.\n\n| Block         | Docs                                                      | What it does                                                                  |\n| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |\n| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |\n| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |\n| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |\n| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |\n| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |\n| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |\n| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |\n| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |\n| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |\n| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |\n\n<br />\n\n# **Multiple email inboxes** w/ good AI tools, integrated CRM\n\nMacro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:\n\n1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.\n2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.\n3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.\n\n![Macro email thread with actions, tags, and properties in the sidebar](.github/readme/email-thread.png)\n\n4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.\n5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.\n\nMacro Mail lives in the same interface as channels, docs, tasks, and code. From any email, hit \"task\" to create a linked task, e.g. a ticket for an engineer from a customer support email. @mention emails in documents, e.g. @Re: Contract Signature.eml inside of Todos.md. In Macro, your email is brought into the fold with all of your tools, and your team, in the same permissions system: just hit `Share` to share an email to any DM or channel — no need to screenshot.\n\n[Email docs &rarr;](https://docs.macro.com/product/email)\n\n<br />","totalLines":266,"fileSize":19987}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-5-tawt"}
+
+id: 1787345181251-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1605}
+
+id: 1787345181469-0
+event: tool_call
+data: {"callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6\nfc_192d9881-3315-9c09-8467-812c167c70d1_3","name":"run_terminal_cmd","status":"completed","args":{"command":"git remote -v && git rev-parse --abbrev-ref HEAD","timeout":600000,"toolCallId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6\nfc_192d9881-3315-9c09-8467-812c167c70d1_3","simpleCommands":["git","git"],"parsingResult":{"executableCommands":[{"name":"git","args":[{"type":"word","value":"remote"},{"type":"word","value":"-v"}],"fullText":"git remote -v"},{"name":"git","args":[{"type":"word","value":"rev-parse"},{"type":"word","value":"--abbrev-ref"},{"type":"word","value":"HEAD"}],"fullText":"git rev-parse --abbrev-ref HEAD"}]},"fileOutputThresholdBytes":"40000","timeoutBehavior":"TIMEOUT_BEHAVIOR_BACKGROUND","hardTimeout":86400000,"description":"Get git remote URL and branch","closeStdin":true,"conversationId":"bc-44fac838-ffed-4477-930b-0cc824c83a5b"},"result":{"success":{"command":"git remote -v && git rev-parse --abbrev-ref HEAD","stdout":"origin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (fetch)\norigin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (push)\ncursor/ci-badge-readme-2041\n","executionTime":449,"interleavedOutput":"origin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (fetch)\norigin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (push)\ncursor/ci-badge-readme-2041\n","localExecutionTimeMs":66},"isBackground":false}}
+
+id: 1787345181469-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-5cedfe44-af2e-4ad1-a2c8-19a6902531c5-6\nfc_192d9881-3315-9c09-8467-812c167c70d1_3","toolCall":{"type":"shell","args":{"command":"git remote -v && git rev-parse --abbrev-ref HEAD","timeout":600000},"result":{"status":"success","value":{"exitCode":0,"signal":"","stdout":"origin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (fetch)\norigin\thttps://DUMMY-SECRET-ae74febd7bc4-connection_string_credentials@github.com/macro-inc/macro (push)\ncursor/ci-badge-readme-2041\n","stderr":"","executionTime":449}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-8-koue"}
+
+id: 1787345181499-0
+event: interaction_update
+data: {"type":"token-delta","tokens":76}
+
+id: 1787345181671-0
+event: interaction_update
+data: {"type":"step-completed","stepId":94,"stepDurationMs":2638}
+
+id: 1787345182238-0
+event: interaction_update
+data: {"type":"step-started","stepId":174}
+
+id: 1787345183582-0
+event: thinking
+data: {"text":"The primary CI workflow"}
+
+id: 1787345183582-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"The primary CI workflow"}
+
+id: 1787345183586-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345183720-0
+event: thinking
+data: {"text":" is `code_check_cloud_storage.yml`"}
+
+id: 1787345183720-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" is `code_check_cloud_storage.yml`"}
+
+id: 1787345183723-0
+event: interaction_update
+data: {"type":"token-delta","tokens":9}
+
+id: 1787345183832-0
+event: thinking
+data: {"text":" named \"cloud storage"}
+
+id: 1787345183832-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" named \"cloud storage"}
+
+id: 1787345183836-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345184574-0
+event: thinking
+data: {"text":" code check\"."}
+
+id: 1787345184574-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" code check\"."}
+
+id: 1787345184578-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345184582-0
+event: thinking
+data: {"text":"\n\nThe repository is "}
+
+id: 1787345184582-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nThe repository is "}
+
+id: 1787345184585-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345184589-0
+event: thinking
+data: {"text":"`macro-inc/macro`. The"}
+
+id: 1787345184589-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"`macro-inc/macro`. The"}
+
+id: 1787345184593-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345184596-0
+event: thinking
+data: {"text":" CI badge SVG and link"}
+
+id: 1787345184596-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" CI badge SVG and link"}
+
+id: 1787345184600-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345184604-0
+event: thinking
+data: {"text":" URLs are ready. Item"}
+
+id: 1787345184604-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" URLs are ready. Item"}
+
+id: 1787345184607-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345184611-0
+event: thinking
+data: {"text":" 1 will be marked complete"}
+
+id: 1787345184611-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" 1 will be marked complete"}
+
+id: 1787345184614-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345184618-0
+event: thinking
+data: {"text":" next. Item 2 will follow."}
+
+id: 1787345184618-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" next. Item 2 will follow."}
+
+id: 1787345184621-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787345184624-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":1043}
+
+id: 1787345184630-0
+event: assistant
+data: {"text":"Primary"}
+
+id: 1787345184630-0
+event: interaction_update
+data: {"type":"text-delta","text":"Primary"}
+
+id: 1787345184633-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184638-0
+event: assistant
+data: {"text":" CI"}
+
+id: 1787345184638-0
+event: interaction_update
+data: {"type":"text-delta","text":" CI"}
+
+id: 1787345184641-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184646-0
+event: assistant
+data: {"text":" is"}
+
+id: 1787345184646-0
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+id: 1787345184649-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184653-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345184653-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345184657-0
+event: assistant
+data: {"text":"code"}
+
+id: 1787345184657-0
+event: interaction_update
+data: {"type":"text-delta","text":"code"}
+
+id: 1787345184660-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184664-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345184664-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345184668-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184671-0
+event: assistant
+data: {"text":"check"}
+
+id: 1787345184671-0
+event: interaction_update
+data: {"type":"text-delta","text":"check"}
+
+id: 1787345184675-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184683-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345184683-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345184687-0
+event: assistant
+data: {"text":"cloud"}
+
+id: 1787345184687-0
+event: interaction_update
+data: {"type":"text-delta","text":"cloud"}
+
+id: 1787345184693-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184698-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345184698-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345184701-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184705-0
+event: assistant
+data: {"text":"storage"}
+
+id: 1787345184705-0
+event: interaction_update
+data: {"type":"text-delta","text":"storage"}
+
+id: 1787345184708-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184712-0
+event: assistant
+data: {"text":".yml"}
+
+id: 1787345184712-0
+event: interaction_update
+data: {"type":"text-delta","text":".yml"}
+
+id: 1787345184715-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184719-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345184719-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345184722-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184725-0
+event: assistant
+data: {"text":" on"}
+
+id: 1787345184725-0
+event: interaction_update
+data: {"type":"text-delta","text":" on"}
+
+id: 1787345184729-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345184729-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345184732-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184736-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345184736-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345184739-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184743-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345184743-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345184746-0
+event: assistant
+data: {"text":"inc"}
+
+id: 1787345184746-0
+event: interaction_update
+data: {"type":"text-delta","text":"inc"}
+
+id: 1787345184750-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184755-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345184755-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345184761-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345184761-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345184765-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345184769-0
+event: assistant
+data: {"text":"`."}
+
+id: 1787345184769-0
+event: interaction_update
+data: {"type":"text-delta","text":"`."}
+
+id: 1787345184772-0
+event: assistant
+data: {"text":" I’ll"}
+
+id: 1787345184772-0
+event: interaction_update
+data: {"type":"text-delta","text":" I’ll"}
+
+id: 1787345184776-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184779-0
+event: assistant
+data: {"text":" mark"}
+
+id: 1787345184779-0
+event: interaction_update
+data: {"type":"text-delta","text":" mark"}
+
+id: 1787345184782-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345184785-0
+event: assistant
+data: {"text":" that"}
+
+id: 1787345184785-0
+event: interaction_update
+data: {"type":"text-delta","text":" that"}
+
+id: 1787345184788-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184791-0
+event: assistant
+data: {"text":" done"}
+
+id: 1787345184791-0
+event: interaction_update
+data: {"type":"text-delta","text":" done"}
+
+id: 1787345184795-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184798-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345184798-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345184801-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184804-0
+event: assistant
+data: {"text":" pick"}
+
+id: 1787345184804-0
+event: interaction_update
+data: {"type":"text-delta","text":" pick"}
+
+id: 1787345184808-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184811-0
+event: assistant
+data: {"text":" where"}
+
+id: 1787345184811-0
+event: interaction_update
+data: {"type":"text-delta","text":" where"}
+
+id: 1787345184815-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345184819-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345184819-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345184823-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184827-0
+event: assistant
+data: {"text":" badge"}
+
+id: 1787345184827-0
+event: interaction_update
+data: {"type":"text-delta","text":" badge"}
+
+id: 1787345184831-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184835-0
+event: assistant
+data: {"text":" should"}
+
+id: 1787345184835-0
+event: interaction_update
+data: {"type":"text-delta","text":" should"}
+
+id: 1787345184839-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345184843-0
+event: assistant
+data: {"text":" sit"}
+
+id: 1787345184843-0
+event: interaction_update
+data: {"type":"text-delta","text":" sit"}
+
+id: 1787345184846-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184849-0
+event: assistant
+data: {"text":" in"}
+
+id: 1787345184849-0
+event: interaction_update
+data: {"type":"text-delta","text":" in"}
+
+id: 1787345184853-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184856-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345184856-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345184861-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345184864-0
+event: assistant
+data: {"text":" README"}
+
+id: 1787345184864-0
+event: interaction_update
+data: {"type":"text-delta","text":" README"}
+
+id: 1787345184868-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345184871-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345184871-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345184875-0
+event: interaction_update
+data: {"type":"token-delta","tokens":22}
+
+id: 1787345184880-0
+event: interaction_update
+data: {"type":"token-delta","tokens":14}
+
+id: 1787345184884-0
+event: interaction_update
+data: {"type":"token-delta","tokens":18}
+
+id: 1787345184888-0
+event: interaction_update
+data: {"type":"token-delta","tokens":18}
+
+id: 1787345185038-0
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","name":"todo_write","status":"running"}
+
+id: 1787345185042-0
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-8\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_1","name":"read_file","status":"running"}
+
+id: 1787345185042-1
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-9\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_2","name":"read_file","status":"running"}
+
+id: 1787345185042-2
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-10\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_3","name":"read_file","status":"running"}
+
+id: 1787345185042-3
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-8\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_1","name":"read_file","status":"running","args":{"path":"/workspace/README.md","offset":220,"limit":50}}
+
+id: 1787345185042-3
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-8\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_1","toolCall":{"type":"read","args":{"path":"/workspace/README.md"}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-13-fbd9"}
+
+id: 1787345185042-4
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-9\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_2","name":"read_file","status":"running","args":{"path":"/workspace/.github/workflows/web-app-check-main.yml","limit":25}}
+
+id: 1787345185042-4
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-9\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_2","toolCall":{"type":"read","args":{"path":"/workspace/.github/workflows/web-app-check-main.yml"}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-14-zi3l"}
+
+id: 1787345185042-5
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-10\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_3","name":"read_file","status":"running","args":{"path":"/workspace/.github/workflows/code_check_infra.yml","limit":15}}
+
+id: 1787345185042-5
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-10\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_3","toolCall":{"type":"read","args":{"path":"/workspace/.github/workflows/code_check_infra.yml"}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-15-dvvq"}
+
+id: 1787345185078-0
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-8\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_1","name":"read_file","status":"completed","args":{"path":"/workspace/README.md","offset":220,"limit":50},"result":{"success":{"content":"├── infra/         Pulumi definitions\n├── docker/        local Compose stack\n├── nix/           pinned dev shell and build inputs\n└── tooling/       repo scripts and code generators\n```\n\nServices follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.\n\n<br />\n\n# Security\n\n<img width=\"520\" alt=\"ISO 27001 and SOC 2 Type II badges\" src=\".github/readme/security-badges.svg\" />\n\nEnterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified. We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).\n\n<br />\n\n# License\n\nMacro is fully open source — not \"open core\" — under the GNU Affero General Public License v3.0. See `LICENSE.txt` for details.\n\nYou can self-host Macro under the terms of the AGPLv3; the [FAQ](https://docs.macro.com/faq) covers what that involves. If you want to build on top of Macro under a different license, contact [licensing@macro.com](mailto:licensing@macro.com). For managed hosting or commercial arrangements, contact [self-host@macro.com](mailto:self-host@macro.com).\n\n<br />\n\n# Community\n\nHave an idea, want to contribute, or want to work on Macro?\n\n- Feature requests: [contact@macro.com](mailto:contact@macro.com)\n- Contributions: see our [contribution guidelines](CONTRIBUTING.md)\n- Hiring: [teo@macro.com](mailto:teo@macro.com)\n\n<br />\n\n# Star us on GitHub\n\nIf Macro is interesting/useful to you, please scroll up and give the repo a star (scroll to the top of this page -> click `Star` in top right). Stars are how most users hear about Macro because they move us up GitHub's search and trending pages.\n\n<a href=\"https://github.com/macro-inc/macro\">\n  <picture>\n    <source media=\"(prefers-color-scheme: dark)\" srcset=\".github/readme/star-history-dark.svg\" />\n    <img alt=\"Star history for macro-inc/macro, from launch to 3608 stars\" src=\".github/readme/star-history-light.svg\" width=\"100%\" />\n  </picture>\n</a>\n","totalLines":266,"fileSize":19987,"path":"/workspace/README.md","readRange":{"startLine":220,"endLine":266}}}}
+
+id: 1787345185078-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-8\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_1","toolCall":{"type":"read","args":{"path":"/workspace/README.md"},"result":{"status":"success","value":{"content":"├── infra/         Pulumi definitions\n├── docker/        local Compose stack\n├── nix/           pinned dev shell and build inputs\n└── tooling/       repo scripts and code generators\n```\n\nServices follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.\n\n<br />\n\n# Security\n\n<img width=\"520\" alt=\"ISO 27001 and SOC 2 Type II badges\" src=\".github/readme/security-badges.svg\" />\n\nEnterprise-grade security. Zero data retention with model providers, including no training on customer data. SOC 2 Type II certified. We welcome responsible security reports and pay bounties in accordance with severity and impact. Send reports to [security@macro.com](mailto:security@macro.com).\n\n<br />\n\n# License\n\nMacro is fully open source — not \"open core\" — under the GNU Affero General Public License v3.0. See `LICENSE.txt` for details.\n\nYou can self-host Macro under the terms of the AGPLv3; the [FAQ](https://docs.macro.com/faq) covers what that involves. If you want to build on top of Macro under a different license, contact [licensing@macro.com](mailto:licensing@macro.com). For managed hosting or commercial arrangements, contact [self-host@macro.com](mailto:self-host@macro.com).\n\n<br />\n\n# Community\n\nHave an idea, want to contribute, or want to work on Macro?\n\n- Feature requests: [contact@macro.com](mailto:contact@macro.com)\n- Contributions: see our [contribution guidelines](CONTRIBUTING.md)\n- Hiring: [teo@macro.com](mailto:teo@macro.com)\n\n<br />\n\n# Star us on GitHub\n\nIf Macro is interesting/useful to you, please scroll up and give the repo a star (scroll to the top of this page -> click `Star` in top right). Stars are how most users hear about Macro because they move us up GitHub's search and trending pages.\n\n<a href=\"https://github.com/macro-inc/macro\">\n  <picture>\n    <source media=\"(prefers-color-scheme: dark)\" srcset=\".github/readme/star-history-dark.svg\" />\n    <img alt=\"Star history for macro-inc/macro, from launch to 3608 stars\" src=\".github/readme/star-history-light.svg\" width=\"100%\" />\n  </picture>\n</a>\n","totalLines":266,"fileSize":19987}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-13-fbd9"}
+
+id: 1787345185082-0
+event: interaction_update
+data: {"type":"token-delta","tokens":562}
+
+id: 1787345185085-0
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","name":"todo_write","status":"running","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345185084"}]}}
+
+id: 1787345185085-0
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"completed"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-12-semw"}
+
+id: 1787345185086-0
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","name":"todo_write","status":"running","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345185084"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345185084"}]}}
+
+id: 1787345185086-0
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"completed"},{"content":"Determine README placement and markdown for the CI badge","status":"inProgress"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-12-semw"}
+
+id: 1787345185086-1
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","name":"todo_write","status":"running","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345185085"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345185085"}],"merge":true}}
+
+id: 1787345185086-1
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"completed"},{"content":"Determine README placement and markdown for the CI badge","status":"inProgress"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-12-semw"}
+
+id: 1787345185089-0
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","name":"todo_write","status":"completed","args":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345185085"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345185085"}],"merge":true},"result":{"success":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345185088"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345185088"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_PENDING","createdAt":"1787345178058","updatedAt":"1787345178058"}],"totalCount":3,"wasMerge":true}}}
+
+id: 1787345185089-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-7\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"completed"},{"content":"Determine README placement and markdown for the CI badge","status":"inProgress"}]},"result":{"status":"success","value":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"completed"},{"content":"Determine README placement and markdown for the CI badge","status":"inProgress"},{"content":"Record the exact README change to make (without applying it)","status":"pending"}],"totalCount":3}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-12-semw"}
+
+id: 1787345185094-0
+event: interaction_update
+data: {"type":"token-delta","tokens":119}
+
+id: 1787345185117-0
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-9\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_2","name":"read_file","status":"completed","args":{"path":"/workspace/.github/workflows/web-app-check-main.yml","limit":25},"result":{"success":{"content":"# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs\nname: Web App Pr Checks\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-tiny-no-cache\n    outputs:\n      should_run: ${{ steps.filter.outputs.should_run }}\n      api_changed: ${{ steps.filter.outputs.api_changed }}\n    steps:\n    - name: Checkout Repo\n      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10\n    - id: filter\n      name: Filter changed paths\n      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590\n      with:","totalLines":297,"fileSize":11057,"path":"/workspace/.github/workflows/web-app-check-main.yml","readRange":{"startLine":1,"endLine":25}}}}
+
+id: 1787345185117-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-9\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_2","toolCall":{"type":"read","args":{"path":"/workspace/.github/workflows/web-app-check-main.yml"},"result":{"status":"success","value":{"content":"# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs\nname: Web App Pr Checks\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-tiny-no-cache\n    outputs:\n      should_run: ${{ steps.filter.outputs.should_run }}\n      api_changed: ${{ steps.filter.outputs.api_changed }}\n    steps:\n    - name: Checkout Repo\n      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10\n    - id: filter\n      name: Filter changed paths\n      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590\n      with:","totalLines":297,"fileSize":11057}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-14-zi3l"}
+
+id: 1787345185120-0
+event: tool_call
+data: {"callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-10\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_3","name":"read_file","status":"completed","args":{"path":"/workspace/.github/workflows/code_check_infra.yml","limit":15},"result":{"success":{"content":"# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs\nname: infra code check\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-small","totalLines":113,"fileSize":3703,"path":"/workspace/.github/workflows/code_check_infra.yml","readRange":{"startLine":1,"endLine":15}}}}
+
+id: 1787345185120-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-03d14646-0280-4e3c-aeb4-413c4c548aa3-10\nfc_01c9e3d2-d33e-9bea-b371-ae131af9c753_3","toolCall":{"type":"read","args":{"path":"/workspace/.github/workflows/code_check_infra.yml"},"result":{"status":"success","value":{"content":"# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).\n# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs\nname: infra code check\n'on':\n  pull_request:\n    types:\n    - opened\n    - synchronize\n    - reopened\n    - ready_for_review\n    branches:\n    - main\njobs:\n  path-check:\n    runs-on: namespace-profile-linux-small","totalLines":113,"fileSize":3703}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-15-dvvq"}
+
+id: 1787345185122-0
+event: interaction_update
+data: {"type":"token-delta","tokens":199}
+
+id: 1787345185125-0
+event: interaction_update
+data: {"type":"token-delta","tokens":101}
+
+id: 1787345185230-0
+event: interaction_update
+data: {"type":"step-completed","stepId":174,"stepDurationMs":2991}
+
+id: 1787345185709-0
+event: interaction_update
+data: {"type":"step-started","stepId":284}
+
+id: 1787345186770-0
+event: thinking
+data: {"text":"Items 2 and 3 can now"}
+
+id: 1787345186770-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Items 2 and 3 can now"}
+
+id: 1787345186774-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345186963-0
+event: thinking
+data: {"text":" be completed."}
+
+id: 1787345186963-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" be completed."}
+
+id: 1787345186967-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345187930-0
+event: thinking
+data: {"text":"\n\nThe CI badge will "}
+
+id: 1787345187930-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nThe CI badge will "}
+
+id: 1787345187934-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345188024-0
+event: thinking
+data: {"text":"be placed right after"}
+
+id: 1787345188024-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"be placed right after"}
+
+id: 1787345188029-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345188092-0
+event: thinking
+data: {"text":" the header navigation"}
+
+id: 1787345188092-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" the header navigation"}
+
+id: 1787345188096-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345188178-0
+event: thinking
+data: {"text":" links in the centered"}
+
+id: 1787345188178-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" links in the centered"}
+
+id: 1787345188181-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345188259-0
+event: thinking
+data: {"text":" layout, following standard"}
+
+id: 1787345188259-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" layout, following standard"}
+
+id: 1787345188263-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345188342-0
+event: thinking
+data: {"text":" GitHub README conventions."}
+
+id: 1787345188342-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" GitHub README conventions."}
+
+id: 1787345188357-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787345189051-0
+event: thinking
+data: {"text":"\n\nThe exact CI badge"}
+
+id: 1787345189051-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nThe exact CI badge"}
+
+id: 1787345189055-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345189058-0
+event: thinking
+data: {"text":" markdown is ready. "}
+
+id: 1787345189058-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" markdown is ready. "}
+
+id: 1787345189062-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345189066-0
+event: thinking
+data: {"text":"Item 2 will be marked"}
+
+id: 1787345189066-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Item 2 will be marked"}
+
+id: 1787345189069-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345189072-0
+event: thinking
+data: {"text":" complete, and item "}
+
+id: 1787345189072-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" complete, and item "}
+
+id: 1787345189076-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345189079-0
+event: thinking
+data: {"text":"3 will be completed "}
+
+id: 1787345189079-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"3 will be completed "}
+
+id: 1787345189083-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345189086-0
+event: thinking
+data: {"text":"by recording the change"}
+
+id: 1787345189086-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"by recording the change"}
+
+id: 1787345189090-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345189093-0
+event: thinking
+data: {"text":" in the response."}
+
+id: 1787345189093-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" in the response."}
+
+id: 1787345189097-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787345189101-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":2332}
+
+id: 1787345189106-0
+event: assistant
+data: {"text":"Placement"}
+
+id: 1787345189106-0
+event: interaction_update
+data: {"type":"text-delta","text":"Placement"}
+
+id: 1787345189109-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345189113-0
+event: assistant
+data: {"text":" is"}
+
+id: 1787345189113-0
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+id: 1787345189118-0
+event: assistant
+data: {"text":" clear"}
+
+id: 1787345189118-0
+event: interaction_update
+data: {"type":"text-delta","text":" clear"}
+
+id: 1787345189122-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189126-0
+event: assistant
+data: {"text":":"}
+
+id: 1787345189126-0
+event: interaction_update
+data: {"type":"text-delta","text":":"}
+
+id: 1787345189131-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345189131-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345189137-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189142-0
+event: assistant
+data: {"text":" CI"}
+
+id: 1787345189142-0
+event: interaction_update
+data: {"type":"text-delta","text":" CI"}
+
+id: 1787345189146-0
+event: assistant
+data: {"text":" badge"}
+
+id: 1787345189146-0
+event: interaction_update
+data: {"type":"text-delta","text":" badge"}
+
+id: 1787345189150-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189154-0
+event: assistant
+data: {"text":" belongs"}
+
+id: 1787345189154-0
+event: interaction_update
+data: {"type":"text-delta","text":" belongs"}
+
+id: 1787345189157-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189161-0
+event: assistant
+data: {"text":" in"}
+
+id: 1787345189161-0
+event: interaction_update
+data: {"type":"text-delta","text":" in"}
+
+id: 1787345189164-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189182-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345189182-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345189185-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189189-0
+event: assistant
+data: {"text":" centered"}
+
+id: 1787345189189-0
+event: interaction_update
+data: {"type":"text-delta","text":" centered"}
+
+id: 1787345189192-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189195-0
+event: assistant
+data: {"text":" header"}
+
+id: 1787345189195-0
+event: interaction_update
+data: {"type":"text-delta","text":" header"}
+
+id: 1787345189199-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189202-0
+event: assistant
+data: {"text":" after"}
+
+id: 1787345189202-0
+event: interaction_update
+data: {"type":"text-delta","text":" after"}
+
+id: 1787345189206-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189209-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345189209-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345189212-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189216-0
+event: assistant
+data: {"text":" nav"}
+
+id: 1787345189216-0
+event: interaction_update
+data: {"type":"text-delta","text":" nav"}
+
+id: 1787345189223-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189226-0
+event: assistant
+data: {"text":" links"}
+
+id: 1787345189226-0
+event: interaction_update
+data: {"type":"text-delta","text":" links"}
+
+id: 1787345189231-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189234-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345189234-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345189238-0
+event: assistant
+data: {"text":" I’ll"}
+
+id: 1787345189238-0
+event: interaction_update
+data: {"type":"text-delta","text":" I’ll"}
+
+id: 1787345189242-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189247-0
+event: assistant
+data: {"text":" record"}
+
+id: 1787345189247-0
+event: interaction_update
+data: {"type":"text-delta","text":" record"}
+
+id: 1787345189252-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189256-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345189256-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345189260-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189264-0
+event: assistant
+data: {"text":" exact"}
+
+id: 1787345189264-0
+event: interaction_update
+data: {"type":"text-delta","text":" exact"}
+
+id: 1787345189268-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189272-0
+event: assistant
+data: {"text":" markdown"}
+
+id: 1787345189272-0
+event: interaction_update
+data: {"type":"text-delta","text":" markdown"}
+
+id: 1787345189275-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345189279-0
+event: assistant
+data: {"text":" next"}
+
+id: 1787345189279-0
+event: interaction_update
+data: {"type":"text-delta","text":" next"}
+
+id: 1787345189282-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189286-0
+event: assistant
+data: {"text":","}
+
+id: 1787345189286-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345189290-0
+event: assistant
+data: {"text":" still"}
+
+id: 1787345189290-0
+event: interaction_update
+data: {"type":"text-delta","text":" still"}
+
+id: 1787345189293-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189296-0
+event: assistant
+data: {"text":" without"}
+
+id: 1787345189296-0
+event: interaction_update
+data: {"type":"text-delta","text":" without"}
+
+id: 1787345189300-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189304-0
+event: assistant
+data: {"text":" editing"}
+
+id: 1787345189304-0
+event: interaction_update
+data: {"type":"text-delta","text":" editing"}
+
+id: 1787345189308-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345189311-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345189311-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345189315-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189318-0
+event: assistant
+data: {"text":" file"}
+
+id: 1787345189318-0
+event: interaction_update
+data: {"type":"text-delta","text":" file"}
+
+id: 1787345189322-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345189325-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345189325-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345189329-0
+event: interaction_update
+data: {"type":"token-delta","tokens":23}
+
+id: 1787345189502-0
+event: tool_call
+data: {"callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","name":"todo_write","status":"running"}
+
+id: 1787345189520-0
+event: tool_call
+data: {"callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","name":"todo_write","status":"running","args":{"todos":[{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345189519"}]}}
+
+id: 1787345189520-0
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Determine README placement and markdown for the CI badge","status":"completed"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-19-3ld6"}
+
+id: 1787345189521-0
+event: tool_call
+data: {"callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","name":"todo_write","status":"running","args":{"todos":[{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345189519"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345189519"}]}}
+
+id: 1787345189521-0
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Determine README placement and markdown for the CI badge","status":"completed"},{"content":"Record the exact README change to make (without applying it)","status":"inProgress"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-19-3ld6"}
+
+id: 1787345189521-1
+event: tool_call
+data: {"callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","name":"todo_write","status":"running","args":{"todos":[{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345189520"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345189520"}],"merge":true}}
+
+id: 1787345189521-1
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Determine README placement and markdown for the CI badge","status":"completed"},{"content":"Record the exact README change to make (without applying it)","status":"inProgress"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-19-3ld6"}
+
+id: 1787345189525-0
+event: tool_call
+data: {"callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","name":"todo_write","status":"completed","args":{"todos":[{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345189520"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345189520"}],"merge":true},"result":{"success":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345185088"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345189524"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_IN_PROGRESS","createdAt":"1787345178058","updatedAt":"1787345189524"}],"totalCount":3,"wasMerge":true}}}
+
+id: 1787345189525-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-4b018d39-45a1-41a0-86f2-fe6bc3741472-11\nfc_4d5294a8-82de-95a9-9548-9a9fede8bc18_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Determine README placement and markdown for the CI badge","status":"completed"},{"content":"Record the exact README change to make (without applying it)","status":"inProgress"}]},"result":{"status":"success","value":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"completed"},{"content":"Determine README placement and markdown for the CI badge","status":"completed"},{"content":"Record the exact README change to make (without applying it)","status":"inProgress"}],"totalCount":3}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-19-3ld6"}
+
+id: 1787345189529-0
+event: interaction_update
+data: {"type":"token-delta","tokens":119}
+
+id: 1787345189731-0
+event: interaction_update
+data: {"type":"step-completed","stepId":284,"stepDurationMs":4021}
+
+id: 1787345190253-0
+event: interaction_update
+data: {"type":"step-started","stepId":378}
+
+id: 1787345192700-0
+event: thinking
+data: {"text":"Item 3 is now marked"}
+
+id: 1787345192700-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Item 3 is now marked"}
+
+id: 1787345192708-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345192712-0
+event: thinking
+data: {"text":" complete after recording"}
+
+id: 1787345192712-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" complete after recording"}
+
+id: 1787345192716-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345192720-0
+event: thinking
+data: {"text":" the exact README change."}
+
+id: 1787345192720-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" the exact README change."}
+
+id: 1787345192728-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345192732-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":33}
+
+id: 1787345192738-0
+event: interaction_update
+data: {"type":"token-delta","tokens":14}
+
+id: 1787345192947-0
+event: tool_call
+data: {"callId":"call-afee3a02-6c61-432e-98d0-58c560451742-12\nfc_799a0b10-3002-9652-ab72-188838537dca_0","name":"todo_write","status":"running"}
+
+id: 1787345192963-0
+event: tool_call
+data: {"callId":"call-afee3a02-6c61-432e-98d0-58c560451742-12\nfc_799a0b10-3002-9652-ab72-188838537dca_0","name":"todo_write","status":"running","args":{"todos":[{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345192963"}]}}
+
+id: 1787345192963-0
+event: interaction_update
+data: {"type":"partial-tool-call","callId":"call-afee3a02-6c61-432e-98d0-58c560451742-12\nfc_799a0b10-3002-9652-ab72-188838537dca_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Record the exact README change to make (without applying it)","status":"completed"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-23-i9zw"}
+
+id: 1787345192964-0
+event: tool_call
+data: {"callId":"call-afee3a02-6c61-432e-98d0-58c560451742-12\nfc_799a0b10-3002-9652-ab72-188838537dca_0","name":"todo_write","status":"running","args":{"todos":[{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345192963"}],"merge":true}}
+
+id: 1787345192964-0
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-afee3a02-6c61-432e-98d0-58c560451742-12\nfc_799a0b10-3002-9652-ab72-188838537dca_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Record the exact README change to make (without applying it)","status":"completed"}]}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-23-i9zw"}
+
+id: 1787345192968-0
+event: tool_call
+data: {"callId":"call-afee3a02-6c61-432e-98d0-58c560451742-12\nfc_799a0b10-3002-9652-ab72-188838537dca_0","name":"todo_write","status":"completed","args":{"todos":[{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345192963"}],"merge":true},"result":{"success":{"todos":[{"id":"1","content":"Identify existing CI workflow and badge URL","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345185088"},{"id":"2","content":"Determine README placement and markdown for the CI badge","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345189524"},{"id":"3","content":"Record the exact README change to make (without applying it)","status":"TODO_STATUS_COMPLETED","createdAt":"1787345178058","updatedAt":"1787345192967"}],"totalCount":3,"wasMerge":true}}}
+
+id: 1787345192968-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-afee3a02-6c61-432e-98d0-58c560451742-12\nfc_799a0b10-3002-9652-ab72-188838537dca_0","toolCall":{"type":"updateTodos","args":{"todos":[{"content":"Record the exact README change to make (without applying it)","status":"completed"}]},"result":{"status":"success","value":{"todos":[{"content":"Identify existing CI workflow and badge URL","status":"completed"},{"content":"Determine README placement and markdown for the CI badge","status":"completed"},{"content":"Record the exact README change to make (without applying it)","status":"completed"}],"totalCount":3}}},"modelCallId":"serverGenReqId_d35597d3-fa5f-42e6-b07b-b5b4bc5bef84-23-i9zw"}
+
+id: 1787345192972-0
+event: interaction_update
+data: {"type":"token-delta","tokens":119}
+
+id: 1787345193081-0
+event: interaction_update
+data: {"type":"step-completed","stepId":378,"stepDurationMs":2828}
+
+id: 1787345193565-0
+event: interaction_update
+data: {"type":"step-started","stepId":393}
+
+id: 1787345194651-0
+event: thinking
+data: {"text":"All three todo items"}
+
+id: 1787345194651-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"All three todo items"}
+
+id: 1787345194655-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345195237-0
+event: thinking
+data: {"text":" are complete. I am "}
+
+id: 1787345195237-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" are complete. I am "}
+
+id: 1787345195241-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345195245-0
+event: thinking
+data: {"text":"preparing a brief summary"}
+
+id: 1787345195245-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"preparing a brief summary"}
+
+id: 1787345195248-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345195251-0
+event: thinking
+data: {"text":" of the completed tasks."}
+
+id: 1787345195251-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" of the completed tasks."}
+
+id: 1787345195255-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345195258-0
+event: thinking
+data: {"text":"\n\nI located the README"}
+
+id: 1787345195258-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"\n\nI located the README"}
+
+id: 1787345195262-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345195265-0
+event: thinking
+data: {"text":" file. I identified "}
+
+id: 1787345195265-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" file. I identified "}
+
+id: 1787345195268-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345195272-0
+event: thinking
+data: {"text":"where to place the CI"}
+
+id: 1787345195272-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"where to place the CI"}
+
+id: 1787345195283-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787345195286-0
+event: thinking
+data: {"text":" badge. I determined"}
+
+id: 1787345195286-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" badge. I determined"}
+
+id: 1787345195290-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345195296-0
+event: thinking
+data: {"text":" the exact markdown "}
+
+id: 1787345195296-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" the exact markdown "}
+
+id: 1787345195300-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345195304-0
+event: thinking
+data: {"text":"syntax. No files were"}
+
+id: 1787345195304-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"syntax. No files were"}
+
+id: 1787345195309-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787345195312-0
+event: thinking
+data: {"text":" modified."}
+
+id: 1787345195312-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" modified."}
+
+id: 1787345195315-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195319-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":667}
+
+id: 1787345195323-0
+event: assistant
+data: {"text":"I"}
+
+id: 1787345195323-0
+event: interaction_update
+data: {"type":"text-delta","text":"I"}
+
+id: 1787345195326-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195330-0
+event: assistant
+data: {"text":" created"}
+
+id: 1787345195330-0
+event: interaction_update
+data: {"type":"text-delta","text":" created"}
+
+id: 1787345195333-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195337-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345195337-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345195340-0
+event: assistant
+data: {"text":" three"}
+
+id: 1787345195340-0
+event: interaction_update
+data: {"type":"text-delta","text":" three"}
+
+id: 1787345195345-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195348-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345195348-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345195355-0
+event: assistant
+data: {"text":"item"}
+
+id: 1787345195355-0
+event: interaction_update
+data: {"type":"text-delta","text":"item"}
+
+id: 1787345195359-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195375-0
+event: assistant
+data: {"text":" todo"}
+
+id: 1787345195375-0
+event: interaction_update
+data: {"type":"text-delta","text":" todo"}
+
+id: 1787345195378-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195382-0
+event: assistant
+data: {"text":" list"}
+
+id: 1787345195382-0
+event: interaction_update
+data: {"type":"text-delta","text":" list"}
+
+id: 1787345195385-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195389-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345195389-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345195392-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195396-0
+event: assistant
+data: {"text":" worked"}
+
+id: 1787345195396-0
+event: interaction_update
+data: {"type":"text-delta","text":" worked"}
+
+id: 1787345195399-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195406-0
+event: assistant
+data: {"text":" through"}
+
+id: 1787345195406-0
+event: interaction_update
+data: {"type":"text-delta","text":" through"}
+
+id: 1787345195410-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195413-0
+event: assistant
+data: {"text":" each"}
+
+id: 1787345195413-0
+event: interaction_update
+data: {"type":"text-delta","text":" each"}
+
+id: 1787345195417-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195420-0
+event: assistant
+data: {"text":" one"}
+
+id: 1787345195420-0
+event: interaction_update
+data: {"type":"text-delta","text":" one"}
+
+id: 1787345195423-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195426-0
+event: assistant
+data: {"text":" by"}
+
+id: 1787345195426-0
+event: interaction_update
+data: {"type":"text-delta","text":" by"}
+
+id: 1787345195430-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195433-0
+event: assistant
+data: {"text":" reading"}
+
+id: 1787345195433-0
+event: interaction_update
+data: {"type":"text-delta","text":" reading"}
+
+id: 1787345195436-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195440-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345195440-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345195444-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195448-0
+event: assistant
+data: {"text":" repo"}
+
+id: 1787345195448-0
+event: interaction_update
+data: {"type":"text-delta","text":" repo"}
+
+id: 1787345195452-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195455-0
+event: assistant
+data: {"text":" only"}
+
+id: 1787345195455-0
+event: interaction_update
+data: {"type":"text-delta","text":" only"}
+
+id: 1787345195459-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195462-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345195462-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345195466-0
+event: assistant
+data: {"text":" All"}
+
+id: 1787345195466-0
+event: interaction_update
+data: {"type":"text-delta","text":" All"}
+
+id: 1787345195471-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195475-0
+event: assistant
+data: {"text":" three"}
+
+id: 1787345195475-0
+event: interaction_update
+data: {"type":"text-delta","text":" three"}
+
+id: 1787345195479-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195482-0
+event: assistant
+data: {"text":" are"}
+
+id: 1787345195482-0
+event: interaction_update
+data: {"type":"text-delta","text":" are"}
+
+id: 1787345195485-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195489-0
+event: assistant
+data: {"text":" marked"}
+
+id: 1787345195489-0
+event: interaction_update
+data: {"type":"text-delta","text":" marked"}
+
+id: 1787345195492-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195496-0
+event: assistant
+data: {"text":" **"}
+
+id: 1787345195496-0
+event: interaction_update
+data: {"type":"text-delta","text":" **"}
+
+id: 1787345195499-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195502-0
+event: assistant
+data: {"text":"completed"}
+
+id: 1787345195502-0
+event: interaction_update
+data: {"type":"text-delta","text":"completed"}
+
+id: 1787345195505-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195509-0
+event: assistant
+data: {"text":"**."}
+
+id: 1787345195509-0
+event: interaction_update
+data: {"type":"text-delta","text":"**."}
+
+id: 1787345195512-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195516-0
+event: assistant
+data: {"text":" No"}
+
+id: 1787345195516-0
+event: interaction_update
+data: {"type":"text-delta","text":" No"}
+
+id: 1787345195519-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195522-0
+event: assistant
+data: {"text":" files"}
+
+id: 1787345195522-0
+event: interaction_update
+data: {"type":"text-delta","text":" files"}
+
+id: 1787345195525-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195529-0
+event: assistant
+data: {"text":" were"}
+
+id: 1787345195529-0
+event: interaction_update
+data: {"type":"text-delta","text":" were"}
+
+id: 1787345195532-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195535-0
+event: assistant
+data: {"text":" edited"}
+
+id: 1787345195535-0
+event: interaction_update
+data: {"type":"text-delta","text":" edited"}
+
+id: 1787345195538-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195542-0
+event: assistant
+data: {"text":","}
+
+id: 1787345195542-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345195549-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345195549-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345195554-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195560-0
+event: assistant
+data: {"text":" nothing"}
+
+id: 1787345195560-0
+event: interaction_update
+data: {"type":"text-delta","text":" nothing"}
+
+id: 1787345195564-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195568-0
+event: assistant
+data: {"text":" was"}
+
+id: 1787345195568-0
+event: interaction_update
+data: {"type":"text-delta","text":" was"}
+
+id: 1787345195571-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195575-0
+event: assistant
+data: {"text":" committed"}
+
+id: 1787345195575-0
+event: interaction_update
+data: {"type":"text-delta","text":" committed"}
+
+id: 1787345195579-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345195583-0
+event: assistant
+data: {"text":","}
+
+id: 1787345195583-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345195586-0
+event: assistant
+data: {"text":" pushed"}
+
+id: 1787345195586-0
+event: interaction_update
+data: {"type":"text-delta","text":" pushed"}
+
+id: 1787345195590-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195594-0
+event: assistant
+data: {"text":","}
+
+id: 1787345195594-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345195597-0
+event: assistant
+data: {"text":" or"}
+
+id: 1787345195597-0
+event: interaction_update
+data: {"type":"text-delta","text":" or"}
+
+id: 1787345195600-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195604-0
+event: assistant
+data: {"text":" opened"}
+
+id: 1787345195604-0
+event: interaction_update
+data: {"type":"text-delta","text":" opened"}
+
+id: 1787345195607-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195610-0
+event: assistant
+data: {"text":" as"}
+
+id: 1787345195610-0
+event: interaction_update
+data: {"type":"text-delta","text":" as"}
+
+id: 1787345195614-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345195614-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345195616-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195620-0
+event: assistant
+data: {"text":" PR"}
+
+id: 1787345195620-0
+event: interaction_update
+data: {"type":"text-delta","text":" PR"}
+
+id: 1787345195624-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195629-0
+event: assistant
+data: {"text":".\n\n"}
+
+id: 1787345195629-0
+event: interaction_update
+data: {"type":"text-delta","text":".\n\n"}
+
+id: 1787345195633-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345195633-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345195638-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195644-0
+event: assistant
+data: {"text":"1"}
+
+id: 1787345195644-0
+event: interaction_update
+data: {"type":"text-delta","text":"1"}
+
+id: 1787345195647-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345195647-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345195651-0
+event: assistant
+data: {"text":" CI"}
+
+id: 1787345195651-0
+event: interaction_update
+data: {"type":"text-delta","text":" CI"}
+
+id: 1787345195654-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195658-0
+event: assistant
+data: {"text":" workflow"}
+
+id: 1787345195658-0
+event: interaction_update
+data: {"type":"text-delta","text":" workflow"}
+
+id: 1787345195662-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195665-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345195665-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345195669-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195672-0
+event: assistant
+data: {"text":" badge"}
+
+id: 1787345195672-0
+event: interaction_update
+data: {"type":"text-delta","text":" badge"}
+
+id: 1787345195676-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195679-0
+event: assistant
+data: {"text":" URL"}
+
+id: 1787345195679-0
+event: interaction_update
+data: {"type":"text-delta","text":" URL"}
+
+id: 1787345195683-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195687-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345195687-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345195691-0
+event: assistant
+data: {"text":"  \n"}
+
+id: 1787345195691-0
+event: interaction_update
+data: {"type":"text-delta","text":"  \n"}
+
+id: 1787345195694-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195698-0
+event: assistant
+data: {"text":"The"}
+
+id: 1787345195698-0
+event: interaction_update
+data: {"type":"text-delta","text":"The"}
+
+id: 1787345195701-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195705-0
+event: assistant
+data: {"text":" main"}
+
+id: 1787345195705-0
+event: interaction_update
+data: {"type":"text-delta","text":" main"}
+
+id: 1787345195708-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195724-0
+event: assistant
+data: {"text":" backend"}
+
+id: 1787345195724-0
+event: interaction_update
+data: {"type":"text-delta","text":" backend"}
+
+id: 1787345195728-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195732-0
+event: assistant
+data: {"text":" CI"}
+
+id: 1787345195732-0
+event: interaction_update
+data: {"type":"text-delta","text":" CI"}
+
+id: 1787345195735-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195739-0
+event: assistant
+data: {"text":" workflow"}
+
+id: 1787345195739-0
+event: interaction_update
+data: {"type":"text-delta","text":" workflow"}
+
+id: 1787345195742-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195745-0
+event: assistant
+data: {"text":" is"}
+
+id: 1787345195745-0
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+id: 1787345195749-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195752-0
+event: assistant
+data: {"text":" `."}
+
+id: 1787345195752-0
+event: interaction_update
+data: {"type":"text-delta","text":" `."}
+
+id: 1787345195755-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195759-0
+event: assistant
+data: {"text":"github"}
+
+id: 1787345195759-0
+event: interaction_update
+data: {"type":"text-delta","text":"github"}
+
+id: 1787345195762-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195765-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345195765-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345195769-0
+event: assistant
+data: {"text":"workflows"}
+
+id: 1787345195769-0
+event: interaction_update
+data: {"type":"text-delta","text":"workflows"}
+
+id: 1787345195772-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345195776-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345195776-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345195780-0
+event: assistant
+data: {"text":"code"}
+
+id: 1787345195780-0
+event: interaction_update
+data: {"type":"text-delta","text":"code"}
+
+id: 1787345195783-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195786-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345195786-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345195803-0
+event: assistant
+data: {"text":"check"}
+
+id: 1787345195803-0
+event: interaction_update
+data: {"type":"text-delta","text":"check"}
+
+id: 1787345195807-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195810-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345195810-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345195814-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195817-0
+event: assistant
+data: {"text":"cloud"}
+
+id: 1787345195817-0
+event: interaction_update
+data: {"type":"text-delta","text":"cloud"}
+
+id: 1787345195821-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195824-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345195824-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345195827-0
+event: assistant
+data: {"text":"storage"}
+
+id: 1787345195827-0
+event: interaction_update
+data: {"type":"text-delta","text":"storage"}
+
+id: 1787345195831-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195835-0
+event: assistant
+data: {"text":".yml"}
+
+id: 1787345195835-0
+event: interaction_update
+data: {"type":"text-delta","text":".yml"}
+
+id: 1787345195839-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195843-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345195843-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345195847-0
+event: assistant
+data: {"text":" (`"}
+
+id: 1787345195847-0
+event: interaction_update
+data: {"type":"text-delta","text":" (`"}
+
+id: 1787345195850-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195854-0
+event: assistant
+data: {"text":"cloud"}
+
+id: 1787345195854-0
+event: interaction_update
+data: {"type":"text-delta","text":"cloud"}
+
+id: 1787345195857-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195862-0
+event: assistant
+data: {"text":" storage"}
+
+id: 1787345195862-0
+event: interaction_update
+data: {"type":"text-delta","text":" storage"}
+
+id: 1787345195865-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195870-0
+event: assistant
+data: {"text":" code"}
+
+id: 1787345195870-0
+event: interaction_update
+data: {"type":"text-delta","text":" code"}
+
+id: 1787345195873-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195877-0
+event: assistant
+data: {"text":" check"}
+
+id: 1787345195877-0
+event: interaction_update
+data: {"type":"text-delta","text":" check"}
+
+id: 1787345195881-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195886-0
+event: assistant
+data: {"text":"`)"}
+
+id: 1787345195886-0
+event: interaction_update
+data: {"type":"text-delta","text":"`)"}
+
+id: 1787345195891-0
+event: assistant
+data: {"text":" on"}
+
+id: 1787345195891-0
+event: interaction_update
+data: {"type":"text-delta","text":" on"}
+
+id: 1787345195894-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195898-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345195898-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345195901-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195904-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345195904-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345195907-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195911-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345195911-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345195914-0
+event: assistant
+data: {"text":"inc"}
+
+id: 1787345195914-0
+event: interaction_update
+data: {"type":"text-delta","text":"inc"}
+
+id: 1787345195917-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195921-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345195921-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345195926-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345195926-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345195930-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195933-0
+event: assistant
+data: {"text":"`."}
+
+id: 1787345195933-0
+event: interaction_update
+data: {"type":"text-delta","text":"`."}
+
+id: 1787345195936-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195939-0
+event: assistant
+data: {"text":" Badge"}
+
+id: 1787345195939-0
+event: interaction_update
+data: {"type":"text-delta","text":" Badge"}
+
+id: 1787345195943-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195947-0
+event: assistant
+data: {"text":" URL"}
+
+id: 1787345195947-0
+event: interaction_update
+data: {"type":"text-delta","text":" URL"}
+
+id: 1787345195951-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195955-0
+event: assistant
+data: {"text":":\n\n"}
+
+id: 1787345195955-0
+event: interaction_update
+data: {"type":"text-delta","text":":\n\n"}
+
+id: 1787345195958-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345195961-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345195961-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345195965-0
+event: assistant
+data: {"text":"https"}
+
+id: 1787345195965-0
+event: interaction_update
+data: {"type":"text-delta","text":"https"}
+
+id: 1787345195968-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345195973-0
+event: assistant
+data: {"text":"://"}
+
+id: 1787345195973-0
+event: interaction_update
+data: {"type":"text-delta","text":"://"}
+
+id: 1787345195978-0
+event: assistant
+data: {"text":"github"}
+
+id: 1787345195978-0
+event: interaction_update
+data: {"type":"text-delta","text":"github"}
+
+id: 1787345195985-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196000-0
+event: assistant
+data: {"text":".com"}
+
+id: 1787345196000-0
+event: interaction_update
+data: {"type":"text-delta","text":".com"}
+
+id: 1787345196018-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196023-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196023-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196027-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345196027-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345196031-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196034-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345196034-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345196037-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196041-0
+event: assistant
+data: {"text":"inc"}
+
+id: 1787345196041-0
+event: interaction_update
+data: {"type":"text-delta","text":"inc"}
+
+id: 1787345196045-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196045-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196050-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196056-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345196056-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345196059-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196068-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196068-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196073-0
+event: assistant
+data: {"text":"actions"}
+
+id: 1787345196073-0
+event: interaction_update
+data: {"type":"text-delta","text":"actions"}
+
+id: 1787345196076-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196081-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196081-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196084-0
+event: assistant
+data: {"text":"workflows"}
+
+id: 1787345196084-0
+event: interaction_update
+data: {"type":"text-delta","text":"workflows"}
+
+id: 1787345196088-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196092-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196092-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196096-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196101-0
+event: assistant
+data: {"text":"code"}
+
+id: 1787345196101-0
+event: interaction_update
+data: {"type":"text-delta","text":"code"}
+
+id: 1787345196104-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196108-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345196108-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345196112-0
+event: assistant
+data: {"text":"check"}
+
+id: 1787345196112-0
+event: interaction_update
+data: {"type":"text-delta","text":"check"}
+
+id: 1787345196115-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196119-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345196119-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345196123-0
+event: assistant
+data: {"text":"cloud"}
+
+id: 1787345196123-0
+event: interaction_update
+data: {"type":"text-delta","text":"cloud"}
+
+id: 1787345196126-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196129-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345196129-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345196133-0
+event: assistant
+data: {"text":"storage"}
+
+id: 1787345196133-0
+event: interaction_update
+data: {"type":"text-delta","text":"storage"}
+
+id: 1787345196136-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196143-0
+event: assistant
+data: {"text":".yml"}
+
+id: 1787345196143-0
+event: interaction_update
+data: {"type":"text-delta","text":".yml"}
+
+id: 1787345196146-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196150-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196150-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196155-0
+event: assistant
+data: {"text":"badge"}
+
+id: 1787345196155-0
+event: interaction_update
+data: {"type":"text-delta","text":"badge"}
+
+id: 1787345196158-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196162-0
+event: assistant
+data: {"text":".svg"}
+
+id: 1787345196162-0
+event: interaction_update
+data: {"type":"text-delta","text":".svg"}
+
+id: 1787345196166-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196169-0
+event: assistant
+data: {"text":"`\n\n"}
+
+id: 1787345196169-0
+event: interaction_update
+data: {"type":"text-delta","text":"`\n\n"}
+
+id: 1787345196177-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196180-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345196180-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345196184-0
+event: assistant
+data: {"text":"2"}
+
+id: 1787345196184-0
+event: interaction_update
+data: {"type":"text-delta","text":"2"}
+
+id: 1787345196187-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196191-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345196191-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345196196-0
+event: assistant
+data: {"text":" README"}
+
+id: 1787345196196-0
+event: interaction_update
+data: {"type":"text-delta","text":" README"}
+
+id: 1787345196200-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196206-0
+event: assistant
+data: {"text":" placement"}
+
+id: 1787345196206-0
+event: interaction_update
+data: {"type":"text-delta","text":" placement"}
+
+id: 1787345196211-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196215-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345196215-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345196218-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196221-0
+event: assistant
+data: {"text":"  \n"}
+
+id: 1787345196221-0
+event: interaction_update
+data: {"type":"text-delta","text":"  \n"}
+
+id: 1787345196226-0
+event: assistant
+data: {"text":"The"}
+
+id: 1787345196226-0
+event: interaction_update
+data: {"type":"text-delta","text":"The"}
+
+id: 1787345196231-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196235-0
+event: assistant
+data: {"text":" root"}
+
+id: 1787345196235-0
+event: interaction_update
+data: {"type":"text-delta","text":" root"}
+
+id: 1787345196238-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196241-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345196241-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345196245-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196249-0
+event: assistant
+data: {"text":"README"}
+
+id: 1787345196249-0
+event: interaction_update
+data: {"type":"text-delta","text":"README"}
+
+id: 1787345196253-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196257-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787345196257-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787345196260-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196263-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787345196263-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787345196266-0
+event: assistant
+data: {"text":" has"}
+
+id: 1787345196266-0
+event: interaction_update
+data: {"type":"text-delta","text":" has"}
+
+id: 1787345196270-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196273-0
+event: assistant
+data: {"text":" a"}
+
+id: 1787345196273-0
+event: interaction_update
+data: {"type":"text-delta","text":" a"}
+
+id: 1787345196277-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196280-0
+event: assistant
+data: {"text":" centered"}
+
+id: 1787345196280-0
+event: interaction_update
+data: {"type":"text-delta","text":" centered"}
+
+id: 1787345196283-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196287-0
+event: assistant
+data: {"text":" header"}
+
+id: 1787345196287-0
+event: interaction_update
+data: {"type":"text-delta","text":" header"}
+
+id: 1787345196290-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196294-0
+event: assistant
+data: {"text":" ("}
+
+id: 1787345196294-0
+event: interaction_update
+data: {"type":"text-delta","text":" ("}
+
+id: 1787345196297-0
+event: assistant
+data: {"text":"logo"}
+
+id: 1787345196297-0
+event: interaction_update
+data: {"type":"text-delta","text":"logo"}
+
+id: 1787345196300-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196303-0
+event: assistant
+data: {"text":" +"}
+
+id: 1787345196303-0
+event: interaction_update
+data: {"type":"text-delta","text":" +"}
+
+id: 1787345196306-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196311-0
+event: assistant
+data: {"text":" nav"}
+
+id: 1787345196311-0
+event: interaction_update
+data: {"type":"text-delta","text":" nav"}
+
+id: 1787345196314-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196317-0
+event: assistant
+data: {"text":" links"}
+
+id: 1787345196317-0
+event: interaction_update
+data: {"type":"text-delta","text":" links"}
+
+id: 1787345196321-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196325-0
+event: assistant
+data: {"text":")"}
+
+id: 1787345196325-0
+event: interaction_update
+data: {"type":"text-delta","text":")"}
+
+id: 1787345196330-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196337-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787345196337-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787345196341-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196345-0
+event: assistant
+data: {"text":" no"}
+
+id: 1787345196345-0
+event: interaction_update
+data: {"type":"text-delta","text":" no"}
+
+id: 1787345196348-0
+event: assistant
+data: {"text":" CI"}
+
+id: 1787345196348-0
+event: interaction_update
+data: {"type":"text-delta","text":" CI"}
+
+id: 1787345196351-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196355-0
+event: assistant
+data: {"text":" badge"}
+
+id: 1787345196355-0
+event: interaction_update
+data: {"type":"text-delta","text":" badge"}
+
+id: 1787345196358-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196362-0
+event: assistant
+data: {"text":" today"}
+
+id: 1787345196362-0
+event: interaction_update
+data: {"type":"text-delta","text":" today"}
+
+id: 1787345196365-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196369-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345196369-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345196373-0
+event: assistant
+data: {"text":" The"}
+
+id: 1787345196373-0
+event: interaction_update
+data: {"type":"text-delta","text":" The"}
+
+id: 1787345196376-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196380-0
+event: assistant
+data: {"text":" natural"}
+
+id: 1787345196380-0
+event: interaction_update
+data: {"type":"text-delta","text":" natural"}
+
+id: 1787345196383-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196386-0
+event: assistant
+data: {"text":" spot"}
+
+id: 1787345196386-0
+event: interaction_update
+data: {"type":"text-delta","text":" spot"}
+
+id: 1787345196390-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196393-0
+event: assistant
+data: {"text":" is"}
+
+id: 1787345196393-0
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+id: 1787345196397-0
+event: assistant
+data: {"text":" inside"}
+
+id: 1787345196397-0
+event: interaction_update
+data: {"type":"text-delta","text":" inside"}
+
+id: 1787345196400-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196407-0
+event: assistant
+data: {"text":" that"}
+
+id: 1787345196407-0
+event: interaction_update
+data: {"type":"text-delta","text":" that"}
+
+id: 1787345196415-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196422-0
+event: assistant
+data: {"text":" centered"}
+
+id: 1787345196422-0
+event: interaction_update
+data: {"type":"text-delta","text":" centered"}
+
+id: 1787345196426-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345196430-0
+event: assistant
+data: {"text":" block"}
+
+id: 1787345196430-0
+event: interaction_update
+data: {"type":"text-delta","text":" block"}
+
+id: 1787345196434-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196437-0
+event: assistant
+data: {"text":","}
+
+id: 1787345196437-0
+event: interaction_update
+data: {"type":"text-delta","text":","}
+
+id: 1787345196442-0
+event: assistant
+data: {"text":" after"}
+
+id: 1787345196442-0
+event: interaction_update
+data: {"type":"text-delta","text":" after"}
+
+id: 1787345196446-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196450-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345196450-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345196454-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196457-0
+event: assistant
+data: {"text":" nav"}
+
+id: 1787345196457-0
+event: interaction_update
+data: {"type":"text-delta","text":" nav"}
+
+id: 1787345196460-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196464-0
+event: assistant
+data: {"text":" links"}
+
+id: 1787345196464-0
+event: interaction_update
+data: {"type":"text-delta","text":" links"}
+
+id: 1787345196468-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196472-0
+event: assistant
+data: {"text":" ("}
+
+id: 1787345196472-0
+event: interaction_update
+data: {"type":"text-delta","text":" ("}
+
+id: 1787345196475-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196479-0
+event: assistant
+data: {"text":"around"}
+
+id: 1787345196479-0
+event: interaction_update
+data: {"type":"text-delta","text":"around"}
+
+id: 1787345196482-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196485-0
+event: assistant
+data: {"text":" line"}
+
+id: 1787345196485-0
+event: interaction_update
+data: {"type":"text-delta","text":" line"}
+
+id: 1787345196488-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196492-0
+event: assistant
+data: {"text":" "}
+
+id: 1787345196492-0
+event: interaction_update
+data: {"type":"text-delta","text":" "}
+
+id: 1787345196497-0
+event: assistant
+data: {"text":"23"}
+
+id: 1787345196497-0
+event: interaction_update
+data: {"type":"text-delta","text":"23"}
+
+id: 1787345196500-0
+event: assistant
+data: {"text":")."}
+
+id: 1787345196500-0
+event: interaction_update
+data: {"type":"text-delta","text":")."}
+
+id: 1787345196503-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196507-0
+event: assistant
+data: {"text":"\n\n"}
+
+id: 1787345196507-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n\n"}
+
+id: 1787345196510-0
+event: assistant
+data: {"text":"**"}
+
+id: 1787345196510-0
+event: interaction_update
+data: {"type":"text-delta","text":"**"}
+
+id: 1787345196513-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196517-0
+event: assistant
+data: {"text":"3"}
+
+id: 1787345196517-0
+event: interaction_update
+data: {"type":"text-delta","text":"3"}
+
+id: 1787345196520-0
+event: assistant
+data: {"text":"."}
+
+id: 1787345196520-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787345196523-0
+event: assistant
+data: {"text":" Exact"}
+
+id: 1787345196523-0
+event: interaction_update
+data: {"type":"text-delta","text":" Exact"}
+
+id: 1787345196526-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196530-0
+event: assistant
+data: {"text":" change"}
+
+id: 1787345196530-0
+event: interaction_update
+data: {"type":"text-delta","text":" change"}
+
+id: 1787345196535-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196539-0
+event: assistant
+data: {"text":" to"}
+
+id: 1787345196539-0
+event: interaction_update
+data: {"type":"text-delta","text":" to"}
+
+id: 1787345196542-0
+event: assistant
+data: {"text":" make"}
+
+id: 1787345196542-0
+event: interaction_update
+data: {"type":"text-delta","text":" make"}
+
+id: 1787345196547-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196551-0
+event: assistant
+data: {"text":" ("}
+
+id: 1787345196551-0
+event: interaction_update
+data: {"type":"text-delta","text":" ("}
+
+id: 1787345196555-0
+event: assistant
+data: {"text":"not"}
+
+id: 1787345196555-0
+event: interaction_update
+data: {"type":"text-delta","text":"not"}
+
+id: 1787345196559-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196563-0
+event: assistant
+data: {"text":" applied"}
+
+id: 1787345196563-0
+event: interaction_update
+data: {"type":"text-delta","text":" applied"}
+
+id: 1787345196566-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196570-0
+event: assistant
+data: {"text":")**"}
+
+id: 1787345196570-0
+event: interaction_update
+data: {"type":"text-delta","text":")**"}
+
+id: 1787345196573-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196577-0
+event: assistant
+data: {"text":"  \n"}
+
+id: 1787345196577-0
+event: interaction_update
+data: {"type":"text-delta","text":"  \n"}
+
+id: 1787345196580-0
+event: assistant
+data: {"text":"Insert"}
+
+id: 1787345196580-0
+event: interaction_update
+data: {"type":"text-delta","text":"Insert"}
+
+id: 1787345196584-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196588-0
+event: assistant
+data: {"text":" this"}
+
+id: 1787345196588-0
+event: interaction_update
+data: {"type":"text-delta","text":" this"}
+
+id: 1787345196591-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196594-0
+event: assistant
+data: {"text":" after"}
+
+id: 1787345196594-0
+event: interaction_update
+data: {"type":"text-delta","text":" after"}
+
+id: 1787345196597-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196601-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345196601-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345196604-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196607-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787345196607-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787345196611-0
+event: assistant
+data: {"text":"</"}
+
+id: 1787345196611-0
+event: interaction_update
+data: {"type":"text-delta","text":"</"}
+
+id: 1787345196614-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196618-0
+event: assistant
+data: {"text":"p"}
+
+id: 1787345196618-0
+event: interaction_update
+data: {"type":"text-delta","text":"p"}
+
+id: 1787345196622-0
+event: assistant
+data: {"text":">`"}
+
+id: 1787345196622-0
+event: interaction_update
+data: {"type":"text-delta","text":">`"}
+
+id: 1787345196626-0
+event: assistant
+data: {"text":" in"}
+
+id: 1787345196626-0
+event: interaction_update
+data: {"type":"text-delta","text":" in"}
+
+id: 1787345196629-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196633-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787345196633-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787345196636-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196641-0
+event: assistant
+data: {"text":" header"}
+
+id: 1787345196641-0
+event: interaction_update
+data: {"type":"text-delta","text":" header"}
+
+id: 1787345196644-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196648-0
+event: assistant
+data: {"text":":\n\n"}
+
+id: 1787345196648-0
+event: interaction_update
+data: {"type":"text-delta","text":":\n\n"}
+
+id: 1787345196652-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196656-0
+event: assistant
+data: {"text":"```"}
+
+id: 1787345196656-0
+event: interaction_update
+data: {"type":"text-delta","text":"```"}
+
+id: 1787345196659-0
+event: assistant
+data: {"text":"markdown"}
+
+id: 1787345196659-0
+event: interaction_update
+data: {"type":"text-delta","text":"markdown"}
+
+id: 1787345196663-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196667-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345196667-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345196670-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196675-0
+event: assistant
+data: {"text":" "}
+
+id: 1787345196675-0
+event: interaction_update
+data: {"type":"text-delta","text":" "}
+
+id: 1787345196678-0
+event: assistant
+data: {"text":" <"}
+
+id: 1787345196678-0
+event: interaction_update
+data: {"type":"text-delta","text":" <"}
+
+id: 1787345196682-0
+event: assistant
+data: {"text":"p"}
+
+id: 1787345196682-0
+event: interaction_update
+data: {"type":"text-delta","text":"p"}
+
+id: 1787345196685-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196689-0
+event: assistant
+data: {"text":">\n"}
+
+id: 1787345196689-0
+event: interaction_update
+data: {"type":"text-delta","text":">\n"}
+
+id: 1787345196692-0
+event: assistant
+data: {"text":"   "}
+
+id: 1787345196692-0
+event: interaction_update
+data: {"type":"text-delta","text":"   "}
+
+id: 1787345196696-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196699-0
+event: assistant
+data: {"text":" <"}
+
+id: 1787345196699-0
+event: interaction_update
+data: {"type":"text-delta","text":" <"}
+
+id: 1787345196703-0
+event: assistant
+data: {"text":"a"}
+
+id: 1787345196703-0
+event: interaction_update
+data: {"type":"text-delta","text":"a"}
+
+id: 1787345196707-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196710-0
+event: assistant
+data: {"text":" href"}
+
+id: 1787345196710-0
+event: interaction_update
+data: {"type":"text-delta","text":" href"}
+
+id: 1787345196715-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196718-0
+event: assistant
+data: {"text":"=\""}
+
+id: 1787345196718-0
+event: interaction_update
+data: {"type":"text-delta","text":"=\""}
+
+id: 1787345196722-0
+event: assistant
+data: {"text":"https"}
+
+id: 1787345196722-0
+event: interaction_update
+data: {"type":"text-delta","text":"https"}
+
+id: 1787345196726-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196729-0
+event: assistant
+data: {"text":"://"}
+
+id: 1787345196729-0
+event: interaction_update
+data: {"type":"text-delta","text":"://"}
+
+id: 1787345196733-0
+event: assistant
+data: {"text":"github"}
+
+id: 1787345196733-0
+event: interaction_update
+data: {"type":"text-delta","text":"github"}
+
+id: 1787345196736-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196740-0
+event: assistant
+data: {"text":".com"}
+
+id: 1787345196740-0
+event: interaction_update
+data: {"type":"text-delta","text":".com"}
+
+id: 1787345196743-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196746-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196746-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196750-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345196750-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345196753-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196757-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345196757-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345196760-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196763-0
+event: assistant
+data: {"text":"inc"}
+
+id: 1787345196763-0
+event: interaction_update
+data: {"type":"text-delta","text":"inc"}
+
+id: 1787345196768-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196768-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196771-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196777-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345196777-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345196787-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196793-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196793-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196798-0
+event: assistant
+data: {"text":"actions"}
+
+id: 1787345196798-0
+event: interaction_update
+data: {"type":"text-delta","text":"actions"}
+
+id: 1787345196802-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196805-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196805-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196808-0
+event: assistant
+data: {"text":"workflows"}
+
+id: 1787345196808-0
+event: interaction_update
+data: {"type":"text-delta","text":"workflows"}
+
+id: 1787345196811-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196815-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196815-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196818-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196821-0
+event: assistant
+data: {"text":"code"}
+
+id: 1787345196821-0
+event: interaction_update
+data: {"type":"text-delta","text":"code"}
+
+id: 1787345196825-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196832-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345196832-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345196836-0
+event: assistant
+data: {"text":"check"}
+
+id: 1787345196836-0
+event: interaction_update
+data: {"type":"text-delta","text":"check"}
+
+id: 1787345196841-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196845-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345196845-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345196849-0
+event: assistant
+data: {"text":"cloud"}
+
+id: 1787345196849-0
+event: interaction_update
+data: {"type":"text-delta","text":"cloud"}
+
+id: 1787345196852-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196856-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345196856-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345196859-0
+event: assistant
+data: {"text":"storage"}
+
+id: 1787345196859-0
+event: interaction_update
+data: {"type":"text-delta","text":"storage"}
+
+id: 1787345196863-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196866-0
+event: assistant
+data: {"text":".yml"}
+
+id: 1787345196866-0
+event: interaction_update
+data: {"type":"text-delta","text":".yml"}
+
+id: 1787345196870-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196873-0
+event: assistant
+data: {"text":"\">"}
+
+id: 1787345196873-0
+event: interaction_update
+data: {"type":"text-delta","text":"\">"}
+
+id: 1787345196879-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345196879-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345196883-0
+event: assistant
+data: {"text":"     "}
+
+id: 1787345196883-0
+event: interaction_update
+data: {"type":"text-delta","text":"     "}
+
+id: 1787345196886-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196889-0
+event: assistant
+data: {"text":" <"}
+
+id: 1787345196889-0
+event: interaction_update
+data: {"type":"text-delta","text":" <"}
+
+id: 1787345196893-0
+event: assistant
+data: {"text":"img"}
+
+id: 1787345196893-0
+event: interaction_update
+data: {"type":"text-delta","text":"img"}
+
+id: 1787345196896-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196900-0
+event: assistant
+data: {"text":" alt"}
+
+id: 1787345196900-0
+event: interaction_update
+data: {"type":"text-delta","text":" alt"}
+
+id: 1787345196904-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196907-0
+event: assistant
+data: {"text":"=\""}
+
+id: 1787345196907-0
+event: interaction_update
+data: {"type":"text-delta","text":"=\""}
+
+id: 1787345196911-0
+event: assistant
+data: {"text":"CI"}
+
+id: 1787345196911-0
+event: interaction_update
+data: {"type":"text-delta","text":"CI"}
+
+id: 1787345196914-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196917-0
+event: assistant
+data: {"text":"\""}
+
+id: 1787345196917-0
+event: interaction_update
+data: {"type":"text-delta","text":"\""}
+
+id: 1787345196921-0
+event: assistant
+data: {"text":" src"}
+
+id: 1787345196921-0
+event: interaction_update
+data: {"type":"text-delta","text":" src"}
+
+id: 1787345196924-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196930-0
+event: assistant
+data: {"text":"=\""}
+
+id: 1787345196930-0
+event: interaction_update
+data: {"type":"text-delta","text":"=\""}
+
+id: 1787345196934-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196937-0
+event: assistant
+data: {"text":"https"}
+
+id: 1787345196937-0
+event: interaction_update
+data: {"type":"text-delta","text":"https"}
+
+id: 1787345196940-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196944-0
+event: assistant
+data: {"text":"://"}
+
+id: 1787345196944-0
+event: interaction_update
+data: {"type":"text-delta","text":"://"}
+
+id: 1787345196947-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196952-0
+event: assistant
+data: {"text":"github"}
+
+id: 1787345196952-0
+event: interaction_update
+data: {"type":"text-delta","text":"github"}
+
+id: 1787345196955-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196959-0
+event: assistant
+data: {"text":".com"}
+
+id: 1787345196959-0
+event: interaction_update
+data: {"type":"text-delta","text":".com"}
+
+id: 1787345196962-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196965-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196965-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196969-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345196969-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345196972-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345196975-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787345196975-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787345196979-0
+event: assistant
+data: {"text":"inc"}
+
+id: 1787345196979-0
+event: interaction_update
+data: {"type":"text-delta","text":"inc"}
+
+id: 1787345196982-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196986-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196986-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196989-0
+event: assistant
+data: {"text":"macro"}
+
+id: 1787345196989-0
+event: interaction_update
+data: {"type":"text-delta","text":"macro"}
+
+id: 1787345196992-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345196996-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345196996-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345196999-0
+event: assistant
+data: {"text":"actions"}
+
+id: 1787345196999-0
+event: interaction_update
+data: {"type":"text-delta","text":"actions"}
+
+id: 1787345197017-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345197020-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345197020-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345197024-0
+event: assistant
+data: {"text":"workflows"}
+
+id: 1787345197024-0
+event: interaction_update
+data: {"type":"text-delta","text":"workflows"}
+
+id: 1787345197027-0
+event: interaction_update
+data: {"type":"token-delta","tokens":3}
+
+id: 1787345197031-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345197031-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345197034-0
+event: assistant
+data: {"text":"code"}
+
+id: 1787345197034-0
+event: interaction_update
+data: {"type":"text-delta","text":"code"}
+
+id: 1787345197037-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197041-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345197041-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345197044-0
+event: assistant
+data: {"text":"check"}
+
+id: 1787345197044-0
+event: interaction_update
+data: {"type":"text-delta","text":"check"}
+
+id: 1787345197047-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197050-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345197050-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345197054-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197057-0
+event: assistant
+data: {"text":"cloud"}
+
+id: 1787345197057-0
+event: interaction_update
+data: {"type":"text-delta","text":"cloud"}
+
+id: 1787345197060-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197063-0
+event: assistant
+data: {"text":"_"}
+
+id: 1787345197063-0
+event: interaction_update
+data: {"type":"text-delta","text":"_"}
+
+id: 1787345197069-0
+event: assistant
+data: {"text":"storage"}
+
+id: 1787345197069-0
+event: interaction_update
+data: {"type":"text-delta","text":"storage"}
+
+id: 1787345197081-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787345197086-0
+event: assistant
+data: {"text":".yml"}
+
+id: 1787345197086-0
+event: interaction_update
+data: {"type":"text-delta","text":".yml"}
+
+id: 1787345197090-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197104-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787345197104-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787345197109-0
+event: assistant
+data: {"text":"badge"}
+
+id: 1787345197109-0
+event: interaction_update
+data: {"type":"text-delta","text":"badge"}
+
+id: 1787345197113-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197116-0
+event: assistant
+data: {"text":".svg"}
+
+id: 1787345197116-0
+event: interaction_update
+data: {"type":"text-delta","text":".svg"}
+
+id: 1787345197119-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197123-0
+event: assistant
+data: {"text":"\""}
+
+id: 1787345197123-0
+event: interaction_update
+data: {"type":"text-delta","text":"\""}
+
+id: 1787345197127-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197130-0
+event: assistant
+data: {"text":" />"}
+
+id: 1787345197130-0
+event: interaction_update
+data: {"type":"text-delta","text":" />"}
+
+id: 1787345197136-0
+event: assistant
+data: {"text":"\n"}
+
+id: 1787345197136-0
+event: interaction_update
+data: {"type":"text-delta","text":"\n"}
+
+id: 1787345197140-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197143-0
+event: assistant
+data: {"text":"   "}
+
+id: 1787345197143-0
+event: interaction_update
+data: {"type":"text-delta","text":"   "}
+
+id: 1787345197147-0
+event: assistant
+data: {"text":" </"}
+
+id: 1787345197147-0
+event: interaction_update
+data: {"type":"text-delta","text":" </"}
+
+id: 1787345197155-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197159-0
+event: assistant
+data: {"text":"a"}
+
+id: 1787345197159-0
+event: interaction_update
+data: {"type":"text-delta","text":"a"}
+
+id: 1787345197163-0
+event: assistant
+data: {"text":">\n"}
+
+id: 1787345197163-0
+event: interaction_update
+data: {"type":"text-delta","text":">\n"}
+
+id: 1787345197166-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197170-0
+event: assistant
+data: {"text":" "}
+
+id: 1787345197170-0
+event: interaction_update
+data: {"type":"text-delta","text":" "}
+
+id: 1787345197173-0
+event: assistant
+data: {"text":" </"}
+
+id: 1787345197173-0
+event: interaction_update
+data: {"type":"text-delta","text":" </"}
+
+id: 1787345197177-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197182-0
+event: assistant
+data: {"text":"p"}
+
+id: 1787345197182-0
+event: interaction_update
+data: {"type":"text-delta","text":"p"}
+
+id: 1787345197185-0
+event: assistant
+data: {"text":">\n"}
+
+id: 1787345197185-0
+event: interaction_update
+data: {"type":"text-delta","text":">\n"}
+
+id: 1787345197189-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787345197193-0
+event: assistant
+data: {"text":"```"}
+
+id: 1787345197193-0
+event: interaction_update
+data: {"type":"text-delta","text":"```"}
+
+id: 1787345197300-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787345197304-0
+event: interaction_update
+data: {"type":"step-completed","stepId":393,"stepDurationMs":3738}
+
+event: status
+data: {"runId":"run-6522034a-aeaa-4309-a80f-f82cec410454","status":"FINISHED"}
+
+id: 1787345198440-0
+event: result
+data: {"runId":"run-6522034a-aeaa-4309-a80f-f82cec410454","status":"FINISHED","text":"I created a three-item todo list and worked through each one by reading the repo only. All three are marked **completed**. No files were edited, and nothing was committed, pushed, or opened as a PR.\n\n**1. CI workflow and badge URL**  \nThe main backend CI workflow is `.github/workflows/code_check_cloud_storage.yml` (`cloud storage code check`) on `macro-inc/macro`. Badge URL:\n\n`https://github.com/macro-inc/macro/actions/workflows/code_check_cloud_storage.yml/badge.svg`\n\n**2. README placement**  \nThe root `README.md` has a centered header (logo + nav links) and no CI badge today. The natural spot is inside that centered block, after the nav links (around line 23).\n\n**3. Exact change to make (not applied)**  \nInsert this after the `</p>` in the header:\n\n```markdown\n  <p>\n    <a href=\"https://github.com/macro-inc/macro/actions/workflows/code_check_cloud_storage.yml\">\n      \n    </a>\n  </p>\n```","durationMs":26007,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/ci-badge-readme-2041"}]}}
+
+id: 1787345198440-0
+event: done
+data: {}
+
