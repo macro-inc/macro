@@ -111,9 +111,7 @@ export function createGraphqlSoupAstItemsQuery(
   let cacheGeneration = 0;
   let resetContinuationPages: (() => void) | undefined;
   let previousInitialInput: GraphqlSoupInput | undefined;
-  let staleFallbackSpan:
-    | ReturnType<typeof Telemetry.anonymousSpan>
-    | undefined;
+  let staleFallbackSpan: ReturnType<typeof Telemetry.anonymousSpan> | undefined;
 
   const recordAuthority = (source: 'network' | 'local' | 'stale-fallback') => {
     const span = Telemetry.anonymousSpan('graphql_cache.soup_authority');

@@ -193,7 +193,9 @@ describe('CacheWorkerCore', () => {
     const observations: Array<Record<string, unknown>> = [];
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({
-        hydrateQuery: vi.fn().mockRejectedValue(new Error('OPFS WAL io failure')),
+        hydrateQuery: vi
+          .fn()
+          .mockRejectedValue(new Error('OPFS WAL io failure')),
       }),
     });
     const core = new CacheWorkerCore({

@@ -128,7 +128,9 @@ export function legacySoupProjectionDocument(query: string): string {
   );
 }
 
-function legacyProjectionRequest(init: RequestInit | undefined): RequestInit | undefined {
+function legacyProjectionRequest(
+  init: RequestInit | undefined
+): RequestInit | undefined {
   if (typeof init?.body !== 'string') return;
   try {
     const payload: unknown = JSON.parse(init.body);
@@ -158,7 +160,11 @@ async function isLegacyProjectionValidationError(
 ): Promise<boolean> {
   try {
     const payload: unknown = await response.clone().json();
-    if (payload === null || typeof payload !== 'object' || !('errors' in payload)) {
+    if (
+      payload === null ||
+      typeof payload !== 'object' ||
+      !('errors' in payload)
+    ) {
       return false;
     }
     const errors = payload.errors;

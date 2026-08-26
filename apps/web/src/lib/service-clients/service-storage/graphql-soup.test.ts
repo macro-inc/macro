@@ -195,10 +195,13 @@ describe('GraphQL Soup browser cache session gate', () => {
 
   it('keeps an old client compatible with a server that has the additive field', async () => {
     mocks.platformFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: { user: { soup: { items: [] } } } }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
     );
     const soup = await import('./graphql-soup');
     const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
@@ -229,10 +232,13 @@ describe('GraphQL Soup browser cache session gate', () => {
         )
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ data: { user: { soup: { items: [] } } } }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        })
+        new Response(
+          JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        )
       );
     const soup = await import('./graphql-soup');
     const query = `query Soup {

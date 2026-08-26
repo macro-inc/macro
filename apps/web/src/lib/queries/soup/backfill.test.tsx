@@ -107,15 +107,19 @@ describe('runSoupBackfills', () => {
     });
 
     await expect(
-      Effect.runPromise(runSoupBackfill('user-1', lane('projection-v2', fetchPage)))
+      Effect.runPromise(
+        runSoupBackfill('user-1', lane('projection-v2', fetchPage))
+      )
     ).rejects.toMatchObject({ cause: projectionFailure });
 
     expect(fetchPage).toHaveBeenCalledOnce();
-    expect(loadSoupBackfillCheckpoint('user-1', 'projection-v2')).toMatchObject({
-      nextCursor: null,
-      pagesFetched: 0,
-      completed: false,
-    });
+    expect(loadSoupBackfillCheckpoint('user-1', 'projection-v2')).toMatchObject(
+      {
+        nextCursor: null,
+        pagesFetched: 0,
+        completed: false,
+      }
+    );
   });
 
   it('continues to later lanes after a lane exhausts its retries', async () => {

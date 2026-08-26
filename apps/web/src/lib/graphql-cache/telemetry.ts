@@ -368,7 +368,9 @@ function sanitizeObservation(
       ? { mismatchedKeyCount: boundedNumber(input.mismatchedKeyCount) }
       : {}),
     ...(boundedNumber(input.unsupportedProfileCount) !== undefined
-      ? { unsupportedProfileCount: boundedNumber(input.unsupportedProfileCount) }
+      ? {
+          unsupportedProfileCount: boundedNumber(input.unsupportedProfileCount),
+        }
       : {}),
     ...(boundedNumber(input.sampleRate) !== undefined
       ? { sampleRate: boundedNumber(input.sampleRate) }
