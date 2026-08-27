@@ -15,12 +15,12 @@ use std::path::PathBuf;
 
 pub mod arch;
 pub mod build;
+pub mod cf_tunnel;
 pub mod cli;
 pub mod db;
 pub mod docker;
 pub mod doctor;
 pub mod e2e;
-pub mod egress_tunnel;
 pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;
@@ -156,7 +156,7 @@ use std::process::Command;
 
 use anyhow::Result;
 
-use instance::Instance;
+use instance::{Instance, Port};
 use stage::Stage;
 
 /// Every non-Rust local service whose image is built from this repository.
@@ -228,25 +228,61 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         std::thread::spawn(move || teardown_commands(&instance))
     });
 
+    // Sharing posture (`--with-cf-tunnel`, local only): besides the tunnels,
+    // the proxy additionally serves the headless static bundle, because that
+    // bundle — built against the `same-origin` sentinel — is the only frontend
+    // a remote visitor can actually use: the dev server's bundle calls the
+    // backend on an absolute `localhost:<proxy>` origin. The dev server still
+    // runs for the local developer. What a visitor can't do: follow
+    // backend-generated absolute links (invite/login emails point at
+    // `localhost:{FRONTEND_PORT}`) or the FusionAuth OAuth flow — passwordless
+    // login works, with the code readable at `<tunnel>/mailpit`.
+    let share_app = args.with_cf_tunnel && mode == Mode::Local;
+    if args.with_cf_tunnel && mode != Mode::Local {
+        stage.note("--with-cf-tunnel is ignored by run_dev (tunnels share a fully local stack)");
+    }
+
     // The Cursor egress tunnel, before env resolution because the minted
     // hostname is written into `EGRESS_BASE_URL`. Best-effort with a loud
     // downgrade: a laptop with no route to Cloudflare should still get a
     // working stack, minus the one thing that needs public ingress -
     // `@cursor` sessions reaching local MCP servers.
-    let egress_tunnel = (mode == Mode::Local && !stage.is_dry_run())
-        .then(|| match egress_tunnel::start(&instance) {
-            Ok(tunnel) => {
-                stage.note(&format!("cursor egress tunnel: {}", tunnel.url));
-                Some(tunnel)
-            }
-            Err(error) => {
-                stage.note(&format!(
-                    "WARNING: no cursor egress tunnel ({error:#}); EGRESS_BASE_URL stays \
-                     in-network, so @cursor sessions cannot reach this stack's MCP servers"
-                ));
-                None
+    let egress_tunnel = (share_app && !stage.is_dry_run())
+        .then(|| {
+            match cf_tunnel::open(&instance, "egress", instance.port(Port::AgentHarnessEgress)) {
+                Ok(tunnel) => {
+                    stage.note(&format!("cursor egress tunnel: {}", tunnel.url));
+                    Some(tunnel)
+                }
+                Err(error) => {
+                    stage.note(&format!(
+                        "WARNING: no cursor egress tunnel ({error:#}); EGRESS_BASE_URL stays \
+                         in-network, so @cursor sessions cannot reach this stack's MCP servers"
+                    ));
+                    None
+                }
             }
         })
+        .flatten();
+
+    // The app tunnel does not feed the env, but it degrades the same way: a
+    // failure warns and the stack comes up localhost-only.
+    let app_tunnel = (share_app && !stage.is_dry_run())
+        .then(
+            || match cf_tunnel::open(&instance, "app", instance.port(Port::Proxy)) {
+                Ok(tunnel) => {
+                    stage.note(&format!("shared app tunnel: {}/app/", tunnel.url));
+                    Some(tunnel)
+                }
+                Err(error) => {
+                    stage.note(&format!(
+                        "WARNING: no shared app tunnel ({error:#}); the app stays reachable \
+                         on localhost only"
+                    ));
+                    None
+                }
+            },
+        )
         .flatten();
 
     // Foreground: resolve env, build binaries + runtime image, generate the
@@ -257,11 +293,26 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         mode,
         &instance,
         args,
-        false,
+        share_app,
         false,
         false,
         egress_tunnel.as_ref().map(|tunnel| tunnel.url.as_str()),
     )?;
+
+    // Build + stage the shareable bundle in the background (pure host-side
+    // work), joined just before `bring_up_app` creates the proxy container
+    // that mounts the staged dir. The bundle is a share-time snapshot: the
+    // `r` hotkey reloads service binaries, not this bundle — live frontend
+    // edits show on the dev server, not on the shared URL.
+    if share_app && stage.is_dry_run() {
+        frontend::build_static(&stage, &instance, mode)?;
+    }
+    let fe_build = (share_app && !stage.is_dry_run()).then(|| {
+        let instance = instance.clone();
+        std::thread::spawn(move || {
+            frontend::build_static(&Stage::from_env().quiet(), &instance, mode)
+        })
+    });
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
@@ -285,6 +336,13 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // otherwise the services race their backends on startup (no `macrodb`,
     // DynamoDB/OpenSearch connection refused).
     bring_up_infra(&stage, mode, &instance, &env, InfraInit::Full)?;
+    if let Some(handle) = fe_build {
+        stage.run_step("Building frontend (static bundle)", move || {
+            handle
+                .join()
+                .map_err(|_| anyhow::anyhow!("frontend build panicked"))?
+        })?;
+    }
     bring_up_app(&stage, mode, &instance, &env)?;
     let _sdk_webhook_tunnel = (mode == Mode::Local && !stage.is_dry_run())
         .then(|| sdk_webhook::start(&instance))
@@ -312,12 +370,24 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         )?
     };
 
+    // Sharing moves the Mailpit UI under `/mailpit` (MP_WEBROOT, so a remote
+    // visitor can read their login code through the proxy); show the URL that
+    // actually resolves.
+    let mailpit_url = if share_app {
+        mailpit::proxy_ui_url(&instance)
+    } else {
+        mailpit::direct_ui_url(&instance)
+    };
+    let shared_app_url = app_tunnel
+        .as_ref()
+        .map(|tunnel| format!("{}/app/", tunnel.url));
     summary::print(
         mode,
         &instance,
         &env,
         &frontend::url(&instance),
-        &mailpit::direct_ui_url(&instance),
+        &mailpit_url,
+        shared_app_url.as_deref(),
     );
 
     match frontend {
@@ -524,7 +594,8 @@ fn interact(
 /// Caddyfile / kickstart. Deliberately does NOT create the external
 /// networks/volumes — that's done after the background teardown joins, since
 /// teardown removes them. `static_frontend` wires the proxy to serve the staged
-/// app bundle (headless `stack up`). `infra_only` skips zigbuild: bake never
+/// app bundle (headless `stack up`, and `run_local --with-cf-tunnel`'s shared
+/// app). `infra_only` skips zigbuild: bake never
 /// starts Rust services and runs in parallel with the cargo lane. Returns the
 /// resolved env + build target.
 ///
@@ -663,7 +734,6 @@ fn bring_up_infra(
     if stage.is_dry_run() {
         return Ok(());
     }
-    use instance::Port;
     let spec = mode.spec();
 
     // `--wait` gates on each service's healthcheck. Postgres (`pg_isready`) and

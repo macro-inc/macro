@@ -125,6 +125,7 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
             enable_onboarding: false,
             traces: None,
             verbose: false,
+            with_cf_tunnel: false,
         },
         ..stack::UpArgs::default()
     };
