@@ -723,6 +723,17 @@
             "format": "date-time",
             "description": "When the session was created."
           },
+          "external": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalSessionResponse",
+                "description": "The external provider serving this session, when one does. Absent for\nsandboxed sessions, so existing payloads are byte-identical."
+              }
+            ]
+          },
           "harness": {
             "type": "string",
             "description": "Harness slug."
@@ -880,6 +891,25 @@
           }
         }
       },
+      "ExternalSessionResponse": {
+        "type": "object",
+        "description": "The provider-side identity of an externally-served session.",
+        "required": ["provider"],
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The provider's display name for the agent, when it reported one."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Which provider serves the session, e.g. `cursor`."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "The agent's page on the provider's site, for a client to link out to."
+          }
+        }
+      },
       "LogDirectionDto": {
         "type": "string",
         "description": "Which way a logged frame travelled, mirroring [`Message`]'s discriminant.",
@@ -913,7 +943,7 @@
       },
       "SandboxSize": {
         "type": "string",
-        "description": "Named compute tier for a managed sandbox.\n\nDisk is always 96 GiB; CPU and RAM vary. The API and database store the\nname, never raw resource integers.",
+        "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agent_harness/sandbox_sizes.json`.",
         "enum": ["small", "default", "large"]
       },
       "SandboxSizeBody": {

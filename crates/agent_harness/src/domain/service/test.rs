@@ -32,8 +32,8 @@ use macro_uuid::Uuid;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AnnounceOrigin, DeliverAction, HarnessCommand, MentionOrigin, OpenSession, SessionDefaults,
-    SpawnContainer,
+    AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
+    OpenSession, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::ContainerManager as _;
 use crate::outbound::runtime_registry::RuntimeRegistry;
@@ -47,6 +47,10 @@ use agent_session::domain::ports::{
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
+}
+
+fn staff_sender() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid staff user id")
 }
 
 fn open_command() -> OpenSession {
@@ -119,7 +123,7 @@ fn harness() -> (
 }
 
 /// Play the agent's half of the ACP handshake.
-async fn complete_handshake(container: &ContainerMock) {
+async fn complete_session_handshake(container: &ContainerMock) {
     let agent = container.agent();
     let already = agent.received_requests().len();
     container.sends_ready();
@@ -127,6 +131,12 @@ async fn complete_handshake(container: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(already + 2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+}
+
+async fn complete_handshake(container: &ContainerMock) {
+    complete_session_handshake(container).await;
+    let agent = container.agent();
+    agent.completes_prompt().await;
 }
 
 async fn complete_resume(container: &ContainerMock) {
@@ -146,6 +156,7 @@ async fn complete_resume(container: &ContainerMock) {
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
     ));
     agent.resumes_session(ResumeSessionResponse::new());
+    agent.completes_prompt().await;
 }
 
 fn prompts(agent: &FakeAgent) -> Vec<Vec<ContentBlock>> {
@@ -190,6 +201,7 @@ async fn disconnected_session(
     containers
         .spawn(SpawnContainer {
             session_id: id,
+            kind: AgentKind::SandboxedCoder,
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: agent_session::domain::model::SandboxSize::Default,
         })
@@ -333,13 +345,13 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("open should succeed");
 
-    service
-        .execute(
-            id,
-            HarnessCommand::Deliver(forward_message("and add a regression test")),
-        )
-        .await
-        .expect("forward to a live session should succeed");
+    let forward = service.execute(
+        id,
+        HarnessCommand::Deliver(forward_message("and add a regression test")),
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(forward, agent.completes_prompt());
+    result.expect("forward to a live session should succeed");
 
     assert_eq!(containers.spawned(), 1, "no second container");
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
@@ -355,6 +367,46 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     );
     assert_eq!(announced[1].origin_channel_id, Uuid::from_u128(0xf0));
     assert_eq!(announced[1].origin_thread_id, Uuid::from_u128(0xf1));
+}
+
+#[tokio::test]
+async fn forward_announces_before_delivering_the_prompt() {
+    let (service, _repo, containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+    assert_eq!(prompts(&container.agent()).len(), 1);
+
+    // A chip that cannot be posted has nothing to anchor the response, so the
+    // prompt must not reach the agent at all.
+    announcer.fails("the chip could not be posted");
+    let result = service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("and add a regression test")),
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::Announce(_))));
+    assert_eq!(
+        prompts(&container.agent()).len(),
+        1,
+        "the chip is announced before the prompt is delivered"
+    );
 }
 
 #[tokio::test]
@@ -460,6 +512,7 @@ async fn concurrent_forwards_share_one_session_recovery() {
             .expect("the resumed container is findable");
         complete_resume(&resumed).await;
         resumed.agent().wait_for_requests(4).await;
+        resumed.agent().completes_prompt().await;
         resumed
     };
 
@@ -615,6 +668,51 @@ async fn live_session(
     container
 }
 
+async fn live_cursor_session(
+    service: &TestHarness,
+    containers: &MockContainerManager,
+    id: AgentSessionId,
+) -> ContainerMock {
+    let mut command = open_command();
+    command.bot_id = bot_id::CURSOR_BOT_ID;
+    command.origin.sender = staff_sender();
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("cursor session should open");
+    container
+}
+
+#[tokio::test]
+async fn a_non_staff_sender_cannot_open_a_cursor_session() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let mut command = open_command();
+    command.bot_id = bot_id::CURSOR_BOT_ID;
+
+    let error = service
+        .execute(AgentSessionId::new(), HarnessCommand::Open(command))
+        .await
+        .expect_err("non-staff must not open cursor sessions");
+
+    assert!(matches!(
+        error,
+        HarnessError::Session(AgentSessionError::Forbidden)
+    ));
+    assert_eq!(containers.spawned(), 0);
+}
+
 #[tokio::test]
 async fn changing_the_model_persists_it_and_tells_the_running_agent() {
     let (service, repo, containers, _announcer, _runtimes) = harness();
@@ -673,16 +771,16 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
     let container = live_session(&service, &containers, id).await;
     let announced_before = announcer.announced().len();
 
-    service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::prompt("and now the docs"),
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect("prompting through control should succeed");
+    let prompted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::prompt("and now the docs"),
+            actor: Some(sender()),
+        },
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+    result.expect("prompting through control should succeed");
 
     assert_eq!(
         prompts(&container.agent()).len(),
@@ -697,21 +795,62 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 }
 
 #[tokio::test]
-async fn compact_through_control_reaches_opencode_as_a_slash_command() {
+async fn a_non_staff_control_event_cannot_drive_a_cursor_session() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
-    let container = live_session(&service, &containers, id).await;
+    let container = live_cursor_session(&service, &containers, id).await;
+
+    let error = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("spend cursor credits"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect_err("non-staff must not control cursor sessions");
+
+    assert!(matches!(error, AgentSessionError::Forbidden));
+    assert_eq!(prompts(&container.agent()).len(), 1);
+}
+
+#[tokio::test]
+async fn a_staff_control_event_can_drive_a_cursor_session() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_cursor_session(&service, &containers, id).await;
 
     service
         .control_event(
             id,
             ControlEvent {
-                action: AgentAction::Compact,
-                actor: Some(sender()),
+                action: AgentAction::prompt("continue"),
+                actor: Some(staff_sender()),
             },
         )
         .await
-        .expect("compaction should reach the running agent");
+        .expect("staff may control cursor sessions");
+
+    assert_eq!(prompts(&container.agent()).len(), 2);
+}
+
+#[tokio::test]
+async fn compact_through_control_reaches_opencode_as_a_slash_command() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+
+    let compacted = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::Compact,
+            actor: Some(sender()),
+        },
+    );
+    let agent = container.agent();
+    let (result, ()) = tokio::join!(compacted, agent.completes_prompt());
+    result.expect("compaction should reach the running agent");
 
     assert_eq!(
         prompts(&container.agent()),
@@ -784,6 +923,7 @@ async fn complete_bound_handshake(runtime: &ContainerMock) {
     agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
     agent.wait_for_requests(2).await;
     agent.opens_session(NewSessionResponse::new("acp-test"));
+    agent.completes_prompt().await;
 }
 
 /// As [`complete_bound_handshake`], for a session the runtime is restoring.
@@ -806,6 +946,7 @@ async fn complete_bound_resume(runtime: &ContainerMock) {
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == "acp-test"
     ));
     agent.resumes_session(ResumeSessionResponse::new());
+    agent.completes_prompt().await;
 }
 
 /// Wait until a session has noticed that its transport ended.
@@ -918,9 +1059,10 @@ async fn a_bound_session_stays_on_its_connection_until_it_drops() {
 
     // Already bound: a second prompt goes straight down the same connection,
     // with no second handshake to drive.
-    prompt(&service, session.id, "and now the docs")
-        .await
-        .expect("a bound session needs no rebinding");
+    let prompted = prompt(&service, session.id, "and now the docs");
+    let agent = first.agent();
+    let (result, ()) = tokio::join!(prompted, agent.completes_prompt());
+    result.expect("a bound session needs no rebinding");
     assert_eq!(
         prompts(&first.agent()),
         ["fix the failing test", "and now the docs"]
@@ -966,6 +1108,54 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
     // Still an operator-hosted session: reconnecting never provisions.
     assert_eq!(containers.spawned(), 0);
     assert_eq!(containers.resumed(), 0);
+}
+
+/// The create menu names no bot, so its sessions open as the deployment's
+/// managed default - the in-process bot when one is configured - with that
+/// bot's own defaults stamped on.
+#[tokio::test]
+async fn a_managed_session_opens_as_the_managed_default_bot() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let containers = MockContainerManager::new();
+    let inmem_bot = BotId::TEST_B;
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        containers.clone(),
+        AnnouncerMock::new(),
+        RuntimeRegistry::<ContainerSender>::new(),
+        HarnessDefaults::new(SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        })
+        .with_bot(
+            inmem_bot,
+            SessionDefaults {
+                bot_id: inmem_bot,
+                model: "fast-model".to_owned(),
+                harness: "macro-inmem".to_owned(),
+                repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            },
+        )
+        .with_managed_bot(inmem_bot),
+    );
+
+    let session = service
+        .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            owner: sender(),
+            prompt: None,
+        })
+        .await
+        .expect("the managed session should open");
+
+    assert_eq!(session.bot_id, inmem_bot);
+    assert_eq!(session.model, "fast-model");
+    assert_eq!(session.harness, "macro-inmem");
 }
 
 #[tokio::test]
@@ -1200,7 +1390,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         let container = containers
             .container(session_of(&containers))
             .expect("the spawned container is findable");
-        complete_handshake(&container).await;
+        complete_session_handshake(&container).await;
     };
     let (opened, _) = tokio::join!(open, drive);
     let session = opened.expect("open should succeed");

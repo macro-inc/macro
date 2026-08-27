@@ -3,22 +3,28 @@
 mod config;
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
+use agent_trigger::domain::processing::process_channel_event;
 use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
+use agent_trigger::outbound::{ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector};
 use anyhow::Context as _;
 use bots::domain::models::BotId;
 use bots::domain::ports::BotRepo as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
+use channels::domain::broker_events::ChannelMacroEvent;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use config::Config;
-use kafka_util::{GroupName, KafkaEventConsumer};
+use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
+use lexical_client::LexicalClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
-    KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBroker as _,
-    MacroEventBrokerService, MacroEventCollection as _, MacroEventConsumerService,
+    KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
+    MacroEventCollection as _, MacroEventConsumerService,
 };
+use macro_service_urls::LexicalServiceUrl;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use tracing::Instrument as _;
 
 struct AgentTriggerConsumerGroup;
 
@@ -51,9 +57,14 @@ impl AgentBotLookup for PgAgentBotLookup {
 }
 
 #[tokio::main]
-#[tracing::instrument(err)]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let entrypoint = MacroEntrypoint::default().init();
+    let result = run().await;
+    entrypoint.shutdown();
+    result
+}
+
+async fn run() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -62,9 +73,16 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
+    let lexical = LexicalClient::new(
+        config.internal_api_key.clone(),
+        LexicalServiceUrl::new()?.to_string(),
+    );
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(pool.clone()),
-        PgAgentBotLookup(PgBotsRepo::new(pool)),
+        PgAgentBotLookup(PgBotsRepo::new(pool.clone())),
+        LexicalReplyDetector::new(lexical),
+        FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
+        ChannelThreadHistory::new(PgChannelsRepo::new(pool)),
     );
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())?,
@@ -84,6 +102,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let mut shutdown = std::pin::pin!(shutdown_signal());
+    let mut run_error = None;
     loop {
         tokio::select! {
             () = &mut shutdown => {
@@ -98,40 +117,44 @@ async fn main() -> anyhow::Result<()> {
                         continue;
                     }
                 };
-                let kafka_message = message.inner();
-                let event = match message.decode_payload() {
-                    Ok(DeclaredMacroEvent::ChannelMacroEvent(event)) => event,
-                    Err(error) => {
-                        tracing::error!(
-                            error = ?error,
-                            partition = kafka_message.partition(),
-                            offset = kafka_message.offset(),
-                            "dropping undecodable channel event"
-                        );
-                        commit_message(&consumer, kafka_message)?;
-                        continue;
-                    }
-                };
+                let span = consumer_span(message.inner(), AgentTriggerConsumerGroup::GROUP_NAME);
+                let result = async {
+                    let kafka_message = message.inner();
+                    let event = match message.decode_payload() {
+                        Ok(DeclaredMacroEvent::ChannelMacroEvent(event)) => event,
+                        Err(error) => {
+                            record_span_error(&tracing::Span::current(), &error);
+                            tracing::error!(
+                                error = ?error,
+                                partition = kafka_message.partition(),
+                                offset = kafka_message.offset(),
+                                "dropping undecodable channel event"
+                            );
+                            commit_message(&consumer, kafka_message)?;
+                            return Ok::<(), anyhow::Error>(());
+                        }
+                    };
+                    tracing::Span::current().record("macro.event.id", tracing::field::display(event.event().event_id));
 
-                let ChannelTopicEvent::MessagePosted(posted) = &event.event().event else {
+                    process_channel_event(&trigger, &publisher, &event).await?;
                     commit_message(&consumer, kafka_message)?;
-                    continue;
-                };
-                let yielded_events = trigger.evaluate(posted).await?;
-                if yielded_events.is_empty() {
-                    tracing::debug!(message_id = %posted.message_id, "agent trigger yielded no event");
+                    Ok(())
                 }
-                for yielded in yielded_events {
-                    let json = serde_json::to_string(yielded.event())?;
-                    tracing::info!(yielded_event = %json, "agent trigger yielded event");
-                    let publish = publisher.send_event(&yielded)?;
-                    publish.await.context("agent event publication task failed")??;
+                .instrument(span.clone())
+                .await;
+                if let Err(error) = &result {
+                    record_span_error(&span, error);
                 }
-
-                commit_message(&consumer, kafka_message)?;
+                if let Err(error) = result {
+                    run_error = Some(error);
+                    break;
+                }
             }
         }
     }
 
-    Ok(())
+    match run_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }

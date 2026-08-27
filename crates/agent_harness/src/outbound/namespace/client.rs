@@ -316,9 +316,12 @@ impl NamespaceClient {
         B: Serialize + ?Sized,
     {
         let url = format!("{}/{service}/{method}", host.trim_end_matches('/'));
+        let mut trace_headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut trace_headers);
         let response = self
             .http
             .post(url)
+            .headers(trace_headers)
             .bearer_auth(self.token.expose())
             .json(body)
             .send()

@@ -49,9 +49,8 @@ export function usePipedreamConnectionsQuery(options?: {
 }
 
 /**
- * Browse or search the Pipedream app catalog, paged by cursor. Curated
- * priority connectors arrive first (flagged `priority`), followed by
- * organic results from Pipedream's app directory.
+ * Browse or search the Pipedream app catalog, paged by cursor. Entries come
+ * from Pipedream's app directory, ranked most-popular-first.
  */
 export function usePipedreamCatalogQuery(search: () => string) {
   return useInfiniteQuery(() => ({

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   databaseOwnerLockName,
@@ -25,6 +26,7 @@ const enginePort = {
 describe('coordinator runtime protocol', () => {
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
+    expect(isCacheRequest({ id: 1, kind: 'current-revision' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'read', query: '{ x }' })).toBe(true);
     expect(
       isCacheRequest({
@@ -114,7 +116,12 @@ describe('coordinator runtime protocol', () => {
       })
     ).toBe(false);
     expect(isCacheResponse({ id: 3, ok: false, error: 4 })).toBe(false);
-    expect(isCachePush({ kind: 'cache-changed' })).toBe(true);
+    expect(
+      isCachePush({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      })
+    ).toBe(true);
     expect(
       isCachePush({
         kind: 'mutation-settled',

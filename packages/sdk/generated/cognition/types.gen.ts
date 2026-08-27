@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session';
 
 /**
  * A structured part within an assistant message.
@@ -987,11 +987,6 @@ export type PipedreamCatalogEntryResponse = {
      * URL of the app's icon, when available.
      */
     icon_url?: string | null;
-    /**
-     * Curated priority connectors rank first and may be rendered as their
-     * own featured section.
-     */
-    priority: boolean;
 };
 
 /**
@@ -1003,7 +998,7 @@ export type PipedreamCatalogResponse = {
      */
     next_cursor?: string | null;
     /**
-     * Catalog entries in display order (priority connectors first).
+     * Catalog entries in display order (most popular first).
      */
     servers: Array<PipedreamCatalogEntryResponse>;
 };

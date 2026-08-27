@@ -13,6 +13,7 @@ import type {
 } from './generated/schemas';
 import type { ApiUserNotification } from './generated/schemas/apiUserNotification';
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
+import type { GetNotificationTypePreferencesResponse } from './generated/schemas/getNotificationTypePreferencesResponse';
 import type { NotificationBulkRequest } from './generated/schemas/notificationBulkRequest';
 import type { UserUnsubscribe } from './generated/schemas/userUnsubscribe';
 
@@ -198,6 +199,24 @@ export const notificationServiceClient = {
       method: 'DELETE',
       body: JSON.stringify(args),
     });
+  },
+  async getNotificationTypePreferences() {
+    return notificationFetch<GetNotificationTypePreferencesResponse>(
+      '/user_notifications/preferences',
+      { method: 'GET' }
+    );
+  },
+  async disableNotificationType(notificationEventType: string) {
+    return notificationFetch<{}>(
+      `/user_notifications/preferences/${encodeURIComponent(notificationEventType)}/disable`,
+      { method: 'PUT' }
+    );
+  },
+  async enableNotificationType(notificationEventType: string) {
+    return notificationFetch<{}>(
+      `/user_notifications/preferences/${encodeURIComponent(notificationEventType)}/enable`,
+      { method: 'PUT' }
+    );
   },
   async getUnsubscribes() {
     return (

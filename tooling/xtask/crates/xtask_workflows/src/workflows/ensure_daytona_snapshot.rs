@@ -13,6 +13,22 @@ use gh_workflow::{
 
 use crate::workflows::{runners, steps, vars};
 
+const SANDBOX_SIZES_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../../crates/agent_harness/sandbox_sizes.json"
+));
+
+fn snapshot_quota() -> (String, String, String) {
+    let sizes: serde_json::Value =
+        serde_json::from_str(SANDBOX_SIZES_JSON).expect("sandbox_sizes.json should parse");
+    let snapshot = &sizes["snapshot"];
+    (
+        snapshot["cpu"].to_string(),
+        snapshot["memoryGib"].to_string(),
+        snapshot["diskGib"].to_string(),
+    )
+}
+
 #[cfg(test)]
 mod test;
 
@@ -36,10 +52,11 @@ fn image_source_pull_request() -> PullRequest {
     pr
 }
 
-fn image_source_paths() -> [xtask_paths::RepoGlob<'static>; 5] {
+fn image_source_paths() -> [xtask_paths::RepoGlob<'static>; 6] {
     [
         xtask_paths::repo_glob!("crates/agent_harness/container/**"),
         xtask_paths::repo_glob!("crates/agent_harness/justfile"),
+        xtask_paths::repo_glob!("crates/agent_harness/sandbox_sizes.json"),
         xtask_paths::repo_glob!("nix/cloud-storage.nix"),
         xtask_paths::repo_glob!(
             "tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs"
@@ -69,6 +86,7 @@ pub fn ensure_daytona_snapshot() -> Workflow {
 }
 
 fn ensure_snapshot() -> Job {
+    let (cpu, memory, disk) = snapshot_quota();
     Job::default()
         .name("Ensure macro-agent-harness snapshot")
         .runs_on(runners::Runner::Small.to_string())
@@ -92,9 +110,9 @@ fn ensure_snapshot() -> Job {
                 "#})
                 .shell("bash")
                 .add_env(("DAYTONA_API_KEY", vars::DAYTONA_API_KEY))
-                .add_env(("DAYTONA_SNAPSHOT_CPU", "8"))
-                .add_env(("DAYTONA_SNAPSHOT_MEMORY", "16"))
-                .add_env(("DAYTONA_SNAPSHOT_DISK", "96")),
+                .add_env(("DAYTONA_SNAPSHOT_CPU", cpu))
+                .add_env(("DAYTONA_SNAPSHOT_MEMORY", memory))
+                .add_env(("DAYTONA_SNAPSHOT_DISK", disk)),
         )
 }
 

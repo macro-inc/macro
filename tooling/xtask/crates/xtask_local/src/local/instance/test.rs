@@ -62,6 +62,14 @@ fn port_offsets_are_unique() {
 }
 
 #[test]
+fn named_instance_ports_stay_below_the_linux_ephemeral_range() {
+    let highest_base = WINDOW_START + (BUCKETS - 1) * STRIDE;
+    let highest_offset = Port::all().map(Port::offset).max().unwrap() as u32;
+
+    assert!(highest_base + highest_offset < 32_768);
+}
+
+#[test]
 fn port_base_override_wins() {
     let inst = Instance::derive(Some("agent-a"), Some(12000)).unwrap();
     assert_eq!(inst.port_base(), 12000);

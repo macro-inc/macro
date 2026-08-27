@@ -2,7 +2,9 @@ use crate::{
     config::Config,
     context::{ApiContext, AppState, AuthorizationService},
     model::{
-        connection::ConnectionContext, message::OutgoingMessage, tracking::EntityConnectionExt,
+        connection::ConnectionContext,
+        message::{OutgoingMessage, record_span_error},
+        tracking::EntityConnectionExt,
     },
 };
 use anyhow::Result;
@@ -27,6 +29,8 @@ use model::user::UserContext;
 use model_entity::EntityType;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
+use tracing::Instrument as _;
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 mod messages;
 
@@ -136,15 +140,37 @@ pub async fn forwarder(
     mut sink: SplitSink<WebSocket, AxumWebsocketMessage>,
     mut receiver: Receiver<OutgoingMessage>,
 ) -> Result<()> {
-    while let Some(message) = receiver.recv().await {
-        if let Ok(msg) = message.try_into()
-            && let Err(err) = sink.send(msg).await
-        {
-            tracing::warn!(
-                error=?err,
-                "Failed to send message to WebSocket, client likely disconnected"
-            );
-            break;
+    while let Some(mut message) = receiver.recv().await {
+        let span = match &message {
+            OutgoingMessage::Message(message) => {
+                let span = tracing::info_span!(
+                    "connection_gateway.websocket_send",
+                    otel.kind = "producer",
+                    message_type = %message.message_type,
+                    otel.status_code = tracing::field::Empty,
+                    otel.status_description = tracing::field::Empty,
+                );
+                if let Some(parent) = message.remote_trace_context() {
+                    let _ = span.set_parent(parent);
+                }
+                span
+            }
+            OutgoingMessage::Pong => tracing::Span::none(),
+        };
+        if let OutgoingMessage::Message(message) = &mut message {
+            message.trace.clear();
+        }
+
+        if let Ok(msg) = message.try_into() {
+            let result = sink.send(msg).instrument(span.clone()).await;
+            if let Err(err) = result {
+                record_span_error(&span, &err);
+                tracing::warn!(
+                    error=?err,
+                    "Failed to send message to WebSocket, client likely disconnected"
+                );
+                break;
+            }
         }
     }
 

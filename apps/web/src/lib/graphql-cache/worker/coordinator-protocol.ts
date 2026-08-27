@@ -365,6 +365,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isNonEmptyString(value.scope) &&
         isOptionalPositiveInteger(value.hotCapacity)
       );
+    case 'current-revision':
+      return hasOnlyKeys(value, ['id', 'kind']);
     case 'read':
       return (
         hasOnlyKeys(value, [

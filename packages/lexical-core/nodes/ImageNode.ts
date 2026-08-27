@@ -177,8 +177,17 @@ export class ImageNode extends MediaNode<{ alt: string }> {
         return null;
       },
       div: (domNode: HTMLElement) => {
-        const img = domNode.querySelector('img');
-        if (!img) return null;
+        // Match only the exported wrapper shape (<div> whose sole child is
+        // the <img>). Claiming any div with a descendant img would steal
+        // ancestor containers (quote wrappers, merged paragraph divs) and
+        // collapse them to just the image, dropping their other content.
+        const img = domNode.firstElementChild;
+        if (
+          domNode.childElementCount !== 1 ||
+          img?.tagName !== 'IMG' ||
+          domNode.textContent?.trim() !== ''
+        )
+          return null;
 
         const src = img.getAttribute('src');
         const alt = img.getAttribute('alt');

@@ -16,6 +16,7 @@
 //! ```
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
 use axum::extract::State;
@@ -28,6 +29,10 @@ use serde::de::DeserializeOwned;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::mpsc;
+// Tokio's clock rather than the standard library's, so the silence deadline is
+// on the same clock as the interval that checks it - and so a test can drive
+// both without waiting out six real seconds.
+use tokio::time::Instant;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 
@@ -37,25 +42,52 @@ use crate::domain::ports::{Transport, TransportError, TransportSender};
 #[cfg(test)]
 mod test;
 
-/// A physical WebSocket frame type that can carry one JSON text payload.
+/// How often each peer sends a WebSocket ping.
+///
+/// Both ends ping on their own timer rather than one pinging and the other
+/// answering. Keepalive would only need one side - any frame resets an idle
+/// proxy's timer - but *detection* is per-endpoint: the gateway has to notice
+/// a daemon that went away, and a daemon has to notice a gateway that did, so
+/// each end needs traffic it can time out on. Symmetric also means neither
+/// end depends on the other being new enough to ping.
+const PING_INTERVAL: Duration = Duration::from_secs(2);
+
+/// How long a socket may go without any inbound frame before this side
+/// declares it dead.
+///
+/// Three missed pings. A live peer answers every ping with a pong, and a pong
+/// is an inbound frame, so silence this long means the peer is gone or the
+/// path to it is - the case a half-open socket produces, where writes keep
+/// succeeding into a connection that will never answer again.
+const SILENCE_TIMEOUT: Duration = Duration::from_secs(6);
+
+/// A physical WebSocket frame type: one JSON text payload, or a ping.
 ///
 /// Implemented for both `axum`'s and `tokio-tungstenite`'s message types so
 /// the pump loop below can drive either a server-accepted or a
 /// client-dialed socket without caring which library it came from.
-trait TextFrame: Sized {
+trait WireFrame: Sized {
     /// Wrap a JSON payload as a text frame.
     fn text(payload: String) -> Self;
+
+    /// An empty ping frame.
+    fn ping() -> Self;
 
     /// Extract this frame's text payload, if it has one.
     ///
     /// Non-text frames (ping/pong/binary/close) are not part of the logical
-    /// protocol and are silently skipped by the pump loop.
+    /// protocol and are silently skipped by the pump loop - but they still
+    /// count as liveness, which is the whole point of the pings.
     fn into_text(self) -> Option<String>;
 }
 
-impl TextFrame for AxumMessage {
+impl WireFrame for AxumMessage {
     fn text(payload: String) -> Self {
         Self::Text(payload.into())
+    }
+
+    fn ping() -> Self {
+        Self::Ping(Default::default())
     }
 
     fn into_text(self) -> Option<String> {
@@ -66,9 +98,13 @@ impl TextFrame for AxumMessage {
     }
 }
 
-impl TextFrame for TungsteniteMessage {
+impl WireFrame for TungsteniteMessage {
     fn text(payload: String) -> Self {
         Self::Text(payload.into())
+    }
+
+    fn ping() -> Self {
+        Self::Ping(Default::default())
     }
 
     fn into_text(self) -> Option<String> {
@@ -92,10 +128,15 @@ async fn run_pump<Rx, Socket, Frame, Error>(
     incoming: mpsc::UnboundedSender<Rx>,
 ) where
     Rx: DeserializeOwned,
-    Frame: TextFrame,
+    Frame: WireFrame,
     Socket: Sink<Frame, Error = Error> + Stream<Item = Result<Frame, Error>> + Unpin,
 {
     let (mut sink, mut stream) = socket.split();
+    let mut ping = tokio::time::interval(PING_INTERVAL);
+    // A pump that was busy longer than one tick owes one ping, not a burst of
+    // however many it slept through.
+    ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut last_inbound = Instant::now();
     loop {
         tokio::select! {
             next_outgoing = outgoing.recv() => {
@@ -105,6 +146,9 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 }
             }
             next_incoming = stream.next() => {
+                // Every frame counts, text or not: a pong carries no logical
+                // message and is exactly what proves the peer is still there.
+                last_inbound = Instant::now();
                 match next_incoming {
                     Some(Ok(frame)) => {
                         let Some(text) = frame.into_text() else { continue };
@@ -120,6 +164,21 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                         }
                     }
                     Some(Err(_)) | None => break,
+                }
+            }
+            _ = ping.tick() => {
+                let silent_for = last_inbound.elapsed();
+                if silent_for >= SILENCE_TIMEOUT {
+                    tracing::warn!(
+                        silent_for_ms = silent_for.as_millis(),
+                        "closing a WebSocket that stopped answering pings"
+                    );
+                    break;
+                }
+                // Both halves of a split socket share one connection, so this
+                // is also what flushes any pong the read half queued.
+                if sink.send(Frame::ping()).await.is_err() {
+                    break;
                 }
             }
         }

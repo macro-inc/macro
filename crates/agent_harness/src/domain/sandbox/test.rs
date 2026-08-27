@@ -1,22 +1,32 @@
 use super::*;
 
 #[test]
-fn disk_is_96_gib_for_every_tier() {
-    for size in [SandboxSize::Small, SandboxSize::Default, SandboxSize::Large] {
-        assert_eq!(resources(size).disk_gib, 96);
+fn resources_come_from_sandbox_sizes_json() {
+    let table: serde_json::Value =
+        serde_json::from_str(SANDBOX_SIZES_JSON).expect("sandbox_sizes.json should parse");
+    for (size, key) in [
+        (SandboxSize::Small, "small"),
+        (SandboxSize::Default, "default"),
+        (SandboxSize::Large, "large"),
+    ] {
+        let row = &table[key];
+        assert_eq!(
+            resources(size),
+            SandboxResources {
+                cpu: row["cpu"].as_u64().unwrap() as u32,
+                memory_gib: row["memoryGib"].as_u64().unwrap() as u32,
+                disk_gib: row["diskGib"].as_u64().unwrap() as u32,
+            }
+        );
     }
 }
 
 #[test]
-fn default_is_eight_cpu_sixteen_gib() {
-    assert_eq!(
-        resources(SandboxSize::Default),
-        SandboxResources {
-            cpu: 8,
-            memory_gib: 16,
-            disk_gib: 96,
-        }
-    );
+fn snapshot_matches_default_cpu_and_ram() {
+    let snapshot = snapshot();
+    let default = resources(SandboxSize::Default);
+    assert_eq!(snapshot.cpu, default.cpu);
+    assert_eq!(snapshot.memory_gib, default.memory_gib);
 }
 
 #[test]
@@ -49,21 +59,29 @@ fn cpu_ram_increases_are_in_place_and_decreases_need_a_restart() {
 
 #[test]
 fn live_quotas_that_are_not_named_tiers_still_pick_in_place_or_restart() {
-    let snapshot = SandboxResources {
-        cpu: 4,
-        memory_gib: 8,
-        disk_gib: 10,
+    let smaller = SandboxResources {
+        cpu: resources(SandboxSize::Small).cpu,
+        memory_gib: resources(SandboxSize::Small).memory_gib,
+        disk_gib: snapshot().disk_gib,
     };
     assert_eq!(
-        resize_effect_from_resources(snapshot, resources(SandboxSize::Default)),
+        resize_effect_from_resources(smaller, resources(SandboxSize::Default)),
         SandboxResizeEffect::InPlace
     );
     assert_eq!(
-        resize_effect_from_resources(resources(SandboxSize::Default), snapshot),
+        resize_effect_from_resources(resources(SandboxSize::Default), smaller),
         SandboxResizeEffect::Restart
     );
     assert_eq!(
-        resize_effect_from_resources(snapshot, snapshot),
+        resize_effect_from_resources(smaller, smaller),
+        SandboxResizeEffect::NoOp
+    );
+}
+
+#[test]
+fn default_is_a_cpu_ram_noop_against_the_snapshot() {
+    assert_eq!(
+        resize_effect_from_resources(snapshot(), resources(SandboxSize::Default)),
         SandboxResizeEffect::NoOp
     );
 }

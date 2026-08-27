@@ -1,3 +1,4 @@
+import { usePreference } from '@app/preferences/use-preference';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -41,6 +42,27 @@ const SIDE_MAX_PX = 380;
 const MAIN_MIN_PX = 320;
 
 /**
+ * Wide-mode open state for a side panel.
+ *
+ * With a `persistKey`, the user's show/hide choice is remembered across
+ * visits under a per-block localStorage key; without one the panel falls back
+ * to a plain signal that resets to `defaultOpen` on every mount.
+ *
+ * Only wide mode is persisted. Narrow mode renders the panel as a full-screen
+ * overlay on top of the content, so restoring it open would hide the content
+ * the user came back to.
+ */
+function createWideOpenState(
+  persistKey: string | undefined,
+  defaultOpen: boolean
+): [Accessor<boolean>, Setter<boolean>] {
+  if (persistKey === undefined) return createSignal(defaultOpen);
+  return usePreference(`macro:pref:side-panel:open:${persistKey}`, {
+    default: defaultOpen,
+  });
+}
+
+/**
  * Layout root for a block that opts in to a right-side panel.
  *
  * Wraps `props.children` in a horizontal Resize.Zone with a main panel
@@ -57,15 +79,24 @@ const MAIN_MIN_PX = 320;
  *
  * The side panel is suppressed entirely when no sections are registered.
  *
+ * Pass `persistKey` to remember the wide-mode open state across visits (see
+ * `createWideOpenState`); without it the panel returns to `defaultOpen` every
+ * time the block mounts.
+ *
  * Sections are rendered as a Kobalte Accordion in JSX-declared order.
  */
-function Layout(props: ParentProps<{ defaultOpen?: boolean }>) {
+function Layout(
+  props: ParentProps<{ defaultOpen?: boolean; persistKey?: string }>
+) {
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
-  const [isWideOpen, setIsWideOpen] = createSignal(props.defaultOpen ?? true);
+  const [isWideOpen, setIsWideOpen] = createWideOpenState(
+    props.persistKey,
+    props.defaultOpen ?? true
+  );
   const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
   const [isNarrow, setIsNarrow] = createSignal(isMobile());
 

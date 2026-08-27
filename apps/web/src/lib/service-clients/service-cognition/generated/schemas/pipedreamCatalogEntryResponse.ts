@@ -19,7 +19,4 @@ export interface PipedreamCatalogEntryResponse {
   display_name: string;
   /** URL of the app's icon, when available. */
   icon_url?: PipedreamCatalogEntryResponseIconUrl;
-  /** Curated priority connectors rank first and may be rendered as their
-own featured section. */
-  priority: boolean;
 }

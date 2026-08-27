@@ -185,6 +185,7 @@ impl From<AttendeeInput> for CalendarAttendeeInput {
         Self {
             email: input.email,
             is_optional: input.is_optional,
+            response_status: None,
         }
     }
 }

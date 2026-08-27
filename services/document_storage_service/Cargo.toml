@@ -56,7 +56,6 @@ bzip2 = { workspace = true, default-features = false, features = [
 ] }
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
-channel_bots = { path = "../../crates/channel_bots" }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
@@ -69,6 +68,10 @@ chat = { path = "../../crates/chat", default-features = false, features = [
 ] }
 chrono = { workspace = true }
 clap = { workspace = true }
+collab_surface = { path = "../../crates/collab_surface", features = [
+  "inbound",
+  "postgres",
+] }
 cloudfront_sign = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 complete_graph = { path = "../../crates/complete_graph" }

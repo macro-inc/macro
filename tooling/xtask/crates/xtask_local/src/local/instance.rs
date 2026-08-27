@@ -17,12 +17,12 @@ use super::repo_root;
 /// project and the fixed base ports.
 pub const DEFAULT_NAME: &str = "macro";
 
-/// Start of the non-default port window. Each named instance gets a 1000-port
-/// stride starting here; per-port offsets (all < `STRIDE`) live within a
-/// stride, so two distinct strides can never overlap.
+/// Start of the non-default port window. Keep the entire allocation below
+/// Linux's default ephemeral range (32768-60999), otherwise an ordinary
+/// outbound connection can intermittently occupy a Compose host port.
 const WINDOW_START: u32 = 20_000;
-const STRIDE: u32 = 1_000;
-const BUCKETS: u32 = 40; // 20000..=60000
+const STRIDE: u32 = 100;
+const BUCKETS: u32 = 120; // 20000..=31999
 
 /// A validated instance name: lowercase ASCII alphanumerics, hyphen, and
 /// underscore, starting alphanumeric, non-empty, <= 40 chars. The newtype

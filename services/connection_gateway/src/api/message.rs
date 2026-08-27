@@ -61,10 +61,7 @@ pub async fn send_message_handler(
     let res = send_message_to_entity(
         &ctx,
         &entity,
-        Message {
-            message_type: body.message_type.clone(),
-            data: body.message.to_string(),
-        },
+        Message::new(body.message_type.clone(), body.message.to_string()),
         redis_connection,
     )
     .await
@@ -110,10 +107,7 @@ pub async fn batch_send_message_handler(
         send_message_to_entity(
             &ctx,
             entity,
-            Message {
-                message_type: body.message_type.clone(),
-                data: body.message.to_string(),
-            },
+            Message::new(body.message_type.clone(), body.message.to_string()),
             redis_connection,
         )
     }))
@@ -165,10 +159,10 @@ pub async fn batch_send_unique_messages_handler(
         send_message_to_entity(
             &ctx,
             &message.entity,
-            Message {
-                message_type: message.message_type.clone(),
-                data: message.message_content.to_string(),
-            },
+            Message::new(
+                message.message_type.clone(),
+                message.message_content.to_string(),
+            ),
             redis_connection,
         )
     }))

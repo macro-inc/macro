@@ -62,9 +62,11 @@ import {
 } from 'wonka';
 import type { CacheHost } from '../host/types';
 import {
+  type CacheRevision,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
   isAdmittedEnqueueUncertainError,
+  isCacheRevision,
   isOwnerEpochLostError,
   type QueryRevalidationWire,
 } from '../protocol';
@@ -97,6 +99,42 @@ const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
 const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+
+const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
+
+/** Private authority metadata attached by the normalized-cache exchange. */
+export type NormalizedCacheResultMetadata =
+  | { source: 'live-network'; revision?: CacheRevision }
+  | { source: 'normalized-cache-hit' }
+  | { source: 'affected-cache-reread' };
+
+/** Reads normalized-cache authority metadata from an urql operation result. */
+export function normalizedCacheResultMetadata(
+  result: Pick<OperationResult, 'extensions'>
+): NormalizedCacheResultMetadata | undefined {
+  const metadata = result.extensions?.[NORMALIZED_CACHE_RESULT_METADATA_KEY];
+  if (metadata === null || typeof metadata !== 'object') return;
+  const source = (metadata as { source?: unknown }).source;
+  if (source === 'normalized-cache-hit' || source === 'affected-cache-reread') {
+    return { source };
+  }
+  if (source !== 'live-network') return;
+  const revision = (metadata as { revision?: unknown }).revision;
+  return isCacheRevision(revision) ? { source, revision } : { source };
+}
+
+function withResultMetadata(
+  result: OperationResult,
+  metadata: NormalizedCacheResultMetadata
+): OperationResult {
+  return {
+    ...result,
+    extensions: {
+      ...result.extensions,
+      [NORMALIZED_CACHE_RESULT_METADATA_KEY]: metadata,
+    },
+  };
+}
 
 type QueueAttemptContext = {
   transactionId: string;
@@ -227,16 +265,23 @@ function withQueueRequestTimeout(op: Operation): Operation {
 function cacheResult(
   op: Operation,
   data: unknown,
-  stale: boolean
+  stale: boolean,
+  source: Extract<
+    NormalizedCacheResultMetadata,
+    { source: 'normalized-cache-hit' | 'affected-cache-reread' }
+  >['source'] = 'normalized-cache-hit'
 ): OperationResult {
-  return {
-    operation: op,
-    data,
-    error: undefined,
-    extensions: undefined,
-    stale,
-    hasNext: false,
-  };
+  return withResultMetadata(
+    {
+      operation: op,
+      data,
+      error: undefined,
+      extensions: undefined,
+      stale,
+      hasNext: false,
+    },
+    { source }
+  );
 }
 
 type CacheEffect =
@@ -575,7 +620,9 @@ export function normalizedCacheExchange(
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred
           // cache reread below when it could not register fresh dependencies.
-          emitAffectedResult(cacheResult(active, read.data, true));
+          emitAffectedResult(
+            cacheResult(active, read.data, true, 'affected-cache-reread')
+          );
         })
         .catch((error) => options.onCacheError?.(error, operation));
     };
@@ -993,6 +1040,10 @@ export function normalizedCacheExchange(
         result: OperationResult
       ): Promise<OperationResult> {
         const op = result.operation;
+        let output =
+          op.kind === 'query'
+            ? withResultMetadata(result, { source: 'live-network' })
+            : result;
         if (op.kind === 'subscription' && result.data != null) {
           // Serialize effects across every emission for this operation, as
           // well as within buffered payloads, so a slower earlier write cannot
@@ -1022,10 +1073,13 @@ export function normalizedCacheExchange(
               identity: options.extractIdentity?.(result.data),
               entityResolvers,
             });
-            return {
-              ...result,
-              data: hydration.kind === 'data' ? hydration.data : undefined,
-            };
+            return withResultMetadata(
+              {
+                ...result,
+                data: hydration.kind === 'data' ? hydration.data : undefined,
+              },
+              { source: 'live-network', revision: hydration.revision }
+            );
           } catch (error) {
             options.onCacheError?.(error, op);
             return {
@@ -1079,7 +1133,11 @@ export function normalizedCacheExchange(
                 state.retainedReplacementFallback = retained;
               }
               try {
-                await host.writeQuery(writeArgs);
+                const write = await host.writeQuery(writeArgs);
+                output = withResultMetadata(result, {
+                  source: 'live-network',
+                  revision: write.revision,
+                });
                 state.networkRegistrationSatisfied =
                   writeArgs.registerDependencies;
                 if (state.retainedReplacementFallback === retained) {
@@ -1195,7 +1253,7 @@ export function normalizedCacheExchange(
             });
           }
         }
-        return result;
+        return output;
       }
 
       const cacheResults$ = pipe(

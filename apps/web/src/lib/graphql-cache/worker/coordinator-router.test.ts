@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   databaseOwnerLockName,
@@ -338,11 +339,19 @@ describe('CoordinatorRouter', () => {
       ...version,
       kind: 'engine-push',
       ownerEpoch: 1,
-      push: { kind: 'cache-changed' },
+      push: {
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      },
     });
     for (const tab of [tabA, tabB, tabC]) {
       expect(messagesOfKind(tab, 'cache-message')).toContainEqual(
-        expect.objectContaining({ message: { kind: 'cache-changed' } })
+        expect.objectContaining({
+          message: {
+            kind: 'cache-changed',
+            revision: INITIAL_CACHE_REVISION,
+          },
+        })
       );
     }
   });

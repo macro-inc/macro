@@ -19,6 +19,10 @@ export {
   selectAll,
 } from './exchange/inspection';
 export {
+  type NormalizedCacheResultMetadata,
+  normalizedCacheResultMetadata,
+} from './exchange/normalized-cache-exchange';
+export {
   executeOptimisticMutation,
   type LinkDiff,
   type ListSelection,
@@ -56,6 +60,7 @@ export type {
   CacheReadPriority,
   CacheRequest,
   CacheResponse,
+  CacheRevision,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
@@ -64,6 +69,7 @@ export type {
   OptimisticWriteResult,
   QueryVariableFilter,
   ReadRecordsByKeysArgs,
+  ReadRecordsByKeysResult,
   ReadResult,
   SearchCacheArgs,
   SearchCachePage,
@@ -74,6 +80,7 @@ export type {
   WriteResult,
 } from './protocol';
 export {
+  INITIAL_CACHE_REVISION,
   MAX_CACHE_SEARCH_QUERY_BYTES,
   MAX_RECORD_SELECTION_PAGE_SIZE,
   validateCacheSearchArgs,

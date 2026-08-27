@@ -559,6 +559,64 @@ fn rsvp_patch_updates_only_the_connected_attendee() {
     assert_eq!(attendees[0]["comment"], "unrelated state that must survive");
 }
 
+fn google_attendee(email: &str, is_self: bool) -> GoogleAttendee {
+    serde_json::from_value(serde_json::json!({
+        "email": email,
+        "self": is_self,
+        "responseStatus": "needsAction",
+    }))
+    .unwrap()
+}
+
+#[test]
+fn rsvp_patches_the_actor_row_not_the_google_self_flag() {
+    let attendees = vec![
+        google_attendee("jacob@example.com", true),
+        google_attendee("jackson@example.com", false),
+    ];
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
+    let found = find_actor_attendee(&attendees, &actor);
+    assert_eq!(
+        found.and_then(|attendee| attendee.email.as_deref()),
+        Some("jackson@example.com")
+    );
+}
+
+#[test]
+fn rsvp_does_not_patch_another_attendee_when_the_requester_is_absent() {
+    let attendees = vec![google_attendee("jacob@example.com", true)];
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
+    assert!(find_actor_attendee(&attendees, &actor).is_none());
+}
+
+#[test]
+fn google_attendees_write_an_explicit_response_status() {
+    let body = google_attendees_body(&[
+        CalendarAttendeeInput {
+            email: "self@example.com".to_string(),
+            is_optional: false,
+            response_status: Some(AttendeeResponseStatus::Accepted),
+        },
+        CalendarAttendeeInput {
+            email: "guest@example.com".to_string(),
+            is_optional: true,
+            response_status: None,
+        },
+    ]);
+
+    assert_eq!(body[0]["email"], "self@example.com");
+    assert_eq!(body[0]["responseStatus"], "accepted");
+    assert_eq!(body[0]["optional"], false);
+    assert_eq!(body[1]["email"], "guest@example.com");
+    assert_eq!(body[1]["optional"], true);
+    assert!(
+        body[1].get("responseStatus").is_none(),
+        "a guest without a status must keep Google's default"
+    );
+}
+
 #[test]
 fn reminders_round_trip_between_google_and_the_domain() {
     let master: GoogleEvent = serde_json::from_value(serde_json::json!({

@@ -408,6 +408,11 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   );
 }
 
+function SoupBackfillSideEffect(props: { userId: string }) {
+  useSoupBackfills(props.userId);
+  return null;
+}
+
 /** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
 function UserInfoSideEffects() {
   const analytics = useAnalytics();
@@ -417,8 +422,6 @@ function UserInfoSideEffects() {
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
-
-  useSoupBackfills(() => userInfo()?.id);
 
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();
@@ -463,7 +466,11 @@ function UserInfoSideEffects() {
     })
   );
 
-  return null;
+  return (
+    <Show when={userInfo()?.id} keyed>
+      {(userId) => <SoupBackfillSideEffect userId={userId} />}
+    </Show>
+  );
 }
 
 const clearBodyInlineStyleColor = () => {

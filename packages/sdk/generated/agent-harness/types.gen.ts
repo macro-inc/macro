@@ -113,6 +113,7 @@ export type AgentSessionResponse = {
      * When the session was created.
      */
     createdAt: string;
+    external?: null | ExternalSessionResponse;
     /**
      * Harness slug.
      */
@@ -275,6 +276,24 @@ export type CreateSessionThread = {
 };
 
 /**
+ * The provider-side identity of an externally-served session.
+ */
+export type ExternalSessionResponse = {
+    /**
+     * The provider's display name for the agent, when it reported one.
+     */
+    name?: string | null;
+    /**
+     * Which provider serves the session, e.g. `cursor`.
+     */
+    provider: string;
+    /**
+     * The agent's page on the provider's site, for a client to link out to.
+     */
+    url?: string | null;
+};
+
+/**
  * Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
  */
 export type LogDirectionDto = 'to_server' | 'to_runtime';
@@ -315,8 +334,8 @@ export type RenameAgentSessionRequest = {
 /**
  * Named compute tier for a managed sandbox.
  *
- * Disk is always 96 GiB; CPU and RAM vary. The API and database store the
- * name, never raw resource integers.
+ * The API and database store the name. CPU, RAM, and disk live in
+ * `crates/agent_harness/sandbox_sizes.json`.
  */
 export type SandboxSize = 'small' | 'default' | 'large';
 

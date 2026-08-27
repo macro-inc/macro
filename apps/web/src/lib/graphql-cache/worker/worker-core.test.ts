@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
@@ -22,7 +23,11 @@ describe('CacheWorkerCore', () => {
         record: { id: 'item-1' },
       },
     ];
-    const readRecordsByKeys = vi.fn().mockResolvedValue(records);
+    const selectionResult = {
+      revision: INITIAL_CACHE_REVISION,
+      records,
+    };
+    const readRecordsByKeys = vi.fn().mockResolvedValue(selectionResult);
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({ readRecordsByKeys }),
     });
@@ -48,7 +53,11 @@ describe('CacheWorkerCore', () => {
       'Item',
       ['GraphqlSoupDocument:item-1']
     );
-    expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: records });
+    expect(messages.at(-1)).toEqual({
+      id: 2,
+      ok: true,
+      result: selectionResult,
+    });
   });
 
   it('dispatches bounded search to the wasm compact projection', async () => {
@@ -95,6 +104,7 @@ describe('CacheWorkerCore', () => {
     const order: string[] = [];
     let resolveEnqueue!: (result: {
       transactionId: string;
+      revision: typeof INITIAL_CACHE_REVISION;
       changed: string[];
       affectedOps: string[];
       reset: false;
@@ -104,6 +114,7 @@ describe('CacheWorkerCore', () => {
       order.push('enqueue:start');
       return new Promise<{
         transactionId: string;
+        revision: typeof INITIAL_CACHE_REVISION;
         changed: string[];
         affectedOps: string[];
         reset: false;
@@ -165,6 +176,7 @@ describe('CacheWorkerCore', () => {
     );
     resolveEnqueue({
       transactionId: '1',
+      revision: INITIAL_CACHE_REVISION,
       changed: ['Thing:1'],
       affectedOps: ['client:query'],
       reset: false,
@@ -247,6 +259,159 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('runs foreground cache reads ahead of queued background hydration', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const readQuery = vi.fn(async (opId: string | undefined) => {
+      order.push(`read:${opId}`);
+      if (opId === 'client:blocker') {
+        markBlockerStarted();
+        await blocker;
+      }
+      return { kind: 'miss' as const };
+    });
+    const entityFilter = vi.fn(async () => {
+      order.push('entity-filter');
+      return { kind: 'incomplete' as const };
+    });
+    const hydrateQuery = vi.fn(async () => {
+      order.push('hydrate');
+      return { kind: 'none' as const };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery,
+        entityFilter,
+        hydrateQuery,
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'client:blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { backfill }',
+      data: { backfill: true },
+    });
+    const filter = core.handleRequest(port, {
+      id: 4,
+      kind: 'entity-filter',
+      request: {
+        filters: {},
+        sortMethod: 'UPDATED_AT',
+        sortDirection: 'DESC',
+        limit: 20,
+      },
+    });
+    const visibleRead = core.handleRequest(port, {
+      id: 5,
+      kind: 'read',
+      opId: 'client:visible',
+      query: 'query Visible { visible }',
+      priority: 'user-visible',
+    });
+
+    releaseBlocker();
+    await Promise.all([running, hydration, filter, visibleRead]);
+
+    expect(order).toEqual([
+      'read:client:blocker',
+      'read:client:visible',
+      'entity-filter',
+      'hydrate',
+    ]);
+  });
+
+  it('does not let stale hydration overwrite a newer queued write', async () => {
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const record = { id: 'doc-1', title: 'initial' };
+    const mergeDocument = (data: unknown) => {
+      Object.assign(
+        record,
+        (data as { document: { id: string; title: string } }).document
+      );
+    };
+    const readQuery = vi.fn(async () => {
+      markBlockerStarted();
+      await blocker;
+      return { kind: 'miss' as const };
+    });
+    const hydrateQuery = vi.fn(async (...args: unknown[]) => {
+      mergeDocument(args[3]);
+      return { changed: [], affectedOps: [], reset: false, data: null };
+    });
+    const writeQuery = vi.fn(async (...args: unknown[]) => {
+      mergeDocument(args[4]);
+      return { changed: [], affectedOps: [], reset: false };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery,
+        hydrateQuery,
+        writeQuery,
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { document { id title } }',
+      data: { document: { id: 'doc-1', title: 'stale' } },
+    });
+    const write = core.handleRequest(port, {
+      id: 4,
+      kind: 'write',
+      query: 'query Current { document { id title } }',
+      data: { document: { id: 'doc-1', title: 'newer' } },
+    });
+
+    releaseBlocker();
+    await Promise.all([running, hydration, write]);
+
+    expect(record).toEqual({ id: 'doc-1', title: 'newer' });
+    expect(hydrateQuery).toHaveBeenCalledBefore(writeQuery);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
@@ -270,6 +435,7 @@ describe('CacheWorkerCore', () => {
         order.push(`enqueue:${query}`);
         return {
           transactionId: query,
+          revision: INITIAL_CACHE_REVISION,
           changed: [],
           affectedOps: [],
           reset: false,
@@ -491,6 +657,7 @@ describe('CacheWorkerCore', () => {
       order.push('enqueue');
       return {
         transactionId: '1',
+        revision: INITIAL_CACHE_REVISION,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -601,6 +768,7 @@ describe('CacheWorkerCore', () => {
 
   it('pushes cache changes even without affected operations', async () => {
     const writeResult = {
+      revision: INITIAL_CACHE_REVISION,
       changed: ['GraphqlSoupDocument:doc-1'],
       affectedOps: [],
       reset: false,
@@ -642,7 +810,10 @@ describe('CacheWorkerCore', () => {
       { user: { id: 'user-1' } },
       undefined
     );
-    expect(messages).toContainEqual({ kind: 'cache-changed' });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
   });
 
   it('drains earlier request responses before consuming close and rejects later admission', async () => {
@@ -800,6 +971,7 @@ describe('CacheWorkerCore', () => {
     });
     const close = vi.fn().mockResolvedValue(undefined);
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -933,6 +1105,7 @@ describe('CacheWorkerCore', () => {
       .mockImplementation(() => new Promise(() => {}));
     const readQuery = vi.fn().mockResolvedValue({ kind: 'miss' });
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -1002,6 +1175,7 @@ describe('CacheWorkerCore', () => {
       .mockRejectedValueOnce(resetError)
       .mockImplementation(() => new Promise(() => {}));
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -1072,6 +1246,7 @@ describe('CacheWorkerCore', () => {
 
   it('records an identity-changing hydration as a logical reset', async () => {
     const hydrateQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: true,
@@ -1107,7 +1282,12 @@ describe('CacheWorkerCore', () => {
     expect(port.postMessage).toHaveBeenLastCalledWith({
       id: 2,
       ok: true,
-      result: { kind: 'data', data: { cursor: 'next' }, reset: true },
+      result: {
+        kind: 'data',
+        data: { cursor: 'next' },
+        revision: INITIAL_CACHE_REVISION,
+        reset: true,
+      },
     });
   });
 

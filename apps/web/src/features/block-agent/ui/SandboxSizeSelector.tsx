@@ -1,19 +1,25 @@
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import sizes from '@sandbox-sizes';
 import { Dropdown } from '@ui';
 import { For } from 'solid-js';
 
 /** Named compute tier for a managed coding-agent sandbox. */
 export type SandboxSize = 'small' | 'default' | 'large';
 
-const TIERS: {
-  id: SandboxSize;
-  label: string;
-  detail: string;
-}[] = [
-  { id: 'small', label: 'Small', detail: '2 vCPU · 4 GiB · 96 GiB' },
-  { id: 'default', label: 'Default', detail: '8 vCPU · 16 GiB · 96 GiB' },
-  { id: 'large', label: 'Large', detail: '16 vCPU · 32 GiB · 96 GiB' },
-];
+const TIER_LABELS: Record<SandboxSize, string> = {
+  small: 'Small',
+  default: 'Default',
+  large: 'Large',
+};
+
+const TIERS = (Object.keys(TIER_LABELS) as SandboxSize[]).map((id) => {
+  const { cpu, memoryGib, diskGib } = sizes[id];
+  return {
+    id,
+    label: TIER_LABELS[id],
+    detail: `${cpu} vCPU · ${memoryGib} GiB · ${diskGib} GiB`,
+  };
+});
 
 export interface SandboxSizeSelectorProps {
   size: SandboxSize;

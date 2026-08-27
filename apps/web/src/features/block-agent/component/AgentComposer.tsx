@@ -40,6 +40,7 @@ export function AgentComposer() {
         autofocus={autofocus}
         busy={composer.busy()}
         disabled={loadFailed()}
+        commands={() => metadata()?.availableCommands ?? []}
         onSend={composer.send}
         onStop={composer.stop}
         modelControl={

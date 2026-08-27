@@ -8,8 +8,8 @@
 /**
  * Named compute tier for a managed sandbox.
 
-Disk is always 96 GiB; CPU and RAM vary. The API and database store the
-name, never raw resource integers.
+The API and database store the name. CPU, RAM, and disk live in
+`crates/agent_harness/sandbox_sizes.json`.
  */
 export type SandboxSize = (typeof SandboxSize)[keyof typeof SandboxSize];
 

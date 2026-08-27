@@ -41,6 +41,13 @@ pub struct Config {
     /// unaffected.
     #[macro_config_default(String::new())]
     pub github_token: String,
+    /// API key sandboxes run Anthropic models with. Injected into the
+    /// sandbox environment at creation, where it activates opencode's
+    /// `anthropic` provider — the only provider
+    /// `crates/agent_harness/container/opencode.json` enables. Empty means
+    /// sandboxes advertise no models and managed sessions cannot prompt.
+    #[macro_config_default(String::new())]
+    pub anthropic_api_key: String,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this
@@ -64,10 +71,16 @@ pub struct Config {
     pub local_container_network: String,
     /// The bot this deployment answers for.
     ///
-    /// Configuration rather than a constant: `@claude` and `@codex` are separate
-    /// deployments of this same binary, distinguished only by which bot id they
-    /// watch for. It must be a real `bots` row - `agent_session.bot_id`
-    /// references it.
+    /// Still configuration, because `@claude` and `@codex` are separate
+    /// deployments of this same binary distinguished only by the bot they
+    /// watch for, and those are user-owned bots with rows.
+    ///
+    /// Deliberately required, with no default. A default here would be the
+    /// same silent-misconfiguration trap this binary already fell into once:
+    /// a per-bot deployment that failed to set it would not fail, it would
+    /// quietly become a second deployment of whatever the default was, split
+    /// the shared consumer group with the real one, and answer half its
+    /// mentions.
     pub harness_bot_id: Uuid,
     /// Model slug stamped onto sessions this deployment opens.
     #[macro_config_default(String::from("claude"))]
@@ -78,6 +91,19 @@ pub struct Config {
     /// Repository sessions run against, until it becomes per-request data.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub harness_repo_url: String,
+    /// Repository `@cursor` sessions work on. Temporary hardcoding, same as
+    /// `harness_repo_url` — and one repository for everyone is a real limit
+    /// here, since each session runs on its own owner's Cursor account and
+    /// only works if *their* GitHub App installation can see this repo.
+    #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
+    pub cursor_repo_url: String,
+    /// Model id stamped onto sessions the in-memory bot opens. Unknown ids
+    /// fall back to the agent loop's default model.
+    #[macro_config_default(String::from("claude-sonnet-5"))]
+    pub inmem_model: String,
+    /// Harness slug stamped onto sessions the in-memory bot opens.
+    #[macro_config_default(String::from("macro-inmem"))]
+    pub inmem_harness_slug: String,
     /// Key for internal service-to-service calls (the connection gateway).
     pub internal_api_key: String,
     /// Port the control routes are served on.

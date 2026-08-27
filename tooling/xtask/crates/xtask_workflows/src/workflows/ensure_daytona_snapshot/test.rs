@@ -66,11 +66,21 @@ fn daytona_job_stays_on_the_small_runner_and_skips_prs() {
 }
 
 #[test]
-fn daytona_job_requests_the_default_snapshot_size() {
+fn daytona_job_requests_the_json_snapshot_size() {
     let yaml = rendered();
-    assert!(yaml.contains("DAYTONA_SNAPSHOT_CPU: '8'"), "{yaml}");
-    assert!(yaml.contains("DAYTONA_SNAPSHOT_MEMORY: '16'"), "{yaml}");
-    assert!(yaml.contains("DAYTONA_SNAPSHOT_DISK: '96'"), "{yaml}");
+    let (cpu, memory, disk) = super::snapshot_quota();
+    assert!(
+        yaml.contains(&format!("DAYTONA_SNAPSHOT_CPU: '{cpu}'")),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains(&format!("DAYTONA_SNAPSHOT_MEMORY: '{memory}'")),
+        "{yaml}"
+    );
+    assert!(
+        yaml.contains(&format!("DAYTONA_SNAPSHOT_DISK: '{disk}'")),
+        "{yaml}"
+    );
     assert!(
         yaml.contains("--cpu ${DAYTONA_SNAPSHOT_CPU} --memory ${DAYTONA_SNAPSHOT_MEMORY} --disk ${DAYTONA_SNAPSHOT_DISK}"),
         "{yaml}"
