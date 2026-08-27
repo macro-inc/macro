@@ -677,6 +677,94 @@ async function navigateAfterOpeningEntity(
   }
 }
 
+async function openSpecialEntityInSplit(
+  entity: EntityData,
+  options: OpenEntityOptions,
+  splitManager: SplitManager
+): Promise<boolean> {
+  if (isNonMemberChannelEntity(entity)) {
+    openNonMemberChannelInSplit(entity, options, splitManager);
+    return true;
+  }
+  if (isGithubPrEntity(entity)) {
+    openGithubPrInSplit(entity, options, splitManager);
+    return true;
+  }
+  if (entity.type === 'foreign') return true;
+  if (entity.type === 'reminder' && !entity.referencedEntity) return true;
+  if (entity.type === 'calendar_event') {
+    await openCalendarEventInSplit(entity, options, splitManager);
+    return true;
+  }
+  return false;
+}
+
+function shouldPreventDuplicatePreviewOpen(
+  entity: EntityData,
+  options: OpenEntityOptions
+): boolean {
+  const { allowDuplicate, openInNewSplit, replacePreview, splitHandle } =
+    options;
+  return (
+    !allowDuplicate &&
+    !openInNewSplit &&
+    !replacePreview &&
+    !!splitHandle &&
+    preventDuplicatePreviewEntityOpen(entity, splitHandle)
+  );
+}
+
+function channelOpenFlags(entity: EntityData): {
+  channelMessageTarget:
+    | Extract<ChannelClickTarget, { kind: 'message' }>
+    | undefined;
+  openChannelAtLatest: boolean;
+} {
+  const channelTarget = getChannelEntityTarget(entity);
+  return {
+    channelMessageTarget:
+      channelTarget?.kind === 'message' ? channelTarget : undefined,
+    openChannelAtLatest: channelTarget?.kind === 'latest',
+  };
+}
+
+function referredFromForOpenedEntity(
+  options: OpenEntityOptions,
+  splitManager: SplitManager
+): ReferredFrom | undefined {
+  const sourceContent =
+    options.splitHandle?.content() ?? splitManager.activeSplit()?.content();
+  const sourceListView =
+    sourceContent?.type === 'component' && isListViewID(sourceContent.id)
+      ? sourceContent.id
+      : undefined;
+  return options.referredFrom ?? sourceListView;
+}
+
+function splitContentForOpenedEntity(
+  entity: EntityData,
+  content: SplitContent,
+  params: Record<string, string> | undefined,
+  options: OpenEntityOptions
+): SplitContent {
+  const splitContent: SplitContent = { ...content, params };
+  if (options.splitHandle?.isControllerSplit() && !options.replacePreview) {
+    return withPreviewSourceEntityId(splitContent, entity.id);
+  }
+  return splitContent;
+}
+
+function channelReopenMode(
+  entity: EntityData,
+  location: SearchLocation | undefined,
+  openChannelAtLatest: boolean
+): 'latest' | undefined {
+  if (entity.type === 'channel' && !location && openChannelAtLatest) {
+    return 'latest';
+  }
+  return undefined;
+}
+
 /**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
  * Supports both regular entities (channel, email, etc.) and document entities.
@@ -709,67 +797,35 @@ export const openEntityInSplitFromUnifiedList = async (
 
   // Channels the viewer hasn't joined can't be read. In a Preview Pair, offer
   // the Join prompt in the Viewer; otherwise the row's inline Join button is
-  // the only affordance.
-  if (isNonMemberChannelEntity(entity)) {
-    openNonMemberChannelInSplit(entity, options, splitManager);
+  // the only affordance. Foreign rows and standalone reminders have nothing to
+  // open. Calendar is a singleton block and retargets that instance.
+  if (await openSpecialEntityInSplit(entity, options, splitManager)) {
     return;
   }
-
-  if (isGithubPrEntity(entity)) {
-    openGithubPrInSplit(entity, options, splitManager);
-    return;
-  }
-  if (entity.type === 'foreign') return;
 
   const blockOrchestrator = splitManager.getOrchestrator();
-
-  // A standalone reminder points at nothing, so there is nothing to open.
-  if (entity.type === 'reminder' && !entity.referencedEntity) return;
-
-  // Calendar is a singleton block. Event opens retarget that one instance
-  // with a locator range, including repeat clicks on an already-open split.
-  if (entity.type === 'calendar_event') {
-    await openCalendarEventInSplit(entity, options, splitManager);
-    return;
-  }
-
   const content = getEntitySplitContent(entity);
 
-  if (
-    !allowDuplicate &&
-    !openInNewSplit &&
-    !replacePreview &&
-    splitHandle &&
-    preventDuplicatePreviewEntityOpen(entity, splitHandle)
-  ) {
+  if (shouldPreventDuplicatePreviewOpen(entity, options)) {
     return;
   }
 
-  const channelTarget = getChannelEntityTarget(entity);
-  const channelMessageTarget =
-    channelTarget?.kind === 'message' ? channelTarget : undefined;
-  const openChannelAtLatest = channelTarget?.kind === 'latest';
+  const { channelMessageTarget, openChannelAtLatest } =
+    channelOpenFlags(entity);
   const params = splitParamsForOpenedEntity(
     entity,
     location,
     channelMessageTarget
   );
-
-  const sourceContent =
-    splitHandle?.content() ?? splitManager.activeSplit()?.content();
-
-  const sourceListView =
-    sourceContent?.type === 'component' && isListViewID(sourceContent.id)
-      ? sourceContent.id
-      : undefined;
-  const referredFrom = options.referredFrom ?? sourceListView;
-
-  let splitContent: SplitContent = { ...content, params };
+  const referredFrom = referredFromForOpenedEntity(options, splitManager);
   // Preview source metadata belongs on Viewer entries; a replacement takes the
   // Preview Pair's place, so its entry is ordinary split history.
-  if (splitHandle?.isControllerSplit() && !replacePreview) {
-    splitContent = withPreviewSourceEntityId(splitContent, entity.id);
-  }
+  const splitContent = splitContentForOpenedEntity(
+    entity,
+    content,
+    params,
+    options
+  );
 
   splitManager.openWithSplit(splitContent, {
     referredFrom,
@@ -779,10 +835,7 @@ export const openEntityInSplitFromUnifiedList = async (
     handle: splitHandle,
     mergeHistory,
     allowDuplicate,
-    reopen:
-      entity.type === 'channel' && !location && openChannelAtLatest
-        ? 'latest'
-        : undefined,
+    reopen: channelReopenMode(entity, location, openChannelAtLatest),
   });
 
   await navigateAfterOpeningEntity(
