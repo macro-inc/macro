@@ -303,6 +303,369 @@ export function mapChannelSearchResultItem(
 const formatDisplayName = (text: string, fileType?: string | null) =>
   formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
 
+type MappedSearchEntities = (WithSearch<EntityData> | undefined)[];
+type SearchChannelLookup = () => ReadonlyArray<{
+  id: string;
+  name?: string | null;
+}>;
+
+function mapCompanySearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'company' }>
+): MappedSearchEntities {
+  const primaryDomain = result.domains[0]?.domain;
+  const nameHighlight = result.nameHighlighted
+    ? mergeAdjacentMacroEmTags(result.nameHighlighted)
+    : null;
+  return [
+    {
+      type: 'crm_company',
+      id: result.id,
+      teamId: result.teamId,
+      name: result.name || primaryDomain || 'Unknown Company',
+      ownerId: result.teamId,
+      description: result.description ?? undefined,
+      // Not returned by search — left undefined ("not loaded") so
+      // consumers don't mistake it for a real `false`.
+      emailSync: undefined,
+      hidden: result.hidden,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
+      sortTs: result.updatedAt,
+      domains: result.domains.map((d) => ({
+        id: d.id,
+        companyId: d.companyId,
+        domain: d.domain,
+        createdAt: d.createdAt,
+      })),
+      search: {
+        nameHighlight,
+        senderHighlightTerms: null,
+        contentHitData: null,
+        source: 'service',
+      },
+    },
+  ];
+}
+
+function documentSearchData(
+  result: Extract<UnifiedSearchResponseItem, { type: 'document' }>,
+  searchQuery: string
+): SearchData {
+  const searchFileType = result.file_type === 'docx' ? 'pdf' : result.file_type;
+  if (searchFileType === 'md') {
+    return getSearchData({
+      results: result.document_search_results,
+      type: 'md',
+    });
+  }
+  if (searchFileType === 'pdf') {
+    return getSearchData({
+      results: result.document_search_results,
+      type: 'pdf',
+      searchQuery,
+    });
+  }
+  return getSearchData({
+    results: result.document_search_results,
+  });
+}
+
+function documentSubType(
+  subType: Extract<UnifiedSearchResponseItem, { type: 'document' }>['sub_type']
+): DocumentEntity['subType'] {
+  if (subType === 'task') return { type: 'task' };
+  if (subType === 'snippet') return { type: 'snippet' };
+  if (subType === 'skill') return { type: 'skill' };
+  return null;
+}
+
+function mapDocumentSearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'document' }>,
+  searchQuery: string
+): MappedSearchEntities {
+  if (!result.metadata || result.metadata.deleted_at) return [];
+  let search = documentSearchData(result, searchQuery);
+  // The index stores unformatted document names, so server name
+  // highlights lack the extension suffix the display name carries.
+  if (search.nameHighlight) {
+    search = {
+      ...search,
+      nameHighlight: formatDisplayName(search.nameHighlight, result.file_type),
+    };
+  }
+  const properties = result.properties ?? undefined;
+  return [
+    {
+      type: 'document',
+      subType: documentSubType(result.sub_type),
+      id: result.document_id,
+      name: formatDisplayName(
+        result.name || blockNameToDefaultFile(result.file_type),
+        result.file_type
+      ),
+      ownerId: result.owner_id,
+      createdAt: result.metadata?.created_at,
+      updatedAt: result.metadata?.updated_at,
+      fileType: result.file_type || undefined,
+      projectId: result.metadata?.project_id ?? undefined,
+      properties,
+      search,
+    },
+  ];
+}
+
+function mapEmailSearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'email' }>,
+  searchQuery: string
+): MappedSearchEntities {
+  const search = getSearchData({
+    results: result.email_message_search_results,
+    type: 'email',
+    searchQuery,
+  });
+
+  const name = result.name ?? blockNameToDefaultFile('email');
+
+  const participants = result.participants?.map((p) => ({
+    email: p.email,
+    name: p.name ?? undefined,
+  }));
+
+  return [
+    {
+      type: 'email',
+      id: result.thread_id,
+      name,
+      ownerId: result.owner_id,
+      linkId: result.link_id,
+      createdAt: result.created_at,
+      updatedAt: result.updated_at,
+      viewedAt: result.viewed_at,
+      isRead: result.is_read,
+      isImportant: result.is_important,
+      isDraft: result.is_draft,
+      done: !result.inbox_visible,
+      participants,
+      search,
+      snippet: result.snippet ?? undefined,
+      properties: result.properties ?? undefined,
+    },
+  ];
+}
+
+function mapChatSearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'chat' }>
+): MappedSearchEntities {
+  if (!result.metadata || result.metadata.deleted_at) return [];
+  const search = getSearchData({
+    results: result.chat_search_results,
+  });
+  return [
+    {
+      type: 'chat',
+      id: result.chat_id,
+      name: result.name,
+      ownerId: result.user_id,
+      createdAt: result.metadata?.created_at,
+      updatedAt: result.metadata?.updated_at,
+      projectId: result.metadata?.project_id ?? undefined,
+      properties: result.properties ?? undefined,
+      search,
+    },
+  ];
+}
+
+function mapChannelSearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'channel' }>,
+  channels: SearchChannelLookup
+): MappedSearchEntities {
+  if (!result.metadata) return [];
+  const nameHighlight = result.highlight.name
+    ? mergeAdjacentMacroEmTags(result.highlight.name)
+    : null;
+  const search: SearchData = {
+    nameHighlight,
+    senderHighlightTerms: null,
+    contentHitData: null,
+    source: 'service',
+  };
+  const channelName =
+    channels().find((channel) => channel.id === result.channel_id)?.name ??
+    (search.nameHighlight
+      ? extractSearchSnippet(search.nameHighlight)
+      : blockNameToDefaultFile('channel'));
+  return [
+    {
+      type: 'channel',
+      id: result.channel_id,
+      name: channelName,
+      ownerId: result.owner_id ?? '',
+      channelType: result.channel_type as ChannelType,
+      createdAt: result.metadata.created_at,
+      updatedAt: result.metadata.updated_at,
+      viewedAt: result.metadata.viewed_at,
+      interactedAt: result.metadata.interacted_at,
+      search,
+    },
+  ];
+}
+
+function mapChannelMessageSearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'channelMessage' }>,
+  channels: SearchChannelLookup
+): MappedSearchEntities {
+  const channelName =
+    channels().find((c) => c.id === result.channel_id)?.name ??
+    blockNameToDefaultFile('channel');
+  const search = getSearchData({ type: 'channel', results: [result] });
+  const content = search.contentHitData?.[0]?.content ?? '';
+  return [
+    {
+      type: 'channel_message',
+      id: `${result.channel_id}:${result.message_id}`,
+      channelId: result.channel_id,
+      channelName,
+      channelType: result.channel_type as ChannelType,
+      messageId: result.message_id,
+      threadId: result.thread_id ?? undefined,
+      target: {
+        messageId: result.message_id,
+        threadId: result.thread_id ?? undefined,
+      },
+      senderId: result.sender_id,
+      content,
+      name: channelName,
+      ownerId: result.owner_id ?? '',
+      createdAt: result.created_at,
+      updatedAt: result.updated_at,
+      search,
+    },
+  ];
+}
+
+function mapProjectSearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'project' }>
+): MappedSearchEntities {
+  if (!result.metadata || result.metadata.deleted_at) return [];
+  const search = getSearchData({
+    results: result.project_search_results,
+  });
+
+  return [
+    {
+      type: 'project',
+      id: result.id,
+      name: result.name,
+      ownerId: result.owner_id,
+      createdAt: result.created_at,
+      updatedAt: result.updated_at,
+      projectId: result.metadata?.parent_project_id ?? undefined,
+      properties: result.properties ?? undefined,
+      search,
+    },
+  ];
+}
+
+function mapCalendarEventSearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'calendarEvent' }>
+): MappedSearchEntities {
+  if (!result.metadata) return [];
+  const search = getSearchData({
+    results: result.calendar_event_search_results,
+  });
+
+  // A recurring series is indexed once, as its master. The service
+  // resolves which instance this row means — next upcoming, else most
+  // recent past — so prefer that span over the master's, which for a
+  // long-running series is its original (stale) start.
+  const metadata = result.metadata;
+  const time = toCalendarEventTime(metadata.occurrence?.time ?? metadata.time);
+
+  return [
+    {
+      type: 'calendar_event',
+      id: result.id,
+      name: result.name,
+      ownerId: result.owner_id,
+      status: metadata.status,
+      time,
+      occurrenceKey: metadata.occurrence?.occurrenceKey,
+      conferenceUrl: metadata.conferenceUrl ?? undefined,
+      isReadOnly: metadata.isReadOnly,
+      createdAt: metadata.createdAt,
+      updatedAt: metadata.updatedAt,
+      properties: result.properties ?? undefined,
+      search,
+    },
+  ];
+}
+
+function mapCallSearchItem(
+  result: Extract<UnifiedSearchResponseItem, { type: 'call' }>,
+  channels: SearchChannelLookup
+): MappedSearchEntities {
+  if (!result.metadata) return [];
+  const search = getSearchData({
+    type: 'call_record',
+    results: result.call_search_results,
+    callId: result.call_id,
+    callStartedAt: result.metadata.started_at,
+  });
+
+  const channelName: string | undefined =
+    result.metadata.channel_name ??
+    channels().find((c) => c.id === result.channel_id)?.name ??
+    undefined;
+  const status = result.metadata.status;
+
+  return [
+    {
+      type: 'call',
+      id: result.call_id,
+      name: result.name ?? channelName ?? blockNameToDefaultFile('call'),
+      channelId: result.channel_id,
+      channelName,
+      ownerId: result.owner_id,
+      createdAt: result.metadata.started_at,
+      updatedAt: result.metadata.updated_at,
+      isActive: false,
+      status,
+      attended: status === 'ATTENDED',
+      durationMs: result.metadata.duration_ms,
+      participantIds: result.participant_ids,
+      properties: result.properties ?? undefined,
+      search,
+    },
+  ];
+}
+
+function mapUnifiedSearchResponseItem(
+  result: UnifiedSearchResponseItem,
+  searchQuery: string,
+  channels: SearchChannelLookup
+): MappedSearchEntities {
+  switch (result.type) {
+    case 'company':
+      return mapCompanySearchItem(result);
+    case 'document':
+      return mapDocumentSearchItem(result, searchQuery);
+    case 'email':
+      return mapEmailSearchItem(result, searchQuery);
+    case 'chat':
+      return mapChatSearchItem(result);
+    case 'channel':
+      return mapChannelSearchItem(result, channels);
+    case 'channelMessage':
+      return mapChannelMessageSearchItem(result, channels);
+    case 'project':
+      return mapProjectSearchItem(result);
+    case 'calendarEvent':
+      return mapCalendarEventSearchItem(result);
+    case 'call':
+      return mapCallSearchItem(result, channels);
+  }
+}
+
 export const useSearchResponseItemMapper = () => {
   const channelsContext = useChannelsContext();
   const channels = channelsContext.channels;
@@ -310,310 +673,8 @@ export const useSearchResponseItemMapper = () => {
   return (
     result: UnifiedSearchResponseItem,
     searchQuery: string
-  ): (WithSearch<EntityData> | undefined)[] => {
-    switch (result.type) {
-      case 'company': {
-        const primaryDomain = result.domains[0]?.domain;
-        const nameHighlight = result.nameHighlighted
-          ? mergeAdjacentMacroEmTags(result.nameHighlighted)
-          : null;
-        return [
-          {
-            type: 'crm_company',
-            id: result.id,
-            teamId: result.teamId,
-            name: result.name || primaryDomain || 'Unknown Company',
-            ownerId: result.teamId,
-            description: result.description ?? undefined,
-            // Not returned by search — left undefined ("not loaded") so
-            // consumers don't mistake it for a real `false`.
-            emailSync: undefined,
-            hidden: result.hidden,
-            createdAt: result.createdAt,
-            updatedAt: result.updatedAt,
-            sortTs: result.updatedAt,
-            domains: result.domains.map((d) => ({
-              id: d.id,
-              companyId: d.companyId,
-              domain: d.domain,
-              createdAt: d.createdAt,
-            })),
-            search: {
-              nameHighlight,
-              senderHighlightTerms: null,
-              contentHitData: null,
-              source: 'service',
-            },
-          },
-        ];
-      }
-      case 'document': {
-        if (!result.metadata || result.metadata.deleted_at) return [];
-        const searchFileType =
-          result.file_type === 'docx' ? 'pdf' : result.file_type;
-        let search: SearchData;
-        if (searchFileType === 'md') {
-          search = getSearchData({
-            results: result.document_search_results,
-            type: 'md',
-          });
-        } else if (searchFileType === 'pdf') {
-          search = getSearchData({
-            results: result.document_search_results,
-            type: 'pdf',
-            searchQuery,
-          });
-        } else {
-          search = getSearchData({
-            results: result.document_search_results,
-          });
-        }
-        // The index stores unformatted document names, so server name
-        // highlights lack the extension suffix the display name carries.
-        if (search.nameHighlight) {
-          search = {
-            ...search,
-            nameHighlight: formatDisplayName(
-              search.nameHighlight,
-              result.file_type
-            ),
-          };
-        }
-        const properties = result.properties ?? undefined;
-        return [
-          {
-            type: 'document',
-            subType:
-              result.sub_type === 'task'
-                ? { type: 'task' }
-                : result.sub_type === 'snippet'
-                  ? { type: 'snippet' }
-                  : result.sub_type === 'skill'
-                    ? { type: 'skill' }
-                    : null,
-            id: result.document_id,
-            name: formatDisplayName(
-              result.name || blockNameToDefaultFile(result.file_type),
-              result.file_type
-            ),
-            ownerId: result.owner_id,
-            createdAt: result.metadata?.created_at,
-            updatedAt: result.metadata?.updated_at,
-            fileType: result.file_type || undefined,
-            projectId: result.metadata?.project_id ?? undefined,
-            properties,
-            search,
-          },
-        ];
-      }
-      case 'email': {
-        const search = getSearchData({
-          results: result.email_message_search_results,
-          type: 'email',
-          searchQuery,
-        });
-
-        const name = result.name ?? blockNameToDefaultFile('email');
-
-        const participants = result.participants?.map((p) => ({
-          email: p.email,
-          name: p.name ?? undefined,
-        }));
-
-        return [
-          {
-            type: 'email',
-            id: result.thread_id,
-            name,
-            ownerId: result.owner_id,
-            linkId: result.link_id,
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            viewedAt: result.viewed_at,
-            isRead: result.is_read,
-            isImportant: result.is_important,
-            isDraft: result.is_draft,
-            done: !result.inbox_visible,
-            participants,
-            search,
-            snippet: result.snippet ?? undefined,
-            properties: result.properties ?? undefined,
-          },
-        ];
-      }
-      case 'chat': {
-        if (!result.metadata || result.metadata.deleted_at) return [];
-        const search = getSearchData({
-          results: result.chat_search_results,
-        });
-        return [
-          {
-            type: 'chat',
-            id: result.chat_id,
-            name: result.name,
-            ownerId: result.user_id,
-            createdAt: result.metadata?.created_at,
-            updatedAt: result.metadata?.updated_at,
-            projectId: result.metadata?.project_id ?? undefined,
-            properties: result.properties ?? undefined,
-            search,
-          },
-        ];
-      }
-      case 'channel': {
-        if (!result.metadata) return [];
-        const nameHighlight = result.highlight.name
-          ? mergeAdjacentMacroEmTags(result.highlight.name)
-          : null;
-        const search: SearchData = {
-          nameHighlight,
-          senderHighlightTerms: null,
-          contentHitData: null,
-          source: 'service',
-        };
-        const channelName =
-          channels().find((channel) => channel.id === result.channel_id)
-            ?.name ??
-          (search.nameHighlight
-            ? extractSearchSnippet(search.nameHighlight)
-            : blockNameToDefaultFile('channel'));
-        return [
-          {
-            type: 'channel',
-            id: result.channel_id,
-            name: channelName,
-            ownerId: result.owner_id ?? '',
-            channelType: result.channel_type as ChannelType,
-            createdAt: result.metadata.created_at,
-            updatedAt: result.metadata.updated_at,
-            viewedAt: result.metadata.viewed_at,
-            interactedAt: result.metadata.interacted_at,
-            search,
-          },
-        ];
-      }
-      case 'channelMessage': {
-        const channelName =
-          channels().find((c) => c.id === result.channel_id)?.name ??
-          blockNameToDefaultFile('channel');
-        const search = getSearchData({ type: 'channel', results: [result] });
-        const content = search.contentHitData?.[0]?.content ?? '';
-        return [
-          {
-            type: 'channel_message',
-            id: `${result.channel_id}:${result.message_id}`,
-            channelId: result.channel_id,
-            channelName,
-            channelType: result.channel_type as ChannelType,
-            messageId: result.message_id,
-            threadId: result.thread_id ?? undefined,
-            target: {
-              messageId: result.message_id,
-              threadId: result.thread_id ?? undefined,
-            },
-            senderId: result.sender_id,
-            content,
-            name: channelName,
-            ownerId: result.owner_id ?? '',
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            search,
-          },
-        ];
-      }
-
-      case 'project': {
-        if (!result.metadata || result.metadata.deleted_at) return [];
-        const search = getSearchData({
-          results: result.project_search_results,
-        });
-
-        return [
-          {
-            type: 'project',
-            id: result.id,
-            name: result.name,
-            ownerId: result.owner_id,
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            projectId: result.metadata?.parent_project_id ?? undefined,
-            properties: result.properties ?? undefined,
-            search,
-          },
-        ];
-      }
-
-      case 'calendarEvent': {
-        if (!result.metadata) return [];
-        const search = getSearchData({
-          results: result.calendar_event_search_results,
-        });
-
-        // A recurring series is indexed once, as its master. The service
-        // resolves which instance this row means — next upcoming, else most
-        // recent past — so prefer that span over the master's, which for a
-        // long-running series is its original (stale) start.
-        const metadata = result.metadata;
-        const time = toCalendarEventTime(
-          metadata.occurrence?.time ?? metadata.time
-        );
-
-        return [
-          {
-            type: 'calendar_event',
-            id: result.id,
-            name: result.name,
-            ownerId: result.owner_id,
-            status: metadata.status,
-            time,
-            occurrenceKey: metadata.occurrence?.occurrenceKey,
-            conferenceUrl: metadata.conferenceUrl ?? undefined,
-            isReadOnly: metadata.isReadOnly,
-            createdAt: metadata.createdAt,
-            updatedAt: metadata.updatedAt,
-            properties: result.properties ?? undefined,
-            search,
-          },
-        ];
-      }
-
-      case 'call': {
-        if (!result.metadata) return [];
-        const search = getSearchData({
-          type: 'call_record',
-          results: result.call_search_results,
-          callId: result.call_id,
-          callStartedAt: result.metadata.started_at,
-        });
-
-        const channelName: string | undefined =
-          result.metadata.channel_name ??
-          channels().find((c) => c.id === result.channel_id)?.name ??
-          undefined;
-        const status = result.metadata.status;
-
-        return [
-          {
-            type: 'call',
-            id: result.call_id,
-            name: result.name ?? channelName ?? blockNameToDefaultFile('call'),
-            channelId: result.channel_id,
-            channelName,
-            ownerId: result.owner_id,
-            createdAt: result.metadata.started_at,
-            updatedAt: result.metadata.updated_at,
-            isActive: false,
-            status,
-            attended: status === 'ATTENDED',
-            durationMs: result.metadata.duration_ms,
-            participantIds: result.participant_ids,
-            properties: result.properties ?? undefined,
-            search,
-          },
-        ];
-      }
-    }
-  };
+  ): MappedSearchEntities =>
+    mapUnifiedSearchResponseItem(result, searchQuery, channels);
 };
 
 const resolveDocumentEntityName = (
