@@ -29,7 +29,10 @@ function isNetworkStatus(value: unknown): value is NativeNetworkStatus {
 
 function applyStatus(payload: NetworkStatusPayload): void {
   if (!isNetworkStatus(payload.status)) {
-    console.error('[network-status] ignored invalid native status');
+    console.error(
+      '[network-status] ignored invalid native status',
+      payload.status
+    );
     return;
   }
 

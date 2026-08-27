@@ -1,4 +1,4 @@
-import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
+import { defineBlock, LoadErrors } from '@core/block';
 import { ok } from 'neverthrow';
 import EmailBlock from './component/Block';
 
@@ -20,5 +20,3 @@ export const definition = defineBlock({
   },
   accepted: {},
 });
-
-export type EmailData = ExtractLoadType<(typeof definition)['load']>;
