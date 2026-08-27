@@ -10,7 +10,6 @@ import {
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
-import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
@@ -29,10 +28,12 @@ import {
   type Component,
   createEffect,
   createMemo,
+  createSignal,
   For,
   type JSX,
   type ParentProps,
   Show,
+  type Signal,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import {
@@ -41,6 +42,7 @@ import {
 } from '../context';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
+import { RenamableSplitTitle } from './RenamableSplitTitle';
 
 export function StaticSplitLabel(props: {
   label: string;
@@ -49,11 +51,16 @@ export function StaticSplitLabel(props: {
   badges?: JSX.Element;
   class?: string;
   colorIcon?: boolean;
-  /** Enables in-place editing while retaining the split title/menu chrome. */
+  /** Enables double-click renaming while retaining the split title/menu
+   * chrome. */
   onRename?: (name: string) => void;
   renameAriaLabel?: string;
+  /** Edit state owned by the caller, so its own chrome (e.g. a Rename menu
+   * item) can open the same editor the title's double-click opens. */
+  renaming?: Signal<boolean>;
 }) {
   const panel = useSplitPanelOrThrow();
+  const renaming = props.renaming ?? createSignal(false);
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
@@ -99,15 +106,12 @@ export function StaticSplitLabel(props: {
               }
             >
               {(onRename) => (
-                <span onClick={(event) => event.stopPropagation()}>
-                  <InlineTitleEditor
-                    value={props.label}
-                    placeholder="Untitled"
-                    ariaLabel={props.renameAriaLabel ?? 'Rename'}
-                    onRename={onRename()}
-                    class="text-sm"
-                  />
-                </span>
+                <RenamableSplitTitle
+                  label={props.label}
+                  ariaLabel={props.renameAriaLabel ?? 'Rename'}
+                  onRename={onRename()}
+                  editing={renaming}
+                />
               )}
             </Show>
             <Show when={panel.titleFileMenuTrigger()}>
