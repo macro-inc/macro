@@ -266,31 +266,6 @@ describe('stop', () => {
     expect(control.calls.at(-1)?.action).toEqual({ type: 'stop' });
     dispose();
   });
-
-  it('posts only one stop while the turn is still running', async () => {
-    const { controller, setWorking, dispose } = setup({ working: true });
-    controller.stop();
-    controller.stop();
-    controller.stop();
-    await flush();
-    expect(
-      control.calls.filter(
-        (call) => (call.action as { type: string }).type === 'stop'
-      )
-    ).toHaveLength(1);
-
-    setWorking(false);
-    await flush();
-    setWorking(true);
-    controller.stop();
-    await flush();
-    expect(
-      control.calls.filter(
-        (call) => (call.action as { type: string }).type === 'stop'
-      )
-    ).toHaveLength(2);
-    dispose();
-  });
 });
 
 describe('a session that does not exist yet', () => {

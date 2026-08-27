@@ -96,18 +96,11 @@ export function createComposerController(options: {
      * (nor an older refusal of the same model) can answer this request.
      */
     requestedActionId: string | undefined;
-    /**
-     * A stop has been posted and the fold has not yet settled the turn.
-     * Extra clicks must not stack another `session/cancel` (and another
-     * "Stopped" line) while that round trip is in flight.
-     */
-    stopping: boolean;
   }>({
     queue: [],
     post: { type: 'idle' },
     requestedModel: undefined,
     requestedActionId: undefined,
-    stopping: false,
   });
 
   const postHead = async (sessionId: string, prompt: QueuedPrompt) => {
@@ -157,11 +150,10 @@ export function createComposerController(options: {
       .control(sessionId, { type: 'stop' })
       .catch(() => undefined);
     if (result === undefined || result.isErr()) {
-      setState('stopping', false);
       toast.failure('The agent could not be stopped');
     }
     // Success is observed through the fold: the turn settles and `working`
-    // flips false, which re-runs the drain and clears `stopping`.
+    // flips false, which re-runs the drain.
   };
 
   // The drain: whenever any fact changes, ask the model what to do and do
@@ -232,12 +224,6 @@ export function createComposerController(options: {
     onCleanup(() => clearTimeout(timer));
   });
 
-  // A stop is done when the fold shows the turn is no longer running. Until
-  // then extra clicks are ignored; once it settles, the next turn can stop.
-  createEffect(() => {
-    if (!options.working()) setState('stopping', false);
-  });
-
   // A session switch resets the composer: queued prompts belong to the
   // session they were typed in, never the next one.
   //
@@ -260,7 +246,6 @@ export function createComposerController(options: {
       post: { type: 'idle' },
       requestedModel: undefined,
       requestedActionId: undefined,
-      stopping: false,
     });
   });
 
@@ -299,8 +284,7 @@ export function createComposerController(options: {
     stop: () => {
       const sessionId = options.sessionId();
       if (!sessionId) return;
-      if (!isBusy(state.post, options.working()) || state.stopping) return;
-      setState('stopping', true);
+      if (!isBusy(state.post, options.working())) return;
       void postStop(sessionId);
     },
     setModel: (model) => {

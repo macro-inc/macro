@@ -160,18 +160,6 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
-  it('stops showing Thinking once the turn is cancelled', () => {
-    expect(
-      deriveMagicChipPresentation({
-        persistedStatus: 'acp_ready',
-        response: response({ stop: { kind: 'cancelled' } }),
-      })
-    ).toEqual({
-      kind: 'working',
-      activity: { label: 'Stopped', busy: false },
-    });
-  });
-
   it('keeps partial prose when a turn is cancelled', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'acp_ready',

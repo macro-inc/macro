@@ -53,19 +53,9 @@ function UserMessage(props: { message: FoldedMessage }) {
   );
 }
 
-export function Message(props: {
-  message: FoldedMessage;
-  /**
-   * Override for whether this agent message is still in flight. Defaults to
-   * "agent-authored and no stop reason yet". A later Stop control can make
-   * the session idle while this message still has `stop: null`, so the
-   * transcript passes the session's working signal here.
-   */
-  inFlight?: boolean;
-}) {
+export function Message(props: { message: FoldedMessage }) {
   const inFlight = () =>
-    props.inFlight ??
-    (props.message.author.kind === 'agent' && props.message.stop == null);
+    props.message.author.kind === 'agent' && props.message.stop == null;
   const failure = () =>
     props.message.stop?.kind === 'failed'
       ? props.message.stop.message

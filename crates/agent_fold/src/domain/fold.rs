@@ -315,10 +315,8 @@ struct Turn {
 impl FoldState {
     /// Advance by one log entry, returning what it changed in emission order.
     ///
-    /// Most frames change at most one message. A user stop is the exception:
-    /// it settles the open turn and emits a control, so the reader stops
-    /// seeing work in flight the moment they asked it to stop — rather than
-    /// waiting on a `session/prompt` response that may never arrive.
+    /// One entry changes at most one message today - see [`FoldEvent`]
+    /// for why the prompt-interrupts-a-turn case is not an exception.
     fn step(&mut self, entry: AgentSessionLog) -> Vec<StepChange> {
         self.session = Some(entry.agent_session_id);
 
@@ -330,33 +328,33 @@ impl FoldState {
                 // set-model request whose response this correlates.
                 self.note_config_request(&acp.0);
                 if let Some(action) = AgentAction::control_from_runtime(message) {
-                    return match action {
+                    return StepChange::message(match action {
                         AgentAction::SetModel(action) => {
                             let request_id = match &acp.0 {
                                 RawJsonRpcMessage::Request(request) => Some(&request.id),
                                 _ => None,
                             };
-                            StepChange::message(self.record_control(
+                            self.record_control(
                                 Control::SetModel {
                                     model: action.model,
                                 },
                                 request_id,
                                 entry.user_id.clone(),
-                            ))
+                            )
                         }
-                        AgentAction::Compact => StepChange::message(match &acp.0 {
+                        AgentAction::Compact => match &acp.0 {
                             RawJsonRpcMessage::Request(request) => {
                                 self.begin_compact(&request.id, entry.user_id.clone())
                             }
                             _ => None,
-                        }),
+                        },
                         // A stop is a notification: nothing can answer it, so
-                        // it is accepted the moment it is sent — and it
-                        // settles the open turn immediately, so the UI does
-                        // not wait on a prompt response that may never come.
-                        AgentAction::Stop => self.record_stop(entry.user_id.clone()),
-                        AgentAction::Prompt(_) => Vec::new(),
-                    };
+                        // it is accepted the moment it is sent.
+                        AgentAction::Stop => {
+                            self.record_control(Control::Stop, None, entry.user_id.clone())
+                        }
+                        AgentAction::Prompt(_) => None,
+                    });
                 }
                 StepChange::message(match &acp.0 {
                     // A user's prompt opens a turn.
@@ -388,13 +386,9 @@ impl FoldState {
                 RawJsonRpcMessage::Request(request)
                     if RequestPermissionRequest::matches_method(&request.method) =>
                 {
-                    if self.turn_is_settled() {
-                        Vec::new()
-                    } else {
-                        StepChange::message(
-                            self.request_permission(&request.id, request.params.as_ref()),
-                        )
-                    }
+                    StepChange::message(
+                        self.request_permission(&request.id, request.params.as_ref()),
+                    )
                 }
                 // The response to `session/prompt` closes the turn; a
                 // config-bearing response updates the metadata; a control's
@@ -576,77 +570,6 @@ impl FoldState {
         Some(Changed::new(message))
     }
 
-    /// Record a user stop: settle the open turn, then emit one Stop control.
-    ///
-    /// Repeated `session/cancel` notifications (the stop button stays lit
-    /// until the fold is seen to settle) must not stack "Stopped" lines, and
-    /// they must not wait for a prompt response that a Cursor turn in
-    /// particular may never send.
-    fn record_stop(&mut self, user_id: Option<MacroUserIdStr<'static>>) -> Vec<StepChange> {
-        let mut changes = StepChange::message(self.cancel_open_turn());
-        if self.last_is_accepted_stop() {
-            return changes;
-        }
-        changes.extend(StepChange::message(self.record_control(
-            Control::Stop,
-            None,
-            user_id,
-        )));
-        changes
-    }
-
-    /// Whether the transcript's last message is already an accepted stop.
-    fn last_is_accepted_stop(&self) -> bool {
-        let Some(message) = self.messages.last() else {
-            return false;
-        };
-        matches!(
-            message.parts.as_slice(),
-            [MessagePart::Control {
-                control: Control::Stop,
-                outcome: ControlOutcome::Accepted,
-            }]
-        )
-    }
-
-    /// The open turn has already been given a stop reason (a user cancel).
-    fn turn_is_settled(&self) -> bool {
-        self.turn
-            .as_ref()
-            .and_then(|turn| turn.agent)
-            .and_then(|message| self.messages.get(message))
-            .is_some_and(|message| message.stop.is_some())
-    }
-
-    /// Stamp the open agent message cancelled and fail anything still in
-    /// flight on it. Leaves the turn in place so a later prompt response can
-    /// still correlate, without reopening thinking.
-    fn cancel_open_turn(&mut self) -> Option<Changed> {
-        let message = self.turn.as_ref()?.agent?;
-        if self.messages[message].stop.is_some() {
-            return None;
-        }
-        let len = self.messages[message].parts.len();
-        for index in 0..len {
-            match self.messages[message].parts.get_mut(index) {
-                Some(MessagePart::ToolUse { status, .. })
-                    if matches!(*status, ToolStatus::Pending | ToolStatus::Running) =>
-                {
-                    *status = ToolStatus::Failed;
-                }
-                Some(MessagePart::Permission {
-                    outcome: outcome @ PermissionOutcome::Pending,
-                    ..
-                }) => {
-                    *outcome = PermissionOutcome::Cancelled;
-                }
-                _ => {}
-            }
-        }
-        self.messages[message].stop = Some(StopReason::Cancelled);
-        Some(Changed::updated(message))
-    }
-
     /// Resolve a pending control from its response. `None` when the id
     /// matches no control.
     fn resolve_control(&mut self, response_id: &RequestId, error: Option<&str>) -> Option<Changed> {
@@ -752,14 +675,6 @@ impl FoldState {
 
     /// Handle a `session/update`.
     fn apply_session_update(&mut self, params: Option<&RawJsonRpcParams>) -> Vec<StepChange> {
-        // A user stop stamps the open turn cancelled before the runtime's
-        // prompt response (and before any chunks still in flight). Those late
-        // frames must not reopen thinking or grow a turn the reader already
-        // saw end.
-        if self.turn_is_settled() {
-            return Vec::new();
-        }
-
         // Only the `update` field is folded; the rest of the notification
         // (session id, meta) carries nothing renderable. Borrowed out of the
         // params rather than cloning them - `session/update` is the bulk of
@@ -1159,9 +1074,6 @@ impl FoldState {
     fn close_turn(&mut self, stop: Option<StopReason>) -> Option<Changed> {
         let turn = self.turn.take()?;
         let message = turn.agent?;
-        if self.messages[message].stop.is_some() {
-            return None;
-        }
         self.messages[message].stop = Some(stop?);
         Some(Changed::updated(message))
     }
