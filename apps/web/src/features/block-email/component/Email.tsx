@@ -38,6 +38,8 @@ import { isPersonalMessage } from '../util/isPersonalMessage';
 import type { ReplyType } from '../util/replyType';
 import {
   type ScrollAlign,
+  messageElement,
+  pageThenAdvanceDelta,
   revealMessageAfterLayout,
   scrollToMessage,
   threadMessageIsExpanded,
@@ -158,7 +160,7 @@ function EmailContent(props: EmailViewProps) {
       focus: true,
     }
   ) => {
-    opts = { focus: true, behavior: 'smooth', align: 'start', ...opts };
+    opts = { focus: true, behavior: 'smooth', align: 'nearest', ...opts };
     const messages = untrack(context.messages.list);
     const container = untrack(context.messagesListRef);
 
@@ -221,6 +223,19 @@ function EmailContent(props: EmailViewProps) {
     if (!messages?.length || !list) return false;
 
     const currentFocusedId = context.messages.focusedID();
+
+    if (currentFocusedId) {
+      const focusedEl = messageElement(list, messages, currentFocusedId);
+      if (focusedEl) {
+        const pageDelta = pageThenAdvanceDelta(list, focusedEl, dir);
+        if (pageDelta !== 0) {
+          setIsScrollingToMessage(true);
+          list.scrollBy({ top: pageDelta, behavior: 'smooth' });
+          setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
+          return true;
+        }
+      }
+    }
 
     if (!currentFocusedId) {
       const target =

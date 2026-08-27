@@ -8,6 +8,8 @@ import {
   isTruncatedMiddleMessage,
   nextShownChronologicalIndex,
   prevShownChronologicalIndex,
+  nearestDelta,
+  pageThenAdvanceDelta,
   revealDelta,
   threadMessageIsExpanded,
   truncatedMiddleCount,
@@ -205,5 +207,60 @@ describe('revealDelta', () => {
     box(container, 0, 800);
     box(element, 200, 1200);
     expect(revealDelta(container, element)).toBe(200);
+  });
+});
+
+describe('nearestDelta', () => {
+  it('does nothing when any part of the card is on screen', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 200, 400);
+    expect(nearestDelta(container, element)).toBe(0);
+    box(element, -200, 200);
+    expect(nearestDelta(container, element)).toBe(0);
+  });
+
+  it('start-aligns a card that sits entirely below the list', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 900, 1100);
+    expect(nearestDelta(container, element)).toBe(900);
+  });
+});
+
+describe('pageThenAdvanceDelta', () => {
+  it('advances when the card already fits', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 200, 400);
+    expect(pageThenAdvanceDelta(container, element, 'next')).toBe(0);
+    expect(pageThenAdvanceDelta(container, element, 'prev')).toBe(0);
+  });
+
+  it('pages down by the remaining overflow when it is less than a viewport', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 100, 950);
+    expect(pageThenAdvanceDelta(container, element, 'next')).toBe(150);
+  });
+
+  it('pages down by one viewport when overflow is larger', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 0, 2400);
+    expect(pageThenAdvanceDelta(container, element, 'next')).toBe(800);
+  });
+
+  it('pages up when the card top is above the list', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, -400, 600);
+    expect(pageThenAdvanceDelta(container, element, 'prev')).toBe(-400);
   });
 });

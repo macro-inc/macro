@@ -1,4 +1,5 @@
-export type ScrollAlign = 'start' | 'end';
+export type ScrollAlign = 'start' | 'end' | 'nearest';
+export type NavDirection = 'prev' | 'next';
 
 export type OpenTargetMessage = {
   db_id?: string | null;
@@ -96,6 +97,8 @@ export function alignmentDelta(
       return elementBox.bottom - containerBox.bottom;
     case 'start':
       return elementBox.top - containerBox.top;
+    case 'nearest':
+      return nearestDelta(container, element);
     default: {
       const _exhaustive: never = align;
       return _exhaustive;
@@ -129,6 +132,22 @@ export function alignElementInContainer(
   });
 }
 
+/** Scroll only if the card does not intersect the viewport. */
+export function nearestDelta(
+  container: HTMLElement,
+  element: HTMLElement
+): number {
+  const containerBox = container.getBoundingClientRect();
+  const elementBox = element.getBoundingClientRect();
+  if (elementBox.bottom <= containerBox.top + 1) {
+    return alignmentDelta(container, element, 'start');
+  }
+  if (elementBox.top >= containerBox.bottom - 1) {
+    return alignmentDelta(container, element, 'start');
+  }
+  return 0;
+}
+
 /** Keep a card in view after it grows. Prefer scrolling down. */
 export function revealDelta(
   container: HTMLElement,
@@ -146,6 +165,33 @@ export function revealDelta(
     return alignmentDelta(container, element, 'end');
   }
   return 0;
+}
+
+/** Page the focused card if it still overflows. 0 means advance to the next card. */
+export function pageThenAdvanceDelta(
+  container: HTMLElement,
+  element: HTMLElement,
+  dir: NavDirection
+): number {
+  const containerBox = container.getBoundingClientRect();
+  const elementBox = element.getBoundingClientRect();
+  const page = containerBox.height;
+  switch (dir) {
+    case 'next': {
+      const overflow = elementBox.bottom - containerBox.bottom;
+      if (overflow <= 1) return 0;
+      return Math.min(overflow, page);
+    }
+    case 'prev': {
+      const overflow = containerBox.top - elementBox.top;
+      if (overflow <= 1) return 0;
+      return -Math.min(overflow, page);
+    }
+    default: {
+      const _exhaustive: never = dir;
+      return _exhaustive;
+    }
+  }
 }
 
 export function revealMessageInView(
