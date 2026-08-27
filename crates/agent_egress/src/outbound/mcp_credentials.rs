@@ -16,9 +16,9 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 use pipedream_mcp::domain::models::PipedreamConnection;
-use pipedream_mcp::domain::ports::{ConnectionStore, McpUpstream};
+use pipedream_mcp::domain::ports::ConnectionStore;
+use pipedream_mcp::outbound::api::McpUpstream;
 use std::sync::Arc;
-use url::Url;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{BearerToken, McpDestination, McpServerSlug, UpstreamCall};
@@ -108,15 +108,12 @@ where
             ))
         })?;
 
-        // Parsed, but not yet vetted: `UpstreamCall`'s constructor is what
-        // refuses a non-https endpoint, and it is the only way to pair this
-        // URL with a credential.
-        let url = Url::parse(&call.url).map_err(|error| {
-            EgressError::Internal(rootcause::report!(
-                "configured Pipedream MCP url is not a url: {error}"
-            ))
-        })?;
-
-        UpstreamCall::bearer(url, BearerToken::new(call.bearer_token))?.scoped_by(call.headers)
+        // Typed at the source, but not yet vetted: `UpstreamCall`'s
+        // constructor is what refuses a non-https endpoint, and it is the
+        // only way to pair this URL with a credential.
+        Ok(
+            UpstreamCall::bearer(call.url, BearerToken::new(call.bearer_token))?
+                .scoped_by(call.headers),
+        )
     }
 }

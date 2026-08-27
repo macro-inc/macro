@@ -119,26 +119,6 @@ fn strips_every_pipedream_scoping_header() {
     assert_eq!(names(&headers), ["accept"]);
 }
 
-/// Scope headers travel next to a credential, so a value that could smuggle a
-/// newline is a header injection and the call must refuse to exist.
-#[test]
-fn a_scope_header_that_could_inject_is_refused() {
-    let call = UpstreamCall::bearer(
-        Url::parse("https://remote.mcp.pipedream.net").expect("url"),
-        BearerToken::new("token"),
-    )
-    .expect("call");
-
-    let refusal = call
-        .scoped_by([(
-            "x-pd-external-user-id".to_owned(),
-            "owner\r\nx-pd-external-user-id: somebody-else".to_owned(),
-        )])
-        .expect_err("refused");
-
-    assert!(matches!(refusal, EgressError::Internal(_)), "{refusal}");
-}
-
 /// The headers MCP needs to work across a proxy at all: the server's session
 /// id, event-stream resumption, and the accept header that asks for a stream.
 #[test]

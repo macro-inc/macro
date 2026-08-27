@@ -554,33 +554,23 @@ impl UpstreamCall {
         })
     }
 
-    /// The same call with scoping headers attached, validated here for the
-    /// same reason [`UpstreamCredential::header_value`] validates: these
-    /// values travel next to a credential, and one carrying a newline would
-    /// be a header injection, not a header.
+    /// The same call with scoping headers attached. Already-typed headers,
+    /// so there is nothing left to validate: a value that could smuggle a
+    /// newline is unrepresentable as a `HeaderValue`, refused wherever the
+    /// adapter built it.
     ///
     /// Scoping headers are part of the credential story, not decoration:
     /// Pipedream decides *whose* connected account a request spends from
     /// `x-pd-external-user-id` alone, so these pairs must come from the same
     /// resolution that produced the token - never from the request.
-    pub fn scoped_by(
-        mut self,
-        headers: impl IntoIterator<Item = (String, String)>,
-    ) -> Result<Self, EgressError> {
-        for (name, value) in headers {
-            let name = HeaderName::from_bytes(name.as_bytes()).map_err(|error| {
-                EgressError::Internal(rootcause::report!(
-                    "scope header name {name:?} is not a header name: {error}"
-                ))
-            })?;
-            let value = HeaderValue::from_str(&value).map_err(|error| {
-                EgressError::Internal(rootcause::report!(
-                    "scope header {name} value is not a header value: {error}"
-                ))
-            })?;
-            self.scope.push((name, value));
-        }
-        Ok(self)
+    #[must_use]
+    pub fn scoped_by(mut self, headers: HeaderMap) -> Self {
+        self.scope.extend(
+            headers
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone())),
+        );
+        self
     }
 
     /// Where the request goes.

@@ -65,7 +65,7 @@ struct SpyCredentials {
     asked: Mutex<Vec<(String, String)>>,
     known: bool,
     url: String,
-    scope: Vec<(String, String)>,
+    scope: HeaderMap,
 }
 
 impl SpyCredentials {
@@ -79,18 +79,22 @@ impl SpyCredentials {
             asked: Mutex::default(),
             known: true,
             url: url.to_owned(),
-            scope: Vec::new(),
+            scope: HeaderMap::new(),
         }
     }
 
     /// A resolution that scopes its credential with extra headers, the way
     /// the Pipedream adapter does.
     fn scoped(scope: &[(&str, &str)]) -> Self {
+        let mut headers = HeaderMap::new();
+        for (name, value) in scope {
+            headers.insert(
+                HeaderName::from_bytes(name.as_bytes()).expect("a header name"),
+                HeaderValue::from_str(value).expect("a header value"),
+            );
+        }
         Self {
-            scope: scope
-                .iter()
-                .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
-                .collect(),
+            scope: headers,
             ..Self::knowing()
         }
     }
@@ -100,7 +104,7 @@ impl SpyCredentials {
             asked: Mutex::default(),
             known: false,
             url: String::new(),
-            scope: Vec::new(),
+            scope: HeaderMap::new(),
         }
     }
 }
@@ -123,11 +127,11 @@ impl McpCredentials for SpyCredentials {
             return Err(EgressError::UnknownServer(slug.clone()));
         }
 
-        UpstreamCall::bearer(
+        Ok(UpstreamCall::bearer(
             Url::parse(&self.url).expect("url"),
             BearerToken::new("upstream-token"),
         )?
-        .scoped_by(self.scope.iter().cloned())
+        .scoped_by(self.scope.clone()))
     }
 }
 
@@ -333,7 +337,8 @@ async fn stamps_the_resolved_scope_over_whatever_the_sandbox_claimed() {
         .await
         .expect("proxied");
 
-    let scope = service.forward.forwarded(|parts| {
+    // Sorted, because a `HeaderMap` decides its own iteration order.
+    let mut scope = service.forward.forwarded(|parts| {
         parts
             .headers
             .iter()
@@ -346,12 +351,13 @@ async fn stamps_the_resolved_scope_over_whatever_the_sandbox_claimed() {
             })
             .collect::<Vec<_>>()
     });
+    scope.sort();
 
     assert_eq!(
         scope,
         [
-            ("x-pd-external-user-id".to_owned(), "the-owner".to_owned()),
             ("x-pd-app-slug".to_owned(), "datadog".to_owned()),
+            ("x-pd-external-user-id".to_owned(), "the-owner".to_owned()),
         ],
         "exactly the resolved scope, nothing the sandbox sent"
     );

@@ -37,25 +37,6 @@ pub struct PipedreamConnection {
     pub enabled: bool,
 }
 
-/// How to address Pipedream's remote MCP server on behalf of one user's
-/// connected app.
-///
-/// The bearer is our project-level API token and the headers are what scope a
-/// request to the user and app - Pipedream injects the account's own
-/// credentials server-side from nothing but these. That is why this struct
-/// exists as a value handed to a proxy rather than only inside a client:
-/// whoever holds the bearer can claim to be any user, so the caller is
-/// expected to keep it away from anything user-controlled.
-#[derive(Clone, Debug)]
-pub struct McpUpstreamCall {
-    /// URL of Pipedream's remote MCP server.
-    pub url: String,
-    /// Our project API token, for `Authorization: Bearer`.
-    pub bearer_token: String,
-    /// The `x-pd-*` headers scoping the call to the record's user and app.
-    pub headers: Vec<(String, String)>,
-}
-
 /// A short-lived token for opening Pipedream's hosted Connect UI.
 #[derive(Clone, Debug)]
 pub struct ConnectToken {

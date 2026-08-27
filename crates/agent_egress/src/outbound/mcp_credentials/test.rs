@@ -1,7 +1,9 @@
 use super::*;
 use crate::domain::model::McpDestination;
-use pipedream_mcp::domain::models::McpUpstreamCall;
+use http::header::{HeaderMap, HeaderValue};
+use pipedream_mcp::outbound::api::McpUpstreamCall;
 use std::sync::Mutex;
+use url::Url;
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")
@@ -73,16 +75,19 @@ impl McpUpstream for SpyUpstream {
             .lock()
             .expect("spy lock should not be poisoned")
             .push(record.clone());
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-pd-external-user-id",
+            HeaderValue::from_str(&record.user_id.to_string()).expect("a header value"),
+        );
+        headers.insert(
+            "x-pd-app-slug",
+            HeaderValue::from_str(&record.app_slug).expect("a header value"),
+        );
         Ok(McpUpstreamCall {
-            url: self.url.to_owned(),
+            url: Url::parse(self.url).expect("a url"),
             bearer_token: "project-token".to_owned(),
-            headers: vec![
-                (
-                    "x-pd-external-user-id".to_owned(),
-                    record.user_id.to_string(),
-                ),
-                ("x-pd-app-slug".to_owned(), record.app_slug.clone()),
-            ],
+            headers,
         })
     }
 }
