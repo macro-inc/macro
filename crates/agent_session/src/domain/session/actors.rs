@@ -164,7 +164,7 @@ where
                     );
                     span.record(
                         "agent.session.runtime_phase_at_dequeue",
-                        runtime_phase(self.machine.status()),
+                        self.machine.status().as_ref(),
                     );
                     Input::Command {
                         from: user_id,
@@ -472,15 +472,6 @@ where
         if let Some(stop) = stop {
             effects.push_back(stop);
         }
-    }
-}
-
-fn runtime_phase(status: RuntimeStatus) -> &'static str {
-    match status {
-        RuntimeStatus::Booting => "booting",
-        RuntimeStatus::Handshaking => "handshaking",
-        RuntimeStatus::Live { .. } => "live",
-        RuntimeStatus::Dead => "dead",
     }
 }
 
