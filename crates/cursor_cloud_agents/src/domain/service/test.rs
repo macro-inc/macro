@@ -277,8 +277,12 @@ async fn cancel_mid_tool_call_closes_it_as_failed() {
     assert_eq!(closing.fields.status, Some(ToolCallStatus::Failed));
 }
 
-/// A cancel while the prompt is still queued behind someone else's run ends the
-/// wait, rather than sitting out the full busy timeout.
+/// A cancel while the prompt is still queued behind someone else's run ends
+/// the wait, rather than sitting out the full busy timeout — and reports it as
+/// the stop it is. The wait itself fails, but a failure the client asked for
+/// is a stop reason: an ACP error would surface in the transcript as a red
+/// "the prompt was cancelled while waiting for the agent to be free" instead
+/// of a stopped turn.
 #[tokio::test]
 async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
     let (service, cursor, _notifier) = service(None);
@@ -303,11 +307,108 @@ async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
 
     service.cancel(&session).await.expect("cancel works");
 
-    let outcome = turn.await.expect("task joins");
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    // Nothing was ever created, so there is no run to have cancelled.
     assert!(
-        outcome.is_err(),
-        "a cancelled wait is an error, not a silent success: {outcome:?}"
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..)))
     );
+}
+
+/// A stopped run whose record never turns terminal.
+///
+/// Cursor makes one terminal within seconds of the cancel POST, so this is
+/// the API misbehaving — and the turn ends on the stop rather than holding it
+/// open for the full fifteen minutes `POLL_ATTEMPTS` allows a live run.
+#[tokio::test(start_paused = true)]
+async fn a_stopped_run_that_never_reports_terminal_ends_on_the_stop() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // Far more than the stopped bound, so the bound is what ends the poll.
+    for _ in 0..STOPPED_POLL_ATTEMPTS * 3 {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+    events
+        .send(CursorEvent::Thinking {
+            text: "hmm".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    service.cancel(&session).await.expect("cancel works");
+    drop(events); // no result frame, so the turn falls back to polling
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    let polls = cursor
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, CursorCall::RunResult(..)))
+        .count();
+    assert_eq!(
+        polls, STOPPED_POLL_ATTEMPTS,
+        "the poll stopped at the bound rather than running out the attempts"
+    );
+}
+
+/// A stop that beats the run into existence.
+///
+/// `cancel` has no run id to POST while the first prompt is still creating the
+/// agent — ten seconds, live — so the stop is sent the moment the run has one.
+/// Left unsent, Cursor keeps working and this turn reads the stream to the
+/// agent's own natural end, which is the stop button doing nothing at all.
+#[tokio::test]
+async fn a_stop_before_the_run_exists_is_sent_once_it_does() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let finish_creating = cursor.script_create_gate();
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    // Mid-create: the turn has neither agent nor run for a cancel to name.
+    cursor
+        .wait_for_calls(1, |call| matches!(call, CursorCall::CreateAgent(..)))
+        .await;
+    service.cancel(&session).await.expect("cancel works");
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..))),
+        "there was no run to cancel yet"
+    );
+
+    finish_creating.send(()).expect("the create is waiting");
+
+    // The run exists now, so the stop it missed is sent for it, and the turn
+    // ends on Cursor's cancelled result like any other cancelled run.
+    cursor
+        .wait_for_calls(1, |call| matches!(call, CursorCall::CancelRun(..)))
+        .await;
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
 }
 
 #[tokio::test]

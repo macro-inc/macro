@@ -22,13 +22,18 @@
 //! The cancellation token is for waits that have no run yet: a prompt queued
 //! behind `agent_busy`. It does not cut a live stream short, and it does not
 //! stand in for Cursor's terminal record once the stream is gone — that path
-//! still reads `GET …/runs/{run}` until the run is terminal.
+//! still reads `GET …/runs/{run}` until the run is terminal, only on a
+//! shorter leash ([`STOPPED_POLL_ATTEMPTS`]) once a stop has been sent, since
+//! a stopped run turns terminal within seconds or not at all.
 //!
 //! The remote cancel still needs a run id, and this process only remembers
 //! one for a turn it is itself streaming. A session restored after a restart,
 //! or one whose run started from cursor.com, has no such memory — cancelling
 //! it falls back to asking Cursor which run is current rather than silently
-//! skipping the remote call.
+//! skipping the remote call. A stop that beats the run into existence has
+//! nothing to fall back to, so [`CursorSessionService::prompt`] re-sends it
+//! the moment the run has an id; otherwise the stop would be swallowed and
+//! the turn would run to the agent's own natural end.
 
 #[cfg(test)]
 mod test;
@@ -58,6 +63,14 @@ const POLL_ATTEMPTS: usize = 450;
 
 /// Consecutive poll failures tolerated before the turn takes the error.
 const POLL_ERROR_TOLERANCE: usize = 5;
+
+/// Polls a run the client has stopped gets before the turn ends on the stop
+/// alone.
+///
+/// Cursor turns a cancelled run's record terminal within a second or two of
+/// the cancel POST, so this is generous. It exists because the alternative is
+/// [`POLL_ATTEMPTS`] — a quarter of an hour of a lit stop button.
+const STOPPED_POLL_ATTEMPTS: usize = 15;
 
 /// A stream this quiet gets its run's record checked. Observed live: the
 /// final text arrives and the stream then hangs open, its terminal `result`
@@ -443,9 +456,16 @@ where
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
-                let run = self
+                let run = match self
                     .create_run_when_free(&agent, prompt, model.as_ref(), &cancel)
-                    .await?;
+                    .await
+                {
+                    Ok(run) => run,
+                    // The wait ended because the client asked to stop, which
+                    // ACP answers with a stop reason rather than an error.
+                    Err(_) if cancel.is_cancelled() => return Ok(StopReason::Cancelled),
+                    Err(error) => return Err(error),
+                };
                 // Catch the session's view up on whatever it missed while it
                 // was not looking. After the create on purpose: creating
                 // proved the agent free, so every missed run is terminal and
@@ -475,10 +495,25 @@ where
             }
         };
         tracing::info!(%agent, %run, "cursor run started");
-        {
+        let cancelled_before_the_run = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.agent = Some(agent.clone());
             state.active_run = Some(run.clone());
+            state.cancelled
+        };
+        // A stop this run did not exist to receive. `cancel` had no run id to
+        // POST — a first prompt spends ten seconds creating the agent, and a
+        // session with no agent yet cannot name one — so the remote work was
+        // left going and the stream below would have read it to the agent's
+        // own natural end. Ask now, and the same stream ends on Cursor's
+        // cancelled `result` a second or two later.
+        if cancelled_before_the_run {
+            tracing::info!(%agent, %run, "stop arrived before this run existed; cancelling it now");
+            if let Err(error) = self.cursor.cancel_run(&agent, &run).await {
+                // Best-effort, exactly as in `cancel`: the turn still ends on
+                // whatever the stream reports.
+                tracing::warn!(%agent, %run, %error, "could not cancel a run stopped before it existed");
+            }
         }
 
         let outcome = self
@@ -523,6 +558,9 @@ where
             state.cancel.cancel();
             (state.agent.clone(), state.active_run.clone())
         };
+        // No agent yet: the session's first prompt is still creating one, so
+        // there is nothing to name in a remote cancel. `cancelled` is set,
+        // and `prompt` sends it as soon as the run has an id.
         let Some(agent) = agent else {
             return Ok(());
         };
@@ -693,7 +731,20 @@ where
                                 .poll_turn(session_id, session, agent, run, streamed_text, cancel)
                                 .await;
                         }
-                        Ok(_) => continue, // still running; keep listening
+                        // Still running. Keep listening — unless the client
+                        // asked to stop, in which case a silent stream is no
+                        // longer worth waiting on and the record is the only
+                        // thing left to read. `poll_turn` bounds that wait.
+                        Ok(_) if cancel.is_cancelled() => {
+                            tracing::info!(
+                                %agent, %run,
+                                "stopped run's stream went quiet; reading its record instead"
+                            );
+                            return self
+                                .poll_turn(session_id, session, agent, run, streamed_text, cancel)
+                                .await;
+                        }
+                        Ok(_) => continue,
                         Err(error) => {
                             tracing::warn!(%agent, %run, %error, "quiet-stream status check failed");
                             continue;
@@ -1021,6 +1072,7 @@ where
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<StopReason, SessionError> {
         let mut consecutive_errors = 0;
+        let mut polls_since_stop = 0;
         for _ in 0..POLL_ATTEMPTS {
             // Get A Run is the result frame once the stream is gone. A client
             // cancel is the notification that asked for that record; it does
@@ -1051,6 +1103,21 @@ where
             };
             consecutive_errors = 0;
             if !outcome.is_terminal() {
+                // A cancelled run's record turns terminal within a second or
+                // two of the POST, so one that still has not is not going to
+                // — and the client asked to stop minutes ago. Waiting out the
+                // full `POLL_ATTEMPTS` there is the stop button doing nothing.
+                if cancel.is_cancelled() {
+                    polls_since_stop += 1;
+                    if polls_since_stop >= STOPPED_POLL_ATTEMPTS {
+                        tracing::warn!(
+                            %agent, %run,
+                            "stopped run never reported terminal; ending the turn on the stop"
+                        );
+                        self.close_open_tool_calls(session_id, session).await;
+                        return Ok(StopReason::Cancelled);
+                    }
+                }
                 tokio::time::sleep(POLL_INTERVAL).await;
                 continue;
             }
