@@ -19,12 +19,12 @@
 //! same way a finished run ends. Cancellation is terminal on Cursor's side;
 //! that `result` is what closes the ACP prompt.
 //!
-//! The cancellation token is for waits that have no run yet: a prompt queued
-//! behind `agent_busy`. It does not cut a live stream short, and it does not
-//! stand in for Cursor's terminal record once the stream is gone — that path
-//! still reads `GET …/runs/{run}` until the run is terminal, only on a
-//! shorter leash ([`STOPPED_POLL_ATTEMPTS`]) once a stop has been sent, since
-//! a stopped run turns terminal within seconds or not at all.
+//! The cancellation token never cuts a live stream short — that is the whole
+//! point of the paragraph above. It ends the waits where there is nothing to
+//! read: a prompt queued behind `agent_busy`, and the fallback poll, which
+//! only runs because the stream is gone. Reading `GET …/runs/{run}` once more
+//! after the user has stopped buys nothing a stopped turn reports anyway, so
+//! the poll's wait is where a stop lands.
 //!
 //! The remote cancel still needs a run id, and this process only remembers
 //! one for a turn it is itself streaming. A session restored after a restart,
@@ -63,14 +63,6 @@ const POLL_ATTEMPTS: usize = 450;
 
 /// Consecutive poll failures tolerated before the turn takes the error.
 const POLL_ERROR_TOLERANCE: usize = 5;
-
-/// Polls a run the client has stopped gets before the turn ends on the stop
-/// alone.
-///
-/// Cursor turns a cancelled run's record terminal within a second or two of
-/// the cancel POST, so this is generous. It exists because the alternative is
-/// [`POLL_ATTEMPTS`] — a quarter of an hour of a lit stop button.
-const STOPPED_POLL_ATTEMPTS: usize = 15;
 
 /// A stream this quiet gets its run's record checked. Observed live: the
 /// final text arrives and the stream then hangs open, its terminal `result`
@@ -731,18 +723,14 @@ where
                                 .poll_turn(session_id, session, agent, run, streamed_text, cancel)
                                 .await;
                         }
-                        // Still running. Keep listening — unless the client
-                        // asked to stop, in which case a silent stream is no
-                        // longer worth waiting on and the record is the only
-                        // thing left to read. `poll_turn` bounds that wait.
+                        // Still running: keep listening. Unless the client
+                        // stopped, in which case a silent stream and a run
+                        // the record says is still going is nothing left to
+                        // wait for.
                         Ok(_) if cancel.is_cancelled() => {
-                            tracing::info!(
-                                %agent, %run,
-                                "stopped run's stream went quiet; reading its record instead"
-                            );
-                            return self
-                                .poll_turn(session_id, session, agent, run, streamed_text, cancel)
-                                .await;
+                            tracing::info!(%agent, %run, "stopped run's stream went quiet");
+                            self.close_open_tool_calls(session_id, session).await;
+                            return Ok(StopReason::Cancelled);
                         }
                         Ok(_) => continue,
                         Err(error) => {
@@ -825,6 +813,27 @@ where
                 "cursor stream for run {run} ended without reporting a result"
             ))),
         }
+    }
+
+    /// Wait out one poll interval, unless the client has stopped the turn.
+    /// `true` means it has, and the turn is over.
+    ///
+    /// The only cancel check in the fallback poll. Ending here is not the
+    /// local settle this service refuses elsewhere: the poll runs precisely
+    /// because the stream is gone, so there are no frames left to abandon —
+    /// only a record to stop re-reading on the user's behalf.
+    async fn wait_unless_stopped(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> bool {
+        if !sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
+            return false;
+        }
+        tracing::info!("turn stopped while polling for its run's record");
+        self.close_open_tool_calls(session_id, session).await;
+        true
     }
 
     /// Close out every tool call still open when a turn ends cancelled.
@@ -1072,12 +1081,9 @@ where
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<StopReason, SessionError> {
         let mut consecutive_errors = 0;
-        let mut polls_since_stop = 0;
         for _ in 0..POLL_ATTEMPTS {
-            // Get A Run is the result frame once the stream is gone. A client
-            // cancel is the notification that asked for that record; it does
-            // not replace it. Only give up on the token when the record
-            // itself cannot be read.
+            // Both waits below go through `wait_unless_stopped`, the one
+            // place a stop ends this poll.
             let outcome = match self.cursor.run_result(agent, run).await {
                 Ok(outcome) => outcome,
                 // A blip mid-poll is survivable; the same failure over and
@@ -1085,40 +1091,18 @@ where
                 Err(error) if consecutive_errors < POLL_ERROR_TOLERANCE => {
                     consecutive_errors += 1;
                     tracing::warn!(%agent, %run, %error, consecutive_errors, "run poll failed");
-                    if cancel.is_cancelled() {
-                        self.close_open_tool_calls(session_id, session).await;
-                        return Ok(StopReason::Cancelled);
-                    }
-                    if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
-                        self.close_open_tool_calls(session_id, session).await;
+                    if self.wait_unless_stopped(session_id, session, cancel).await {
                         return Ok(StopReason::Cancelled);
                     }
                     continue;
-                }
-                Err(_error) if cancel.is_cancelled() => {
-                    self.close_open_tool_calls(session_id, session).await;
-                    return Ok(StopReason::Cancelled);
                 }
                 Err(error) => return Err(SessionError::Cursor(error)),
             };
             consecutive_errors = 0;
             if !outcome.is_terminal() {
-                // A cancelled run's record turns terminal within a second or
-                // two of the POST, so one that still has not is not going to
-                // — and the client asked to stop minutes ago. Waiting out the
-                // full `POLL_ATTEMPTS` there is the stop button doing nothing.
-                if cancel.is_cancelled() {
-                    polls_since_stop += 1;
-                    if polls_since_stop >= STOPPED_POLL_ATTEMPTS {
-                        tracing::warn!(
-                            %agent, %run,
-                            "stopped run never reported terminal; ending the turn on the stop"
-                        );
-                        self.close_open_tool_calls(session_id, session).await;
-                        return Ok(StopReason::Cancelled);
-                    }
+                if self.wait_unless_stopped(session_id, session, cancel).await {
+                    return Ok(StopReason::Cancelled);
                 }
-                tokio::time::sleep(POLL_INTERVAL).await;
                 continue;
             }
 

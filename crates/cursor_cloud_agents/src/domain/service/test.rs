@@ -130,11 +130,14 @@ async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
     );
 }
 
-/// Once the stream is gone, Get A Run is the result frame. Cancel does not
-/// skip that record — a still-running poll, then `CANCELLED` with text,
-/// must deliver that text rather than resolving on the token alone.
+/// A stop must not lose an answer the run had already produced.
+///
+/// The race: the run finishes, its stream is truncated before the `result`
+/// frame, and the stop lands. Get A Run is the only place that answer exists,
+/// so the poll reads it and delivers its text — a stopped turn ends on the
+/// record it can reach, not on the token alone.
 #[tokio::test(start_paused = true)]
-async fn cancel_delivers_a_polled_cancelled_result_after_the_stream_ends() {
+async fn a_stop_still_delivers_a_finished_run_the_stream_never_reported() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
 
@@ -153,12 +156,8 @@ async fn cancel_delivers_a_polled_cancelled_result_after_the_stream_ends() {
     notifier.wait_for_updates(1).await;
 
     cursor.script_run_result(RunOutcome {
-        status: RunStatus::Running,
-        text: None,
-    });
-    cursor.script_run_result(RunOutcome {
-        status: RunStatus::Cancelled,
-        text: Some("stopped here".to_owned()),
+        status: RunStatus::Finished,
+        text: Some("here is the answer".to_owned()),
     });
     service.cancel(&session).await.expect("cancel works");
     drop(events);
@@ -178,7 +177,7 @@ async fn cancel_delivers_a_polled_cancelled_result_after_the_stream_ends() {
             _ => None,
         })
         .collect();
-    assert_eq!(texts, vec!["stopped here".to_owned()]);
+    assert_eq!(texts, vec!["here is the answer".to_owned()]);
 }
 
 /// Cancel is a notification: POST it, keep reading until Cursor's `result`.
@@ -318,18 +317,18 @@ async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
     );
 }
 
-/// A stopped run whose record never turns terminal.
+/// A stop while the fallback poll is running.
 ///
-/// Cursor makes one terminal within seconds of the cancel POST, so this is
-/// the API misbehaving — and the turn ends on the stop rather than holding it
-/// open for the full fifteen minutes `POLL_ATTEMPTS` allows a live run.
+/// The poll only exists because the stream is gone, so a stop ends it at the
+/// first wait rather than re-reading a record nobody is waiting on: one read,
+/// then the turn is over.
 #[tokio::test(start_paused = true)]
-async fn a_stopped_run_that_never_reports_terminal_ends_on_the_stop() {
+async fn a_stop_ends_the_fallback_poll_at_its_first_wait() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
 
-    // Far more than the stopped bound, so the bound is what ends the poll.
-    for _ in 0..STOPPED_POLL_ATTEMPTS * 3 {
+    // Plenty scripted, so what ends the poll is the stop and not the script.
+    for _ in 0..10 {
         cursor.script_run_result(RunOutcome {
             status: RunStatus::Running,
             text: None,
@@ -359,10 +358,7 @@ async fn a_stopped_run_that_never_reports_terminal_ends_on_the_stop() {
         .iter()
         .filter(|call| matches!(call, CursorCall::RunResult(..)))
         .count();
-    assert_eq!(
-        polls, STOPPED_POLL_ATTEMPTS,
-        "the poll stopped at the bound rather than running out the attempts"
-    );
+    assert_eq!(polls, 1, "one read of the record, then the stop ends it");
 }
 
 /// A stop that beats the run into existence.
