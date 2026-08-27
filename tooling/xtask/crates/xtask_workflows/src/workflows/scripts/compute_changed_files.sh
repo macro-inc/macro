@@ -15,4 +15,5 @@ else
   fi
 fi
 
+printf '%s\n' "$compare_rev" > /tmp/base-revision
 git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files

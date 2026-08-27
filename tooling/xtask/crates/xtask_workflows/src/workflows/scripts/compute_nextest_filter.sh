@@ -8,8 +8,9 @@ set -euo pipefail
 # `skip_tests=true` keeps clippy on a package set while the live-Postgres
 # test job stays skipped (used for `.sqlx`-only diffs).
 #
-# Only Cargo/toolchain/config edits force `all`. flake.nix, the Nix shell
-# action, and this workflow file used to live on that list and turned every
+# Root Cargo/toolchain/config edits force `all`. Cargo.lock is handled by
+# determinator's old/new graph comparison. flake.nix, the Nix shell action,
+# and this workflow file used to live on the full-suite list and turned every
 # dev-shell tweak into a full-suite rebuild.
 
 echo "skip_tests=false" >> "$GITHUB_OUTPUT"
@@ -20,7 +21,7 @@ if [ ! -s /tmp/changed-files ]; then
   exit 0
 fi
 
-if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*)$' /tmp/changed-files; then
+if grep -qE '^(Cargo\.toml|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*)$' /tmp/changed-files; then
   echo "Workspace-level Cargo/toolchain change detected; running all tests"
   echo "rust_packages=all" >> "$GITHUB_OUTPUT"
   exit 0
@@ -37,7 +38,7 @@ if ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
   exit 0
 fi
 
-packages="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files)"
+packages="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files "$(< /tmp/base-revision)")"
 
 if [ -z "$packages" ] || [ "$packages" = "none" ]; then
   echo "No package-specific Rust changes detected; running no tests"

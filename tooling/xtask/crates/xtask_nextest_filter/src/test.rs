@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn crate_change_maps_to_rdeps_of_that_crate() {
     let graph = build_graph(false).expect("cargo metadata");
-    let packages = compute_packages(&graph, "crates/email_validator/src/lib.rs\n").unwrap();
+    let packages = compute_packages(&graph, &graph, "crates/email_validator/src/lib.rs\n").unwrap();
     assert_ne!(packages, "none");
     assert_ne!(packages, "all");
     let set: BTreeSet<&str> = packages.split_whitespace().collect();
@@ -22,10 +22,23 @@ fn unmapped_files_alone_yield_none() {
     let graph = build_graph(false).expect("cargo metadata");
     let packages = compute_packages(
         &graph,
+        &graph,
         "random.json\npackage.json\ndocs/README.md\njustfile\n",
     )
     .unwrap();
     assert_eq!(packages, "none");
+}
+
+/// Package-local metadata files still select their package because some are
+/// compile-time inputs (for example, webhook embeds its README).
+#[test]
+fn package_readme_selects_its_package() {
+    let graph = build_graph(false).expect("cargo metadata");
+    let packages = compute_packages(&graph, &graph, "crates/webhook/README.md\n").unwrap();
+    assert!(
+        packages.split_whitespace().any(|name| name == "webhook"),
+        "package README must select its owner: {packages}"
+    );
 }
 
 /// Shared assets embedded into crates from outside their directories select
@@ -34,7 +47,7 @@ fn unmapped_files_alone_yield_none() {
 fn embedded_assets_select_their_consumers() {
     let graph = build_graph(false).expect("cargo metadata");
 
-    let packages = compute_packages(&graph, "static_assets/schema.graphql\n").unwrap();
+    let packages = compute_packages(&graph, &graph, "static_assets/schema.graphql\n").unwrap();
     let set: BTreeSet<&str> = packages.split_whitespace().collect();
     for expected in [
         "cache-core",
@@ -52,6 +65,7 @@ fn embedded_assets_select_their_consumers() {
 
     let mixed = compute_packages(
         &graph,
+        &graph,
         "crates/email_validator/src/lib.rs\nstatic_assets/markdown-golden.1.bin\n",
     )
     .unwrap();
@@ -61,16 +75,14 @@ fn embedded_assets_select_their_consumers() {
     assert!(mixed_set.contains("collab_surface"));
 }
 
-/// Drift check: every workspace package whose Rust sources mention an
-/// [`EMBEDDED_ASSET_PACKAGES`] path prefix must be listed in the table (and
-/// vice versa), so new compile-time embeds of shared assets never silently
-/// escape the CI test filter. The scan is textual, so a doc-comment mention
-/// counts; listing such a package merely over-selects, which is the safe
-/// direction.
+/// Drift check: every workspace package whose Rust sources mention the shared
+/// asset path must be listed in the determinator rule (and vice versa). The
+/// scan is textual, so a doc-comment mention merely over-selects safely.
 #[test]
 fn embedded_asset_packages_match_source_references() {
     let graph = build_graph(false).expect("cargo metadata");
     let workspace = graph.workspace();
+    let prefix = "static_assets";
 
     let packages: Vec<(PathBuf, String)> = workspace
         .iter()
@@ -85,36 +97,44 @@ fn embedded_asset_packages_match_source_references() {
         collect_rust_files(dir, &mut rust_files);
     }
 
-    for (prefix, expected) in EMBEDDED_ASSET_PACKAGES {
-        let mut found = BTreeSet::new();
-        for file in &rust_files {
-            let content = std::fs::read_to_string(file).unwrap_or_default();
-            if !content.contains(prefix) {
-                continue;
-            }
-            // Attribute the file to its deepest containing package, mirroring
-            // compute_packages, so nested workspaces (tooling/xtask/crates/*)
-            // don't credit the parent package.
-            let owner = packages
-                .iter()
-                .filter(|(dir, _)| file.starts_with(dir))
-                .max_by_key(|(dir, _)| dir.components().count())
-                .map(|(_, name)| name.clone())
-                .expect("rust file collected from a package dir");
-            // This crate's own sources name the prefixes it maps.
-            if owner == env!("CARGO_PKG_NAME") {
-                continue;
-            }
+    let mut found = BTreeSet::new();
+    for file in &rust_files {
+        let content = std::fs::read_to_string(file).unwrap_or_default();
+        if !content.contains(prefix) {
+            continue;
+        }
+        // Attribute the file to its deepest containing package, mirroring
+        // determinator's nearest-package behavior for nested xtask crates.
+        let owner = packages
+            .iter()
+            .filter(|(dir, _)| file.starts_with(dir))
+            .max_by_key(|(dir, _)| dir.components().count())
+            .map(|(_, name)| name.clone())
+            .expect("rust file collected from a package dir");
+        if owner != env!("CARGO_PKG_NAME") {
             found.insert(owner);
         }
-
-        let expected: BTreeSet<String> = expected.iter().map(|name| (*name).to_owned()).collect();
-        assert_eq!(
-            found, expected,
-            "EMBEDDED_ASSET_PACKAGES entry for `{prefix}` is out of sync with the \
-             packages whose Rust sources reference it; update the table in main.rs"
-        );
     }
+
+    let rules = DeterminatorRules::parse(DETERMINATOR_RULES).expect("determinator rules");
+    let mut determinator = Determinator::new(&graph, &graph);
+    determinator.set_rules(&rules).expect("set rules");
+    let mut configured = BTreeSet::new();
+    determinator.match_path("static_assets/drift-check", |id| {
+        configured.insert(
+            graph
+                .metadata(id)
+                .expect("package metadata")
+                .name()
+                .to_owned(),
+        );
+    });
+
+    assert_eq!(
+        found, configured,
+        "determinator rule for `{prefix}` is out of sync with packages whose Rust sources \
+         reference it; update determinator.toml"
+    );
 }
 
 /// Recursively collect `.rs` files under `dir`, skipping hidden and build
