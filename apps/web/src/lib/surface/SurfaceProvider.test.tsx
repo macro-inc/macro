@@ -51,19 +51,7 @@ describe('SurfaceProvider', () => {
     expect(maybe).toBeUndefined();
   });
 
-  it('announces on mount and disposes on unmount', () => {
-    const directory = createSurfaceDirectory();
-    const view = renderView(() => (
-      <SurfaceProvider name="image" id={() => 'mounted'} directory={directory}>
-        <div />
-      </SurfaceProvider>
-    ));
-    expect(directory.isLive('image', 'mounted')).toBe(true);
-    view.unmount();
-    expect(directory.isLive('image', 'mounted')).toBe(false);
-  });
-
-  it('nested provider sets nested and neither announces nor provides', async () => {
+  it('nested provider sets nested and does not provide', async () => {
     vi.useFakeTimers();
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const directory = createSurfaceDirectory();
@@ -74,7 +62,7 @@ describe('SurfaceProvider', () => {
     const Inner = () => {
       const surface = useSurface();
       nested = surface.nested;
-      useSurfaceMethods('image', {
+      useSurfaceMethods({
         goToLatest: () => {
           innerRan = true;
         },
@@ -83,33 +71,31 @@ describe('SurfaceProvider', () => {
     };
 
     const Outer = () => {
-      useSurfaceMethods('image', {
+      useSurfaceMethods({
         goToLatest: () => {
           outerRan = true;
         },
       });
       return (
-        <SurfaceProvider name="image" id={() => 'inner'} directory={directory}>
+        <SurfaceProvider id={() => 'inner'} directory={directory}>
           <Inner />
         </SurfaceProvider>
       );
     };
 
     renderView(() => (
-      <SurfaceProvider name="image" id={() => 'outer'} directory={directory}>
+      <SurfaceProvider id={() => 'outer'} directory={directory}>
         <Outer />
       </SurfaceProvider>
     ));
 
     expect(nested).toBe(true);
-    expect(directory.isLive('image', 'outer')).toBe(true);
-    expect(directory.isLive('image', 'inner')).toBe(false);
 
-    await directory.handle('image', 'outer').goToLatest();
+    await directory.handle('outer').goToLatest();
     expect(outerRan).toBe(true);
     expect(innerRan).toBe(false);
 
-    const innerCall = directory.handle('image', 'inner').goToLatest();
+    const innerCall = directory.handle('inner').goToLatest();
     await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS);
     await expect(innerCall).resolves.toBeUndefined();
   });
@@ -122,7 +108,7 @@ describe('SurfaceProvider', () => {
     const [show, setShow] = createSignal(true);
 
     const Child = () => {
-      useSurfaceMethods('image', {
+      useSurfaceMethods({
         goToLatest: () => {
           ran = true;
         },
@@ -131,29 +117,29 @@ describe('SurfaceProvider', () => {
     };
 
     renderView(() => (
-      <SurfaceProvider name="image" id={() => 'owner'} directory={directory}>
+      <SurfaceProvider id={() => 'owner'} directory={directory}>
         {show() ? <Child /> : null}
       </SurfaceProvider>
     ));
 
-    await directory.handle('image', 'owner').goToLatest();
+    await directory.handle('owner').goToLatest();
     expect(ran).toBe(true);
 
     ran = false;
     setShow(false);
-    const gone = directory.handle('image', 'owner').goToLatest();
+    const gone = directory.handle('owner').goToLatest();
     await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS);
     await expect(gone).resolves.toBeUndefined();
     expect(ran).toBe(false);
   });
 
-  it('rekeys reactively: old key dies, new key is live and answers, and a pre-flip call on the new key resolves', async () => {
+  it('rekeys reactively: old key dies, new key answers, and a pre-flip call on the new key resolves', async () => {
     const directory = createSurfaceDirectory();
     const [id, setId] = createSignal('pending-x');
     let ranOn: string | undefined;
 
     const Methods = () => {
-      useSurfaceMethods('image', {
+      useSurfaceMethods({
         goToLatest: () => {
           ranOn = id();
         },
@@ -162,20 +148,17 @@ describe('SurfaceProvider', () => {
     };
 
     renderView(() => (
-      <SurfaceProvider name="image" id={id} directory={directory}>
+      <SurfaceProvider id={id} directory={directory}>
         <Methods />
       </SurfaceProvider>
     ));
 
-    expect(directory.isLive('image', 'pending-x')).toBe(true);
-    const pendingNew = directory.handle('image', 'session-y').goToLatest();
+    const pendingNew = directory.handle('session-y').goToLatest();
     setId('session-y');
     await pendingNew;
     expect(ranOn).toBe('session-y');
-    expect(directory.isLive('image', 'pending-x')).toBe(false);
-    expect(directory.isLive('image', 'session-y')).toBe(true);
     ranOn = undefined;
-    await directory.handle('image', 'session-y').goToLatest();
+    await directory.handle('session-y').goToLatest();
     expect(ranOn).toBe('session-y');
   });
 
@@ -187,7 +170,7 @@ describe('SurfaceProvider', () => {
     const [tick, setTick] = createSignal(0);
 
     const Consumer = () => {
-      const snapshot = useSurfaceParams('image');
+      const snapshot = useSurfaceParams<'image'>();
       createEffect(
         on(snapshot, (value) => {
           last = value;
@@ -202,7 +185,6 @@ describe('SurfaceProvider', () => {
 
     renderView(() => (
       <SurfaceProvider
-        name="image"
         id={() => 'params'}
         params={params}
         directory={directory}
@@ -218,33 +200,5 @@ describe('SurfaceProvider', () => {
     await Promise.resolve();
     expect(reads).toBe(1);
     expect(last).toEqual({});
-  });
-
-  it('DEV-throws on useSurfaceParams / useSurfaceMethods name mismatch', () => {
-    const directory = createSurfaceDirectory();
-
-    const BadParams = () => {
-      useSurfaceParams('inbox');
-      return null;
-    };
-    expect(() =>
-      renderView(() => (
-        <SurfaceProvider name="image" id={() => 'x'} directory={directory}>
-          <BadParams />
-        </SurfaceProvider>
-      ))
-    ).toThrow(/useSurfaceParams\('inbox'\) called inside surface 'image'/);
-
-    const BadMethods = () => {
-      useSurfaceMethods('inbox', {});
-      return null;
-    };
-    expect(() =>
-      renderView(() => (
-        <SurfaceProvider name="image" id={() => 'y'} directory={directory}>
-          <BadMethods />
-        </SurfaceProvider>
-      ))
-    ).toThrow(/useSurfaceMethods\('inbox'\) called inside surface 'image'/);
   });
 });

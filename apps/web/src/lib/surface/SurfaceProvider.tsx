@@ -15,20 +15,18 @@ import {
 import type { MethodsFor, ParamsFor, SurfaceName } from './specs';
 
 /** Context value established by SurfaceProvider for a mounted surface. */
-export type SurfaceContextValue<N extends SurfaceName = SurfaceName> = {
-  readonly name: N;
+export type SurfaceContextValue = {
   /** Reactive: changes in place on adoptContentId (placeholder → real id). */
   readonly id: Accessor<string>;
   /** Stable accessor over the mount-time params snapshot; never re-fires. */
-  readonly params: Accessor<ParamsFor<N> | undefined>;
+  readonly params: Accessor<Record<string, unknown> | undefined>;
   /** True when mounted inside another SurfaceProvider (derived from context). */
   readonly nested: boolean;
 };
 
-type InternalSurfaceContextValue<N extends SurfaceName = SurfaceName> =
-  SurfaceContextValue<N> & {
-    directory: SurfaceDirectory;
-  };
+type InternalSurfaceContextValue = SurfaceContextValue & {
+  directory: SurfaceDirectory;
+};
 
 const SurfaceContext = createContext<InternalSurfaceContextValue>();
 
@@ -39,15 +37,16 @@ function directoryOf(surface: SurfaceContextValue): SurfaceDirectory {
 }
 
 /**
- * Establishes surface identity, params, and directory announcement for a
- * mount. Renders no DOM of its own.
+ * Establishes surface identity and params for a mount, and carries the
+ * directory used by useSurfaceMethods. Renders no DOM of its own. Takes no
+ * `name`: the mount creator only has runtime content.type, so identity is the
+ * id; the typed edge is consumer-side (useSurfaceParams / useSurfaceMethods).
  */
-export function SurfaceProvider<N extends SurfaceName>(
+export function SurfaceProvider(
   props: FlowProps<{
-    name: N;
     id: Accessor<string>;
     /** One-shot mount params. Snapshotted at setup; never re-read. */
-    params?: ParamsFor<N>;
+    params?: Record<string, unknown>;
     /** Injectable for tests. Defaults to the app-wide surfaceDirectory. */
     directory?: SurfaceDirectory;
   }>
@@ -55,28 +54,21 @@ export function SurfaceProvider<N extends SurfaceName>(
   const parent = useContext(SurfaceContext);
   const nested = parent !== undefined;
   const directory = untrack(() => props.directory) ?? appSurfaceDirectory;
-  const paramsSnapshot: ParamsFor<N> | undefined = untrack(() => {
+  const paramsSnapshot: Record<string, unknown> | undefined = untrack(() => {
     const params = props.params;
     if (params === undefined) return undefined;
     return { ...params };
   });
 
-  const value: InternalSurfaceContextValue<N> = {
-    name: untrack(() => props.name),
+  const value: InternalSurfaceContextValue = {
     id: () => props.id(),
     params: () => paramsSnapshot,
     nested,
     directory,
   };
 
-  createEffect(() => {
-    if (nested) return;
-    const dispose = directory.announce(props.name, props.id());
-    onCleanup(dispose);
-  });
-
   return (
-    <SurfaceContext.Provider value={value as InternalSurfaceContextValue}>
+    <SurfaceContext.Provider value={value}>
       {props.children}
     </SurfaceContext.Provider>
   );
@@ -100,39 +92,29 @@ export function useMaybeSurface(): SurfaceContextValue | undefined {
 }
 
 /**
- * Typed params for the named surface. DEV-throws when the enclosing
- * provider's name !== `name` (the cast would be a lie).
+ * Typed params for the enclosing surface. `N` is a compile-time witness; the
+ * cast is unchecked at runtime (the surface component names its own N — the
+ * same trust the legacy BlockComponentProps lookup extended).
  */
-export function useSurfaceParams<N extends SurfaceName>(
-  name: N
-): Accessor<ParamsFor<N> | undefined> {
-  const surface = useSurface();
-  if (import.meta.env.DEV && surface.name !== name) {
-    throw new Error(
-      `useSurfaceParams('${name}') called inside surface '${surface.name}'`
-    );
-  }
-  return surface.params as Accessor<ParamsFor<N> | undefined>;
+export function useSurfaceParams<N extends SurfaceName>(): Accessor<
+  ParamsFor<N> | undefined
+> {
+  return useSurface().params as Accessor<ParamsFor<N> | undefined>;
 }
 
 /**
  * Register public methods for the enclosing surface. No-op when nested.
- * DEV-throws on name mismatch with the enclosing provider.
+ * Pass `N` explicitly to register surface-specific methods; without it,
+ * inference falls back to the shared methods.
  */
-export function useSurfaceMethods<N extends SurfaceName>(
-  name: N,
+export function useSurfaceMethods<N extends SurfaceName = SurfaceName>(
   methods: Partial<MethodsFor<N>>
 ): void {
   const surface = useSurface();
-  if (import.meta.env.DEV && surface.name !== name) {
-    throw new Error(
-      `useSurfaceMethods('${name}') called inside surface '${surface.name}'`
-    );
-  }
   if (surface.nested) return;
   const directory = directoryOf(surface);
   createEffect(() => {
-    const dispose = directory.provide(name, surface.id(), methods);
+    const dispose = directory.provide<N>(surface.id(), methods);
     onCleanup(dispose);
   });
 }

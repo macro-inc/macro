@@ -2,49 +2,40 @@ import { createEffect, createRoot, untrack } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { AsHandleMethods, MethodsFor, SurfaceName } from './specs';
 
-/** Composite key identifying a live surface instance. */
-export type SurfaceKey = `${SurfaceName}:${string}`;
-
-/** Build the directory key for `(name, id)`. */
-export const surfaceKey = (name: SurfaceName, id: string): SurfaceKey =>
-  `${name}:${id}`;
-
-/** Cleanup function returned by announce/provide. */
+/** Cleanup function returned by provide. */
 export type Disposer = () => void;
 
-/** Typed handle pinned to a `(name, id)` pair; method lookups resolve per call. */
-export type SurfaceHandle<N extends SurfaceName> = {
-  readonly surface: { readonly name: N; readonly id: string };
-} & AsHandleMethods<MethodsFor<N>>;
+/** Typed handle pinned to an id; method lookups resolve per call. */
+export type SurfaceHandle<N extends SurfaceName> = AsHandleMethods<
+  MethodsFor<N>
+>;
 
-/** Runtime registry of live surface instances and their public methods. */
+/**
+ * Typed method bus for live surface instances, keyed by id alone — the model
+ * the block orchestrator has always used (its registry is `setBlocks(id, …)`).
+ * CONTRACT: ids are unique across live surfaces. Entity ids are server-issued
+ * UUIDs, placeholder ids are `pending-<uuid>`, and app surfaces choose
+ * distinctive slugs; the DEV overwrite warn in provide() is the alarm if two
+ * providers ever share an id. `N` is a compile-time witness selecting the
+ * method map; it is not part of runtime identity.
+ */
 export type SurfaceDirectory = {
   /**
-   * Declare that a live, non-nested instance of (name, id) exists.
-   * Returns a disposer (refcounted; see announce disposer).
+   * Merge typed methods for `id`. Returns a disposer that removes exactly the
+   * methods this call registered (guarded by the registration token below).
+   * Later provides win per method name.
    */
-  announce(name: SurfaceName, id: string): Disposer;
-
-  /**
-   * Merge typed methods for (name, id). Independent of announce — neither
-   * requires the other, in either order. Returns a disposer that removes
-   * exactly the methods this call registered (guarded by the registration
-   * token below). Later provides win per method name.
-   */
-  provide<N extends SurfaceName>(
-    name: N,
+  provide<N extends SurfaceName = SurfaceName>(
     id: string,
     methods: Partial<MethodsFor<N>>
   ): Disposer;
 
   /**
-   * Synchronous, infallible, cheap. Pins (name, id) at creation; method
-   * lookups are resolved lazily at each call.
+   * Synchronous, infallible, cheap. Pins `id` at creation; each method call
+   * bounded-awaits registration (DEFAULT_METHOD_TIMEOUT_MS), then resolves
+   * `undefined` as a no-op if the method never arrives.
    */
-  handle<N extends SurfaceName>(name: N, id: string): SurfaceHandle<N>;
-
-  /** Reactive: true while announce-count > 0 for (name, id). */
-  isLive(name: SurfaceName, id: string): boolean;
+  handle<N extends SurfaceName = SurfaceName>(id: string): SurfaceHandle<N>;
 };
 
 const DEFAULT_AWAIT_TIMEOUT_MS = 5_000;
@@ -56,10 +47,6 @@ type RegisteredMethod = {
   fn: (...args: unknown[]) => unknown;
   /** identity of the provide() call that registered it */
   token: symbol;
-};
-type DirectoryEntry = {
-  announceCount: number;
-  methods: Record<string, RegisteredMethod | undefined>;
 };
 
 /**
@@ -92,8 +79,10 @@ export function awaitCondition(
   });
 }
 
-function hasRegisteredMethods(entry: DirectoryEntry): boolean {
-  for (const value of Object.values(entry.methods)) {
+function hasRegisteredMethods(
+  methods: Record<string, RegisteredMethod | undefined>
+): boolean {
+  for (const value of Object.values(methods)) {
     if (value !== undefined) return true;
   }
   return false;
@@ -105,74 +94,39 @@ function hasRegisteredMethods(entry: DirectoryEntry): boolean {
  */
 export function createSurfaceDirectory(): SurfaceDirectory {
   const [entries, setEntries] = createStore<
-    Record<SurfaceKey, DirectoryEntry | undefined>
+    Record<string, Record<string, RegisteredMethod | undefined> | undefined>
   >({});
 
-  const ensureEntry = (key: SurfaceKey) => {
-    if (entries[key] === undefined) {
-      setEntries(key, { announceCount: 0, methods: {} });
+  const ensureEntry = (id: string) => {
+    if (entries[id] === undefined) {
+      setEntries(id, {});
     }
   };
 
-  const prune = (key: SurfaceKey) => {
-    const entry = entries[key];
+  const prune = (id: string) => {
+    const entry = entries[id];
     if (!entry) return;
-    if (entry.announceCount === 0 && !hasRegisteredMethods(entry)) {
-      setEntries(key, undefined);
+    if (!hasRegisteredMethods(entry)) {
+      setEntries(id, undefined);
     }
   };
 
   return {
-    announce(name, id) {
-      const key = surfaceKey(name, id);
-      // Registry mutations must not subscribe the caller's effect (provider
-      // announce/provide effects would loop on their own store writes).
-      untrack(() => {
-        const current = entries[key];
-        if (current === undefined) {
-          setEntries(key, { announceCount: 1, methods: {} });
-          return;
-        }
-        setEntries(key, 'announceCount', (count) => {
-          const next = count + 1;
-          if (import.meta.env.DEV && next > 1) {
-            console.warn(
-              `two live mounts share \`${key}\`; expected only transiently during a remount in the same tick`
-            );
-          }
-          return next;
-        });
-      });
-      return () => {
-        untrack(() => {
-          const entry = entries[key];
-          if (entry === undefined) return;
-          const next = Math.max(0, entry.announceCount - 1);
-          if (next === 0 && !hasRegisteredMethods(entry)) {
-            setEntries(key, undefined);
-            return;
-          }
-          setEntries(key, 'announceCount', next);
-        });
-      };
-    },
-
-    provide(name, id, methods) {
-      const key = surfaceKey(name, id);
+    provide(id, methods) {
       const token = Symbol();
       const registeredNames: string[] = [];
       untrack(() => {
-        ensureEntry(key);
+        ensureEntry(id);
         for (const [methodName, fn] of Object.entries(methods)) {
           if (!fn) continue;
           registeredNames.push(methodName);
           if (import.meta.env.DEV) {
-            const existing = entries[key]?.methods[methodName];
+            const existing = entries[id]?.[methodName];
             if (existing !== undefined && existing.token !== token) {
-              console.warn(`surface method overwritten: ${key}.${methodName}`);
+              console.warn(`surface method overwritten: ${id}.${methodName}`);
             }
           }
-          setEntries(key, 'methods', methodName, {
+          setEntries(id, methodName, {
             fn: fn as (...args: unknown[]) => unknown,
             token,
           });
@@ -180,46 +134,39 @@ export function createSurfaceDirectory(): SurfaceDirectory {
       });
       return () => {
         untrack(() => {
-          if (entries[key] === undefined) return;
+          if (entries[id] === undefined) return;
           for (const methodName of registeredNames) {
-            setEntries(key, 'methods', methodName, (current) =>
+            setEntries(id, methodName, (current) =>
               current?.token === token ? undefined : current
             );
           }
-          prune(key);
+          prune(id);
         });
       };
     },
 
-    handle(name, id) {
-      const key = surfaceKey(name, id);
-      const surface = { name, id };
-      return new Proxy({} as SurfaceHandle<typeof name>, {
+    handle(id) {
+      return new Proxy({} as SurfaceHandle<SurfaceName>, {
         get(_, prop) {
-          if (prop === 'surface') return surface;
           if (prop === 'then' || prop === 'catch' || prop === 'finally') {
             return undefined;
           }
           if (typeof prop !== 'string') return undefined;
           return async (...args: unknown[]) => {
             await awaitCondition(
-              () => entries[key]?.methods[prop] !== undefined,
+              () => entries[id]?.[prop] !== undefined,
               DEFAULT_METHOD_TIMEOUT_MS
             ).catch(() => {
               if (import.meta.env.DEV) {
-                console.warn(`surface method timed out: ${key}.${prop}`);
+                console.warn(`surface method timed out: ${id}.${prop}`);
               }
             });
-            const entry = entries[key]?.methods[prop];
+            const entry = entries[id]?.[prop];
             if (!entry) return undefined;
             return (await entry.fn(...args)) as never;
           };
         },
       });
-    },
-
-    isLive(name, id) {
-      return (entries[surfaceKey(name, id)]?.announceCount ?? 0) > 0;
     },
   };
 }

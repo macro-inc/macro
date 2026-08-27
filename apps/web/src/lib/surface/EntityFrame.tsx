@@ -6,22 +6,11 @@ import {
   toEntityLoadError,
 } from '@core/component/EntityLoadGate';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { isTabFocused } from '@core/signal/tabFocus';
-import { connectionGatewayClient } from '@service-connection/client';
-import {
-  type Accessor,
-  createContext,
-  createEffect,
-  type JSX,
-  onCleanup,
-  useContext,
-} from 'solid-js';
+import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 import { useSurface } from './SurfaceProvider';
 
 /** Re-exported so features import one module for the frame + its error type. */
 export type { EntityLoadError, EntityLoadResult };
-
-const PING_INTERVAL_MS = 20_000;
 
 /**
  * Adapt a TanStack solid-query result (reactive store) to EntityLoadResult.
@@ -44,11 +33,6 @@ export function queryLoadResult<Data>(query: {
 export type EntityFrameProps<Data> = {
   /** Drives loading / access-error / content states. */
   result: EntityLoadResult<Data>;
-  /**
-   * Presence tracking via the connection gateway (open/ping/close).
-   * Default false — the feature opts in (replaces liveTrackingEnabled).
-   */
-  liveTracking?: boolean;
   /** Rendered once data is available, with a narrowed accessor. */
   children: (data: Accessor<Data>) => JSX.Element;
 };
@@ -62,8 +46,8 @@ export type SurfaceChrome = {
 const SurfaceChromeContext = createContext<SurfaceChrome>();
 
 /**
- * Opt-in chrome for entity surfaces: load gate, live tracking, hotkey scope,
- * and DOM identity attributes.
+ * Opt-in chrome for entity surfaces: load gate, hotkey scope, and DOM
+ * identity.
  */
 export function EntityFrame<Data>(props: EntityFrameProps<Data>): JSX.Element {
   const surface = useSurface();
@@ -85,7 +69,7 @@ export function EntityFrame<Data>(props: EntityFrameProps<Data>): JSX.Element {
   if (split) {
     fallbackScopeId = split.splitHotkeyScope;
   } else {
-    const [attachHotkeys, scopeId] = useHotkeyDOMScope(surface.name);
+    const [attachHotkeys, scopeId] = useHotkeyDOMScope('surface');
     attachFallbackHotkeyScope = attachHotkeys;
     fallbackScopeId = scopeId;
   }
@@ -98,42 +82,11 @@ export function EntityFrame<Data>(props: EntityFrameProps<Data>): JSX.Element {
     hotkeyScope,
   };
 
-  createEffect(() => {
-    if (!props.liveTracking || surface.nested) return;
-    const entityId = surface.id();
-    // Every draft entity surface is a document; the chat/channel/project
-    // mapping returns when those surfaces migrate.
-    const entityType = 'document' as const;
-    connectionGatewayClient.trackEntity({
-      entity_type: entityType,
-      entity_id: entityId,
-      action: 'open',
-    });
-    const pingInterval = setInterval(() => {
-      if (isTabFocused()) {
-        connectionGatewayClient.trackEntity({
-          entity_type: entityType,
-          entity_id: entityId,
-          action: 'ping',
-        });
-      }
-    }, PING_INTERVAL_MS);
-    onCleanup(() => {
-      connectionGatewayClient.trackEntity({
-        entity_type: entityType,
-        entity_id: entityId,
-        action: 'close',
-      });
-      clearInterval(pingInterval);
-    });
-  });
-
   return (
     <SurfaceChromeContext.Provider value={chrome}>
       <div
         class="relative size-full portal-scope"
         id={`surface-${surface.id()}`}
-        data-surface={surface.name}
         ref={(el) => attachFallbackHotkeyScope?.(el)}
       >
         <div class="overflow-hidden size-full">

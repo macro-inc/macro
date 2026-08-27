@@ -14,6 +14,9 @@ export type SurfaceMethod = (...args: never[]) => unknown;
  * asynchronously must be declared with a `T | Promise<T>` return (see
  * SharedSurfaceMethods). Providers then pass plain implementations checked
  * against Partial<MethodsFor<N>> — no provider-side mapped type exists.
+ * Surface-specific methods are selected by an explicit type argument
+ * (`useSurfaceMethods<'md'>(…)`); when it is omitted, inference falls back
+ * to the shared methods.
  */
 export type SurfaceMethodMap = Record<string, SurfaceMethod>;
 
