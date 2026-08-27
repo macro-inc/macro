@@ -270,7 +270,7 @@ describe('LinkPreviews', () => {
     expect(container.querySelector('[data-message-link-previews]')).toBeNull();
   });
 
-  it('hides the remove control until the preview is hovered', () => {
+  it('hides the remove control until the message or preview is hovered', () => {
     const url = 'https://example.com/hover-x';
     unfurlResults.set(url, {
       type: 'success',
@@ -286,8 +286,32 @@ describe('LinkPreviews', () => {
     const button = getByRole('button', { name: 'Remove link preview' });
     const classes = button.className.split(/\s+/);
     expect(classes).toContain('opacity-0');
-    expect(classes).toContain('group-hover/preview:opacity-100');
+    expect(classes).toContain('group-hover/message:opacity-100');
+    expect(classes).toContain('text-ink-muted');
     expect(classes.some((c) => c.startsWith('bg-'))).toBe(false);
+  });
+
+  it('reveals the muted X after pointer hover on the preview', async () => {
+    const user = userEvent.setup();
+    const url = 'https://example.com/pointer-hover-x';
+    unfurlResults.set(url, {
+      type: 'success',
+      data: { url, title: 'Pointer Hover X' },
+      _createdAt: new Date(),
+    });
+
+    const { container, getByRole } = renderPreviews(url, {
+      id: 'message-pointer-hover-x',
+      sender_id: 'user-1',
+    });
+
+    const card = container.querySelector('[data-link-preview]');
+    expect(card).not.toBeNull();
+    const button = getByRole('button', { name: 'Remove link preview' });
+    expect(button.className.split(/\s+/)).toContain('opacity-0');
+
+    await user.hover(card!);
+    expect(button.className.split(/\s+/)).toContain('opacity-100');
   });
 
   it('lets the sender remove a preview for everyone', async () => {

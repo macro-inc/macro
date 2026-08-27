@@ -36,12 +36,15 @@ function LinkPreviewCard(props: {
 }) {
   const [faviconFailed, setFaviconFailed] = createSignal(false);
   const [imageFailed, setImageFailed] = createSignal(false);
+  const [hovered, setHovered] = createSignal(false);
   const domain = () => extractDomain(props.unfurled.url);
 
   return (
     <div
       class="group/preview mb-2 flex min-w-0 flex-col gap-0.5 border-l-2 border-edge py-0.5 pl-3"
       data-link-preview={props.unfurled.url}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
     >
       <div class="flex min-w-0 items-center gap-1.5">
         <Show
@@ -66,10 +69,15 @@ function LinkPreviewCard(props: {
           <button
             type="button"
             aria-label="Remove link preview"
-            class="shrink-0 rounded p-0.5 text-ink opacity-0 group-hover/preview:opacity-100 group-focus-within/preview:opacity-100 focus-visible:opacity-100 touch:opacity-100"
+            class={cn(
+              'shrink-0 rounded p-0.5 text-ink-muted',
+              hovered()
+                ? 'opacity-100'
+                : 'opacity-0 group-hover/message:opacity-100 group-hover/preview:opacity-100 group-focus-within/message:opacity-100 group-focus-within/preview:opacity-100 focus-visible:opacity-100 touch:opacity-100'
+            )}
             onClick={props.onHide}
           >
-            <XIcon class="size-3.5 fill-ink" />
+            <XIcon class="size-4 fill-current" />
           </button>
         </Show>
       </div>
