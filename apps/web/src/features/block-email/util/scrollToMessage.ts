@@ -129,6 +129,52 @@ export function alignElementInContainer(
   });
 }
 
+/** Keep a card in view after it grows. Prefer scrolling down. */
+export function revealDelta(
+  container: HTMLElement,
+  element: HTMLElement
+): number {
+  const containerBox = container.getBoundingClientRect();
+  const elementBox = element.getBoundingClientRect();
+  if (elementBox.height >= containerBox.height) {
+    return alignmentDelta(container, element, 'start');
+  }
+  if (elementBox.top < containerBox.top) {
+    return alignmentDelta(container, element, 'start');
+  }
+  if (elementBox.bottom > containerBox.bottom) {
+    return alignmentDelta(container, element, 'end');
+  }
+  return 0;
+}
+
+export function revealMessageInView(
+  messageId: string,
+  messages: Array<{ db_id?: string | null }>,
+  container: HTMLElement,
+  behavior: ScrollBehavior = 'auto'
+): void {
+  const element = messageElement(container, messages, messageId);
+  if (!element) return;
+  const top = revealDelta(container, element);
+  if (top === 0) return;
+  const nativeBehavior: ScrollBehavior =
+    behavior === 'instant' ? 'auto' : behavior;
+  container.scrollBy({ top, behavior: nativeBehavior });
+}
+
+export function revealMessageAfterLayout(
+  messageId: string,
+  messages: Array<{ db_id?: string | null }>,
+  container: HTMLElement | undefined | null,
+  behavior: ScrollBehavior = 'auto'
+): void {
+  if (!container) return;
+  requestAnimationFrame(() => {
+    revealMessageInView(messageId, messages, container, behavior);
+  });
+}
+
 /**
  * Scrolls to a message by its ID within a messages container
  * @param messageId - The db_id of the message to scroll to

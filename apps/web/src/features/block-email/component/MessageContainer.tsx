@@ -5,6 +5,7 @@ import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
 import { getSenderMacroId } from '@block-email/util/emailUser';
+import { revealMessageAfterLayout } from '@block-email/util/scrollToMessage';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
@@ -199,10 +200,15 @@ export function MessageContainer(props: MessageContainerProps) {
   };
 
   const handleExpand = () => {
-    if (props.message.db_id) {
-      context.messages.setExpandedBodyId(props.message.db_id, true);
-      context.messages.setFocused(props.message.db_id);
-    }
+    const messageId = props.message.db_id;
+    if (!messageId) return;
+    context.messages.setExpandedBodyId(messageId, true);
+    context.messages.setFocused(messageId);
+    revealMessageAfterLayout(
+      messageId,
+      context.messages.list(),
+      context.messagesListRef()
+    );
   };
 
   return (

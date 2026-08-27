@@ -8,6 +8,7 @@ import {
   isTruncatedMiddleMessage,
   nextShownChronologicalIndex,
   prevShownChronologicalIndex,
+  revealDelta,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from './scrollToMessage';
@@ -178,5 +179,31 @@ describe('alignmentDelta', () => {
     box(container, 0, 800);
     box(element, 600, 800);
     expect(alignmentDelta(container, element, 'end')).toBe(0);
+  });
+});
+
+describe('revealDelta', () => {
+  it('does nothing when the card already fits', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 200, 400);
+    expect(revealDelta(container, element)).toBe(0);
+  });
+
+  it('scrolls down when the card grows past the bottom', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 600, 950);
+    expect(revealDelta(container, element)).toBe(150);
+  });
+
+  it('start-aligns a card taller than the list', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 200, 1200);
+    expect(revealDelta(container, element)).toBe(200);
   });
 });

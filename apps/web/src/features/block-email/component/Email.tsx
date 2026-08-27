@@ -38,6 +38,7 @@ import { isPersonalMessage } from '../util/isPersonalMessage';
 import type { ReplyType } from '../util/replyType';
 import {
   type ScrollAlign,
+  revealMessageAfterLayout,
   scrollToMessage,
   threadMessageIsExpanded,
 } from '../util/scrollToMessage';
@@ -361,6 +362,11 @@ function EmailContent(props: EmailViewProps) {
       if (focusedId && target?.message.db_id === focusedId) {
         if (!isMessageRenderedExpanded(target)) {
           context.messages.setExpandedBodyId(focusedId, true);
+          revealMessageAfterLayout(
+            focusedId,
+            untrack(context.messages.list),
+            untrack(context.messagesListRef)
+          );
           return true;
         }
 
