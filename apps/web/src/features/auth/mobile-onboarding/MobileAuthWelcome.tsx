@@ -42,7 +42,7 @@ export function MobileAuthWelcome() {
           </div>
           <div class="flex flex-col gap-3 px-8 pb-8">
             <Button
-              variant="contrast"
+              variant="strong"
               size="lg"
               onClick={() => navigate('/onboarding')}
             >

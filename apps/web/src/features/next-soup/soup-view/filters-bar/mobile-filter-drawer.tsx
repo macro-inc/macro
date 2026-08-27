@@ -801,7 +801,7 @@ export const MobileFilterDrawer = (props: {
                   </For>
                   <Button
                     onClick={() => resetToTabDefaults()}
-                    variant="base"
+                    variant="outline"
                     size="sm"
                     class="min-h-10 rounded-lg bg-active!"
                   >

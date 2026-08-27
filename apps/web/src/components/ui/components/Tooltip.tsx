@@ -1,12 +1,12 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { Placement } from '@floating-ui/dom';
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
-import { Surface } from '@ui';
 import type { ParentProps } from 'solid-js';
 import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
 import { Hotkey } from '../../ui/components/Hotkey';
 import { tooltipsEnabled } from '../signals/signals';
 import { cn } from '../utils/classname';
+import { Surface } from './Surface';
 
 type TooltipProps = ParentProps<{
   hotkey?: HotkeyToken | HotkeyToken[];

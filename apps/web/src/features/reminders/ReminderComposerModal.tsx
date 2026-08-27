@@ -612,7 +612,7 @@ function DescriptionStep(props: {
         label="Cancel"
       />
       <Button
-        variant="active"
+        variant="accent"
         size="sm"
         depth={3}
         class="ml-auto gap-3 rounded-lg border-0"
@@ -950,7 +950,7 @@ function RepeatStep(props: {
       <CommandMenuShell.Footer class="gap-3 py-3">
         <span class="text-xs text-ink-muted truncate">{summary()}</span>
         <Button
-          variant="active"
+          variant="accent"
           size="sm"
           depth={3}
           class="ml-auto gap-3 rounded-lg border-0"

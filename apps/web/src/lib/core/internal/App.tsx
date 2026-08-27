@@ -80,7 +80,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <For each={Themes}>
           {() => (
-            <Button variant="base">
+            <Button variant="outline">
               <Subtract /> Button Text <CaretDown />
             </Button>
           )}
@@ -89,7 +89,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="base">
+            <Button variant="outline">
               <Subtract /> Button Text <CaretDown />
             </Button>
           )}
@@ -98,7 +98,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={Themes}>
           {() => (
-            <Button variant="base" size="icon-md">
+            <Button variant="outline" size="icon-md">
               <Acorn />
             </Button>
           )}
@@ -107,7 +107,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="base" size="icon-md">
+            <Button variant="outline" size="icon-md">
               <Acorn />
               <CaretDown />
             </Button>
@@ -117,7 +117,7 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="base" size="icon-md">
+            <Button variant="outline" size="icon-md">
               <Acorn />
               <CaretDown />
             </Button>
@@ -136,7 +136,7 @@ const App: Component = () => {
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Dropdown>
-          <Dropdown.Trigger variant="base" tabIndex={-1}>
+          <Dropdown.Trigger variant="outline" tabIndex={-1}>
             Open
           </Dropdown.Trigger>
           <Dropdown.Content>

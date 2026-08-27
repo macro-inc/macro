@@ -218,7 +218,7 @@ export default function ThemeEdit3() {
             class="h-9 min-w-48 flex-1 rounded-md border border-edge-muted bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
           />
 
-          <Button variant="base" size="md" onClick={copyTheme}>
+          <Button variant="outline" size="md" onClick={copyTheme}>
             <ClipboardIcon class="size-4" />
             Copy full theme JSON
           </Button>

@@ -287,7 +287,7 @@ function ProfilePictureRow(props: { userId: string }) {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 disabled={isRemoving()}
                 onClick={() => setShowRemoveConfirmModal(false)}
@@ -474,7 +474,7 @@ export function Account() {
             <div class="px-6 py-3.5">
               <Button
                 fullWidth
-                variant="active"
+                variant="accent"
                 depth={4}
                 onClick={() => logout()}
               >
@@ -577,7 +577,7 @@ export function Account() {
             </div>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 onClick={() => {
                   setShowDeleteModal(false);
@@ -622,7 +622,7 @@ export function Account() {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 disabled={isDeleting()}
                 onClick={() => {
@@ -872,7 +872,7 @@ function BundleUpdateRow() {
         </span>
         <Show when={action()}>
           {(a) => (
-            <Button variant="active" size="sm" depth={3} onClick={a().action}>
+            <Button variant="accent" size="sm" depth={3} onClick={a().action}>
               {a().label}
             </Button>
           )}

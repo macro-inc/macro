@@ -94,6 +94,8 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
+      square
+      size="sm"
       class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
@@ -103,7 +105,7 @@ function SplitBackButton() {
         context.handle.goBack();
       }}
     >
-      <CaretLeft class="h-4" />
+      <CaretLeft />
     </Button>
   );
 }
@@ -113,13 +115,15 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
+      square
+      size="sm"
+      class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Forward"
       hotkey={TOKENS.split.go.forward}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
-      class={cn('p-1 rounded-lg')}
     >
-      <CaretRight class="h-4" />
+      <CaretRight />
     </Button>
   );
 }
@@ -145,7 +149,9 @@ function SidebarExpandButton() {
       aria-hidden={!visible()}
     >
       <Button
-        class="p-1 rounded-lg"
+        class="rounded-lg"
+        square
+        size="sm"
         label="Expand Sidebar"
         hotkey={TOKENS.global.toggleSidebar}
         disabled={!visible()}
@@ -215,12 +221,14 @@ function SplitCloseButton() {
   return (
     <Show when={hasMultipleSplits() && !isPreviewViewer()}>
       <Button
-        class="p-1 rounded-lg"
+        square
+        size="sm"
+        class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={context.handle.close}
       >
-        <CloseIcon class="size-4" />
+        <CloseIcon />
       </Button>
     </Show>
   );

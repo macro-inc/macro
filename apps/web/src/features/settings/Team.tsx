@@ -182,7 +182,7 @@ function InviteEntryRow(props: {
         <Show when={props.showRemove}>
           <Tooltip label="Remove">
             <Button
-              variant="base"
+              variant="outline"
               size="icon-sm"
               class="rounded-xs shrink-0 focus:border-accent"
               tabIndex={0}
@@ -300,7 +300,7 @@ function InviteEmailsInput(props: {
         </div>
       </Show>
       <Button
-        variant="base"
+        variant="outline"
         class="rounded-xs w-full justify-center focus:border-accent"
         tabIndex={0}
         disabled={!canAddRow()}
@@ -495,7 +495,7 @@ function UserInviteRow(props: {
       </div>
       <div class="flex items-center gap-2 shrink-0">
         <Button
-          variant="base"
+          variant="outline"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onDecline}
@@ -505,7 +505,7 @@ function UserInviteRow(props: {
           </Show>
         </Button>
         <Button
-          variant="active"
+          variant="accent"
           class="px-2 py-1 rounded-xs"
           disabled={props.isAccepting || props.isDeclining}
           onClick={props.onAccept}
@@ -700,7 +700,7 @@ function CreateTeamDialog(props: { open: boolean; onClose: () => void }) {
               Cancel
             </Button>
             <Button
-              variant="active"
+              variant="accent"
               class="rounded-xs"
               disabled={
                 createTeamMutation.isPending ||
@@ -737,7 +737,7 @@ function EmptyTeamState() {
               together.
             </p>
             <Button
-              variant="active"
+              variant="accent"
               class="rounded-xs"
               onClick={() => setShowCreateModal(true)}
             >
@@ -790,7 +790,7 @@ function SaveCancelButtons(props: {
     <div class="flex items-center gap-1 shrink-0">
       <Tooltip label="Save">
         <Button
-          variant="active"
+          variant="accent"
           size="icon-sm"
           class="rounded-xs"
           disabled={props.saveDisabled}
@@ -1285,7 +1285,7 @@ function TeamManagement(props: {
               hideDescriptionOnMobile
             >
               <Button
-                variant="base"
+                variant="outline"
                 size="sm"
                 class="rounded-xs"
                 onClick={handleCopyGithubAutolinkUrl}
@@ -1389,7 +1389,7 @@ function TeamManagement(props: {
             // to admins; removals stay admin-only.
             <Show when={isAdminOrOwner() || allowNonAdminInvites()}>
               <Button
-                variant="base"
+                variant="outline"
                 size="sm"
                 class="rounded-xs"
                 onClick={() => setShowInviteModal(true)}
@@ -1677,7 +1677,7 @@ function TeamManagement(props: {
                 Cancel
               </Button>
               <Button
-                variant={hasValidInvites() ? 'active' : 'ghost'}
+                variant={hasValidInvites() ? 'accent' : 'ghost'}
                 class="rounded-xs"
                 disabled={!hasValidInvites() || inviteToTeamMutation.isPending}
                 onClick={handleInvite}

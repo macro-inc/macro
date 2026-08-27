@@ -64,7 +64,7 @@ export function PreviewButton(
       >
         <Button
           onClick={togglePreview}
-          variant="base"
+          variant="outline"
           size="sm"
           depth={2}
           class="bg-surface"

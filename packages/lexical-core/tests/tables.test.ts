@@ -25,6 +25,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
 import { $createImageNode, $isImageNode } from '../nodes/ImageNode';
+import { $createVideoNode, $isVideoNode } from '../nodes/VideoNode';
 import { EXTERNAL_TRANSFORMERS, INTERNAL_TRANSFORMERS } from '../transformers';
 
 function createTestEditor() {
@@ -415,6 +416,94 @@ describe('images inside table cells', () => {
       const image = $getFirstCellImage();
       expect(image.getUrl()).toBe('https://example.com/cat.png');
       expect(image.getAlt()).toBe('cat');
+    });
+  });
+});
+
+describe('videos inside table cells', () => {
+  function $getFirstCellVideo() {
+    const table = $getFirstTable();
+    const [row] = table.getChildren().filter($isTableRowNode);
+    const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
+    const video = cell
+      .getChildren()
+      .flatMap((child) =>
+        $isVideoNode(child)
+          ? [child]
+          : $isElementNode(child)
+            ? child.getChildren().filter($isVideoNode)
+            : []
+      )[0];
+    expect(video).toBeDefined();
+    return video!;
+  }
+
+  it('round-trips a video in a cell through internal markdown', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      cell.append(
+        $createVideoNode({
+          srcType: 'url',
+          url: 'https://example.com/clip.mp4',
+          width: 400,
+          height: 300,
+          constrainedWidth: 200,
+          constrainedHeight: 150,
+        })
+      );
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain('<m-video>');
+    expect(markdown).toContain('https://example.com/clip.mp4');
+    expect(markdown).toContain('"constrainedWidth":200');
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const video = $getFirstCellVideo();
+      expect(video.getUrl()).toBe('https://example.com/clip.mp4');
+      expect(video.getConstrainedWidth()).toBe(200);
+      expect(video.getConstrainedHeight()).toBe(150);
+    });
+  });
+
+  it('round-trips a video in a cell through external pipe-table markdown', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const videoCell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      videoCell.append(
+        $createVideoNode({
+          srcType: 'url',
+          url: 'https://example.com/clip.mp4',
+        })
+      );
+      row.append(videoCell, $createCell('plain'));
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toContain('<m-video>');
+    expect(markdown).toContain('|');
+    expect(markdown).toContain('plain');
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, EXTERNAL_TRANSFORMERS);
+    });
+    editor.getEditorState().read(() => {
+      const video = $getFirstCellVideo();
+      expect(video.getUrl()).toBe('https://example.com/clip.mp4');
     });
   });
 });

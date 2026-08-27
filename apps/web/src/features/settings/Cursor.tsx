@@ -122,7 +122,7 @@ export function CursorCard() {
                   }}
                 />
                 <Button
-                  variant="base"
+                  variant="outline"
                   size="sm"
                   depth={3}
                   disabled={apiKey().length === 0 || saveKey.isPending}

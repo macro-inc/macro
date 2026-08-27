@@ -106,7 +106,7 @@ export const SidebarCreateMenu = (props: {
       >
         <Dropdown.Trigger
           as={Button}
-          variant="base"
+          variant="outline"
           size="icon-sm"
           depth={1}
           class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"

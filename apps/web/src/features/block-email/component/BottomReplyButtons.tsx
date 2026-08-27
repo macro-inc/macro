@@ -29,7 +29,7 @@ function ReplyActionButton(props: {
       // matches the dock buttons. (The region host's Layer can't help —
       // Button's own Layer would reset it.)
       depth={isTouchDevice() ? 3 : undefined}
-      variant="base"
+      variant="outline"
       aria-label={props.ariaLabel}
       class={cn(
         // Island pills when floating in the mobile/tablet accessory region.

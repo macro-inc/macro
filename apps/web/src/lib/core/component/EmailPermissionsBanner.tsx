@@ -13,7 +13,7 @@ export function EmailPermissionsBanner() {
           <div class="text-sm shrink-0">No email account connected.</div>
           <span class="grow" />
           <Button
-            variant="active"
+            variant="accent"
             size="sm"
             class="px-4"
             onClick={() => void startAddInbox()}

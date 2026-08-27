@@ -177,7 +177,7 @@ export const SoupViewCreateButton = () => {
 
   const SingleOptionButton = (props: { hideLabel?: boolean }) => (
     <Button
-      variant="active"
+      variant="accent"
       class={cn(
         'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
         props.hideLabel && 'pr-1'
@@ -195,7 +195,7 @@ export const SoupViewCreateButton = () => {
   const MultiOptionButton = (props: { hideLabel?: boolean }) => (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant="active"
+        variant="accent"
         class={cn(
           'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
           props.hideLabel && 'pr-1'

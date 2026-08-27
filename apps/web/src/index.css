@@ -53,6 +53,9 @@
 @property --c4c { syntax: "<number>"; inherits: true; initial-value:      0; }
 @property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
+/* Foreground lightness selected for readable content on the active accent. */
+@property --accent-contrast-l { syntax: "<number>"; inherits: true; initial-value: 0.2; }
+
 @property --safe-bottom { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-right  { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-left   { syntax: "<length>"; inherits: true; initial-value: 0px; }
@@ -256,6 +259,8 @@ body.tauri-ios {
   --color-edge: var(--color-surface-4);
   --color-edge-muted: var(--color-surface-3);
   --color-accent: var(--a0);
+  --color-accent-contrast: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h));
+  --color-accent-contrast-muted: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h) / 0.7);
   --color-red: oklch(63.7% 0.237 25.331);
   --color-orange: oklch(70.5% 0.213 47.604);
   --color-amber: oklch(76.9% 0.188 70.08);

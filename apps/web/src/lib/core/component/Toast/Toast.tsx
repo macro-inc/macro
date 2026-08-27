@@ -274,7 +274,7 @@ function ActionButtons(props: { actions: ToastAction[]; mobile?: boolean }) {
         <Button
           size={props.mobile ? 'sm' : 'md'}
           onClick={action.onClick}
-          variant="base"
+          variant="outline"
           class="px-2 py-1 bg-lift"
           depth={3}
         >

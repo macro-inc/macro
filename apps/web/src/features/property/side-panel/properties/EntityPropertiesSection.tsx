@@ -30,7 +30,7 @@ import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, Layer } from '@ui';
+import { Badge, Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   createEffect,
@@ -369,18 +369,17 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
 function AddPinnedPropertyButton() {
   const { openPropertySelector } = usePropertiesContext();
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
+      noTouchResize
       onClick={openPropertySelector}
-      class={cn(
-        'inline-flex items-center gap-1.5 m-px border border-edge-muted bg-surface',
-        'px-2 py-1 leading-tight rounded-full text-ink-muted',
-        'hover:bg-hover hover:text-ink transition-colors'
-      )}
+      class="m-px rounded-full"
     >
       <Plus class="size-3" />
       <span>Add property</span>
-    </button>
+    </Button>
   );
 }
 
@@ -612,8 +611,6 @@ function SinglePill(props: {
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
   property: Property;
 }) {
-  const ctx = usePropertiesContext();
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
   const empty = () => !hasValue(props.property);
   const isNonUserEntity = () =>
     props.property.valueType === 'ENTITY' &&
@@ -632,11 +629,7 @@ function SinglePill(props: {
 
   return (
     <PropertyNS.Tooltip property={props.property}>
-      <PropertyNS.EditTrigger
-        class={cn(SidePanel.pillClass, 'w-fit overflow-hidden', {
-          'hover:bg-hover': !isReadOnly(),
-        })}
-      >
+      <PropertyNS.Pill class="w-fit overflow-hidden">
         <Show
           when={!empty()}
           fallback={
@@ -663,27 +656,19 @@ function SinglePill(props: {
             <span class="min-w-0 truncate">{entityDisplay.name()}</span>
           </Show>
         </Show>
-        <Show when={!isReadOnly()}>
-          <PropertyNS.Caret />
-        </Show>
-      </PropertyNS.EditTrigger>
+        <PropertyNS.Caret />
+      </PropertyNS.Pill>
     </PropertyNS.Tooltip>
   );
 }
 
 function UserStackPill(props: { property: Property }) {
-  const ctx = usePropertiesContext();
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
   const empty = () => !hasValue(props.property);
 
   return (
     <PropertyNS.Tooltip property={props.property}>
       <Layer depth={2}>
-        <PropertyNS.EditTrigger
-          class={cn(SidePanel.pillClass, 'w-fit bg-surface', {
-            'hover:bg-hover': !isReadOnly(),
-          })}
-        >
+        <PropertyNS.Pill class="w-fit">
           <Show when={!empty()} fallback={<SidePanel.EmptyPill />}>
             <PropertyNS.UserStack property={props.property} maxUsers={3} />
             <span class="min-w-0 truncate">
@@ -691,7 +676,7 @@ function UserStackPill(props: { property: Property }) {
             </span>
           </Show>
           <PropertyNS.Caret />
-        </PropertyNS.EditTrigger>
+        </PropertyNS.Pill>
       </Layer>
     </PropertyNS.Tooltip>
   );
@@ -719,31 +704,23 @@ function MultiValue(props: { property: Property }) {
               property={props.property}
               renderChip={(chip) => (
                 <Layer depth={2}>
-                  <span
-                    class={cn(
-                      SidePanel.pillClass,
-                      'text-xs max-w-35 bg-surface'
-                    )}
-                  >
+                  <Badge variant="ghost" size="sm" class="max-w-35">
                     <PropertyValueIcon
                       optionId={chip.key}
                       class="size-3 shrink-0"
                     />
                     <span class="truncate">{chip.label}</span>
-                  </span>
+                  </Badge>
                 </Layer>
               )}
             />
             <Show when={!isReadOnly()}>
-              <PropertyNS.EditTrigger
-                class={cn(
-                  'inline-flex items-center justify-center size-5 rounded-full',
-                  'text-ink-muted hover:bg-hover hover:text-ink transition-colors'
-                )}
+              <PropertyNS.Pill
+                class="size-6 p-0"
                 aria-label={`Add ${props.property.displayName}`}
               >
                 <Plus class="size-3" />
-              </PropertyNS.EditTrigger>
+              </PropertyNS.Pill>
             </Show>
           </div>
         </Show>
@@ -791,7 +768,9 @@ function NonUserEntityValue(props: { property: Property }) {
         when={!isReadOnly()}
         fallback={
           <Show when={entities().length === 0}>
-            <SidePanel.EmptyPill />
+            <Badge variant="ghost" size="sm">
+              <SidePanel.EmptyPill />
+            </Badge>
           </Show>
         }
       >
@@ -801,7 +780,7 @@ function NonUserEntityValue(props: { property: Property }) {
             variant="ghost"
             depth={0}
             size="icon-sm"
-            class="size-5 rounded-full bg-surface"
+            class="rounded-full"
             aria-label={`Add ${props.property.displayName}`}
             onClick={(event) => {
               event.stopPropagation();

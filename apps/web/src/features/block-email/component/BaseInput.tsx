@@ -1659,7 +1659,7 @@ export function BaseInput(props: {
   );
 
   const AttachButton = (buttonProps?: {
-    variant?: 'ghost' | 'base';
+    variant?: 'ghost' | 'outline';
     class?: string;
   }) => (
     <Button

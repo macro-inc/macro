@@ -6,7 +6,6 @@ import { Layer } from './Layer';
 type ButtonGroupOrientation = 'horizontal' | 'vertical';
 
 type ButtonGroupContextValue = {
-  depth?: 0 | 1 | 2 | 3 | 4;
   variant?: ButtonVariant;
   size?: ButtonSize;
   orientation: ButtonGroupOrientation;
@@ -29,17 +28,17 @@ type ButtonGroupProps = {
 
 const groupVariantStyles: Record<ButtonVariant, string> = {
   danger: 'border border-failure/50  ',
-  base: 'border border-edge-muted  ',
-  active: 'border border-accent  ',
+  outline: 'border border-edge-muted  ',
+  accent: 'border border-accent  ',
   success: 'border border-success  ',
   ghost: '                          ',
-  contrast: 'border border-transparent',
+  strong: 'border border-transparent',
   cta: 'border border-transparent ',
 };
 
 /* Mirrors the glass mapping in Button.tsx: the group carries the glass for
    the whole row, sized like its buttons (compact sizes get `glass-sm`), and a
-   `ghost` group — a bare toolbar cluster with no surface of its own — only
+   `ghost` or `outline` group — transparent, with no surface of its own — only
    picks it up on hover. Kept local rather than imported so the Button <->
    ButtonGroup dependency stays type-only. */
 const glassSizeStyles: Record<ButtonSize, string> = {
@@ -54,7 +53,7 @@ const glassSizeStyles: Record<ButtonSize, string> = {
 };
 
 // Literal strings only — Tailwind's scanner can't see template-built classes.
-const ghostGlassSizeStyles: Record<ButtonSize, string> = {
+const hoverGlassSizeStyles: Record<ButtonSize, string> = {
   xs: 'hover:glass-sm',
   'icon-xs': 'hover:glass-sm',
   sm: 'hover:glass-sm',
@@ -65,16 +64,20 @@ const ghostGlassSizeStyles: Record<ButtonSize, string> = {
   'icon-lg': 'hover:glass',
 };
 
+const HOVER_ONLY_GLASS_VARIANTS = new Set<ButtonVariant>(['ghost', 'outline']);
+
 const glassClass = (variant: ButtonVariant, size: ButtonSize): string =>
-  variant === 'ghost' ? ghostGlassSizeStyles[size] : glassSizeStyles[size];
+  HOVER_ONLY_GLASS_VARIANTS.has(variant)
+    ? hoverGlassSizeStyles[size]
+    : glassSizeStyles[size];
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
   danger: 'bg-failure/50',
-  base: 'bg-edge-muted',
-  active: 'bg-accent',
+  outline: 'bg-edge-muted',
+  accent: 'bg-accent',
   success: 'bg-success',
   ghost: 'bg-edge-muted',
-  contrast: 'bg-surface/50',
+  strong: 'bg-surface-4/50',
   cta: 'bg-surface/50',
 };
 
@@ -113,9 +116,6 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
   };
 
   const ctx: ButtonGroupContextValue = {
-    get depth() {
-      return props.depth;
-    },
     get variant() {
       return props.variant;
     },
@@ -131,6 +131,7 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
     <ButtonGroupContext.Provider value={ctx}>
       <Layer depth={props.depth ?? 0}>
         <div
+          data-slot="button-group"
           data-orientation={orientation()}
           class={cn(
             'data-[orientation=horizontal]:flex-row items-center',
@@ -160,7 +161,7 @@ type DividerProps = { class?: string };
 const Divider = (props: DividerProps) => {
   const group = useButtonGroupContext();
   const orientation = () => group?.orientation ?? 'horizontal';
-  const variant = () => group?.variant ?? 'base';
+  const variant = () => group?.variant ?? 'outline';
   return (
     <div
       role="separator"

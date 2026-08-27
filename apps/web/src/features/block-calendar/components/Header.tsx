@@ -125,7 +125,7 @@ export function Header() {
               fallback={
                 <Show when={!isTodayVisible()}>
                   <Button
-                    variant="active"
+                    variant="accent"
                     size="sm"
                     class="rounded-lg px-3"
                     depth={2}

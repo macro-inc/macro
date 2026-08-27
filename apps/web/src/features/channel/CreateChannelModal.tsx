@@ -290,7 +290,7 @@ export function CreateChannelModal() {
               </Show>
               <Button
                 type="submit"
-                variant={canSubmit() ? 'active' : 'ghost'}
+                variant={canSubmit() ? 'accent' : 'ghost'}
                 depth={3}
                 class="rounded-lg border-0"
                 disabled={!canSubmit()}

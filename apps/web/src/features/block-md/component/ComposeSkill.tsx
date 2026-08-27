@@ -430,7 +430,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
         <Button
           onClick={handleCreateSkill}
           disabled={title().trim().length === 0 || isCreating()}
-          variant={title().trim().length === 0 ? 'ghost' : 'active'}
+          variant={title().trim().length === 0 ? 'ghost' : 'accent'}
           depth={3}
           class="gap-3 rounded-lg border-0"
         >

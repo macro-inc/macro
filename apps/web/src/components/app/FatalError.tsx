@@ -41,14 +41,14 @@ export function FatalError(props: FatalErrorProps) {
 
             <div class="flex flex-row gap-3 justify-center">
               <Button
-                variant="active"
+                variant="accent"
                 onClick={() => {
                   window.location.href = window.location.origin + '/app';
                 }}
               >
                 <HomeIcon class="size-4" /> Home
               </Button>
-              <Button variant="base" onClick={props.reset}>
+              <Button variant="outline" onClick={props.reset}>
                 <ResetIcon class="size-4" /> Try Again
               </Button>
             </div>

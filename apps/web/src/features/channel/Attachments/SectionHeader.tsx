@@ -40,7 +40,7 @@ export function LoadMoreButton(props: {
 }) {
   return (
     <Button
-      variant="base"
+      variant="outline"
       size="sm"
       depth={4}
       class="justify-self-center mt-2 bg-surface"

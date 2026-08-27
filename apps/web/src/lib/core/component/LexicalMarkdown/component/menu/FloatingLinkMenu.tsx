@@ -442,7 +442,7 @@ export function FloatingLinkMenu(props: {
                 <Button
                   onClick={openInNewTab}
                   class="p-1 hover:bg-hover hover-transition-bg"
-                  variant="active"
+                  variant="accent"
                   size="icon-sm"
                   tooltip="Open in new tab"
                 >
@@ -527,7 +527,7 @@ export function FloatingLinkMenu(props: {
               <Button
                 onClick={handleSubmit}
                 class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
-                variant="base"
+                variant="outline"
                 disabled={
                   !pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText
                 }

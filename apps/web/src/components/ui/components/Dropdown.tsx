@@ -351,7 +351,7 @@ function DropdownItem(props: DropdownItemProps) {
 function DropdownTrigger(props: DropdownTriggerProps) {
   return (
     <KobalteDropdownMenu.Trigger
-      variant="base"
+      variant="outline"
       as={Button}
       size="sm"
       {...props}

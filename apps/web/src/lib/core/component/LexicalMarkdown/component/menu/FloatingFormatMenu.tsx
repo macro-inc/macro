@@ -319,7 +319,7 @@ function ElementFormatButton(props: {
       size="icon-sm"
       class="rounded-md"
       depth={3}
-      variant={isActive() ? 'active' : 'ghost'}
+      variant={isActive() ? 'accent' : 'ghost'}
       onPointerDown={(e: PointerEvent) => e.preventDefault()}
       onClick={(e: MouseEvent | KeyboardEvent) => {
         e.preventDefault();
@@ -347,7 +347,7 @@ function ElementFormatMenu(props: {
   return (
     <Dropdown>
       <Dropdown.Trigger
-        variant={isAnyActive() ? 'active' : 'ghost'}
+        variant={isAnyActive() ? 'accent' : 'ghost'}
         size="icon-sm"
         class="rounded-md"
         depth={3}
@@ -393,7 +393,7 @@ function InlineFormatMenu(props: {
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
       <Dropdown.Trigger
-        variant={isAnyActive() ? 'active' : 'ghost'}
+        variant={isAnyActive() ? 'accent' : 'ghost'}
         size="icon-sm"
         class="rounded-md"
         depth={3}
@@ -412,7 +412,7 @@ function InlineFormatMenu(props: {
                   shortcut={item.shortcut}
                   size="icon-sm"
                   variant={
-                    props.selection()?.[item.format] ? 'active' : 'ghost'
+                    props.selection()?.[item.format] ? 'accent' : 'ghost'
                   }
                   class="rounded-md"
                   depth={3}

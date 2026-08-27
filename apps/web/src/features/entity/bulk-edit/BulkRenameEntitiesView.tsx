@@ -200,7 +200,7 @@ export const BulkRenameEntitiesView = (props: {
           </Button>
           <Button
             type="button"
-            variant="base"
+            variant="outline"
             class="rounded-xs"
             onClick={finishEditing}
           >

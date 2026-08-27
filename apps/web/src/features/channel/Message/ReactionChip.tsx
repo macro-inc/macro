@@ -88,7 +88,7 @@ export function ReactionChip(props: ReactionChipProps) {
               }))
             }
             size="sm"
-            variant="base"
+            variant="outline"
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-1 rounded-full',
               {

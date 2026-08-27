@@ -168,7 +168,12 @@ function CrmEnablementSection() {
             fallback={
               <Tooltip label="Only team admins can change CRM settings.">
                 <span>
-                  <Button variant="base" size="sm" class="rounded-xs" disabled>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="rounded-xs"
+                    disabled
+                  >
                     Admins only
                   </Button>
                 </span>
@@ -180,7 +185,7 @@ function CrmEnablementSection() {
                 <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
               </Show>
               <Button
-                variant={crmEnabled() ? 'danger' : 'active'}
+                variant={crmEnabled() ? 'danger' : 'accent'}
                 size="sm"
                 class="rounded-xs"
                 disabled={patchCrmMutation.isPending}
@@ -221,7 +226,7 @@ function CrmEnablementSection() {
                 Cancel
               </Button>
               <Button
-                variant="base"
+                variant="outline"
                 class="rounded-xs"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(false)}
@@ -236,7 +241,7 @@ function CrmEnablementSection() {
                 </Show>
               </Button>
               <Button
-                variant="active"
+                variant="accent"
                 class="rounded-xs"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(true)}
