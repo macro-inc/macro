@@ -917,7 +917,10 @@ export function BaseInput(props: {
         if (
           untrack(() => props.replyingTo()?.db_id) === pendingSaveReplyingToId
         ) {
-          void executeSaveDraft();
+          // The mutation's own onError reports the failure (toast + console);
+          // this catch only keeps the post-disposal rejection from surfacing
+          // as unhandled.
+          executeSaveDraft().catch(() => {});
         }
       } catch {
         // Props already disposed; the next mount's autosave persists it.
