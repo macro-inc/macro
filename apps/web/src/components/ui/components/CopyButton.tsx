@@ -117,8 +117,8 @@ export function CopyButton(props: CopyButtonProps) {
       size={local.size ?? 'icon-sm'}
       class={cn(
         local.class,
-        status() === 'success' && 'text-success hover:text-success',
-        status() === 'failure' && 'text-warning hover:text-warning'
+        status() === 'success' && 'text-success hover:text-success opacity-100',
+        status() === 'failure' && 'text-warning hover:text-warning opacity-100'
       )}
       {...rest}
       ref={(el) => {
@@ -132,10 +132,10 @@ export function CopyButton(props: CopyButtonProps) {
     >
       <Switch fallback={<CopyIcon />}>
         <Match when={status() === 'success'}>
-          <CheckIcon />
+          <CheckIcon class="text-success" />
         </Match>
         <Match when={status() === 'failure'}>
-          <WarningIcon />
+          <WarningIcon class="text-warning" />
         </Match>
       </Switch>
       <Show when={local.children}>{local.children}</Show>
