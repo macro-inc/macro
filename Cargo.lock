@@ -14160,6 +14160,7 @@ dependencies = [
  "clap",
  "comms_db_client",
  "email_db_client",
+ "email_utils",
  "entity_access",
  "entity_access_db_utils",
  "fusionauth",

@@ -1,0 +1,6 @@
+{
+  "name": "wide-table",
+  "description": "Fixed-width 836px table. At 360px and 800px the viewer should keep native type and scroll sideways.",
+  "container_widths": [360, 800],
+  "body_html_sanitized": "<table width=\"836\" cellpadding=\"0\" cellspacing=\"0\"><tr><td style=\"padding:16px;font-size:16px;\">Panelist invitation for a designed newsletter table.</td></tr></table>"
+}

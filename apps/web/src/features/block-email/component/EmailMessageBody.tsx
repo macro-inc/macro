@@ -24,6 +24,7 @@ import {
 } from 'solid-js';
 import { themeReactive } from '../../theme/signals/themeReactive';
 import { themeUpdate } from '../../theme/signals/themeSignals';
+import { EMAIL_BODY_CONTAINMENT_CSS } from '../util/emailBodyContainmentCss';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import {
   fetchImagesViaPlatform,
@@ -136,6 +137,10 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   const host = createMemo(() => {
     themeUpdate();
     const hostContainer = document.createElement('div');
+    // Stay the pane width so leftover-canvas measure uses clientWidth, not
+    // the table's min-content. Ancestors clip overflow-x.
+    hostContainer.style.minWidth = '0';
+    hostContainer.style.width = '100%';
     const shadow = hostContainer.attachShadow({ mode: 'open' });
     // Style that uses a CSS variable to control image visibility
     const styleEl = document.createElement('style');
@@ -144,16 +149,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       isPersonal() && !isMacroSender()
         ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
         : '';
-    // Let long &nbsp;-joined signature lines wrap (overflow-wrap is inherited)
-    // and fixed-width tables scroll, so a wide signature doesn't trip the
-    // fit-to-width zoom below and shrink the whole message.
-    const signatureContain = `.macro-email-signature{max-width:100%;overflow-x:auto;overflow-wrap:anywhere;}`;
-    // Browser default blockquote margins apply on both sides. In long email
-    // reply chains that compounds into a narrow column, so keep quote nesting
-    // as a left indent only.
-    const quoteContain =
-      'blockquote{margin-block:0.75em!important;margin-inline-start:1.5em!important;margin-inline-end:0!important;max-width:100%!important;box-sizing:border-box;}';
-    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${signatureContain}${quoteContain}${fontOverride}`;
+    // Containment (images, signatures, quotes, pre/code) lives in
+    // EMAIL_BODY_CONTAINMENT_CSS so the snapshot harness stays in lockstep.
+    styleEl.textContent = `${EMAIL_BODY_CONTAINMENT_CSS}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
@@ -253,59 +251,54 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     );
   });
 
-  // Scale down wide HTML emails to fit the container width (like Gmail on mobile)
+  // After containment, leftover wide canvases (newsletter tables) stay at
+  // native type. Scroll sideways when the body is still wider than the pane.
   createEffect(() => {
     const container = host();
     // Re-run when source changes
     source();
 
-    const clearScale = () => {
+    const clearOverflowX = () => {
       const root = container.shadowRoot;
       if (!root) return;
       const messageDiv = root.querySelector('div');
       if (messageDiv instanceof HTMLElement) {
-        messageDiv.style.zoom = '';
         messageDiv.style.overflow = '';
+        messageDiv.style.overflowX = '';
       }
     };
 
     if (!props.isBodyExpanded()) {
-      clearScale();
+      clearOverflowX();
       return;
     }
 
-    const applyScale = () => {
+    const applyOverflowX = () => {
       const root = container.shadowRoot;
       if (!root) return;
       const messageDiv = root.querySelector('div');
       if (!messageDiv || !(messageDiv instanceof HTMLElement)) return;
 
-      // Reset any previous scaling before measuring
-      messageDiv.style.zoom = '';
+      // Reset before measuring. overflowX is a longhand and survives
+      // clearing the overflow shorthand.
       messageDiv.style.overflow = '';
+      messageDiv.style.overflowX = '';
 
-      const containerWidth = container.clientWidth;
-      const contentWidth = messageDiv.scrollWidth;
-
-      if (containerWidth > 0 && contentWidth > containerWidth) {
-        const scale = containerWidth / contentWidth;
-        // Use zoom instead of transform: scale() so that backgrounds,
-        // borders, and layout all shrink together without clipping.
-        messageDiv.style.zoom = `${scale}`;
+      // When content fits, leave overflow alone. overflow:auto on a fitting
+      // body turns hidden tracking-pixel divs into a message-height scrollbar.
+      if (messageDiv.scrollWidth - container.clientWidth > 1) {
+        messageDiv.style.overflowX = 'auto';
       }
-      // When content fits, leave overflow alone — an overflow:auto wrapper
-      // turns hidden tracking-pixel divs (e.g. max-height:1px) into a
-      // message-height scrollbar.
     };
 
     // Re-run on container resize (e.g. orientation change, split resize)
-    const resizeObserver = new ResizeObserver(() => applyScale());
+    const resizeObserver = new ResizeObserver(() => applyOverflowX());
     resizeObserver.observe(container);
 
     // Re-run when images inside the shadow DOM finish loading
     const root = container.shadowRoot;
     const images = root ? Array.from(root.querySelectorAll('img')) : [];
-    const onImageLoad = () => applyScale();
+    const onImageLoad = () => applyOverflowX();
     for (const img of images) {
       if (!img.complete) {
         img.addEventListener('load', onImageLoad);
@@ -313,7 +306,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     }
 
     // Initial measurement after layout
-    requestAnimationFrame(() => applyScale());
+    requestAnimationFrame(() => applyOverflowX());
 
     onCleanup(() => {
       resizeObserver.disconnect();
@@ -336,7 +329,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       }}
     >
       <div
-        class="relative"
+        class="relative min-w-0 w-full"
         classList={{
           isPersonal: isPersonal(),
           'line-clamp-3': !props.isBodyExpanded(),

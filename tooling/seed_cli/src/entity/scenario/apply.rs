@@ -37,6 +37,16 @@ use super::spec::{
 use super::{sql_string, values_sql};
 use crate::config::SeedCliContext;
 
+#[cfg(test)]
+mod test;
+
+fn scenario_body_html_sanitized(body_html: Option<&str>, body_text: &str) -> String {
+    let raw = body_html
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("<p>{body_text}</p>"));
+    email_utils::sanitize_email_html(&raw)
+}
+
 /// Canonical blank-markdown loro snapshot, matching the one production uses
 /// to initialize empty documents.
 const MARKDOWN_GOLDEN_SNAPSHOT: &[u8] =
@@ -1079,7 +1089,10 @@ fn build_thread(
         bcc: vec![],
         labels,
         body_text: Some(body_text.clone()),
-        body_html_sanitized: Some(format!("<p>{body_text}</p>")),
+        body_html_sanitized: Some(scenario_body_html_sanitized(
+            thread_spec.body_html.as_deref(),
+            &body_text,
+        )),
         body_macro: None,
         attachments: vec![],
         attachments_draft: vec![],
