@@ -58,7 +58,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { cn, Layer, Surface, Tooltip } from '@ui';
+import { Badge, cn, Layer, Surface, Tooltip } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
@@ -433,11 +433,10 @@ function PreviewPropertyPill(props: {
   return (
     <Property.Root property={props.property}>
       <Layer depth={2}>
-        <div
-          class={cn(
-            'inline-flex items-center gap-1.5 min-w-0 max-w-full border border-edge-muted',
-            'px-2 py-1 leading-tight text-left rounded-full bg-surface'
-          )}
+        <Badge
+          variant="ghost"
+          size="sm"
+          class="min-w-0 max-w-full gap-1.5 text-left"
         >
           <Switch
             fallback={
@@ -455,7 +454,7 @@ function PreviewPropertyPill(props: {
             </Match>
           </Switch>
           <Property.Text property={props.property} class="truncate" />
-        </div>
+        </Badge>
       </Layer>
     </Property.Root>
   );

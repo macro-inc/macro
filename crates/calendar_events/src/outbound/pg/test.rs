@@ -131,6 +131,7 @@ fn timed_upsert(
             status: EventStatus::Confirmed,
             visibility: EventVisibility::Default,
             transparency: EventTransparency::Opaque,
+            event_type: EventType::Default,
             time: EventTime::Timed {
                 starts_at,
                 ends_at,
@@ -139,6 +140,8 @@ fn timed_upsert(
             recurrence_lines: vec!["RRULE:FREQ=DAILY;COUNT=2".to_string()],
             organizer_email: Some("organizer@example.com".to_string()),
             organizer_name: Some("Organizer".to_string()),
+            creator_email: Some("creator@example.com".to_string()),
+            creator_name: Some("Creator".to_string()),
             conference_url: None,
             conference_provider: None,
             sequence,
@@ -1203,6 +1206,10 @@ async fn occurrence_range_uses_overlap_indexes_and_preserves_attendees(pool: PgP
 
     assert_eq!(result.len(), 2);
     assert!(result.iter().all(|(event, _)| event.attendees.len() == 1));
+    assert!(result.iter().all(|(event, _)| {
+        event.creator_email.as_deref() == Some("creator@example.com")
+            && event.creator_name.as_deref() == Some("Creator")
+    }));
 }
 
 /// A Google out-of-office auto-decline records the decline on the exception
@@ -2312,19 +2319,80 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
     assert_eq!(target.calendar_id, provider.1);
     assert_eq!(target.provider_calendar_id, "primary");
     assert_eq!(target.owner_id, owner_id);
+    let inbox = format!("calendar-{link_id}@example.com");
     assert_eq!(target.token_identity.provider, "GMAIL");
+    assert_eq!(target.token_identity.email_address, inbox);
+    assert!(
+        target
+            .actor
+            .as_ref()
+            .is_some_and(|actor| actor.matches(&inbox))
+    );
 
     let delegated = repo
         .get_event_mutation_target(delegate_id, event_id)
         .await
-        .unwrap();
-    assert!(delegated.is_some(), "delegate sees the mutation target");
+        .unwrap()
+        .expect("delegate sees the mutation target");
+    assert_eq!(delegated.token_identity.email_address, inbox);
+    assert!(
+        delegated.actor.is_none(),
+        "a delegate without their own inbox has no actor"
+    );
 
     let hidden = repo
         .get_event_mutation_target(stranger_id, event_id)
         .await
         .unwrap();
     assert!(hidden.is_none(), "stranger cannot see the mutation target");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn creation_target_actor_is_owned_inboxes_not_the_calendar_inbox(pool: PgPool) {
+    let owner_id = "macro|calendar-create-actor@example.com";
+    let delegate_id = "macro|calendar-create-delegate@example.com";
+    insert_user(&pool, owner_id).await;
+    insert_user(&pool, delegate_id).await;
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    grant_and_provider_ids(&repo, link_id).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+        VALUES ($1, $2, $3)
+        "#,
+        delegate_id,
+        owner_id,
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let inbox = format!("calendar-{link_id}@example.com");
+    let owner = repo
+        .get_creation_target(owner_id, None, None)
+        .await
+        .unwrap()
+        .expect("owner resolves a creation target");
+    assert_eq!(owner.token_identity.email_address, inbox);
+    assert!(
+        owner
+            .actor
+            .as_ref()
+            .is_some_and(|actor| actor.matches(&inbox))
+    );
+
+    let delegated = repo
+        .get_creation_target(delegate_id, None, None)
+        .await
+        .unwrap()
+        .expect("delegate resolves a creation target");
+    assert_eq!(delegated.token_identity.email_address, inbox);
+    assert!(
+        delegated.actor.is_none(),
+        "a delegate without their own inbox has no actor"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -2541,6 +2609,7 @@ fn reminder_upsert(
             status: EventStatus::Confirmed,
             visibility: EventVisibility::Default,
             transparency: EventTransparency::Opaque,
+            event_type: EventType::Default,
             time: EventTime::Timed {
                 starts_at,
                 ends_at,
@@ -2549,6 +2618,8 @@ fn reminder_upsert(
             recurrence_lines: Vec::new(),
             organizer_email: None,
             organizer_name: None,
+            creator_email: None,
+            creator_name: None,
             conference_url: None,
             conference_provider: None,
             sequence: 0,
@@ -2579,6 +2650,22 @@ fn reminder_upsert(
             },
             is_cancelled: false,
         }],
+    }
+}
+
+fn reminder_attendee(email: &str, declined: bool, is_self: bool) -> CalendarAttendee {
+    CalendarAttendee {
+        email: email.to_string(),
+        display_name: None,
+        response_status: if declined {
+            AttendeeResponseStatus::Declined
+        } else {
+            AttendeeResponseStatus::Accepted
+        },
+        is_organizer: false,
+        is_optional: false,
+        is_self,
+        comment: None,
     }
 }
 
@@ -2722,6 +2809,111 @@ async fn calendar_default_reminders_fan_out_to_use_default_events(pool: PgPool) 
             starts_at - Duration::minutes(10)
         )],
         "explicit overrides are untouched by a defaults change"
+    );
+}
+
+/// Status-style events (working location, out of office, focus time,
+/// birthdays) never resolve the calendar's default reminders — Google's
+/// clients offer no notification setting on them — while explicit overrides
+/// still schedule firings.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn status_events_ignore_calendar_default_reminders(pool: PgPool) {
+    let owner_id = "macro|working-location@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, calendar_id) = provider_ids(&repo, link_id).await;
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let primary_with_defaults = |minutes: &[u32]| ProviderCalendar {
+        provider_calendar_id: "primary".to_string(),
+        name: "Primary".to_string(),
+        description: None,
+        time_zone: Some("UTC".to_string()),
+        color: None,
+        access_role: Some("owner".to_string()),
+        is_primary: true,
+        is_selected: true,
+        default_reminders: minutes
+            .iter()
+            .map(|minutes| EventReminderOverride {
+                method: REMINDER_METHOD_POPUP.to_string(),
+                minutes: *minutes,
+            })
+            .collect(),
+    };
+    let updated = repo
+        .upsert_calendar_fixture(account_id, primary_with_defaults(&[10]))
+        .await
+        .unwrap();
+    assert_eq!(updated, calendar_id);
+
+    let mut working_location = reminder_upsert(
+        owner_id,
+        link_id,
+        (account_id, calendar_id),
+        "office",
+        starts_at,
+        EventReminders::default(),
+    );
+    working_location.event.event_type = EventType::WorkingLocation;
+    let follows_defaults = repo.upsert_event_fixture(working_location).await.unwrap();
+    let meeting = repo
+        .upsert_event_fixture(reminder_upsert(
+            owner_id,
+            link_id,
+            (account_id, calendar_id),
+            "meeting",
+            starts_at,
+            EventReminders::default(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, follows_defaults).await,
+        Vec::new(),
+        "useDefault resolves to nothing on a status event"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, meeting).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            10,
+            starts_at - Duration::minutes(10)
+        )],
+        "an ordinary event on the same calendar still follows the defaults"
+    );
+
+    let mut with_override = reminder_upsert(
+        owner_id,
+        link_id,
+        (account_id, calendar_id),
+        "office-override",
+        starts_at,
+        popup_reminders(&[5]),
+    );
+    with_override.event.event_type = EventType::WorkingLocation;
+    let overridden = repo.upsert_event_fixture(with_override).await.unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, overridden).await,
+        vec![(starts_at.to_rfc3339(), 5, starts_at - Duration::minutes(5))],
+        "an explicit override on a status event still fires"
+    );
+
+    repo.upsert_calendar_fixture(account_id, primary_with_defaults(&[30]))
+        .await
+        .unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, follows_defaults).await,
+        Vec::new(),
+        "a defaults change never schedules a status event"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, meeting).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            30,
+            starts_at - Duration::minutes(30)
+        )],
+        "the same defaults change still fans out to ordinary events"
     );
 }
 
@@ -2921,7 +3113,7 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         popup_reminders(&[10]),
     );
     declined.event.attendees = vec![CalendarAttendee {
-        email: "self@example.com".to_string(),
+        email: format!("calendar-{link_id}@example.com"),
         display_name: None,
         response_status: AttendeeResponseStatus::Declined,
         is_organizer: false,
@@ -2952,6 +3144,75 @@ async fn stale_and_declined_firings_resolve_safely(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(past, Vec::new());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reminder_decline_follows_owner_inbox_not_calendar_self(pool: PgPool) {
+    let owner_id = "macro|reminder-owner-inbox@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let owner_inbox = format!("calendar-{link_id}@example.com");
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    let starts_at = (Utc::now() + Duration::minutes(10)).trunc_subsecs(0);
+
+    let mut coworker_declined = reminder_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "coworker-declined",
+        starts_at,
+        popup_reminders(&[10]),
+    );
+    coworker_declined.event.attendees = vec![
+        reminder_attendee("jackson@example.com", true, true),
+        reminder_attendee(&owner_inbox, false, false),
+    ];
+    let coworker_event_id = repo.upsert_event_fixture(coworker_declined).await.unwrap();
+
+    let mut owner_declined = reminder_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "owner-declined",
+        starts_at,
+        popup_reminders(&[10]),
+    );
+    owner_declined.event.attendees = vec![
+        reminder_attendee("jackson@example.com", false, true),
+        reminder_attendee(&owner_inbox, true, false),
+    ];
+    let owner_event_id = repo.upsert_event_fixture(owner_declined).await.unwrap();
+
+    let due = repo
+        .due_reminder_firings(Utc::now(), None, 100)
+        .await
+        .unwrap();
+    let firing_for = |event_id| {
+        due.iter()
+            .find(|firing| firing.event_id == event_id)
+            .expect("event has a due firing")
+            .clone()
+    };
+
+    let coworker = repo
+        .find_due_reminder(&firing_for(coworker_event_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        !coworker.declined,
+        "a coworker's declined self row must not suppress the owner's reminder"
+    );
+
+    let owner = repo
+        .find_due_reminder(&firing_for(owner_event_id))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        owner.declined,
+        "the owner's own declined inbox must suppress the reminder even when is_self is on a coworker"
+    );
 }
 
 /// The provider classification has to survive the write and come back on the

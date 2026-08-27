@@ -46,6 +46,9 @@ export function createOtelCacheTelemetrySink(): CacheTelemetrySink {
             event.queueDiagnosticsAvailability
           );
         }
+        if (event.revisionCategory !== undefined) {
+          span.setAttr('cache.revision_category', event.revisionCategory);
+        }
         if (event.resetAttempt !== undefined) {
           span.setAttr('cache.reset_attempt', event.resetAttempt);
         }

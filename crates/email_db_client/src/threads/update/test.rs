@@ -182,19 +182,25 @@ async fn signal_set_for_draft_despite_category_label(pool: Pool<Postgres>) -> an
     Ok(())
 }
 
-// Discarding a draft via delete_message_with_tx(update_thread_metadata =
-// false) — the drafts delete API path — must still refresh is_signal.
+// Discarding a draft via delete_message_with_tx — the drafts delete API
+// path — must recompute the thread metadata the draft inflated: is_signal,
+// inbox_visible, and latest_inbound_message_ts all count drafts, and stale
+// values would strand the thread in inbox views (Signal) after the draft
+// is gone.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("sync_thread_signal_flag"))
 )]
-async fn draft_discard_without_metadata_recompute_syncs_signal_flag(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
+async fn draft_discard_recomputes_thread_metadata(pool: Pool<Postgres>) -> anyhow::Result<()> {
     const THREAD: &str = "00000000-0000-0000-0000-00000000d208";
     const DRAFT_MSG: &str = "00000000-0000-0000-0000-00000000d510";
 
+    // Draft-inflated fixture state: signal, inbox-visible, draft ts standing
+    // in for the inbound timestamp.
     assert!(fetch_signal(&pool, THREAD).await?);
+    let before = fetch_inbox_state(&pool, THREAD).await?;
+    assert!(before.inbox_visible);
+    assert!(before.latest_inbound_message_ts.is_some());
 
     let now = chrono::Utc::now();
     let draft = models_email::email::service::message::SimpleMessage {
@@ -223,13 +229,34 @@ async fn draft_discard_without_metadata_recompute_syncs_signal_flag(
     };
 
     let mut conn = pool.acquire().await?;
-    let deleted_thread =
-        crate::messages::delete::delete_message_with_tx(&mut conn, &draft, false).await?;
+    let deleted_thread = crate::messages::delete::delete_message_with_tx(&mut conn, &draft).await?;
     assert!(deleted_thread.is_none(), "thread should survive");
 
-    // The remaining message is CATEGORY_PROMOTIONS-only: noise.
+    // The remaining message is CATEGORY_PROMOTIONS-only: noise, and without
+    // an INBOX label the thread leaves the inbox and has no inbound ts.
     assert!(!fetch_signal(&pool, THREAD).await?);
+    let after = fetch_inbox_state(&pool, THREAD).await?;
+    assert!(!after.inbox_visible);
+    assert!(after.latest_inbound_message_ts.is_none());
     Ok(())
+}
+
+struct ThreadInboxState {
+    inbox_visible: bool,
+    latest_inbound_message_ts: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+async fn fetch_inbox_state(
+    pool: &Pool<Postgres>,
+    thread_id: &str,
+) -> anyhow::Result<ThreadInboxState> {
+    Ok(sqlx::query_as!(
+        ThreadInboxState,
+        r#"SELECT inbox_visible, latest_inbound_message_ts FROM email_threads WHERE id = $1"#,
+        Uuid::parse_str(thread_id)?
+    )
+    .fetch_one(pool)
+    .await?)
 }
 
 // update_thread_metadata piggybacks the is_signal sync, so every existing

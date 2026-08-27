@@ -96,15 +96,40 @@ async fn update_thread_metadata_syncs_signal_flag(pool: Pool<Postgres>) -> anyho
 const THREAD_DRAFT_SIGNAL: &str = "00000000-0000-0000-0000-00000000e204";
 const DRAFT_MSG: &str = "00000000-0000-0000-0000-00000000e505";
 
-// Discarding a draft via the new-crate delete_draft_message (no metadata
-// recompute on this path) still refreshes is_signal.
+struct ThreadInboxState {
+    inbox_visible: bool,
+    latest_inbound_message_ts: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+async fn fetch_inbox_state(
+    pool: &Pool<Postgres>,
+    thread_id: &str,
+) -> anyhow::Result<ThreadInboxState> {
+    Ok(sqlx::query_as!(
+        ThreadInboxState,
+        "SELECT inbox_visible, latest_inbound_message_ts FROM email_threads WHERE id = $1",
+        Uuid::parse_str(thread_id)?
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+// Discarding a draft via delete_draft_message recomputes the thread metadata
+// the draft inflated: is_signal, inbox_visible, and
+// latest_inbound_message_ts all count drafts.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
 )]
-async fn delete_draft_message_syncs_signal_flag(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    // The draft is the thread's only signal message.
+async fn delete_draft_message_recomputes_thread_metadata(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // The draft is the thread's only signal message and its stand-in
+    // inbound timestamp.
     assert!(fetch_signal(&pool, THREAD_DRAFT_SIGNAL).await?);
+    let before = fetch_inbox_state(&pool, THREAD_DRAFT_SIGNAL).await?;
+    assert!(before.inbox_visible);
+    assert!(before.latest_inbound_message_ts.is_some());
 
     let repo = EmailPgRepo::new(pool.clone());
     repo.delete_draft_message(
@@ -114,6 +139,41 @@ async fn delete_draft_message_syncs_signal_flag(pool: Pool<Postgres>) -> anyhow:
     .await?;
 
     assert!(!fetch_signal(&pool, THREAD_DRAFT_SIGNAL).await?);
+    let after = fetch_inbox_state(&pool, THREAD_DRAFT_SIGNAL).await?;
+    assert!(!after.inbox_visible);
+    assert!(after.latest_inbound_message_ts.is_none());
+    Ok(())
+}
+
+const THREAD_SENT_DONE: &str = "00000000-0000-0000-0000-00000000e206";
+const SENT_THREAD_DRAFT_MSG: &str = "00000000-0000-0000-0000-00000000e508";
+
+// Starting a draft on a done sent thread resurfaces it into the inbox
+// (Signal); discarding the draft must send it back out. is_signal stays
+// true via the SENT label, so the inbox_visible / latest_inbound reset is
+// the only thing keeping the thread out of inbox views.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
+)]
+async fn delete_draft_message_returns_sent_thread_out_of_inbox(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let before = fetch_inbox_state(&pool, THREAD_SENT_DONE).await?;
+    assert!(before.inbox_visible);
+    assert!(before.latest_inbound_message_ts.is_some());
+
+    let repo = EmailPgRepo::new(pool.clone());
+    repo.delete_draft_message(
+        Uuid::parse_str(SENT_THREAD_DRAFT_MSG)?,
+        Uuid::parse_str(THREAD_SENT_DONE)?,
+    )
+    .await?;
+
+    assert!(fetch_signal(&pool, THREAD_SENT_DONE).await?);
+    let after = fetch_inbox_state(&pool, THREAD_SENT_DONE).await?;
+    assert!(!after.inbox_visible);
+    assert!(after.latest_inbound_message_ts.is_none());
     Ok(())
 }
 

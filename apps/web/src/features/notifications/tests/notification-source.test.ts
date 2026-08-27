@@ -48,11 +48,9 @@ vi.mock('@queries/notification/user-notifications', () => ({
   useUserNotificationsQuery: () => mocks.notificationsQuery,
 }));
 
-vi.mock('@service-notification/client', () => ({
-  notificationServiceClient: {
-    removeUnsubscribeItem: vi.fn(),
-    unsubscribeItem: vi.fn(),
-  },
+vi.mock('@queries/notification/unsubscribes', () => ({
+  useMuteItemMutation: () => ({ mutateAsync: vi.fn() }),
+  useUnmuteItemMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({

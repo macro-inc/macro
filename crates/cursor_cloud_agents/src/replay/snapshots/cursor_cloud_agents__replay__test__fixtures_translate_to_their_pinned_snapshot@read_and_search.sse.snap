@@ -1,0 +1,1017 @@
+---
+source: crates/cursor_cloud_agents/src/replay/test.rs
+assertion_line: 208
+expression: updates(sse)
+input_file: crates/cursor_cloud_agents/fixtures/real/read_and_search.sse
+---
+[
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "I will locate the top-level"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " README.md and report"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " its first heading."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "I'll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " locate"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " repo"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "'s"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " top"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "level"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".md"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " read"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " so"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " I"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " can"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " report"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " first"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " heading"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-0 fc_619e26e1-b86b-96f8-ab0f-aff03723c74e_0",
+    "title": "file_search",
+    "kind": "search",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-0 fc_619e26e1-b86b-96f8-ab0f-aff03723c74e_0",
+    "kind": "search",
+    "status": "in_progress",
+    "title": "file_search",
+    "rawInput": {
+      "targetDirectory": "/workspace",
+      "globPattern": "README.md"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-1 fc_619e26e1-b86b-96f8-ab0f-aff03723c74e_1",
+    "title": "get_mcp_tools",
+    "status": "in_progress",
+    "rawInput": {
+      "toolCallId": "unknown-tool-call-id"
+    },
+    "rawOutput": {
+      "result": {
+        "error": {
+          "error": "Invalid arguments"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-1 fc_619e26e1-b86b-96f8-ab0f-aff03723c74e_1",
+    "kind": "other",
+    "status": "in_progress",
+    "title": "get_mcp_tools",
+    "rawInput": {
+      "server": "cursor-cloud",
+      "toolName": "cursor-cloud-get-message-queue",
+      "toolCallId": "call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-1\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_1"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-0 fc_619e26e1-b86b-96f8-ab0f-aff03723c74e_0",
+    "kind": "search",
+    "status": "completed",
+    "title": "file_search",
+    "locations": [
+      {
+        "path": "/workspace"
+      }
+    ],
+    "rawInput": {
+      "targetDirectory": "/workspace",
+      "globPattern": "README.md"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "path": "/workspace",
+          "files": [
+            "packages/collaboration/README.md",
+            "packages/collaboration/src/websocket/README.md",
+            "packages/lexical-core/README.md",
+            "crates/client/README.md",
+            "crates/client/turso-opfs/README.md",
+            "tooling/seed_cli/README.md",
+            "tooling/seed_cli/src/entity/email/README.md",
+            "infra/README.md",
+            "packages/sdk/README.md",
+            "infra/stacks/fusion-auth/README.md",
+            "crates/opensearch_query_builder/README.md",
+            "infra/stacks/fusionauth-instance/README.md",
+            "infra/stacks/opensearch/README.md",
+            "packages/loro-mirror/README.md",
+            "infra/stacks/opensearch/helpers/README.md",
+            "README.md",
+            "infra/stacks/cloud-storage-cache/README.md",
+            "infra/stacks/web-app/README.md",
+            "infra/preview/README.md",
+            "crates/comms_db_client/README.md",
+            "crates/teams/README.md",
+            "crates/mcp_client/src/domain/provider_registry/slack/README.md",
+            "crates/chat/README.md",
+            "services/unfurl_service/README.md",
+            "services/sync-service/README.md",
+            "apps/web/tauri/src-tauri/README.md",
+            "services/email_scheduled_handler/README.md",
+            "apps/web/README.md",
+            "services/search_processing_service/README.md",
+            "services/contacts_service/README.md",
+            "crates/properties/README.md",
+            "services/email_refresh_handler/README.md",
+            "apps/web/src/features/block-image/README.md",
+            "services/bots/stripe-payment-bot/README.md",
+            "services/bots/anthropic-status-bot/README.md",
+            "crates/properties_service/README.md",
+            "crates/notification_db_client/README.md",
+            "apps/web/src/features/block-chat/README.md",
+            "services/email_service/src/bin/cleanup_unused_sfs/README.md",
+            "apps/web/src/features/block-canvas/README.md",
+            "services/email_service/src/bin/find_used_sfs_ids/README.md",
+            "services/email_service/src/bin/backfill_gmail_attachments/README.md",
+            "services/email_service/src/bin/backfill_contacts/README.md",
+            "services/email_service/src/bin/find_unused_sfs_ids/README.md",
+            "services/email_service/src/bin/backfill_sfs_attachments/README.md",
+            "apps/web/src/features/block-md/README.md",
+            "crates/macro_db_client/README.md",
+            "services/email_sfs_delete_handler/README.md",
+            "services/docx_unzip_handler/README.md",
+            "apps/web/src/features/block-code/README.md",
+            "services/connection_gateway/README.md",
+            "services/email_suppression_handler/README.md",
+            "services/organization_retention_handler/README.md",
+            "services/user_link_cleanup_handler/README.md",
+            "apps/web/src/features/entity/README.md",
+            "services/cla-worker/README.md",
+            "services/worker_trigger/README.md",
+            "services/document_storage_service/README.md",
+            "apps/web/src/features/block-project/README.md",
+            "apps/web/src/features/property/README.md",
+            "services/mcp_auth_proxy/README.md",
+            "services/delete_chat_handler/README.md",
+            "crates/email_db_client/README.md",
+            "services/convert_service/load-test/README.md",
+            "services/convert_service/helpers/README.md",
+            "crates/opensearch_client/README.md",
+            "crates/anthropic/README.md",
+            "services/deleted_item_poller/README.md",
+            "apps/web/src/components/app/split-layout/README.md",
+            "services/notification_service/README.md",
+            "services/lexical-service/README.md",
+            "apps/web/src/lib/service-clients/service-cognition/README.md",
+            "crates/bots/README.md",
+            "services/sha_cleanup_worker/README.md",
+            "services/document_cognition_service/README.md",
+            "services/document_cognition_service/load-test/README.md",
+            "crates/webhook/README.md",
+            "crates/integration_tests/local_e2e/README.md",
+            "services/document_text_extractor/README.md",
+            "crates/kafka_util/README.md",
+            "apps/web/src/lib/service-clients/service-connection/README.md",
+            "crates/local_e2e_test_support/README.md",
+            "crates/soup_realtime/README.md",
+            "apps/web/src/lib/service-clients/service-sync/README.md",
+            "apps/web/src/lib/filesystem/README.md",
+            "apps/docs/README.md",
+            "apps/web/src/lib/core/README.md"
+          ],
+          "totalFiles": 87
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-1 fc_619e26e1-b86b-96f8-ab0f-aff03723c74e_1",
+    "kind": "other",
+    "status": "failed",
+    "title": "get_mcp_tools",
+    "rawInput": {
+      "toolCallId": "unknown-tool-call-id"
+    },
+    "rawOutput": {
+      "result": {
+        "error": {
+          "error": "MCP tool \"cursor-cloud-get-message-queue\" not found on server \"cursor-cloud\"."
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Found the top-level "
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "README.md. Reading it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " now to identify the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " first heading."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Found"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " top"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "level"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " Next"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " I’ll"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " read"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " it"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " and"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " check"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " the"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " message"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " queue"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-2 fc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_0",
+    "title": "read_file",
+    "kind": "read",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3 fc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1",
+    "title": "get_mcp_tools",
+    "status": "in_progress",
+    "rawInput": {
+      "toolCallId": "unknown-tool-call-id"
+    },
+    "rawOutput": {
+      "result": {
+        "error": {
+          "error": "Invalid arguments"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-2 fc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_0",
+    "kind": "read",
+    "status": "in_progress",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/README.md",
+      "limit": 80
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3 fc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1",
+    "kind": "other",
+    "status": "in_progress",
+    "title": "get_mcp_tools",
+    "rawInput": {
+      "server": "cursor-cloud",
+      "toolCallId": "call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-2 fc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_0",
+    "kind": "read",
+    "status": "completed",
+    "title": "read_file",
+    "locations": [
+      {
+        "path": "/workspace/README.md"
+      }
+    ],
+    "rawInput": {
+      "path": "/workspace/README.md",
+      "limit": 80
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>\n    ·\n    <a href=\"mailto:teo@macro.com\">Hiring</a>\n  </p>\n</div>\n\n<br />\n\nMacro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.\n\n<br />\n\n# Why Macro\n\nWe built Macro because we wanted a single operating system for our startup. There are many good software products, and we used them all — Slack, Linear, Notion, HubSpot, and Superhuman — but they don't work together as one system. As we scaled our last venture to ~20 people things started to break: every team got their own tools and the company was held together by MCP and Zapier. The company was not computable. It was chaotic.\n\nMacro is a complete redesign of work software from the ground up as a single system.\n\nDesigned by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their \"operating system\".\n\n<br />\n\n# Features\n\nMacro is composed of 'blocks' designed to be modular, extensible, and work together like Lego. For each block, we studied the best prior art and tried to make it even better.\n\nEach surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.\n\n| Block         | Docs                                                      | What it does                                                                  |\n| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |\n| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |\n| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |\n| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |\n| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |\n| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |\n| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |\n| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |\n| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |\n| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |\n| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |\n\n<br />\n\n# **Multiple email inboxes** w/ good AI tools, integrated CRM\n\nMacro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:\n\n1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.\n2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.\n3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.\n\n![Macro email thread with actions, tags, and properties in the sidebar](.github/readme/email-thread.png)\n\n4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.\n5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.\n\nMacro Mail lives in the same interface as channels, docs, tasks, and code. From any email, hit \"task\" to create a linked task, e.g. a ticket for an engineer from a customer support email. @mention emails in documents, e.g. @Re: Contract Signature.eml inside of Todos.md. In Macro, your email is brought into the fold with all of your tools, and your team, in the same permissions system: just hit `Share` to share an email to any DM or channel — no need to screenshot.\n\n[Email docs &rarr;](https://docs.macro.com/product/email)\n\n<br />",
+          "totalLines": 266,
+          "fileSize": 19987,
+          "path": "/workspace/README.md",
+          "readRange": {
+            "startLine": 1,
+            "endLine": 80
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3 fc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1",
+    "kind": "other",
+    "status": "completed",
+    "title": "get_mcp_tools",
+    "rawInput": {
+      "server": "cursor-cloud",
+      "toolCallId": "call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "{\n  \"note\": \"Large output has been written to: /home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt (31.4 KB, 469 lines)\",\n  \"filePath\": \"/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt\"\n}",
+          "outputFilePath": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "The top-level README.md"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " starts with the heading"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " \"# Why Macro\"."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4 fc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0",
+    "title": "grep_search",
+    "kind": "search",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4 fc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0",
+    "kind": "search",
+    "status": "in_progress",
+    "title": "grep_search",
+    "locations": [
+      {
+        "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt"
+      }
+    ],
+    "rawInput": {
+      "pattern": "get-message-queue",
+      "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt",
+      "caseInsensitive": false,
+      "headLimit": 20,
+      "multiline": false,
+      "toolCallId": "call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0",
+      "offset": 0
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4 fc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0",
+    "kind": "search",
+    "status": "completed",
+    "title": "grep_search",
+    "locations": [
+      {
+        "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt"
+      }
+    ],
+    "rawInput": {
+      "pattern": "get-message-queue",
+      "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt",
+      "caseInsensitive": false,
+      "headLimit": 20,
+      "multiline": false,
+      "toolCallId": "call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0",
+      "offset": 0
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "pattern": "get-message-queue",
+          "path": "/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt",
+          "outputMode": "content",
+          "workspaceResults": {
+            "/workspace": {
+              "content": {
+                "matches": [
+                  {
+                    "file": "../home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt",
+                    "matches": [
+                      {
+                        "lineNumber": 5,
+                        "content": "  \"serverDescription\": \"Cursor-internal cloud-agent diagnostics (server `cursor-cloud`). - `cursor-cloud-run-info` — return the current cloud-agent run identity, basic run metadata (name, repo, branch, model, owners — including the owning user's name and email when resolvable, lifecycle and setup status, created-at), and the URL where the run is available (https://cursor.com/agents/<bcId>). - `cursor-cloud-list-cloud-agents` — list cloud agents accessible to this run's principal in THIS run's environment (or, when this run has no saved environment, agents on the same repository), ordered by creation time (newest first), returning basic run metadata plus URLs. Users and service accounts see their own runs. Team admins can additionally browse teammates' runs only when enabled in team MCP settings. Supports browse filters (source, lifecycle status, setup status, recency/creation windows, archived, self-hosted, whether the agent made code changes, and whether it created a pull request) plu [... omitted end of long line]"
+                      },
+                      {
+                        "lineNumber": 113,
+                        "content": "      \"tool\": \"get-message-queue\","
+                      }
+                    ]
+                  }
+                ],
+                "totalLines": 2,
+                "totalMatchedLines": 2,
+                "headLimitApplied": 20
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "Retrieving the schema"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " for get-message-queue."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5 fc_033755be-c7c3-91e6-a17e-f649c25e4a11_0",
+    "title": "get_mcp_tools",
+    "status": "in_progress",
+    "rawInput": {
+      "toolCallId": "unknown-tool-call-id"
+    },
+    "rawOutput": {
+      "result": {
+        "error": {
+          "error": "Invalid arguments"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5 fc_033755be-c7c3-91e6-a17e-f649c25e4a11_0",
+    "kind": "other",
+    "status": "in_progress",
+    "title": "get_mcp_tools",
+    "rawInput": {
+      "server": "cursor-cloud",
+      "toolName": "get-message-queue",
+      "toolCallId": "call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5\nfc_033755be-c7c3-91e6-a17e-f649c25e4a11_0"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5 fc_033755be-c7c3-91e6-a17e-f649c25e4a11_0",
+    "kind": "other",
+    "status": "completed",
+    "title": "get_mcp_tools",
+    "rawInput": {
+      "server": "cursor-cloud",
+      "toolName": "get-message-queue",
+      "toolCallId": "call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5\nfc_033755be-c7c3-91e6-a17e-f649c25e4a11_0"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": "{\n  \"mode\": \"single_tool\",\n  \"server\": \"cursor-cloud\",\n  \"serverStatus\": \"ready\",\n  \"serverDescription\": \"Cursor-internal cloud-agent diagnostics (server `cursor-cloud`). - `cursor-cloud-run-info` — return the current cloud-agent run identity, basic run metadata (name, repo, branch, model, owners — including the owning user's name and email when resolvable, lifecycle and setup status, created-at), and the URL where the run is available (https://cursor.com/agents/<bcId>). - `cursor-cloud-list-cloud-agents` — list cloud agents accessible to this run's principal in THIS run's environment (or, when this run has no saved environment, agents on the same repository), ordered by creation time (newest first), returning basic run metadata plus URLs. Users and service accounts see their own runs. Team admins can additionally browse teammates' runs only when enabled in team MCP settings. Supports browse filters (source, lifecycle status, setup status, recency/creation windows, archived, self-hosted, whether the agent made code changes, and whether it created a pull request) plus limit/offset paging. When counting or enumerating many runs, page with nextOffset until hasMore is false; use totalMatched only when the accessible scan is complete. - `cursor-cloud-environment-info` — return THIS run's environment (name, environment & version public ids, source, recorded-via/created-at provenance, repos, full environment.json, dashboard URL, and environmentDeleted when the linked environment is soft-deleted), a top-level `repos` list (same canonical URLs as environment.repos / trigger-environment-build refs[].repoUrl; still populated when environment is null from composer.repoUrl), effective egress policy (allow-all, the complete merged allowed-domain list, or unresolved with a reason), the environment build the pod booted from (build id, snapshot id, git-setup mode, warm-fork mode) or null when the run started just-in-time rather than from a build, and (for internal runs) the initiating Cursor client build info (version + commit SHA, same as Help → About). - `cursor-cloud-get-events` — list the events recorded for THIS run (the same events shown on the run's dashboard page), oldest first: run lifecycle and setup outcomes plus soft failures such as MCP authentication errors (kind `mcp_auth_error` — an MCP server rejected this run's credentials, so its tool calls failed while the run continued). Each event carries publicId, createdAtMs, category, logLevel, a stable kind, a user-facing title, and optional detail and linkUrl. - `cursor-cloud-get-message-queue` — return a point-in-time snapshot of THIS run's user-visible pending follow-up queue (the same queue shown on the dashboard). No arguments; always this run. The currently executing message is no longer queued. Defer slow testing/verification while queued messages remain, then verify the cumulative result when the queue is empty. Returns hasQueuedMessages, queuedMessageCount, and queued message metadata (followupId, createdAtMs, source, text). Does not include attachments or internal queue entries. - `cursor-cloud-batch-fetch-details` — fetch details for a batch of specified accessible cloud agents by bcIds. Users and service accounts can fetch their own runs. Team admins can additionally fetch teammates' runs only when enabled in team MCP settings. When matching agents are found, writes basic run info to index.json and optionally writes diff-metadata.json, setup-logs.txt, start-logs.txt, environment-info.json, events.json, and transcript.json under /tmp/cursor/cloud-agent-transcripts/<datetime-id>/<bcId>/. Set includeEvents to include each run's dashboard events. First-class Task results include cloudAgentBcId; pass those ids to another batch-fetch-details call to fetch child transcripts. Transcripts can be very large — read them via subagents, never directly. - `cursor-cloud-get-automation` — look up one Cursor automation by id (UUID) via the AutomationsService GetAutomation API, as the run's principal: returns automation metadata (id, name, enabled state, display owner/creator, owner email, and URL) when readable, the same metadata fields for a teammate's private automation when only a restricted summary is visible, or a not-found error otherwise. - `cursor-cloud-list-environment-builds` — list this run's environment builds (the prebuilt environment snapshots a cloud agent can boot from), newest first, with status/failure outcomes. Returns an empty list when the run has no linked environment. Supports statuses and createdAfter/createdBefore filters plus limit; page older builds by passing nextCursor back as cursor. - `cursor-cloud-environment-build-logs` — fetch the install/setup logs for one environment build by buildId (returned inline; large outputs are spilled to a file automatically). Build logs are retained ~10 days; only builds of this run's own environment are accessible. - `cursor-cloud-trigger-environment-build` — start one DRAFT environment build of this run's own environment and return its buildId. OK to call during environment setup to validate the config before proposing, or when the user asks to trigger a build. Each build boots a pod and runs the full install, so skip it outside those cases. Supports per-repo ref overrides (`refs`) and a custom `environmentJson` config override for testing config changes. For a greenfield run with no linked environment, pass the complete `environmentJson`; the trigger creates and links a personal transitional draft automatically. Draft builds never become the build new agents boot from; track them with list-environment-builds and fetch logs with environment-build-logs. - `cursor-cloud-request-environment-setup-actions` — record one or more user actions that currently block environment setup. Calls may be made more than once in a turn; successful calls from the completed turn are combined into one request for the user. Presenting results: unless the user asks for a specific format or a summary, show a tool call's returned result to the user verbatim as pretty-printed JSON in a `json` code block rather than paraphrasing or summarizing it. This applies only to data returned directly by the tool call, not to detail files written to the filesystem (e.g. batch-fetch-details output).\",\n  \"tool\": {\n    \"tool\": \"get-message-queue\",\n    \"description\": \"Return a point-in-time snapshot of THIS run's user-visible pending follow-up message queue — the same queue shown on the dashboard. No arguments; always scoped to this run. The currently executing message is no longer queued. Defer slow testing and verification while queued messages remain, then verify the cumulative result when the queue is empty. Returns hasQueuedMessages, queuedMessageCount, and queued message metadata (followupId, createdAtMs, source, text). Does not include attachments or internal queue entries.\",\n    \"inputSchema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"additionalProperties\": false,\n      \"$schema\": \"http://json-schema.org/draft-07/schema#\"\n    }\n  }\n}"
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "I'll call the get-message-queue"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " tool."
+    }
+  },
+  {
+    "sessionUpdate": "tool_call",
+    "toolCallId": "call-a645a2c6-a9d5-48fc-938a-119b22be925f-6 fc_a2ef656f-041d-9fee-b161-9414227faf7e_0",
+    "title": "mcp",
+    "status": "in_progress"
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-a645a2c6-a9d5-48fc-938a-119b22be925f-6 fc_a2ef656f-041d-9fee-b161-9414227faf7e_0",
+    "kind": "other",
+    "status": "in_progress",
+    "title": "mcp",
+    "rawInput": {
+      "name": "cursor-cloud-get-message-queue",
+      "toolCallId": "call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0",
+      "providerIdentifier": "cursor-cloud",
+      "toolName": "get-message-queue",
+      "serverIdentifier": "cursor-cloud"
+    }
+  },
+  {
+    "sessionUpdate": "tool_call_update",
+    "toolCallId": "call-a645a2c6-a9d5-48fc-938a-119b22be925f-6 fc_a2ef656f-041d-9fee-b161-9414227faf7e_0",
+    "kind": "other",
+    "status": "completed",
+    "title": "mcp",
+    "rawInput": {
+      "name": "cursor-cloud-get-message-queue",
+      "toolCallId": "call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0",
+      "providerIdentifier": "cursor-cloud",
+      "toolName": "get-message-queue",
+      "serverIdentifier": "cursor-cloud"
+    },
+    "rawOutput": {
+      "result": {
+        "success": {
+          "content": [
+            {
+              "text": {
+                "text": "Cursor Cloud message queue (0 queued). The currently executing message is not queued.\n{\n  \"hasQueuedMessages\": false,\n  \"queuedMessageCount\": 0,\n  \"queuedMessages\": []\n}"
+              }
+            }
+          ],
+          "structuredContent": {
+            "hasQueuedMessages": false,
+            "queuedMessageCount": 0,
+            "queuedMessages": []
+          }
+        }
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "The first heading in"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " the top-level README.md"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": " is \"# Why Macro\"."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "The"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " top"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "-"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "level"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".md"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " at"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " `/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "workspace"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "/"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "README"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ".md"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "`."
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " Its"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " first"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " heading"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " is"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " **"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "Why"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " Macro"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "**."
+    }
+  }
+]

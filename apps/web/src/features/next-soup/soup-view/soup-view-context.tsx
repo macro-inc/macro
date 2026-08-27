@@ -58,6 +58,10 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  NATIVE_OFFLINE_ERROR_MESSAGE,
+  nativeNetworkStatus,
+} from '@core/mobile/native-network-status';
 import { idToDisplayName } from '@core/user/util';
 import {
   COMPANY_STAGE_OPTIONS,
@@ -66,6 +70,7 @@ import {
   isWithNotification,
   type Notification,
   toNotificationEntity,
+  unreadFilterFn,
 } from '@entity';
 import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -102,6 +107,10 @@ import { unwrap } from 'solid-js/store';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
+  error: Accessor<Error | null>;
+  /** True when the active request has local or network data, including an
+   * intentionally empty result. */
+  hasData: Accessor<boolean>;
   isLoading: Accessor<boolean>;
   isFetching: Accessor<boolean>;
   /**
@@ -280,6 +289,15 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
 type EntityWithRawNotifications = EntityData & {
   notifications?: Notification[];
 };
+
+const NATIVE_OFFLINE_LOAD_ERROR = new Error(NATIVE_OFFLINE_ERROR_MESSAGE);
+
+/** Retryable load error for a data-less view once iOS reports no network path. */
+function nativeOfflineLoadError(hasData: () => boolean): Error | null {
+  return nativeNetworkStatus() === 'offline' && !hasData()
+    ? NATIVE_OFFLINE_LOAD_ERROR
+    : null;
+}
 
 function rawEntityNotifications(
   entity: EntityData
@@ -605,7 +623,7 @@ export const SoupViewContextProvider: FlowComponent<
     default: 'board',
   });
   const [readFilter, setReadFilter] = makeFlaggedPersisted(
-    useEntryState<ReadFilter>('soup.readFilter', { default: 'unread' }),
+    useEntryState<ReadFilter>('soup.readFilter', { default: 'all' }),
     {
       enabled: filterPersistenceEnabled,
       name: soupViewPersistenceKey('soup-view-read-filter'),
@@ -767,12 +785,28 @@ export const SoupViewContextProvider: FlowComponent<
         documentSeen: seen,
         emailSeen: seen,
         channelSeen: seen,
-        // channelThreadSeen: seen,
+        channelThreadSeen: seen,
         chatSeen: seen,
         folderSeen: seen,
         foreignEntitySeen: seen,
       },
     };
+  };
+
+  // A row the status filter admitted stays admitted for the rest of the visit
+  // (see `admittedByStatusFilter`). The inbox opens rows in a preview pane, and
+  // previewing marks the row read — so without this the row the user just
+  // clicked drops out from under the preview they are still reading, taking the
+  // list position with it. The row re-renders in its read styling, it just keeps
+  // its place.
+  const entityMatchesInboxReadFilter = (entity: EntityData): boolean => {
+    const filter = readFilter();
+    if (filter === 'all' || !isInboxView()) return true;
+    const isUnread = unreadFilterFn(entity);
+    return (
+      (filter === 'unread' ? isUnread : !isUnread) ||
+      admittedByStatusFilter().ids.has(entity.id)
+    );
   };
 
   const applyViewFilters = (state: QueryState): QueryState => {
@@ -947,9 +981,10 @@ export const SoupViewContextProvider: FlowComponent<
     const membershipFilter = config().itemMembershipFilter;
     if (membershipFilter && !membershipFilter(item)) return false;
 
-    return soup.predicates.test(
-      mapApiSoupItemToEntity(item) as SoupEntity,
-      getFilterContext()
+    const entity = mapApiSoupItemToEntity(item) as SoupEntity;
+    return (
+      soup.predicates.test(entity, getFilterContext()) &&
+      entityMatchesInboxReadFilter(entity)
     );
   };
 
@@ -977,9 +1012,15 @@ export const SoupViewContextProvider: FlowComponent<
   // Read loading first so REST fallback leaves the view shell rendered.
   const itemsQueryData = () =>
     itemsQuery.isLoading ? undefined : itemsQuery.data;
+  const itemsQueryHasData = () =>
+    itemsQueryData() !== undefined && !itemsQuery.isPlaceholderData;
+  const itemsQueryError = () =>
+    itemsQuery.error ?? nativeOfflineLoadError(itemsQueryHasData);
 
   const itemsSource = {
     data: itemsQueryData,
+    error: itemsQueryError,
+    hasData: itemsQueryHasData,
     isLoading: () => itemsQuery.isLoading,
     isFetching: () => itemsQuery.isFetching,
     isPlaceholderData: () => itemsQuery.isPlaceholderData,
@@ -997,20 +1038,26 @@ export const SoupViewContextProvider: FlowComponent<
 
       if (!searching) {
         const data = itemsSource.data();
+        const extras = config().additionalEntities?.() ?? [];
+        const extraEntities = extras.map((e) =>
+          isWithNotification(e) ? e : attachNotifications(e)
+        ) as SoupEntity[];
 
-        if (!data || data.groups) return prev;
+        if (!data) {
+          // Query rebinding can temporarily produce no data without an
+          // error; keep the previous rows to avoid a flash on back
+          // navigation. Once the active query fails, those rows belong to
+          // the previous query and must go so the load-error state can
+          // render — only client-local rows remain valid.
+          return itemsSource.error() ? extraEntities : prev;
+        }
+        if (data.groups) return prev;
 
         const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
 
-        const extras = config().additionalEntities?.() ?? [];
-
-        if (extras.length === 0) return base;
-
-        const extraEntities = extras.map((e) =>
-          isWithNotification(e) ? e : attachNotifications(e)
-        ) as SoupEntity[];
+        if (extraEntities.length === 0) return base;
 
         return [...extraEntities, ...base];
       }
@@ -1042,6 +1089,32 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
+  // Ids that have matched the inbox status filter at some point during this
+  // visit, so `entityMatchesInboxReadFilter` can keep admitting a row after the
+  // user reads it.
+  //
+  // A visit is one view/tab/filter combination: changing any of them starts a
+  // new set, and returning a new object is what re-runs every consumer. An
+  // effect that emptied the set in place would not — a plain Set notifies
+  // nothing — and the list would keep rendering the previous visit's rows.
+  const admittedByStatusFilter = createMemo<{
+    scope: string;
+    ids: Set<string>;
+  }>((prev) => {
+    const filter = readFilter();
+    const scope = `${activeListView()}:${activeTab()}:${filter}`;
+    const ids = prev?.scope === scope ? new Set(prev.ids) : new Set<string>();
+
+    if (filter !== 'all' && isInboxView()) {
+      const wantUnread = filter === 'unread';
+      for (const entity of items()) {
+        if (unreadFilterFn(entity) === wantUnread) ids.add(entity.id);
+      }
+    }
+
+    return { scope, ids };
+  });
+
   const baseEntities = () => {
     let transformed = items();
     const ctx = getFilterContext();
@@ -1051,6 +1124,9 @@ export const SoupViewContextProvider: FlowComponent<
     const next = [];
     for (const entity of transformed) {
       if (!soup.predicates.test(entity, ctx)) {
+        continue;
+      }
+      if (!entityMatchesInboxReadFilter(entity)) {
         continue;
       }
       if (!entityMatchesTagFilter(entity, tagOptionIds, tagFilterMode)) {
@@ -1403,12 +1479,30 @@ export const SoupViewContextProvider: FlowComponent<
   });
 
   const { searchQuery } = search;
+  const searchSourceHasData = () =>
+    (searchQuery.data !== undefined && !searchQuery.isPlaceholderData) ||
+    (!searchQuery.isPlaceholderData && entities().length > 0);
+  const searchSourceError = () =>
+    (searchQuery.error as Error | null) ??
+    nativeOfflineLoadError(searchSourceHasData);
 
   const context = {
     soup,
     initialize,
     source: {
       data: entities,
+      error: () =>
+        search.isSearching() ? searchSourceError() : itemsSource.error(),
+      hasData: () =>
+        search.isSearching()
+          ? searchSourceHasData()
+          : itemsSource.hasData() ||
+            // Rows retained across a query rebind count as data so the view
+            // doesn't flash, but once the query errors only client-local
+            // rows remain and must not suppress the load-error state.
+            (!itemsSource.error() &&
+              !itemsSource.isPlaceholderData() &&
+              entities().length > 0),
       isLoading: () => itemsSource.isLoading(),
       isFetching: () => itemsSource.isFetching() || searchQuery.isFetching,
       isPlaceholderData: () =>

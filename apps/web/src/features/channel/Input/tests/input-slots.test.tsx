@@ -2,9 +2,17 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { render as renderBare, screen } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import type { JSX } from 'solid-js';
+import { Portal } from 'solid-js/web';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const editorMocks = vi.hoisted(() => ({
+  clear: vi.fn(),
+  focus: vi.fn(),
+}));
 
 vi.hoisted(() => {
   Object.defineProperty(window, 'matchMedia', {
@@ -25,6 +33,10 @@ vi.hoisted(() => {
 vi.mock('@core/util/upload', () => ({
   chatRuleset: {},
   uploadFile: vi.fn(),
+}));
+
+vi.mock('@core/cursor/flag', () => ({
+  useCursorAgentsAccess: () => () => true,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -108,12 +120,17 @@ vi.mock('@core/component/VideoPreview', () => ({
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: { placeholder?: string; initialValue?: string }) => (
-    <div
-      data-testid="markdown-shell"
-      data-initial-value={props.initialValue ?? ''}
-    >
-      {props.placeholder}
-    </div>
+    <>
+      <div
+        data-testid="markdown-shell"
+        data-initial-value={props.initialValue ?? ''}
+      >
+        {props.placeholder}
+      </div>
+      <Portal>
+        <input data-testid="markdown-portal-input" />
+      </Portal>
+    </>
   ),
 }));
 
@@ -122,8 +139,8 @@ vi.mock(
   () => ({
     buildConfig: () => {
       const controls = {
-        clear: vi.fn(),
-        focus: vi.fn(),
+        clear: editorMocks.clear,
+        focus: editorMocks.focus,
       };
       const lexical = {
         focus: vi.fn(),
@@ -206,7 +223,41 @@ const baseInput: InputData = {
   attachments: [],
 };
 
+/**
+ * `ChannelInput` reads the stored Cursor API key status to decide whether to
+ * offer `@cursor` in the mention typeahead, so it needs a query client even
+ * though none of these tests care about that entry. Shadowing `render` keeps
+ * every call site below unchanged.
+ */
+const testQueryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
+
+function render(ui: () => JSX.Element) {
+  return renderBare(() => (
+    <QueryClientProvider client={testQueryClient}>{ui()}</QueryClientProvider>
+  ));
+}
+
 describe('Input slots', () => {
+  beforeEach(() => {
+    editorMocks.clear.mockClear();
+    editorMocks.focus.mockClear();
+  });
+
+  it('does not refocus the editor when a portaled editor control is clicked', async () => {
+    const user = userEvent.setup();
+    render(() => <ChannelInput input={baseInput} />);
+
+    await user.click(screen.getByTestId('markdown-shell'));
+    expect(editorMocks.focus).toHaveBeenCalledOnce();
+
+    editorMocks.focus.mockClear();
+    await user.click(screen.getByTestId('markdown-portal-input'));
+
+    expect(editorMocks.focus).not.toHaveBeenCalled();
+  });
+
   it('renders the default action composition and wires handlers through context', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();

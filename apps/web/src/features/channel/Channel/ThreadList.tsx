@@ -692,7 +692,7 @@ export function ThreadList(props: ThreadListProps) {
         data-channel-id={props.channelId}
         data-channel-scroll-inset-start={insets().start}
         data-channel-scroll-inset-end={insets().end}
-        class="scrollbar-hidden"
+        class="scrollbar-hidden px-2"
         {...scrollIntent.handlers}
         style={{
           width: '100%',

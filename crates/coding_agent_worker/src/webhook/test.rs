@@ -45,6 +45,7 @@ fn follow_up(content: &str) -> AgentTriggerTopicEvent {
         agent_trigger::domain::broker_events::ChannelEventMetadata {
             bot_id: bot_id::BotId::TEST_A,
             session_id: test_session(),
+            kind: agent_trigger::domain::broker_events::ChannelKind::MentionThread,
             message: message(content, Some(Uuid::from_u128(7))),
         },
     ))

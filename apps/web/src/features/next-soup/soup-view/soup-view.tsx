@@ -16,7 +16,10 @@ import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
-import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
+import {
+  EmptyState,
+  shouldShowLoadError,
+} from '@app/features/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
@@ -71,6 +74,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
@@ -417,12 +421,18 @@ export const SoupView = (props: SoupViewProps) => {
     });
   });
 
-  // Fresh preview-default views engage as soon as the layout can form a pair,
+  // Preview-default views engage as soon as the layout can form a pair,
   // without waiting for rows. useSoupPreviewAvailability owns disengagement: a
   // settled result with no previewable rows only suspends the pair and
   // re-engages once an entity arrives, so an initially empty view still lands
   // in preview mode. Resolving here keeps a manual exit from being undone by
   // later Soup updates.
+  //
+  // The preference alone decides engagement, independent of navigation cause:
+  // navigating the Controller away dissolves its Preview Pair, so an entry
+  // restored via history back/forward has no pair left to revive and must
+  // re-engage here like a fresh arrival. Manual toggles write the preference,
+  // which keeps an explicit exit from being resurrected by history navigation.
   let initialPreviewResolved = false;
   createEffect(() => {
     if (initialPreviewResolved) return;
@@ -430,10 +440,7 @@ export const SoupView = (props: SoupViewProps) => {
       initialPreviewResolved = true;
       return;
     }
-    if (
-      panel.handle.lastNavigationCause() !== 'fresh' ||
-      panel.handle.isViewerSplit()
-    ) {
+    if (panel.handle.isViewerSplit()) {
       initialPreviewResolved = true;
       return;
     }
@@ -662,7 +669,7 @@ export const SoupView = (props: SoupViewProps) => {
                       fallback={
                         <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                           <Button
-                            variant="base"
+                            variant="outline"
                             class="p-1 size-7 rounded-lg ml-2 bg-surface"
                             onClick={() => setNarrowSearchExpanded(true)}
                             depth={2}
@@ -1069,16 +1076,27 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    const newEntitiesForSelection = [];
     const sign = Math.sign(params.entityIndex - anchorIndex);
+
+    // Shift-clicking the anchor itself has zero range. Stepping the loop by
+    // `sign` (0) would spin forever, so just toggle the single entity.
+    if (sign === 0) {
+      soup.selection.toggle(params.entity);
+      lastClickedEntityId = params.entityIndex;
+      return;
+    }
+
+    const newEntitiesForSelection = [];
 
     for (
       let i = anchorIndex;
       sign > 0 ? i <= params.entityIndex : i >= params.entityIndex;
       i += sign
     ) {
+      // The anchor can be stale (rows changed since the last click), so guard
+      // against indexing past the current list.
       const entity = entityList[i];
-      if (!entity.isSelected()) {
+      if (entity && !entity.isSelected()) {
         newEntitiesForSelection.push(entity.original);
       }
     }
@@ -1125,6 +1143,17 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   const showEmptyState = () =>
     ((!source.isFetching() || isPullRefreshing()) && !rows().length) ||
     forceEmptyState();
+
+  const showLoadError = () =>
+    !!source.error() &&
+    shouldShowLoadError({
+      hasData: source.hasData(),
+      forceEmptyState: forceEmptyState(),
+    });
+
+  const retryLoad = () => {
+    void source.refresh().catch(() => undefined);
+  };
 
   const entityById = createMemo(
     () => {
@@ -1238,7 +1267,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       >
         <SoupViewFileDropzone>
           <div class="@container/u-list size-full unified-list-root flex flex-col relative no-select-children">
-            <Show when={isTouchDevice() && source.isPlaceholderData()}>
+            <Show
+              when={
+                isTouchDevice() && source.isPlaceholderData() && !source.error()
+              }
+            >
               <MobileTabLoadingBar />
             </Show>
             <Show when={isTouchDevice()}>
@@ -1251,6 +1284,14 @@ const SoupViewListContent = (props: SoupViewListProps) => {
             </Show>
             <StaticMarkdownContext>
               <Switch>
+                <Match when={showLoadError()}>
+                  <div
+                    ref={setEmptyStateRef}
+                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                  >
+                    <LoadErrorPanel onRetry={retryLoad} />
+                  </div>
+                </Match>
                 <Match
                   when={
                     source.isFetching() && !rows().length && !isPullRefreshing()
@@ -1415,7 +1456,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                           fallback={
                                             <Button
-                                              variant="base"
+                                              variant="outline"
                                               size="sm"
                                               depth={2}
                                               class={cn({
@@ -1431,7 +1472,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                         >
                                           <Button
-                                            variant="base"
+                                            variant="outline"
                                             size="sm"
                                             depth={2}
                                             class={cn({

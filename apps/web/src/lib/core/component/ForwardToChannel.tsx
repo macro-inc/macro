@@ -597,7 +597,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                   Cancel
                 </Button>
                 <Button
-                  variant={selectedOptions().length > 0 ? 'active' : 'ghost'}
+                  variant={selectedOptions().length > 0 ? 'accent' : 'ghost'}
                   depth={3}
                   class="rounded-lg border-0"
                   disabled={selectedOptions().length === 0}

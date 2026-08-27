@@ -202,7 +202,7 @@ export default function ImportLinear() {
         <div class="flex items-center justify-between">
           <div class="text-lg font-medium text-ink">Import Linear CSV</div>
           <Button
-            variant="base"
+            variant="outline"
             onClick={() => {
               setFileName('');
               setParseError('');

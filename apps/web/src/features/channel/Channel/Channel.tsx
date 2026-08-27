@@ -350,7 +350,12 @@ export function Channel(props: ChannelProps) {
       activityTracker.isNewMessage,
       // Once there are no older pages left to fetch, the oldest loaded message
       // (index 0) is the true first message in the channel.
-      !messagesQuery.hasNextPage
+      !messagesQuery.hasNextPage,
+      // A reply being composed opens the thread before any reply exists; the
+      // rail must already reach it. Signal reads keep this memo live.
+      (message) =>
+        threadManager.getOrCreateThreadState(message.id).isReplying() ||
+        unifiedInput.replyTarget()?.threadId === message.id
     )
   );
 
@@ -702,7 +707,11 @@ export function Channel(props: ChannelProps) {
   );
 
   return (
-    <EntityLoadGate result={messagesLoadResult}>
+    <EntityLoadGate
+      result={messagesLoadResult}
+      loadErrorTitle="Unable to load this channel"
+      onRetry={() => void messagesQuery.refetch()}
+    >
       <DebugSuspense name="Channel.root">
         <deleteConfirmation.ConfirmationDialog />
         <StaticMarkdownContext>

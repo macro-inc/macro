@@ -29,8 +29,9 @@ use model_entity::Entity;
 use super::models::{
     BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     CreateTaskRequest, DocumentError, DocumentTeamShare, DocumentTeamShareResponse,
-    EditDocumentRepoArgs, EditDocumentServiceArgs, GithubPullRequestsResponse, LocationQueryParams,
-    TaskBranchName, TeamTaskMetadata,
+    EditDocumentRepoArgs, EditDocumentServiceArgs, EmailImportRepoOutcome,
+    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
+    TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -129,9 +130,8 @@ pub trait DocumentRepo: Send + Sync + 'static {
 
     /// Create a new document with all associated records in a single transaction.
     ///
-    /// Handles: Document row, version (DocumentInstance or DocumentBom),
-    /// document_sub_type, SharePermission, DocumentPermission, UserHistory,
-    /// ItemLastAccessed, UserItemAccess, and document_email.
+    /// Always inserts a `Document` row. Email-attachment linking and SHA reuse
+    /// belong on [`DocumentRepo::import_email_attachment_document`].
     ///
     /// `share_permission` is the pre-resolved initial share permission — the
     /// repository persists it verbatim and carries no share-policy of its own.
@@ -140,6 +140,17 @@ pub trait DocumentRepo: Send + Sync + 'static {
         args: CreateDocumentRepoArgs,
         share_permission: SharePermissionV2,
     ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+
+    /// Import an email attachment: link it to a reusable live email document
+    /// owned by the same user, or insert a new document and link it.
+    ///
+    /// Lookup, possible insert, and the `document_email` write happen in one
+    /// transaction under an advisory lock on `(owner, sha)`.
+    fn import_email_attachment_document(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+        share_permission: SharePermissionV2,
+    ) -> impl Future<Output = Result<EmailImportRepoOutcome, Self::Err>> + Send;
 
     /// Get the link-share preference of the user's team, or `None` when the
     /// user is not on a team.
@@ -418,6 +429,16 @@ pub trait DocumentService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
+    ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
+
+    /// Import an email attachment as a document.
+    ///
+    /// Reuse returns existing content and no upload URL. A first import
+    /// follows the same post-create lifecycle as [`DocumentService::create_document`].
+    fn import_email_attachment(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        args: ImportEmailAttachmentRepoArgs,
     ) -> impl Future<Output = Result<CreateDocumentResponseData, DocumentError>> + Send;
 
     /// Get content lifecycle metadata for a document.

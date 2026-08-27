@@ -21,6 +21,7 @@ import {
 import { $isParagraphNode, $isTextNode, type LexicalNode } from "lexical";
 import { z } from "zod";
 import { CUSTOM_TRANSFORMERS } from "./customTransformers";
+import { I_IMAGE_CONSTRAINED, IMAGE } from "./image";
 import { E_BLOCK_EQUATION_NODE, I_EQUATION_NODE } from "./katex";
 import {
 	E_CONTACT_MENTION,
@@ -31,6 +32,7 @@ import {
 	I_USER_MENTION,
 } from "./mentions";
 import { BR_TAG_TO_LINE_BREAK, HTML_ENTITY_TRANSFORMERS } from "./transformers";
+import { I_VIDEO } from "./video";
 
 // Internal Table Node
 
@@ -97,6 +99,9 @@ const internalTransformersWithinTables: Transformer[] = [
 	I_DOCUMENT_MENTION,
 	I_CONTACT_MENTION,
 	I_EQUATION_NODE,
+	I_IMAGE_CONSTRAINED,
+	IMAGE,
+	I_VIDEO,
 	...TRANSFORMERS,
 ];
 
@@ -243,6 +248,8 @@ const externalTransformersWithinTables: Transformer[] = [
 	E_DOCUMENT_MENTION,
 	E_CONTACT_MENTION,
 	E_BLOCK_EQUATION_NODE,
+	IMAGE,
+	I_VIDEO,
 	...HTML_ENTITY_TRANSFORMERS,
 	...TRANSFORMERS,
 ];
@@ -257,7 +264,7 @@ function createTableCell(cellContent: string): TableCellNode {
 	// Export escapes cell newlines as `\n` so rows stay on one line; restore
 	// them so multi-line content (lists, multiple blocks) survives the trip.
 	$convertFromMarkdownString(
-		cellContent.replace(/\\n/g, "\n"),
+		cellContent.replace(/\\n/g, "\n").trim(),
 		externalTransformersWithinTables,
 		cellNode,
 		true,

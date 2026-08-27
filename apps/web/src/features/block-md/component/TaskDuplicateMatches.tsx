@@ -181,7 +181,7 @@ function DismissDuplicateButton(props: { onDismiss: () => void }) {
   return (
     <Button
       depth={2}
-      variant="base"
+      variant="outline"
       size="sm"
       class="h-6 shrink-0 px-2 text-xs"
       onClick={props.onDismiss}
@@ -195,7 +195,7 @@ function DismissAllButton(props: { onDismissAll: () => void }) {
   return (
     <Button
       depth={2}
-      variant="base"
+      variant="outline"
       size="sm"
       class="mt-1 w-fit text-xs"
       onClick={props.onDismissAll}

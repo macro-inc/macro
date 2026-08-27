@@ -342,6 +342,15 @@ impl EmailService for MockEmail {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
+    async fn set_sender_policy(
+        &self,
+        _link: &email::domain::models::Link,
+        _sender_email: &str,
+        _policy: email::domain::models::SenderPolicy,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn delete_email_filter(
         &self,
         _link: &email::domain::models::Link,
@@ -762,6 +771,15 @@ impl EmailService for MockEmailLinkResult {
         _link: &email::domain::models::Link,
         _input: email::domain::models::UpsertEmailFilterInput,
     ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn set_sender_policy(
+        &self,
+        _link: &email::domain::models::Link,
+        _sender_email: &str,
+        _policy: email::domain::models::SenderPolicy,
+    ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 

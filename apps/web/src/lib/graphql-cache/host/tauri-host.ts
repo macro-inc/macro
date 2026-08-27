@@ -9,22 +9,27 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type {
+  AffectedOperationsResult,
+  CachedQueryInstanceWire,
+  CachedQueryVariantWire,
+  CacheRevision,
+  ClaimedMutation,
+  EnqueueOptimisticMutationResult,
+  HydrationResult,
+  MutationClaim,
+  MutationSettlement,
+  ReadRecordsByKeysArgs,
+  ReadRecordsByKeysResult,
+  ReadResult,
+  SearchCacheArgs,
+  SearchCachePage,
+  WriteResult,
+} from '../protocol';
 import {
-  type CachedQueryInstanceWire,
-  type CachedQueryVariantWire,
-  type ClaimedMutation,
-  type EnqueueOptimisticMutationResult,
-  type HydrationResult,
-  type MutationClaim,
-  type MutationSettlement,
-  type ReadRecordsByKeysArgs,
-  type ReadResult,
-  type SearchCacheArgs,
-  type SearchCachePage,
-  type SelectedRecordByKeyWire,
+  parseCacheRevision,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
-  type WriteResult,
 } from '../protocol';
 import type {
   CacheHost,
@@ -49,7 +54,7 @@ type OpsAffectedPayload = {
   keys: string[];
 };
 
-type CacheChangedPayload = Record<string, never>;
+type CacheChangedPayload = { revision: string };
 
 export interface TauriHostOptions {
   scope: string;
@@ -69,7 +74,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   const clientId = crypto.randomUUID();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<() => void>();
+  const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
@@ -127,8 +132,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     });
 
   const unlistenCacheChanges: Promise<UnlistenFn | undefined> =
-    listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, () => {
-      for (const cb of cacheChangeSubscribers) cb();
+    listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, (event) => {
+      const revision = parseCacheRevision(event.payload.revision);
+      for (const cb of cacheChangeSubscribers) cb(revision);
     }).catch((error) => {
       console.warn('graphql cache change listener failed', error);
       return undefined;
@@ -153,6 +159,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   return {
     clientId,
 
+    async currentRevision(): Promise<CacheRevision> {
+      await ready;
+      return parseCacheRevision(
+        await request<string>('graphql_cache_current_revision', {})
+      );
+    },
+
     async readQuery(args: CacheReadArgs): Promise<ReadResult> {
       await ready;
       return await request<ReadResult>('graphql_cache_read', {
@@ -166,10 +179,10 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async readRecordsByKeys(
       args: ReadRecordsByKeysArgs
-    ): Promise<SelectedRecordByKeyWire[]> {
+    ): Promise<ReadRecordsByKeysResult> {
       const keys = validateRecordSelectionKeys(args.keys);
       await ready;
-      return await request<SelectedRecordByKeyWire[]>(
+      const result = await request<ReadRecordsByKeysResult>(
         'graphql_cache_read_records_by_keys',
         {
           document: args.document,
@@ -177,6 +190,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           keys,
         }
       );
+      return { ...result, revision: parseCacheRevision(result.revision) };
     },
 
     async search(args: SearchCacheArgs): Promise<SearchCachePage> {
@@ -342,14 +356,22 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       );
     },
 
-    async invalidate(keys: string[]): Promise<string[]> {
+    async invalidate(keys: string[]): Promise<AffectedOperationsResult> {
       await ready;
-      return await request<string[]>('graphql_cache_invalidate', { keys });
+      const result = await request<AffectedOperationsResult>(
+        'graphql_cache_invalidate',
+        { keys }
+      );
+      return { ...result, revision: parseCacheRevision(result.revision) };
     },
 
-    async deleteRecords(keys: string[]): Promise<string[]> {
+    async deleteRecords(keys: string[]): Promise<AffectedOperationsResult> {
       await ready;
-      return await request<string[]>('graphql_cache_delete_records', { keys });
+      const result = await request<AffectedOperationsResult>(
+        'graphql_cache_delete_records',
+        { keys }
+      );
+      return { ...result, revision: parseCacheRevision(result.revision) };
     },
 
     async teardown(opKey: number): Promise<void> {
@@ -357,9 +379,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       await request('graphql_cache_teardown', { opId: opId(opKey) });
     },
 
-    async clear(): Promise<void> {
+    async clear(): Promise<CacheRevision> {
       await ready;
-      await request('graphql_cache_clear', {});
+      return parseCacheRevision(
+        await request<string>('graphql_cache_clear', {})
+      );
     },
 
     onOpsAffected(cb: (opKeys: number[]) => void): () => void {
@@ -367,9 +391,14 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
-    onCacheChanged(cb: () => void): () => void {
+    onCacheChanged(cb: (revision: CacheRevision) => void): () => void {
       cacheChangeSubscribers.add(cb);
       return () => cacheChangeSubscribers.delete(cb);
+    },
+
+    onCacheGenerationChanged(): () => void {
+      // The native host process owns one engine generation for its lifetime.
+      return () => undefined;
     },
 
     onMutationSettled(

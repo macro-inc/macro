@@ -17,6 +17,11 @@ import {
   prepareEmailBody,
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
+import {
+  endUndoSend,
+  restoreDraftBodyAfterUndo,
+  runUndoSend,
+} from '@block-email/util/undoSend';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -32,6 +37,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_EMAIL_SIGNATURES_FLAG,
   ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  ENABLE_GRAPHQL_SOUP,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
@@ -52,7 +58,6 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import { queryClient } from '@queries/client';
 import {
   useRemoveDraftAttachmentMutation,
   useRemoveForwardedAttachmentMutation,
@@ -62,7 +67,6 @@ import {
   useDeleteDraftMutation,
   useSaveDraftMutation,
 } from '@queries/email/draft';
-import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
   useEmailSignature,
@@ -70,6 +74,7 @@ import {
   usePrimaryEmailLinkId,
 } from '@queries/email/link';
 import {
+  fetchAndCacheThread,
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
@@ -398,45 +403,77 @@ export function EmailCompose(props: EmailComposeProps) {
   const [validationError, setValidationError] =
     createSignal<ComposeValidationError | null>(null);
 
-  const undoSend = async (draftId: string, threadId?: string) => {
-    try {
-      const result = await emailClient.unscheduleMessage(
-        { draftID: draftId },
-        headerLinkId()
-      );
-      // A non-2xx response comes back as an Err Result (it doesn't throw), so
-      // bail before reverting the send appearance in the UI.
-      if (result.isErr()) {
-        toast.failure('Failed to undo send');
-        return;
-      }
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.previews._def,
-      });
-      // Wipe the new thread's cache when its view unmounts (replaceSplit
-      // below) so the next visit fetches fresh data without the sent message.
-      if (threadId) markThreadDraftSaved(threadId);
-      replaceSplit({
-        content: {
-          type: 'component',
-          id: 'email-compose',
-          params: { draftID: draftId },
-          // reattach() strips params by default; keep draftID so the compose
-          // remount can restore the undo snapshot.
-          preserveParams: true,
+  // Everything that follows a successful unschedule: scrub the new thread's
+  // cache, restore the server-side draft, and remount the compose view so it
+  // restores the form from the undo snapshot.
+  const restoreAfterUndoSend = async (
+    draftId: string,
+    threadId: string | undefined,
+    linkId: string | undefined
+  ) => {
+    // Wipe the new thread's cache when its view unmounts (replaceSplit
+    // below) so the next visit fetches fresh data without the sent message.
+    if (threadId && !ENABLE_GRAPHQL_SOUP()) markThreadDraftSaved(threadId);
+
+    // Overwrite the server-side draft with the pre-send content. The
+    // snapshot itself stays for the compose remount below to restore the
+    // form from.
+    const snapshot =
+      undoComposeSnapshot?.draftId === draftId ? undoComposeSnapshot : null;
+    if (snapshot) {
+      await restoreDraftBodyAfterUndo(
+        {
+          bcc: snapshot.recipients.bcc.map(convertEmailRecipientToContactInfo),
+          cc: snapshot.recipients.cc.map(convertEmailRecipientToContactInfo),
+          db_id: draftId,
+          subject: snapshot.subject,
+          to: snapshot.recipients.to.map(convertEmailRecipientToContactInfo),
         },
-      });
-      toast.success('Send cancelled');
-      invalidateSoupEntity(draftId);
-    } catch {
-      toast.failure('Failed to undo send');
+        snapshot.bodyHtml,
+        linkId
+      );
     }
+
+    // GraphQL mode renders threads from the normalized cache, which
+    // markThreadDraftSaved's TanStack cleanup can't reach — refetch through
+    // it (after the draft-body restore) so a revisit doesn't replay the
+    // undone message from cache.
+    if (threadId && ENABLE_GRAPHQL_SOUP()) {
+      void fetchAndCacheThread(threadId);
+    }
+
+    replaceSplit({
+      content: {
+        type: 'component',
+        id: 'email-compose',
+        params: { draftID: draftId },
+        // reattach() strips params by default; keep draftID so the compose
+        // remount can restore the undo snapshot.
+        preserveParams: true,
+      },
+    });
   };
 
+  // `linkId` is the X-Email-Link-Id header value the send itself used, resolved
+  // at send time.
+  const undoSend = (
+    draftId: string,
+    threadId: string | undefined,
+    linkId: string | undefined
+  ) =>
+    runUndoSend({
+      draftId,
+      linkId,
+      onUndone: () => restoreAfterUndoSend(draftId, threadId, linkId),
+    });
+
   const sendMutation = useSendMessageMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, vars) => {
       const draftId = data.message.db_id;
       const threadId = data.message.thread_db_id;
+      // This send opens a fresh undo cycle for the draft id.
+      if (draftId) endUndoSend(draftId);
+      const sendLinkId = vars.linkId;
       const toastId = toast.success('Email sent', {
         actions: draftId
           ? [
@@ -445,7 +482,7 @@ export function EmailCompose(props: EmailComposeProps) {
                 icon: ArrowCounterClockwise,
                 onClick: () => {
                   if (toastId != null) toast.dismiss(toastId);
-                  void undoSend(draftId, threadId ?? undefined);
+                  void undoSend(draftId, threadId ?? undefined, sendLinkId);
                 },
               },
             ]

@@ -3,6 +3,8 @@
 //! This process owns the complete agent-session HTTP API: durable metadata and
 //! log reads as well as operations against the live in-memory transport.
 
+use std::time::Duration;
+
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -18,6 +20,7 @@ use axum::Router;
 use axum::routing::get;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::MacroAuthorizationService;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -41,6 +44,8 @@ where
     Auth: MacroAuthorizationService,
 {
     let app = api_router(read_state, control_state, create_state, gateway_state)
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
+        .merge(Router::new().route("/health", get(health)))
         .layer(macro_cors::cors_layer())
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
@@ -74,7 +79,6 @@ where
         .merge(agent_session_control_router(control_state))
         .merge(agent_session_create_router(create_state));
     Router::new()
-        .route("/health", get(health))
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(read_state))
         .nest("/runtime", runtime_gateway_router(gateway_state))

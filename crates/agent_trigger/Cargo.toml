@@ -5,8 +5,12 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+agent = { path = "../agent" }
 agent_session = { path = "../agent_session" }
+ai_usage = { path = "../ai_usage" }
+anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
+lexical_client = { path = "../lexical_client" }
 channels = { path = "../channels", features = ["ports"] }
 chrono = { workspace = true }
 # Only the domain vocabulary (`Event`, `MacroEvent`, `TopicEvent`). Asking for

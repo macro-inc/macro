@@ -45,7 +45,11 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
         // too tight, so we widen the padding and let the centered column keep
         // comfortable space from the split's edges (content stays left-aligned).
         'flex size-full flex-col overflow-y-auto px-10 pb-8 @4xl:px-2',
-        props.centered && 'items-center text-center',
+        // Centered states can span full-bleed mobile panels (e.g. the entity
+        // load gate), where the panel extends behind the floating top chrome
+        // — inset the content below it like other full-bleed content.
+        props.centered &&
+          'items-center text-center touch:pt-(--mobile-content-inset-top)',
         props.class
       )}
     >

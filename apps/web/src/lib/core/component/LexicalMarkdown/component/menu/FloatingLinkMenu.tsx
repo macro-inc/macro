@@ -13,7 +13,7 @@ import Trash from '@phosphor/link-break.svg';
 import Pencil from '@phosphor/pencil-simple.svg';
 import LinkText from '@phosphor/text-t.svg';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
-import { Button, Tooltip } from '@ui';
+import { Button, Surface } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -93,10 +93,7 @@ export function FloatingLinkMenu(props: {
   // Switch on submit behavior
   const [createMode, setCreateMode] = createSignal(false);
 
-  let [activeInput, setActiveInput] = createSignal<HTMLInputElement>();
-
   let urlInputRef!: HTMLInputElement | undefined;
-  let linkTextInputRef: HTMLInputElement | undefined;
   let menuRef: HTMLDivElement | undefined;
 
   const reset = () => {
@@ -357,7 +354,7 @@ export function FloatingLinkMenu(props: {
       <Show when={linkInfo()?.linkRef || linkInfo()?.selection}>
         <ScopedPortal scope="block">
           <div
-            class="p-2 fixed border border-edge-muted bg-surface top-0 left-0 text-sm z-modal-content rounded-sm shadow-lg min-w-80"
+            class="fixed top-0 left-0 z-modal-content w-80 max-w-[calc(100vw-1rem)] text-sm menu-open-animation"
             use:floatWithElement={floatWithElementProps()}
             use:floatWithSelection={floatWithSelectionProps()}
             use:clickOutside={() => {
@@ -366,7 +363,9 @@ export function FloatingLinkMenu(props: {
             }}
             ref={menuRef}
           >
-            {props.children}
+            <Surface depth={2} class="rounded-xl bg-menu p-1.5 shadow-menu">
+              {props.children}
+            </Surface>
           </div>
         </ScopedPortal>
       </Show>
@@ -380,25 +379,31 @@ export function FloatingLinkMenu(props: {
           {(link) => (
             <ScopedPortal>
               <div
-                class="p-2 absolute top-0 left-0 z-10 border border-edge-muted bg-surface w-80 shadow-lg rounded-sm"
+                class="fixed top-0 left-0 z-modal-content w-80 max-w-[calc(100vw-1rem)]"
                 use:floatWithElement={{
                   element: () => link().linkRef,
                   useBlockBoundary: true,
                 }}
               >
-                <Show
-                  when={unfurledDetails()}
-                  fallback={
-                    <UnfurlLink
-                      unfurled={{
-                        url: link().url ?? '',
-                        title: link().linkText ?? '',
-                      }}
-                    />
-                  }
+                <Surface
+                  depth={2}
+                  class="rounded-xl p-1.5 shadow-lg shadow-drop-shadow"
                 >
-                  {(details) => <UnfurlLink unfurled={details()} />}
-                </Show>
+                  <Show
+                    when={unfurledDetails()}
+                    fallback={
+                      <UnfurlLink
+                        size="sm"
+                        unfurled={{
+                          url: link().url ?? '',
+                          title: link().linkText ?? '',
+                        }}
+                      />
+                    }
+                  >
+                    {(details) => <UnfurlLink size="sm" unfurled={details()} />}
+                  </Show>
+                </Surface>
               </div>
             </ScopedPortal>
           )}
@@ -406,14 +411,9 @@ export function FloatingLinkMenu(props: {
       </Match>
       <Match when={menuOpen()}>
         <MenuWrapper>
-          <div class="flex items-center">
-            <div
-              class="flex items-center rounded grow gap-1 p-1 pr-2"
-              classList={{
-                'bg-active': activeInput() === urlInputRef,
-              }}
-            >
-              <Link class="text-ink-extra-muted size-4" />
+          <div class="flex items-center gap-1.5">
+            <div class="flex h-8 min-w-0 grow items-center gap-2 rounded-md border border-edge-muted bg-surface px-2 focus-within:border-accent">
+              <Link class="size-4 shrink-0 text-ink-extra-muted" />
               <input
                 ref={urlInputRef}
                 tabIndex={2}
@@ -426,23 +426,19 @@ export function FloatingLinkMenu(props: {
                     url: e.currentTarget.value,
                   });
                 }}
-                onFocus={() => {
-                  setActiveInput(urlInputRef);
-                  setIsEditing(true);
-                }}
-                onBlur={() => {
-                  // setActiveInput();
-                }}
+                onFocus={() => setIsEditing(true)}
                 placeholder="https://example.com"
-                class="grow text-ellipsis ease-in-out placeholder-gray-400"
+                class="min-w-0 grow bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
               />
             </div>
-            <div class="relative flex items-center justify-end shrink">
-              <div class="flex ease-in-out" classList={{ hidden: expanded() }}>
+            <div
+              class="relative flex shrink-0 items-center justify-end"
+              classList={{ hidden: expanded() }}
+            >
+              <div class="flex items-center gap-0.5 ease-in-out">
                 <Button
                   onClick={openInNewTab}
-                  class="p-1 hover:bg-hover hover-transition-bg"
-                  variant="active"
+                  variant="accent"
                   size="icon-sm"
                   tooltip="Open in new tab"
                 >
@@ -450,7 +446,6 @@ export function FloatingLinkMenu(props: {
                 </Button>
                 <Button
                   onClick={handleEditClick}
-                  class="p-1 hover:bg-hover hover-transition-bg"
                   variant="ghost"
                   size="icon-sm"
                   tooltip="Edit link"
@@ -459,7 +454,6 @@ export function FloatingLinkMenu(props: {
                 </Button>
                 <Button
                   onClick={copyLink}
-                  class="p-1 hover:bg-hover hover-transition-bg"
                   variant="ghost"
                   size="icon-sm"
                   tooltip="Copy link"
@@ -468,7 +462,6 @@ export function FloatingLinkMenu(props: {
                 </Button>
                 <Button
                   onClick={handleUnlink}
-                  class="p-1 hover:bg-hover hover-transition-bg"
                   variant="ghost"
                   size="icon-sm"
                   tooltip="Remove link"
@@ -479,23 +472,17 @@ export function FloatingLinkMenu(props: {
             </div>
           </div>
           <div
-            class="flex gap-1 ease-in-out overflow-hidden"
+            class="flex overflow-hidden ease-in-out"
             classList={{
               'max-h-0 mt-0': !expanded(),
-              'max-h-24 mt-1': expanded(),
+              'max-h-24 mt-1.5': expanded(),
             }}
           >
-            <div
-              class="flex items-center gap-1 rounded grow p-1 pr-2"
-              classList={{
-                'bg-active': activeInput() === linkTextInputRef,
-              }}
-            >
-              <LinkText class="text-ink-extra-muted size-4" />
+            <div class="flex h-8 min-w-0 grow items-center gap-2 rounded-md border border-edge-muted bg-surface px-2 focus-within:border-accent">
+              <LinkText class="size-4 shrink-0 text-ink-extra-muted" />
               <input
                 tabIndex={3}
                 type="text"
-                ref={linkTextInputRef}
                 value={pendingLinkInfo()?.linkText ?? ''}
                 onInput={(e) => {
                   if (!pendingLinkInfo()) return;
@@ -504,37 +491,28 @@ export function FloatingLinkMenu(props: {
                     linkText: e.currentTarget.value,
                   });
                 }}
-                onFocus={() => {
-                  setActiveInput(linkTextInputRef);
-                  setIsEditing(true);
-                }}
-                onBlur={() => {
-                  setActiveInput();
-                }}
+                onFocus={() => setIsEditing(true)}
                 placeholder="Link text"
-                class="grow text-ellipsis ease-in-out placeholder-gray-400"
+                class="min-w-0 grow bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
               />
             </div>
           </div>
           <div
-            class="flex gap-1 ease-in-out overflow-hidden justify-end"
+            class="flex justify-end overflow-hidden ease-in-out"
             classList={{
               'max-h-0 mt-0': !expanded(),
-              'max-h-24 mt-1': expanded(),
+              'max-h-24 mt-1.5': expanded(),
             }}
           >
-            <Tooltip label="Apply link changes">
-              <Button
-                onClick={handleSubmit}
-                class="focus:ring-failure focus:ring-2 focus:ring-offset-2"
-                variant="base"
-                disabled={
-                  !pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText
-                }
-              >
-                <Check /> Apply
-              </Button>
-            </Tooltip>
+            <Button
+              onClick={handleSubmit}
+              variant="cta"
+              size="sm"
+              tooltip="Apply link changes"
+              disabled={!pendingLinkInfo()?.url && !pendingLinkInfo()?.linkText}
+            >
+              <Check /> Apply
+            </Button>
           </div>
         </MenuWrapper>
       </Match>

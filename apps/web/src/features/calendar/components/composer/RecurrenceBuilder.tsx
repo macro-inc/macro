@@ -137,7 +137,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
                   <Button
                     type="button"
                     variant={
-                      props.value.byDay.includes(code) ? 'active' : 'ghost'
+                      props.value.byDay.includes(code) ? 'accent' : 'ghost'
                     }
                     size="icon-sm"
                     class="rounded-full text-xxs"

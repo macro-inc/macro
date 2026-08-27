@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_events\n        SET title = $2,\n            description = $3,\n            location = $4,\n            status = $5,\n            visibility = $6,\n            transparency = $7,\n            event_type = $28,\n            starts_at = $8,\n            ends_at = $9,\n            start_date = $10,\n            end_date = $11,\n            time_zone = $12,\n            recurrence_lines = $13,\n            organizer_email = $14,\n            organizer_name = $15,\n            creator_email = $26,\n            creator_name = $27,\n            conference_url = $16,\n            conference_provider = $25,\n            sequence = $17,\n            is_read_only = $18,\n            canonical_source_kind = $19,\n            canonical_source_updated_at = $20,\n            reminders_use_default = $23,\n            reminder_overrides = $24,\n            created_at = $21,\n            updated_at = GREATEST(calendar_events.updated_at, $22)\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date",
+        "Text",
+        "TextArray",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Bool",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14ad26177f96192b0004726d0572b02133f44f00fc66b58ba291f8738d7abc0e"
+}

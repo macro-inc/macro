@@ -70,10 +70,12 @@ impl AttachmentProcessor {
         // 2. Calculate hashes required for validation.
         let (sha256_hex, sha256_base64) = Self::calculate_hashes(&data);
 
-        // 3. Get a presigned URL from the Document Storage Service.
-        let (presigned_url, content_type) = self.get_presigned_url(attachment, &sha256_hex).await?;
+        let Some((presigned_url, content_type)) =
+            self.get_presigned_url(attachment, &sha256_hex).await?
+        else {
+            return Ok(());
+        };
 
-        // 4. Upload the data to the presigned URL (e.g., S3).
         self.upload_to_storage(&presigned_url, &content_type, &sha256_base64, data)
             .await?;
 
@@ -113,7 +115,7 @@ impl AttachmentProcessor {
         &self,
         attachment: &AttachmentUploadMetadata,
         sha256_hex: &str,
-    ) -> anyhow::Result<(String, String)> {
+    ) -> anyhow::Result<Option<(String, String)>> {
         // we filter out null filenames in the db query, but set to default just in case
         let file_name = attachment
             .filename
@@ -153,13 +155,11 @@ impl AttachmentProcessor {
             .await
             .context("DSS create_document call failed")?;
 
-        let presigned_url = dss_response
-            .data
-            .document_response
-            .presigned_url
-            .context("DSS response did not include a presigned URL")?;
+        let Some(presigned_url) = dss_response.data.document_response.presigned_url else {
+            return Ok(None);
+        };
 
-        Ok((presigned_url, dss_response.data.content_type))
+        Ok(Some((presigned_url, dss_response.data.content_type)))
     }
 
     /// Performs the final PUT request to upload the file data to cloud storage.

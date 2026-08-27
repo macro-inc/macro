@@ -52,7 +52,11 @@ async fn only_the_first_prompt_is_selected_for_automatic_naming() {
     let session = test_session();
     repo.insert_session(test_agent_session(session));
     let folds = FoldedMessageService::new(repo.clone());
-    let prompt = AgentAction::prompt("fix the flaky tests");
+    let mut prompt = AgentAction::prompt("composed prompt with private context");
+    let AgentAction::Prompt(prompt_action) = &mut prompt else {
+        unreachable!("the test constructed a prompt");
+    };
+    prompt_action.set_name_source("fix the flaky tests");
 
     assert_eq!(
         initial_prompt_for_rename(&folds, session, &prompt).await,
@@ -342,6 +346,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         bot_id: Option<BotId>,
     ) -> Result<ChannelSession> {
         self.repo.find_for_channel(thread_id, bot_id).await
+    }
+
+    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+        self.repo.find_all_for_thread(thread_id).await
     }
 
     async fn set_acp_session_id(
@@ -655,6 +663,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
             action_id: AgentActionId::mint(),
             completed,
             span: tracing::info_span!("test.command"),
+            enqueued_at: tokio::time::Instant::now(),
         })
         .await
         .unwrap();
@@ -729,6 +738,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
             action_id: AgentActionId::mint(),
             completed,
             span: tracing::info_span!("test.command"),
+            enqueued_at: tokio::time::Instant::now(),
         })
         .await
         .unwrap();

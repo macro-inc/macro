@@ -322,8 +322,6 @@ pub struct CreateDocumentRepoArgs {
     pub project_id: Option<uuid::Uuid>,
     /// Team to use when assigning a per-team task number.
     pub team_id: Option<uuid::Uuid>,
-    /// Email attachment to link (internal only).
-    pub email_attachment_id: Option<uuid::Uuid>,
     /// Custom creation timestamp.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Sub type of the document — task or snippet (MD files only).
@@ -337,16 +335,50 @@ pub struct CreateDocumentRepoArgs {
 impl CreateDocumentRepoArgs {
     /// Resolves who created this document for activity recording.
     ///
-    /// Ownership (`user_id`) is unchanged. Email auto-imports default to
-    /// the system principal so they do not appear on the owner's feed.
+    /// Ownership (`user_id`) is unchanged.
     pub fn resolved_attribution(&self) -> Attribution {
-        self.attribution.clone().unwrap_or_else(|| {
-            if self.email_attachment_id.is_some() {
-                Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))
-            } else {
-                Attribution::direct(Actor::new_from_user(self.user_id.clone()))
-            }
+        self.attribution
+            .clone()
+            .unwrap_or_else(|| Attribution::direct(Actor::new_from_user(self.user_id.clone())))
+    }
+}
+
+/// Arguments for importing an email attachment as a document.
+pub struct ImportEmailAttachmentRepoArgs {
+    /// The email attachment being imported.
+    pub email_attachment_id: uuid::Uuid,
+    /// How to create the document when no reusable import exists.
+    pub create: CreateDocumentRepoArgs,
+}
+
+impl ImportEmailAttachmentRepoArgs {
+    /// Resolves who created this import for activity recording.
+    ///
+    /// Unset attribution is the system bot: email import is an internal
+    /// pipeline, not a user-authored create. Ownership (`create.user_id`)
+    /// is unchanged.
+    pub fn resolved_attribution(&self) -> Attribution {
+        self.create.attribution.clone().unwrap_or_else(|| {
+            Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))
         })
+    }
+}
+
+/// Fact returned by the repository for an email-attachment import.
+#[derive(Clone, Debug)]
+pub enum EmailImportRepoOutcome {
+    /// A new `Document` row was inserted and linked to the attachment.
+    Created(DocumentMetadata),
+    /// An existing live email-imported document was linked, or was already linked.
+    Reused(DocumentMetadata),
+}
+
+impl EmailImportRepoOutcome {
+    /// Metadata of the created or reused document.
+    pub fn metadata(&self) -> &DocumentMetadata {
+        match self {
+            Self::Created(metadata) | Self::Reused(metadata) => metadata,
+        }
     }
 }
 

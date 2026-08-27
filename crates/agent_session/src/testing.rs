@@ -116,6 +116,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             workspace: params.workspace,
             sandbox_size: params.sandbox_size,
             acp_session_id: None,
+            external: None,
             status: SessionStatus::default(),
             created_at: now,
             modified_at: now,
@@ -134,6 +135,19 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .ok_or_else(|| {
                 AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
             })
+    }
+
+    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+        let mut found: Vec<AgentSession> = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .values()
+            .filter(|session| session.thread_id == Some(thread_id))
+            .cloned()
+            .collect();
+        found.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(found)
     }
 
     async fn find_for_channel(
@@ -375,6 +389,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         workspace: "/workspace".to_string(),
         sandbox_size: SandboxSize::Default,
         acp_session_id: None,
+        external: None,
         status: SessionStatus::NoMessages,
         created_at: now,
         modified_at: now,

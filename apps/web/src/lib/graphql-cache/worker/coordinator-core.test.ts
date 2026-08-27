@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import { type CoordinatorAction, CoordinatorCore } from './coordinator-core';
 import type { DatabaseActionProof } from './coordinator-protocol';
 
@@ -168,8 +169,16 @@ describe('CoordinatorCore', () => {
     core.beginGracefulDeparture('tab-a', 1);
     expect(core.request('tab-b', clear(5))).toEqual([]);
     expect(core.snapshot().queuedRequestCount).toBe(1);
-    expect(core.enginePush(1, { kind: 'cache-changed' })).toEqual([
-      { kind: 'broadcast-push', push: { kind: 'cache-changed' } },
+    expect(
+      core.enginePush(1, {
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      })
+    ).toEqual([
+      {
+        kind: 'broadcast-push',
+        push: { kind: 'cache-changed', revision: INITIAL_CACHE_REVISION },
+      },
     ]);
     expect(
       core.engineResponse(1, routed.routeId, {
@@ -254,7 +263,12 @@ describe('CoordinatorCore', () => {
         reason: 'unknown-route',
       })
     );
-    expect(core.enginePush(0, { kind: 'cache-changed' })).toContainEqual(
+    expect(
+      core.enginePush(0, {
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      })
+    ).toContainEqual(
       expect.objectContaining({
         kind: 'drop-stale-engine-message',
         reason: 'stale-epoch',

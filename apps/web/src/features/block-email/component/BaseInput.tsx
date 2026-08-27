@@ -26,6 +26,7 @@ import {
   ENABLE_EMAIL_SCHEDULED_SEND,
   ENABLE_EMAIL_SIGNATURES_FLAG,
   ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  ENABLE_GRAPHQL_SOUP,
 } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -70,13 +71,15 @@ import {
   usePrimaryEmailLinkId,
 } from '@queries/email/link';
 import {
+  fetchAndCacheThread,
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
-import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import type { UndoHandle } from '@queries/undo';
 import { emailClient } from '@service-email/client';
 import type {
+  ApiDraftInput,
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
@@ -112,6 +115,11 @@ import {
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
+import {
+  endUndoSend,
+  restoreDraftBodyAfterUndo,
+  runUndoSend,
+} from '../util/undoSend';
 import { SignaturePreview } from './compose/SignaturePreview';
 import {
   type EmailRecipient,
@@ -191,6 +199,15 @@ type UndoReplySnapshot = {
   bodyHtml: string;
   attachments: DraftFormAttachment[];
   includeSignature: boolean;
+  /** Whether the quoted thread was appended in the editor at send time.
+   * Restored so the quoted-text toggle matches the restored body — otherwise
+   * it reads as "not appended" and appends a duplicate quote block. */
+  replyAppended: boolean;
+  /** Draft payload for restoring the server-side draft on undo. The
+   * unscheduled message keeps the sent body (appended reply chain, injected
+   * signature), so undo re-saves the draft with the pre-send content —
+   * bodyHtml above, prepared at undo time, fills body_html. */
+  draftRestore: ApiDraftInput;
 };
 // Set on send, persists across navigation, only consumed by undoSend.
 let undoSendSnapshot: UndoReplySnapshot | null = null;
@@ -258,6 +275,15 @@ export function BaseInput(props: {
   draft?: ApiMessage;
   preloadedBody?: string;
   preloadedHtml?: string;
+  /** Seed identity of the draft this composer mounted from — becomes part of
+   * the form-state cache key so a remount on a newer draft version gets a
+   * freshly seeded form. See EmailInput's seed key. */
+  formSeed?: string;
+  /** Reports the composer gaining local state worth keeping — a first edit
+   * or save (every modification funnels through scheduleDraftSave) or an
+   * undo-send restore. The parent latches the seed key on it so the input
+   * stops remounting on later draft versions. */
+  onEngaged?: () => void;
   sideEffectOnSend?: (newMessageId: ApiDraftOutputDbId | null) => void;
   onMarkDone?: (opts?: {
     silent?: boolean;
@@ -288,6 +314,7 @@ export function BaseInput(props: {
       return getOrInitEmailFormContext({
         type: 'replying_to',
         messageID: replyingTo.db_id,
+        seed: props.formSeed,
       });
     }
 
@@ -297,6 +324,7 @@ export function BaseInput(props: {
       return getOrInitEmailFormContext({
         type: 'draft',
         messageID: props.draft.db_id,
+        seed: props.formSeed,
       });
     }
 
@@ -353,8 +381,12 @@ export function BaseInput(props: {
   // Gmail-style sizing: the composer opens compact and grows to the full cap
   // once the user scrolls the content
   const [composerExpanded, setComposerExpanded] = createSignal(false);
-  // Appended quoted thread starts hidden behind a "⋯" pill (desktop)
-  const [quoteCollapsed, setQuoteCollapsed] = createSignal(true);
+  // Appended quoted thread starts hidden behind a "⋯" pill (desktop). A
+  // draft reloaded with the quote already appended opens expanded instead —
+  // that's how the composer looked when the draft was saved.
+  const [quoteCollapsed, setQuoteCollapsed] = createSignal(
+    !form().replyAppended()
+  );
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -367,15 +399,18 @@ export function BaseInput(props: {
     recipient: EmailRecipient;
     sourceField: 'to' | 'cc' | 'bcc';
   } | null>(null);
+  // A pending undo-send restore that belongs to this thread (inline reply
+  // remount case). It carries a just-undone send. Consumed below.
+  const restoredSnapshot =
+    undoReplySnapshot?.threadId === ctx.thread()?.db_id
+      ? undoReplySnapshot
+      : null;
+
+  // The draft row this composer upserts into: the server draft when one
+  // exists, else the one the undone send restores.
   const [savedDraftId, setSavedDraftId] = createSignal<
     ApiDraftOutputDbId | undefined
-  >(
-    props.draft?.db_id ??
-      (undoReplySnapshot?.threadId === ctx.thread()?.db_id
-        ? undoReplySnapshot?.draftId
-        : undefined) ??
-      undefined
-  );
+  >(props.draft?.db_id ?? restoredSnapshot?.draftId ?? undefined);
 
   const editorConfig = createConfiguredEmailMarkdownEditor({
     namespace: 'email-base-input-markdown',
@@ -410,25 +445,28 @@ export function BaseInput(props: {
   const markdownHandle = editorConfig.buildHandle();
   const editor = () => markdownHandle.lexical;
 
-  // Consume undo-send snapshot if one exists and belongs to this thread (inline reply remount case).
-  // Use bodyHtml as initialHtml for the editor, restore attachments on mount.
-  const restoredSnapshot =
-    undoReplySnapshot?.threadId === ctx.thread()?.db_id
-      ? undoReplySnapshot
-      : null;
+  // Consume the undo-send snapshot so a later composer mount doesn't restore
+  // it again. Use bodyHtml as initialHtml for the editor, restore attachments
+  // on mount.
   if (restoredSnapshot) {
     undoReplySnapshot = null;
     onMount(() => {
+      // Restored content is local state worth keeping — latch the seed.
+      props.onEngaged?.();
       for (const attachment of restoredSnapshot.attachments) {
         form().attachments.add(attachment);
       }
       setIncludeSignature(restoredSnapshot.includeSignature);
+      form().setReplyAppended(restoredSnapshot.replyAppended);
+      // Reopen with the quote visible, as it was when the send was undone.
+      if (restoredSnapshot.replyAppended) setQuoteCollapsed(false);
     });
   }
 
   // Register a callback so stale undoSend closures from a previous mount can
   // restore state into this (the live) component instance.
   restoreUndoCallback = (snapshot, draftId) => {
+    props.onEngaged?.();
     setSavedDraftId(draftId);
     const currentEditor = editor();
     if (currentEditor && snapshot.bodyHtml) {
@@ -438,6 +476,9 @@ export function BaseInput(props: {
       form().attachments.add(attachment);
     }
     setIncludeSignature(snapshot.includeSignature);
+    form().setReplyAppended(snapshot.replyAppended);
+    // Reopen with the quote visible, as it was when the send was undone.
+    if (snapshot.replyAppended) setQuoteCollapsed(false);
   };
   onCleanup(() => {
     restoreUndoCallback = null;
@@ -466,88 +507,112 @@ export function BaseInput(props: {
   let markDoneUndoHandle: UndoHandle | undefined;
   let pendingMarkDoneNavigationTargetId: string | undefined;
 
-  const undoSend = async (draftId: string) => {
-    try {
-      const result = await emailClient.unscheduleMessage(
-        { draftID: draftId },
-        headerLinkId()
-      );
-      // A non-2xx response comes back as an Err Result (it doesn't throw), so
-      // bail before reverting the send appearance in the UI.
-      if (result.isErr()) {
-        toast.failure('Failed to undo send');
-        return;
-      }
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.previews._def,
-      });
-
-      // Remove the sent message from the thread cache so it disappears from the list.
-      const threadId = ctx.thread()?.db_id;
-      if (threadId) {
-        queryClient.setQueryData(
-          emailKeys.threadMessages(threadId).queryKey,
-          (old: any) => {
-            if (!old?.pages) return old;
-            return {
-              ...old,
-              pages: old.pages.map((page: any) => ({
-                ...page,
-                messages: page.messages.filter((m: any) => m.db_id !== draftId),
-              })),
-            };
-          }
-        );
-        // Wipe the thread cache on unmount so the next visit fetches fresh
-        // data (with the restored draft). Deferred to avoid Suspense DOM
-        // detach while the thread is open.
-        markThreadDraftSaved(threadId);
-      }
-
-      const snapshot = undoSendSnapshot;
+  // Everything that follows a successful unschedule: consume the send
+  // snapshot, scrub the sent message from the thread cache, restore the
+  // server-side draft and the composer, and reverse the send's mark-done.
+  const restoreAfterUndoSend = async (
+    draftId: string,
+    linkId: string | undefined
+  ) => {
+    let snapshot: UndoReplySnapshot | null = null;
+    if (undoSendSnapshot?.draftId === draftId) {
+      snapshot = undoSendSnapshot;
       undoSendSnapshot = null;
+    }
 
-      if (snapshot && restoreUndoCallback) {
-        // A live BaseInput is mounted — restore after reactive updates from
-        // setQueryData have settled (form may have re-keyed).
-        const cb = restoreUndoCallback;
-        setTimeout(() => cb(snapshot, draftId), 0);
-      } else if (snapshot) {
-        // No live component (e.g. inline reply was unmounted).
-        // Stash for mount-time restore.
-        undoReplySnapshot = snapshot;
-        props.setShowReply?.(true);
-      }
+    // Remove the sent message from the thread cache so it disappears from
+    // the list. Prefer the snapshot's threadId — captured at send time, it
+    // survives navigation — while the context read covers snapshotless undos
+    // in a still-mounted thread.
+    const threadId = snapshot?.threadId ?? ctx.thread()?.db_id;
+    if (threadId && !ENABLE_GRAPHQL_SOUP()) {
+      queryClient.setQueryData(
+        emailKeys.threadMessages(threadId).queryKey,
+        (old: any) => {
+          if (!old?.pages) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page: any) => ({
+              ...page,
+              messages: page.messages.filter((m: any) => m.db_id !== draftId),
+            })),
+          };
+        }
+      );
+      // Wipe the thread cache on unmount so the next visit fetches fresh
+      // data (with the restored draft). Deferred to avoid Suspense DOM
+      // detach while the thread is open.
+      markThreadDraftSaved(threadId);
+    }
 
-      // Reverse the mark-done this send triggered (restores the soup rows,
-      // notification state, and unarchives), then refresh the thread's soup
-      // item the same way a send does so inbox views show the restored draft.
-      const doneHandle = markDoneUndoHandle;
-      markDoneUndoHandle = undefined;
-      if (doneHandle) {
-        await doneHandle.undo({
-          onError: () => toast.failure('Failed to restore thread to inbox'),
-        });
-      }
-      if (threadId) {
-        void refetchSoupEntity(threadId, 'emailThread');
-      }
+    // Overwrite the server-side draft with the pre-send content before
+    // anything loads it into a composer (thread revisit, refetch, next
+    // session).
+    if (snapshot) {
+      await restoreDraftBodyAfterUndo(
+        snapshot.draftRestore,
+        snapshot.bodyHtml,
+        linkId
+      );
+    }
 
-      toast.success('Send cancelled');
-      invalidateSoupEntity(draftId);
-    } catch {
-      toast.failure('Failed to undo send');
+    // GraphQL mode renders the thread from the normalized cache, which the
+    // setQueryData surgery above can't reach — refetch through it instead.
+    // After the draft-body restore, so the single fetch returns the message
+    // as a draft with the pre-send content, dropping it from the message
+    // list and re-seeding the draft map in one pass.
+    if (threadId && ENABLE_GRAPHQL_SOUP()) {
+      void fetchAndCacheThread(threadId);
+    }
+
+    if (snapshot && restoreUndoCallback) {
+      // A live BaseInput is mounted — restore after reactive updates from
+      // setQueryData have settled (form may have re-keyed).
+      const cb = restoreUndoCallback;
+      setTimeout(() => cb(snapshot, draftId), 0);
+    } else if (snapshot) {
+      // No live component (e.g. inline reply was unmounted).
+      // Stash for mount-time restore.
+      undoReplySnapshot = snapshot;
+      props.setShowReply?.(true);
+    }
+
+    // Reverse the mark-done this send triggered (restores the soup rows,
+    // notification state, and unarchives), then refresh the thread's soup
+    // item the same way a send does so inbox views show the restored draft.
+    const doneHandle = markDoneUndoHandle;
+    markDoneUndoHandle = undefined;
+    if (doneHandle) {
+      await doneHandle.undo({
+        onError: () => toast.failure('Failed to restore thread to inbox'),
+      });
+    }
+    if (threadId) {
+      void refetchSoupEntity(threadId, 'emailThread');
     }
   };
 
+  // linkId is the X-Email-Link-Id header value the send itself used, resolved
+  // at send time. Undo can fire after navigation has disposed this component's
+  // reactive state (mark-done navigates away).
+  const undoSend = (draftId: string, linkId: string | undefined) =>
+    runUndoSend({
+      draftId,
+      linkId,
+      onUndone: () => restoreAfterUndoSend(draftId, linkId),
+    });
+
   const sendMutation = useSendMessageMutation({
-    onSuccess: async ({ message }) => {
+    onSuccess: async ({ message }, vars) => {
       // Cancel the post-reset save scheduled by sendEmail's resetState() and
       // re-enable autosave for any future edits in this BaseInput instance
       // (covers new-message flows where replyingTo never changes).
       if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
       pendingSend = false;
       const draftId = message.db_id;
+      // This send opens a fresh undo cycle for the draft id.
+      if (draftId) endUndoSend(draftId);
+      const sendLinkId = vars.linkId;
       const toastId = toast.success('Email sent', {
         actions: draftId
           ? [
@@ -556,7 +621,7 @@ export function BaseInput(props: {
                 icon: ArrowCounterClockwise,
                 onClick: () => {
                   if (toastId != null) toast.dismiss(toastId);
-                  void undoSend(draftId);
+                  void undoSend(draftId, sendLinkId);
                 },
               },
             ]
@@ -816,21 +881,58 @@ export function BaseInput(props: {
     }
   }
 
+  // The reply target the pending debounced save was scheduled against.
+  // Captured at schedule time — a live interactive context — because the
+  // unmount flush below cannot trust props during disposal.
+  let pendingSaveReplyingToId: string | undefined;
+
   function scheduleDraftSave() {
+    props.onEngaged?.();
+    pendingSaveReplyingToId = untrack(() => props.replyingTo()?.db_id);
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     draftSaveTimer = window.setTimeout(() => {
+      draftSaveTimer = undefined;
       void executeSaveDraft();
     }, DRAFT_DEBOUNCE_MS);
   }
 
   onCleanup(() => {
-    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+    const flushPending = draftSaveTimer !== undefined;
+    if (draftSaveTimer) {
+      window.clearTimeout(draftSaveTimer);
+      draftSaveTimer = undefined;
+    }
+    // A send or discard already owns this composer's state; saving here
+    // would resurrect content those flows just cleared.
+    if (pendingSend || pendingDeletion) return;
+
+    // Flush the pending debounced save so dismissal doesn't drop the last
+    // edits server-side; a failure surfaces through the mutation's toast.
+    if (flushPending) {
+      try {
+        // Only while the reply target still reads as the one the save was
+        // scheduled against — mid-disposal it can come back empty or stale,
+        // and a save without replying_to_id would unlink the server draft
+        // from its message.
+        if (
+          untrack(() => props.replyingTo()?.db_id) === pendingSaveReplyingToId
+        ) {
+          // The mutation's own onError reports the failure (toast + console);
+          // this catch only keeps the post-disposal rejection from surfacing
+          // as unhandled.
+          executeSaveDraft().catch(() => {});
+        }
+      } catch {
+        // Props already disposed; the next mount's autosave persists it.
+      }
+    }
   });
 
   // Persist the draft immediately when the user switches the sending inbox, even
   // without a text edit, so it moves to the new inbox and the choice survives a
   // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
   const persistDraftOnSenderSwitch = (linkId: string) => {
+    props.onEngaged?.();
     form().setSelectedFromLink(linkId);
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     void executeSaveDraft();
@@ -1049,6 +1151,18 @@ export function BaseInput(props: {
           bodyHtml: snapshotHtml,
           attachments: [...form().attachments.list()],
           includeSignature: includeSignature(),
+          replyAppended: form().replyAppended(),
+          draftRestore: {
+            bcc,
+            cc,
+            db_id: snapshotDraftId,
+            provider_id: props.draft?.provider_id,
+            provider_thread_id: currentThread?.provider_id,
+            replying_to_id: props.replyingTo()?.db_id,
+            subject: form().subject(),
+            thread_db_id: currentThread?.db_id,
+            to,
+          },
         };
       }
     }
@@ -1569,7 +1683,7 @@ export function BaseInput(props: {
   );
 
   const AttachButton = (buttonProps?: {
-    variant?: 'ghost' | 'base';
+    variant?: 'ghost' | 'outline';
     class?: string;
   }) => (
     <Button
@@ -1978,7 +2092,7 @@ export function BaseInput(props: {
         <div
           ref={setScrollContainer}
           class={cn(
-            'relative min-h-18 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
+            'relative min-h-8 w-full flex flex-col placeholder:text-ink-placeholder placeholder:opacity-50 px-0 py-1',
             isMobileDrawer()
               ? 'max-h-none flex-1 overflow-visible px-5 pt-6 pb-4'
               : cn(
@@ -2055,55 +2169,6 @@ export function BaseInput(props: {
             refFn={(el) => props.markdownDomRef?.(el)}
             onConnect={handleEditorConnect}
           />
-          <Show when={form().replyAppended() && quoteCollapsed()}>
-            <div class="flex items-center py-1.5">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-                tooltip="Show quoted text"
-                onclick={(e: MouseEvent) => {
-                  e.stopPropagation();
-                  setQuoteCollapsed(false);
-                  setComposerExpanded(true);
-                }}
-              >
-                <DotsThree />
-              </Button>
-            </div>
-          </Show>
-          <Show
-            when={
-              props.replyingTo() &&
-              // The collapse pill above already covers this state
-              !(form().replyAppended() && quoteCollapsed())
-            }
-          >
-            <div
-              class="shrink-0 pt-1"
-              data-corvu-no-drag=""
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Tooltip
-                label={
-                  form().replyAppended()
-                    ? 'Hide quoted text'
-                    : 'Show quoted text'
-                }
-              >
-                <KToggleButton
-                  as={Button}
-                  variant="ghost"
-                  size="icon-sm"
-                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
-                  pressed={form().replyAppended()}
-                  onChange={toggleQuotedText}
-                >
-                  <DotsThree />
-                </KToggleButton>
-              </Tooltip>
-            </div>
-          </Show>
           <Show when={!hasPaidAccess()}>
             <div class="text-ink/50 mt-[1lh]" data-watermark>
               <MacroSignatureButton />
@@ -2116,11 +2181,66 @@ export function BaseInput(props: {
             {(html) => (
               <SignaturePreview
                 html={html()}
-                onDismiss={() => setIncludeSignature(false)}
+                onDismiss={() => {
+                  // Dismissal is composer-local state worth keeping — latch
+                  // the seed so a draft upgrade can't remount it away.
+                  props.onEngaged?.();
+                  setIncludeSignature(false);
+                }}
               />
             )}
           </Show>
         </div>
+        {/* Quoted-text controls live below the scroll area so they stay
+            anchored to the composer bottom instead of scrolling with (and
+            floating over) tall content. */}
+        <Show when={form().replyAppended() && quoteCollapsed()}>
+          <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="rounded-md text-ink-extra-muted hover:text-ink-muted hover:bg-active"
+              tooltip="Show quoted text"
+              onclick={(e: MouseEvent) => {
+                e.stopPropagation();
+                setQuoteCollapsed(false);
+                setComposerExpanded(true);
+              }}
+            >
+              <DotsThree />
+            </Button>
+          </div>
+        </Show>
+        <Show
+          when={
+            props.replyingTo() &&
+            // The collapse pill above already covers this state
+            !(form().replyAppended() && quoteCollapsed())
+          }
+        >
+          <div
+            class="shrink-0 pt-1"
+            data-corvu-no-drag=""
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Tooltip
+              label={
+                form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
+              }
+            >
+              <KToggleButton
+                as={Button}
+                variant="ghost"
+                size="icon-sm"
+                class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
+                pressed={form().replyAppended()}
+                onChange={toggleQuotedText}
+              >
+                <DotsThree />
+              </KToggleButton>
+            </Tooltip>
+          </div>
+        </Show>
         <Show when={!isMobileDrawer()}>
           {/* Below the scroll area so quoted email content can never overlap it */}
           <AttachmentsRow class="px-4" />
@@ -2128,7 +2248,12 @@ export function BaseInput(props: {
             {(html) => (
               <SignaturePreview
                 html={html()}
-                onDismiss={() => setIncludeSignature(false)}
+                onDismiss={() => {
+                  // Dismissal is composer-local state worth keeping — latch
+                  // the seed so a draft upgrade can't remount it away.
+                  props.onEngaged?.();
+                  setIncludeSignature(false);
+                }}
               />
             )}
           </Show>

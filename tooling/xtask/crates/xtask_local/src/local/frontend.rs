@@ -1,5 +1,5 @@
 //! Frontend dev-server orchestration: generate the instance env, wait for the
-//! backend to be reachable through the proxy, then launch `bun run dev` pointed
+//! backend to be reachable through the proxy, then launch Vite pointed
 //! at the proxy origin.
 
 use std::io::Read;
@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
 
-/// The app dir where `bun run dev` runs.
+/// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
 }
@@ -101,7 +101,12 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
 /// and exercises the real browser -> proxy -> collector path. Left unset
 /// otherwise. This overrides the bare-dev defaults in apps/web/.env.local
 /// (Vite lets process env win).
-fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Vec<(String, String)> {
+fn dev_env(
+    instance: &Instance,
+    mode: Mode,
+    traces_enabled: bool,
+    enable_onboarding: bool,
+) -> Vec<(String, String)> {
     let mut env = vec![
         (
             "PORT".to_string(),
@@ -136,6 +141,12 @@ fn dev_env(instance: &Instance, mode: Mode, traces_enabled: bool) -> Vec<(String
         "VITE_ENABLE_BROWSER_OTEL".to_string(),
         traces_enabled.to_string(),
     ));
+    // Existing override: always set so the app's DEV_MODE default (on) does
+    // not win. `just run_local --enable-onboarding` is the opt-in.
+    env.push((
+        "VITE_ENABLE_ONBOARDING_V4".to_string(),
+        enable_onboarding.to_string(),
+    ));
     env
 }
 
@@ -165,11 +176,13 @@ impl Frontend {
     /// moment the processes die. Then reap `bun` and join the drain threads (their
     /// pipes close, so they exit).
     pub fn shutdown(&mut self) {
-        let pgid = self.child.id() as i32;
-        // SAFETY: a plain `kill(2)`; an invalid/already-dead group is a harmless
-        // ESRCH. The negative pid targets the whole process group.
-        unsafe {
-            libc::kill(-pgid, libc::SIGKILL);
+        if matches!(self.child.try_wait(), Ok(None)) {
+            let pgid = self.child.id() as i32;
+            // SAFETY: a plain `kill(2)`; an invalid/already-dead group is a harmless
+            // ESRCH. The negative pid targets the whole process group.
+            unsafe {
+                libc::kill(-pgid, libc::SIGKILL);
+            }
         }
         let _ = self.child.wait();
         for h in self.drains.drain(..) {
@@ -188,6 +201,12 @@ impl Frontend {
     }
 }
 
+impl Drop for Frontend {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
 fn tail_str(s: &str, n: usize) -> String {
     let lines: Vec<&str> = s.lines().collect();
     let start = lines.len().saturating_sub(n);
@@ -203,6 +222,7 @@ pub fn start(
     instance: &Instance,
     mode: Mode,
     traces_enabled: bool,
+    enable_onboarding: bool,
 ) -> Result<Option<Frontend>> {
     if mode.spec().wait_backend_before_frontend {
         wait_backend_ready(stage, instance)?;
@@ -231,12 +251,19 @@ pub fn start(
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
+    let mut prepare = Command::new("bash");
+    prepare.current_dir(app_dir()).args([
+        "-lc",
+        "just ensure-cache-wasm && just ensure-agent-fold-wasm",
+    ]);
+    stage.run("Preparing frontend dependencies", &mut prepare)?;
+
     let mut cmd = Command::new("bun");
     cmd.current_dir(app_dir())
-        .args(["run", "--bun", "dev"])
-        // Run bun (and the Vite child it spawns) in its OWN process group, so
-        // `shutdown` can signal the whole group — killing just `bun` would orphan
-        // Vite and leave the port held. (0 = "new group led by the child".)
+        .arg(repo_root().join("node_modules/vite/bin/vite.js"))
+        .args(["-c", "vite.config.ts"])
+        // Run Vite directly in its OWN process group. Avoiding the `bun run`
+        // package-script wrapper keeps the listener in the process we own.
         .process_group(0)
         // Open-but-empty stdin (piped, held open, never written): vite sees a
         // non-TTY stdin so it won't bind its own keypress shortcuts (no fight
@@ -245,7 +272,7 @@ pub fn start(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in dev_env(instance, mode, traces_enabled) {
+    for (k, v) in dev_env(instance, mode, traces_enabled, enable_onboarding) {
         cmd.env(k, v);
     }
     let mut child = cmd.spawn().context("launching `bun run dev`")?;

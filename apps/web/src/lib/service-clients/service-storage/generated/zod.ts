@@ -806,7 +806,7 @@ export const listOccurrencesResponse = zod
                       isSelf: zod
                         .boolean()
                         .describe(
-                          'Whether this attendee represents the connected account.'
+                          "Whether this attendee is one of the viewing requester's inboxes."
                         ),
                       responseStatus: zod
                         .enum([
@@ -841,10 +841,33 @@ export const listOccurrencesResponse = zod
                 .nullish()
                 .describe('Direct join URL when known.'),
               createdAt: zod.iso.datetime({}).describe('Entity creation time.'),
+              creatorEmail: zod
+                .string()
+                .nullish()
+                .describe(
+                  'Provider-reported creator email. Distinct from the organizer when\nsomeone writes onto a calendar they do not own. Omitted from stored\nprojections when unknown so events ingested before this field still\ncompare equal.'
+                ),
+              creatorName: zod
+                .string()
+                .nullish()
+                .describe('Provider-reported creator display name.'),
               description: zod
                 .string()
                 .nullish()
                 .describe('Optional event body.'),
+              eventType: zod
+                .enum([
+                  'default',
+                  'out_of_office',
+                  'focus_time',
+                  'working_location',
+                  'birthday',
+                  'from_gmail',
+                ])
+                .optional()
+                .describe(
+                  "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation."
+                ),
               icalUid: zod
                 .string()
                 .describe(

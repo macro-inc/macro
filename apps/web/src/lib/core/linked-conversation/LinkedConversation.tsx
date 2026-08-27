@@ -6,6 +6,7 @@ import { Message } from '@channel/Message/Message';
 import type { MessageData } from '@channel/Message/types';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadRail } from '@channel/Thread/ThreadRail';
+import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
@@ -72,15 +73,12 @@ export function LinkedConversation(props: LinkedConversationProps) {
           </Show>
           <Show when={hasReplies()}>
             <div class="relative w-full">
-              <Thread.ReplyRailDecorations
-                isReplying={() => false}
-                firstThreadReplyNewMessage={false}
-              />
+              <Thread.ReplyRailDecorations />
               <Thread.RepliesContainer>
                 <For each={displayReplies()}>
                   {(reply) => (
                     <div class="relative">
-                      <ThreadRail />
+                      <ThreadReplyRail grouped={isGroupedById()[reply.id]} />
                       <ConversationMessage
                         message={reply}
                         grouped={isGroupedById()[reply.id]}

@@ -208,7 +208,11 @@ fn add_localstack_service(
         "localstack".to_string(),
         Some(dct::Service {
             image: Some(LOCALSTACK_IMAGE.to_string()),
-            environment: kv(&[("SERVICES", "sqs,dynamodb,s3")]),
+            // `kms` for the Cursor API key CMK (see `localstack::create_kms_keys`).
+            // LocalStack only starts the services named here, so an omission
+            // shows up as `"kms": "disabled"` on its health endpoint rather
+            // than as a connection error.
+            environment: kv(&[("SERVICES", "sqs,dynamodb,s3,kms")]),
             ports: dct::Ports::Short(vec![format!("{}:4566", instance.port(Port::LocalStack))]),
             networks: net_aliases(&[
                 ("databases", &["localstack"]),

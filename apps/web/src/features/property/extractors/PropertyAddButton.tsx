@@ -1,4 +1,4 @@
-import { cn } from '@ui';
+import { badgeTriggerClasses, cn } from '@ui';
 import { useProperty } from '../core/context';
 
 type Props = {
@@ -34,10 +34,12 @@ export function PropertyAddButton(props: Props) {
       type="button"
       onClick={handleClick}
       disabled={isReadOnly()}
-      class={cn(
-        'text-ink-muted hover:text-ink hover:bg-hover px-2 py-0.5 inline-block shrink-0 rounded-sm cursor-default',
-        props.class
-      )}
+      class={badgeTriggerClasses({
+        variant: 'ghost',
+        size: 'sm',
+        class: cn('size-6 p-0', props.class),
+      })}
+      aria-label={`Add ${ctx.property().displayName}`}
     >
       +
     </button>
