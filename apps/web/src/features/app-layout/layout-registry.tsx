@@ -15,6 +15,16 @@ export type AppLayoutCapabilities = {
    * floating as rounded, shadowed cards over the page.
    */
   flatSplitSeams: boolean;
+  /**
+   * The layout's home is a centered AI chat, ChatGPT-style: the app lands on
+   * the chat workspace instead of the inbox, and the empty workspace centers
+   * its composer mid-screen.
+   */
+  aiChatHome: boolean;
+  /** The inbox pane offers Signal and Noise only, with no All tab. */
+  focusedInboxTabs: boolean;
+  /** Inbox cards collapse to one line: icon, title, timestamp. */
+  singleLineInboxCards: boolean;
   compactSplitHeader: boolean;
   removesSplitContentLeftPadding: boolean;
 };
@@ -52,6 +62,9 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesCalendarWorkspace: false,
       chromeOwnsViewControls: false,
       flatSplitSeams: false,
+      aiChatHome: false,
+      focusedInboxTabs: false,
+      singleLineInboxCards: false,
       compactSplitHeader: false,
       removesSplitContentLeftPadding: false,
     },
@@ -69,6 +82,9 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesCalendarWorkspace: false,
       chromeOwnsViewControls: false,
       flatSplitSeams: false,
+      aiChatHome: false,
+      focusedInboxTabs: false,
+      singleLineInboxCards: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
@@ -90,6 +106,9 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesCalendarWorkspace: true,
       chromeOwnsViewControls: false,
       flatSplitSeams: false,
+      aiChatHome: false,
+      focusedInboxTabs: false,
+      singleLineInboxCards: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
@@ -113,6 +132,9 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesCalendarWorkspace: true,
       chromeOwnsViewControls: true,
       flatSplitSeams: true,
+      aiChatHome: false,
+      focusedInboxTabs: false,
+      singleLineInboxCards: false,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },
@@ -136,6 +158,9 @@ export const APP_LAYOUT_DEFINITIONS = [
       usesCalendarWorkspace: true,
       chromeOwnsViewControls: true,
       flatSplitSeams: true,
+      aiChatHome: true,
+      focusedInboxTabs: true,
+      singleLineInboxCards: true,
       compactSplitHeader: true,
       removesSplitContentLeftPadding: true,
     },

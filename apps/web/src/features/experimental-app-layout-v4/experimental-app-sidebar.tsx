@@ -1,4 +1,4 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { layoutHomePath } from '@app/features/app-layout/split-chrome';
 import { SidebarCreateMenu } from '@app/features/command/sidebar/sidebar-create-menu';
 import { TOP_BAR_SPLIT_DESTINATIONS } from '@app/features/experimental-app-layout-v3/topbar-destinations';
 import { unreadBadgeLabel } from '@app/features/experimental-app-layout-v3/topbar-unread';
@@ -81,7 +81,7 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
             type="button"
             aria-label="Home"
             class="flex size-10 shrink-0 items-center justify-center rounded-full text-accent outline-none hover:bg-ink/5 focus-visible:ring-2 focus-visible:ring-accent/40"
-            {...pressHandlers(() => navigate(DEFAULT_ROUTE))}
+            {...pressHandlers(() => navigate(layoutHomePath()))}
           >
             <LogoIcon class="size-6" />
           </button>

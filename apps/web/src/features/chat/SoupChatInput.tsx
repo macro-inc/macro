@@ -22,7 +22,10 @@ import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createEffect, onMount } from 'solid-js';
 
-function SoupChatInputInner(props: { onChatCreated?: (chatId: string) => void }) {
+function SoupChatInputInner(props: {
+  onChatCreated?: (chatId: string) => void;
+  placement?: 'docked' | 'centered';
+}) {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
@@ -123,10 +126,21 @@ function SoupChatInputInner(props: { onChatCreated?: (chatId: string) => void })
   return (
     <div
       ref={containerRef}
-      class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
-      style={{
-        'background-image': `linear-gradient(transparent, var(--color-surface) 85%)`,
-      }}
+      class={
+        // Centered sits in normal flow (an AI-chat-home hero composer);
+        // docked floats over the bottom edge with the fade that keeps
+        // scrolled content legible behind it.
+        props.placement === 'centered'
+          ? 'flex w-full justify-center pointer-events-none'
+          : 'absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none'
+      }
+      style={
+        props.placement === 'centered'
+          ? undefined
+          : {
+              'background-image': `linear-gradient(transparent, var(--color-surface) 85%)`,
+            }
+      }
     >
       <div class="w-full max-w-3xl">
         <div class="pointer-events-auto">
@@ -146,16 +160,22 @@ function SoupChatInputInner(props: { onChatCreated?: (chatId: string) => void })
   );
 }
 
-export function SoupChatInput(props: {
-  onChatCreated?: (chatId: string) => void;
-} = {}) {
+export function SoupChatInput(
+  props: {
+    onChatCreated?: (chatId: string) => void;
+    placement?: 'docked' | 'centered';
+  } = {}
+) {
   // Seed the selector from the persisted soup draft model so the user's last
   // choice in the new-chat composer is restored. ChatInputProvider falls back
   // to DEFAULT_MODEL when this is undefined.
   const initialModel = getSoupInputStoredModel();
   return (
     <ChatInputProvider model={initialModel}>
-      <SoupChatInputInner onChatCreated={props.onChatCreated} />
+      <SoupChatInputInner
+        onChatCreated={props.onChatCreated}
+        placement={props.placement}
+      />
     </ChatInputProvider>
   );
 }

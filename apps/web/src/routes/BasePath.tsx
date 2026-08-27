@@ -1,4 +1,4 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { layoutHomePath } from '@app/features/app-layout/split-chrome';
 import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkout-completion-listener';
 import { clearLocalAuthSession } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -117,7 +117,7 @@ export function BasePathComponent() {
 
   // Preserve existing query parameters when redirecting
   const queryString = getCurrentQueryString();
-  const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
+  const redirectPath = `${layoutHomePath()}${queryString}`;
 
   return (
     <Switch>

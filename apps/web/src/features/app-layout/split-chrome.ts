@@ -1,5 +1,13 @@
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { activeAppLayout } from './layout-state';
+
+/**
+ * Where "home" is under the active layout: an AI-chat-home layout lands on
+ * the chat workspace, everything else on the default inbox route.
+ */
+export const layoutHomePath = () =>
+  activeAppLayout().capabilities.aiChatHome ? '/chat' : DEFAULT_ROUTE;
 
 /**
  * Whether a split still has to introduce itself. When the app chrome names

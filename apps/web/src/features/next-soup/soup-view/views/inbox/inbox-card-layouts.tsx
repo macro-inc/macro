@@ -73,11 +73,20 @@ import {
 
 const InboxCardRootClassContext = createContext<string>();
 
+/**
+ * Compact cards collapse to one line — icon, title, timestamp — dropping the
+ * preview/body rows. Carried by context so the per-type layouts stay unaware:
+ * BaseCard is the single place a body renders.
+ */
+const InboxCardCompactContext = createContext<boolean>(false);
+
 export interface InboxCardLayoutProps {
   /** The already-derived item to render. */
   item: InboxCardDisplayItem;
   /** Optional root-card styling for alternate list compositions. */
   class?: string;
+  /** One-line rendering: icon, title, timestamp; no body rows. */
+  compact?: boolean;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
@@ -537,6 +546,7 @@ function BaseCard(props: {
   children?: JSX.Element;
 }) {
   const rootClass = useContext(InboxCardRootClassContext);
+  const compact = useContext(InboxCardCompactContext);
   return (
     <InboxCard.Root
       class={props.class ?? rootClass}
@@ -558,9 +568,13 @@ function BaseCard(props: {
           </InboxCard.Title>
         </InboxCard.Header>
 
-        <div class="col-start-2 row-start-2 flex min-w-0 flex-col text-sm">
-          {props.children}
-        </div>
+        {/* Left unrendered (not hidden) when compact, so the body row
+            collapses and its content is never built. */}
+        <Show when={!compact}>
+          <div class="col-start-2 row-start-2 flex min-w-0 flex-col text-sm">
+            {props.children}
+          </div>
+        </Show>
       </InboxCard.Body>
       <InboxTimestamp
         timestamp={props.item.timestamp}
@@ -1629,54 +1643,56 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <InboxCardRootClassContext.Provider value={props.class}>
-      <Switch>
-      <Match when={props.item.entity.type === 'email'}>
-        <EmailCardLayout {...props} />
-      </Match>
-      <Match
-        when={
-          notificationTag() === 'call_started' ||
-          props.item.entity.type === 'call'
-        }
-      >
-        <CallCardLayout {...props} />
-      </Match>
-      <Match when={isGithub()}>
-        <GithubCardLayout {...props} />
-      </Match>
-      <Match
-        when={
-          notificationTag() === 'ai_response' ||
-          props.item.entity.type === 'chat'
-        }
-      >
-        <AiCardLayout {...props} />
-      </Match>
-      <Match when={isTask()}>
-        <TaskCardLayout {...props} />
-      </Match>
-      <Match when={props.item.entity.type === 'document'}>
-        <DocumentCardLayout {...props} />
-      </Match>
-      <Match when={props.item.entity.type === 'channel'}>
-        <ChannelCardLayout {...props} />
-      </Match>
-      <Match when={props.item.entity.type === 'channel_message'}>
-        <ChannelMessageCardLayout {...props} />
-      </Match>
-      <Match when={props.item.entity.type === 'channel_thread'}>
-        <ChannelThreadCardLayout {...props} />
-      </Match>
-      <Match when={props.item.entity.type === 'reminder'}>
-        <ReminderCardLayout {...props} />
-      </Match>
-      <Match when={props.item.entity.type === 'calendar_event'}>
-        <CalendarEventCardLayout {...props} />
-      </Match>
-        <Match when={true}>
-          <GenericCardLayout {...props} />
-        </Match>
-      </Switch>
+      <InboxCardCompactContext.Provider value={props.compact ?? false}>
+        <Switch>
+          <Match when={props.item.entity.type === 'email'}>
+            <EmailCardLayout {...props} />
+          </Match>
+          <Match
+            when={
+              notificationTag() === 'call_started' ||
+              props.item.entity.type === 'call'
+            }
+          >
+            <CallCardLayout {...props} />
+          </Match>
+          <Match when={isGithub()}>
+            <GithubCardLayout {...props} />
+          </Match>
+          <Match
+            when={
+              notificationTag() === 'ai_response' ||
+              props.item.entity.type === 'chat'
+            }
+          >
+            <AiCardLayout {...props} />
+          </Match>
+          <Match when={isTask()}>
+            <TaskCardLayout {...props} />
+          </Match>
+          <Match when={props.item.entity.type === 'document'}>
+            <DocumentCardLayout {...props} />
+          </Match>
+          <Match when={props.item.entity.type === 'channel'}>
+            <ChannelCardLayout {...props} />
+          </Match>
+          <Match when={props.item.entity.type === 'channel_message'}>
+            <ChannelMessageCardLayout {...props} />
+          </Match>
+          <Match when={props.item.entity.type === 'channel_thread'}>
+            <ChannelThreadCardLayout {...props} />
+          </Match>
+          <Match when={props.item.entity.type === 'reminder'}>
+            <ReminderCardLayout {...props} />
+          </Match>
+          <Match when={props.item.entity.type === 'calendar_event'}>
+            <CalendarEventCardLayout {...props} />
+          </Match>
+          <Match when={true}>
+            <GenericCardLayout {...props} />
+          </Match>
+        </Switch>
+      </InboxCardCompactContext.Provider>
     </InboxCardRootClassContext.Provider>
   );
 }

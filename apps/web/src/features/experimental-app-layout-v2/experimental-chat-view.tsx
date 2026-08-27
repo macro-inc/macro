@@ -1,14 +1,15 @@
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { EmptyChatState } from '@core/component/AI/component/message/EmptyChatState';
+import { createBlockInstance } from '@core/orchestrator';
 import { Entity } from '@entity';
 import type { ChatEntity, EntityData } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
 import { unreadFilterFn } from '@entity/utils/filter';
-import { EmptyChatState } from '@core/component/AI/component/message/EmptyChatState';
-import { createBlockInstance } from '@core/orchestrator';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import {
@@ -91,12 +92,7 @@ function ChatHistorySection(props: {
   });
 
   return (
-    <SidePanel.Section
-      id="chat-history"
-      title="Chats"
-      defaultOpen
-      order={0}
-    >
+    <SidePanel.Section id="chat-history" title="Chats" defaultOpen order={0}>
       <div class="flex flex-col gap-3">
         <div class="flex items-center gap-2">
           <div class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-ink/4 px-3 text-ink-muted focus-within:ring-2 focus-within:ring-accent/30">
@@ -158,6 +154,19 @@ export function ChatWorkspaceMain(props: {
             </div>
           )}
         </Match>
+        <Match when={activeAppLayout().capabilities.aiChatHome}>
+          {/* ChatGPT-style home: the composer alone, centered mid-screen and
+              nudged a touch above true center so it reads as seated, not
+              sinking. History lives in the side panel. */}
+          <div class="flex size-full min-h-0 flex-col items-center justify-center px-4 pb-[12vh]">
+            <div class="w-full max-w-3xl">
+              <SoupChatInput
+                placement="centered"
+                onChatCreated={props.onChatCreated}
+              />
+            </div>
+          </div>
+        </Match>
         <Match when={true}>
           <div class="flex size-full min-h-0 flex-col">
             <div class="min-h-0 flex-1 overflow-y-auto pb-28">
@@ -184,9 +193,7 @@ export function ExperimentalChatView() {
     typeof params.id === 'string' && params.id.length > 0
       ? params.id
       : undefined;
-  const chats = createMemo(() =>
-    (chatsQuery.data ?? []).filter(isChatEntity)
-  );
+  const chats = createMemo(() => (chatsQuery.data ?? []).filter(isChatEntity));
   const activeChatBlock = createMemo(() => {
     const id = selectedChatId();
     return id ? createBlockInstance('chat', id) : undefined;
