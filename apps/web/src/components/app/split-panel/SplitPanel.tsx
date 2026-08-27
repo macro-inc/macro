@@ -167,6 +167,7 @@ function BackButton(props: SplitControlButtonProps) {
     'hotkey',
     'label',
     'size',
+    'square',
     'type',
     'variant',
   ]);
@@ -177,19 +178,20 @@ function BackButton(props: SplitControlButtonProps) {
       {...rest}
       type={local.type ?? 'button'}
       variant={local.variant}
-      size={local.size}
+      size={local.size ?? 'sm'}
+      square={local.square ?? true}
       class={cn(
         !local.size && 'p-1',
         'rounded-lg touch:active:bg-transparent',
         local.class
       )}
-      aria-label={local['aria-label'] ?? label()}
+      aria-label={local['aria-label']}
       label={label()}
       hotkey={local.hotkey ?? TOKENS.split.go.back}
       disabled={Boolean(local.disabled) || !controller.canGoBack()}
       onClick={() => controller.goBack()}
     >
-      {local.children ?? <CaretLeftIcon class="h-4" />}
+      {local.children ?? <CaretLeftIcon />}
     </Button>
   );
 }
@@ -204,6 +206,7 @@ function ForwardButton(props: SplitControlButtonProps) {
     'hotkey',
     'label',
     'size',
+    'square',
     'type',
     'variant',
   ]);
@@ -214,15 +217,20 @@ function ForwardButton(props: SplitControlButtonProps) {
       {...rest}
       type={local.type ?? 'button'}
       variant={local.variant}
-      size={local.size}
-      class={cn(!local.size && 'p-1', 'rounded-lg', local.class)}
-      aria-label={local['aria-label'] ?? label()}
+      size={local.size ?? 'sm'}
+      square={local.square ?? true}
+      class={cn(
+        !local.size && 'p-1',
+        'rounded-lg touch:active:bg-transparent',
+        local.class
+      )}
+      aria-label={local['aria-label']}
       label={label()}
       hotkey={local.hotkey ?? TOKENS.split.go.forward}
       disabled={Boolean(local.disabled) || !controller.canGoForward()}
       onClick={() => controller.goForward()}
     >
-      {local.children ?? <CaretRightIcon class="h-4" />}
+      {local.children ?? <CaretRightIcon />}
     </Button>
   );
 }
@@ -237,6 +245,7 @@ function CloseButton(props: SplitControlButtonProps) {
     'hotkey',
     'label',
     'size',
+    'square',
     'type',
     'variant',
   ]);
@@ -248,15 +257,16 @@ function CloseButton(props: SplitControlButtonProps) {
         {...rest}
         type={local.type ?? 'button'}
         variant={local.variant}
-        size={local.size}
-        class={cn(!local.size && 'p-1', 'rounded-lg', local.class)}
-        aria-label={local['aria-label'] ?? label()}
+        size={local.size ?? 'sm'}
+        square={local.square ?? true}
+        class={cn('rounded-lg', local.class)}
+        aria-label={local['aria-label']}
         label={label()}
         hotkey={local.hotkey ?? TOKENS.split.close}
         disabled={Boolean(local.disabled)}
         onClick={() => controller.close()}
       >
-        {local.children ?? <CloseIcon class="size-4" />}
+        {local.children ?? <CloseIcon />}
       </Button>
     </Show>
   );

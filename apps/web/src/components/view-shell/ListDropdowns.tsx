@@ -29,11 +29,12 @@ function SingleSelectDropdown<TId extends string>(
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        variant="base"
-        size="icon-xs"
+        variant="outline"
+        size="md"
+        square
         depth={2}
-        class={cn('size-8 rounded-lg bg-surface', props.class)}
-        aria-label={props.label}
+        class={cn('rounded-lg bg-surface', props.class)}
+        label={props.label}
       >
         {props.icon}
       </Dropdown.Trigger>
@@ -146,15 +147,16 @@ export function ListFilterDropdown<
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        variant="base"
-        size="icon-xs"
+        variant="outline"
+        size="md"
+        square
         depth={2}
         class={cn(
-          'size-8 rounded-lg bg-surface',
+          'rounded-lg bg-surface',
           (props.activeCount ?? 0) > 0 && 'bg-active text-ink',
           props.class
         )}
-        aria-label={props.label ?? 'Filter list'}
+        label={props.label ?? 'Filter list'}
       >
         <FilterIcon />
       </Dropdown.Trigger>
