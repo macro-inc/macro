@@ -1,8 +1,7 @@
-import { createGraphqlGroupedSoupQueries } from '@app/features/next-soup/soup-view/create-graphql-grouped-soup-queries';
-import { createInfiniteQueries } from '@app/features/next-soup/soup-view/create-infinite-queries';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { useQueryClient } from '@queries/client';
+import { createInfiniteQueries } from '@queries/create-infinite-queries';
 import { groupedCacheVersion } from '@queries/soup/cache';
 import {
   groupedSortMethod,
@@ -14,6 +13,7 @@ import type {
   SoupApiItemFilter,
   SoupAstBody,
   SoupAstItemsGroupedPage,
+  SoupAstItemsQueryTransport,
   SoupParams,
 } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
@@ -35,6 +35,7 @@ import {
   on,
   untrack,
 } from 'solid-js';
+import { createGraphqlGroupedSoupQueries } from './graphql/create-graphql-grouped-soup-queries';
 
 type InitialGroupPage = {
   items: SoupAstItemsGroupedPage['items'];
@@ -50,13 +51,12 @@ export type GroupQueryData = {
   entities: EntityData[];
 };
 
-type CreateGroupedSoupQueriesArgs = {
+export type CreateGroupedSoupQueriesArgs = {
   initialPage: Accessor<InitialGroupPage | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
   soupParams: Accessor<SoupParams>;
   soupBody: Accessor<SoupAstBody>;
-  /** True only when the live GraphQL grouped parent query owns the view. */
-  graphqlReactive: Accessor<boolean>;
+  transport: Accessor<SoupAstItemsQueryTransport>;
   queryOptions: Accessor<{
     enabled?: boolean;
     meta?: {
@@ -68,6 +68,7 @@ type CreateGroupedSoupQueriesArgs = {
 };
 
 export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
+  const usesGraphql = () => args.transport() === 'graphql';
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const queryClient = useQueryClient();
 
@@ -123,7 +124,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     const field = args.groupByField();
     const initialGroupedPage = args.initialPage();
 
-    if (args.graphqlReactive() || !field || !initialGroupedPage) {
+    if (usesGraphql() || !field || !initialGroupedPage) {
       return [];
     }
 
@@ -193,15 +194,14 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     groupByField: args.groupByField,
     soupParams: args.soupParams,
     soupBody: args.soupBody,
-    enabled: () =>
-      args.graphqlReactive() && args.queryOptions().enabled === true,
+    enabled: () => usesGraphql() && args.queryOptions().enabled === true,
     itemFilter: () => args.queryOptions().meta?.itemFilter,
   });
 
   const [groupDataVersion, setGroupDataVersion] = createSignal(0);
 
   const list = createMemo(() => {
-    if (args.graphqlReactive()) return graphqlQueries.list();
+    if (usesGraphql()) return graphqlQueries.list();
 
     return queries.list().map((query) => ({
       ...query,
@@ -228,33 +228,38 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     return next;
   });
 
+  const resetRestToInitialPage = (initialGroupedPage = args.initialPage()) => {
+    const field = args.groupByField();
+    if (!field || !initialGroupedPage) return;
+
+    batch(() => {
+      for (const group of initialGroupedPage.groups) {
+        const initialPage = makeInitialPage(initialGroupedPage, group);
+        const queryKey = soupKeys.groupedGroup({
+          params: args.soupParams(),
+          body: args.soupBody(),
+          groupBy: field,
+          groupKey: group.key,
+        }).queryKey;
+
+        queryClient.setQueryData<InfiniteData<GroupQueryPage, string | null>>(
+          queryKey,
+          {
+            pages: [initialPage],
+            pageParams: [null],
+          }
+        );
+      }
+
+      setGroupDataVersion((version) => version + 1);
+    });
+  };
+
   createEffect(
     on(
       () => args.initialPage(),
       (initialGroupedPage) => {
-        const field = args.groupByField();
-        if (args.graphqlReactive() || !field || !initialGroupedPage) return;
-
-        batch(() => {
-          for (const group of initialGroupedPage.groups) {
-            const initialPage = makeInitialPage(initialGroupedPage, group);
-            const queryKey = soupKeys.groupedGroup({
-              params: args.soupParams(),
-              body: args.soupBody(),
-              groupBy: field,
-              groupKey: group.key,
-            }).queryKey;
-
-            queryClient.setQueryData<
-              InfiniteData<GroupQueryPage, string | null>
-            >(queryKey, {
-              pages: [initialPage],
-              pageParams: [null],
-            });
-          }
-
-          setGroupDataVersion((version) => version + 1);
-        });
+        if (!usesGraphql()) resetRestToInitialPage(initialGroupedPage);
       },
       { defer: true }
     )
@@ -265,7 +270,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     list,
     map,
     resetToInitialPage: () => {
-      if (args.graphqlReactive()) graphqlQueries.resetToInitialPage();
+      resetRestToInitialPage();
+      graphqlQueries.resetToInitialPage();
     },
   };
 }

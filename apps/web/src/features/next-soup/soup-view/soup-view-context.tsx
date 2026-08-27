@@ -29,7 +29,6 @@ import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { createGroupedSoupQueries } from '@app/features/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
 import {
   createTagFilter,
@@ -72,6 +71,7 @@ import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
+import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
@@ -1108,8 +1108,7 @@ export const SoupViewContextProvider: FlowComponent<
     groupByField: serverGroupByField,
     soupParams,
     soupBody,
-    graphqlReactive: () =>
-      itemsQuery.transport === 'graphql' && serverGroupByField() !== undefined,
+    transport: () => itemsQuery.transport,
     queryOptions: () => {
       const view = activeListView();
       return {
