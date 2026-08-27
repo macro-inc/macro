@@ -65,6 +65,11 @@ export {
 
 interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
+  indicatorPosition?: 'start' | 'end';
+  unreadIndicator?: 'dot' | 'icon';
+  hideIconWhenRead?: boolean;
+  showTimestampOnHover?: boolean;
+  compact?: boolean;
 }
 
 export function MaybeEntityRow(props: {
@@ -142,6 +147,11 @@ export function ListEntity(props: ListEntityProps) {
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
+    indicatorPosition: props.indicatorPosition,
+    unreadIndicator: props.unreadIndicator,
+    hideIconWhenRead: props.hideIconWhenRead,
+    showTimestampOnHover: props.showTimestampOnHover,
+    compact: props.compact,
     unread: unread(),
     isShared: isShared(),
     hasNotifications: hasNotifications(),

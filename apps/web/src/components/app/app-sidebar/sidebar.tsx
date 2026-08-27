@@ -361,7 +361,7 @@ const registerSidebarHotkeys = ({
   // side-panel state, which is force-hidden (and thus a no-op) on full-cover
   // routes like solo settings, where `AppSidebar` unmounts. Genuinely global
   // shortcuts that must survive those routes live in `GoToHotkeys` instead.
-  registerHotkey({
+  return registerHotkey({
     hotkey: 'cmd+.',
     scopeId: 'global',
     hotkeyToken: TOKENS.global.toggleSidebar,
@@ -1466,10 +1466,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
     }
   });
 
-  registerSidebarHotkeys({
+  const sidebarHotkeyRegistration = registerSidebarHotkeys({
     isSlim: isCollapsed,
     onOpenChange: props.onOpenChange,
   });
+  onCleanup(sidebarHotkeyRegistration.dispose);
 
   // hotkeyScopeNeutralAttribute: focusing anything in the sidebar (rows, the
   // workspace toggle, ...) must not flip the active hotkey scope to 'global',

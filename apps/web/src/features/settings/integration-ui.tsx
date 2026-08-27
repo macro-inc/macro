@@ -21,6 +21,7 @@ export function ConnectAction(props: {
   onClick: () => void;
   disabled?: boolean;
   loading?: boolean;
+  large?: boolean;
   /** 'connect' shows the external-link arrow; the others are plain buttons. */
   variant?: 'connect' | 'neutral' | 'danger';
 }) {
@@ -31,7 +32,8 @@ export function ConnectAction(props: {
       disabled={props.disabled || props.loading}
       onClick={() => props.onClick()}
       class={cn(
-        'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-sm font-medium',
+        'inline-flex items-center gap-1.5 text-sm font-medium',
+        props.large ? 'h-9 rounded-full px-3' : 'h-7 rounded-md px-2',
         'cursor-default transition-colors disabled:opacity-50',
         'outline-none focus-visible:bg-ink/6',
         variant() === 'danger'

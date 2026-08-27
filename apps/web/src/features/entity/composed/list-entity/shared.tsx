@@ -54,6 +54,11 @@ export interface LayoutProps {
   checked?: boolean;
   hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
+  indicatorPosition?: 'start' | 'end';
+  unreadIndicator?: 'dot' | 'icon';
+  hideIconWhenRead?: boolean;
+  showTimestampOnHover?: boolean;
+  compact?: boolean;
   unread: boolean;
   isShared: boolean;
   hasNotifications: boolean;

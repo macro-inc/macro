@@ -86,7 +86,11 @@ function createWideOpenState(
  * Sections are rendered as a Kobalte Accordion in JSX-declared order.
  */
 function Layout(
-  props: ParentProps<{ defaultOpen?: boolean; persistKey?: string }>
+  props: ParentProps<{
+    defaultOpen?: boolean;
+    narrowThreshold?: number;
+    persistKey?: string;
+  }>
 ) {
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
@@ -155,6 +159,7 @@ function Layout(
           isOpen={isOpen}
           setIsOpen={setIsOpen}
           setIsNarrow={setIsNarrow}
+          narrowThreshold={props.narrowThreshold}
         >
           {props.children}
         </SidePanelLayoutInner>
@@ -171,6 +176,7 @@ function SidePanelLayoutInner(
     isOpen: Accessor<boolean>;
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsNarrow: Setter<boolean>;
+    narrowThreshold?: number;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -181,7 +187,9 @@ function SidePanelLayoutInner(
   }
 
   const isNarrow = createMemo(
-    () => isMobile() || zoneCtx.size() < NARROW_THRESHOLD_PX
+    () =>
+      isMobile() ||
+      zoneCtx.size() < (props.narrowThreshold ?? NARROW_THRESHOLD_PX)
   );
   const hasSections = createMemo(() => props.sections().length > 0);
 
@@ -249,35 +257,43 @@ function SidePanelLayoutInner(
   );
 }
 
-function SidePanelHeaderToggle() {
+function Toggle(props: { class?: string } = {}) {
   const ctx = useContext(SidePanelContext);
   if (!ctx) return null;
 
-  const ToggleButton = () => (
-    <Button
-      depth={2}
-      variant="base"
-      size="icon-sm"
-      class={cn(
-        !isTouchDevice() && 'bg-surface',
-        isTouchDevice() &&
-          'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
-        isTouchDevice() && ctx.isOpen() && 'text-accent'
-      )}
-      tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
-      hotkey={TOKENS.block.toggleSidePanel}
-      onClick={() => ctx.toggle()}
-    >
-      <Show
-        when={ctx.isNarrow()}
-        fallback={<SidePanelIcon class={cn(ctx.isOpen() && 'text-accent')} />}
+  return (
+    <Show when={ctx.hasSections()}>
+      <Button
+        depth={2}
+        variant="base"
+        size="icon-sm"
+        class={cn(
+          !isTouchDevice() && 'bg-surface',
+          isTouchDevice() &&
+            'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
+          isTouchDevice() && ctx.isOpen() && 'text-accent',
+          props.class
+        )}
+        tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
+        hotkey={TOKENS.block.toggleSidePanel}
+        onClick={() => ctx.toggle()}
       >
-        <InfoIcon
-          class={cn('size-4', !isMobile() && ctx.isOpen() && 'text-accent')}
-        />
-      </Show>
-    </Button>
+        <Show
+          when={ctx.isNarrow()}
+          fallback={<SidePanelIcon class={cn(ctx.isOpen() && 'text-accent')} />}
+        >
+          <InfoIcon
+            class={cn('size-4', !isMobile() && ctx.isOpen() && 'text-accent')}
+          />
+        </Show>
+      </Button>
+    </Show>
   );
+}
+
+function SidePanelHeaderToggle() {
+  const ctx = useContext(SidePanelContext);
+  if (!ctx) return null;
 
   return (
     <Show when={ctx.hasSections()}>
@@ -289,7 +305,7 @@ function SidePanelHeaderToggle() {
               ctx.isOpen() && 'text-accent'
             )}
           >
-            <ToggleButton />
+            <Toggle />
           </HeaderIsland>
         </div>
       </SplitHeaderRight>
@@ -412,7 +428,7 @@ function useSidePanel() {
 }
 
 /** Indicates whether the current subtree has a SidePanel.Layout ancestor. */
-function _useHasSidePanel(): boolean {
+export function useHasSidePanel(): boolean {
   return useContext(SidePanelContext) !== undefined;
 }
 
@@ -526,6 +542,7 @@ function Card(props: ParentProps) {
 
 export const SidePanel = {
   Layout,
+  Toggle,
   Section,
   Grid,
   Row,

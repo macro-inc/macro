@@ -21,6 +21,7 @@ type LayoutUrlSyncEnvironment = {
   navigate: Navigator;
   search: Accessor<string>;
   hash: Accessor<string>;
+  serializePath?: (segments: string[]) => string;
 };
 
 function sameSplitContentIdentity(a: SplitContent, b: SplitContent) {
@@ -143,9 +144,10 @@ export function createLayoutUrlSync(
     }
     const search = query.toString();
     const hash = pathChanged ? '' : environment.hash();
-    const nextUrl = `/${nextState.segments.join('/')}${
-      search ? `?${search}` : ''
-    }${hash}`;
+    const pathname = environment.serializePath
+      ? environment.serializePath(nextState.segments)
+      : `/${nextState.segments.join('/')}`;
+    const nextUrl = `${pathname}${search ? `?${search}` : ''}${hash}`;
 
     environment.navigate(nextUrl, { replace });
   };

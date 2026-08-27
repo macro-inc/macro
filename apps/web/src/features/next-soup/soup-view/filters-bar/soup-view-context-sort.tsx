@@ -13,19 +13,28 @@ import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { createMemo, createSignal, Match, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  onCleanup,
+  Switch,
+} from 'solid-js';
 
 type SortOpenProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  hideLabel?: boolean;
 };
 
-export const SoupViewContextSort = () => {
+export const SoupViewContextSort = (
+  props: { hideLabel?: boolean } = {}
+) => {
   const panel = useSplitPanelOrThrow();
 
   const [sortOpen, setSortOpen] = createSignal(false);
 
-  registerHotkey({
+  const sortHotkeyRegistration = registerHotkey({
     hotkey: 's',
     scopeId: panel.splitHotkeyScope,
     description: 'Open sort menu',
@@ -35,6 +44,8 @@ export const SoupViewContextSort = () => {
       return true;
     },
   });
+
+  onCleanup(sortHotkeyRegistration.dispose);
 
   const component = createMemo(() => {
     const content = panel.handle.content();
@@ -51,6 +62,7 @@ export const SoupViewContextSort = () => {
   const openProps = (): SortOpenProps => ({
     open: sortOpen(),
     onOpenChange: setSortOpen,
+    hideLabel: props.hideLabel,
   });
 
   return (
@@ -97,8 +109,10 @@ const useSortDropdown = (options: SortOption[] = DEFAULT_SORT_OPTIONS) => {
   return { value, onChange, options };
 };
 
-const InboxSort = (props: SortOpenProps) => {
-  const sort = useSortDropdown();
+const ViewSort = (
+  props: SortOpenProps & { options?: SortOption[] }
+) => {
+  const sort = useSortDropdown(props.options);
 
   return (
     <SortDropdown
@@ -107,90 +121,23 @@ const InboxSort = (props: SortOpenProps) => {
       options={sort.options}
       open={props.open}
       onOpenChange={props.onOpenChange}
+      hideLabel={props.hideLabel}
     />
   );
 };
 
-const AgentsSort = (props: SortOpenProps) => {
-  const sort = useSortDropdown();
-
-  return (
-    <SortDropdown
-      value={sort.value}
-      onChange={sort.onChange}
-      options={sort.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
-
-const MailSort = (props: SortOpenProps) => {
-  const sort = useSortDropdown(EMAIL_SORT_OPTIONS);
-
-  return (
-    <SortDropdown
-      value={sort.value}
-      onChange={sort.onChange}
-      options={sort.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
-
-const DocumentsSort = (props: SortOpenProps) => {
-  const sort = useSortDropdown(DOCUMENT_SORT_OPTIONS);
-
-  return (
-    <SortDropdown
-      value={sort.value}
-      onChange={sort.onChange}
-      options={sort.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
-
-const TasksSort = (props: SortOpenProps) => {
-  const sort = useSortDropdown(TASK_SORT_OPTIONS);
-
-  return (
-    <SortDropdown
-      value={sort.value}
-      onChange={sort.onChange}
-      options={sort.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
-
-const ChannelsSort = (props: SortOpenProps) => {
-  const sort = useSortDropdown(CHANNEL_SORT_OPTIONS);
-
-  return (
-    <SortDropdown
-      value={sort.value}
-      onChange={sort.onChange}
-      options={sort.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
-
-const FilesSort = (props: SortOpenProps) => {
-  const sort = useSortDropdown();
-
-  return (
-    <SortDropdown
-      value={sort.value}
-      onChange={sort.onChange}
-      options={sort.options}
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    />
-  );
-};
+const InboxSort = (props: SortOpenProps) => <ViewSort {...props} />;
+const AgentsSort = (props: SortOpenProps) => <ViewSort {...props} />;
+const MailSort = (props: SortOpenProps) => (
+  <ViewSort {...props} options={EMAIL_SORT_OPTIONS} />
+);
+const DocumentsSort = (props: SortOpenProps) => (
+  <ViewSort {...props} options={DOCUMENT_SORT_OPTIONS} />
+);
+const TasksSort = (props: SortOpenProps) => (
+  <ViewSort {...props} options={TASK_SORT_OPTIONS} />
+);
+const ChannelsSort = (props: SortOpenProps) => (
+  <ViewSort {...props} options={CHANNEL_SORT_OPTIONS} />
+);
+const FilesSort = (props: SortOpenProps) => <ViewSort {...props} />;

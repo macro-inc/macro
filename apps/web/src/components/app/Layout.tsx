@@ -18,6 +18,8 @@ import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
 import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { activeAppLayoutSurfaces } from '@app/features/app-layout/layout-surfaces';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import {
   AddInboxDialog,
   isAddInboxDialogOpen,
@@ -78,6 +80,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
@@ -124,7 +127,10 @@ export function Layout(props: RouteSectionProps) {
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
       <SidebarCollapseContext.Provider
         value={{
-          isCollapsed: () => sidebarVisible() && sidebarState() === 'slim',
+          isCollapsed: () =>
+            sidebarVisible() &&
+            !activeAppLayout().capabilities.hidesGlobalSidebar &&
+            sidebarState() === 'slim',
           expand: () => setSidebarState('expanded'),
         }}
       >
@@ -350,12 +356,17 @@ function LayoutInner(props: RouteSectionProps) {
     createSignal(false);
   const callCtx = useCallContextOptional();
   const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
+  const globalSidebarVisible = createMemo(
+    () =>
+      isSidebarVisible() &&
+      !activeAppLayout().capabilities.hidesGlobalSidebar
+  );
   const sidebarCollapsed = createMemo(
-    () => isSidebarVisible() && sidebarState() === 'slim'
+    () => globalSidebarVisible() && sidebarState() === 'slim'
   );
   const activeCallWidgetVisible = createMemo(
     () =>
-      isSidebarVisible() &&
+      globalSidebarVisible() &&
       sidebarState() === 'slim' &&
       !!callCtx?.isInCall() &&
       !callCtx?.isCallPage()
@@ -486,24 +497,46 @@ function LayoutInner(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="max-h-full grow flex">
+      <div class="max-h-full min-h-0 grow flex">
         {/* The provider spans the sidebar too so its favorites can register
             sortables with the same drag-drop context as the entity drags. */}
         <ItemDndProvider>
-          <Show when={isSidebarVisible()}>
-            <AppSidebar
-              sidebarState={sidebarState()}
-              overlayOpen={sidebarOverlayOpen()}
-              onOverlayOpenChange={setSidebarOverlayOpenGuarded}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
-                  return;
-                }
+          <Show when={globalSidebarVisible()}>
+            <Show
+              when={activeAppLayoutSurfaces()?.AppSidebar}
+              fallback={
+                <AppSidebar
+                  sidebarState={sidebarState()}
+                  overlayOpen={sidebarOverlayOpen()}
+                  onOverlayOpenChange={setSidebarOverlayOpenGuarded}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
+                      return;
+                    }
 
-                setSidebarState('expanded');
-              }}
-            />
+                    setSidebarState('expanded');
+                  }}
+                />
+              }
+            >
+              {(AppSidebarSurface) => (
+                <Dynamic
+                  component={AppSidebarSurface()}
+                  sidebarState={sidebarState()}
+                  overlayOpen={sidebarOverlayOpen()}
+                  onOverlayOpenChange={setSidebarOverlayOpenGuarded}
+                  onOpenChange={(open: boolean) => {
+                    if (!open) {
+                      setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
+                      return;
+                    }
+
+                    setSidebarState('expanded');
+                  }}
+                />
+              )}
+            </Show>
           </Show>
           <Show when={sidebarCollapsed()}>
             <div
@@ -519,14 +552,48 @@ function LayoutInner(props: RouteSectionProps) {
             />
           </Show>
 
-          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
-            {props.children}
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col font-sans text-ink caret-accent">
+            <Show
+              when={
+                isSidebarVisible() &&
+                activeAppLayoutSurfaces()?.GlobalTopBar
+              }
+            >
+              {(GlobalTopBarSurface) => (
+                <Dynamic
+                  component={GlobalTopBarSurface()}
+                  sidebarState={sidebarState()}
+                  overlayOpen={sidebarOverlayOpen()}
+                  onOverlayOpenChange={setSidebarOverlayOpenGuarded}
+                  onOpenChange={(open: boolean) => {
+                    if (!open) {
+                      setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
+                      return;
+                    }
+                    setSidebarState('expanded');
+                  }}
+                />
+              )}
+            </Show>
+            <div class="min-h-0 min-w-0 flex-1">
+              {props.children}
+            </div>
+            <Show
+              when={
+                isSidebarVisible() &&
+                activeAppLayoutSurfaces()?.GlobalBottomBar
+              }
+            >
+              {(GlobalBottomBarSurface) => (
+                <Dynamic component={GlobalBottomBarSurface()} />
+              )}
+            </Show>
           </div>
         </ItemDndProvider>
       </div>
       <CollapsedSidebarIncomingCallWidget
         visible={
-          isSidebarVisible() &&
+          globalSidebarVisible() &&
           sidebarState() === 'slim' &&
           incomingCallWidgetVisible()
         }

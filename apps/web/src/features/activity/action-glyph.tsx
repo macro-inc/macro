@@ -25,15 +25,30 @@ const GLYPHS = {
   GraphqlActivityUnknownAction: PencilSimple,
 } as const;
 
+type ActivityActionType = ActivityEvent['action']['__typename'];
+
+/** A small icon for an activity action typename. */
+export function ActionTypeGlyph(props: {
+  actionType: ActivityActionType;
+  class?: string;
+}) {
+  return (
+    <Dynamic
+      component={GLYPHS[props.actionType]}
+      class={props.class ?? 'size-3'}
+    />
+  );
+}
+
 /** A small icon for the kind of action, for glyph-led activity rows. */
 export function ActionGlyph(props: {
   action: ActivityEvent['action'];
   class?: string;
 }) {
   return (
-    <Dynamic
-      component={GLYPHS[props.action.__typename]}
-      class={props.class ?? 'size-3'}
+    <ActionTypeGlyph
+      actionType={props.action.__typename}
+      class={props.class}
     />
   );
 }

@@ -5,7 +5,7 @@ import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
-function CalendarMiniCalendarSidePanelSection() {
+export function CalendarMiniCalendarControl() {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
   const initialDate = new Date();
@@ -42,24 +42,30 @@ function CalendarMiniCalendarSidePanelSection() {
   createEffect(on(currentDate, setFocusedDay));
 
   return (
+    <MiniCalendar
+      required
+      fixedWeeks
+      startOfWeek={calendarView.displaySettings.weekStartsOn}
+      value={currentDate()}
+      month={currentDate()}
+      focusedDay={focusedDay()}
+      highlightedRange={highlightedRange()}
+      onMonthChange={navigateMonth}
+      onFocusedDayChange={setFocusedDay}
+      onValueChange={selectDate}
+    />
+  );
+}
+
+function CalendarMiniCalendarSidePanelSection() {
+  return (
     <SidePanel.Section
       id="calendar-mini-calendar"
       title="Calendar"
       order={10}
       defaultOpen
     >
-      <MiniCalendar
-        required
-        fixedWeeks
-        startOfWeek={calendarView.displaySettings.weekStartsOn}
-        value={currentDate()}
-        month={currentDate()}
-        focusedDay={focusedDay()}
-        highlightedRange={highlightedRange()}
-        onMonthChange={navigateMonth}
-        onFocusedDayChange={setFocusedDay}
-        onValueChange={selectDate}
-      />
+      <CalendarMiniCalendarControl />
     </SidePanel.Section>
   );
 }

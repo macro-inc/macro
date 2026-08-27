@@ -1,3 +1,4 @@
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
   isSidebarVisible,
@@ -44,6 +45,7 @@ import { createSplitFocusTracker } from './splitFocusTracker';
 type SplitLayoutContainerProps = {
   pairs: string[];
   setManager: Setter<SplitManager | undefined>;
+  serializePath?: (segments: string[]) => string;
 };
 
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
@@ -109,6 +111,8 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       navigate,
       search: () => location.search,
       hash: () => location.hash,
+      serializePath: (segments) =>
+        props.serializePath?.(segments) ?? `/${segments.join('/')}`,
     }
   );
   createSplitFocusTracker({ splitManager, panelRefs, splits });
@@ -117,7 +121,15 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
       <div
         class={cn('size-full p-2 touch:p-0', {
-          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
+          'pl-0':
+            isSidebarVisible() &&
+            !activeAppLayout().capabilities.hidesGlobalSidebar &&
+            (!sidebar.isCollapsed() ||
+              activeAppLayout().capabilities.removesSplitContentLeftPadding),
+          'pt-0':
+            activeAppLayout().capabilities.removesSplitContentTopPadding,
+          'pb-0':
+            activeAppLayout().capabilities.removesSplitContentBottomPadding,
         })}
       >
         <Show

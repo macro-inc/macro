@@ -9,6 +9,11 @@ import {
   createMenuOpen,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
+import { APP_LAYOUT_DEFINITIONS } from '@app/features/app-layout/layout-registry';
+import {
+  effectiveAppLayoutId,
+  selectAppLayout,
+} from '@app/features/app-layout/layout-state';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -41,6 +46,7 @@ import {
   openFolderPicker,
 } from '@core/util/upload';
 import IconGear from '@icon/macro-gear.svg';
+import GridIcon from '@phosphor/grid-four.svg';
 import Plus from '@phosphor/plus.svg';
 import LogoutIcon from '@phosphor/sign-out.svg';
 import Upload from '@phosphor/upload.svg';
@@ -226,6 +232,32 @@ export default function GlobalShortcuts() {
     },
     runWithInputFocused: true,
   });
+
+  for (const layout of APP_LAYOUT_DEFINITIONS) {
+    registerHotkey({
+      scopeId: 'global',
+      description: `Use ${layout.label} app layout`,
+      keyDownHandler: () => {
+        selectAppLayout(layout.id);
+        toast.success(`${layout.label} app layout enabled`);
+        return true;
+      },
+      icon: GridIcon,
+      keywords: [
+        'sidebar',
+        'layout',
+        'views',
+        'classic',
+        'old',
+        'new',
+        'experiment',
+        layout.label,
+      ],
+      displayPriority: 9,
+      hide: () => effectiveAppLayoutId() === layout.id,
+      runWithInputFocused: true,
+    });
+  }
 
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,

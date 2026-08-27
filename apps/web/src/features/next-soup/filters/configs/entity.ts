@@ -2,6 +2,7 @@ import { getEntityProjectId } from '@entity';
 import { defineQueryFilters } from '../filter-store/compile';
 import {
   activeAgentFilter as activeAgentPredicate,
+  allChannelsFilter as allChannelsPredicate,
   callsFilter as callsPredicate,
   channelsFilter as channelsPredicate,
   crmCompanyActiveFilter as crmCompanyActivePredicate,
@@ -21,6 +22,12 @@ import { config, isAgent, isNotTask, NIL_UUID } from './base';
 export const channelsFilter = config({
   id: 'channels',
   predicate: channelsPredicate,
+  query: { exclude: { channelId: [NIL_UUID] } },
+});
+
+export const allChannelsFilter = config({
+  id: 'all-channels',
+  predicate: allChannelsPredicate,
   query: { exclude: { channelId: [NIL_UUID] } },
 });
 

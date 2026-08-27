@@ -1,7 +1,7 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { SidePanel } from '@components/app/side-panel';
+import { SidePanel, useHasSidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -17,6 +17,16 @@ export default function ChatBlock() {
   const blockId = useBlockId();
   const notificationSource = useGlobalNotificationSource();
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
+  const hasParentSidePanel = useHasSidePanel();
+
+  const ChatContent = () => (
+    <>
+      <ChatSidePanelSections />
+      <Show when={chatBlockData()}>
+        {(data) => <Chat data={data()} />}
+      </Show>
+    </>
+  );
 
   return (
     <DocumentBlockContainer title={name()}>
@@ -26,12 +36,16 @@ export default function ChatBlock() {
           entity={{ type: 'chat', id: blockId }}
         />
         <ModalsProvider>
-          <SidePanel.Layout defaultOpen={false}>
-            <ChatSidePanelSections />
-            <Show when={chatBlockData()}>
-              {(data) => <Chat data={data()} />}
-            </Show>
-          </SidePanel.Layout>
+          <Show
+            when={hasParentSidePanel}
+            fallback={
+              <SidePanel.Layout defaultOpen={false}>
+                <ChatContent />
+              </SidePanel.Layout>
+            }
+          >
+            <ChatContent />
+          </Show>
         </ModalsProvider>
       </div>
     </DocumentBlockContainer>

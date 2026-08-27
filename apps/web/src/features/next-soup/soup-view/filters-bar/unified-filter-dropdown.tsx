@@ -891,7 +891,7 @@ export const UnifiedFilterDropdown = (
     return tagFilter.hasTags() && !!view && TAGGABLE_LIST_VIEWS.has(view);
   };
 
-  registerHotkey({
+  const filterHotkeyRegistration = registerHotkey({
     hotkey: 'f',
     scopeId: panel.splitHotkeyScope,
     description: 'Open filter menu',
@@ -901,6 +901,8 @@ export const UnifiedFilterDropdown = (
       return true;
     },
   });
+
+  onCleanup(filterHotkeyRegistration.dispose);
 
   // Capture anchor position when menu opens to prevent jumping when chips are added
   const [anchorRect, setAnchorRect] = createSignal<DOMRect | null>(null);

@@ -9,6 +9,11 @@ import {
   useMaybeEmailContext,
 } from '@block-email/component/EmailContext';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import {
+  registerEmailDraftDeleteHandler,
+  trackEmailDraft,
+  untrackEmailDraft,
+} from '@block-email/draft-tracker';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { plainTextToHtml } from '@block-email/util/plainTextToHtml';
 import {
@@ -91,6 +96,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   Show,
   useContext,
 } from 'solid-js';
@@ -331,17 +337,29 @@ export function EmailCompose(props: EmailComposeProps) {
     }
   }
 
+  let draftSaveQueue = Promise.resolve();
+  let suppressDraftSaves = false;
+  const runDraftSave = () => {
+    if (suppressDraftSaves) return Promise.resolve(undefined);
+    const save = draftSaveQueue.then(() => executeSaveDraft());
+    draftSaveQueue = save.then(
+      () => undefined,
+      () => undefined
+    );
+    return save;
+  };
+
   // Edits since the composer opened; an untouched existing draft can be
   // left without the keep-or-delete prompt.
   const [draftDirty, setDraftDirty] = createSignal(false);
 
   const scheduleDraftSave = debounce(() => {
-    void executeSaveDraft();
+    if (!suppressDraftSaves) void runDraftSave();
   }, DRAFT_DEBOUNCE_MS);
 
   const markDirtyAndScheduleSave = () => {
     setDraftDirty(true);
-    scheduleDraftSave();
+    if (!suppressDraftSaves) scheduleDraftSave();
   };
 
   // --- Attachment handling ---
@@ -506,6 +524,8 @@ export function EmailCompose(props: EmailComposeProps) {
     onSuccess: (data, vars) => {
       const draftId = data.message.db_id;
       const threadId = data.message.thread_db_id;
+      const trackedDraftId = draftId ?? currentDraftID();
+      if (trackedDraftId) untrackEmailDraft(trackedDraftId);
       // This send opens a fresh undo cycle for the draft id.
       if (draftId) endUndoSend(draftId);
       const sendLinkId = vars.linkId;
@@ -584,7 +604,7 @@ export function EmailCompose(props: EmailComposeProps) {
     // draft id to snapshot and restore (the send reuses the draft's db_id).
     scheduleDraftSave.clear();
     try {
-      await executeSaveDraft();
+      await runDraftSave();
     } catch {
       // Draft save is best-effort; the send still works without one.
     }
@@ -677,7 +697,7 @@ export function EmailCompose(props: EmailComposeProps) {
     form.setSendTime(date);
 
     if (date) {
-      const draftID = currentDraft ?? (await executeSaveDraft());
+      const draftID = currentDraft ?? (await runDraftSave());
       if (!draftID) {
         toast.failure('Failed to schedule message', {
           subtext: 'Draft required',
@@ -730,15 +750,23 @@ export function EmailCompose(props: EmailComposeProps) {
   };
 
   const deleteDraftAndReset = async () => {
+    scheduleDraftSave.clear();
+    suppressDraftSaves = true;
+    await draftSaveQueue;
     const draftId = currentDraftID();
-    if (draftId) {
-      await deleteDraftMutation.mutateAsync({
-        draftId,
-        threadId: currentThreadID(),
-        linkId: headerLinkId(),
-      });
+    try {
+      if (draftId) {
+        await deleteDraftMutation.mutateAsync({
+          draftId,
+          threadId: currentThreadID(),
+          linkId: headerLinkId(),
+        });
+        untrackEmailDraft(draftId);
+      }
+      resetState();
+    } finally {
+      suppressDraftSaves = false;
     }
-    resetState();
   };
 
   // --- Derived state ---
@@ -858,7 +886,7 @@ export function EmailCompose(props: EmailComposeProps) {
       form.setSelectedFromLink(linkId);
       setDraftDirty(true);
       scheduleDraftSave.clear();
-      void executeSaveDraft();
+      void runDraftSave();
     },
     hasPaidAccess,
 
@@ -883,6 +911,34 @@ export function EmailCompose(props: EmailComposeProps) {
 
   const panel = useContext(SplitPanelContext);
   const [draftBackMenuOpen, setDraftBackMenuOpen] = createSignal(false);
+
+  createEffect(() => {
+    const draftId = currentDraftID();
+    if (!draftId) return;
+    const unregister = registerEmailDraftDeleteHandler(draftId, async () => {
+      scheduleDraftSave.clear();
+      await deleteDraftAndReset();
+    });
+    onCleanup(unregister);
+  });
+
+  createEffect(() => {
+    const updateMeta = panel?.handle.updateMeta as
+      | ((data: { draftId?: string; hasDraft: boolean }) => void)
+      | undefined;
+    const draftId = currentDraftID();
+    updateMeta?.({ draftId, hasDraft: draftId !== undefined });
+    if (draftId) {
+      trackEmailDraft(
+        draftId,
+        ctxValue.subject() || previewName?.() || 'Draft email',
+        {
+          threadId: currentThreadID(),
+          linkId: headerLinkId(),
+        }
+      );
+    }
+  });
 
   if (isMobile()) {
     // Backing out of a compose that has a draft asks whether to keep it.

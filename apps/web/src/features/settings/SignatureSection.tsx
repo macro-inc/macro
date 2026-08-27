@@ -6,50 +6,26 @@ import { useEmailSignature } from '@queries/email/link';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import { SIGNATURE_IMAGES_UNRESOLVED_CODE } from '@service-email/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { Button, ToggleSwitch } from '@ui';
+import { Button, cn, ToggleSwitch } from '@ui';
 import { createSignal, lazy, Show, Suspense } from 'solid-js';
 
-// Quill (and its CSS) is heavy and only needed once a signature section is
-// expanded, so load it as its own chunk on demand instead of in the settings
+// Quill (and its CSS) is heavy and only needed once the signature dialog is
+// opened, so load it as its own chunk on demand instead of in the settings
 // bundle.
 const SignatureEditor = lazy(() => import('./SignatureEditor'));
 
-// Unsaved signature drafts and per-inbox expanded state, keyed by link id and
-// held at module scope. The settings panel unmounts the Connected Accounts tab
-// when you switch away (and the links query can recreate an inbox row on
-// refetch); keeping this outside that subtree means tabbing away and back no
-// longer closes the editor or discards unsaved edits.
+// Unsaved signature drafts are keyed by link id and held at module scope. The
+// settings panel can unmount while the editor dialog is closed; keeping drafts
+// outside that subtree preserves unsaved edits across those transitions.
 const [signatureDrafts, setSignatureDrafts] = createSignal<
   Record<string, string>
 >({});
-const [signatureExpanded, setSignatureExpanded] = createSignal<
-  Record<string, boolean>
->({});
-
-/** Whether an inbox's signature editor is expanded (reactive). */
-export function isSignatureExpanded(linkId: string): boolean {
-  return signatureExpanded()[linkId] ?? false;
-}
-
-/** Toggles an inbox's signature editor open/closed. */
-export function toggleSignatureExpanded(linkId: string): void {
-  setSignatureExpanded((prev) => ({
-    ...prev,
-    [linkId]: !isSignatureExpanded(linkId),
-  }));
-}
-
 /**
- * Drops a link's draft + expanded entries so the module store doesn't retain
+ * Drops a link's draft so the module store doesn't retain
  * state for an inbox that no longer exists (called when an inbox is removed).
  */
 export function clearSignatureState(linkId: string): void {
   setSignatureDrafts((prev) => {
-    const next = { ...prev };
-    delete next[linkId];
-    return next;
-  });
-  setSignatureExpanded((prev) => {
     const next = { ...prev };
     delete next[linkId];
     return next;
@@ -77,7 +53,11 @@ function saveSignatureErrorMessage(error: Error): string {
  * patches `email_settings` on save. The "replies & forwards" toggle patches
  * immediately (the backend patch is partial, so it leaves the signature alone).
  */
-export function SignatureSection(props: { link: EmailLink }) {
+export function SignatureSection(props: {
+  link: EmailLink;
+  embedded?: boolean;
+  onSaved?: () => void;
+}) {
   const signature = useEmailSignature(() => props.link.id);
   // Draft lives in the module-level store (keyed by link id) so it survives the
   // settings tab unmounting; `null` means "no unsaved edit".
@@ -119,6 +99,7 @@ export function SignatureSection(props: { link: EmailLink }) {
           setDraft(null);
           editorApi?.setContent(data.settings.signature ?? '');
           toast.success('Signature saved');
+          props.onSaved?.();
         },
         // The backend rejects the whole patch (HTTP 422, nothing persisted) when
         // a signature has images that won't render for recipients — e.g. pasted
@@ -159,7 +140,12 @@ export function SignatureSection(props: { link: EmailLink }) {
   };
 
   return (
-    <div class="flex flex-col gap-3 rounded-xl border border-edge-muted p-3">
+    <div
+      class={cn(
+        'flex flex-col gap-3',
+        !props.embedded && 'rounded-xl border border-edge-muted p-3'
+      )}
+    >
       {/* Editing (Quill) is desktop-only; on mobile the section still offers
           the replies/forwards toggle and Remove, with a pointer to desktop. */}
       <Show
@@ -205,8 +191,9 @@ export function SignatureSection(props: { link: EmailLink }) {
         <div class="flex items-center justify-end gap-2">
           <Button
             variant="base"
-            size="sm"
+            size="md"
             depth={3}
+            class="rounded-lg px-4"
             disabled={!hasContent() || updateSettings.isPending}
             onClick={removeSignature}
           >
@@ -215,8 +202,9 @@ export function SignatureSection(props: { link: EmailLink }) {
           <Show when={!isMobile()}>
             <Button
               variant="active"
-              size="sm"
+              size="md"
               depth={3}
+              class="rounded-lg px-4"
               disabled={!isDirty() || updateSettings.isPending}
               onClick={saveSignature}
             >

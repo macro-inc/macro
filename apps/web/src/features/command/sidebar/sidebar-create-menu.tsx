@@ -1,5 +1,8 @@
 import { CREATE_MENU_COMMAND_SCOPE } from '@app/constants/hotkeys';
-import { useCreateMenuBlocks } from '@app/features/command/Launcher';
+import {
+  type CreatableBlock,
+  useCreateMenuBlocks,
+} from '@app/features/command/Launcher';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { setActiveScope } from '@core/hotkey/state';
@@ -7,19 +10,40 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@icon/square-pen-create.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { Button, Dropdown, Hotkey, NavRow } from '@ui';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { Button, cn, Dropdown, Hotkey, NavRow } from '@ui';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
 export const SidebarCreateMenu = (props: {
   isSlim: () => boolean;
   variant?: 'row' | 'icon';
+  icon?: 'create' | 'plus';
+  filled?: boolean;
+  showLabel?: boolean;
+  large?: boolean;
+  triggerClass?: string;
+  animateSlimLabel?: boolean;
+  placement?: 'right-start' | 'bottom-start';
   onMenuOpenChange?: (open: boolean) => void;
+  onAgentSelect?: () => void;
+  excludedLabels?: readonly string[];
 }) => {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
   const blocks = useCreateMenuBlocks();
+  const visibleBlocks = createMemo(() => {
+    const excluded = new Set(props.excludedLabels ?? []);
+    return blocks().filter((block) => !excluded.has(block.label));
+  });
+
+  const runBlock = (block: CreatableBlock, event?: KeyboardEvent) => {
+    if (block.blockName === 'chat' && props.onAgentSelect) {
+      props.onAgentSelect();
+      return;
+    }
+    block.keyDownHandler?.(event);
+  };
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen && !open()) {
@@ -48,7 +72,7 @@ export const SidebarCreateMenu = (props: {
       return true;
     }
 
-    const matchingBlock = blocks().find((block) => {
+    const matchingBlock = visibleBlocks().find((block) => {
       const shiftedHotkey = `shift+${block.hotkey}`;
       return (
         context.pressedKeysString === block.hotkey ||
@@ -59,7 +83,7 @@ export const SidebarCreateMenu = (props: {
     if (!matchingBlock) return false;
 
     setOpen(false);
-    matchingBlock.keyDownHandler?.(context.event);
+    runBlock(matchingBlock, context.event);
     activateClosestDOMScope();
     return true;
   });
@@ -68,7 +92,7 @@ export const SidebarCreateMenu = (props: {
     <Dropdown
       open={open()}
       onOpenChange={handleOpenChange}
-      placement="right-start"
+      placement={props.placement ?? 'right-start'}
       gutter={8}
     >
       <Show
@@ -76,7 +100,10 @@ export const SidebarCreateMenu = (props: {
         fallback={
           <Dropdown.Trigger
             as={NavRow}
-            class="center h-8 bg-ink/4 text-[13px]"
+            class={cn(
+              'center h-8 bg-ink/4 text-[13px]',
+              props.triggerClass
+            )}
             fullWidth
             tooltipPlacement="right"
             tooltipDisabled={!props.isSlim()}
@@ -90,7 +117,19 @@ export const SidebarCreateMenu = (props: {
             <div class="size-4 shrink-0">
               <PlusIcon class="size-4" />
             </div>
-            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
+            <span
+              class={cn(
+                'whitespace-nowrap',
+                props.animateSlimLabel
+                  ? [
+                      'overflow-hidden transition-[max-width,opacity] duration-[220ms]',
+                      props.isSlim()
+                        ? 'max-w-0 opacity-0'
+                        : 'max-w-24 opacity-100',
+                    ]
+                  : 'group-data-[slim=true]/sidebar:hidden'
+              )}
+            >
               Create
             </span>
             <Show when={open()}>
@@ -106,10 +145,19 @@ export const SidebarCreateMenu = (props: {
       >
         <Dropdown.Trigger
           as={Button}
-          variant="base"
+          variant={props.filled ? 'ghost' : 'base'}
           size="icon-sm"
           depth={1}
-          class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
+          class={cn(
+            'rounded-full',
+            props.large
+              ? 'size-9 [&_svg]:size-[18px]!'
+              : 'size-[26px] [&_svg]:size-4!',
+            props.filled
+              ? 'border-transparent bg-ink/8 text-ink shadow-none hover:bg-ink/12 hover:text-ink!'
+              : 'bg-surface shadow-md shadow-drop-shadow',
+            props.triggerClass
+          )}
           label="Create"
           hotkey={TOKENS.global.createCommand}
           onMouseDown={(e: MouseEvent) => {
@@ -117,12 +165,17 @@ export const SidebarCreateMenu = (props: {
             e.preventDefault();
           }}
         >
-          <CreateIcon />
+          <Show when={props.icon === 'plus'} fallback={<CreateIcon />}>
+            <PlusIcon />
+          </Show>
+          <Show when={props.showLabel}>
+            <span class="text-xs">Create</span>
+          </Show>
         </Dropdown.Trigger>
       </Show>
       <Dropdown.Content class="min-w-52 shadow-menu">
         <Dropdown.Group>
-          <For each={blocks()}>
+          <For each={visibleBlocks()}>
             {(block, index) => (
               <Dropdown.Item
                 class="min-h-9 gap-2 px-2.5"
@@ -130,7 +183,7 @@ export const SidebarCreateMenu = (props: {
                 onMouseEnter={() => setFocusedIndex(index())}
                 onSelect={() => {
                   setOpen(false);
-                  block.keyDownHandler();
+                  runBlock(block);
                 }}
               >
                 <div class="size-4 shrink-0 flex items-center rounded-sm text-ink-muted [&_svg]:size-4">

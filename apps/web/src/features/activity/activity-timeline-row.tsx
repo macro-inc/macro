@@ -4,9 +4,7 @@ import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { GraphqlEntityType } from '@service-storage/graphql/generated/graphql';
 import { Show } from 'solid-js';
-import { match } from 'ts-pattern';
 import { ActionGlyph } from './action-glyph';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
@@ -14,26 +12,9 @@ import {
   actionAsPropertyChange,
   describeActionForEntity,
 } from './describe-action';
+import { displayEntityType } from './display-entity-type';
 import { EntityMention } from './entity-mention';
 import { PropertyChangeText } from './property-change';
-
-/**
- * Maps an activity event's canonical entity type onto the display vocabulary
- * used by the shared entity name/icon/link resolver. Unsupported entity kinds
- * render without a reference instead of leaking a raw identifier.
- */
-function displayEntityType(
-  entityType: GraphqlEntityType
-): EntityType | undefined {
-  return match<GraphqlEntityType, EntityType | undefined>(entityType)
-    .with('DOCUMENT', () => 'DOCUMENT')
-    .with('PROJECT', () => 'PROJECT')
-    .with('CHAT', () => 'CHAT')
-    .with('EMAIL_THREAD', () => 'THREAD')
-    .with('CHANNEL', () => 'CHANNEL')
-    .with('USER', () => 'USER')
-    .otherwise(() => undefined);
-}
 
 function Timestamp(props: { event: ActivityEvent }) {
   return (
@@ -61,12 +42,20 @@ export function ActivityTimelineRow(props: {
   event: ActivityEvent;
   /** Activity feeds name the actor; caller-scoped tool results can omit it. */
   showActor?: boolean;
+  /** Experimental feeds own their outer inset and render rows at full width. */
+  experimental?: boolean;
 }) {
   const entityType = () => displayEntityType(props.event.entityType);
   const showActor = () => props.showActor !== false;
 
   return (
-    <div class="mx-1 flex w-[calc(100%-0.5rem)] items-stretch gap-1 px-2 text-sm">
+    <div
+      class={
+        props.experimental
+          ? 'flex w-full items-stretch gap-1 text-sm'
+          : 'mx-1 flex w-[calc(100%-0.5rem)] items-stretch gap-1 px-2 text-sm'
+      }
+    >
       <div class="relative flex w-6 shrink-0 items-center justify-center">
         <div class="absolute inset-y-0 w-px bg-edge-muted" />
         <span class="relative flex size-5 items-center justify-center rounded-full bg-surface ring ring-edge-muted">

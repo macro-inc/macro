@@ -53,7 +53,12 @@ function deriveScheduleName(prompt: string) {
 }
 
 /** The cron-editable parts of a draft, which is all the shared helpers need. */
-function cronParts(draft: ScheduleDraft): CronParts {
+function cronParts(
+  draft: Pick<
+    ScheduleDraft,
+    'frequency' | 'time' | 'daysOfWeek' | 'dayOfMonth'
+  >
+): CronParts {
   return {
     frequency: draft.frequency,
     time: draft.time,
@@ -62,7 +67,13 @@ function cronParts(draft: ScheduleDraft): CronParts {
   };
 }
 
-export function describeSchedule(draft: ScheduleDraft, timezone: string) {
+export function describeSchedule(
+  draft: Pick<
+    ScheduleDraft,
+    'frequency' | 'time' | 'daysOfWeek' | 'dayOfMonth'
+  >,
+  timezone?: string
+) {
   return describeCron(cronParts(draft), timezone);
 }
 

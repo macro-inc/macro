@@ -3354,7 +3354,7 @@ type GraphqlReminderMetadata {
 	description: String!
 	"""
 	Which firing this notification is for, in RFC 3339 format.
-	
+
 	The counterpart of a calendar alarm's `occurrenceKey`: it is what tells
 	two notifications from the same recurring reminder apart. Absent on
 	notifications written before recurring dispatch existed.
@@ -5084,7 +5084,7 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	displayName: String
 	"""
 	Common reminder metadata.
-	
+
 	`owner_id` is absent because a reminder is only ever readable by its
 	owner, and `parent` because a reminder is not contained by the entity it
 	references — see [`Self::referenced_entity`].
@@ -5092,7 +5092,7 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	metadata: GraphqlEntityMetadata!
 	"""
 	The entity this reminder is about, when it is attached to one.
-	
+
 	Only the reference is returned; the client resolves it into a Soup item
 	through the edges that already exist for that entity type.
 	"""
@@ -5508,7 +5508,7 @@ input SoupContinuationInput {
 	emailView: GraphqlEmailView
 	"""
 	Direction to order the page in. Defaults to DESC.
-	
+
 	The cursor does not carry it, so re-send whatever the initial query
 	used or the continuation flips order mid-list.
 	"""

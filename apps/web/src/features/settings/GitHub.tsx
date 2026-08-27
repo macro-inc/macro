@@ -17,7 +17,7 @@ import {
 import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 
 /** GitHub integration as a Connected-accounts card. */
-export function GitHubCard() {
+export function GitHubCard(props: { embedded?: boolean } = {}) {
   const githubLink = useGithubLinkStatusQuery();
   const initGithubLink = useInitGithubLinkMutation();
   const deleteGithubLink = useDeleteGithubLinkMutation();
@@ -65,12 +65,17 @@ export function GitHubCard() {
   };
 
   return (
-    <SettingsCard>
-      <IntegrationRow
-        icon={<GithubIcon />}
-        title="GitHub"
-        description="Connect Macro to your GitHub account and repositories."
-      />
+    <SettingsCard
+      unstyled={props.embedded}
+      class={props.embedded ? 'flex flex-col gap-5' : undefined}
+    >
+      <Show when={!props.embedded}>
+        <IntegrationRow
+          icon={<GithubIcon />}
+          title="GitHub"
+          description="Connect Macro to your GitHub account and repositories."
+        />
+      </Show>
 
       <SettingsRow
         label={
@@ -84,6 +89,8 @@ export function GitHubCard() {
           </span>
         }
         description="Identify your GitHub activity in Macro."
+        class={props.embedded ? 'px-3' : undefined}
+        stackOnNarrow={props.embedded}
       >
         <Show
           when={!githubLink.isLoading}
@@ -95,6 +102,7 @@ export function GitHubCard() {
                 label="Connect"
                 onClick={handleGithubEnable}
                 disabled={initGithubLink.isPending}
+                large={props.embedded}
               />
             }
           >
@@ -111,6 +119,7 @@ export function GitHubCard() {
                 variant="danger"
                 onClick={handleGithubDisable}
                 disabled={deleteGithubLink.isPending}
+                large={props.embedded}
               />
             </Match>
             <Match when={status() === 'reauthentication_required'}>
@@ -118,6 +127,7 @@ export function GitHubCard() {
                 label="Reconnect"
                 onClick={handleGithubReconnect}
                 disabled={reauthenticateGithub.isPending}
+                large={props.embedded}
               />
             </Match>
           </Switch>
@@ -127,6 +137,8 @@ export function GitHubCard() {
       <SettingsRow
         label="GitHub App"
         description="Choose repositories for Macro to sync."
+        class={props.embedded ? 'px-3' : undefined}
+        stackOnNarrow={props.embedded}
       >
         {/* The install callback rejects users without a linked account, so
             don't offer the flow until the account above is connected. */}

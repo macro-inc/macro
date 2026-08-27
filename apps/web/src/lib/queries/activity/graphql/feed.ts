@@ -9,7 +9,7 @@ import type { Accessor } from 'solid-js';
 import type { ActivityEvent } from './entity';
 
 /** Rows fetched per feed page. */
-export const ACTIVITY_FEED_PAGE_LIMIT = 50;
+export const ACTIVITY_FEED_PAGE_LIMIT = 100;
 
 /**
  * Infinite query over the authenticated user's own activity, newest first.

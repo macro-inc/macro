@@ -1,4 +1,5 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
@@ -37,8 +38,9 @@ import { createPriorityCollapseController } from './PriorityCollapseOverflowSens
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
+import { SplitPanelV2 } from './SplitPanelV2';
 
-type SplitPanelProps = {
+export type SplitPanelProps = {
   setPanelRef: (ref: HTMLDivElement) => void;
   handle: SplitHandle;
   split: SplitState;
@@ -53,6 +55,17 @@ type SplitPanelProps = {
 const PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS = 1_500;
 
 export function SplitPanel(props: SplitPanelProps) {
+  return (
+    <Show
+      when={activeAppLayout().splitPanelRenderer === 'v2-composed'}
+      fallback={<LegacySplitPanel {...props} />}
+    >
+      <SplitPanelV2 {...props} />
+    </Show>
+  );
+}
+
+function LegacySplitPanel(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
   );
@@ -318,7 +331,10 @@ export function SplitPanel(props: SplitPanelProps) {
             >
               <Panel.Header
                 class={cn(
-                  'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                  'relative block touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                  activeAppLayout().capabilities.compactSplitHeader
+                    ? 'min-h-9'
+                    : 'min-h-10.25',
                   'z-split-panel-chrome',
                   // On mobile/tablet the header collapses to a zero-height grid row;
                   // SplitHeader overlays the body as floating islands.

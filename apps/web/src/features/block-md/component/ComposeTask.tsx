@@ -74,6 +74,7 @@ import {
 import {
   clearTaskComposerDraft,
   loadTaskComposerDraft,
+  registerTaskDraftCleanup,
   saveTaskComposerDraft,
   updateDraftTimestamp,
 } from '../util/taskComposerStorage';
@@ -440,6 +441,13 @@ export function ComposeTask(props: ComposeTaskProps) {
   // draft saving logic
   let hasInitializedFromDraft = isDraftLoaded();
   const debouncedSave = debounce(saveTaskComposerDraft, 300);
+  onCleanup(
+    registerTaskDraftCleanup(() => {
+      debouncedSave.clear();
+      clearTaskComposerDraft();
+      splitPanel.handle.close();
+    })
+  );
 
   createEffect(() => {
     const currentTitle = title();

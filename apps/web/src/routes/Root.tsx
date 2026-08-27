@@ -31,7 +31,12 @@ import { CallKitSync } from '@channel/Call/use-callkit';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
-import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
+import {
+  BRAIN_LAYOUT_ROUTE,
+  CHANNELS_LAYOUT_ROUTE,
+  CHAT_LAYOUT_ROUTE,
+  LAYOUT_ROUTE,
+} from '@components/app/split-layout/SplitLayoutRoute';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -227,6 +232,9 @@ const ROUTES: RouteDefinition[] = [
     path: '/task-slug/:taskSlug',
     component: TaskRoute,
   },
+  CHAT_LAYOUT_ROUTE,
+  CHANNELS_LAYOUT_ROUTE,
+  BRAIN_LAYOUT_ROUTE,
   LAYOUT_ROUTE,
   /** BEGIN - APP ROUTES */
   {
@@ -246,10 +254,6 @@ const ROUTES: RouteDefinition[] = [
     component: LAYOUT_ROUTE.component,
   },
   {
-    path: '/agents',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
     path: '/mail',
     component: LAYOUT_ROUTE.component,
   },
@@ -259,10 +263,6 @@ const ROUTES: RouteDefinition[] = [
   },
   {
     path: '/tasks',
-    component: LAYOUT_ROUTE.component,
-  },
-  {
-    path: '/channels',
     component: LAYOUT_ROUTE.component,
   },
   {

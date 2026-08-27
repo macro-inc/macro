@@ -50,7 +50,16 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
 import { parseISO } from 'date-fns';
-import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createContext,
+  createMemo,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+  useContext,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard } from './InboxCard';
@@ -62,9 +71,13 @@ import {
   itemContent,
 } from './utils';
 
+const InboxCardRootClassContext = createContext<string>();
+
 export interface InboxCardLayoutProps {
   /** The already-derived item to render. */
   item: InboxCardDisplayItem;
+  /** Optional root-card styling for alternate list compositions. */
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
@@ -507,6 +520,7 @@ const githubAction = (notification?: Notification): string => {
  */
 function BaseCard(props: {
   item: InboxCardDisplayItem;
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
@@ -522,8 +536,10 @@ function BaseCard(props: {
   titleLeading?: JSX.Element;
   children?: JSX.Element;
 }) {
+  const rootClass = useContext(InboxCardRootClassContext);
   return (
     <InboxCard.Root
+      class={props.class ?? rootClass}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -870,6 +886,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   // the quoted-original block stacked beneath.
   return (
     <InboxCard.Root
+      class={props.class}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -1611,7 +1628,8 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
   };
 
   return (
-    <Switch>
+    <InboxCardRootClassContext.Provider value={props.class}>
+      <Switch>
       <Match when={props.item.entity.type === 'email'}>
         <EmailCardLayout {...props} />
       </Match>
@@ -1655,10 +1673,11 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
       <Match when={props.item.entity.type === 'calendar_event'}>
         <CalendarEventCardLayout {...props} />
       </Match>
-      <Match when={true}>
-        <GenericCardLayout {...props} />
-      </Match>
-    </Switch>
+        <Match when={true}>
+          <GenericCardLayout {...props} />
+        </Match>
+      </Switch>
+    </InboxCardRootClassContext.Provider>
   );
 }
 

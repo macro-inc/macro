@@ -1,6 +1,8 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { activeAppLayoutSurfaces } from '@app/features/app-layout/layout-surfaces';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { ExperimentalChatView as ExperimentalChatViewV1 } from '@app/features/experimental-app-layout/experimental-chat-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
@@ -39,6 +41,7 @@ import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { EmptyStatePanel } from '@ui';
 import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import { previewEmptyStateForContent } from './previewController';
@@ -93,9 +96,19 @@ export type UnifiedListMeta = {
   viewId: ViewId;
 };
 
-export type ComponentMeta = UnifiedListMeta | { kind?: undefined };
+export type EmailComposeMeta = {
+  kind: 'email-compose';
+  draftId?: string;
+  hasDraft: boolean;
+};
+
+export type ComponentMeta =
+  | UnifiedListMeta
+  | EmailComposeMeta
+  | { kind?: undefined };
 
 export type ComponentMetaMap = {
+  'email-compose': EmailComposeMeta;
   'unified-list': UnifiedListMeta;
 };
 
@@ -153,6 +166,20 @@ registerComponent(
   withAuth(() => {
     usePageViewTracking('home');
     return <Home />;
+  })
+);
+
+registerComponent(
+  'chat-workspace',
+  withAuth(() => {
+    usePageViewTracking('chat');
+    return (
+      <Dynamic
+        component={
+          activeAppLayoutSurfaces()?.ChatView ?? ExperimentalChatViewV1
+        }
+      />
+    );
   })
 );
 
@@ -257,6 +284,21 @@ function MyActivityViewWrapper() {
 }
 
 registerComponent('activity', withAuth(MyActivityViewWrapper));
+
+registerComponent(
+  'notifications',
+  withAuth(() => {
+    usePageViewTracking('notifications');
+    return (
+      <Show
+        when={activeAppLayoutSurfaces()?.InboxView}
+        fallback={<RedirectSplit to={{ type: 'component', id: 'inbox' }} />}
+      >
+        {(InboxView) => <Dynamic component={InboxView()} />}
+      </Show>
+    );
+  })
+);
 
 registerComponent(
   'reminders',
@@ -375,17 +417,25 @@ registerComponent(
   })
 );
 
+type ChannelsComponentParams = {
+  experimentalView?: 'messages';
+  initialTab?: string;
+};
+
 registerComponent(
   'channels',
-  withAuth(() => {
+  withAuth((params: ChannelsComponentParams = {}) => {
     usePageViewTracking('channels');
-    const preset = getViewPreset('channels');
+    const preset = getViewPreset('channels', params.initialTab);
     return (
       <SoupView
-        viewName="Channels"
+        viewName={params.experimentalView === 'messages' ? 'Messages' : 'Channels'}
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}
+        initialActiveTab={params.initialTab}
+        preferInitialFilters={params.initialTab !== undefined}
+        experimentalView={params.experimentalView}
       />
     );
   })
@@ -547,25 +597,29 @@ registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
   return <ChannelCompose />;
 });
-registerComponent('email-compose', (params) => {
-  usePageViewTracking('email-compose');
-  // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
-  const toParam = new URLSearchParams(window.location.search).get('to');
-  const paramsInitialTo = Array.isArray(params.initialTo)
-    ? params.initialTo.filter(
-        (value): value is string => typeof value === 'string'
-      )
-    : undefined;
-  const initialTo =
-    paramsInitialTo ??
-    toParam
-      ?.split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-  const draftID =
-    typeof params.draftID === 'string' ? params.draftID : undefined;
-  return <EmailCompose draftID={draftID} initialTo={initialTo} />;
-});
+registerComponent(
+  'email-compose',
+  (params) => {
+    usePageViewTracking('email-compose');
+    // mailto: links land here as `component/email-compose?to=a@x.com,b@y.com`.
+    const toParam = new URLSearchParams(window.location.search).get('to');
+    const paramsInitialTo = Array.isArray(params.initialTo)
+      ? params.initialTo.filter(
+          (value): value is string => typeof value === 'string'
+        )
+      : undefined;
+    const initialTo =
+      paramsInitialTo ??
+      toParam
+        ?.split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
+    const draftID =
+      typeof params.draftID === 'string' ? params.draftID : undefined;
+    return <EmailCompose draftID={draftID} initialTo={initialTo} />;
+  },
+  { hasDraft: false }
+);
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;

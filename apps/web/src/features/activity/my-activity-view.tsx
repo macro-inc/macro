@@ -1,3 +1,4 @@
+import { activeAppLayoutSurfaces } from '@app/features/app-layout/layout-surfaces';
 import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -7,6 +8,7 @@ import { createMyActivityQuery } from '@queries/activity/graphql/feed';
 import { createMyActivityOverviewQuery } from '@queries/activity/graphql/overview';
 import { Button } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { ActionGraph } from './action-graph';
 import { ActivityTimelineRow } from './activity-timeline-row';
 import { TopEntities } from './top-entities';
@@ -18,7 +20,11 @@ const INSET_CLASS = 'mx-1 w-[calc(100%-0.5rem)]';
 
 /** The user's own activity, newest first, behind the activity-feed flag. */
 export function MyActivityView() {
-  const overview = createMyActivityOverviewQuery({ enabled: () => true });
+  const hasExperimentalActivityView = () =>
+    activeAppLayoutSurfaces()?.ActivityView !== undefined;
+  const overview = createMyActivityOverviewQuery({
+    enabled: () => !hasExperimentalActivityView(),
+  });
   const feed = createMyActivityQuery({ enabled: () => true });
   const groups = createMemo<FeedGroup[]>(() => {
     const out: FeedGroup[] = [];
@@ -34,7 +40,44 @@ export function MyActivityView() {
     return out;
   });
 
-  return (
+  const ExperimentalFeedContent = () => (
+    <StaticMarkdownContext>
+      <div class="min-h-0 flex-1 overflow-y-auto py-1">
+        <Show
+          when={groups().length > 0}
+          fallback={
+            <p class="px-2 py-2 text-sm text-ink-muted">
+              {feed.isLoading
+                ? 'Loading…'
+                : feed.isError
+                  ? 'Activity is unavailable right now. Try again in a moment.'
+                  : 'No activity yet.'}
+            </p>
+          }
+        >
+          <FeedGroups
+            groups={groups()}
+            row={ActivityTimelineRow}
+            experimental
+          />
+          <Show when={feed.hasNextPage}>
+            <div class="flex justify-center py-2">
+              <Button
+                variant="ghost"
+                class="rounded-full"
+                onClick={() => void feed.fetchNextPage()}
+                disabled={feed.isFetchingNextPage}
+              >
+                {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
+              </Button>
+            </div>
+          </Show>
+        </Show>
+      </div>
+    </StaticMarkdownContext>
+  );
+
+  const ClassicActivityContent = () => (
     <div class="@container/u-list flex size-full flex-col">
       <SplitHeaderLeft>
         <span class="font-semibold text-sm">Activity</span>
@@ -89,19 +132,57 @@ export function MyActivityView() {
       </StaticMarkdownContext>
     </div>
   );
+
+  return (
+    <Show
+      when={activeAppLayoutSurfaces()?.ActivityView}
+      fallback={<ClassicActivityContent />}
+    >
+      {(ActivityView) => (
+        <Dynamic
+          component={ActivityView()}
+          events={feed.data ?? []}
+          isLoading={feed.isLoading}
+          isError={feed.isError}
+          hasNextPage={feed.hasNextPage}
+          isFetchingNextPage={feed.isFetchingNextPage}
+          onFetchNextPage={() => void feed.fetchNextPage()}
+        >
+          <ExperimentalFeedContent />
+        </Dynamic>
+      )}
+    </Show>
+  );
 }
 
 function FeedGroups(props: {
   groups: FeedGroup[];
-  row: Component<{ event: ActivityEvent }>;
+  row: Component<{
+    event: ActivityEvent;
+    experimental?: boolean;
+  }>;
+  experimental?: boolean;
 }) {
   return (
     <For each={props.groups}>
       {(group) => (
         <>
-          <SoupSectionHeader>{group.label}</SoupSectionHeader>
+          <Show
+            when={props.experimental}
+            fallback={<SoupSectionHeader>{group.label}</SoupSectionHeader>}
+          >
+            <div class="flex items-center gap-2 px-2 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-extra-muted">
+              <span class="shrink-0">{group.label}</span>
+              <span class="h-px min-w-4 flex-1 bg-edge-muted/80" />
+            </div>
+          </Show>
           <For each={group.events}>
-            {(event) => <props.row event={event} />}
+            {(event) => (
+              <props.row
+                event={event}
+                experimental={props.experimental}
+              />
+            )}
           </For>
         </>
       )}

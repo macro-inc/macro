@@ -19,9 +19,10 @@ import {
 } from '@core/util/upload';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
-import { Button, cn, Dropdown } from '@ui';
+import { Button, cn, Dropdown, SplitActionButton } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
 
@@ -43,11 +44,11 @@ type CreateOption = {
 
 const IMPORT_FILE_OPTION: CreateOption = {
   id: 'import-file',
-  label: 'Import file',
+  label: 'Upload files',
 };
 const IMPORT_FOLDER_OPTION: CreateOption = {
   id: 'import-folder',
-  label: 'Import folder',
+  label: 'Upload folder',
 };
 // Companies aren't blocks, so the Customers view gets a bespoke option
 // that opens the create-company modal instead of a create action.
@@ -127,7 +128,15 @@ function CreateOptionIcon(props: { id: CreateOption['id'] }) {
   );
 }
 
-export const SoupViewCreateButton = () => {
+export const SoupViewCreateButton = (
+  props: {
+    inline?: boolean;
+    experimental?: boolean;
+    hideLabel?: boolean;
+    preferredOptionId?: string;
+    buttonClass?: string;
+  } = {}
+) => {
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
   const isCreatableEnabled = useCreatableEnabled();
@@ -141,13 +150,18 @@ export const SoupViewCreateButton = () => {
   const options = createMemo<CreateOption[]>(() => {
     const view = currentView();
     if (!view) return [];
-    return getViewCreateOptions(view, isCreatableEnabled);
+    const viewOptions = getViewCreateOptions(view, isCreatableEnabled);
+    return props.preferredOptionId
+      ? viewOptions.filter((option) => option.id === props.preferredOptionId)
+      : viewOptions;
   });
   const createLabel = createMemo(() => {
     const view = currentView();
     if (!view) return 'Create';
     return VIEW_CREATE_LABELS[view] ?? 'Create';
   });
+  const singleCreateLabel = () =>
+    props.experimental ? 'New' : createLabel();
 
   const handleSelect = (option: CreateOption) => {
     if (currentView() === 'channels' && option.id === 'channel') {
@@ -175,50 +189,114 @@ export const SoupViewCreateButton = () => {
     runCreateAction(option.id);
   };
 
-  const SingleOptionButton = (props: { hideLabel?: boolean }) => (
+  const CreateGlyph = (glyphProps: { classicAccent?: boolean }) => (
+    <Show
+      when={props.experimental}
+      fallback={
+        <PlusCircleIcon
+          class={cn('size-3.5', glyphProps.classicAccent && 'text-accent')}
+        />
+      }
+    >
+      <PlusIcon class="size-4" />
+    </Show>
+  );
+
+  const SingleOptionButton = (buttonProps: { hideLabel?: boolean }) => (
     <Button
-      variant="active"
+      variant={props.experimental ? 'cta' : 'active'}
       class={cn(
-        'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
-        props.hideLabel && 'pr-1'
+        'font-semibold',
+        props.experimental
+          ? 'h-8 rounded-full border-transparent px-3'
+          : 'border-0 rounded-full px-3 py-2 pl-1',
+        buttonProps.hideLabel &&
+          (props.experimental ? 'size-8 rounded-full px-0' : 'pr-1'),
+        props.buttonClass
       )}
       size="sm"
+      label={buttonProps.hideLabel ? singleCreateLabel() : undefined}
+      aria-label={buttonProps.hideLabel ? singleCreateLabel() : undefined}
       onClick={() => handleSelect(options()[0])}
     >
-      <PlusCircleIcon class="size-3.5 text-accent" />
-      <Show when={!props.hideLabel}>
-        <span>{createLabel()}</span>
+      <CreateGlyph classicAccent />
+      <Show when={!buttonProps.hideLabel}>
+        <span>{singleCreateLabel()}</span>
       </Show>
     </Button>
   );
 
-  const MultiOptionButton = (props: { hideLabel?: boolean }) => (
+  const CreateOptionItems = (itemProps: { items?: CreateOption[] }) => (
+    <For each={itemProps.items ?? options()}>
+      {(item) => (
+        <Dropdown.Item onSelect={() => handleSelect(item)}>
+          <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
+            <CreateOptionIcon id={item.id} />
+          </span>
+          <span class="flex-1 truncate text-ink-muted">{item.label}</span>
+        </Dropdown.Item>
+      )}
+    </For>
+  );
+
+  const ExperimentalCreateButton = () => (
+    <SplitActionButton
+      label={createLabel()}
+      icon={<PlusIcon class="size-4" />}
+      onPrimaryAction={() => handleSelect(options()[0])}
+      class={props.buttonClass}
+    >
+      <CreateOptionItems />
+    </SplitActionButton>
+  );
+
+  const LibraryCreateButton = () => (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant="active"
+        variant="cta"
+        size="sm"
         class={cn(
-          'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
-          props.hideLabel && 'pr-1'
+          'h-8 rounded-full border-transparent px-3 font-semibold',
+          props.buttonClass
+        )}
+        aria-label="New"
+      >
+        <PlusIcon class="size-4" />
+        <span>New</span>
+        <ChevronDownIcon class="size-2.5" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <CreateOptionItems />
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+
+  const MultiOptionButton = (buttonProps: { hideLabel?: boolean }) => (
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger
+        variant={props.experimental ? 'cta' : 'active'}
+        aria-label={buttonProps.hideLabel ? createLabel() : undefined}
+        class={cn(
+          'font-semibold',
+          props.experimental
+            ? 'h-10 rounded-xl border-transparent px-3'
+            : 'border-0 rounded-full px-3 py-2 pl-1',
+          buttonProps.hideLabel &&
+            (props.experimental ? 'min-w-10 rounded-full px-2' : 'pr-1'),
+          props.buttonClass
         )}
       >
-        <PlusCircleIcon class="size-3.5" />
-        <Show when={!props.hideLabel}>
+        <CreateGlyph />
+        <Show when={!buttonProps.hideLabel}>
           <span>{createLabel()}</span>
         </Show>
         <ChevronDownIcon class="size-2.5" />
       </Dropdown.Trigger>
       <Dropdown.Content>
         <Dropdown.Group>
-          <For each={options()}>
-            {(item) => (
-              <Dropdown.Item onSelect={() => handleSelect(item)}>
-                <span class="size-3.5 flex items-center justify-center shrink-0 text-ink-muted">
-                  <CreateOptionIcon id={item.id} />
-                </span>
-                <span class="flex-1 truncate text-ink-muted">{item.label}</span>
-              </Dropdown.Item>
-            )}
-          </For>
+          <CreateOptionItems />
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
@@ -230,16 +308,49 @@ export const SoupViewCreateButton = () => {
         <NewCallButton />
       </Show>
       <Show when={options().length > 0}>
-        <CollapsibleHeaderItem id="create-button" priority={2}>
-          {(isCollapsed) => (
+        <Show
+          when={props.experimental}
+          fallback={
             <Show
-              when={options().length > 1}
-              fallback={<SingleOptionButton hideLabel={isCollapsed()} />}
+              when={props.inline}
+              fallback={
+                <CollapsibleHeaderItem id="create-button" priority={2}>
+                  {(isCollapsed) => (
+                    <Show
+                      when={options().length > 1}
+                      fallback={
+                        <SingleOptionButton hideLabel={isCollapsed()} />
+                      }
+                    >
+                      <MultiOptionButton hideLabel={isCollapsed()} />
+                    </Show>
+                  )}
+                </CollapsibleHeaderItem>
+              }
             >
-              <MultiOptionButton hideLabel={isCollapsed()} />
+              <Show
+                when={options().length > 1}
+                fallback={<SingleOptionButton hideLabel={props.hideLabel} />}
+              >
+                <MultiOptionButton hideLabel={props.hideLabel} />
+              </Show>
             </Show>
-          )}
-        </CollapsibleHeaderItem>
+          }
+        >
+          <Show
+            when={currentView() === 'documents'}
+            fallback={
+              <Show
+                when={options().length > 1}
+                fallback={<SingleOptionButton />}
+              >
+                <ExperimentalCreateButton />
+              </Show>
+            }
+          >
+            <LibraryCreateButton />
+          </Show>
+        </Show>
       </Show>
     </>
   );

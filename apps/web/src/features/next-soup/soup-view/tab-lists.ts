@@ -51,7 +51,10 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
   ],
   tasks: [
     { value: 'my-tasks', label: 'My tasks' },
-    { value: 'all', label: 'All' },
+    { value: 'created-by-me', label: 'Created by me' },
+    { value: 'shared-with-me', label: 'Shared with me' },
+    { value: 'projects', label: 'Projects' },
+    { value: 'team-tasks', label: 'Team tasks' },
   ],
   channels: [
     { value: 'recent', label: 'Recent' },

@@ -94,21 +94,31 @@ export function SettingsSection(props: {
  * divider between them (via `settings-row-dividers`); a single-child card draws
  * no divider, so it doubles as a plain container.
  */
-export function SettingsCard(props: { class?: string; children: JSX.Element }) {
+export function SettingsCard(props: {
+  class?: string;
+  children: JSX.Element;
+  /** Render only a layout wrapper when the surrounding surface owns chrome. */
+  unstyled?: boolean;
+}) {
   // Raised a level above the content panel so the card reads as a subtly
   // lighter surface (theme-safe via the depth system) rather than just an
   // outline on the same fill.
   return (
-    <Layer depth={2}>
-      <div
-        class={cn(
-          'rounded-xl border border-ink/[0.05] bg-surface overflow-hidden settings-row-dividers',
-          props.class
-        )}
-      >
-        {props.children}
-      </div>
-    </Layer>
+    <Show
+      when={!props.unstyled}
+      fallback={<div class={props.class}>{props.children}</div>}
+    >
+      <Layer depth={2}>
+        <div
+          class={cn(
+            'rounded-xl border border-ink/[0.05] bg-surface overflow-hidden settings-row-dividers',
+            props.class
+          )}
+        >
+          {props.children}
+        </div>
+      </Layer>
+    </Show>
   );
 }
 

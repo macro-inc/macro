@@ -15,6 +15,7 @@ import {
 import { useCrmPermissions } from '@companies/crm/team-crm-config';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import CheckIcon from '@phosphor/check.svg';
 import FloppyDiskIcon from '@phosphor/floppy-disk.svg';
 import LinkIcon from '@phosphor/link.svg';
 import PushPinIcon from '@phosphor/push-pin.svg';
@@ -330,20 +331,15 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
  */
 export function CompanyDisplayMenu() {
   const { options, toggleListColumn } = useCrmDisplayOptions();
-  const { activeTab, viewMode } = useSoupView();
+  const { activeTab, viewMode, setViewMode } = useSoupView();
   const { applyTabPreset } = useApplyPreset();
   const isTeamAdmin = useIsTeamAdmin();
 
   const showingHidden = () => activeTab() === 'hidden';
 
-  // On the board, the menu holds only the admin-gated hidden toggle — hide
-  // the trigger entirely when there'd be nothing to show.
-  const hasContent = () => viewMode() === 'list' || isTeamAdmin();
-
   return (
-    <Show when={hasContent()}>
-      <Dropdown>
-        <Tooltip label="Display options">
+    <Dropdown>
+      <Tooltip label="Display options">
           <Dropdown.Trigger
             depth={2}
             class="bg-surface"
@@ -351,9 +347,40 @@ export function CompanyDisplayMenu() {
           >
             <SlidersIcon />
           </Dropdown.Trigger>
-        </Tooltip>
+      </Tooltip>
 
-        <Dropdown.Content class="w-56 shadow-menu">
+      <Dropdown.Content class="w-56 shadow-menu">
+          <Dropdown.Group>
+            <Dropdown.GroupLabel>Layout</Dropdown.GroupLabel>
+            <Dropdown.RadioGroup
+              value={viewMode()}
+              onChange={(mode) => {
+                if (mode === 'board' || mode === 'list') setViewMode(mode);
+              }}
+            >
+              <Dropdown.RadioItem
+                value="board"
+                class="justify-between"
+                closeOnSelect={false}
+              >
+                <span class="flex-1 truncate">Board</span>
+                <Dropdown.ItemIndicator class="shrink-0">
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Dropdown.ItemIndicator>
+              </Dropdown.RadioItem>
+              <Dropdown.RadioItem
+                value="list"
+                class="justify-between"
+                closeOnSelect={false}
+              >
+                <span class="flex-1 truncate">List</span>
+                <Dropdown.ItemIndicator class="shrink-0">
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Dropdown.ItemIndicator>
+              </Dropdown.RadioItem>
+            </Dropdown.RadioGroup>
+          </Dropdown.Group>
+
           {/* Column visibility only applies to the list. */}
           <Show when={viewMode() === 'list'}>
             <Dropdown.Group>
@@ -393,8 +420,7 @@ export function CompanyDisplayMenu() {
               </Dropdown.CheckboxItem>
             </Dropdown.Group>
           </Show>
-        </Dropdown.Content>
-      </Dropdown>
-    </Show>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }
