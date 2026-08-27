@@ -176,8 +176,8 @@ function HeaderTopRow(props: {
   ]);
 
   return (
-    <div class="flex flex-row w-full items-center justify-between gap-2 text-xs min-w-0">
-      <div class="flex flex-row items-center gap-1.5 min-w-0">
+    <div class="flex flex-row w-full min-w-0 flex-1 items-center gap-2 text-sm">
+      <div class="flex flex-row items-center gap-1.5 min-w-0 flex-1">
         <EmailUserTooltip recipient={props.message.from}>
           <span class="text-ink font-medium cursor-default">
             {props.senderName}
@@ -190,13 +190,6 @@ function HeaderTopRow(props: {
             currentUserEmail={props.currentUserEmail}
           />
         </span>
-        <Show when={props.message.internal_date_ts}>
-          <Tooltip label={formatFullDate(props.message.internal_date_ts!)}>
-            <span class="text-xs text-ink-extra-muted/60 tabular-nums cursor-default shrink-0">
-              {formatShortDate(props.message.internal_date_ts!)}
-            </span>
-          </Tooltip>
-        </Show>
         <div
           classList={{
             'opacity-0': !props.isHovering && !props.isExpanded,
@@ -237,6 +230,13 @@ function HeaderTopRow(props: {
           hiddenActions={props.hiddenActions}
         />
       </div>
+      <Show when={props.message.internal_date_ts}>
+        <Tooltip label={formatFullDate(props.message.internal_date_ts!)}>
+          <span class="text-ink-extra-muted/60 tabular-nums cursor-default shrink-0">
+            {formatShortDate(props.message.internal_date_ts!)}
+          </span>
+        </Tooltip>
+      </Show>
     </div>
   );
 }

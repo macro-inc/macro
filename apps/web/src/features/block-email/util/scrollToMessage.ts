@@ -1,4 +1,179 @@
-import type { ApiMessage } from '@service-email/generated/schemas';
+export type ScrollAlign = 'start' | 'end';
+
+export type OpenTargetMessage = {
+  db_id?: string | null;
+  labels: Array<{ provider_label_id?: string | null }>;
+};
+
+export function reversedChildIndex(
+  chronologicalIndex: number,
+  length: number
+): number {
+  if (chronologicalIndex < 0) return -1;
+  return length - 1 - chronologicalIndex;
+}
+
+export function isUnreadMessage(message: OpenTargetMessage): boolean {
+  return message.labels.some((label) => label.provider_label_id === 'UNREAD');
+}
+
+/** `messages` is oldest-first, matching `EmailContext`. */
+export function openTargetMessageId(
+  messages: OpenTargetMessage[]
+): string | undefined {
+  if (messages.length === 0) return undefined;
+  const newestId = messages.at(-1)?.db_id ?? undefined;
+  if (messages.every(isUnreadMessage)) return newestId;
+  return messages.find(isUnreadMessage)?.db_id ?? newestId;
+}
+
+export function shouldPageForOldestUnread(
+  messages: OpenTargetMessage[],
+  hasMore: boolean
+): boolean {
+  const oldest = messages[0];
+  return hasMore && oldest != null && isUnreadMessage(oldest);
+}
+
+/** Oldest, penultimate, and newest stay visible. Hide the rest when length > 3. */
+export function isTruncatedMiddleMessage(
+  chronologicalIndex: number,
+  length: number
+): boolean {
+  return length > 3 && chronologicalIndex > 0 && chronologicalIndex < length - 2;
+}
+
+export function truncatedMiddleCount(length: number): number {
+  return length > 3 ? length - 3 : 0;
+}
+
+/** Next older-to-newer shown index, or null when the expand control or list end follows. */
+export function nextShownChronologicalIndex(
+  chronologicalIndex: number,
+  length: number,
+  showMiddle: boolean
+): number | null {
+  if (chronologicalIndex < 0 || chronologicalIndex >= length - 1) return null;
+  if (!showMiddle && truncatedMiddleCount(length) > 0) {
+    if (chronologicalIndex === 0) return null;
+    if (chronologicalIndex === length - 2) return length - 1;
+    return null;
+  }
+  return chronologicalIndex + 1;
+}
+
+/** Previous newer-to-older shown index, or null when the expand control or list start precedes. */
+export function prevShownChronologicalIndex(
+  chronologicalIndex: number,
+  length: number,
+  showMiddle: boolean
+): number | null {
+  if (chronologicalIndex <= 0 || chronologicalIndex >= length) return null;
+  if (!showMiddle && truncatedMiddleCount(length) > 0) {
+    if (chronologicalIndex === length - 1) return length - 2;
+    return null;
+  }
+  return chronologicalIndex - 1;
+}
+
+export function threadMessageIsExpanded(args: {
+  chronologicalIndex: number;
+  listLength: number;
+  isManuallyExpanded: boolean;
+  isUnread: boolean;
+  hasDraft: boolean;
+}): boolean {
+  return (
+    args.isManuallyExpanded ||
+    args.chronologicalIndex === args.listLength - 1 ||
+    args.isUnread ||
+    args.hasDraft
+  );
+}
+
+/** Square the corners that sit against another open card. */
+export function shownOpenCardFlush(
+  chronologicalIndex: number,
+  length: number,
+  showMiddle: boolean,
+  expandedAt: (index: number) => boolean
+): { top: boolean; bottom: boolean } {
+  if (!expandedAt(chronologicalIndex)) return { top: false, bottom: false };
+  const prev = prevShownChronologicalIndex(
+    chronologicalIndex,
+    length,
+    showMiddle
+  );
+  const next = nextShownChronologicalIndex(
+    chronologicalIndex,
+    length,
+    showMiddle
+  );
+  return {
+    top: prev != null && expandedAt(prev),
+    bottom: next != null && expandedAt(next),
+  };
+}
+
+export function collapsedRowShowsDivider(
+  chronologicalIndex: number,
+  length: number,
+  showMiddle: boolean,
+  nextIsCollapsed: boolean
+): boolean {
+  const next = nextShownChronologicalIndex(
+    chronologicalIndex,
+    length,
+    showMiddle
+  );
+  return next != null && nextIsCollapsed;
+}
+
+export function alignmentDelta(
+  container: HTMLElement,
+  element: HTMLElement,
+  align: ScrollAlign
+): number {
+  const containerBox = container.getBoundingClientRect();
+  const elementBox = element.getBoundingClientRect();
+  switch (align) {
+    case 'end':
+      return elementBox.bottom - containerBox.bottom;
+    case 'start':
+      return elementBox.top - containerBox.top;
+    default: {
+      const _exhaustive: never = align;
+      return _exhaustive;
+    }
+  }
+}
+
+export function messageElement(
+  container: HTMLElement,
+  messages: Array<{ db_id?: string | null }>,
+  messageId: string,
+  _reversed = true
+): HTMLElement | undefined {
+  if (!messages.some((message) => message.db_id === messageId)) return undefined;
+  const el = container.querySelector(
+    `[data-message-body-id="${CSS.escape(messageId)}"]`
+  );
+  return el instanceof HTMLElement ? el : undefined;
+}
+
+export function alignElementInContainer(
+  container: HTMLElement,
+  element: HTMLElement,
+  align: ScrollAlign,
+  behavior: ScrollBehavior = 'auto'
+): void {
+  const nativeBehavior: ScrollBehavior =
+    behavior === 'instant' ? 'auto' : behavior;
+  container.scrollBy({
+    top: alignmentDelta(container, element, align),
+    behavior: nativeBehavior,
+  });
+}
 
 /**
  * Scrolls to a message by its ID within a messages container
@@ -10,63 +185,26 @@ import type { ApiMessage } from '@service-email/generated/schemas';
  */
 export function scrollToMessage(
   messageId: string,
-  messages: ApiMessage[],
+  messages: Array<{ db_id?: string | null }>,
   messagesContainer: HTMLElement,
   {
     behavior = 'smooth',
-    reversed = false,
-  }: { behavior?: ScrollBehavior; reversed?: boolean }
+    reversed = true,
+    align = 'start',
+  }: {
+    behavior?: ScrollBehavior;
+    reversed?: boolean;
+    align?: ScrollAlign;
+  } = {}
 ): boolean {
-  let messageIndex = messages.findIndex((m) => m.db_id === messageId);
+  const targetElement = messageElement(
+    messagesContainer,
+    messages,
+    messageId,
+    reversed
+  );
+  if (!targetElement) return false;
 
-  if (reversed) {
-    messageIndex = messages.length - 1 - messageIndex;
-  }
-
-  if (messageIndex < 0) {
-    return false;
-  }
-
-  const targetElement = messagesContainer.children[messageIndex];
-
-  if (!targetElement) {
-    return false;
-  }
-
-  targetElement.scrollIntoView({
-    behavior,
-    block: 'start',
-  });
-
+  alignElementInContainer(messagesContainer, targetElement, align, behavior);
   return true;
-}
-
-/**
- * Scrolls to the last message in the thread
- * @param messagesContainer - The DOM container holding the message elements
- * @param behavior - Scroll behavior ('smooth' | 'instant' | 'auto')
- */
-function _scrollToLastMessage(
-  messagesContainer: HTMLDivElement,
-  behavior: ScrollBehavior | 'instant' = 'instant'
-): void {
-  const nativeBehavior: ScrollBehavior =
-    behavior === 'instant' ? 'auto' : behavior;
-  const lastChild = messagesContainer.children[
-    messagesContainer.children.length - 1
-  ] as HTMLElement | undefined;
-
-  if (!lastChild) return;
-  // Align the last child to the bottom of the nearest scrolling container
-  lastChild.scrollIntoView({ behavior: nativeBehavior, block: 'start' });
-}
-
-/**
- * Gets the last message ID from a thread
- * @param messages - Array of messages in the current thread
- * @returns The db_id of the last message, or undefined if no messages
- */
-function _getLastMessageId(messages: ApiMessage[]): string | undefined {
-  const lastMessage = messages[messages.length - 1];
-  return lastMessage?.db_id?.toString();
 }

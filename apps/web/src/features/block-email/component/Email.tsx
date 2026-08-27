@@ -39,11 +39,12 @@ import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import type { ReplyType } from '../util/replyType';
-import { scrollToMessage } from '../util/scrollToMessage';
+import {
+  type ScrollAlign,
+  scrollToMessage,
+} from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
-import { EmailParticipants } from './EmailParticipants';
-import { EmailThreadTitle } from './EmailThreadTitle';
 import { openEmailReplyComposerForMessage } from './emailReplyActions';
 import { MessageList } from './MessageList';
 import { MobileEmailComposeDrawer } from './MobileEmailComposeDrawer';
@@ -53,9 +54,6 @@ import { TopBar } from './TopBar';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 const SCROLL_ANIMATION_MS = 1000;
-const SCROLL_AFTER_SEND_DELAY_MS = 100;
-const SCROLL_SETTLE_STABLE_FRAMES = 15;
-const SCROLL_SETTLE_MAX_MS = 2000;
 
 type EmailViewProps = {
   title: string;
@@ -88,12 +86,6 @@ function EmailContent(props: EmailViewProps) {
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { isLoading: isUserLoading } = useUserContext();
   const userEmail = useEmail();
-
-  const [isScrolled, setIsScrolled] = createSignal(false);
-
-  const handleScrollPositionChange = (scrollFromTop: number) => {
-    setIsScrolled(scrollFromTop > 1);
-  };
 
   const openTaskCompose = () => {
     const threadId = context.thread()?.db_id;
@@ -155,26 +147,20 @@ function EmailContent(props: EmailViewProps) {
   };
 
   /**
-   * Loads the next page only when there is more data to load and
-   * it's not already fetching
-   */
-  const fetchNextPage = () => {
-    if (context.query.hasMore() && !context.query.isFetching()) {
-      context.query.fetchNextPage();
-    }
-  };
-
-  /**
    * Performs scrolling to a message and updates focus.
    */
   const performScrollToMessage = (
     messageId: string,
-    opts: { behavior?: ScrollBehavior; focus?: boolean } = {
+    opts: {
+      behavior?: ScrollBehavior;
+      focus?: boolean;
+      align?: ScrollAlign;
+    } = {
       behavior: 'smooth',
       focus: true,
     }
   ) => {
-    opts = { focus: true, behavior: 'smooth', ...opts };
+    opts = { focus: true, behavior: 'smooth', align: 'start', ...opts };
     const messages = untrack(context.messages.list);
     const container = untrack(context.messagesListRef);
 
@@ -188,7 +174,7 @@ function EmailContent(props: EmailViewProps) {
 
     const success = scrollToMessage(messageId, messages, container, {
       behavior: opts.behavior,
-      reversed: true,
+      align: opts.align,
     });
 
     if (!success) {
@@ -202,203 +188,43 @@ function EmailContent(props: EmailViewProps) {
       }, TARGET_MESSAGE_HIGHLIGHT_MS);
     }
 
-    // Clear scrolling flag after animation
     setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
 
     return true;
   };
 
-  // Message bodies keep resizing briefly after render (images load, inline
-  // cid: images fail and collapse), so a scroll computed against that
-  // transient layout gets displaced — browser scroll anchoring can clamp it
-  // to the very top of the thread. Re-assert the initial scroll whenever the
-  // content height changes until layout settles or the user scrolls.
-  let cancelActiveScrollPin: (() => void) | undefined;
-  const pinInitialScroll = (messageId: string) => {
-    cancelActiveScrollPin?.();
-    const list = untrack(context.messagesListRef);
-    if (!list) return;
-
-    let cancelled = false;
-    let stableFrames = 0;
-    let lastHeight = list.scrollHeight;
-    const startedAt = performance.now();
-
-    const cancel = () => {
-      cancelled = true;
-      list.removeEventListener('wheel', cancel);
-      list.removeEventListener('touchstart', cancel);
-      list.removeEventListener('pointerdown', cancel);
-    };
-    cancelActiveScrollPin = cancel;
-    list.addEventListener('wheel', cancel, { passive: true });
-    list.addEventListener('touchstart', cancel, { passive: true });
-    list.addEventListener('pointerdown', cancel, { passive: true });
-
-    const tick = () => {
-      if (cancelled || !list.isConnected) return cancel();
-      if (list.scrollHeight !== lastHeight) {
-        lastHeight = list.scrollHeight;
-        stableFrames = 0;
-        performScrollToMessage(messageId, {
-          behavior: 'instant',
-          focus: false,
-        });
-      } else {
-        stableFrames++;
-      }
-      if (
-        stableFrames >= SCROLL_SETTLE_STABLE_FRAMES ||
-        performance.now() - startedAt > SCROLL_SETTLE_MAX_MS
-      ) {
-        return cancel();
-      }
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  };
-
-  const scrollToLastMessage = (
-    behavior: ScrollBehavior = 'instant',
-    focus = false
-  ) => {
-    const messages = context.messages.list();
-    if (!messages?.length) return;
-
-    const lastMessage = messages[messages.length - 1];
-
-    if (!lastMessage.db_id) return;
-
-    performScrollToMessage(lastMessage.db_id, { behavior, focus });
-  };
-
-  const firstUnreadMessageId = createMemo(() => {
-    const messages = context.messages.list().toSorted((a, b) => {
-      if (a.internal_date_ts && b.internal_date_ts) {
-        return (
-          new Date(a.internal_date_ts).getTime() -
-          new Date(b.internal_date_ts).getTime()
-        );
-      } else if (a.sent_at && b.sent_at) {
-        return new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime();
-      }
-      return 0;
-    });
-    return messages?.find((m) =>
-      m.labels.some((l) => l.provider_label_id === 'UNREAD')
-    )?.db_id;
-  });
-
   const canRunInitialEmailScroll = () =>
     !isTouchDevice() || splitPanel?.isPanelActive() !== false;
 
-  // ============================================
-  // PHASE 2: HANDLE TARGET MESSAGE SCROLLING
-  // ============================================
-  // This effect handles scrolling to a specific message (if provided via URL) or scrolling to the last message by default
-  // This effect should only run once.
+  // Open at the visual top. Do not hunt a message or pin the list.
   context.onInitialDataLoad(() => {
-    // Initial scroll positioning visibly shifts the email panel if it runs
-    // while the split is swiping in on touch devices.
     if (!canRunInitialEmailScroll()) return false;
 
-    // Check for target message
+    const list = untrack(context.messagesListRef);
+    if (!list) return false;
+
     const targetMessageId_ = context.messages.targetMessageID();
-
     if (targetMessageId_ && typeof targetMessageId_ !== 'string') return true;
-
-    if (targetMessageId_) {
-      handleTargetMessage(targetMessageId_);
-    } else {
-      const lastUnreadMessageId_ = untrack(firstUnreadMessageId);
-      // Check if there is an unread message
-      if (lastUnreadMessageId_) {
-        setTimeout(() => {
-          performScrollToMessage(lastUnreadMessageId_!, {
-            behavior: 'instant',
-          });
-          pinInitialScroll(lastUnreadMessageId_!);
-        });
-        context.messages.setFocused(lastUnreadMessageId_!);
-      } else {
-        scrollToLastMessage('instant', false);
-        const lastMessageId = untrack(context.messages.list).at(-1)?.db_id;
-        if (lastMessageId) pinInitialScroll(lastMessageId);
-      }
+    if (typeof targetMessageId_ === 'string') {
+      void revealTargetMessage(targetMessageId_);
     }
 
+    // col-reverse: scrollTop 0 is the newest (visual bottom).
+    list.scrollTop = list.clientHeight - list.scrollHeight;
     return true;
   });
 
-  /**
-   * Handles scrolling to a specific message ID from URL
-   */
-  async function handleTargetMessage(messageId: string) {
+  async function revealTargetMessage(messageId: string) {
+    context.messages.setExpandedBodyId(messageId, true);
     const messages = untrack(context.messages.list);
     if (!messages) return;
-    // Expand the target so the navigated-to hit isn't a collapsed row
-    context.messages.setExpandedBodyId(messageId, true);
-    const targetIndex = messages.findIndex((m) => m.db_id === messageId);
-
-    // Case 1: Message not in current loaded batch - need to load more
-    if (targetIndex < 0) {
-      try {
-        const found = await loadMessagesUntilFound(messageId);
-        if (found) {
-          // Load one more batch for scroll context
-          fetchNextPage();
-          await waitForQueryLoad();
-          // Scroll to the message after DOM updates
-          setTimeout(() => {
-            performScrollToMessage(messageId, { behavior: 'instant' });
-            pinInitialScroll(messageId);
-          });
-        } else {
-          // Message not found, fallback to last message
-          setTimeout(() => scrollToLastMessage('instant', true));
-        }
-      } catch (error) {
-        console.error('Error loading target message:', error);
-        setTimeout(() => scrollToLastMessage('instant', true));
-      }
-    }
-    // Case 2: Message is first in current batch - load more for context
-    else if (targetIndex === 0) {
-      fetchNextPage();
-      await waitForQueryLoad();
-      setTimeout(() => {
-        performScrollToMessage(messageId, { behavior: 'instant' });
-        pinInitialScroll(messageId);
-      });
-    }
-    // Case 3: Message is in current batch with sufficient context
-    else {
-      setTimeout(() => {
-        performScrollToMessage(messageId, { behavior: 'instant' });
-        pinInitialScroll(messageId);
-      });
+    if (messages.some((message) => message.db_id === messageId)) return;
+    try {
+      await loadMessagesUntilFound(messageId);
+    } catch (error) {
+      console.error('Error loading target message:', error);
     }
   }
-
-  // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom.
-  createEffect((prev: boolean | undefined) => {
-    const currentFocusedId = context.messages.focusedID();
-    const messages = context.messages.list();
-
-    if (!currentFocusedId || !messages) return true;
-
-    const currentIndex = messages.findIndex(
-      (m) => m.db_id === currentFocusedId
-    );
-    if (currentIndex < 0) return false;
-
-    if (prev === false) {
-      setTimeout(() => {
-        scrollToLastMessage('smooth');
-      }, SCROLL_AFTER_SEND_DELAY_MS);
-    }
-    return true;
-  });
 
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {
     const messages = context.messages.list();
@@ -743,33 +569,11 @@ function EmailContent(props: EmailViewProps) {
                   class="w-full flex-1 flex flex-col items-center overflow-hidden"
                   ref={context.registerMessagesContainer}
                 >
-                  <Show when={!isTouchDevice()}>
-                    <div class="shrink-0 w-full flex justify-center">
-                      <div
-                        class="macro-message-width macro-message-padding w-full border-b"
-                        classList={{
-                          'border-edge-muted/50': isScrolled(),
-                          'border-transparent': !isScrolled(),
-                        }}
-                      >
-                        <div class="h-12" />
-                        <EmailThreadTitle
-                          title={props.title}
-                          copyReveal="hover"
-                          class="text-2xl pb-1.5"
-                        />
-                        <div class="pb-2.5">
-                          <EmailParticipants />
-                        </div>
-                      </div>
-                    </div>
-                  </Show>
                   <MessageList
                     initialLoadComplete={context.initialLoadComplete()}
                     markdownDomRef={(el) => {
                       markdownDomRef = el;
                     }}
-                    onScrollPositionChange={handleScrollPositionChange}
                     title={props.title}
                     underScrollsBottom={!replyInputInFlow()}
                   />
