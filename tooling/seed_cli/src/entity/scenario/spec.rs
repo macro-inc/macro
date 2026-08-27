@@ -362,6 +362,11 @@ pub struct EmailThreadSpec {
     /// Plain-text body. Defaults to a short generated body.
     #[serde(default)]
     pub body: Option<String>,
+    /// Raw HTML body. Apply runs it through [`email_utils::sanitize_email_html`]
+    /// before writing `body_html_sanitized`. When omitted, the plaintext body
+    /// is wrapped in a paragraph and sanitized.
+    #[serde(default)]
+    pub body_html: Option<String>,
     /// Whether the thread is unread.
     #[serde(default)]
     pub unread: bool,

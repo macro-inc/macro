@@ -5,7 +5,6 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
-import { cn } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -40,9 +39,6 @@ export function ChannelThread(props: ThreadProps) {
   const displayName = () => getDisplayName(macroId());
   const thread = () => props.data().thread;
   const hasReplies = () => thread().reply_count > 0;
-  const threadHasNewMessages = () =>
-    props.listMeta?.isNewMessage === true ||
-    activeReplies().some((reply) => props.isNewMessage?.(reply) === true);
   const fetchRepliesEnabled = createThreadRepliesFetchGate({
     threadId: () => props.data().id,
     replyCount: () => thread().reply_count,
@@ -305,7 +301,6 @@ export function ChannelThread(props: ThreadProps) {
             <Thread.RootRail
               visible={hasReplies() || isReplyingToThread()}
               grouped={props.listMeta?.isGroupedWithPrevious}
-              newMessage={threadHasNewMessages()}
             />
             <MarkMessageNotifications
               messageId={props.data().id}
@@ -334,14 +329,14 @@ export function ChannelThread(props: ThreadProps) {
             when={hasReplies() || (props.isReplying() && !isUnifiedInputMode())}
           >
             <div class="relative w-full">
-              <Thread.RepliesBridgeRail newMessage={threadHasNewMessages()} />
+              <Thread.RepliesBridgeRail />
               {/* Terminal branch: the spine's final curve into the footer
                   button's left edge. Its vertical part starts exactly at the
                   last reply row's bottom (button h-8 + mb-2 + container pb). */}
               <Show
                 when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
               >
-                <Thread.TerminalRail newMessage={threadHasNewMessages()} />
+                <Thread.TerminalRail />
               </Show>
               <DebugSuspense name="ChannelThread.replies">
                 <Thread.RepliesContainer>
@@ -354,7 +349,6 @@ export function ChannelThread(props: ThreadProps) {
                       messageEditor={props.messageEditor}
                       participants={props.participants}
                       isNewMessage={props.isNewMessage}
-                      hasNewMessages={threadHasNewMessages()}
                       onReady={setReplyListHandle}
                       positionTarget={props.targetNavigation?.positionTarget}
                       selectedReplyId={replySelection.selectedId}
@@ -380,10 +374,7 @@ export function ChannelThread(props: ThreadProps) {
                           center. Once replies exist, it instead joins the
                           composer at its vertical center. */}
                       <div
-                        class={cn(
-                          'pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-rail rounded-bl-[14px]',
-                          threadHasNewMessages() && 'border-accent'
-                        )}
+                        class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
                         style={{
                           left: 'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)',
                           width:

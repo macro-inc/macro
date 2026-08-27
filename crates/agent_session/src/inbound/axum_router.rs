@@ -248,6 +248,20 @@ impl From<AgentSessionError> for AgentSessionApiError {
 impl IntoResponse for AgentSessionApiError {
     fn into_response(self) -> Response {
         match self {
+            // A session whose runtime is not attached is the everyday state of
+            // a self-hosted agent: the operator's daemon dials on a trigger and
+            // its bridge ends when the session goes quiet. Nothing is wrong
+            // here, and nothing the caller does again right now will land, so it
+            // answers 409 with a reason rather than a 500 that reads as a bug
+            // and buries the one fact worth showing a user.
+            Self::Domain(AgentSessionError::Disconnected(session_id)) => {
+                tracing::info!(%session_id, "action refused: the session's runtime is not connected");
+                (
+                    StatusCode::CONFLICT,
+                    "the agent's runtime is not connected to this session",
+                )
+                    .into_response()
+            }
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
             }

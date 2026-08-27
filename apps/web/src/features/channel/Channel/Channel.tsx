@@ -707,7 +707,11 @@ export function Channel(props: ChannelProps) {
   );
 
   return (
-    <EntityLoadGate result={messagesLoadResult}>
+    <EntityLoadGate
+      result={messagesLoadResult}
+      loadErrorTitle="Unable to load this channel"
+      onRetry={() => void messagesQuery.refetch()}
+    >
       <DebugSuspense name="Channel.root">
         <deleteConfirmation.ConfirmationDialog />
         <StaticMarkdownContext>

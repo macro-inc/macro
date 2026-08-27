@@ -104,7 +104,7 @@ test-watch:
     bunx --bun vitest
 
 test-email-rendering:
-    cd src/lib/core/email/tests && bunx playwright test && bunx playwright show-report
+    cd src/lib/core/email/tests && bunx playwright test
 
 test-email-rendering-update:
     cd src/lib/core/email/tests && bunx playwright test --update-snapshots

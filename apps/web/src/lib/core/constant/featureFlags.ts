@@ -581,13 +581,13 @@ export const BOT_MANAGEMENT_OVERRIDE =
 
 // Onboarding v4: the full-screen stepper new users land in after signup
 // (unified with /login), driving the import machinery with auto-import.
-// PostHog-gated with a dev-mode default; override with
-// VITE_ENABLE_ONBOARDING_V4. Read it through `useOnboardingV4Flag()` so the
-// gate reacts when PostHog answers (and so callers can wait instead of
-// treating "flags not loaded yet" as "off").
+// PostHog-gated; override with VITE_ENABLE_ONBOARDING_V4. Read it through
+// `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
+// callers can wait instead of treating "flags not loaded yet" as "off").
 export const ENABLE_ONBOARDING_V4_FLAG = 'enable-onboarding-v4';
 // Honor an explicit VITE_ENABLE_ONBOARDING_V4=false (don't coerce it to
 // undefined), else default on in dev and defer to PostHog in prod.
+// `just run_local` sets the env to false unless `--enable-onboarding`.
 export const ENABLE_ONBOARDING_V4_OVERRIDE =
   getFeatureFlagOverride('ENABLE_ONBOARDING_V4') ??
   (DEV_MODE_ENV ? true : undefined);

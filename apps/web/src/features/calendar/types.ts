@@ -2,6 +2,7 @@ import type { EventInput } from '@fullcalendar/core';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventType } from '@service-storage/generated/schemas/eventType';
 import { multiDayTimedDisplayRange } from './utils/calendar-date';
 import { canEditCalendarEventTime } from './utils/event-interaction';
 
@@ -28,6 +29,10 @@ export interface CalendarSource {
   name: string;
   /** Semantic CSS color used for events from this source. */
   color: string;
+  /** Connected inbox address, when the source came from a visible calendar. */
+  emailAddress?: string;
+  /** Whether this source is its connected inbox's primary calendar. */
+  isPrimary?: boolean;
 }
 
 /** Calendar occurrence data, independent from FullCalendar. */
@@ -55,10 +60,16 @@ export interface CalendarEvent {
   organizerName?: string;
   /** Event organizer email address. */
   organizerEmail?: string;
+  /** Provider-reported creator display name. */
+  creatorName?: string;
+  /** Provider-reported creator email address. */
+  creatorEmail?: string;
   /** Attendees and their RSVP metadata. */
   attendees: CalendarAttendee[];
   /** Per-user reminder configuration; absent means the calendar default. */
   reminders?: EventReminders;
+  /** Provider event type; absent means a regular event. */
+  eventType?: EventType;
   /** Canonical calendar entity id, for resolving default reminders. */
   calendarId?: string;
   /** Raw recurrence rules attached to the canonical event. */
@@ -88,6 +99,10 @@ export const DEFAULT_CALENDAR_SOURCE: CalendarSource = {
   color: 'var(--color-accent)',
 };
 
+function optionalText(value: string | null | undefined) {
+  return value ?? undefined;
+}
+
 /** Maps one backend occurrence projection into the calendar event model. */
 export function mapCalendarOccurrence(
   item: CalendarOccurrenceItem,
@@ -115,8 +130,11 @@ export function mapCalendarOccurrence(
       undefined,
     organizerName: event.organizerName ?? undefined,
     organizerEmail: event.organizerEmail ?? undefined,
+    creatorName: optionalText(event.creatorName),
+    creatorEmail: optionalText(event.creatorEmail),
     attendees: event.attendees ?? [],
     reminders: event.reminders ?? undefined,
+    eventType: event.eventType ?? undefined,
     calendarId: event.calendarId ?? undefined,
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: event.title,

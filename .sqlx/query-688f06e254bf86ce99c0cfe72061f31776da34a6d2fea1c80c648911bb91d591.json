@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calendar_event_reminder_firings (\n            event_id, occurrence_key, minutes_before, fire_at\n        )\n        SELECT DISTINCT\n            occurrence.event_id,\n            occurrence.occurrence_key,\n            offsets.minutes,\n            COALESCE(\n                occurrence.starts_at,\n                occurrence.start_date::timestamp AT TIME ZONE $2\n            ) - make_interval(mins => offsets.minutes)\n        FROM calendar_event_sources source\n        JOIN calendar_events event ON event.id = source.event_id\n        JOIN calendar_event_occurrences occurrence ON occurrence.event_id = event.id\n        CROSS JOIN LATERAL (\n            SELECT (reminder.value ->> 'minutes')::int AS minutes\n            FROM jsonb_array_elements(\n                CASE\n                    -- Status-style events never resolve the calendar\n                    -- defaults, mirroring EventType::uses_calendar_default_reminders.\n                    WHEN event.reminders_use_default\n                        AND event.event_type IN ('default', 'from_gmail')\n                        THEN $3::jsonb\n                    WHEN event.reminders_use_default THEN '[]'::jsonb\n                    ELSE event.reminder_overrides\n                END\n            ) AS reminder(value)\n            WHERE reminder.value ->> 'method' = 'popup'\n              AND (reminder.value ->> 'minutes')::int >= 0\n        ) offsets\n        WHERE source.calendar_id = $1\n          AND (\n              SELECT canonical.calendar_id\n              FROM calendar_event_sources canonical\n              WHERE canonical.event_id = event.id\n              ORDER BY\n                  canonical.source_sequence DESC,\n                  canonical.source_updated_at DESC,\n                  canonical.last_seen_at DESC,\n                  canonical.id DESC\n              LIMIT 1\n          ) = $1\n          AND event.status <> 'cancelled'\n          AND NOT occurrence.is_cancelled\n          AND COALESCE(\n                occurrence.starts_at,\n                occurrence.start_date::timestamp AT TIME ZONE $2\n              ) - make_interval(mins => offsets.minutes) > now() - interval '1 day'\n        ON CONFLICT (event_id, occurrence_key, minutes_before) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "688f06e254bf86ce99c0cfe72061f31776da34a6d2fea1c80c648911bb91d591"
+}

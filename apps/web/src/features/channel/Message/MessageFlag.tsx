@@ -27,7 +27,7 @@ export function MessageFlag(props: MessageFlagProps) {
       <div
         class={cn(
           'absolute top-7 mobile:top-8 h-0 border-t inset-x-0',
-          props.highlight ? 'border-accent/40' : 'border-rail'
+          props.highlight ? 'border-accent/40' : 'border-thread-rail'
         )}
       />
       {/* Plain label; its surface background carves the gap in the line. */}

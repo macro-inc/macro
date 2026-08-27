@@ -20,7 +20,7 @@
 import { ScrollToBottomOverlay } from '@channel/Channel/ScrollToBottomOverlay';
 import type { ThreadListScrollState } from '@channel/Channel/ThreadList';
 import { Scroll } from '@ui';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { Message } from './AgentMessage';
@@ -33,7 +33,7 @@ const SETTLE_MS = 1000;
 const ITEM_SIZE = 96;
 
 export function Transcript() {
-  const { messages, loadFailed } = useAgentSession();
+  const { messages } = useAgentSession();
 
   let scrollRef: HTMLDivElement | undefined;
   let handle: VirtualizerHandle | undefined;
@@ -165,11 +165,6 @@ export function Transcript() {
         >
           {/* Bottom-align short transcripts, chat-style. */}
           <div aria-hidden style={{ 'flex-grow': 1 }} />
-          <Show when={loadFailed()}>
-            <div class="w-full max-w-3xl mx-auto px-4 py-4 text-sm text-ink-muted">
-              Couldn't load this agent session.
-            </div>
-          </Show>
           <div ref={observeGrowth}>
             <Virtualizer
               ref={(virtualizer) => {
