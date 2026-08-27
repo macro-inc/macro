@@ -11,9 +11,8 @@ use axum::body::Body;
 use axum::extract::{Path, Request, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD as BASE64;
-use http::header::AUTHORIZATION;
+use axum_extra::headers::authorization::{Basic, Bearer};
+use axum_extra::headers::{Authorization, HeaderMapExt};
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
 use std::sync::Arc;
@@ -202,32 +201,19 @@ where
 
 /// Read the session token off a request.
 ///
-/// Both presentations are accepted because git cannot manage the first: it
-/// only knows how to hand a credential helper's username and password to
-/// Basic auth, so the token arrives as the password. The username half is
-/// whatever the helper chose and carries no meaning here.
+/// Both schemes are accepted because git cannot manage the first: it only
+/// knows how to hand a credential helper's username and password to Basic
+/// auth, so the token arrives as the password. The username half is whatever
+/// the helper chose and carries no meaning here.
 fn session_token(headers: &HeaderMap) -> Result<SessionToken, EgressError> {
-    let value = headers
-        .get(AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .ok_or(EgressError::Unauthenticated)?;
-
-    if let Some(token) = value.strip_prefix("Bearer ") {
-        return Ok(SessionToken::new(token));
+    if let Some(Authorization(bearer)) = headers.typed_get::<Authorization<Bearer>>() {
+        return Ok(SessionToken::new(bearer.token()));
     }
 
-    let encoded = value
-        .strip_prefix("Basic ")
-        .ok_or(EgressError::Unauthenticated)?;
-    let decoded = BASE64
-        .decode(encoded.trim())
-        .map_err(|_| EgressError::Unauthenticated)?;
-    let decoded = String::from_utf8(decoded).map_err(|_| EgressError::Unauthenticated)?;
-    let (_username, password) = decoded
-        .split_once(':')
-        .ok_or(EgressError::Unauthenticated)?;
-
-    Ok(SessionToken::new(password))
+    headers
+        .typed_get::<Authorization<Basic>>()
+        .map(|Authorization(basic)| SessionToken::new(basic.password()))
+        .ok_or(EgressError::Unauthenticated)
 }
 
 /// axum's body is already an `http_body::Body`, so this is an error-type

@@ -11,6 +11,9 @@ agent_fold = { path = "../agent_fold", default-features = false }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 axum = { workspace = true }
+# `headers`' typed `Authorization`, which owns the Bearer/Basic parsing the
+# session-token extraction would otherwise hand-roll.
+axum-extra = { workspace = true, features = ["typed-header"] }
 base64 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }

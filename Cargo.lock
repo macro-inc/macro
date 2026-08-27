@@ -177,6 +177,7 @@ dependencies = [
  "agent_session",
  "anyhow",
  "axum",
+ "axum-extra",
  "base64 0.22.1",
  "bytes",
  "chrono",

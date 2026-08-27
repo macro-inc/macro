@@ -1,7 +1,10 @@
 use super::*;
 use crate::domain::model::{GitService, ProxyBody, RepoSlug};
 use axum::body::to_bytes;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use http::Method;
+use http::header::AUTHORIZATION;
 use http_body_util::Empty;
 use std::sync::Mutex;
 use tower::ServiceExt;
