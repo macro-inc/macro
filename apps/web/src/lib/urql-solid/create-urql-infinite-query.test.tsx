@@ -8,7 +8,7 @@ import {
 } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
-import { makeSubject, onEnd, pipe } from 'wonka';
+import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
 import { createUrqlInfiniteQuery } from './create-urql-infinite-query';
 import { InfiniteQueryObserver } from './infinite-query-observer';
 
@@ -104,6 +104,98 @@ describe('createUrqlInfiniteQuery', () => {
     expect(observer.getCurrentResult()).toBe(updated);
     expect(selectCalls).toBe(1);
 
+    const page = { values: ['same'], nextCursor: null };
+    fake.executions[0]?.next(page);
+    const selected = observer.getCurrentResult().data;
+    expect(selectCalls).toBe(2);
+
+    fake.executions[0]?.next(page);
+    expect(observer.getCurrentResult().data).toBe(selected);
+    expect(selectCalls).toBe(2);
+
+    fake.executions[0]?.next({ ...page });
+    expect(selectCalls).toBe(3);
+
+    observer.destroy();
+  });
+
+  it('reselects unchanged pages when the selector changes', () => {
+    const fake = makeFakeClient();
+    const firstSelect = ({ pages }: { pages: Page[] }) =>
+      pages.flatMap((page) => page.values);
+    const observer = new InfiniteQueryObserver<
+      Page,
+      Variables,
+      string | null,
+      string[]
+    >(fake.client, {
+      query: DOCUMENT,
+      initialPageParam: null,
+      variables: (cursor) => ({ cursor }),
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      select: firstSelect,
+    });
+
+    fake.executions[0]?.next({ values: ['first'], nextCursor: null });
+    const secondSelect = ({ pages }: { pages: Page[] }) =>
+      pages.flatMap((page) => page.values.map((value) => `${value}-selected`));
+    observer.setOptions(
+      {
+        query: DOCUMENT,
+        initialPageParam: null,
+        variables: (cursor) => ({ cursor }),
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+        select: secondSelect,
+      },
+      fake.client
+    );
+
+    expect(observer.getCurrentResult().data).toEqual(['first-selected']);
+    observer.destroy();
+  });
+
+  it('coalesces derivation while setting up the initial page', () => {
+    const page = { values: ['cached'], nextCursor: null };
+    let selectCalls = 0;
+    let paginationCalls = 0;
+    const client = {
+      executeQuery: (
+        _request: GraphQLRequest<Page, Variables>,
+        context: Partial<OperationContext>
+      ) => {
+        const operation = {
+          kind: 'query',
+          context,
+        } as Operation<Page, Variables>;
+        return fromValue({ operation, data: page } as OperationResult<
+          Page,
+          Variables
+        >);
+      },
+    } as unknown as Client;
+
+    const observer = new InfiniteQueryObserver<
+      Page,
+      Variables,
+      string | null,
+      string[]
+    >(client, {
+      query: DOCUMENT,
+      initialPageParam: null,
+      variables: (cursor) => ({ cursor }),
+      getNextPageParam: (lastPage) => {
+        paginationCalls += 1;
+        return lastPage.nextCursor;
+      },
+      select: ({ pages }) => {
+        selectCalls += 1;
+        return pages.flatMap((currentPage) => currentPage.values);
+      },
+    });
+
+    expect(observer.getCurrentResult().data).toEqual(['cached']);
+    expect(selectCalls).toBe(1);
+    expect(paginationCalls).toBe(1);
     observer.destroy();
   });
 

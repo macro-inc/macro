@@ -63,6 +63,11 @@ use favorites::{
 };
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 
+use collab_surface::{
+    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
+    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
+    outbound::surface_init::LexicalSyncSurfaceInitializer,
+};
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -164,12 +169,22 @@ type DssSoupState =
 /// Realtime Soup consumer service used by GraphQL subscriptions.
 pub(crate) type DssSoupRealtimeService = SoupRealtimeConsumerService<SoupTopicConsumer>;
 
+/// Realtime notification consumer service used by GraphQL subscriptions.
+pub(crate) type DssNotificationRealtimeService =
+    notification::domain::service::WebSocketNotificationConsumerService<
+        notification::outbound::notification_consumer::NotificationTopicConsumer<
+            model_notifications::NotifEvent,
+        >,
+        model_notifications::NotifEvent,
+    >;
+
 /// GraphQL Soup schema wired to the DSS services; the `ApiContext` state
 /// parameter lets GraphQL resolvers run the same axum extractors as the REST
 /// routes, lazily, against the stored request parts.
 pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssSoupService,
     DssSoupRealtimeService,
+    DssNotificationRealtimeService,
     DssEmailService,
     EntityAccessService,
     AuthorizationService,
@@ -183,7 +198,12 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
     Arc<FavoritesServiceType>,
     Arc<EntityAccessService>,
+    DssActivityReader,
 >;
+
+/// GraphQL activity reader over the Postgres activity log (readonly pool).
+pub(crate) type DssActivityReader =
+    complete_graph::ActivityPortReader<activity::outbound::pg_activity_repo::PgActivityRepo>;
 
 type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -361,7 +381,7 @@ pub(crate) type CallConnectionService =
 pub(crate) type DssVoipPushSender = Option<
     notification::domain::service::VoipPushServiceImpl<
         notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
-        aws_sdk_sns::Client,
+        notification::outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
     >,
 >;
 
@@ -424,6 +444,14 @@ pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the collab-surface service.
+pub(crate) type CollabSurfaceServiceType =
+    CollabSurfaceServiceImpl<PgCollabSurfaceRepo, LexicalSyncSurfaceInitializer>;
+
+/// Type alias for the collab-surface router state.
+pub(crate) type DssCollabSurfaceState =
+    CollabSurfaceRouterState<CollabSurfaceServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the foreign entity service.
 pub(crate) type ForeignEntityServiceType = ForeignEntityServiceImpl<PgForeignEntityRepo>;
 
@@ -470,10 +498,12 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub reminders_state: DssRemindersState,
+    pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,
     pub sqs_client: Arc<sqs_client::SQS>,
@@ -539,6 +569,7 @@ impl From<&ApiContext> for SearchHandlerState {
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
+            calendar_search_enabled: ctx.config.calendar_search_enabled,
         }
     }
 }

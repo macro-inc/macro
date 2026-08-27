@@ -501,7 +501,7 @@ export default function DocumentWherePlayground() {
               <For each={EXAMPLES}>
                 {(example) => (
                   <Button
-                    variant="base"
+                    variant="outline"
                     size="sm"
                     class="h-auto justify-start py-1.5"
                     onClick={() => applyExample(example)}
@@ -592,7 +592,7 @@ export default function DocumentWherePlayground() {
           </section>
 
           <section class="flex gap-2">
-            <Button variant="base" size="sm" onClick={loadJsonFromControls}>
+            <Button variant="outline" size="sm" onClick={loadJsonFromControls}>
               Edit JSON
             </Button>
             <Button
@@ -652,7 +652,7 @@ export default function DocumentWherePlayground() {
               </div>
               <Show when={nextCursor()}>
                 <Button
-                  variant="base"
+                  variant="outline"
                   size="sm"
                   disabled={loading()}
                   onClick={() => run(nextCursor())}

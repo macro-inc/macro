@@ -10,6 +10,8 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
+  CalendarEventEntity,
+  CalendarEventEntityTime,
   CallEntity,
   ChannelEntity,
   ChannelMessageEntity,
@@ -29,6 +31,7 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
+import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
   CallRecordSearchResult,
   ChannelSearchResult,
@@ -41,6 +44,7 @@ import type {
 import type {
   GithubPullRequest,
   SoupApiItem,
+  SoupCalendarEventTime,
   SoupPage,
   SoupReminderReference,
 } from '@service-storage/generated/schemas';
@@ -58,11 +62,7 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-// Calendar soup rendering lands with the calendar FE; skip those items for now.
-type DisplayableSoupItem = Exclude<
-  SoupPage['items'][number],
-  { tag: 'calendarEvent' }
->;
+type DisplayableSoupItem = SoupPage['items'][number];
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
@@ -75,6 +75,7 @@ type SoupEntity =
   | CallEntity
   | CrmCompanyEntity
   | ReminderEntity
+  | CalendarEventEntity
   | ForeignEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
@@ -542,6 +543,40 @@ export const useSearchResponseItemMapper = () => {
         ];
       }
 
+      case 'calendarEvent': {
+        if (!result.metadata) return [];
+        const search = getSearchData({
+          results: result.calendar_event_search_results,
+        });
+
+        // A recurring series is indexed once, as its master. The service
+        // resolves which instance this row means — next upcoming, else most
+        // recent past — so prefer that span over the master's, which for a
+        // long-running series is its original (stale) start.
+        const metadata = result.metadata;
+        const time = toCalendarEventTime(
+          metadata.occurrence?.time ?? metadata.time
+        );
+
+        return [
+          {
+            type: 'calendar_event',
+            id: result.id,
+            name: result.name,
+            ownerId: result.owner_id,
+            status: metadata.status,
+            time,
+            occurrenceKey: metadata.occurrence?.occurrenceKey,
+            conferenceUrl: metadata.conferenceUrl ?? undefined,
+            isReadOnly: metadata.isReadOnly,
+            createdAt: metadata.createdAt,
+            updatedAt: metadata.updatedAt,
+            properties: result.properties ?? undefined,
+            search,
+          },
+        ];
+      }
+
       case 'call': {
         if (!result.metadata) return [];
         const search = getSearchData({
@@ -603,7 +638,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item) && item.tag !== 'calendarEvent';
+): item is DisplayableSoupItem => Boolean(item);
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -953,10 +988,40 @@ export const mapApiSoupItemToEntity = (
         frecencyScore: item.frecency_score,
       } satisfies ReminderEntity;
     })
+    .with({ tag: 'calendarEvent' }, (item) => {
+      return {
+        type: 'calendar_event',
+        id: item.data.id,
+        name: item.data.title,
+        ownerId: item.data.ownerId,
+        status: item.data.status,
+        time: toCalendarEventTime(item.data.time),
+        conferenceUrl: item.data.conferenceUrl ?? undefined,
+        isReadOnly: item.data.isReadOnly,
+        createdAt: item.data.createdAt,
+        updatedAt: item.data.updatedAt,
+        properties: item.data.extra.properties,
+        frecencyScore: item.frecency_score,
+      } satisfies CalendarEventEntity;
+    })
     .exhaustive();
 
-  return withRawNotifications(entity, item);
+  // Attached once for every tag: only touched_by_me pages carry the field,
+  // and the Recent feed's client sort reads it off the entity. Resolved
+  // through the own-touch floor so a touched refetch that outran the
+  // activity consumer can't move a freshly-touched row back down.
+  const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
+  const touched = touchedAt ? { ...entity, touchedAt } : entity;
+
+  return withRawNotifications(touched, item);
 };
+
+const toCalendarEventTime = (
+  time: SoupCalendarEventTime
+): CalendarEventEntityTime =>
+  time.kind === 'timed'
+    ? { kind: 'timed', startsAt: time.startsAt, endsAt: time.endsAt }
+    : { kind: 'allDay', startDate: time.startDate, endDate: time.endDate };
 
 export const isInstructionsMdDoc = (
   item: SoupApiItem,

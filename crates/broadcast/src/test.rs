@@ -70,7 +70,7 @@ async fn returns_the_unpublished_value_when_there_are_no_subscribers() {
 #[tokio::test]
 async fn removes_a_key_after_its_last_receiver_closes() {
     let manager = BroadcastManager::<_, &str, usize>::new(TaskTracker::new(), capacity(8));
-    let receiver = manager.subscribe("user", capacity(2));
+    let receiver = manager.subscribe("user", capacity(2)).into_receiver();
 
     assert!(manager.subscriber_count(&"user") > 0);
     assert_eq!(manager.subscriber_count(&"user"), 1);
@@ -87,7 +87,8 @@ async fn removes_a_key_after_its_last_receiver_closes() {
 #[tokio::test]
 async fn disconnects_a_subscriber_when_its_buffer_is_full() {
     let manager = BroadcastManager::new(TaskTracker::new(), capacity(8));
-    let mut receiver = manager.subscribe("user", capacity(1));
+    let subscription = manager.subscribe("user", capacity(1));
+    let (mut receiver, exit_reason) = subscription.into_parts();
 
     assert_eq!(manager.publish(&"user", 1).unwrap(), 1);
     wait_until(|| receiver.len() == 1).await;
@@ -97,6 +98,7 @@ async fn disconnects_a_subscriber_when_its_buffer_is_full() {
 
     assert_eq!(receiver.recv().await, Some(1));
     assert_eq!(receiver.recv().await, None);
+    assert_eq!(exit_reason.await, Ok(ExitReason::SlowConsumer));
 
     manager.shutdown().await;
 }

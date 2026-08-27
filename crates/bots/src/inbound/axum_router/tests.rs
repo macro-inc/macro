@@ -11,8 +11,9 @@ use axum::{
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityPermission,
-        EntityType, ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -150,8 +151,7 @@ impl BotService for TestBotService {
 
     async fn add_bot_to_channel(
         &self,
-        _caller: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _bot_id: BotId,
     ) -> Result<(), BotError> {
         self.add_calls.fetch_add(1, Ordering::SeqCst);
@@ -560,6 +560,7 @@ fn sample_self_bot(bot_id: BotId) -> Bot {
         created_at: now,
         updated_at: now,
         deleted_at: None,
+        has_agent: false,
     }
 }
 
@@ -825,12 +826,26 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
                 handle: "bot-route-alerts".to_string(),
                 description: Some("Posts alarm notifications".to_string()),
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await?;
 
     bot_service
-        .add_bot_to_channel(macro_user_id(BOT_OWNER_ID), channel_id, bot.id)
+        .add_bot_to_channel(
+            EntityAccessReceipt::try_new_authenticated_user(
+                macro_user_id(BOT_OWNER_ID),
+                Entity {
+                    entity_id: channel_id.to_string(),
+                    entity_type: EntityType::Channel,
+                },
+                EntityPermission::ChannelRole {
+                    role: EntityParticipantRole::Member,
+                },
+            )
+            .expect("member role satisfies channel membership"),
+            bot.id,
+        )
         .await?;
 
     let bot_principal_id = bot.id.into_storage_id().to_string();
@@ -911,6 +926,7 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
                 handle: "datadog-alerts".to_string(),
                 description: Some("Posts alarm notifications".to_string()),
                 avatar_url: None,
+                has_agent: None,
             },
         )
         .await?;
@@ -969,6 +985,99 @@ async fn channel_admin_can_add_and_remove_owned_bot_via_http(pool: PgPool) -> an
 
     let left_at: Option<chrono::DateTime<chrono::Utc>> = participant.try_get("left_at")?;
     assert!(left_at.is_some());
+
+    Ok(())
+}
+
+async fn read_bot(response: axum::response::Response) -> Bot {
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_owner_can_create_and_patch_has_agent_via_http(pool: PgPool) -> anyhow::Result<()> {
+    const BOT_OWNER_ID: &str = "macro|has-agent-owner@example.com";
+    insert_user(&pool, BOT_OWNER_ID).await?;
+    let router = real_router(pool, BOT_OWNER_ID);
+
+    let create_agent_request = Request::builder()
+        .method("POST")
+        .uri("/bots")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "name": "Agent Bot",
+                "handle": "agent-bot",
+                "has_agent": true,
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let create_agent_response = router.clone().oneshot(create_agent_request).await.unwrap();
+    assert_eq!(create_agent_response.status(), StatusCode::CREATED);
+    assert!(read_bot(create_agent_response).await.has_agent);
+
+    let create_plain_request = Request::builder()
+        .method("POST")
+        .uri("/bots")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({
+                "name": "Plain Bot",
+                "handle": "plain-bot",
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let create_plain_response = router.clone().oneshot(create_plain_request).await.unwrap();
+    assert_eq!(create_plain_response.status(), StatusCode::CREATED);
+    let plain_bot = read_bot(create_plain_response).await;
+    assert!(!plain_bot.has_agent);
+
+    let enable_request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/bots/{}", plain_bot.id))
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({ "has_agent": true }).to_string(),
+        ))
+        .unwrap();
+
+    let enable_response = router.clone().oneshot(enable_request).await.unwrap();
+    assert_eq!(enable_response.status(), StatusCode::OK);
+    assert!(read_bot(enable_response).await.has_agent);
+
+    let rename_request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/bots/{}", plain_bot.id))
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({ "name": "Renamed Bot" }).to_string(),
+        ))
+        .unwrap();
+
+    let rename_response = router.clone().oneshot(rename_request).await.unwrap();
+    assert_eq!(rename_response.status(), StatusCode::OK);
+    let renamed_bot = read_bot(rename_response).await;
+    assert_eq!(renamed_bot.name, "Renamed Bot");
+    assert!(renamed_bot.has_agent);
+
+    let disable_request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/bots/{}", plain_bot.id))
+        .header("content-type", "application/json")
+        .body(Body::from(
+            serde_json::json!({ "has_agent": false }).to_string(),
+        ))
+        .unwrap();
+
+    let disable_response = router.oneshot(disable_request).await.unwrap();
+    assert_eq!(disable_response.status(), StatusCode::OK);
+    assert!(!read_bot(disable_response).await.has_agent);
 
     Ok(())
 }

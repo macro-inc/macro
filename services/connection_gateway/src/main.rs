@@ -35,6 +35,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
@@ -140,6 +141,7 @@ async fn main() -> Result<()> {
             Duration::from_secs(60),
         )),
     })
+    .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
     .layer(cors);
 
     tracing::info!(

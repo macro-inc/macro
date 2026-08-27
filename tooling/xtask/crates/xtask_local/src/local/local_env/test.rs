@@ -2,9 +2,14 @@ use super::*;
 use crate::local::Mode;
 use crate::local::instance::{Instance, Port};
 
+/// The merged env a `--no-doppler` stack sees: boot stubs below, the
+/// authoritative local env on top (mirrors `env_layer::resolve`).
 fn local_env() -> BTreeMap<String, String> {
     let instance = Instance::derive(None, None).expect("default instance derives");
-    LocalEnv::for_instance(Mode::Local, &instance, true).to_env()
+    let local = LocalEnv::for_instance(Mode::Local, &instance, true);
+    let mut env = local.boot_stub_env();
+    env.extend(local.to_env());
+    env
 }
 
 /// Every key a local service relies on must be present — this is the test that
@@ -31,12 +36,127 @@ fn emits_required_keys() {
         "FUSIONAUTH_PUBLIC_URL",
         "FUSIONAUTH_OAUTH_REDIRECT_URI",
         "JWT_SECRET_KEY",
+        // Boot-blocking stubs — service config loaders require these even in a
+        // no-doppler stack (see `BootStubEnv`).
+        "REDIS_HOST",
+        "MACRO_DB_URL",
+        "INTERNAL_API_KEY",
+        "AUTHENTICATION_SERVICE_SECRET_KEY",
+        "OPENSEARCH_USERNAME",
+        "OPENSEARCH_PASSWORD",
+        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL",
+        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
+        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY",
+        "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET_KEY",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
+        "GITHUB_IDP_ID",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PRICE_ID",
+        "STRIPE_WEBHOOK_SECRET_KEY",
+        "MACRO_API_TOKEN_ISSUER",
+        "MACRO_API_TOKEN_PUBLIC_KEY",
+        "MACRO_API_TOKEN_PRIVATE_SECRET_KEY",
+        "MACRO_API_TOKEN_EXPIRY_SECONDS",
+        "GMAIL_GCP_QUEUE",
+        "APOLLO_API_KEY",
+        "EMAIL_SERVICE_CLOUDFRONT_DISTRIBUTION_URL",
+        "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY",
+        "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID",
+        "APPLE_BUNDLE_ID",
+        "SNS_APNS_PLATFORM_ARN",
+        "SNS_FCM_PLATFORM_ARN",
+        "MCP_CREDENTIALS_KEY_SECRET_NAME",
+        "ANTHROPIC_API_KEY",
+        "SLACK_MCP_CLIENT_ID",
+        "SLACK_MCP_CLIENT_SECRET",
+        "GITHUB_SYNC_APP_URL",
+        "GITHUB_SYNC_APP_CLIENT_ID",
+        "GITHUB_SYNC_APP_CLIENT_SECRET",
+        "GITHUB_INSTALLATION_STATE_SECRET",
+        "GITHUB_WEBHOOK_SECRET_KEY",
+        "GITHUB_SYNC_APP_PEM_SECRET_KEY",
+        "LIVEKIT_SERVER_URL",
+        "LIVEKIT_API_KEY",
+        "LIVEKIT_API_SECRET",
+        "OPENAI_API_KEY",
+        "COHERE_API_KEY",
+        "CAL_WEBHOOK_SECRET_KEY",
+        "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",
+        "META_PIXEL_ID",
+        "META_ACCESS_TOKEN",
+        "GITHUB_TOKEN",
+        "DEV_DANGEROUS_LOCAL_CONTAINERS",
+        "LOCAL_CONTAINER_IMAGE",
+        "LOCAL_CONTAINER_NETWORK",
+        "DAYTONA_API_KEY",
+        "HARNESS_BOT_ID",
     ] {
         assert!(
             env.contains_key(key),
             "missing required local env key: {key}"
         );
     }
+}
+
+/// Boot stubs are a fallback layer BELOW Doppler; `to_env` is authoritative
+/// ABOVE Doppler. A key present in both would make its precedence ambiguous —
+/// whichever map wrote last would silently win.
+#[test]
+fn boot_stubs_do_not_overlap_authoritative_env() {
+    let instance = Instance::derive(None, None).expect("default instance derives");
+    let local = LocalEnv::for_instance(Mode::Local, &instance, true);
+    let authoritative = local.to_env();
+    for key in local.boot_stub_env().keys() {
+        assert!(
+            !authoritative.contains_key(key),
+            "{key} is in both boot_stub_env and to_env"
+        );
+    }
+}
+
+/// The boot stubs must be local-only values: the same in-network endpoints the
+/// rest of the env uses, dummy creds, and never a real secret or deployed URL.
+#[test]
+fn boot_stubs_are_local_only() {
+    let env = local_env();
+    assert_eq!(
+        env.get("REDIS_HOST").map(String::as_str),
+        Some("redis://redis:6379")
+    );
+    assert_eq!(
+        env.get("MACRO_DB_URL").map(String::as_str),
+        Some("postgres://user:password@postgres:5432/macrodb")
+    );
+    // INTERNAL_API_KEY must agree with the internal-auth key other services
+    // validate against, or every internal call 401s.
+    assert_eq!(
+        env.get("INTERNAL_API_KEY"),
+        env.get("INTERNAL_API_SECRET_KEY"),
+        "INTERNAL_API_KEY must match INTERNAL_API_SECRET_KEY"
+    );
+    assert_eq!(
+        env.get("AUTHENTICATION_SERVICE_SECRET_KEY"),
+        env.get("INTERNAL_API_SECRET_KEY"),
+        "AUTHENTICATION_SERVICE_SECRET_KEY must match INTERNAL_API_SECRET_KEY"
+    );
+    assert_eq!(
+        env.get("OPENSEARCH_USERNAME").map(String::as_str),
+        Some("macrouser")
+    );
+}
+
+#[test]
+fn internal_auth_values_are_authoritative_local_env() {
+    let env =
+        LocalEnv::for_instance(Mode::Local, &Instance::derive(None, None).unwrap(), true).to_env();
+    let expected = env.get("INTERNAL_API_SECRET_KEY");
+
+    assert_eq!(env.get("INTERNAL_API_KEY"), expected);
+    assert_eq!(env.get("INTERNAL_AUTH_KEY"), expected);
+    assert_eq!(env.get("AUTHENTICATION_SERVICE_SECRET_KEY"), expected);
 }
 
 /// Local must never point at real dev/prod infrastructure: endpoints are docker
@@ -79,6 +199,10 @@ fn emits_in_network_service_url_overrides() {
         (
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
             "http://document-storage-service:8080",
+        ),
+        (
+            "OVERRIDE_LEXICAL_SERVICE_URL",
+            "http://lexical-service:8096",
         ),
     ] {
         assert_eq!(env.get(key).map(String::as_str), Some(expected));
@@ -147,5 +271,51 @@ fn fusionauth_public_url_uses_the_instance_host_port() {
     assert_eq!(
         named_env.get("FUSIONAUTH_PUBLIC_URL").map(String::as_str),
         Some(named_public_url.as_str())
+    );
+}
+
+/// A local stack runs sandboxes on the developer's own daemon, so it needs no
+/// Daytona account to exercise the sandbox path.
+#[test]
+fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
+    let env = local_env();
+
+    assert_eq!(
+        env.get("DEV_DANGEROUS_LOCAL_CONTAINERS")
+            .map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(env.get("DAYTONA_API_KEY").map(String::as_str), Some(""));
+    // Present so `GITHUB_TOKEN=... just run_local` overlays, but empty in a
+    // no-Doppler stack. Doppler would supply a real token above this stub.
+    assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
+    // No `CURSOR_API_KEY`: `@cursor` sessions run on the key each user
+    // registers in settings, so there is no deployment-wide one to stub.
+    assert!(!env.contains_key("CURSOR_API_KEY"));
+}
+
+/// Sandboxes and the harness are both containers, so they reach each other on a
+/// shared Compose network and never over the host's loopback. The network name
+/// has to track the instance, or a named stack's sandboxes join the wrong one.
+#[test]
+fn local_sandboxes_join_the_instances_compose_network() {
+    let named = Instance::derive(Some("2508"), None).unwrap();
+    let default_env =
+        LocalEnv::for_instance(Mode::Local, &Instance::derive(None, None).unwrap(), true).to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true).to_env();
+
+    assert_eq!(
+        default_env
+            .get("LOCAL_CONTAINER_NETWORK")
+            .map(String::as_str),
+        Some("macro_services")
+    );
+    assert_eq!(
+        named_env.get("LOCAL_CONTAINER_NETWORK").map(String::as_str),
+        Some(format!("{}_services", named.project_name()).as_str())
+    );
+    assert_eq!(
+        default_env.get("LOCAL_CONTAINER_IMAGE").map(String::as_str),
+        Some("macro-agent-harness:latest")
     );
 }

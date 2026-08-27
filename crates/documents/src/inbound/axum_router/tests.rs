@@ -51,7 +51,7 @@ use crate::{
         models::{
             CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
             DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-            LocationQueryParams, TaskBranchName,
+            ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
         },
         ports::{DocumentContentEventService, DocumentService, create::DocumentCreationService},
         response::{
@@ -80,7 +80,12 @@ const RESOLVED_DOCUMENT_ID: &str = "resolved-document";
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CreateDocumentCall {
     user_id: String,
-    email_attachment_id: Option<Uuid>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ImportEmailAttachmentCall {
+    user_id: String,
+    email_attachment_id: Uuid,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -113,6 +118,7 @@ enum TeamSlugResult {
 #[derive(Default)]
 struct FakeDocumentService {
     create_calls: Mutex<Vec<CreateDocumentCall>>,
+    import_calls: Mutex<Vec<ImportEmailAttachmentCall>>,
     upload_snapshot_calls: Mutex<Vec<UploadSnapshotCall>>,
     content_uploaded_calls: Mutex<Vec<ContentUploadedCall>>,
     internal_get_calls: Mutex<Vec<String>>,
@@ -126,6 +132,13 @@ impl FakeDocumentService {
         self.create_calls
             .lock()
             .expect("create calls lock poisoned")
+            .clone()
+    }
+
+    fn import_calls(&self) -> Vec<ImportEmailAttachmentCall> {
+        self.import_calls
+            .lock()
+            .expect("import calls lock poisoned")
             .clone()
     }
 
@@ -277,13 +290,28 @@ impl DocumentService for FakeDocumentService {
     async fn create_document(
         &self,
         user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        _args: CreateDocumentRepoArgs,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         self.create_calls
             .lock()
             .expect("create calls lock poisoned")
             .push(CreateDocumentCall {
+                user_id: user_id.as_ref().to_string(),
+            });
+
+        Ok(create_document_response(user_id))
+    }
+
+    async fn import_email_attachment(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        args: ImportEmailAttachmentRepoArgs,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        self.import_calls
+            .lock()
+            .expect("import calls lock poisoned")
+            .push(ImportEmailAttachmentCall {
                 user_id: user_id.as_ref().to_string(),
                 email_attachment_id: args.email_attachment_id,
             });
@@ -1121,11 +1149,12 @@ async fn legacy_internal_headers_reach_the_internal_only_creation_path() {
     let (status, _body) = send(&router, request).await;
 
     assert_eq!(status, StatusCode::OK);
+    assert!(document_service.create_calls().is_empty());
     assert_eq!(
-        document_service.create_calls(),
-        [CreateDocumentCall {
+        document_service.import_calls(),
+        [ImportEmailAttachmentCall {
             user_id: LEGACY_INTERNAL_USER_ID.to_string(),
-            email_attachment_id: Some(email_attachment_id),
+            email_attachment_id,
         }]
     );
     assert!(!authorization_service.calls().is_empty());
@@ -1153,9 +1182,9 @@ async fn standard_internal_headers_reach_the_document_service() {
         document_service.create_calls(),
         [CreateDocumentCall {
             user_id: STANDARD_INTERNAL_USER_ID.to_string(),
-            email_attachment_id: None,
         }]
     );
+    assert!(document_service.import_calls().is_empty());
     assert!(!authorization_service.calls().is_empty());
     assert!(authorization_service.calls().iter().all(|call| matches!(
         call,
@@ -1183,9 +1212,9 @@ async fn standard_internal_headers_take_precedence_over_legacy_headers() {
         document_service.create_calls(),
         [CreateDocumentCall {
             user_id: STANDARD_INTERNAL_USER_ID.to_string(),
-            email_attachment_id: None,
         }]
     );
+    assert!(document_service.import_calls().is_empty());
     assert!(!authorization_service.calls().is_empty());
     assert!(authorization_service.calls().iter().all(|call| matches!(
         call,
@@ -1213,4 +1242,5 @@ async fn jwt_user_cannot_create_a_document_for_an_email_attachment() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body, json!({ "message": "unauthorized" }));
     assert!(document_service.create_calls().is_empty());
+    assert!(document_service.import_calls().is_empty());
 }

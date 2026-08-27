@@ -235,6 +235,11 @@ pub struct EntityPropertyMutationSnapshot {
     pub property: EntityProperty,
     /// The complete value after the mutation.
     pub value: Option<PropertyValue>,
+    /// The complete value before the mutation: `None` when the property was
+    /// not previously attached (or the stored value didn't decode). Captured
+    /// in the same statement/transaction as the write, so it feeds the
+    /// "changed X from A to B" activity transition.
+    pub previous_value: Option<PropertyValue>,
 }
 
 /// The reconciled final option ids for one property after a bulk update. The

@@ -7,16 +7,15 @@ use models_email::email::service::{
 
 /// Map one initialization queue delivery into the email-backfill application service.
 #[tracing::instrument(
-    skip(ctx, access_token, link, backfill_job),
+    skip(ctx, link, backfill_job),
     fields(link_id = %link.id, job_id = %backfill_job.id),
     err
 )]
 pub async fn init_backfill(
     ctx: &PubSubContext,
-    access_token: &str,
     scope: &JobScopedPayload<InitPayload>,
     link: &Link,
     backfill_job: &BackfillJob,
 ) -> Result<(), ProcessingError> {
-    backfill_init_service::init_backfill(ctx, access_token, scope, link, backfill_job).await
+    backfill_init_service::init_backfill(ctx, scope, link, backfill_job).await
 }

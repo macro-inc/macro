@@ -17,6 +17,12 @@ export type EntityBase = {
   name: string;
   ownerId: string;
   frecencyScore?: number;
+  /**
+   * The viewer's latest own mutation of this entity, present only on rows
+   * from `touched_by_me` pages. The Recent feed sorts on it, so mutation
+   * helpers may bump it optimistically.
+   */
+  touchedAt?: DateValue | null;
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;
@@ -324,7 +330,9 @@ export type ReminderEntity = EntityBase & {
    * assignable to the preview/open helpers, which only know real targets. */
   referencedEntity?: {
     id: string;
-    type: Exclude<EntityType, 'reminder'>;
+    // Calendar events are excluded alongside reminders: neither has a
+    // previewable block, and the mapper yields `undefined` for both.
+    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
     fileType?: string;
     subType?: string;
   };
@@ -342,6 +350,30 @@ export type ReminderEntity = EntityBase & {
   completedAt?: DateValue | null;
 };
 
+/** Normalized time shape of a calendar event soup row. */
+export type CalendarEventEntityTime =
+  | { kind: 'timed'; startsAt: string; endsAt: string }
+  | { kind: 'allDay'; startDate: string; endDate: string };
+
+export type CalendarEventEntity = EntityBase & {
+  type: 'calendar_event';
+  /** Canonical event status (`confirmed`, `tentative`, `cancelled`). */
+  status: string;
+  /** Master event time. Absent when the wire shape could not be read. */
+  time?: CalendarEventEntityTime;
+  /**
+   * The instance this row means, when one was resolved. Search rows carry it
+   * so a click lands on the relevant occurrence of a recurring series rather
+   * than the master's original start; soup rows leave it unset.
+   */
+  occurrenceKey?: string;
+  /** Direct join URL when known. */
+  conferenceUrl?: string;
+  /** Whether the canonical source prohibits mutation. */
+  isReadOnly: boolean;
+  properties?: SoupProperty[];
+};
+
 export type EntityData =
   | ChannelEntity
   | ChannelMessageEntity
@@ -357,6 +389,7 @@ export type EntityData =
   | CrmContactEntity
   | AutomationEntity
   | ReminderEntity
+  | CalendarEventEntity
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
@@ -372,6 +405,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_contact',
   'automation',
   'reminder',
+  'calendar_event',
   'foreign',
 ]);
 

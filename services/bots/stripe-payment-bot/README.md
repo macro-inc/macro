@@ -1,19 +1,20 @@
 # stripe-payment-bot
 
-Posts to every Macro channel containing the bot when a new Stripe payment is
-received. It can be deployed from any Cloudflare account; it has no dependency
-on a Macro-owned Worker or domain.
+Posts to every Macro channel containing the bot when Stripe reports a new
+payment or a subscription cancellation. It can be deployed from any Cloudflare
+account; it has no dependency on a Macro-owned Worker or domain.
 
-The bot handles paid Checkout sessions, delayed payment methods, and the first
-successful invoice after a free trial. Unpaid sessions and unrelated Stripe
-events are acknowledged and ignored.
+The bot handles paid Checkout sessions, delayed payment methods, the first
+successful invoice after a free trial, `customer.subscription.deleted`, and
+`customer.subscription.updated` when `cancel_at_period_end` flips from false to
+true. Unpaid sessions and unrelated Stripe events are acknowledged and ignored.
 
 ## How it works
 
 ```text
 Stripe webhook ──POST /webhook──> Cloudflare Worker
                                    │ Stripe SDK verifies the signature
-                                   │ identify the first real payment
+                                   │ map the event to a payment or cancellation
                                    ▼
                   Macro SDK → list the bot's channel memberships
                             → POST each channel's bot webhook
@@ -55,8 +56,9 @@ printf '%s' 'https://your-storage-api.example.com' | \
   wrangler secret put MACRO_STORAGE_URL
 ```
 
-`STRIPE_API_KEY` can be a restricted key with read access to subscriptions; it
-is only used to confirm that a paid invoice is the first one after a trial.
+`STRIPE_API_KEY` can be a restricted key with read access to subscriptions and
+customers. The Worker uses it to confirm that a paid invoice is the first one
+after a trial, and to resolve customer name and email on cancellation events.
 
 Wrangler prints the URL assigned to the Worker in the deploying Cloudflare
 account. In Stripe Workbench, create a webhook destination pointing to:
@@ -70,6 +72,8 @@ Subscribe it to these events:
 - `checkout.session.completed`
 - `checkout.session.async_payment_succeeded`
 - `invoice.paid`
+- `customer.subscription.deleted`
+- `customer.subscription.updated`
 
 Copy that destination's signing secret (`whsec_...`) into the Worker secret
 above. Test-mode and live-mode webhook destinations have different signing
@@ -87,7 +91,7 @@ Forward Stripe test events to the local server:
 
 ```bash
 stripe listen \
-  --events checkout.session.completed,checkout.session.async_payment_succeeded,invoice.paid \
+  --events checkout.session.completed,checkout.session.async_payment_succeeded,invoice.paid,customer.subscription.deleted,customer.subscription.updated \
   --forward-to localhost:8787/webhook
 ```
 
@@ -102,4 +106,5 @@ than adding a database solely for deduplication.
 
 ```bash
 just check
+just test
 ```

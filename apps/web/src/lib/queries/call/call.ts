@@ -1,7 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { type CallRecord, callServiceClient } from '@service-call/client';
+import type { ActiveCallSummary } from '@service-storage/generated/schemas/activeCallSummary';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -17,30 +19,20 @@ export function useActiveCallQuery(channelId: Accessor<string>) {
   }));
 }
 
-export function useActiveCallsForChannelsQuery(channelIds: Accessor<string[]>) {
-  return useQuery(() => {
-    const ids = [...new Set(channelIds())].sort();
-
-    return {
-      queryKey: callKeys.activeChannels(ids).queryKey,
-      queryFn: async (): Promise<CallActiveResponse[]> => {
-        const activeCalls = await Promise.all(
-          ids.map(async (channelId) =>
-            throwOnErr(() => callServiceClient.checkActiveCall(channelId))
-          )
-        );
-
-        return activeCalls
-          .filter((call): call is CallActiveResponse => call !== null)
-          .sort(
-            (a, b) =>
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-      },
-      refetchInterval: 15_000,
-      enabled: ids.length > 0,
-    };
-  });
+/**
+ * All active calls in channels the user is a member of, newest first. One
+ * request app-wide; the websocket
+ * call_started/call_ended handlers keep it live.
+ */
+export function useActiveCallsQuery() {
+  return useQuery(() => ({
+    queryKey: callKeys.allActive.queryKey,
+    queryFn: async () =>
+      await throwOnErr(() => callServiceClient.getActiveCalls()),
+    placeholderData: [] as ActiveCallSummary[],
+    refetchInterval: 30_000,
+    enabled: ENABLE_CALLS(),
+  }));
 }
 
 export function setActiveCallStartedCache(call: CallActiveResponse) {
@@ -49,8 +41,8 @@ export function setActiveCallStartedCache(call: CallActiveResponse) {
     call
   );
 
-  queryClient.setQueriesData<CallActiveResponse[]>(
-    { queryKey: callKeys.activeChannels._def },
+  queryClient.setQueryData<ActiveCallSummary[]>(
+    callKeys.allActive.queryKey,
     (prev) => {
       if (!prev) return prev;
       const withoutDuplicate = prev.filter(
@@ -58,7 +50,8 @@ export function setActiveCallStartedCache(call: CallActiveResponse) {
           activeCall.callId !== call.callId &&
           activeCall.channelId !== call.channelId
       );
-      return [call, ...withoutDuplicate].sort(
+      // The websocket event carries no count; the creator is in the call.
+      return [{ ...call, participantCount: 1 }, ...withoutDuplicate].sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
@@ -75,8 +68,8 @@ export function setActiveCallEndedCache(params: {
     null
   );
 
-  queryClient.setQueriesData<CallActiveResponse[]>(
-    { queryKey: callKeys.activeChannels._def },
+  queryClient.setQueryData<ActiveCallSummary[]>(
+    callKeys.allActive.queryKey,
     (prev) =>
       prev?.filter(
         (call) =>
@@ -86,10 +79,7 @@ export function setActiveCallEndedCache(params: {
 }
 
 export function invalidateActiveCallQueries() {
-  return Promise.all([
-    queryClient.invalidateQueries({ queryKey: callKeys.active._def }),
-    queryClient.invalidateQueries({ queryKey: callKeys.activeChannels._def }),
-  ]);
+  return queryClient.invalidateQueries({ queryKey: callKeys.active._def });
 }
 
 function _useJoinCallMutation() {

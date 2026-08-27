@@ -4,6 +4,8 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { EventReminderOverride } from './eventReminderOverride';
 import type { VisibleCalendarColor } from './visibleCalendarColor';
 
 /**
@@ -12,6 +14,8 @@ import type { VisibleCalendarColor } from './visibleCalendarColor';
 export interface VisibleCalendar {
   /** Provider color. */
   color?: VisibleCalendarColor;
+  /** Default reminders applied to events that keep `useDefault`. */
+  defaultReminders: EventReminderOverride[];
   /** Connected inbox address, for grouping in multi-inbox pickers. */
   emailAddress: string;
   /** Connected inbox that syncs this calendar. */

@@ -355,6 +355,9 @@ function applyEventPatch(
   if (patch.location !== undefined) {
     event.location = patch.location;
   }
+  if (patch.reminders !== undefined && patch.reminders !== null) {
+    event.reminders = patch.reminders;
+  }
   const time = patch.time ?? undefined;
   const isStandalone =
     event.recurrenceLines.length === 0 &&

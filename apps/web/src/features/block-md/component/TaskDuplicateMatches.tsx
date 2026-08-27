@@ -181,7 +181,7 @@ function DismissDuplicateButton(props: { onDismiss: () => void }) {
   return (
     <Button
       depth={2}
-      variant="base"
+      variant="outline"
       size="sm"
       class="h-6 shrink-0 px-2 text-xs"
       onClick={props.onDismiss}
@@ -195,7 +195,7 @@ function DismissAllButton(props: { onDismissAll: () => void }) {
   return (
     <Button
       depth={2}
-      variant="base"
+      variant="outline"
       size="sm"
       class="mt-1 w-fit text-xs"
       onClick={props.onDismissAll}
@@ -210,7 +210,7 @@ function TaskDuplicateRow(props: {
   onDismiss: () => void;
 }) {
   return (
-    <div class={cn('rounded-lg px-2 py-1.5', 'hover:bg-surface-hover')}>
+    <div class={cn('rounded-lg px-2 py-1.5', 'hover:bg-hover')}>
       <div class="flex min-w-0 items-center gap-1.5">
         <TaskDuplicateMention match={props.match} />
         <DismissDuplicateButton onDismiss={props.onDismiss} />

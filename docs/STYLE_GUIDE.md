@@ -84,9 +84,9 @@ TypeScript · `[ui]` UI / UX conventions
   the catch-all crates must shrink, not accumulate. (#4380)
 - **CS-24** `[arch]` Keep source files under ~1000 lines — split before a reviewer has
   to ask. (#4364)
-- **CS-25** `[arch]` `mod.rs` declares submodules; it doesn't host logic — move real
-  code into its own module file. (#4175 · enforced: ast-grep
-  `rust-mod-rs-declarations-only`, hint)
+- **CS-25** `[arch]` `mod.rs` declares submodules; it doesn't host logic — prefer the
+  `foo.rs` + `foo/` file-and-directory style for modules with logic. (#4175 · enforced:
+  ast-grep `rust-mod-rs-declarations-only`, error)
 - **CS-26** `[arch]` Reuse before reimplementing — if the logic plausibly exists
   (service clients, permission checks, oauth utils, the `agent` crate), find it and
   reuse/extract it instead of writing a second copy. (#3692, #4020, #4380, #4485)
@@ -142,12 +142,27 @@ TypeScript · `[ui]` UI / UX conventions
   in the implementation file. (#4647 · also: CLAUDE.md)
 - **CS-50** `[test]` Update tests and run `just prepare_db` with any db-crate change.
   (also: CLAUDE.md)
+- **CS-51** `[arch]` Domain modules reference no infrastructure or transport: no AWS
+  SDKs, redis, reqwest, opensearch, kafka, axum, or http types under `src/domain/**` —
+  wrap clients in outbound adapters behind ports; response mapping lives in inbound.
+  (enforced: ast-grep `rust-no-infra-in-domain` warning,
+  `rust-no-transport-in-domain` error · also: cloud-storage-hexagonal-architecture
+  skill)
+- **CS-52** `[arch]` Dependencies point inward: `src/domain/**` never imports
+  `crate::inbound`/`crate::outbound`, and `src/outbound/**` never imports
+  `crate::inbound` — define a port in domain and implement it in the adapter.
+  (enforced: ast-grep `rust-domain-no-adapter-imports` warning,
+  `rust-outbound-no-inbound-imports` error)
+- **CS-53** `[arch]` Inbound adapters run no database queries — handlers, tools, and
+  listeners call a domain service backed by an outbound repository, never sqlx
+  directly. (enforced: ast-grep `rust-no-sqlx-in-inbound`, warning)
 
 ## Frontend and shared TypeScript (`apps/web`, `packages/`)
 
 - **FE-01** `[data]` Never call a service client outside the `queries` package — UI code
   calling an endpoint directly is usually re-fetching data an existing query already
-  caches. (#3750, #3961 · also: AGENTS.md)
+  caches. (#3750, #3961 · enforced: ast-grep `ts-no-service-client-outside-queries` +
+  `tsx-no-service-client-outside-queries`, warning · also: AGENTS.md)
 - **FE-02** `[data]` Every query module has a `keys.ts` structured like the existing
   ones. (#3710)
 - **FE-03** `[data]` Conditional fetching uses a debounced signal passed to TanStack
@@ -222,3 +237,8 @@ TypeScript · `[ui]` UI / UX conventions
   If none exists below the app root, or the nearest one is far outside the component's
   own UI scope (e.g. the route-level boundary in `apps/web/src/routes/Root.tsx`, whose
   fallback blanks unrelated UI), flag it and ask which boundary is intended.
+- **FE-30** `[ui]` Never hoist Tailwind class strings into named constants
+  (`const DAY_CELL_CLASS = '...'`) — shared markup+styling is a component; a class
+  string can't carry structure, props, or behavior. Extract a component, or inline the
+  literal at its single use; styling variants are component props, not exported
+  strings. (enforced: ast-grep `tsx-no-class-string-consts`, warning)

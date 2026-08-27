@@ -29,4 +29,3 @@ pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter, normalize_request_
 
 pub use rig_core::completion::CompletionError;
 pub use rig_core::message::Message;
-pub use rig_core::tool::{Tool, ToolDyn};

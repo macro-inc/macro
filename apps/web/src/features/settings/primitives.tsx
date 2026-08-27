@@ -30,8 +30,11 @@ export function SettingsPage(props: {
   children: JSX.Element;
 }) {
   return (
-    <div class="h-full overflow-y-auto">
-      <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 mobile:px-5 mobile:pt-8 mobile:pb-12">
+    <div class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]">
+      {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
+          scroll content (plus the usual breathing room) so pages scroll under
+          the floating header and bottom rows like every other block. */}
+      <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
         {/* Headers are inset by the card's inner padding so the title and
             section labels line up with the leftmost content inside the cards,
             while the cards themselves stay full-width. */}

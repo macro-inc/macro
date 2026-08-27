@@ -1,4 +1,8 @@
-import { Button, Panel } from '@ui';
+import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import CellSignalHighIcon from '@phosphor-icons/core/regular/cell-signal-high.svg?component-solid';
+import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
+import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
+import { Badge, Button, Panel } from '@ui';
 import { For } from 'solid-js';
 
 const LOREM_SHORT = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
@@ -22,22 +26,36 @@ const INK_VARIANTS = [
   { name: 'text-ink-placeholder', class: 'text-ink-placeholder' },
 ] as const;
 
-const BUTTON_VARIANTS = ['ghost', 'base', 'active', 'danger'] as const;
+const BUTTON_VARIANTS = [
+  'ghost',
+  'outline',
+  'accent',
+  'strong',
+  'danger',
+  'cta',
+] as const;
+const BUTTON_CONTENT_VARIANTS = ['outline', 'accent', 'strong', 'cta'] as const;
 const BUTTON_SIZES = ['sm', 'md', 'lg'] as const;
+const BADGE_VARIANTS = ['ghost', 'outline'] as const;
+const BUTTON_SIZE_LABELS = {
+  sm: 'Small',
+  md: 'Default',
+  lg: 'Large',
+} as const;
 
 function ThemeDebug() {
   return (
-    <div class="size-full overflow-auto bg-surface p-6">
+    <div class="size-full overflow-auto p-6">
       <div class="flex flex-col gap-8 max-w-6xl mx-auto">
         <h1 class="text-2xl font-bold text-ink">Theme Debug</h1>
 
         {/* Panel Depths Section */}
         <section class="flex flex-col gap-4">
-          <h2 class="text-xl font-semibold text-ink">Panel Depths (0-5)</h2>
+          <h2 class="text-xl font-semibold text-ink">Panel Depths (0-4)</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <For each={[0, 1, 2, 3, 4, 5] as const}>
+            <For each={[0, 1, 2, 3, 4] as const}>
               {(depth) => (
-                <Panel depth={depth} class="min-h-40">
+                <Panel depth={depth} class="min-h-40 bg-surface">
                   <Panel.Header>
                     <span class="text-sm font-medium text-ink">
                       Depth {depth}
@@ -53,19 +71,16 @@ function ThemeDebug() {
 
           {/* Nested panels to show depth hierarchy */}
           <h3 class="text-lg font-medium text-ink mt-4">Nested Panel Depths</h3>
-          <Panel depth={0} class="p-4">
+          <Panel depth={0} class="bg-surface p-4">
             <p class="text-xs text-ink-muted mb-2">Depth 0</p>
-            <Panel depth={1} class="p-4">
+            <Panel depth={1} class="bg-surface p-4">
               <p class="text-xs text-ink-muted mb-2">Depth 1</p>
-              <Panel depth={2} class="p-4">
+              <Panel depth={2} class="bg-surface p-4">
                 <p class="text-xs text-ink-muted mb-2">Depth 2</p>
-                <Panel depth={3} class="p-4">
+                <Panel depth={3} class="bg-surface p-4">
                   <p class="text-xs text-ink-muted mb-2">Depth 3</p>
-                  <Panel depth={4} class="p-4">
-                    <p class="text-xs text-ink-muted mb-2">Depth 4</p>
-                    <Panel depth={5} class="p-4">
-                      <p class="text-xs text-ink-muted">Depth 5 (innermost)</p>
-                    </Panel>
+                  <Panel depth={4} class="bg-surface p-4">
+                    <p class="text-xs text-ink-muted">Depth 4 (innermost)</p>
                   </Panel>
                 </Panel>
               </Panel>
@@ -77,12 +92,12 @@ function ThemeDebug() {
         <section class="flex flex-col gap-4">
           <h2 class="text-xl font-semibold text-ink">Active Panels</h2>
           <p class="text-sm text-ink-muted">
-            Panels with the `active` prop show an accent border gradient.
+            Panels with the `active` prop show the active focus ring.
           </p>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <For each={[1, 2, 3] as const}>
               {(depth) => (
-                <Panel depth={depth} class="min-h-32">
+                <Panel active depth={depth} class="min-h-32 bg-surface">
                   <Panel.Header>
                     <span class="text-sm font-medium text-ink">
                       Active Depth {depth}
@@ -90,7 +105,7 @@ function ThemeDebug() {
                   </Panel.Header>
                   <Panel.Body class="p-4">
                     <p class="text-sm text-ink-muted">
-                      Active panel with accent styling
+                      Active panel using its layer-relative surface
                     </p>
                   </Panel.Body>
                 </Panel>
@@ -204,7 +219,8 @@ function ThemeDebug() {
         <section class="flex flex-col gap-4">
           <h2 class="text-xl font-semibold text-ink">Button Variants</h2>
           <p class="text-sm text-ink-muted">
-            All button variants: ghost, base, active, and danger.
+            All button variants: ghost, outline, accent, strong, danger, and
+            CTA.
           </p>
 
           <Panel depth={1}>
@@ -220,7 +236,7 @@ function ThemeDebug() {
                         <For each={BUTTON_SIZES}>
                           {(size) => (
                             <Button variant={variant} size={size}>
-                              {size.toUpperCase()} Button
+                              {BUTTON_SIZE_LABELS[size]}
                             </Button>
                           )}
                         </For>
@@ -236,62 +252,149 @@ function ThemeDebug() {
           </Panel>
         </section>
 
-        {/* Button Sizes with Icons */}
+        {/* Button content and size combinations */}
         <section class="flex flex-col gap-4">
-          <h2 class="text-xl font-semibold text-ink">Button Sizes</h2>
+          <h2 class="text-xl font-semibold text-ink">
+            Button Size × Content Matrix
+          </h2>
           <p class="text-sm text-ink-muted">
-            All button sizes including icon variants.
+            Icon-only, text-only, and icon + text buttons use the same size prop
+            and share a height within each row.
           </p>
 
           <Panel depth={1}>
             <Panel.Body class="p-4">
-              <div class="flex flex-col gap-4">
-                <div class="flex flex-wrap gap-2 items-center">
-                  <Button variant="base" size="sm">
-                    Small
-                  </Button>
-                  <Button variant="base" size="md">
-                    Medium
-                  </Button>
-                  <Button variant="base" size="lg">
-                    Large
-                  </Button>
+              <div class="flex flex-col gap-6">
+                <For each={BUTTON_SIZES}>
+                  {(size) => (
+                    <div class="flex flex-col items-start gap-2">
+                      <span class="text-xs text-ink-extra-muted font-mono">
+                        size="{size}"
+                      </span>
+                      <div class="flex flex-col items-start gap-3">
+                        <For each={BUTTON_CONTENT_VARIANTS}>
+                          {(variant) => (
+                            <div class="flex flex-col items-start gap-1.5">
+                              <span class="text-xs text-ink-extra-muted font-mono">
+                                variant="{variant}"
+                              </span>
+                              <div class="flex flex-wrap items-end gap-4">
+                                <div class="flex flex-col items-start gap-1.5">
+                                  <span class="text-xs text-ink-extra-muted">
+                                    Icon only
+                                  </span>
+                                  <Button
+                                    variant={variant}
+                                    size={size}
+                                    square
+                                    label={`Add (${variant}, ${size})`}
+                                  >
+                                    <PlusIcon />
+                                  </Button>
+                                </div>
+                                <div class="flex flex-col items-start gap-1.5">
+                                  <span class="text-xs text-ink-extra-muted">
+                                    Text only
+                                  </span>
+                                  <Button variant={variant} size={size}>
+                                    Button
+                                  </Button>
+                                </div>
+                                <div class="flex flex-col items-start gap-1.5">
+                                  <span class="text-xs text-ink-extra-muted">
+                                    Icon + text
+                                  </span>
+                                  <Button variant={variant} size={size}>
+                                    <PlusIcon />
+                                    Button
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Panel.Body>
+          </Panel>
+        </section>
+
+        {/* Badge variants and sizes */}
+        <section class="flex flex-col gap-4">
+          <h2 class="text-xl font-semibold text-ink">Badge Variants</h2>
+          <p class="text-sm text-ink-muted">
+            Ghost and outline badges share the Button sm, md, and lg size
+            definitions.
+          </p>
+
+          <Panel depth={1}>
+            <Panel.Body class="p-4">
+              <div class="flex flex-col gap-6">
+                <div class="flex flex-col items-start gap-2">
+                  <span class="text-xs text-ink-extra-muted font-mono">
+                    Content samples · size="sm"
+                  </span>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" size="sm">
+                      <span
+                        aria-hidden="true"
+                        class="size-2 rounded-full bg-blue"
+                      />
+                      tags
+                    </Badge>
+                    <Badge variant="outline" size="sm">
+                      <span
+                        aria-hidden="true"
+                        class="size-2 rounded-full bg-pink"
+                      />
+                      tags-ux
+                    </Badge>
+                    <Badge variant="outline" size="sm">
+                      <span class="inline-flex size-[1em] items-center justify-center rounded-full bg-pink text-surface-4">
+                        <CheckIcon aria-hidden="true" class="size-[0.65em]" />
+                      </span>
+                      Completed
+                      <CaretDownIcon aria-hidden="true" />
+                    </Badge>
+                    <Badge variant="outline" size="sm">
+                      <CellSignalHighIcon aria-hidden="true" />
+                      High
+                      <CaretDownIcon aria-hidden="true" />
+                    </Badge>
+                  </div>
                 </div>
-                <div class="flex flex-wrap gap-2 items-center">
-                  <Button variant="base" size="icon-sm">
-                    <svg
-                      class="size-4"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M12 4v16m-8-8h16" />
-                    </svg>
-                  </Button>
-                  <Button variant="base" size="icon-md">
-                    <svg
-                      class="size-5"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M12 4v16m-8-8h16" />
-                    </svg>
-                  </Button>
-                  <Button variant="base" size="icon-lg">
-                    <svg
-                      class="size-6"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M12 4v16m-8-8h16" />
-                    </svg>
-                  </Button>
-                </div>
+                <For each={BUTTON_SIZES}>
+                  {(size) => (
+                    <div class="flex flex-col items-start gap-2">
+                      <span class="text-xs text-ink-extra-muted font-mono">
+                        size="{size}"
+                      </span>
+                      <div class="flex flex-wrap items-end gap-4">
+                        <For each={BADGE_VARIANTS}>
+                          {(variant) => (
+                            <div class="flex flex-col items-start gap-1.5">
+                              <span class="text-xs text-ink-extra-muted font-mono">
+                                variant="{variant}"
+                              </span>
+                              <div class="flex flex-wrap items-center gap-2">
+                                <Badge variant={variant} size={size}>
+                                  Badge
+                                </Badge>
+                                <Badge variant={variant} size={size}>
+                                  <PlusIcon />
+                                  Badge
+                                </Badge>
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </Panel.Body>
           </Panel>
@@ -309,7 +412,7 @@ function ThemeDebug() {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <For each={[1, 2, 3, 4] as const}>
               {(depth) => (
-                <Panel depth={depth}>
+                <Panel depth={depth} class="bg-surface">
                   <Panel.Header>
                     <span class="text-sm font-medium text-ink">
                       Panel Depth {depth}
@@ -320,10 +423,10 @@ function ThemeDebug() {
                       <Button variant="ghost" depth={depth}>
                         Ghost
                       </Button>
-                      <Button variant="base" depth={depth}>
+                      <Button variant="outline" depth={depth}>
                         Base
                       </Button>
-                      <Button variant="active" depth={depth}>
+                      <Button variant="accent" depth={depth}>
                         Active
                       </Button>
                       <Button variant="danger" depth={depth}>
@@ -356,7 +459,7 @@ function ThemeDebug() {
               <Button variant="ghost" size="sm">
                 Cancel
               </Button>
-              <Button variant="active" size="sm">
+              <Button variant="accent" size="sm">
                 Confirm
               </Button>
             </Panel.Footer>

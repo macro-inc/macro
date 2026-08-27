@@ -72,6 +72,8 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
         'quote',
         'code',
         'custom-code',
+        'image',
+        'video',
       ];
       return editor.registerNodeTransform(TableCellNode, (node) => {
         const children = node.getChildren();

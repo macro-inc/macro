@@ -6,9 +6,11 @@
  */
 import type { CalendarAttendeeInputBody } from './calendarAttendeeInputBody';
 import type { CreateCalendarEventRequestCalendarId } from './createCalendarEventRequestCalendarId';
+import type { CreateCalendarEventRequestConference } from './createCalendarEventRequestConference';
 import type { CreateCalendarEventRequestDescription } from './createCalendarEventRequestDescription';
 import type { CreateCalendarEventRequestEmailLinkId } from './createCalendarEventRequestEmailLinkId';
 import type { CreateCalendarEventRequestLocation } from './createCalendarEventRequestLocation';
+import type { CreateCalendarEventRequestReminders } from './createCalendarEventRequestReminders';
 import type { CreateCalendarEventRequestTransparency } from './createCalendarEventRequestTransparency';
 import type { CreateCalendarEventRequestVisibility } from './createCalendarEventRequestVisibility';
 import type { EventTime } from './eventTime';
@@ -22,6 +24,7 @@ export interface CreateCalendarEventRequest {
   /** Exact calendar to create the event on; takes precedence over the
 inbox default. */
   calendarId?: CreateCalendarEventRequestCalendarId;
+  conference?: CreateCalendarEventRequestConference;
   /** Optional event body. */
   description?: CreateCalendarEventRequestDescription;
   /** Connected inbox whose primary calendar receives the event; defaults
@@ -31,6 +34,7 @@ to the requester's primary inbox. */
   location?: CreateCalendarEventRequestLocation;
   /** Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`). */
   recurrenceLines?: string[];
+  reminders?: CreateCalendarEventRequestReminders;
   /** Timed or all-day shape. */
   time: EventTime;
   /** Display title. */

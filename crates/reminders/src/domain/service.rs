@@ -6,15 +6,17 @@ pub mod dispatch;
 mod test;
 
 use chrono::{DateTime, Utc};
+use chrono_tz::Tz;
 use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CreateReminder, MAX_DESCRIPTION_LEN, NewReminder, Reminder, ReminderBatch, ReminderCursor,
-    ReminderError, ReminderFilter, ReminderForSoup, ReminderPage, ReminderPatch, ReminderSchedule,
-    ReminderUpdate, ScheduleUpdate, SoupReminderQuery,
+    CreateReminder, MAX_DESCRIPTION_LEN, MAX_RECURRING_LATENESS, MIN_RECURRING_INTERVAL,
+    NewReminder, Reminder, ReminderBatch, ReminderCron, ReminderCursor, ReminderError,
+    ReminderFilter, ReminderForSoup, ReminderPage, ReminderPatch, ReminderSchedule, ReminderUpdate,
+    ScheduleUpdate, SoupReminderQuery,
 };
 use crate::domain::ports::{Clock, RemindersRepo, RemindersService, SystemClock};
 
@@ -22,6 +24,14 @@ use crate::domain::ports::{Clock, RemindersRepo, RemindersService, SystemClock};
 ///
 /// Only reached when rows cannot be decoded; a normal page costs one read.
 const MAX_LIST_BATCHES: usize = 5;
+
+/// How many consecutive gaps the minimum-interval check measures.
+///
+/// Enough to cover a schedule that clusters several firings and then waits —
+/// the shape a single-gap check reads differently depending on the hour the
+/// request arrives — without walking a cron that fires yearly out to its
+/// hundredth occurrence.
+const INTERVAL_SAMPLE_FIRINGS: usize = 8;
 
 /// Concrete reminders service backed by a [RemindersRepo].
 #[derive(Debug, Clone)]
@@ -89,6 +99,44 @@ fn derive_next_run_at(
     })
 }
 
+/// Reject a cron that fires more often than [`MIN_RECURRING_INTERVAL`].
+///
+/// Measured between the next two firings rather than parsed out of the
+/// expression, so it holds for every way of writing a too-frequent schedule
+/// instead of the handful someone thought to pattern-match. A cron with fewer
+/// than two firings left cannot be too frequent, so it passes.
+fn validate_recurring_interval(
+    cron: &ReminderCron,
+    timezone: Tz,
+    now: DateTime<Utc>,
+) -> Result<(), ReminderError> {
+    // Several gaps, not just the next one. A cron's firings need not be evenly
+    // spaced — `0 0,4 9 * * *` fires at 09:00 and 09:04 daily — so measuring
+    // only the first gap after `now` makes acceptance depend on when the
+    // request happened to arrive: rejected at 08:59, accepted at 09:02, for the
+    // same schedule.
+    let mut previous = match cron.next_run_after(now, timezone) {
+        Some(first) => first,
+        // Nothing left to fire, so nothing can fire too often.
+        None => return Ok(()),
+    };
+
+    for _ in 0..INTERVAL_SAMPLE_FIRINGS {
+        let Some(next) = cron.next_run_after(previous, timezone) else {
+            return Ok(());
+        };
+        if next - previous < MIN_RECURRING_INTERVAL {
+            return Err(ReminderError::BadRequest(format!(
+                "a recurring reminder must fire at most once every {} minutes",
+                MIN_RECURRING_INTERVAL.num_minutes()
+            )));
+        }
+        previous = next;
+    }
+
+    Ok(())
+}
+
 /// Check the schedule will fire, then store it at minute granularity.
 ///
 /// Order matters. Flooring first would drag a request inside the current minute
@@ -101,11 +149,14 @@ fn normalize_schedule(
 ) -> Result<(ReminderSchedule, DateTime<Utc>), ReminderError> {
     let derived = derive_next_run_at(&schedule, now)?;
     let schedule = schedule.floored_to_minute();
-    let next_run_at = match schedule {
+    let next_run_at = match &schedule {
         // Same instant the schedule now carries, so the two cannot disagree.
-        ReminderSchedule::Once { remind_at } => remind_at,
+        ReminderSchedule::Once { remind_at } => *remind_at,
         // A cron's seconds are the owner's, so its firing is left as derived.
-        ReminderSchedule::Recurring { .. } => derived,
+        ReminderSchedule::Recurring { cron, timezone } => {
+            validate_recurring_interval(cron, *timezone, now)?;
+            derived
+        }
     };
     Ok((schedule, next_run_at))
 }
@@ -160,6 +211,77 @@ fn receipt_owner_and_id(
         .parse::<Uuid>()
         .map_err(|_| ReminderError::NotFound)?;
     Ok((user_id, id))
+}
+
+impl<R, C> RemindersServiceImpl<R, C>
+where
+    R: RemindersRepo,
+    C: Clock,
+{
+    /// Pull a revived recurring reminder's firing back into the future.
+    ///
+    /// A reminder that spent three months disabled still carries the firing it
+    /// had when it went quiet, so switching it back on would leave the row
+    /// reading "next run: March". Dispatch would sort that out on its own — a
+    /// firing that stale is rolled forward rather than delivered — but not
+    /// before the owner had seen a date from the past presented as upcoming.
+    ///
+    /// Deliberately narrow. It runs only when the patch is what revived the
+    /// reminder, and only on a firing older than [`MAX_RECURRING_LATENESS`],
+    /// which is far older than one merely waiting its turn in the queue. A
+    /// broader rule would eventually move a firing that was seconds away from
+    /// being delivered, and the delivery already in flight would find the time
+    /// changed under it and drop the notification.
+    async fn refresh_revived_recurring(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        reminder: Reminder,
+        patch_revived: bool,
+    ) -> Result<Reminder, ReminderError> {
+        if !patch_revived || !reminder.enabled || reminder.completed_at.is_some() {
+            return Ok(reminder);
+        }
+
+        let ReminderSchedule::Recurring { cron, timezone } = &reminder.schedule else {
+            return Ok(reminder);
+        };
+
+        let now = self.clock.now();
+        if now - reminder.next_run_at <= MAX_RECURRING_LATENESS {
+            return Ok(reminder);
+        }
+
+        let Some(next_run_at) = cron.next_run_after(now, *timezone) else {
+            return Ok(reminder);
+        };
+
+        let update = ReminderUpdate {
+            schedule: Some(ScheduleUpdate {
+                schedule: reminder.schedule.clone(),
+                next_run_at,
+            }),
+            ..Default::default()
+        };
+
+        // A failure here leaves a stale `next_run_at`, which dispatch corrects
+        // on its own. Not worth failing the owner's edit over.
+        match self
+            .repo
+            .update_reminder(user_id, reminder.id, &update)
+            .await
+        {
+            Ok(Some(refreshed)) => Ok(refreshed),
+            Ok(None) => Ok(reminder),
+            Err(e) => {
+                tracing::error!(
+                    error = ?e,
+                    reminder_id = %reminder.id,
+                    "failed to refresh a revived recurring reminder's next firing",
+                );
+                Ok(reminder)
+            }
+        }
+    }
 }
 
 impl<R, C> RemindersService for RemindersServiceImpl<R, C>
@@ -330,6 +452,16 @@ where
             })
             .transpose()?;
 
+        // Whether this patch is what brought the reminder back into service. An
+        // explicit schedule is not a revival: the owner named a firing, and
+        // recomputing one over the top of it would discard what they chose.
+        //
+        // `enabled` is the only thing that can freeze a series. Completion no
+        // longer stops a recurring reminder coming due — it settles one firing,
+        // not the arrangement — so its `next_run_at` keeps advancing while
+        // completed and cannot go stale that way.
+        let patch_revived = schedule.is_none() && enabled == Some(true);
+
         let update = ReminderUpdate {
             description,
             schedule,
@@ -337,11 +469,15 @@ where
             completed,
         };
 
-        self.repo
+        let updated = self
+            .repo
             .update_reminder(&user_id, id, &update)
             .await
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?
-            .ok_or(ReminderError::NotFound)
+            .ok_or(ReminderError::NotFound)?;
+
+        self.refresh_revived_recurring(&user_id, updated, patch_revived)
+            .await
     }
 
     #[tracing::instrument(err, skip(self, receipt))]

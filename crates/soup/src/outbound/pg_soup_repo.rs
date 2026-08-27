@@ -2,7 +2,7 @@ use crate::{
     domain::{
         models::{
             AdvancedSortParams, GroupedSortRequest, SimpleSortQuery, SimpleSortRequest,
-            SoupPropertiesField, grouping::ItemGroupingInfo,
+            SoupPropertiesField, TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -20,6 +20,7 @@ use system_properties::SystemPropertyKey;
 mod calendar_event;
 mod expanded;
 pub mod grouping;
+mod touched;
 mod unexpanded;
 
 /// PostgreSQL implementation of [`SoupRepo`].
@@ -187,6 +188,13 @@ impl SoupRepo for PgSoupRepo {
             },
         )
         .await
+    }
+
+    async fn touched_soup_page<'a>(
+        &self,
+        req: TouchedSoupRequest<'a>,
+    ) -> Result<Vec<TouchedEntity>, Self::Err> {
+        touched::touched_soup_page(&self.pool.0, req).await
     }
 }
 

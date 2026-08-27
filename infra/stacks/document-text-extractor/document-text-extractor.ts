@@ -188,7 +188,7 @@ export class DocumentTextExtractorLambda extends pulumi.ComponentResource {
         statistic: 'Sum',
         period: 300,
         evaluationPeriods: 1,
-        threshold: 1,
+        threshold: 100,
         comparisonOperator: 'GreaterThanOrEqualToThreshold',
         dimensions: {
           FunctionName: this.lambda.name,
@@ -210,7 +210,7 @@ export class DocumentTextExtractorLambda extends pulumi.ComponentResource {
         statistic: 'Sum',
         period: 300,
         evaluationPeriods: 1,
-        threshold: 1,
+        threshold: 50,
         comparisonOperator: 'GreaterThanOrEqualToThreshold',
         dimensions: {
           FunctionName: this.lambda.name,

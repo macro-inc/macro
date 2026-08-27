@@ -33,6 +33,17 @@ jobs:
       environment: prod
     secrets: inherit
 
+  deploy-ai-editing-worker:
+    name: Deploy AI Editing Worker
+    # Calls DSS/search/auth at prod URLs and opens doc sessions against the prod
+    # sync-service, so it ships behind both. It must also move in lockstep with
+    # cloud-storage's EditDocument tool, which picks the worker's model chains.
+    needs: [deploy-cloud-storage, deploy-sync-service]
+    uses: ./.github/workflows/deploy_ai_editing_worker.yml
+    with:
+      environment: prod
+    secrets: inherit
+
   build:
     name: Build Web App
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci

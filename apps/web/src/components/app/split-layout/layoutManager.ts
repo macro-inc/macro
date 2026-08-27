@@ -8,7 +8,7 @@ import type {
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
@@ -148,7 +148,8 @@ export type SplitMount = BlockMount | ComponentMount;
 
 export type PopoverSplitOptions = {
   content: SplitContent;
-  onClose?: () => void;
+  /** Handles a close request. Call `close` to finish closing the popover. */
+  onClose?: (close: () => void) => void;
 };
 
 export type PopoverSplitHandle = {
@@ -319,6 +320,12 @@ export type SplitManager = {
   /** Remove a split by its split id */
   removeSplit: (id: SplitId) => void;
 
+  /** Swap a split with its immediate neighbor in the requested direction. */
+  swapSplit: (id: SplitId, direction: 'left' | 'right') => void;
+
+  /** Whether a split group has a neighbor in the requested direction. */
+  canSwapSplit: (id: SplitId, direction: 'left' | 'right') => boolean;
+
   /** Create a new split with the provided initial content and activate it */
   createNewSplit: (options: CreateNewSplitOptions) => SplitHandle;
 
@@ -482,6 +489,22 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
     mergeHistory?: boolean;
     referredFrom?: ReferredFrom;
   }) => void;
+  /**
+   * Point this split at a new id for the same block *without* remounting it.
+   *
+   * `replace` tears the mount down and builds a new one, which is right when
+   * the user navigates somewhere else. This is the other case: the block is
+   * already showing the right thing and only just learned what it is called.
+   * The agent block opens on a client-minted placeholder and adopts its real
+   * session id when the create resolves, with the composer the user is typing
+   * into left untouched.
+   *
+   * Only the id moves — same block type, same mount, same history entry
+   * (rewritten in place, so Back still goes where it did and the URL swaps
+   * without a new entry). A no-op unless the split currently shows a block of
+   * `type`.
+   */
+  adoptContentId: (options: { type: BlockName; nextId: string }) => void;
   removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
@@ -501,6 +524,13 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   isLast: () => boolean;
   activate: () => void;
   goBack: () => void;
+  /**
+   * Jump back to the nearest earlier history entry matching `predicate`,
+   * skipping the entries in between. Entries whose content another split
+   * already displays are skipped too, since this split cannot mount them.
+   * Returns false — navigating nowhere — when no earlier entry qualifies.
+   */
+  goBackTo: (predicate: (content: SplitContent) => boolean) => boolean;
   close: () => void;
   reset: () => void;
   /** Returns the content item one step back in this split's history, without mutating. */
@@ -882,6 +912,48 @@ export function createSplitLayout(
     });
   }
 
+  /**
+   * Jump a split back to the nearest earlier history entry matching
+   * `predicate`, skipping the entries in between (they stay reachable with
+   * `forward`). Returns whether a match was found; the split is left untouched
+   * when none is.
+   */
+  function backTo(
+    id: SplitId,
+    predicate: (content: SplitContent) => boolean
+  ): boolean {
+    const i = splitIndexById(id);
+    if (i < 0) {
+      console.error(`Split with id ${id} not found`);
+      return false;
+    }
+
+    const split = state.splits[i];
+    const otherSplits = state.splits.filter((s) => s.id !== split.id);
+    const result = { moved: false };
+
+    batch(() => {
+      captureCurrentEntryState(split);
+
+      // Entries whose content another split already displays are not
+      // candidates: `reattach` refuses them, which would strand the history
+      // index on an entry the split never mounted. Skipping them here keeps
+      // the index and the mounted content in step, and lets the search carry
+      // on to an entry that can actually be shown.
+      const prev = split.history.backTo(
+        (content) =>
+          predicate(content) && !isDuplicateSplit(otherSplits, content)
+      );
+      if (!prev) return;
+
+      result.moved = true;
+      reattach(split, prev, undefined, 'history-back');
+      resetPreviewMode(id);
+    });
+
+    return result.moved;
+  }
+
   function forward(id: SplitId) {
     const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
@@ -946,6 +1018,60 @@ export function createSplitLayout(
         referredFrom,
         mergeHistory ? 'replace' : 'fresh',
         true
+      );
+    });
+  }
+
+  /**
+   * Move a split onto a new id for the block it is already showing, keeping
+   * the mount. See `SplitHandle.adoptContentId` for why this exists.
+   *
+   * The history entry is rewritten rather than pushed, and the navigation
+   * cause is `replace`, so the URL sync swaps the path in place instead of
+   * adding a back step to a placeholder the user can never return to.
+   */
+  function adoptContentId(id: SplitId, type: BlockName, nextId: string) {
+    const i = splitIndexById(id);
+    if (i < 0) return;
+
+    const split = state.splits[i];
+    const current = split.content;
+    if (current.type !== type || current.id === nextId) return;
+    if (
+      isDuplicateSplit(
+        state.splits.filter((s) => s.id !== id),
+        {
+          ...current,
+          id: nextId,
+        }
+      )
+    ) {
+      return;
+    }
+
+    const next: SplitContent = { ...current, id: nextId, params: undefined };
+
+    batch(() => {
+      split.history.replaceCurrent(next);
+      setState('splits', (splits) => {
+        const index = splits.findIndex((s) => s.id === id);
+        if (index < 0) return splits;
+        const previous = splits[index];
+        return splits.with(index, {
+          ...previous,
+          content: next,
+          // The same mount, re-labelled: nothing unmounts here.
+          mount:
+            previous.mount.kind === 'block'
+              ? { ...previous.mount, id: nextId }
+              : previous.mount,
+          lastNavigationCause: 'replace',
+        });
+      });
+      orchestrator.rekeyBlockInstance(
+        resolveBlockAlias(type),
+        current.id,
+        nextId
       );
     });
   }
@@ -1055,10 +1181,14 @@ export function createSplitLayout(
       canGoForward: () =>
         (findSplitById(currentSplit.id) ?? currentSplit).history.canGoForward(),
       goBack: () => back(currentSplit.id),
+      goBackTo: (predicate: (content: SplitContent) => boolean) =>
+        backTo(currentSplit.id, predicate),
       reset: () => reset(currentSplit.id),
       goForward: () => forward(currentSplit.id),
       replace: ({ next, mergeHistory = false, referredFrom }) =>
         replace(currentSplit.id, { next, mergeHistory, referredFrom }),
+      adoptContentId: ({ type, nextId }) =>
+        adoptContentId(currentSplit.id, type, nextId),
       removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
         removeFromHistory(currentSplit.id, predicate);
       },
@@ -1270,6 +1400,68 @@ export function createSplitLayout(
     });
   }
 
+  function splitGroupBounds(
+    id: SplitId
+  ): readonly [number, number] | undefined {
+    const index = splitIndexById(id);
+    if (index < 0) return undefined;
+
+    const viewerId = state.previewPairs[id]?.viewerId;
+    if (viewerId && state.splits[index + 1]?.id === viewerId) {
+      return [index, index + 1];
+    }
+
+    const controllerIndex = state.splits.findIndex(
+      (split) => state.previewPairs[split.id]?.viewerId === id
+    );
+    if (controllerIndex >= 0 && controllerIndex + 1 === index) {
+      return [controllerIndex, index];
+    }
+
+    return [index, index];
+  }
+
+  function canSwapSplit(id: SplitId, direction: 'left' | 'right') {
+    const bounds = splitGroupBounds(id);
+    if (!bounds) return false;
+
+    const targetIndex = direction === 'left' ? bounds[0] - 1 : bounds[1] + 1;
+    return targetIndex >= 0 && targetIndex < state.splits.length;
+  }
+
+  function swapSplit(id: SplitId, direction: 'left' | 'right') {
+    const bounds = splitGroupBounds(id);
+    if (!bounds) return;
+
+    const targetIndex = direction === 'left' ? bounds[0] - 1 : bounds[1] + 1;
+    if (targetIndex < 0 || targetIndex >= state.splits.length) return;
+
+    const target = state.splits[targetIndex];
+    if (!target) return;
+    const targetBounds = splitGroupBounds(target.id);
+    if (!targetBounds) return;
+
+    const [sourceStart, sourceEnd] = bounds;
+    const [targetStart, targetEnd] = targetBounds;
+    const [leftStart, leftEnd, rightStart, rightEnd] =
+      sourceStart < targetStart
+        ? [sourceStart, sourceEnd, targetStart, targetEnd]
+        : [targetStart, targetEnd, sourceStart, sourceEnd];
+
+    batch(() => {
+      resizeContext()?.swap(id, target.id);
+      setState('splits', (splits) => {
+        return [
+          ...splits.slice(0, leftStart),
+          ...splits.slice(rightStart, rightEnd + 1),
+          ...splits.slice(leftEnd + 1, rightStart),
+          ...splits.slice(leftStart, leftEnd + 1),
+          ...splits.slice(rightEnd + 1),
+        ];
+      });
+    });
+  }
+
   /**
    * An unclaimed placeholder split sitting immediately right of the
    * controller that engage adopts as the viewer instead of creating a
@@ -1295,7 +1487,7 @@ export function createSplitLayout(
    * Reactive.
    */
   function canEngagePreview(controllerId: SplitId): boolean {
-    if (isMobile()) return false;
+    if (isTouchDevice()) return false;
     const controller = findSplitById(controllerId);
     if (
       !controller ||
@@ -1314,7 +1506,7 @@ export function createSplitLayout(
     controllerId: SplitId,
     viewerId: SplitId
   ): boolean {
-    if (isMobile()) return false;
+    if (isTouchDevice()) return false;
     const controllerIndex = splitIndexById(controllerId);
     const controller = state.splits[controllerIndex];
     const viewer = state.splits[controllerIndex + 1];
@@ -1386,7 +1578,7 @@ export function createSplitLayout(
 
   function engagePreviewMode(controllerId: SplitId) {
     // Mobile shows one panel at a time; a side-by-side viewer cannot exist.
-    if (isMobile()) return;
+    if (isTouchDevice()) return;
     const controller = findSplitById(controllerId);
     if (!controller || !isPreviewControllerContent(controller.content)) return;
     if (state.previewPairs[controllerId] !== undefined) return;
@@ -1703,30 +1895,42 @@ export function createSplitLayout(
     focusLock.acquire();
 
     const mount = createPinnedMount(orchestrator, options.content);
+    let closed = false;
+
+    const close = () => {
+      if (closed) return;
+      closed = true;
+
+      // Release focus lock to return focus to previously focused element
+      focusLock.release();
+
+      setState('popovers', (prev) => {
+        const newMap = new Map(prev);
+        const popover = newMap.get(id);
+        if (popover) {
+          newMap.set(id, { ...popover, isOpen: false });
+          // Schedule cleanup after a brief delay to allow for animations
+          setTimeout(() => {
+            setState('popovers', (prev) => {
+              const cleanupMap = new Map(prev);
+              cleanupMap.delete(id);
+              return cleanupMap;
+            });
+          }, 300);
+        }
+        return newMap;
+      });
+    };
 
     const handle: PopoverSplitHandle = {
       id,
       close: () => {
-        // Release focus lock to return focus to previously focused element
-        focusLock.release();
-
-        setState('popovers', (prev) => {
-          const newMap = new Map(prev);
-          const popover = newMap.get(id);
-          if (popover) {
-            newMap.set(id, { ...popover, isOpen: false });
-            // Schedule cleanup after a brief delay to allow for animations
-            setTimeout(() => {
-              setState('popovers', (prev) => {
-                const cleanupMap = new Map(prev);
-                cleanupMap.delete(id);
-                return cleanupMap;
-              });
-            }, 300);
-          }
-          return newMap;
-        });
-        options.onClose?.();
+        if (closed) return;
+        if (options.onClose) {
+          options.onClose(close);
+          return;
+        }
+        close();
       },
       isOpen: () => {
         const popover = state.popovers.get(id);
@@ -2019,6 +2223,8 @@ export function createSplitLayout(
     getSplit,
     openWithSplit,
     removeSplit,
+    swapSplit,
+    canSwapSplit,
     createNewSplit,
     getUrlSegments,
     getUrl,

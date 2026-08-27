@@ -1,6 +1,13 @@
-import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
+import {
+  ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
+  ENABLE_GRAPHQL_SOUP,
+} from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
+import {
+  useMuteItemMutation,
+  useUnmuteItemMutation,
+} from '@queries/notification/unsubscribes';
 import {
   optimisticInsertNotification,
   type UserNotificationsQuery,
@@ -9,21 +16,24 @@ import {
   useUserNotificationsQuery,
 } from '@queries/notification/user-notifications';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
-import { notificationServiceClient } from '@service-notification/client';
 import type {
-  ConnGatewayInnerNotifValue,
+  ConnGatewayNotificationPayload,
   NotifEvent,
   UserUnsubscribe,
 } from '@service-notification/generated/schemas';
+import { mapGraphqlNotification } from '@service-storage/graphql-soup';
+import { subscribeToGraphqlNotificationPatches } from '@service-storage/graphql-soup-websocket';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import {
   type Accessor,
+  batch,
   createEffect,
   createMemo,
   createRoot,
   createSignal,
+  onCleanup,
 } from 'solid-js';
-import { reconcile } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js/store';
 import { fromZodError } from 'zod-validation-error';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
@@ -38,6 +48,7 @@ export const CHANNEL_EVENT_TYPES = [
   'channel_mention',
   'channel_message_send',
   'channel_message_reply',
+  'document_mention',
 ] as const;
 
 export const DOCUMENT_COMMENT_EVENT_TYPES = [
@@ -118,18 +129,13 @@ export function setDoneOverride(
 // failure (that rollback is deliberate) and pruned once the cache confirms
 // the seen state at a quiet moment.
 const [seenOverrides, setSeenOverrides] = createRoot(() =>
-  createSignal<ReadonlyMap<string, string>>(new Map())
+  createStore<Record<string, string | undefined>>({})
 );
 
 function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
   if (ids.length === 0) return;
-  setSeenOverrides((prev) => {
-    const next = new Map(prev);
-    for (const id of ids) {
-      if (viewedAt === undefined) next.delete(id);
-      else next.set(id, viewedAt);
-    }
-    return next;
+  batch(() => {
+    for (const id of ids) setSeenOverrides(id, viewedAt);
   });
 }
 
@@ -145,6 +151,8 @@ export function createNotificationSource(
     limit: QUERY_LIMIT,
   }));
   const mutedEntitiesQuery = createMutedEntitiesQuery({ limit: QUERY_LIMIT });
+  const muteItem = useMuteItemMutation();
+  const unmuteItem = useUnmuteItemMutation();
 
   const markNotificationsAsSeenMutation = useMarkNotificationsAsSeenMutation();
   const markNotificationsAsDoneMutation = useMarkNotificationsAsDoneMutation();
@@ -157,16 +165,22 @@ export function createNotificationSource(
     const raw = notificationsQuery.data;
     if (!raw) return [];
     const done = doneOverrides();
-    const seen = seenOverrides();
-    if (done.size === 0 && seen.size === 0) return raw;
-    return raw.map((n) => {
-      const doneOverride = done.get(n.id);
-      const seenOverride = n.viewed_at ? undefined : seen.get(n.id);
-      if (doneOverride === undefined && seenOverride === undefined) return n;
+    return raw.map((notification) => {
+      const doneOverride = done.get(notification.id);
+      if (notification.viewed_at && doneOverride === undefined) {
+        return notification;
+      }
+
       return {
-        ...n,
+        ...notification,
         ...(doneOverride !== undefined ? { done: doneOverride } : {}),
-        ...(seenOverride !== undefined ? { viewed_at: seenOverride } : {}),
+        // Keep seen overrides granular. Reading one notification's viewed_at
+        // subscribes only to that id instead of invalidating the complete
+        // notifications array and every channel/favorite consumer.
+        get viewed_at() {
+          if (notification.viewed_at) return notification.viewed_at;
+          return seenOverrides[notification.id] ?? notification.viewed_at;
+        },
       };
     });
   });
@@ -198,14 +212,14 @@ export function createNotificationSource(
   createEffect(() => {
     const raw = notificationsQuery.data;
     if (!raw) return;
-    const seen = seenOverrides();
-    if (seen.size === 0) return;
+    const seenIds = Object.keys(seenOverrides);
+    if (seenIds.length === 0) return;
     const quiet =
       !notificationsQuery.isFetching &&
       !markNotificationsAsSeenMutation.isPending;
     const byId = new Map(raw.map((n) => [n.id, n]));
     const toPrune: string[] = [];
-    for (const id of seen.keys()) {
+    for (const id of seenIds) {
       const row = byId.get(id);
       if (!row) toPrune.push(id);
       else if (row.viewed_at && quiet) toPrune.push(id);
@@ -227,6 +241,10 @@ export function createNotificationSource(
   });
 
   createEffect(() => {
+    // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
+    // REST notification source is retired. GraphQL consumers should use Soup
+    // notification edges or dedicated notification queries instead.
+    if (ENABLE_GRAPHQL_SOUP()) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
@@ -243,6 +261,8 @@ export function createNotificationSource(
     setMutedEntities(reconcile(mutedEntities));
   });
 
+  // TODO(dev-rb/notifications): Verify whether document-mention suppression is
+  // still required, and remove this source-based cleanup when it is not.
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
     createEffect(() => {
       const toDiscard = notifications().filter(
@@ -255,8 +275,63 @@ export function createNotificationSource(
     });
   }
 
+  const dispatchIncomingNotification = (
+    notification: UnifiedNotification
+  ): void => {
+    onNotification?.(notification);
+    subscriptions.forEach((subscribe) => subscribe(notification));
+  };
+
+  let graphqlRefetchScheduled = false;
+  let graphqlRefetchInFlight = false;
+  let graphqlRefetchPending = false;
+  let graphqlSubscriptionDisposed = false;
+
+  const runGraphqlNotificationRefetch = async (): Promise<void> => {
+    if (graphqlSubscriptionDisposed || graphqlRefetchInFlight) return;
+    graphqlRefetchInFlight = true;
+    try {
+      do {
+        graphqlRefetchPending = false;
+        try {
+          await notificationsQuery.refetch();
+        } catch (error) {
+          console.warn(
+            'Failed to refresh notifications after GraphQL patch',
+            error
+          );
+        }
+      } while (graphqlRefetchPending && !graphqlSubscriptionDisposed);
+    } finally {
+      graphqlRefetchInFlight = false;
+    }
+  };
+
+  const scheduleGraphqlNotificationRefetch = (): void => {
+    graphqlRefetchPending = true;
+    if (graphqlRefetchScheduled || graphqlRefetchInFlight) return;
+    graphqlRefetchScheduled = true;
+    queueMicrotask(() => {
+      graphqlRefetchScheduled = false;
+      void runGraphqlNotificationRefetch();
+    });
+  };
+
+  const unsubscribeFromGraphql = subscribeToGraphqlNotificationPatches(
+    (patch) => {
+      if (!ENABLE_GRAPHQL_SOUP()) return;
+      scheduleGraphqlNotificationRefetch();
+      if (patch.__typename !== 'GraphqlNewNotification') return;
+      dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
+    }
+  );
+  onCleanup(() => {
+    graphqlSubscriptionDisposed = true;
+    unsubscribeFromGraphql();
+  });
+
   const mapWebsocketNotification = (
-    raw: ConnGatewayInnerNotifValue
+    raw: ConnGatewayNotificationPayload
   ): UnifiedNotification => {
     return {
       ...raw,
@@ -266,12 +341,12 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
-    if (wsData.type !== NOTIFICATION_EVENT_TYPE) {
+    if (wsData.type !== NOTIFICATION_EVENT_TYPE || ENABLE_GRAPHQL_SOUP()) {
       return;
     }
     let parsedNotification: UnifiedNotification;
     try {
-      const raw = JSON.parse(wsData.data) as ConnGatewayInnerNotifValue;
+      const raw = JSON.parse(wsData.data) as ConnGatewayNotificationPayload;
       const unsafeMapped = mapWebsocketNotification(raw);
       const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
       if (!parseResult.success) {
@@ -288,9 +363,7 @@ export function createNotificationSource(
       console.error('Failed to parse notification', wsData.data, e);
       return;
     }
-    onNotification?.(parsedNotification);
-
-    subscriptions.forEach((subscribe) => subscribe(parsedNotification));
+    dispatchIncomingNotification(parsedNotification);
 
     if (notificationsQuery.transport === 'rest') {
       optimisticInsertNotification(parsedNotification);
@@ -337,21 +410,17 @@ export function createNotificationSource(
   };
 
   const muteEntity = async (entity: Entity) => {
-    await notificationServiceClient.unsubscribeItem({
+    await muteItem.mutateAsync({
       item_id: entity.id,
       item_type: entity.type,
     });
-
-    await mutedEntitiesQuery.refetch();
   };
 
   const unmuteEntity = async (entity: Entity) => {
-    await notificationServiceClient.removeUnsubscribeItem({
+    await unmuteItem.mutateAsync({
       item_id: entity.id,
       item_type: entity.type,
     });
-
-    await mutedEntitiesQuery.refetch();
   };
 
   const subscribe = (subscribeFn: SubscribeFn) => {

@@ -1,5 +1,10 @@
 import { isListViewID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { createCalendarBlockRange } from '@block-calendar/calendar-range';
+import {
+  CALENDAR_BLOCK_ID,
+  type CalendarBlockProps,
+} from '@block-calendar/types';
 import { URL_PARAMS as CALL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
@@ -17,7 +22,10 @@ import type {
 } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import {
+  ENABLE_CALENDAR_UI,
+  USE_MACRO_PR_SUMMARY_BLOCK,
+} from '@core/constant/featureFlags';
 import {
   ENTITY_ID_DATA_ATTRIBUTE,
   entityIdSelector,
@@ -58,6 +66,10 @@ import {
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import {
+  type NotificationEntityRef,
+  updateNotificationsForEntities,
+} from '@queries/notification/entity-mutations';
 import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
@@ -222,7 +234,9 @@ export const openEntityInNewTab = ({
 
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'document') {
+  if (entity.type === 'calendar_event') {
+    entityPath = `/app/calendar/${CALENDAR_BLOCK_ID}`;
+  } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
     const blockName = fileTypeToBlockName(subType?.type ?? fileType);
     entityPath = `/app/${blockName}/${entity.id}`;
@@ -607,6 +621,36 @@ export const openEntityInSplitFromUnifiedList = async (
   // A standalone reminder points at nothing, so there is nothing to open.
   if (entity.type === 'reminder' && !entity.referencedEntity) return;
 
+  // Calendar is a singleton block. Event opens retarget that one instance
+  // with a locator range, including repeat clicks on an already-open split.
+  if (entity.type === 'calendar_event') {
+    if (!ENABLE_CALENDAR_UI()) return;
+    const params = calendarBlockParamsForEntity(entity);
+    const existing = splitManager.getSplitByContent(
+      'calendar',
+      CALENDAR_BLOCK_ID
+    );
+    if (existing) {
+      existing.activate();
+    } else {
+      splitManager.openWithSplit(
+        { type: 'calendar', id: CALENDAR_BLOCK_ID, params },
+        {
+          activate: true,
+          referredFrom: null,
+          preferNewSplit: openInNewSplit,
+          handle: splitHandle,
+        }
+      );
+    }
+    const calendarHandle = await blockOrchestrator.getBlockHandle(
+      CALENDAR_BLOCK_ID,
+      'calendar'
+    );
+    await calendarHandle?.goToLocationFromParams(params);
+    return;
+  }
+
   const content = getEntitySplitContent(entity);
 
   if (
@@ -689,6 +733,36 @@ export const openEntityInSplitFromUnifiedList = async (
 };
 
 /**
+ * Mark the attached notification that caused a channel row to target a message.
+ *
+ * The row's Soup edge is authoritative here. The channel block's message marker
+ * discovers notifications through the separately paginated global source, so
+ * an older notification can drive navigation without being present there.
+ */
+export function markChannelTargetSeenOnOpen(
+  entity: EntityData,
+  notificationSource: NotificationSource
+) {
+  const target = getChannelEntityTarget(entity);
+  if (target?.kind !== 'message' || !isWithNotification(entity)) return;
+
+  const notifications = scopeChannelNotificationsForEntity(
+    entity,
+    entity.notifications?.() ?? []
+  ).filter((notification) => {
+    if (notificationIsRead(notification)) return false;
+    return (
+      getChannelNotificationParams(notification).messageId === target.messageId
+    );
+  });
+  if (notifications.length === 0) return;
+
+  void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
+    console.error('Failed to mark message notifications as read', error);
+  });
+}
+
+/**
  * Mark a reminder's notification read when the user opens it.
  *
  * Every other entity type gets this for free from the block it opens into,
@@ -704,11 +778,55 @@ export function markReminderSeenOnOpen(
   entity: EntityData,
   notificationSource: NotificationSource
 ) {
-  if (entity.type !== 'reminder') return;
+  // Calendar events share the reminder situation: they open the calendar
+  // component split, which has no block to clear the notification either.
+  if (entity.type !== 'reminder' && entity.type !== 'calendar_event') return;
   void markNotificationsForEntityAsRead(notificationSource, {
     type: entity.type,
     id: entity.id,
   });
+}
+
+/** Build the singleton block params for an event row's target occurrence. */
+/**
+ * The event and instance a calendar row points at, resolved exactly as the
+ * open path resolves it so a copied link lands where a click would.
+ */
+export function calendarEventLinkTarget(
+  entity: Extract<EntityData, { type: 'calendar_event' }>
+): { eventId: string; occurrenceKey?: string } {
+  const { eventId, occurrenceKey } = calendarBlockParamsForEntity(entity);
+  return { eventId: eventId ?? entity.id, occurrenceKey };
+}
+
+function calendarBlockParamsForEntity(
+  entity: Extract<EntityData, { type: 'calendar_event' }>
+): CalendarBlockProps {
+  const notifications = isWithNotification(entity)
+    ? (entity.notifications?.() ?? [])
+    : [];
+  const metadata = notifications
+    .map((notification) => notification.notification_metadata)
+    .find((candidate) => candidate?.tag === 'calendar_event_reminder');
+  const content =
+    metadata?.tag === 'calendar_event_reminder' ? metadata.content : undefined;
+  const time = content?.startsAt
+    ? {
+        kind: 'timed' as const,
+        startsAt: content.startsAt,
+        endsAt: content.endsAt ?? undefined,
+      }
+    : content?.startDate
+      ? { kind: 'allDay' as const, startDate: content.startDate }
+      : entity.time;
+
+  return {
+    eventId: content?.eventId ?? entity.id,
+    // A reminder names a precise instance, so it wins; otherwise fall back to
+    // whatever resolved the row (search supplies one, soup does not).
+    occurrenceKey: content?.occurrenceKey ?? entity.occurrenceKey,
+    range: time ? createCalendarBlockRange(time) : undefined,
+  };
 }
 
 /**
@@ -732,39 +850,46 @@ export function reminderSplitTarget(entity: ReminderEntity) {
 
 // TODO(dev-rb/github): Map GitHub PRs to { type: 'pr', id }.
 function getEntitySplitContent(entity: EntityData) {
-  return match(entity)
-    .with({ type: 'document' }, (entity) => {
-      const { id, fileType, subType } = entity;
-      const blockName = fileTypeToBlockName(subType?.type ?? fileType);
+  return (
+    match(entity)
+      .with({ type: 'document' }, (entity) => {
+        const { id, fileType, subType } = entity;
+        const blockName = fileTypeToBlockName(subType?.type ?? fileType);
 
-      return { type: blockName, id };
-    })
-    .with({ type: 'channel_message' }, (entity) => {
-      return { type: 'channel' as const, id: entity.channelId };
-    })
-    .with({ type: 'channel_thread' }, (entity) => {
-      return { type: 'channel' as const, id: entity.channelId };
-    })
-    .with({ type: 'foreign' }, (entity) => {
-      return { type: 'unknown' as const, id: entity.id };
-    })
-    .with({ type: 'crm_company' }, (entity) => {
-      return { type: 'company' as const, id: entity.id };
-    })
-    .with({ type: 'crm_contact' }, (entity) => {
-      return { type: 'contact' as const, id: entity.id };
-    })
-    .with({ type: 'reminder' }, (entity) => {
-      return (
-        reminderSplitTarget(entity) ?? {
-          type: 'unknown' as const,
-          id: entity.id,
-        }
-      );
-    })
-    .otherwise((entity) => {
-      return { type: entity.type, id: entity.id };
-    });
+        return { type: blockName, id };
+      })
+      .with({ type: 'channel_message' }, (entity) => {
+        return { type: 'channel' as const, id: entity.channelId };
+      })
+      .with({ type: 'channel_thread' }, (entity) => {
+        return { type: 'channel' as const, id: entity.channelId };
+      })
+      .with({ type: 'foreign' }, (entity) => {
+        return { type: 'unknown' as const, id: entity.id };
+      })
+      .with({ type: 'crm_company' }, (entity) => {
+        return { type: 'company' as const, id: entity.id };
+      })
+      .with({ type: 'crm_contact' }, (entity) => {
+        return { type: 'contact' as const, id: entity.id };
+      })
+      .with({ type: 'reminder' }, (entity) => {
+        return (
+          reminderSplitTarget(entity) ?? {
+            type: 'unknown' as const,
+            id: entity.id,
+          }
+        );
+      })
+      // Calendar events open the singleton calendar block; the open path
+      // branches before reaching here, so this only serves duplicate checks.
+      .with({ type: 'calendar_event' }, () => {
+        return { type: 'calendar' as const, id: CALENDAR_BLOCK_ID };
+      })
+      .otherwise((entity) => {
+        return { type: entity.type, id: entity.id };
+      })
+  );
 }
 
 /**
@@ -1340,11 +1465,6 @@ export function applyEntitiesNotDoneOptimistic(args: {
 }
 
 /**
- * Fires the archive + bulk-done APIs for the given ids. Throws on any
- * failure; caller is responsible for rollback via the context returned by
- * `applyEntitiesDoneOptimistic`.
- */
-/**
  * Flip the reminders' own `completed` column. One PATCH each — the reminders
  * API has no bulk endpoint, and a mark-done selection is normally one row.
  */
@@ -1355,17 +1475,30 @@ function setRemindersCompleted(
   return reminderIds.map((id) => setReminderCompleted(id, completed));
 }
 
+/**
+ * Fires archive, selective ID-scoped notification, entity-scoped notification,
+ * and reminder completion writes. Returns the authoritative notification IDs
+ * produced by the entity write. Throws on any failure; the caller owns rollback
+ * through the context returned by `applyEntitiesDoneOptimistic`.
+ */
 export async function executeMarkEntitiesDone(args: {
   emailIds: string[];
   notificationIds: string[];
+  notificationEntities?: NotificationEntityRef[];
   reminderIds?: string[];
-}): Promise<void> {
-  const { emailIds, notificationIds, reminderIds = [] } = args;
+}): Promise<string[]> {
+  const {
+    emailIds,
+    notificationIds,
+    notificationEntities = [],
+    reminderIds = [],
+  } = args;
   await Promise.all([
     queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
     queryClient.cancelQueries({ queryKey: notificationKeys.user._def }),
   ]);
 
+  let authoritativeNotificationIds: string[] = [];
   const results = await Promise.allSettled([
     ...emailIds.map((id) =>
       throwOnErr(
@@ -1374,6 +1507,16 @@ export async function executeMarkEntitiesDone(args: {
     ),
     notificationIds.length > 0
       ? bulkMarkNotificationsAsDone(notificationIds)
+      : Promise.resolve(),
+    notificationEntities.length > 0
+      ? updateNotificationsForEntities({
+          entities: notificationEntities,
+          operation: 'MARK_DONE',
+        }).then((notifications) => {
+          authoritativeNotificationIds = notifications.map(
+            (notification) => notification.id
+          );
+        })
       : Promise.resolve(),
     ...setRemindersCompleted(reminderIds, true),
   ]);
@@ -1409,6 +1552,8 @@ export async function executeMarkEntitiesDone(args: {
     }),
     ...emailIds.map((id) => invalidateSoupEntity(id)),
   ]);
+
+  return authoritativeNotificationIds;
 }
 
 /**

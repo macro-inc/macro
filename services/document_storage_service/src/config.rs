@@ -126,6 +126,13 @@ pub struct Config {
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
 
+    /// Whether calendar events participate in search. Off by default so a
+    /// deployed environment can carry the code before its calendar index has
+    /// been created and backfilled — with this false, calendar events are
+    /// dropped from the searched set no matter what a request asks for.
+    #[macro_config_default(false)]
+    pub calendar_search_enabled: bool,
+
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]
     pub queue_max_messages: i32,
@@ -143,6 +150,12 @@ pub struct Config {
     /// The document limit for free users
     #[macro_config_default(20)]
     pub document_limit: u64,
+
+    /// Master switch for calendar event reminder dispatch. When `false`
+    /// (the default) the worker drains its queue without delivering, so
+    /// synced reminder schedules produce no notifications until enabled.
+    #[macro_config_default(false)]
+    pub calendar_reminder_dispatch_enabled: bool,
 
     /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]

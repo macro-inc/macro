@@ -27,16 +27,6 @@ export function ChannelCreatedIndicator(props: ChannelCreatedIndicatorProps) {
     <Show when={shouldRender() && channel()}>
       {(c) => (
         <div class="relative w-full pr-2 pl-(--message-padding-x) pt-4 pb-2">
-          {/* Rail connector: runs from the circle's center down to the bottom
-              edge so it meets the thread rail on the message below. Sits behind
-              the avatar (which has a solid bg), so it only shows below it. */}
-          <div
-            class="pointer-events-none absolute bottom-0 -z-1 border-l-1 border-rail"
-            style={{
-              left: 'var(--left-of-connector)',
-              top: 'calc(1rem + var(--user-icon-width) / 2)',
-            }}
-          />
           <div
             class="grid min-w-0 items-center gap-x-2"
             style={{
@@ -52,7 +42,7 @@ export function ChannelCreatedIndicator(props: ChannelCreatedIndicatorProps) {
               <span class="text-sm text-ink">
                 Channel <span class="font-semibold">{c().name}</span> created
               </span>
-              <span class="text-xs text-ink-placeholder">
+              <span class="text-xs text-ink-extra-muted">
                 {formatDate(c().created_at, { showTime: true })}
               </span>
             </div>

@@ -82,12 +82,16 @@ function TaskRouteError(props: { notFound: boolean; onRetry?: () => void }) {
             : 'Something went wrong while resolving this task reference.'}
         </p>
         <div class="flex items-center gap-2">
-          <Button variant="base" size="sm" onClick={() => navigate('/tasks')}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/tasks')}
+          >
             Go to tasks
           </Button>
           <Show when={!props.notFound && props.onRetry}>
             {(onRetry) => (
-              <Button variant="base" size="sm" onClick={onRetry()}>
+              <Button variant="outline" size="sm" onClick={onRetry()}>
                 Try again
               </Button>
             )}

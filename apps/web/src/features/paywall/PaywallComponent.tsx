@@ -118,7 +118,7 @@ const PaywallComponent = (props: PaywallProps) => {
             <Show when={paywallMetadata()?.learnMoreUrl}>
               {(learnMoreUrl) => (
                 <a
-                  class="mt-16 inline-flex items-center gap-1 self-start text-xs text-ink-extra-muted hover:text-accent"
+                  class="mt-16 inline-flex items-center gap-1 self-start text-xs text-link hover:text-link-hover visited:text-link-visited"
                   href={learnMoreUrl()}
                   target="_blank"
                   rel="noopener"
@@ -169,7 +169,7 @@ const PaywallComponent = (props: PaywallProps) => {
             when={upgradeDisabled()}
             fallback={
               <Button
-                variant={hasPaid() ? 'base' : 'cta'}
+                variant={hasPaid() ? 'outline' : 'cta'}
                 class="rounded-full sm:w-auto px-3 py-1.5"
                 onClick={handleContinue}
               >
@@ -183,7 +183,7 @@ const PaywallComponent = (props: PaywallProps) => {
             >
               <span>
                 <Button
-                  variant={hasPaid() ? 'base' : 'cta'}
+                  variant={hasPaid() ? 'outline' : 'cta'}
                   class="rounded-full sm:w-auto px-3 py-1.5"
                   disabled
                 >

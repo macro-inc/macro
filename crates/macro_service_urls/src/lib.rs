@@ -536,6 +536,14 @@ service_url! {
             dev: "wss://connection-gateway-dev.macro.com",
             prod: "wss://connection-gateway.macro.com",
         },
+        /// Agent proxy WebSocket URL (the shared runtime endpoint external
+        /// agent runtimes dial). Unused: its service is gone, and the URL
+        /// stays only until the deployed stack behind it is torn down.
+        pub AgentProxyWebsocketUrl {
+            local: "ws://localhost:8091",
+            dev: "wss://agent-proxy-dev.macro.com",
+            prod: "wss://agent-proxy.macro.com",
+        },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
             local: "http://localhost:8085",
@@ -553,6 +561,13 @@ service_url! {
             local: "http://localhost:8100",
             dev: "https://static-file-service-dev.macro.com",
             prod: "https://static-file-service.macro.com",
+        },
+        /// Agent harness service API URL. Serves the agent-session control
+        /// routes, which run in the process that owns the live sessions.
+        pub AgentHarnessServiceUrl {
+            local: "http://localhost:8101",
+            dev: "https://agent-harness-dev.macro.com",
+            prod: "https://agent-harness.macro.com",
         },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {

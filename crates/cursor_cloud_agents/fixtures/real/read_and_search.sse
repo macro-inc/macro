@@ -1,0 +1,1178 @@
+event: status
+data: {"runId":"run-e9ec4729-a9cb-4fcd-9d3a-7a0847b65ca6","status":"RUNNING"}
+
+id: 1787331070407-0
+event: interaction_update
+data: {"type":"step-started","stepId":0}
+
+id: 1787331070423-0
+event: interaction_update
+data: {"type":"user-message-appended","userMessage":{"type":"user_message","session_id":"run-e9ec4729-a9cb-4fcd-9d3a-7a0847b65ca6","text":"Find the top-level README.md in this repo, read it, and tell me its first heading. Use your search and file-reading tools. Do not modify any files."}}
+
+id: 1787331073143-0
+event: thinking
+data: {"text":"I will locate the top-level"}
+
+id: 1787331073143-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"I will locate the top-level"}
+
+id: 1787331073146-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331073150-0
+event: thinking
+data: {"text":" README.md and report"}
+
+id: 1787331073150-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" README.md and report"}
+
+id: 1787331073153-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331073157-0
+event: thinking
+data: {"text":" its first heading."}
+
+id: 1787331073157-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" its first heading."}
+
+id: 1787331073160-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787331073163-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":22}
+
+id: 1787331073168-0
+event: assistant
+data: {"text":"I'll"}
+
+id: 1787331073168-0
+event: interaction_update
+data: {"type":"text-delta","text":"I'll"}
+
+id: 1787331073171-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073175-0
+event: assistant
+data: {"text":" locate"}
+
+id: 1787331073175-0
+event: interaction_update
+data: {"type":"text-delta","text":" locate"}
+
+id: 1787331073179-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331073182-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787331073182-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787331073185-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073190-0
+event: assistant
+data: {"text":" repo"}
+
+id: 1787331073190-0
+event: interaction_update
+data: {"type":"text-delta","text":" repo"}
+
+id: 1787331073194-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073198-0
+event: assistant
+data: {"text":"'s"}
+
+id: 1787331073198-0
+event: interaction_update
+data: {"type":"text-delta","text":"'s"}
+
+id: 1787331073204-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073208-0
+event: assistant
+data: {"text":" top"}
+
+id: 1787331073208-0
+event: interaction_update
+data: {"type":"text-delta","text":" top"}
+
+id: 1787331073211-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073216-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787331073216-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787331073219-0
+event: assistant
+data: {"text":"level"}
+
+id: 1787331073219-0
+event: interaction_update
+data: {"type":"text-delta","text":"level"}
+
+id: 1787331073222-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073226-0
+event: assistant
+data: {"text":" README"}
+
+id: 1787331073226-0
+event: interaction_update
+data: {"type":"text-delta","text":" README"}
+
+id: 1787331073229-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331073233-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787331073233-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787331073237-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073240-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787331073240-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787331073243-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073247-0
+event: assistant
+data: {"text":" read"}
+
+id: 1787331073247-0
+event: interaction_update
+data: {"type":"text-delta","text":" read"}
+
+id: 1787331073251-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073256-0
+event: assistant
+data: {"text":" it"}
+
+id: 1787331073256-0
+event: interaction_update
+data: {"type":"text-delta","text":" it"}
+
+id: 1787331073259-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073263-0
+event: assistant
+data: {"text":" so"}
+
+id: 1787331073263-0
+event: interaction_update
+data: {"type":"text-delta","text":" so"}
+
+id: 1787331073266-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073270-0
+event: assistant
+data: {"text":" I"}
+
+id: 1787331073270-0
+event: interaction_update
+data: {"type":"text-delta","text":" I"}
+
+id: 1787331073274-0
+event: assistant
+data: {"text":" can"}
+
+id: 1787331073274-0
+event: interaction_update
+data: {"type":"text-delta","text":" can"}
+
+id: 1787331073277-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073281-0
+event: assistant
+data: {"text":" report"}
+
+id: 1787331073281-0
+event: interaction_update
+data: {"type":"text-delta","text":" report"}
+
+id: 1787331073284-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331073288-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787331073288-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787331073292-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073296-0
+event: assistant
+data: {"text":" first"}
+
+id: 1787331073296-0
+event: interaction_update
+data: {"type":"text-delta","text":" first"}
+
+id: 1787331073303-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073307-0
+event: assistant
+data: {"text":" heading"}
+
+id: 1787331073307-0
+event: interaction_update
+data: {"type":"text-delta","text":" heading"}
+
+id: 1787331073310-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331073313-0
+event: assistant
+data: {"text":"."}
+
+id: 1787331073313-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787331073324-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331073340-0
+event: interaction_update
+data: {"type":"token-delta","tokens":15}
+
+id: 1787331073345-0
+event: interaction_update
+data: {"type":"token-delta","tokens":17}
+
+id: 1787331080243-0
+event: tool_call
+data: {"callId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-0\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_0","name":"file_search","status":"running"}
+
+id: 1787331080244-0
+event: tool_call
+data: {"callId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-0\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_0","name":"file_search","status":"running","args":{"targetDirectory":"/workspace","globPattern":"README.md"}}
+
+id: 1787331080244-0
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-0\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_0","toolCall":{"type":"glob","args":{"globPattern":"README.md","targetDirectory":"/workspace"}},"modelCallId":"serverGenReqId_1aafe0fb-29f8-47c9-ade7-a2605296b9a7-1-5bse"}
+
+id: 1787331080322-0
+event: tool_call
+data: {"callId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-1\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_1","name":"get_mcp_tools","status":"running","args":{"toolCallId":"unknown-tool-call-id"},"result":{"error":{"error":"Invalid arguments"}}}
+
+id: 1787331080322-1
+event: tool_call
+data: {"callId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-1\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_1","name":"get_mcp_tools","status":"running","args":{"server":"cursor-cloud","toolName":"cursor-cloud-get-message-queue","toolCallId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-1\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_1"}}
+
+id: 1787331080386-0
+event: tool_call
+data: {"callId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-0\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_0","name":"file_search","status":"completed","args":{"targetDirectory":"/workspace","globPattern":"README.md"},"result":{"success":{"path":"/workspace","files":["packages/collaboration/README.md","packages/collaboration/src/websocket/README.md","packages/lexical-core/README.md","crates/client/README.md","crates/client/turso-opfs/README.md","tooling/seed_cli/README.md","tooling/seed_cli/src/entity/email/README.md","infra/README.md","packages/sdk/README.md","infra/stacks/fusion-auth/README.md","crates/opensearch_query_builder/README.md","infra/stacks/fusionauth-instance/README.md","infra/stacks/opensearch/README.md","packages/loro-mirror/README.md","infra/stacks/opensearch/helpers/README.md","README.md","infra/stacks/cloud-storage-cache/README.md","infra/stacks/web-app/README.md","infra/preview/README.md","crates/comms_db_client/README.md","crates/teams/README.md","crates/mcp_client/src/domain/provider_registry/slack/README.md","crates/chat/README.md","services/unfurl_service/README.md","services/sync-service/README.md","apps/web/tauri/src-tauri/README.md","services/email_scheduled_handler/README.md","apps/web/README.md","services/search_processing_service/README.md","services/contacts_service/README.md","crates/properties/README.md","services/email_refresh_handler/README.md","apps/web/src/features/block-image/README.md","services/bots/stripe-payment-bot/README.md","services/bots/anthropic-status-bot/README.md","crates/properties_service/README.md","crates/notification_db_client/README.md","apps/web/src/features/block-chat/README.md","services/email_service/src/bin/cleanup_unused_sfs/README.md","apps/web/src/features/block-canvas/README.md","services/email_service/src/bin/find_used_sfs_ids/README.md","services/email_service/src/bin/backfill_gmail_attachments/README.md","services/email_service/src/bin/backfill_contacts/README.md","services/email_service/src/bin/find_unused_sfs_ids/README.md","services/email_service/src/bin/backfill_sfs_attachments/README.md","apps/web/src/features/block-md/README.md","crates/macro_db_client/README.md","services/email_sfs_delete_handler/README.md","services/docx_unzip_handler/README.md","apps/web/src/features/block-code/README.md","services/connection_gateway/README.md","services/email_suppression_handler/README.md","services/organization_retention_handler/README.md","services/user_link_cleanup_handler/README.md","apps/web/src/features/entity/README.md","services/cla-worker/README.md","services/worker_trigger/README.md","services/document_storage_service/README.md","apps/web/src/features/block-project/README.md","apps/web/src/features/property/README.md","services/mcp_auth_proxy/README.md","services/delete_chat_handler/README.md","crates/email_db_client/README.md","services/convert_service/load-test/README.md","services/convert_service/helpers/README.md","crates/opensearch_client/README.md","crates/anthropic/README.md","services/deleted_item_poller/README.md","apps/web/src/components/app/split-layout/README.md","services/notification_service/README.md","services/lexical-service/README.md","apps/web/src/lib/service-clients/service-cognition/README.md","crates/bots/README.md","services/sha_cleanup_worker/README.md","services/document_cognition_service/README.md","services/document_cognition_service/load-test/README.md","crates/webhook/README.md","crates/integration_tests/local_e2e/README.md","services/document_text_extractor/README.md","crates/kafka_util/README.md","apps/web/src/lib/service-clients/service-connection/README.md","crates/local_e2e_test_support/README.md","crates/soup_realtime/README.md","apps/web/src/lib/service-clients/service-sync/README.md","apps/web/src/lib/filesystem/README.md","apps/docs/README.md","apps/web/src/lib/core/README.md"],"totalFiles":87}}}
+
+id: 1787331080386-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-0\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_0","toolCall":{"type":"glob","args":{"globPattern":"README.md","targetDirectory":"/workspace"},"result":{"status":"success","value":{"files":["packages/collaboration/README.md","packages/collaboration/src/websocket/README.md","packages/lexical-core/README.md","crates/client/README.md","crates/client/turso-opfs/README.md","tooling/seed_cli/README.md","tooling/seed_cli/src/entity/email/README.md","infra/README.md","packages/sdk/README.md","infra/stacks/fusion-auth/README.md","crates/opensearch_query_builder/README.md","infra/stacks/fusionauth-instance/README.md","infra/stacks/opensearch/README.md","packages/loro-mirror/README.md","infra/stacks/opensearch/helpers/README.md","README.md","infra/stacks/cloud-storage-cache/README.md","infra/stacks/web-app/README.md","infra/preview/README.md","crates/comms_db_client/README.md","crates/teams/README.md","crates/mcp_client/src/domain/provider_registry/slack/README.md","crates/chat/README.md","services/unfurl_service/README.md","services/sync-service/README.md","apps/web/tauri/src-tauri/README.md","services/email_scheduled_handler/README.md","apps/web/README.md","services/search_processing_service/README.md","services/contacts_service/README.md","crates/properties/README.md","services/email_refresh_handler/README.md","apps/web/src/features/block-image/README.md","services/bots/stripe-payment-bot/README.md","services/bots/anthropic-status-bot/README.md","crates/properties_service/README.md","crates/notification_db_client/README.md","apps/web/src/features/block-chat/README.md","services/email_service/src/bin/cleanup_unused_sfs/README.md","apps/web/src/features/block-canvas/README.md","services/email_service/src/bin/find_used_sfs_ids/README.md","services/email_service/src/bin/backfill_gmail_attachments/README.md","services/email_service/src/bin/backfill_contacts/README.md","services/email_service/src/bin/find_unused_sfs_ids/README.md","services/email_service/src/bin/backfill_sfs_attachments/README.md","apps/web/src/features/block-md/README.md","crates/macro_db_client/README.md","services/email_sfs_delete_handler/README.md","services/docx_unzip_handler/README.md","apps/web/src/features/block-code/README.md","services/connection_gateway/README.md","services/email_suppression_handler/README.md","services/organization_retention_handler/README.md","services/user_link_cleanup_handler/README.md","apps/web/src/features/entity/README.md","services/cla-worker/README.md","services/worker_trigger/README.md","services/document_storage_service/README.md","apps/web/src/features/block-project/README.md","apps/web/src/features/property/README.md","services/mcp_auth_proxy/README.md","services/delete_chat_handler/README.md","crates/email_db_client/README.md","services/convert_service/load-test/README.md","services/convert_service/helpers/README.md","crates/opensearch_client/README.md","crates/anthropic/README.md","services/deleted_item_poller/README.md","apps/web/src/components/app/split-layout/README.md","services/notification_service/README.md","services/lexical-service/README.md","apps/web/src/lib/service-clients/service-cognition/README.md","crates/bots/README.md","services/sha_cleanup_worker/README.md","services/document_cognition_service/README.md","services/document_cognition_service/load-test/README.md","crates/webhook/README.md","crates/integration_tests/local_e2e/README.md","services/document_text_extractor/README.md","crates/kafka_util/README.md","apps/web/src/lib/service-clients/service-connection/README.md","crates/local_e2e_test_support/README.md","crates/soup_realtime/README.md","apps/web/src/lib/service-clients/service-sync/README.md","apps/web/src/lib/filesystem/README.md","apps/docs/README.md","apps/web/src/lib/core/README.md"],"totalFiles":87,"clientTruncated":false,"ripgrepTruncated":false}}},"modelCallId":"serverGenReqId_1aafe0fb-29f8-47c9-ade7-a2605296b9a7-1-5bse"}
+
+id: 1787331080390-0
+event: interaction_update
+data: {"type":"token-delta","tokens":909}
+
+id: 1787331080418-0
+event: tool_call
+data: {"callId":"call-d3c66dc2-8853-4c1d-a8c4-102d6f6588a4-1\nfc_619e26e1-b86b-96f8-ab0f-aff03723c74e_1","name":"get_mcp_tools","status":"completed","args":{"toolCallId":"unknown-tool-call-id"},"result":{"error":{"error":"MCP tool \"cursor-cloud-get-message-queue\" not found on server \"cursor-cloud\"."}}}
+
+id: 1787331080422-0
+event: interaction_update
+data: {"type":"token-delta","tokens":21}
+
+id: 1787331080891-0
+event: interaction_update
+data: {"type":"step-completed","stepId":0,"stepDurationMs":10477}
+
+id: 1787331081057-0
+event: interaction_update
+data: {"type":"step-started","stepId":52}
+
+id: 1787331082386-0
+event: thinking
+data: {"text":"Found the top-level "}
+
+id: 1787331082386-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Found the top-level "}
+
+id: 1787331082399-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331082402-0
+event: thinking
+data: {"text":"README.md. Reading it"}
+
+id: 1787331082402-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"README.md. Reading it"}
+
+id: 1787331082405-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331082409-0
+event: thinking
+data: {"text":" now to identify the"}
+
+id: 1787331082409-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" now to identify the"}
+
+id: 1787331082412-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331082416-0
+event: thinking
+data: {"text":" first heading."}
+
+id: 1787331082416-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" first heading."}
+
+id: 1787331082419-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787331082422-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":36}
+
+id: 1787331082427-0
+event: assistant
+data: {"text":"Found"}
+
+id: 1787331082427-0
+event: interaction_update
+data: {"type":"text-delta","text":"Found"}
+
+id: 1787331082430-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082433-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787331082433-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787331082436-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082439-0
+event: assistant
+data: {"text":" top"}
+
+id: 1787331082439-0
+event: interaction_update
+data: {"type":"text-delta","text":" top"}
+
+id: 1787331082442-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082469-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787331082469-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787331082473-0
+event: assistant
+data: {"text":"level"}
+
+id: 1787331082473-0
+event: interaction_update
+data: {"type":"text-delta","text":"level"}
+
+id: 1787331082478-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082529-0
+event: assistant
+data: {"text":" README"}
+
+id: 1787331082529-0
+event: interaction_update
+data: {"type":"text-delta","text":" README"}
+
+id: 1787331082546-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331082550-0
+event: assistant
+data: {"text":"."}
+
+id: 1787331082550-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787331082558-0
+event: assistant
+data: {"text":" Next"}
+
+id: 1787331082558-0
+event: interaction_update
+data: {"type":"text-delta","text":" Next"}
+
+id: 1787331082561-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331082565-0
+event: assistant
+data: {"text":" I’ll"}
+
+id: 1787331082565-0
+event: interaction_update
+data: {"type":"text-delta","text":" I’ll"}
+
+id: 1787331082568-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082571-0
+event: assistant
+data: {"text":" read"}
+
+id: 1787331082571-0
+event: interaction_update
+data: {"type":"text-delta","text":" read"}
+
+id: 1787331082575-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082578-0
+event: assistant
+data: {"text":" it"}
+
+id: 1787331082578-0
+event: interaction_update
+data: {"type":"text-delta","text":" it"}
+
+id: 1787331082581-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082584-0
+event: assistant
+data: {"text":" and"}
+
+id: 1787331082584-0
+event: interaction_update
+data: {"type":"text-delta","text":" and"}
+
+id: 1787331082587-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082591-0
+event: assistant
+data: {"text":" check"}
+
+id: 1787331082591-0
+event: interaction_update
+data: {"type":"text-delta","text":" check"}
+
+id: 1787331082594-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082598-0
+event: assistant
+data: {"text":" the"}
+
+id: 1787331082598-0
+event: interaction_update
+data: {"type":"text-delta","text":" the"}
+
+id: 1787331082601-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331082605-0
+event: assistant
+data: {"text":" message"}
+
+id: 1787331082605-0
+event: interaction_update
+data: {"type":"text-delta","text":" message"}
+
+id: 1787331082608-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331082611-0
+event: assistant
+data: {"text":" queue"}
+
+id: 1787331082611-0
+event: interaction_update
+data: {"type":"text-delta","text":" queue"}
+
+id: 1787331082614-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331082618-0
+event: assistant
+data: {"text":"."}
+
+id: 1787331082618-0
+event: interaction_update
+data: {"type":"text-delta","text":"."}
+
+id: 1787331082622-0
+event: interaction_update
+data: {"type":"token-delta","tokens":11}
+
+id: 1787331082627-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331082768-0
+event: tool_call
+data: {"callId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-2\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_0","name":"read_file","status":"running"}
+
+id: 1787331082770-0
+event: tool_call
+data: {"callId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1","name":"get_mcp_tools","status":"running","args":{"toolCallId":"unknown-tool-call-id"},"result":{"error":{"error":"Invalid arguments"}}}
+
+id: 1787331082770-1
+event: tool_call
+data: {"callId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-2\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_0","name":"read_file","status":"running","args":{"path":"/workspace/README.md","limit":80}}
+
+id: 1787331082770-1
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-2\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_0","toolCall":{"type":"read","args":{"path":"/workspace/README.md"}},"modelCallId":"serverGenReqId_1aafe0fb-29f8-47c9-ade7-a2605296b9a7-5-nisf"}
+
+id: 1787331082770-2
+event: tool_call
+data: {"callId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1","name":"get_mcp_tools","status":"running","args":{"server":"cursor-cloud","toolCallId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1"}}
+
+id: 1787331082854-0
+event: tool_call
+data: {"callId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-2\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_0","name":"read_file","status":"completed","args":{"path":"/workspace/README.md","limit":80},"result":{"success":{"content":"<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>\n    ·\n    <a href=\"mailto:teo@macro.com\">Hiring</a>\n  </p>\n</div>\n\n<br />\n\nMacro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.\n\n<br />\n\n# Why Macro\n\nWe built Macro because we wanted a single operating system for our startup. There are many good software products, and we used them all — Slack, Linear, Notion, HubSpot, and Superhuman — but they don't work together as one system. As we scaled our last venture to ~20 people things started to break: every team got their own tools and the company was held together by MCP and Zapier. The company was not computable. It was chaotic.\n\nMacro is a complete redesign of work software from the ground up as a single system.\n\nDesigned by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their \"operating system\".\n\n<br />\n\n# Features\n\nMacro is composed of 'blocks' designed to be modular, extensible, and work together like Lego. For each block, we studied the best prior art and tried to make it even better.\n\nEach surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.\n\n| Block         | Docs                                                      | What it does                                                                  |\n| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |\n| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |\n| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |\n| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |\n| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |\n| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |\n| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |\n| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |\n| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |\n| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |\n| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |\n\n<br />\n\n# **Multiple email inboxes** w/ good AI tools, integrated CRM\n\nMacro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:\n\n1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.\n2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.\n3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.\n\n![Macro email thread with actions, tags, and properties in the sidebar](.github/readme/email-thread.png)\n\n4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.\n5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.\n\nMacro Mail lives in the same interface as channels, docs, tasks, and code. From any email, hit \"task\" to create a linked task, e.g. a ticket for an engineer from a customer support email. @mention emails in documents, e.g. @Re: Contract Signature.eml inside of Todos.md. In Macro, your email is brought into the fold with all of your tools, and your team, in the same permissions system: just hit `Share` to share an email to any DM or channel — no need to screenshot.\n\n[Email docs &rarr;](https://docs.macro.com/product/email)\n\n<br />","totalLines":266,"fileSize":19987,"path":"/workspace/README.md","readRange":{"startLine":1,"endLine":80}}}}
+
+id: 1787331082854-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-2\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_0","toolCall":{"type":"read","args":{"path":"/workspace/README.md"},"result":{"status":"success","value":{"content":"<div align=\"center\">\n  <a target=\"_blank\" href=\"https://macro.com\">\n    <img width=\"2195\" height=\"721\" alt=\"Frame 11\" src=\"https://github.com/user-attachments/assets/50405352-785e-4984-b24f-544e89731acb\" />\n  </a>\n\n  <br />\n  <br />\n\n  <p>\n    <a href=\"https://macro.com/app\">Sign up</a>\n    ·\n    <a href=\"https://docs.macro.com\">Docs</a>\n    ·\n    <a href=\"https://cal.com/team/macro/macro-demo-call?metadata%5Bfbp%5D=fb.1.1778954074516.817396687896036613\">Book demo</a>\n    ·\n    <a href=\"https://macro.com\">Website</a>\n    ·\n    <a href=\"mailto:contact@macro.com\">Feature requests</a>\n    ·\n    <a href=\"CONTRIBUTING.md\">Contribute</a>\n    ·\n    <a href=\"mailto:teo@macro.com\">Hiring</a>\n  </p>\n</div>\n\n<br />\n\nMacro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.\n\n<br />\n\n# Why Macro\n\nWe built Macro because we wanted a single operating system for our startup. There are many good software products, and we used them all — Slack, Linear, Notion, HubSpot, and Superhuman — but they don't work together as one system. As we scaled our last venture to ~20 people things started to break: every team got their own tools and the company was held together by MCP and Zapier. The company was not computable. It was chaotic.\n\nMacro is a complete redesign of work software from the ground up as a single system.\n\nDesigned by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their \"operating system\".\n\n<br />\n\n# Features\n\nMacro is composed of 'blocks' designed to be modular, extensible, and work together like Lego. For each block, we studied the best prior art and tried to make it even better.\n\nEach surface is purpose-built for its job rather than composed from a generic block primitive — but every one of them shares the same backend; cross-references between a doc and a task, or a channel message and an email, are natively stored as a **bidirectional graph**.\n\n| Block         | Docs                                                      | What it does                                                                  |\n| ------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- |\n| Email         | [Docs &rarr;](https://docs.macro.com/product/email)       | Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.   |\n| Messages      | [Docs &rarr;](https://docs.macro.com/product/channels)    | Channels and direct messages designed for focused technical discussions.      |\n| Tasks         | [Docs &rarr;](https://docs.macro.com/product/tasks)       | Linear-inspired tasks, tightly integrated with channels, email, and agents.   |\n| Docs          | [Docs &rarr;](https://docs.macro.com/product/docs)        | Real-time collaborative, markdown-native docs built on CRDTs, with @mentions. |\n| Canvas        | [Docs &rarr;](https://docs.macro.com/product/canvas)      | 2D board with embedded @links to tasks, files, and emails.                    |\n| Agents        | [Docs &rarr;](https://docs.macro.com/product/agents)      | Unified, team-level memory. Can take action on your behalf.                   |\n| Calls         | [Docs &rarr;](https://docs.macro.com/product/calls)       | Recorded, transcribed, and logged to team memory for agents.                  |\n| File storage  | [Docs &rarr;](https://docs.macro.com/product/folders)     | Auto-imported from email and channels, fully searchable.                      |\n| Pull requests | [Docs &rarr;](https://docs.macro.com/integrations/github) | Linked to tasks, embeddable in channels, available to agents.                 |\n| CRM           | [Docs &rarr;](https://docs.macro.com/product/crm)         | Customer and contact objects, custom properties, email sync, enrichment.      |\n\n<br />\n\n# **Multiple email inboxes** w/ good AI tools, integrated CRM\n\nMacro Mail is inspired by Superhuman's keyboard-first interface with a few key additions:\n\n1. Multi-account. Triage all your Google accounts in a single inbox, with the same tagging and sharing system. Or triage individually.\n2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.\n3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.\n\n![Macro email thread with actions, tags, and properties in the sidebar](.github/readme/email-thread.png)\n\n4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.\n5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.\n\nMacro Mail lives in the same interface as channels, docs, tasks, and code. From any email, hit \"task\" to create a linked task, e.g. a ticket for an engineer from a customer support email. @mention emails in documents, e.g. @Re: Contract Signature.eml inside of Todos.md. In Macro, your email is brought into the fold with all of your tools, and your team, in the same permissions system: just hit `Share` to share an email to any DM or channel — no need to screenshot.\n\n[Email docs &rarr;](https://docs.macro.com/product/email)\n\n<br />","totalLines":266,"fileSize":19987}}},"modelCallId":"serverGenReqId_1aafe0fb-29f8-47c9-ade7-a2605296b9a7-5-nisf"}
+
+id: 1787331082859-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1605}
+
+id: 1787331082891-0
+event: tool_call
+data: {"callId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1","name":"get_mcp_tools","status":"completed","args":{"server":"cursor-cloud","toolCallId":"call-eb30330c-d44c-4f23-a92b-5ecddf2c9f3f-3\nfc_94c40b0f-e884-9fe0-b3b9-613bf79cc643_1"},"result":{"success":{"content":"{\n  \"note\": \"Large output has been written to: /home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt (31.4 KB, 469 lines)\",\n  \"filePath\": \"/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt\"\n}","outputFilePath":"/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt"}}}
+
+id: 1787331082895-0
+event: interaction_update
+data: {"type":"token-delta","tokens":68}
+
+id: 1787331082989-0
+event: interaction_update
+data: {"type":"step-completed","stepId":52,"stepDurationMs":1932}
+
+id: 1787331083588-0
+event: interaction_update
+data: {"type":"step-started","stepId":105}
+
+id: 1787331085040-0
+event: thinking
+data: {"text":"The top-level README.md"}
+
+id: 1787331085040-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"The top-level README.md"}
+
+id: 1787331085057-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331085062-0
+event: thinking
+data: {"text":" starts with the heading"}
+
+id: 1787331085062-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" starts with the heading"}
+
+id: 1787331085067-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331085076-0
+event: thinking
+data: {"text":" \"# Why Macro\"."}
+
+id: 1787331085076-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" \"# Why Macro\"."}
+
+id: 1787331085079-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787331085082-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":43}
+
+id: 1787331085096-0
+event: interaction_update
+data: {"type":"token-delta","tokens":37}
+
+id: 1787331085217-0
+event: tool_call
+data: {"callId":"call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0","name":"grep_search","status":"running"}
+
+id: 1787331085245-0
+event: tool_call
+data: {"callId":"call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0","name":"grep_search","status":"running","args":{"pattern":"get-message-queue","path":"/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt","caseInsensitive":false,"headLimit":20,"multiline":false,"toolCallId":"call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0","offset":0}}
+
+id: 1787331085245-0
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0","toolCall":{"type":"grep","args":{"pattern":"get-message-queue","path":"/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt","headLimit":20,"offset":0}},"modelCallId":"serverGenReqId_1aafe0fb-29f8-47c9-ade7-a2605296b9a7-10-zpo8"}
+
+id: 1787331085440-0
+event: tool_call
+data: {"callId":"call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0","name":"grep_search","status":"completed","args":{"pattern":"get-message-queue","path":"/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt","caseInsensitive":false,"headLimit":20,"multiline":false,"toolCallId":"call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0","offset":0},"result":{"success":{"pattern":"get-message-queue","path":"/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt","outputMode":"content","workspaceResults":{"/workspace":{"content":{"matches":[{"file":"../home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt","matches":[{"lineNumber":5,"content":"  \"serverDescription\": \"Cursor-internal cloud-agent diagnostics (server `cursor-cloud`). - `cursor-cloud-run-info` — return the current cloud-agent run identity, basic run metadata (name, repo, branch, model, owners — including the owning user's name and email when resolvable, lifecycle and setup status, created-at), and the URL where the run is available (https://cursor.com/agents/<bcId>). - `cursor-cloud-list-cloud-agents` — list cloud agents accessible to this run's principal in THIS run's environment (or, when this run has no saved environment, agents on the same repository), ordered by creation time (newest first), returning basic run metadata plus URLs. Users and service accounts see their own runs. Team admins can additionally browse teammates' runs only when enabled in team MCP settings. Supports browse filters (source, lifecycle status, setup status, recency/creation windows, archived, self-hosted, whether the agent made code changes, and whether it created a pull request) plu [... omitted end of long line]"},{"lineNumber":113,"content":"      \"tool\": \"get-message-queue\","}]}],"totalLines":2,"totalMatchedLines":2,"headLimitApplied":20}}}}}}
+
+id: 1787331085440-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-cccf3285-2193-4b0f-ad5e-d77af873bb68-4\nfc_7e0bd297-ba9b-9bd3-97fe-390dc2412667_0","toolCall":{"type":"grep","args":{"pattern":"get-message-queue","path":"/home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt","headLimit":20,"offset":0},"result":{"status":"success","value":{"workspaceResults":{"/workspace":{"type":"content","output":{"matches":[{"file":"../home/ubuntu/.cursor/projects/workspace/agent-tools/b67f184a-4793-436d-8108-3abbf899512f.txt"}],"totalMatches":0}}}}}},"modelCallId":"serverGenReqId_1aafe0fb-29f8-47c9-ade7-a2605296b9a7-10-zpo8"}
+
+id: 1787331085445-0
+event: interaction_update
+data: {"type":"token-delta","tokens":309}
+
+id: 1787331085517-0
+event: interaction_update
+data: {"type":"step-completed","stepId":105,"stepDurationMs":1930}
+
+id: 1787331085690-0
+event: interaction_update
+data: {"type":"step-started","stepId":119}
+
+id: 1787331086860-0
+event: thinking
+data: {"text":"Retrieving the schema"}
+
+id: 1787331086860-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"Retrieving the schema"}
+
+id: 1787331086864-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331086871-0
+event: thinking
+data: {"text":" for get-message-queue."}
+
+id: 1787331086871-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" for get-message-queue."}
+
+id: 1787331086874-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331086878-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":19}
+
+id: 1787331086883-0
+event: interaction_update
+data: {"type":"token-delta","tokens":14}
+
+id: 1787331087054-0
+event: tool_call
+data: {"callId":"call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5\nfc_033755be-c7c3-91e6-a17e-f649c25e4a11_0","name":"get_mcp_tools","status":"running","args":{"toolCallId":"unknown-tool-call-id"},"result":{"error":{"error":"Invalid arguments"}}}
+
+id: 1787331087055-0
+event: tool_call
+data: {"callId":"call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5\nfc_033755be-c7c3-91e6-a17e-f649c25e4a11_0","name":"get_mcp_tools","status":"running","args":{"server":"cursor-cloud","toolName":"get-message-queue","toolCallId":"call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5\nfc_033755be-c7c3-91e6-a17e-f649c25e4a11_0"}}
+
+id: 1787331087203-0
+event: tool_call
+data: {"callId":"call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5\nfc_033755be-c7c3-91e6-a17e-f649c25e4a11_0","name":"get_mcp_tools","status":"completed","args":{"server":"cursor-cloud","toolName":"get-message-queue","toolCallId":"call-be2aea28-e655-47f4-8df3-b0d3f4d208c8-5\nfc_033755be-c7c3-91e6-a17e-f649c25e4a11_0"},"result":{"success":{"content":"{\n  \"mode\": \"single_tool\",\n  \"server\": \"cursor-cloud\",\n  \"serverStatus\": \"ready\",\n  \"serverDescription\": \"Cursor-internal cloud-agent diagnostics (server `cursor-cloud`). - `cursor-cloud-run-info` — return the current cloud-agent run identity, basic run metadata (name, repo, branch, model, owners — including the owning user's name and email when resolvable, lifecycle and setup status, created-at), and the URL where the run is available (https://cursor.com/agents/<bcId>). - `cursor-cloud-list-cloud-agents` — list cloud agents accessible to this run's principal in THIS run's environment (or, when this run has no saved environment, agents on the same repository), ordered by creation time (newest first), returning basic run metadata plus URLs. Users and service accounts see their own runs. Team admins can additionally browse teammates' runs only when enabled in team MCP settings. Supports browse filters (source, lifecycle status, setup status, recency/creation windows, archived, self-hosted, whether the agent made code changes, and whether it created a pull request) plus limit/offset paging. When counting or enumerating many runs, page with nextOffset until hasMore is false; use totalMatched only when the accessible scan is complete. - `cursor-cloud-environment-info` — return THIS run's environment (name, environment & version public ids, source, recorded-via/created-at provenance, repos, full environment.json, dashboard URL, and environmentDeleted when the linked environment is soft-deleted), a top-level `repos` list (same canonical URLs as environment.repos / trigger-environment-build refs[].repoUrl; still populated when environment is null from composer.repoUrl), effective egress policy (allow-all, the complete merged allowed-domain list, or unresolved with a reason), the environment build the pod booted from (build id, snapshot id, git-setup mode, warm-fork mode) or null when the run started just-in-time rather than from a build, and (for internal runs) the initiating Cursor client build info (version + commit SHA, same as Help → About). - `cursor-cloud-get-events` — list the events recorded for THIS run (the same events shown on the run's dashboard page), oldest first: run lifecycle and setup outcomes plus soft failures such as MCP authentication errors (kind `mcp_auth_error` — an MCP server rejected this run's credentials, so its tool calls failed while the run continued). Each event carries publicId, createdAtMs, category, logLevel, a stable kind, a user-facing title, and optional detail and linkUrl. - `cursor-cloud-get-message-queue` — return a point-in-time snapshot of THIS run's user-visible pending follow-up queue (the same queue shown on the dashboard). No arguments; always this run. The currently executing message is no longer queued. Defer slow testing/verification while queued messages remain, then verify the cumulative result when the queue is empty. Returns hasQueuedMessages, queuedMessageCount, and queued message metadata (followupId, createdAtMs, source, text). Does not include attachments or internal queue entries. - `cursor-cloud-batch-fetch-details` — fetch details for a batch of specified accessible cloud agents by bcIds. Users and service accounts can fetch their own runs. Team admins can additionally fetch teammates' runs only when enabled in team MCP settings. When matching agents are found, writes basic run info to index.json and optionally writes diff-metadata.json, setup-logs.txt, start-logs.txt, environment-info.json, events.json, and transcript.json under /tmp/cursor/cloud-agent-transcripts/<datetime-id>/<bcId>/. Set includeEvents to include each run's dashboard events. First-class Task results include cloudAgentBcId; pass those ids to another batch-fetch-details call to fetch child transcripts. Transcripts can be very large — read them via subagents, never directly. - `cursor-cloud-get-automation` — look up one Cursor automation by id (UUID) via the AutomationsService GetAutomation API, as the run's principal: returns automation metadata (id, name, enabled state, display owner/creator, owner email, and URL) when readable, the same metadata fields for a teammate's private automation when only a restricted summary is visible, or a not-found error otherwise. - `cursor-cloud-list-environment-builds` — list this run's environment builds (the prebuilt environment snapshots a cloud agent can boot from), newest first, with status/failure outcomes. Returns an empty list when the run has no linked environment. Supports statuses and createdAfter/createdBefore filters plus limit; page older builds by passing nextCursor back as cursor. - `cursor-cloud-environment-build-logs` — fetch the install/setup logs for one environment build by buildId (returned inline; large outputs are spilled to a file automatically). Build logs are retained ~10 days; only builds of this run's own environment are accessible. - `cursor-cloud-trigger-environment-build` — start one DRAFT environment build of this run's own environment and return its buildId. OK to call during environment setup to validate the config before proposing, or when the user asks to trigger a build. Each build boots a pod and runs the full install, so skip it outside those cases. Supports per-repo ref overrides (`refs`) and a custom `environmentJson` config override for testing config changes. For a greenfield run with no linked environment, pass the complete `environmentJson`; the trigger creates and links a personal transitional draft automatically. Draft builds never become the build new agents boot from; track them with list-environment-builds and fetch logs with environment-build-logs. - `cursor-cloud-request-environment-setup-actions` — record one or more user actions that currently block environment setup. Calls may be made more than once in a turn; successful calls from the completed turn are combined into one request for the user. Presenting results: unless the user asks for a specific format or a summary, show a tool call's returned result to the user verbatim as pretty-printed JSON in a `json` code block rather than paraphrasing or summarizing it. This applies only to data returned directly by the tool call, not to detail files written to the filesystem (e.g. batch-fetch-details output).\",\n  \"tool\": {\n    \"tool\": \"get-message-queue\",\n    \"description\": \"Return a point-in-time snapshot of THIS run's user-visible pending follow-up message queue — the same queue shown on the dashboard. No arguments; always scoped to this run. The currently executing message is no longer queued. Defer slow testing and verification while queued messages remain, then verify the cumulative result when the queue is empty. Returns hasQueuedMessages, queuedMessageCount, and queued message metadata (followupId, createdAtMs, source, text). Does not include attachments or internal queue entries.\",\n    \"inputSchema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"additionalProperties\": false,\n      \"$schema\": \"http://json-schema.org/draft-07/schema#\"\n    }\n  }\n}"}}}
+
+id: 1787331087227-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1762}
+
+id: 1787331087337-0
+event: interaction_update
+data: {"type":"step-completed","stepId":119,"stepDurationMs":1648}
+
+id: 1787331087581-0
+event: interaction_update
+data: {"type":"step-started","stepId":132}
+
+id: 1787331088574-0
+event: thinking
+data: {"text":"I'll call the get-message-queue"}
+
+id: 1787331088574-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"I'll call the get-message-queue"}
+
+id: 1787331088577-0
+event: interaction_update
+data: {"type":"token-delta","tokens":7}
+
+id: 1787331088580-0
+event: thinking
+data: {"text":" tool."}
+
+id: 1787331088580-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" tool."}
+
+id: 1787331088583-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331088586-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":13}
+
+id: 1787331088592-0
+event: interaction_update
+data: {"type":"token-delta","tokens":31}
+
+id: 1787331088750-0
+event: tool_call
+data: {"callId":"call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0","name":"mcp","status":"running"}
+
+id: 1787331088803-0
+event: tool_call
+data: {"callId":"call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0","name":"mcp","status":"running","args":{"name":"cursor-cloud-get-message-queue","toolCallId":"call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0","providerIdentifier":"cursor-cloud","toolName":"get-message-queue","serverIdentifier":"cursor-cloud"}}
+
+id: 1787331088803-0
+event: interaction_update
+data: {"type":"tool-call-started","callId":"call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0","toolCall":{"type":"mcp","args":{"providerIdentifier":"cursor-cloud","toolName":"get-message-queue","args":{}}},"modelCallId":"serverGenReqId_1aafe0fb-29f8-47c9-ade7-a2605296b9a7-18-jkax"}
+
+id: 1787331089903-0
+event: tool_call
+data: {"callId":"call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0","name":"mcp","status":"completed","args":{"name":"cursor-cloud-get-message-queue","toolCallId":"call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0","providerIdentifier":"cursor-cloud","toolName":"get-message-queue","serverIdentifier":"cursor-cloud"},"result":{"success":{"content":[{"text":{"text":"Cursor Cloud message queue (0 queued). The currently executing message is not queued.\n{\n  \"hasQueuedMessages\": false,\n  \"queuedMessageCount\": 0,\n  \"queuedMessages\": []\n}"}}],"structuredContent":{"hasQueuedMessages":false,"queuedMessageCount":0,"queuedMessages":[]}}}}
+
+id: 1787331089903-0
+event: interaction_update
+data: {"type":"tool-call-completed","callId":"call-a645a2c6-a9d5-48fc-938a-119b22be925f-6\nfc_a2ef656f-041d-9fee-b161-9414227faf7e_0","toolCall":{"type":"mcp","args":{"providerIdentifier":"cursor-cloud","toolName":"get-message-queue","args":{}},"result":{"status":"success","value":{"content":[{"text":{"text":"Cursor Cloud message queue (0 queued). The currently executing message is not queued.\n{\n  \"hasQueuedMessages\": false,\n  \"queuedMessageCount\": 0,\n  \"queuedMessages\": []\n}"}}],"isError":false}}},"modelCallId":"serverGenReqId_1aafe0fb-29f8-47c9-ade7-a2605296b9a7-18-jkax"}
+
+id: 1787331089907-0
+event: interaction_update
+data: {"type":"token-delta","tokens":42}
+
+id: 1787331089990-0
+event: interaction_update
+data: {"type":"step-completed","stepId":132,"stepDurationMs":2410}
+
+id: 1787331090153-0
+event: interaction_update
+data: {"type":"step-started","stepId":145}
+
+id: 1787331091510-0
+event: thinking
+data: {"text":"The first heading in"}
+
+id: 1787331091510-0
+event: interaction_update
+data: {"type":"thinking-delta","text":"The first heading in"}
+
+id: 1787331091513-0
+event: interaction_update
+data: {"type":"token-delta","tokens":5}
+
+id: 1787331091518-0
+event: thinking
+data: {"text":" the top-level README.md"}
+
+id: 1787331091518-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" the top-level README.md"}
+
+id: 1787331091521-0
+event: interaction_update
+data: {"type":"token-delta","tokens":6}
+
+id: 1787331091524-0
+event: thinking
+data: {"text":" is \"# Why Macro\"."}
+
+id: 1787331091524-0
+event: interaction_update
+data: {"type":"thinking-delta","text":" is \"# Why Macro\"."}
+
+id: 1787331091527-0
+event: interaction_update
+data: {"type":"token-delta","tokens":4}
+
+id: 1787331091531-0
+event: interaction_update
+data: {"type":"thinking-completed","thinkingDurationMs":20}
+
+id: 1787331091536-0
+event: assistant
+data: {"text":"The"}
+
+id: 1787331091536-0
+event: interaction_update
+data: {"type":"text-delta","text":"The"}
+
+id: 1787331091540-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091545-0
+event: assistant
+data: {"text":" top"}
+
+id: 1787331091545-0
+event: interaction_update
+data: {"type":"text-delta","text":" top"}
+
+id: 1787331091555-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091564-0
+event: assistant
+data: {"text":"-"}
+
+id: 1787331091564-0
+event: interaction_update
+data: {"type":"text-delta","text":"-"}
+
+id: 1787331091567-0
+event: assistant
+data: {"text":"level"}
+
+id: 1787331091567-0
+event: interaction_update
+data: {"type":"text-delta","text":"level"}
+
+id: 1787331091571-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091574-0
+event: assistant
+data: {"text":" `"}
+
+id: 1787331091574-0
+event: interaction_update
+data: {"type":"text-delta","text":" `"}
+
+id: 1787331091577-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091581-0
+event: assistant
+data: {"text":"README"}
+
+id: 1787331091581-0
+event: interaction_update
+data: {"type":"text-delta","text":"README"}
+
+id: 1787331091584-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091587-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787331091587-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787331091591-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091596-0
+event: assistant
+data: {"text":"`"}
+
+id: 1787331091596-0
+event: interaction_update
+data: {"type":"text-delta","text":"`"}
+
+id: 1787331091600-0
+event: assistant
+data: {"text":" is"}
+
+id: 1787331091600-0
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+id: 1787331091603-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091606-0
+event: assistant
+data: {"text":" at"}
+
+id: 1787331091606-0
+event: interaction_update
+data: {"type":"text-delta","text":" at"}
+
+id: 1787331091610-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091613-0
+event: assistant
+data: {"text":" `/"}
+
+id: 1787331091613-0
+event: interaction_update
+data: {"type":"text-delta","text":" `/"}
+
+id: 1787331091617-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091621-0
+event: assistant
+data: {"text":"workspace"}
+
+id: 1787331091621-0
+event: interaction_update
+data: {"type":"text-delta","text":"workspace"}
+
+id: 1787331091624-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331091628-0
+event: assistant
+data: {"text":"/"}
+
+id: 1787331091628-0
+event: interaction_update
+data: {"type":"text-delta","text":"/"}
+
+id: 1787331091632-0
+event: assistant
+data: {"text":"README"}
+
+id: 1787331091632-0
+event: interaction_update
+data: {"type":"text-delta","text":"README"}
+
+id: 1787331091634-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331091639-0
+event: assistant
+data: {"text":".md"}
+
+id: 1787331091639-0
+event: interaction_update
+data: {"type":"text-delta","text":".md"}
+
+id: 1787331091642-0
+event: assistant
+data: {"text":"`."}
+
+id: 1787331091642-0
+event: interaction_update
+data: {"type":"text-delta","text":"`."}
+
+id: 1787331091647-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091650-0
+event: assistant
+data: {"text":" Its"}
+
+id: 1787331091650-0
+event: interaction_update
+data: {"type":"text-delta","text":" Its"}
+
+id: 1787331091654-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091657-0
+event: assistant
+data: {"text":" first"}
+
+id: 1787331091657-0
+event: interaction_update
+data: {"type":"text-delta","text":" first"}
+
+id: 1787331091661-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091664-0
+event: assistant
+data: {"text":" heading"}
+
+id: 1787331091664-0
+event: interaction_update
+data: {"type":"text-delta","text":" heading"}
+
+id: 1787331091667-0
+event: interaction_update
+data: {"type":"token-delta","tokens":2}
+
+id: 1787331091671-0
+event: assistant
+data: {"text":" is"}
+
+id: 1787331091671-0
+event: interaction_update
+data: {"type":"text-delta","text":" is"}
+
+id: 1787331091674-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091677-0
+event: assistant
+data: {"text":" **"}
+
+id: 1787331091677-0
+event: interaction_update
+data: {"type":"text-delta","text":" **"}
+
+id: 1787331091680-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091684-0
+event: assistant
+data: {"text":"Why"}
+
+id: 1787331091684-0
+event: interaction_update
+data: {"type":"text-delta","text":"Why"}
+
+id: 1787331091687-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091691-0
+event: assistant
+data: {"text":" Macro"}
+
+id: 1787331091691-0
+event: interaction_update
+data: {"type":"text-delta","text":" Macro"}
+
+id: 1787331091695-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091699-0
+event: assistant
+data: {"text":"**."}
+
+id: 1787331091699-0
+event: interaction_update
+data: {"type":"text-delta","text":"**."}
+
+id: 1787331091703-0
+event: interaction_update
+data: {"type":"token-delta","tokens":1}
+
+id: 1787331091803-0
+event: interaction_update
+data: {"type":"turn-ended"}
+
+id: 1787331091808-0
+event: interaction_update
+data: {"type":"step-completed","stepId":145,"stepDurationMs":1656}
+
+event: status
+data: {"runId":"run-e9ec4729-a9cb-4fcd-9d3a-7a0847b65ca6","status":"FINISHED"}
+
+id: 1787331092957-0
+event: result
+data: {"runId":"run-e9ec4729-a9cb-4fcd-9d3a-7a0847b65ca6","status":"FINISHED","text":"The top-level `README.md` is at `/workspace/README.md`. Its first heading is **Why Macro**.","durationMs":22972,"git":{"branches":[{"repoUrl":"github.com/macro-inc/macro","branch":"cursor/readme-md-first-heading-6e8d"}]}}
+
+id: 1787331092957-0
+event: done
+data: {}
+

@@ -1,0 +1,28 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 237
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/web_tools.sse
+---
+
+--- thinking ---
+Fetching https://example.com to retrieve its page title.
+
+Searching the web for the server events specification. No file changes or commits will be made.
+--- assistant ---
+I'll fetch example.com for the page title and search the web for that phrase. No files or git changes.
+--- thinking ---
+I have the information needed to complete the request.
+
+The page title for example.com is "Example Domain". The web search for the server-sent events specification is next.
+--- assistant ---
+**example.com title:** Example Domain
+
+**Web search for “server sent events spec”:** Server-Sent Events are specified in the WHATWG HTML Living Standard (`EventSource`, MIME type `text/event-stream`). Top hits:
+
+- [HTML Standard — Server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+- [HTML Standard, Edition for Web Developers](https://html.spec.whatwg.org/dev/server-sent-events.html)
+- [Wikipedia: Server-sent events](https://en.wikipedia.org/wiki/Server-sent_events)
+- [MDN: Using server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)
+
+No files were changed and no git/PR actions were taken.

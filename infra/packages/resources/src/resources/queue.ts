@@ -1,9 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../../shared';
+import type { QueueAlarmOptions } from './queue_alarms';
 import { QueueAlarms } from './queue_alarms';
 
 type Args = {
+  alarm?: QueueAlarmOptions;
   // The maximum receive count of a message before it's sent to DLQ
   maxReceiveCount?: number;
   tags: { [key: string]: string };
@@ -81,7 +83,7 @@ export class Queue extends pulumi.ComponentResource {
 
     new QueueAlarms(
       `${name}-alarm`,
-      { queue: this.queue, tags },
+      { ...args.alarm, queue: this.queue, tags },
       { parent: this }
     );
   }

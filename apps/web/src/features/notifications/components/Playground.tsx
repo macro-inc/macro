@@ -235,7 +235,7 @@ function PermissionButton(props: { platformNotif: any }) {
           when={props.platformNotif.permission() === 'granted'}
           fallback={
             <Button
-              variant="active"
+              variant="accent"
               onClick={() => props.platformNotif.requestPermission()}
             >
               Enable Browser Notifications
@@ -286,7 +286,7 @@ function CustomBuilder(props: {
 
         <div class="pt-4 border-t border-edge-muted">
           <Button
-            variant="active"
+            variant="accent"
             onClick={() => props.onTest(props.customNotification)}
           >
             🔔 Test Browser Notification
@@ -295,7 +295,7 @@ function CustomBuilder(props: {
 
         <div>
           <h3 class="text-sm font-medium text-ink mb-3">Live Preview</h3>
-          <div class="p-4 bg-surface-hover rounded-lg border border-edge-muted">
+          <div class="p-4 bg-hover rounded-lg border border-edge-muted">
             <NotificationRenderer
               notification={props.customNotification}
               mode="preview"
@@ -363,7 +363,7 @@ function NotificationDetail(props: {
             </p>
           </div>
           <Button
-            variant="active"
+            variant="accent"
             onClick={() => props.onTest(props.notification)}
           >
             🔔 Test Notification

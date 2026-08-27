@@ -7,6 +7,8 @@
 
 /**
  * Scope that owns a newly-created webhook.
+
+Clients serialize this, so both derives are used.
  */
 export type WebhookScope = (typeof WebhookScope)[keyof typeof WebhookScope];
 

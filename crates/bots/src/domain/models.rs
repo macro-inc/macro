@@ -100,6 +100,8 @@ pub enum BotOwner {
 }
 
 /// Bot row.
+///
+/// Clients deserialize this, so both derives are used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Bot {
@@ -125,6 +127,33 @@ pub struct Bot {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    pub has_agent: bool,
+}
+
+impl Bot {
+    /// The [`Bot`] view of a first-party bot.
+    ///
+    /// First-party bots have no row (see [`bot_id::SystemBot`]), so the
+    /// row-shaped fields are the honest answers for something that was never
+    /// created and cannot be owned, edited, or deleted.
+    #[must_use]
+    pub fn system(bot: &bot_id::SystemBot) -> Self {
+        Self {
+            id: bot.id,
+            kind: BotKind::System,
+            owner: None,
+            name: bot.name.to_owned(),
+            handle: bot.handle.to_owned(),
+            description: None,
+            avatar_url: None,
+            created_by: None,
+            created_at: DateTime::UNIX_EPOCH,
+            updated_at: DateTime::UNIX_EPOCH,
+            deleted_at: None,
+            has_agent: bot.has_agent,
+        }
+    }
 }
 
 /// Channel containing a bot.
@@ -160,8 +189,8 @@ pub struct BotToken {
     pub id: Uuid,
     /// Owning bot id.
     pub bot_id: BotId,
-    /// Raw bearer token.
-    pub token: String,
+    /// Display prefix of the bearer token. The raw secret is never stored here.
+    pub token_prefix: String,
     /// Optional token label.
     pub label: Option<String>,
     /// Last successful use.
@@ -206,6 +235,8 @@ pub struct CreateBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    pub has_agent: Option<bool>,
 }
 
 /// Request to patch a bot.
@@ -220,6 +251,8 @@ pub struct PatchBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
+    pub has_agent: Option<bool>,
 }
 
 /// Request to create a bot token.
@@ -258,6 +291,8 @@ pub struct CreateChannelScopedBotRequest {
     pub token_label: Option<String>,
     /// Optional token expiration timestamp.
     pub token_expires_at: Option<DateTime<Utc>>,
+    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
+    pub has_agent: Option<bool>,
 }
 
 /// Response containing a newly minted token.

@@ -32,6 +32,25 @@ const FUSIONAUTH_API_KEY_SECRET_KEY = config.require(
 const AUTHENTICATION_SERVICE_INTERNAL_API_KEY = config.require(
   `authentication_service_internal_api_key`
 );
+const MICROSOFT_TOKEN_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
+  'microsoft_token_kms_deletion_window_days'
+);
+const CURSOR_API_KEY_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
+  'cursor_api_key_kms_deletion_window_days'
+);
+// Role ARNs allowed to decrypt Cursor API keys. The agent harness is the one
+// reader there is: it decrypts a session owner's key on every spawn and
+// resume, so without this grant every `@cursor` session fails at KMS. Taken
+// from the harness stack's own export rather than a hand-copied ARN, so a
+// re-created role cannot silently leave the policy pointing at a dead one.
+const agentHarnessStack = new pulumi.StackReference('agent-harness-stack', {
+  name: `macro-inc/agent-harness-service/${stack}`,
+});
+const CURSOR_API_KEY_READER_ROLE_ARNS = [
+  agentHarnessStack
+    .getOutput('agentHarnessServiceRoleArn')
+    .apply((value) => value as string),
+];
 
 const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
   `fusionauth_client_secret_key`
@@ -148,7 +167,15 @@ const service = new AuthenticationService('authentication-service', {
     backfillQueueArn,
     contactsQueueArn,
   ],
+  microsoftTokenKmsDeletionWindowInDays:
+    MICROSOFT_TOKEN_KMS_DELETION_WINDOW_IN_DAYS,
+  cursorApiKeyKmsDeletionWindowInDays:
+    CURSOR_API_KEY_KMS_DELETION_WINDOW_IN_DAYS,
+  cursorApiKeyReaderRoleArns: CURSOR_API_KEY_READER_ROLE_ARNS,
   containerEnvVars: [
+    // Configure MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and
+    // MICROSOFT_TENANT_ID together in the authentication_service Doppler
+    // config.
     { name: 'ENVIRONMENT', value: stack },
     { name: 'DOPPLER_PROJECT', value: 'authentication_service' },
     // OpenTelemetry / Datadog tracing configuration

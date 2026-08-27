@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ remindersEnabled: true }));
+const mocks = vi.hoisted(() => ({
+  remindersEnabled: true,
+  calendarUiEnabled: true,
+}));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_NEW_INBOX: () => false,
+  ENABLE_CALENDAR_UI: () => mocks.calendarUiEnabled,
   ENABLE_REMINDERS: () => mocks.remindersEnabled,
   ENABLE_SNIPPETS: () => true,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE: false,
@@ -11,8 +14,10 @@ vi.mock('@core/constant/featureFlags', () => ({
 
 afterEach(() => {
   mocks.remindersEnabled = true;
+  mocks.calendarUiEnabled = true;
 });
 
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { compileToAst, queryStateFrom } from '../filters/filter-store/compile';
 import { VIEW_TAB_LISTS } from '../soup-view/tab-lists';
 import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
@@ -20,23 +25,75 @@ import { getViewPreset, VIEW_TAB_PRESETS } from './soup-filter-presets';
 const mailTabs = Object.keys(VIEW_TAB_PRESETS.mail.tabs);
 
 describe('mail view presets', () => {
-  it('groups every mail tab by date independently of the new inbox flag', () => {
+  it('groups every mail tab by date', () => {
     for (const tab of mailTabs) {
       expect(getViewPreset('mail', tab)?.groupBy).toBe('date');
     }
   });
+
+  it('keeps threads with saved drafts in every thread-listing tab', () => {
+    // A saved draft becomes the thread's latest message, flipping the
+    // entity's isDraft on. Filtering on 'no-drafts' would eject the whole
+    // conversation from its tab, leaving it visible only under Drafts.
+    for (const tab of mailTabs.filter((tab) => tab !== 'drafts')) {
+      expect(
+        getViewPreset('mail', tab)?.clientFilters.and,
+        `mail '${tab}' tab must not exclude drafted threads`
+      ).not.toContain('no-drafts');
+    }
+  });
+});
+
+describe('task view presets', () => {
+  const context = { userId: 'user-1', isTeamAdmin: false };
+
+  it('uses one My tasks tab for tasks owned by or assigned to the user', () => {
+    const preset = getViewPreset('tasks', 'my-tasks', context);
+
+    expect(VIEW_TAB_PRESETS.tasks.default).toBe('my-tasks');
+    expect(Object.keys(VIEW_TAB_PRESETS.tasks.tabs)).toEqual([
+      'my-tasks',
+      'all',
+    ]);
+    expect(preset?.clientFilters).toEqual({
+      and: ['task', 'my-tasks'],
+      or: ['task-not-started', 'task-in-progress', 'task-in-review'],
+    });
+    expect(preset?.groupBy).toBe(`property:${SYSTEM_PROPERTY_IDS.PRIORITY}`);
+    expect(compileToAst(queryStateFrom(preset?.filters ?? {})).df).toEqual({
+      '&': [
+        { l: { dst: 'task' } },
+        {
+          '|': [{ l: { o: 'user-1' } }, { l: { imp: true } }],
+        },
+      ],
+    });
+  });
 });
 
 describe('calendar event scoping', () => {
-  it('excludes calendar events from views that do not render them', () => {
-    const nilId = '00000000-0000-0000-0000-000000000000';
+  const nilId = '00000000-0000-0000-0000-000000000000';
 
+  it('excludes calendar events from feeds that do not render them', () => {
     expect(
       getViewPreset('mail', 'important')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
     expect(
       getViewPreset('inbox', 'all')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
+  });
+
+  it('searches calendar events, which carry a title index of their own', () => {
+    expect(
+      getViewPreset('search', 'all')?.filters.include?.calendarEventId
+    ).toBeUndefined();
+  });
+
+  it('excludes them from search when the calendar UI is off', () => {
+    // Opening a hit needs the calendar block, which the flag gates, so
+    // without it a result would render an inert row.
+    mocks.calendarUiEnabled = false;
+
     expect(
       getViewPreset('search', 'all')?.filters.include?.calendarEventId
     ).toEqual([nilId]);
@@ -60,6 +117,26 @@ describe('inbox view presets', () => {
 
     // No `remf` at all, so an unflagged user never hits the reminders service.
     expect(ast.remf).toBeUndefined();
+  });
+
+  it('opts the signal tab into alarmed calendar events', () => {
+    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+
+    // Referencing `calf` lifts the nil-id exclusion; only events with a
+    // not-done notification come back.
+    expect(ast.calf).toEqual({ l: { nd: false } });
+  });
+
+  it('keeps calendar events nil-scoped when the calendar flag is off', () => {
+    mocks.calendarUiEnabled = false;
+
+    const filters = getViewPreset('inbox', 'signal')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+
+    expect(ast.calf).toEqual({
+      l: { id: '00000000-0000-0000-0000-000000000000' },
+    });
   });
 
   it('leaves every other inbox tab without reminders', () => {
@@ -173,5 +250,39 @@ describe('tab lists and filter presets agree', () => {
     expect(VIEW_TAB_LISTS[view].map((tab) => tab.value)).toContain(
       VIEW_TAB_PRESETS[view].default
     );
+  });
+});
+
+describe('recent view preset', () => {
+  it('forces the touched-by-me server sort', () => {
+    expect(getViewPreset('recent')?.sortMethod).toBe('touched_by_me');
+  });
+
+  it('never compiles channel or email filter trees', () => {
+    // The touched-by-me query rejects channel/email trees with a 400, so
+    // even the NIL-id opt-in trees other views send must be absent.
+    const filters = getViewPreset('recent')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+    expect(ast.chanf).toBeUndefined();
+    expect(ast.ef).toBeUndefined();
+    expect(ast.emailView).toBeUndefined();
+  });
+
+  it('keeps documents, chats, and folders unrestricted', () => {
+    const filters = getViewPreset('recent')?.filters;
+    expect(filters?.include?.documentId).toBeUndefined();
+    expect(filters?.include?.chatId).toBeUndefined();
+    expect(filters?.include?.folderId).toBeUndefined();
+  });
+
+  it('excludes the types the touched feed can never return', () => {
+    const filters = getViewPreset('recent')?.filters;
+    const ast = compileToAst(queryStateFrom(filters!));
+    // Calendar events, CRM companies, foreign entities, and channel threads
+    // keep their match-nothing trees; the touched query ignores them.
+    expect(ast.calf).toBeDefined();
+    expect(ast.ccf).toBeDefined();
+    expect(ast.fef).toBeDefined();
+    expect(ast.cthf).toBeDefined();
   });
 });

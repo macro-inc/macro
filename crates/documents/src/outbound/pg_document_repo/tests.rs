@@ -1,22 +1,27 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
+use models_permissions::share_permission::{
+    LinkShare, SharePermissionV2, TeamLinkShareDefault, UpdateSharePermissionRequestV2,
+};
 use sqlx::{Pool, Postgres, Row};
 
 use crate::domain::models::{
-    CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, FileTypeUpdate,
-    GithubPullRequest, GithubPullRequestsResponse,
+    CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, EmailImportRepoOutcome,
+    FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
 
 const TEST_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
 const SECOND_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000002");
+const TEST_DOCUMENT_ID: &str = "d0000000-0000-0000-0000-000000000001";
+const TEST_DOCUMENT_OWNER_ID: &str = "macro|user@user.com";
+const TEST_DOCUMENT_NON_OWNER_ID: &str = "macro|teammate1@user.com";
 
 fn user_id(user_id: &str) -> macro_user_id::user_id::MacroUserIdStr<'static> {
     macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)
@@ -37,11 +42,17 @@ fn create_document_args(
         file_type: Some(model::document::FileType::Md),
         project_id: None,
         team_id,
-        email_attachment_id: None,
         created_at: None,
         sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
         skip_history: false,
+        attribution: None,
     }
+}
+
+/// The no-team default permission for an md document — the repo persists whatever
+/// the domain layer resolved, so tests pass it explicitly.
+fn md_share_permission() -> SharePermissionV2 {
+    SharePermissionV2::new_document_share_permission(Some(model::document::FileType::Md), None)
 }
 
 async fn create_task_for_team(
@@ -49,9 +60,12 @@ async fn create_task_for_team(
     user_id: &str,
     team_id: uuid::Uuid,
 ) -> model::document::DocumentMetadata {
-    repo.create_document(create_document_args(user_id, true, Some(team_id)))
-        .await
-        .unwrap()
+    repo.create_document(
+        create_document_args(user_id, true, Some(team_id)),
+        md_share_permission(),
+    )
+    .await
+    .unwrap()
 }
 
 async fn team_task_numbers(pool: &Pool<Postgres>, team_id: uuid::Uuid) -> Vec<i32> {
@@ -96,6 +110,70 @@ async fn insert_github_pr_task(
     .execute(pool)
     .await
     .unwrap();
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct SharePermissionColumns {
+    link_share: Option<String>,
+    link_share_access_level: Option<String>,
+}
+
+async fn share_permission_columns(
+    pool: &Pool<Postgres>,
+    document_id: &str,
+) -> SharePermissionColumns {
+    sqlx::query_as!(
+        SharePermissionColumns,
+        r#"
+        SELECT
+            sp."linkShare" as "link_share?",
+            sp."linkShareAccessLevel"::text as "link_share_access_level?"
+        FROM "SharePermission" sp
+        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
+        WHERE dp."documentId" = $1
+        "#,
+        document_id,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn insert_non_owner_user_access(pool: &Pool<Postgres>) {
+    let document_id = macro_uuid::string_to_uuid(TEST_DOCUMENT_ID).unwrap();
+
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access
+            (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'document', $2, 'user', 'edit')
+        "#,
+        document_id,
+        TEST_DOCUMENT_NON_OWNER_ID,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn direct_user_access_sources(pool: &Pool<Postgres>) -> Vec<String> {
+    let document_id = macro_uuid::string_to_uuid(TEST_DOCUMENT_ID).unwrap();
+
+    sqlx::query_scalar!(
+        r#"
+        SELECT source_id
+        FROM entity_access
+        WHERE entity_id = $1
+          AND entity_type = 'document'
+          AND source_type = 'user'
+          AND granted_from_project_id IS NULL
+        ORDER BY source_id
+        "#,
+        document_id,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
 }
 
 async fn insert_second_team(pool: &Pool<Postgres>) {
@@ -301,6 +379,49 @@ async fn test_get_user_view_location(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn test_create_document_writes_link_share_fields(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    let result = share_permission_columns(&pool, &document.document_id).await;
+
+    assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_create_document_persists_resolved_team_share_permission(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            SharePermissionV2::new_document_share_permission(
+                Some(model::document::FileType::Md),
+                Some(TeamLinkShareDefault(Some(LinkShare::Team))),
+            ),
+        )
+        .await
+        .unwrap();
+
+    let result = share_permission_columns(&pool, &document.document_id).await;
+
+    assert_eq!(result.link_share.as_deref(), Some("TEAM"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_edit_document_name(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
@@ -309,6 +430,7 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
         document_name: Some("new-name".to_string()),
         project_id: None,
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -333,6 +455,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
         document_name: None,
         project_id: None,
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: Some(FileTypeUpdate::Set(model::document::FileType::Rs)),
     })
     .await
@@ -357,6 +480,7 @@ async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
         document_name: None,
         project_id: None,
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: Some(FileTypeUpdate::Clear),
     })
     .await
@@ -381,6 +505,7 @@ async fn test_edit_document_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -409,6 +534,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -429,6 +555,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
         document_name: None,
         project_id: Some("".to_string()),
         share_permission: None,
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -445,76 +572,121 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_edit_document_share_permission(pool: Pool<Postgres>) {
+async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
-        document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
+        document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: Some(false),
-            public_access_level: None,
+            link_share: Some(None),
+            link_share_access_level: Some(None),
             channel_share_permissions: None,
         }),
+        revoke_non_owner_user_access: true,
         file_type: None,
     })
     .await
     .unwrap();
 
-    // Verify the share permission was updated
-    let result = sqlx::query!(
-        r#"
-        SELECT sp."isPublic" as is_public, sp."publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission" sp
-        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
-        WHERE dp."documentId" = $1
-        "#,
-        "d0000000-0000-0000-0000-000000000001"
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
 
-    assert!(!result.is_public);
-    assert!(result.public_access_level.is_none());
+    assert_eq!(result.link_share, None);
+    assert_eq!(result.link_share_access_level, None);
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![TEST_DOCUMENT_OWNER_ID.to_string()]
+    );
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_edit_document_set_public_access_level(pool: Pool<Postgres>) {
+async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
-        document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
+        document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: None,
-            public_access_level: Some(AccessLevel::Edit),
+            link_share: Some(Some(LinkShare::Team)),
+            link_share_access_level: Some(Some(AccessLevel::Comment)),
             channel_share_permissions: None,
         }),
+        revoke_non_owner_user_access: true,
         file_type: None,
     })
     .await
     .unwrap();
 
-    let result = sqlx::query!(
-        r#"
-        SELECT sp."publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission" sp
-        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
-        WHERE dp."documentId" = $1
-        "#,
-        "d0000000-0000-0000-0000-000000000001"
-    )
-    .fetch_one(&pool)
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+
+    assert_eq!(result.link_share.as_deref(), Some("TEAM"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("comment"));
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![TEST_DOCUMENT_OWNER_ID.to_string()]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            channel_share_permissions: None,
+        }),
+        revoke_non_owner_user_access: false,
+        file_type: None,
+    })
     .await
     .unwrap();
 
-    assert_eq!(result.public_access_level, Some("edit".to_string()));
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+
+    assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
+
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: Some(None),
+            channel_share_permissions: None,
+        }),
+        revoke_non_owner_user_access: false,
+        file_type: None,
+    })
+    .await
+    .unwrap();
+
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level, None);
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![
+            TEST_DOCUMENT_NON_OWNER_ID.to_string(),
+            TEST_DOCUMENT_OWNER_ID.to_string(),
+        ]
+    );
 }
 
 #[sqlx::test(
@@ -523,46 +695,41 @@ async fn test_edit_document_set_public_access_level(pool: Pool<Postgres>) {
 )]
 async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: Some("renamed".to_string()),
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: Some(true),
-            public_access_level: Some(AccessLevel::Edit),
+            link_share: Some(Some(LinkShare::Public)),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
             channel_share_permissions: None,
         }),
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
     .unwrap();
 
-    let doc = repo
-        .get_basic_document("d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    let doc = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
     assert_eq!(doc.document_name, "renamed");
     assert_eq!(
         doc.project_id,
         Some("d0000000-0000-0000-0000-100000000001".to_string())
     );
 
-    let result = sqlx::query!(
-        r#"
-        SELECT sp."isPublic" as is_public, sp."publicAccessLevel" as "public_access_level?"
-        FROM "SharePermission" sp
-        JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
-        WHERE dp."documentId" = $1
-        "#,
-        "d0000000-0000-0000-0000-000000000001"
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let result = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
 
-    assert!(result.is_public);
-    assert_eq!(result.public_access_level, Some("edit".to_string()));
+    assert_eq!(result.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(result.link_share_access_level.as_deref(), Some("edit"));
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![
+            TEST_DOCUMENT_NON_OWNER_ID.to_string(),
+            TEST_DOCUMENT_OWNER_ID.to_string(),
+        ]
+    );
 }
 
 #[sqlx::test(
@@ -751,7 +918,10 @@ async fn test_team_share_no_team_owner(pool: Pool<Postgres>) {
 
     // Create a document owned by a user without a team
     let metadata = repo
-        .create_document(create_document_args("macro|no-team@user.com", false, None))
+        .create_document(
+            create_document_args("macro|no-team@user.com", false, None),
+            md_share_permission(),
+        )
         .await
         .unwrap();
 
@@ -966,11 +1136,10 @@ async fn test_non_task_document_does_not_create_team_task_row(pool: Pool<Postgre
     let repo = PgDocumentRepo::new(pool);
 
     let metadata = repo
-        .create_document(create_document_args(
-            "macro|user@user.com",
-            false,
-            Some(TEST_TEAM_ID),
-        ))
+        .create_document(
+            create_document_args("macro|user@user.com", false, Some(TEST_TEAM_ID)),
+            md_share_permission(),
+        )
         .await
         .unwrap();
 
@@ -990,7 +1159,10 @@ async fn test_task_without_team_id_does_not_create_team_task_row(pool: Pool<Post
     let repo = PgDocumentRepo::new(pool);
 
     let metadata = repo
-        .create_document(create_document_args("macro|user@user.com", true, None))
+        .create_document(
+            create_document_args("macro|user@user.com", true, None),
+            md_share_permission(),
+        )
         .await
         .unwrap();
 
@@ -1040,13 +1212,16 @@ async fn test_copying_task_allocates_new_team_task_number(pool: Pool<Postgres>) 
     let original = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
 
     let copied = repo
-        .copy_document(CopyDocumentRepoArgs {
-            original_document: original,
-            user_id: user_id("macro|user@user.com"),
-            document_name: "copied task".to_string(),
-            file_type: Some(model::document::FileType::Md),
-            team_id: Some(TEST_TEAM_ID),
-        })
+        .copy_document(
+            CopyDocumentRepoArgs {
+                original_document: original,
+                user_id: user_id("macro|user@user.com"),
+                document_name: "copied task".to_string(),
+                file_type: Some(model::document::FileType::Md),
+                team_id: Some(TEST_TEAM_ID),
+            },
+            md_share_permission(),
+        )
         .await
         .unwrap();
 
@@ -1241,14 +1416,15 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: None,
-            public_access_level: None,
+            link_share: None,
+            link_share_access_level: None,
             channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                 operation: UpdateOperation::Add,
                 channel_id: channel_id.to_string(),
                 access_level: Some(AccessLevel::View),
             }]),
         }),
+        revoke_non_owner_user_access: false,
         file_type: None,
     })
     .await
@@ -1313,14 +1489,15 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
         document_name: None,
         project_id: None,
         share_permission: Some(UpdateSharePermissionRequestV2 {
-            is_public: None,
-            public_access_level: None,
+            link_share: None,
+            link_share_access_level: None,
             channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                 operation: UpdateOperation::Add,
                 channel_id: channel_id.to_string(),
                 access_level: Some(AccessLevel::View),
             }]),
         }),
+        revoke_non_owner_user_access: false,
         file_type: None,
     };
 
@@ -1560,4 +1737,289 @@ async fn test_get_project_children_empty(pool: Pool<Postgres>) {
         .unwrap();
 
     assert!(children.is_empty());
+}
+
+fn pdf_share_permission() -> SharePermissionV2 {
+    SharePermissionV2::new_document_share_permission(Some(model::document::FileType::Pdf), None)
+}
+
+fn import_email_document_args(
+    owner: &str,
+    sha: &str,
+    email_attachment_id: uuid::Uuid,
+) -> ImportEmailAttachmentRepoArgs {
+    ImportEmailAttachmentRepoArgs {
+        email_attachment_id,
+        create: CreateDocumentRepoArgs {
+            id: None,
+            sha: sha.to_string(),
+            document_name: "contract".to_string(),
+            user_id: user_id(owner),
+            file_type: Some(model::document::FileType::Pdf),
+            project_id: None,
+            team_id: None,
+            created_at: None,
+            sub_type: None,
+            skip_history: true,
+            attribution: None,
+        },
+    }
+}
+
+async fn insert_email_attachments(pool: &Pool<Postgres>, count: usize) -> Vec<uuid::Uuid> {
+    let link_id = uuid::Uuid::new_v4();
+    let contact_id = uuid::Uuid::new_v4();
+    let thread_id = uuid::Uuid::new_v4();
+    let message_id = uuid::Uuid::new_v4();
+
+    sqlx::query(
+        r#"
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider, is_sync_active)
+        VALUES ($1, $2, $3, $4, 'GMAIL', true)
+        "#,
+    )
+    .bind(link_id)
+    .bind(TEST_DOCUMENT_OWNER_ID)
+    .bind(TEST_DOCUMENT_OWNER_ID)
+    .bind("user@user.com")
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO email_contacts (id, link_id, email_address)
+        VALUES ($1, $2, 'sender@example.com')
+        "#,
+    )
+    .bind(contact_id)
+    .bind(link_id)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO email_threads (id, link_id, inbox_visible, is_read)
+        VALUES ($1, $2, true, false)
+        "#,
+    )
+    .bind(thread_id)
+    .bind(link_id)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    sqlx::query(
+        r#"
+        INSERT INTO email_messages (
+            id, thread_id, link_id, provider_id, is_sent, from_contact_id,
+            internal_date_ts, has_attachments, is_read, is_starred, is_draft
+        )
+        VALUES ($1, $2, $3, $4, false, $5, NOW(), true, false, false, false)
+        "#,
+    )
+    .bind(message_id)
+    .bind(thread_id)
+    .bind(link_id)
+    .bind(format!("provider-msg-{message_id}"))
+    .bind(contact_id)
+    .execute(pool)
+    .await
+    .unwrap();
+
+    let mut ids = Vec::with_capacity(count);
+    for i in 0..count {
+        let attachment_id = uuid::Uuid::new_v4();
+        sqlx::query(
+            r#"
+            INSERT INTO email_attachments (
+                id, message_id, provider_attachment_id, filename, mime_type, size_bytes
+            )
+            VALUES ($1, $2, $3, $4, 'application/pdf', 1024)
+            "#,
+        )
+        .bind(attachment_id)
+        .bind(message_id)
+        .bind(format!("provider-att-{i}"))
+        .bind(format!("contract-{i}.pdf"))
+        .execute(pool)
+        .await
+        .unwrap();
+        ids.push(attachment_id);
+    }
+    ids
+}
+
+async fn document_email_rows(pool: &Pool<Postgres>, document_id: &str) -> Vec<uuid::Uuid> {
+    sqlx::query_scalar::<_, uuid::Uuid>(
+        r#"SELECT email_attachment_id FROM document_email WHERE document_id = $1 ORDER BY email_attachment_id"#,
+    )
+    .bind(document_id)
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_import_email_attachment_reuses_document_by_sha(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 2).await;
+    let sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    let first = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let second = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[1]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(second, EmailImportRepoOutcome::Reused(_)));
+    assert_eq!(first.metadata().document_id, second.metadata().document_id);
+    let mut expected = attachments.clone();
+    expected.sort();
+    assert_eq!(
+        document_email_rows(&pool, &first.metadata().document_id).await,
+        expected
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_import_email_attachment_same_attachment_id_reuses_document(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 1).await;
+    let sha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    let first = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let second = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(second, EmailImportRepoOutcome::Reused(_)));
+    assert_eq!(first.metadata().document_id, second.metadata().document_id);
+    assert_eq!(
+        document_email_rows(&pool, &first.metadata().document_id).await,
+        attachments
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_import_email_attachment_does_not_reuse_non_email_document_by_sha(
+    pool: Pool<Postgres>,
+) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 1).await;
+    let sha = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+
+    let mut uploaded = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+    uploaded.sha = sha.to_string();
+    uploaded.file_type = Some(model::document::FileType::Pdf);
+    uploaded.document_name = "manual-upload".to_string();
+
+    let uploaded_doc = repo
+        .create_document(uploaded, pdf_share_permission())
+        .await
+        .unwrap();
+    let imported = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(imported, EmailImportRepoOutcome::Created(_)));
+    assert_ne!(uploaded_doc.document_id, imported.metadata().document_id);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_import_email_attachment_does_not_reuse_other_owner_sha(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 2).await;
+    let sha = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+
+    let owner_doc = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let teammate_doc = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_NON_OWNER_ID, sha, attachments[1]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(owner_doc, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(teammate_doc, EmailImportRepoOutcome::Created(_)));
+    assert_ne!(
+        owner_doc.metadata().document_id,
+        teammate_doc.metadata().document_id
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_create_document_does_not_reuse_email_document_by_sha(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 1).await;
+    let sha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+    let imported = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    let mut created = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+    created.sha = sha.to_string();
+    created.file_type = Some(model::document::FileType::Pdf);
+    created.document_name = "same-sha-upload".to_string();
+
+    let created_doc = repo
+        .create_document(created, pdf_share_permission())
+        .await
+        .unwrap();
+
+    assert!(matches!(imported, EmailImportRepoOutcome::Created(_)));
+    assert_ne!(imported.metadata().document_id, created_doc.document_id);
 }

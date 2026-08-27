@@ -43,6 +43,8 @@ import type { ApiThreadReply } from './generated/schemas/apiThreadReply';
 import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
 import type { BotToken } from './generated/schemas/botToken';
+import type { CalendarMentionPreviewRequest } from './generated/schemas/calendarMentionPreviewRequest';
+import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
 import type { CallRecordPreview } from './generated/schemas/callRecordPreview';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
@@ -101,6 +103,8 @@ import type { GetAttachmentReferencesResponse } from './generated/schemas/getAtt
 import type { GetBatchChannelPreviewRequest } from './generated/schemas/getBatchChannelPreviewRequest';
 import type { GetBatchChannelPreviewResponse } from './generated/schemas/getBatchChannelPreviewResponse';
 import type { GetBatchProjectPreviewResponse } from './generated/schemas/getBatchProjectPreviewResponse';
+import type { GetContactByEmailParams } from './generated/schemas/getContactByEmailParams';
+import type { GetContactByEmailResponse } from './generated/schemas/getContactByEmailResponse';
 import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/getDocumentPermissionsResponseDataV2';
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
@@ -158,8 +162,15 @@ import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
 import type { View } from './generated/schemas/view';
 import type { ViewsResponse } from './generated/schemas/viewsResponse';
 import { saveDocumentHandlerResponse } from './generated/zod';
+import type { ItemType } from './itemType';
+
+export type { ItemType } from './itemType';
+
 import type {
+  CollabSurfaceResponse,
+  CollabSurfaceTokenResponse,
   GetDocumentPermissionsTokenResponse,
+  ProcessingResultType,
   StorageServiceClient,
   ValidateDocumentPermissionsTokenResponse,
 } from './service';
@@ -224,18 +235,6 @@ type Success = {
 };
 type SuccessResponse = { data: Success };
 
-export type ItemType =
-  | CloudStorageItemType
-  | 'channel'
-  | 'email'
-  | 'channel_message'
-  | 'channel_thread'
-  | 'call'
-  | 'automation'
-  | 'foreign'
-  | 'crm_company'
-  | 'crm_contact';
-
 export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 export type { ApiAttachmentChannelReference } from './generated/schemas/apiAttachmentChannelReference';
@@ -285,6 +284,8 @@ type CreateBotRequest = {
   handle: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+  has_agent?: boolean;
 };
 
 type PatchBotRequest = {
@@ -292,6 +293,8 @@ type PatchBotRequest = {
   handle?: string;
   description?: string;
   avatar_url?: string;
+  /** Whether mentioning this bot opens a coding-agent session. Omit to leave unchanged. */
+  has_agent?: boolean;
 };
 
 type CreateBotTokenRequest = {
@@ -325,6 +328,7 @@ const itemTypeSet = new Set([
   'channel_message',
   'call',
   'automation',
+  'calendar_event',
   'thread',
   'crm_company',
   'crm_contact',
@@ -342,6 +346,8 @@ export function blockNameToItemType(
       return 'chat';
     case 'call':
       return 'call';
+    case 'calendar':
+      return 'calendar_event';
     case 'channel':
       return 'channel';
     case 'project':
@@ -367,6 +373,7 @@ export function stringToItemType(str: string): ItemType | undefined {
       return 'email';
     }
     case 'call':
+    case 'calendar_event':
     case 'chat':
     case 'document':
     case 'project':
@@ -384,7 +391,6 @@ export function isCloudStorageItem(
   return Object.values(CloudStorageItemTypeMap).includes(item as any);
 }
 
-type ProcessingResultType = 'PREPROCESS' | 'SPLIT_TEXTS';
 export type ProcessingResultResponseType<T extends ProcessingResultType> =
   T extends 'PREPROCESS'
     ? ICoParse
@@ -438,6 +444,18 @@ export const storageServiceClient = {
       await dssFetch<CalendarOccurrenceResponse>(
         `/calendar-events?${params.toString()}`,
         { method: 'GET', signal }
+      )
+    ).map((result) => result);
+  },
+
+  async getBatchCalendarEventPreviews(args: CalendarMentionPreviewRequest) {
+    return (
+      await dssFetch<CalendarMentionPreviewResponse>(
+        `/calendar-events/preview`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+        }
       )
     ).map((result) => result);
   },
@@ -659,7 +677,11 @@ export const storageServiceClient = {
   },
 
   async createChannelScopedBot(
-    args: WithChannelId & CreateChannelScopedBotRequest
+    args: WithChannelId &
+      CreateChannelScopedBotRequest & {
+        /** Whether mentioning this bot opens a coding-agent session. Defaults to false. */
+        has_agent?: boolean;
+      }
   ) {
     const { channel_id, ...request } = args;
     return (
@@ -1066,6 +1088,43 @@ export const storageServiceClient = {
       );
     },
   },
+
+  collabSurfaces: {
+    async ensure(args) {
+      return await dssFetch<CollabSurfaceResponse>(
+        `/collab_surfaces/${args.id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            parentEntityType: args.parentEntityType,
+            parentEntityId: args.parentEntityId,
+            initialMarkdown: args.initialMarkdown ?? '',
+          }),
+        }
+      );
+    },
+    async get(args) {
+      return await dssFetch<CollabSurfaceResponse>(
+        `/collab_surfaces/${args.id}`
+      );
+    },
+    // Uses SYNC_PERMISSION_TOKEN_DSS_HOST (like createPermissionToken) so the
+    // token is always signed by the DSS whose JWT secret matches the sync
+    // service's secret.
+    async createToken(args) {
+      return await fetchWithToken<CollabSurfaceTokenResponse>(
+        `${SYNC_PERMISSION_TOKEN_DSS_HOST}/collab_surfaces/${args.id}/token`,
+        {
+          method: 'POST',
+        }
+      );
+    },
+    async delete(args) {
+      return await dssFetch(`/collab_surfaces/${args.id}`, {
+        method: 'DELETE',
+      });
+    },
+  },
   async getUsersHistory() {
     return (await dssFetch<{ data: Item[] }>(`/history`)).map((result) => ({
       data: result.data,
@@ -1150,12 +1209,10 @@ export const storageServiceClient = {
     ).map((result) => result.data);
   },
 
-  async getPins(params?: { limit?: number; offset?: number }) {
-    return (
-      await dssFetch<{ data: UserPins }>(
-        `/pins?limit=${params?.limit ?? 10}&offset=${params?.offset ?? 0}`
-      )
-    ).map((result) => result.data);
+  async getPins() {
+    return (await dssFetch<{ data: UserPins }>('/pins')).map(
+      (result) => result.data
+    );
   },
 
   async pinItem(params: { id: string } & AddPinRequest) {
@@ -2453,6 +2510,16 @@ export const storageServiceClient = {
     return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
       method: 'GET',
     });
+  },
+  async getContactByEmail({
+    email,
+    signal,
+  }: GetContactByEmailParams & { signal?: AbortSignal }) {
+    const query = new URLSearchParams({ email });
+    return await dssFetch<GetContactByEmailResponse>(
+      `/crm/contacts/by-email?${query.toString()}`,
+      { method: 'GET', signal }
+    );
   },
   async setContactName({
     contactId,

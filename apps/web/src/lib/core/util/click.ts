@@ -5,7 +5,7 @@
  *
  * @param cb - Callback to invoke on Enter key press.
  */
-export const onKeyDownClick = (cb?: (e?: Event) => void) => {
+export const onKeyDownClick = (cb?: (e: Event) => void) => {
   return (e: KeyboardEvent) => {
     const keyboardEvent = e as unknown as KeyboardEvent;
     if (keyboardEvent.key === 'Enter') {
@@ -22,7 +22,7 @@ export const onKeyDownClick = (cb?: (e?: Event) => void) => {
  *
  * @param cb - Callback to invoke on Space key press.
  */
-export const onKeyUpClick = (cb?: (e?: Event) => void) => {
+export const onKeyUpClick = (cb?: (e: Event) => void) => {
   return (e: KeyboardEvent) => {
     const keyboardEvent = e as unknown as KeyboardEvent;
     if (keyboardEvent.key === ' ') {

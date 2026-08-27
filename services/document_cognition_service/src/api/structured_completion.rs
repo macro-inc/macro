@@ -9,7 +9,6 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use futures::StreamExt;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use mcp_client::domain::ports::McpServerStore;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
@@ -85,15 +84,12 @@ pub async fn structured_completion(
     };
 
     // Phase 1: Run agent loop to gather information
-    let mcp_store = ctx.mcp_state.store();
-    let mcp_records = mcp_store.list(&user_id).await.unwrap_or_default();
+    let mcp_tools = {
+        use mcp_select::ConnectorSelect;
+        ctx.mcp_selector.user_toolset(&user_id).await
+    };
     let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
-        mcp_client::domain::service::CombinedToolSet::new(
-            ctx.all_tools.clone(),
-            &mcp_records,
-            mcp_store.clone(),
-        )
-        .await,
+        mcp_select::CombinedToolSet::new(ctx.all_tools.clone(), mcp_tools),
     );
 
     let user_message = ChatMessage {

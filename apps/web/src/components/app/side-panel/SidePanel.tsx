@@ -1,13 +1,15 @@
+import { usePreference } from '@app/preferences/use-preference';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SidePanelIcon from '@icon/square-half-filled.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
-import { Button, Layer, Panel, Scroll } from '@ui';
+import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
@@ -40,6 +42,27 @@ const SIDE_MAX_PX = 380;
 const MAIN_MIN_PX = 320;
 
 /**
+ * Wide-mode open state for a side panel.
+ *
+ * With a `persistKey`, the user's show/hide choice is remembered across
+ * visits under a per-block localStorage key; without one the panel falls back
+ * to a plain signal that resets to `defaultOpen` on every mount.
+ *
+ * Only wide mode is persisted. Narrow mode renders the panel as a full-screen
+ * overlay on top of the content, so restoring it open would hide the content
+ * the user came back to.
+ */
+function createWideOpenState(
+  persistKey: string | undefined,
+  defaultOpen: boolean
+): [Accessor<boolean>, Setter<boolean>] {
+  if (persistKey === undefined) return createSignal(defaultOpen);
+  return usePreference(`macro:pref:side-panel:open:${persistKey}`, {
+    default: defaultOpen,
+  });
+}
+
+/**
  * Layout root for a block that opts in to a right-side panel.
  *
  * Wraps `props.children` in a horizontal Resize.Zone with a main panel
@@ -56,15 +79,24 @@ const MAIN_MIN_PX = 320;
  *
  * The side panel is suppressed entirely when no sections are registered.
  *
+ * Pass `persistKey` to remember the wide-mode open state across visits (see
+ * `createWideOpenState`); without it the panel returns to `defaultOpen` every
+ * time the block mounts.
+ *
  * Sections are rendered as a Kobalte Accordion in JSX-declared order.
  */
-function Layout(props: ParentProps<{ defaultOpen?: boolean }>) {
+function Layout(
+  props: ParentProps<{ defaultOpen?: boolean; persistKey?: string }>
+) {
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
-  const [isWideOpen, setIsWideOpen] = createSignal(props.defaultOpen ?? true);
+  const [isWideOpen, setIsWideOpen] = createWideOpenState(
+    props.persistKey,
+    props.defaultOpen ?? true
+  );
   const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
   const [isNarrow, setIsNarrow] = createSignal(isMobile());
 
@@ -192,7 +224,7 @@ function SidePanelLayoutInner(
           <Scroll>
             {/* Full-frame mobile: the overlay spans the whole panel, so the
                 content must clear the floating header islands + status bar. */}
-            <div class="w-full max-w-2xl mx-auto min-w-0 mobile:pt-(--mobile-content-inset-top)">
+            <div class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--mobile-content-inset-top)">
               <div class="px-2 pt-2">
                 <Button
                   variant="ghost"
@@ -224,13 +256,13 @@ function SidePanelHeaderToggle() {
   const ToggleButton = () => (
     <Button
       depth={2}
-      variant="base"
+      variant="outline"
       size="icon-sm"
       class={cn(
-        !isMobile() && 'bg-surface',
-        isMobile() &&
+        !isTouchDevice() && 'bg-surface',
+        isTouchDevice() &&
           'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
-        isMobile() && ctx.isOpen() && 'text-accent'
+        isTouchDevice() && ctx.isOpen() && 'text-accent'
       )}
       tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
       hotkey={TOKENS.block.toggleSidePanel}
@@ -332,7 +364,11 @@ function Section(
       order: props.order,
       component: () => (
         <Accordion.Item value={props.id}>
-          <Panel depth={2} style={{ height: 'auto' }} class="rounded-xl">
+          <Panel
+            depth={2}
+            style={{ height: 'auto' }}
+            class="rounded-xl bg-surface"
+          >
             <Accordion.Header class="group flex items-center">
               <Accordion.Trigger class="px-2 py-3 flex flex-1 min-w-0 items-center gap-2 text-xs hover:underline">
                 <CaretRight class="size-3 text-ink-muted transition-transform duration-90 group-data-expanded:rotate-90" />
@@ -459,7 +495,7 @@ function EmptyPill(props: { label?: JSX.Element } = {}) {
 function Loading() {
   return (
     <div class="flex items-center justify-center p-2">
-      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-edge-muted/50"></div>
+      <div class="animate-pulse text-ink-muted rounded-full h-2 w-full bg-skeleton"></div>
     </div>
   );
 }
@@ -482,11 +518,9 @@ function CountTitle(props: { label: JSX.Element; count: number }) {
 
 function Card(props: ParentProps) {
   return (
-    <Layer depth={1}>
-      <div class="rounded-lg border border-edge-muted bg-surface overflow-hidden">
-        <div class="divide-y divide-edge-muted">{props.children}</div>
-      </div>
-    </Layer>
+    <div class="rounded-lg border border-edge-muted bg-inset overflow-hidden">
+      <div class="divide-y divide-edge-muted">{props.children}</div>
+    </div>
   );
 }
 

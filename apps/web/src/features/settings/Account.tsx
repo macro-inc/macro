@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import type { AccountDeletionReason } from '@app/lib/analytics/app-events';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
@@ -8,15 +9,16 @@ import {
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
 import {
-  DEV_MODE_ENV,
   DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
+  ENABLE_NOTIFICATION_SETTINGS_FLAG,
+  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
 } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useEmail, useUserId } from '@core/context/user';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
@@ -47,6 +49,7 @@ import {
   createMemo,
   createResource,
   createSignal,
+  For,
   type JSX,
   Match,
   onCleanup,
@@ -54,6 +57,12 @@ import {
   Switch,
 } from 'solid-js';
 import { Transition } from 'solid-transition-group';
+import {
+  ACCOUNT_DELETION_FEEDBACK_MAX_LENGTH,
+  ACCOUNT_DELETION_REASON_OPTIONS,
+  buildAccountDeletionFeedbackPayload,
+  performAccountDeletion,
+} from './account-deletion-feedback';
 import {
   SettingsCard,
   SettingsPage,
@@ -278,7 +287,7 @@ function ProfilePictureRow(props: { userId: string }) {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 disabled={isRemoving()}
                 onClick={() => setShowRemoveConfirmModal(false)}
@@ -303,6 +312,7 @@ function ProfilePictureRow(props: { userId: string }) {
 
 // Not accessible if user is not authenticated
 export function Account() {
+  const analytics = useAnalytics();
   const email = useEmail();
   const userId = useUserId();
   const logout = useLogout();
@@ -310,9 +320,20 @@ export function Account() {
   const autoUpdateUIEnabled = createMemo(
     () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
   );
+  const notificationSettingsFlag = useFeatureFlag(
+    ENABLE_NOTIFICATION_SETTINGS_FLAG,
+    {
+      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+    }
+  );
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
     createSignal<boolean>(false);
+  const [deleteReason, setDeleteReason] = createSignal<AccountDeletionReason>();
+  const [deleteFeedback, setDeleteFeedback] = createSignal('');
+  const [deleteFeedbackCaptured, setDeleteFeedbackCaptured] =
+    createSignal(false);
+  const [isDeleting, setIsDeleting] = createSignal(false);
 
   // The shared own-name cache entry (the one saveUserName invalidates), so
   // this panel and other readers (e.g. the Getting Started checklist) can't
@@ -345,9 +366,49 @@ export function Account() {
     return undefined;
   };
 
+  const resetDeleteFlow = () => {
+    setDeleteReason(undefined);
+    setDeleteFeedback('');
+    setDeleteFeedbackCaptured(false);
+  };
+
   const deleteAccountHandler = async () => {
-    await authServiceClient.deleteUser();
-    logout();
+    if (isDeleting()) return;
+    setIsDeleting(true);
+
+    try {
+      const deleted = await performAccountDeletion({
+        captureFeedback: () => {
+          if (deleteFeedbackCaptured()) return;
+
+          analytics.track(
+            'account_deletion_feedback',
+            buildAccountDeletionFeedbackPayload(
+              deleteReason(),
+              deleteFeedback()
+            ),
+            ['posthog'],
+            {
+              posthog: {
+                send_instantly: true,
+                transport: 'sendBeacon',
+              },
+            }
+          );
+          setDeleteFeedbackCaptured(true);
+        },
+        deleteUser: () => authServiceClient.deleteUser(),
+        logout,
+      });
+
+      if (!deleted) {
+        setIsDeleting(false);
+        toast.failure('Unable to delete your account. Please try again.');
+      }
+    } catch {
+      setIsDeleting(false);
+      toast.failure('Unable to delete your account. Please try again.');
+    }
   };
 
   return (
@@ -401,17 +462,19 @@ export function Account() {
             <BundleUpdateRow />
           </Show>
 
-          <NotificationToggle />
+          <Show when={!notificationSettingsFlag().enabled}>
+            <NotificationToggle />
+          </Show>
         </SettingsCard>
       </SettingsSection>
 
-      <Show when={isMobile()}>
+      <Show when={isTouchDevice()}>
         <SettingsSection>
           <SettingsCard>
             <div class="px-6 py-3.5">
               <Button
                 fullWidth
-                variant="active"
+                variant="accent"
                 depth={4}
                 onClick={() => logout()}
               >
@@ -423,102 +486,167 @@ export function Account() {
         </SettingsSection>
       </Show>
 
-      {/* Account deletion ships on native mobile (App Store requirement) and
-          in dev builds, where deleting test users keeps flows like onboarding
-          re-runnable. */}
-      <Show when={isNativeMobilePlatform() || DEV_MODE_ENV}>
-        <SettingsSection title="Danger zone">
-          <SettingsCard>
-            <SettingsRow
-              label="Delete account"
-              description="Permanently delete your account and all associated data."
+      <SettingsSection title="Danger zone">
+        <SettingsCard>
+          <SettingsRow
+            label="Delete account"
+            description="Permanently delete your account and all associated data."
+          >
+            <Button
+              variant="danger"
+              depth={3}
+              onClick={() => {
+                resetDeleteFlow();
+                setShowDeleteModal(true);
+              }}
             >
+              Delete Account
+            </Button>
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+      <Dialog
+        open={showDeleteModal()}
+        onOpenChange={(open) => {
+          setShowDeleteModal(open);
+          if (!open && !showDeleteConfirmModal()) resetDeleteFlow();
+        }}
+        position="center"
+        class="w-120"
+      >
+        <Panel depth={2} class="rounded-xl">
+          <Panel.Header class="px-6">
+            <Dialog.Title class="text-ink text-sm font-semibold">
+              Delete Account
+            </Dialog.Title>
+          </Panel.Header>
+          <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+            <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+              Are you sure you want to delete your account? This action is
+              permanent and cannot be undone.
+            </Dialog.Description>
+            <div class="flex flex-col gap-3 pt-2">
+              <label class="flex flex-col gap-1.5 text-sm" for="delete-reason">
+                <span>
+                  Why are you leaving?{' '}
+                  <span class="text-ink-muted">(optional)</span>
+                </span>
+                <select
+                  id="delete-reason"
+                  class="settings-input w-full"
+                  value={deleteReason() ?? ''}
+                  onChange={(event) =>
+                    setDeleteReason(
+                      (event.currentTarget.value || undefined) as
+                        | AccountDeletionReason
+                        | undefined
+                    )
+                  }
+                >
+                  <option value="">Select a reason</option>
+                  <For each={ACCOUNT_DELETION_REASON_OPTIONS}>
+                    {(option) => (
+                      <option value={option.value}>{option.label}</option>
+                    )}
+                  </For>
+                </select>
+              </label>
+              <label
+                class="flex flex-col gap-1.5 text-sm"
+                for="delete-feedback"
+              >
+                <span>
+                  Anything else you'd like us to know?{' '}
+                  <span class="text-ink-muted">(optional)</span>
+                </span>
+                <textarea
+                  id="delete-feedback"
+                  class="settings-input ph-no-capture min-h-24 w-full resize-y py-2"
+                  rows={3}
+                  maxLength={ACCOUNT_DELETION_FEEDBACK_MAX_LENGTH}
+                  value={deleteFeedback()}
+                  onInput={(event) =>
+                    setDeleteFeedback(event.currentTarget.value)
+                  }
+                  placeholder="Your feedback helps us improve Macro"
+                />
+                <span class="text-ink-extra-muted text-xs">
+                  Please don't include sensitive information.
+                </span>
+              </label>
+            </div>
+            <div class="pt-3 justify-end items-center gap-3 inline-flex">
+              <Button
+                variant="outline"
+                depth={3}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  resetDeleteFlow();
+                }}
+              >
+                Cancel
+              </Button>
               <Button
                 variant="danger"
                 depth={3}
-                onClick={() => setShowDeleteModal(true)}
+                onClick={() => {
+                  setShowDeleteConfirmModal(true);
+                  setShowDeleteModal(false);
+                }}
               >
-                Delete Account
+                Continue
               </Button>
-            </SettingsRow>
-          </SettingsCard>
-        </SettingsSection>
-        <Dialog
-          open={showDeleteModal()}
-          onOpenChange={setShowDeleteModal}
-          position="center"
-          class="w-120"
-        >
-          <Panel depth={2} class="rounded-xl">
-            <Panel.Header class="px-6">
-              <Dialog.Title class="text-ink text-sm font-semibold">
-                Delete Account
-              </Dialog.Title>
-            </Panel.Header>
-            <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-              <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                Are you sure you want to delete your account? This action is
-                permanent and cannot be undone.
-              </Dialog.Description>
-              <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                <Button
-                  variant="base"
-                  depth={3}
-                  onClick={() => setShowDeleteModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="danger"
-                  depth={3}
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setShowDeleteConfirmModal(true);
-                  }}
-                >
-                  Delete
-                </Button>
-              </div>
-            </Panel.Body>
-          </Panel>
-        </Dialog>
-        <Dialog
-          open={showDeleteConfirmModal()}
-          onOpenChange={setShowDeleteConfirmModal}
-          position="center"
-          class="w-120"
-        >
-          <Panel depth={2} class="rounded-xl">
-            <Panel.Header class="px-6">
-              <Dialog.Title class="text-ink text-sm font-semibold">
-                Are you absolutely sure?
-              </Dialog.Title>
-            </Panel.Header>
-            <Panel.Body class="p-6 font-sans flex flex-col gap-3">
-              <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
-                This will permanently delete your account and all associated
-                data. This cannot be undone.
-              </Dialog.Description>
-              <div class="pt-3 justify-end items-center gap-3 inline-flex">
-                <Button
-                  variant="base"
-                  depth={3}
-                  onClick={() => setShowDeleteConfirmModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="danger"
-                  depth={3}
-                  onClick={deleteAccountHandler}
-                >
-                  Delete My Account
-                </Button>
-              </div>
-            </Panel.Body>
-          </Panel>
-        </Dialog>
-      </Show>
+            </div>
+          </Panel.Body>
+        </Panel>
+      </Dialog>
+      <Dialog
+        open={showDeleteConfirmModal()}
+        onOpenChange={(open) => {
+          setShowDeleteConfirmModal(open);
+          if (!open) resetDeleteFlow();
+        }}
+        position="center"
+        class="w-120"
+      >
+        <Panel depth={2} class="rounded-xl">
+          <Panel.Header class="px-6">
+            <Dialog.Title class="text-ink text-sm font-semibold">
+              Are you absolutely sure?
+            </Dialog.Title>
+          </Panel.Header>
+          <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+            <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+              This will permanently delete your account and all associated data.
+              This cannot be undone.
+            </Dialog.Description>
+            <div class="pt-3 justify-end items-center gap-3 inline-flex">
+              <Button
+                variant="outline"
+                depth={3}
+                disabled={isDeleting()}
+                onClick={() => {
+                  setShowDeleteConfirmModal(false);
+                  resetDeleteFlow();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                depth={3}
+                disabled={isDeleting()}
+                onClick={deleteAccountHandler}
+              >
+                <Show when={isDeleting()} fallback="Delete My Account">
+                  <SpinnerIcon class="size-4 animate-spin" />
+                  Deleting…
+                </Show>
+              </Button>
+            </div>
+          </Panel.Body>
+        </Panel>
+      </Dialog>
     </SettingsPage>
   );
 }
@@ -529,6 +657,48 @@ function Row(props: { label: string; children?: any }) {
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
     </div>
+  );
+}
+
+function NotificationToggle() {
+  const settings = useNotificationSettings();
+
+  return (
+    <Show
+      when={settings.isSupported && settings}
+      fallback={<NotificationNotSupported />}
+    >
+      {(s) => <NotificationSettings settings={s()} />}
+    </Show>
+  );
+}
+
+function NotificationSettings(props: {
+  settings: SupportedNotificationSettings;
+}) {
+  const analytics = useAnalytics();
+
+  const handleToggle = (checked: boolean) => {
+    analytics.track('notifications_toggled');
+    props.settings.toggle(checked);
+  };
+
+  return (
+    <Row label="Notifications">
+      <ToggleSwitch
+        size="md"
+        checked={props.settings.isEnabled()}
+        onChange={handleToggle}
+      />
+    </Row>
+  );
+}
+
+function NotificationNotSupported() {
+  return (
+    <Row label="Notifications">
+      <span class="text-sm text-ink-muted">Not supported on this device</span>
+    </Row>
   );
 }
 
@@ -632,48 +802,6 @@ function NameInput(props: {
   );
 }
 
-function NotificationToggle() {
-  const settings = useNotificationSettings();
-
-  return (
-    <Show
-      when={settings.isSupported && settings}
-      fallback={<NotificationNotSupported />}
-    >
-      {(s) => <NotificationSettings settings={s()} />}
-    </Show>
-  );
-}
-
-function NotificationSettings(props: {
-  settings: SupportedNotificationSettings;
-}) {
-  const analytics = useAnalytics();
-
-  const handleToggle = (checked: boolean) => {
-    analytics.track('notifications_toggled');
-    props.settings.toggle(checked);
-  };
-
-  return (
-    <Row label="Notifications">
-      <ToggleSwitch
-        size="md"
-        checked={props.settings.isEnabled()}
-        onChange={handleToggle}
-      />
-    </Row>
-  );
-}
-
-function NotificationNotSupported() {
-  return (
-    <Row label="Notifications">
-      <span class="text-sm text-ink-muted">Not supported on this device</span>
-    </Row>
-  );
-}
-
 function bundleUpdateAction(
   status: BundleUpdateStatus
 ): { label: string; action: () => void } | null {
@@ -744,7 +872,7 @@ function BundleUpdateRow() {
         </span>
         <Show when={action()}>
           {(a) => (
-            <Button variant="active" size="sm" depth={3} onClick={a().action}>
+            <Button variant="accent" size="sm" depth={3} onClick={a().action}>
               {a().label}
             </Button>
           )}

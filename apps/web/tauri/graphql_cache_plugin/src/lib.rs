@@ -2,7 +2,7 @@
 //!
 //! The webview counterpart of the browser worker glue in
 //! `apps/web/src/lib/graphql-cache/`: the engine (`cache-core` over
-//! `cache-sqlite`) lives in the Tauri host process behind an async mutex
+//! `cache-turso`) lives in the Tauri host process behind an async mutex
 //! (`Storage` futures are `MaybeSend`, so `Send` on native) — one shared
 //! instance across all webviews/windows, never webview storage.
 //! Webviews talk to it through the commands in [`commands`] (registered
@@ -23,8 +23,9 @@ pub mod commands;
 mod engine;
 
 pub use engine::{
-    ClaimedMutationWire, EngineHandle, EnqueueOptimisticMutationResultWire,
-    InitialMutationClaimWire, ReadResultWire, WriteResultWire,
+    AffectedOperationsResultWire, ClaimedMutationWire, EngineHandle,
+    EnqueueOptimisticMutationResultWire, InitialMutationClaimWire, ReadResultWire,
+    RecordSelectionResultWire, WriteResultWire,
 };
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose
@@ -53,7 +54,10 @@ pub struct OpsAffectedEvent {
 /// Payload of [`CACHE_CHANGED_EVENT`].
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CacheChangedEvent {}
+pub struct CacheChangedEvent {
+    /// Effective-view revision installed by the logical mutation.
+    pub revision: String,
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,6 +78,18 @@ struct InitializedCache {
 #[derive(Default)]
 pub struct CacheState(Mutex<Option<InitializedCache>>);
 
+impl CacheState {
+    /// Takes the initialized cache and explicitly closes its Turso connection.
+    pub fn shutdown(&self) -> Result<(), String> {
+        let cache = self
+            .0
+            .lock()
+            .map_err(|_| "graphql cache state poisoned".to_string())?
+            .take();
+        cache.map_or(Ok(()), |cache| cache.handle.shutdown())
+    }
+}
+
 fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[String]) {
     if op_ids.is_empty() {
         return;
@@ -89,8 +105,13 @@ fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[
     .ok();
 }
 
-fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>) {
-    app.emit(CACHE_CHANGED_EVENT, CacheChangedEvent {})
+fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str) {
+    app.emit(
+        CACHE_CHANGED_EVENT,
+        CacheChangedEvent {
+            revision: revision.to_owned(),
+        },
+    )
         .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
         .ok();
 }

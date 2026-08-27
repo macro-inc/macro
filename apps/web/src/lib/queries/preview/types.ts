@@ -5,6 +5,7 @@ import type {
   ApiChannelContextMessage,
   ItemType,
 } from '@service-storage/client';
+import type { CalendarMentionEvent } from '@service-storage/generated/schemas/calendarMentionEvent';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 
 type AccessType = 'access' | 'no_access' | 'does_not_exist';
@@ -32,7 +33,9 @@ type PreviewItemAccess = {
   fileType?: FileType;
   subType?: SubType;
   channelType?: never;
-} & BasePreviewItem<Exclude<ItemType, 'project' | 'document' | 'channel'>>;
+} & BasePreviewItem<
+  Exclude<ItemType, 'project' | 'document' | 'channel' | 'calendar_event'>
+>;
 
 type PreviewProjectAccess = {
   access: Extract<AccessType, 'access'>;
@@ -67,11 +70,24 @@ export type PreviewChannelAccess = {
   messageContext?: MessageContext | undefined;
 } & BasePreviewItem<'channel'>;
 
+export type PreviewCalendarEventAccess = {
+  access: Extract<AccessType, 'access'>;
+  loading: false;
+  rawName: string;
+  name: string;
+  fileType?: never;
+  subType?: never;
+  channelType?: never;
+  /** The requester-relative meeting preview served by the calendar API. */
+  event: CalendarMentionEvent;
+} & BasePreviewItem<'calendar_event'>;
+
 export type AccessiblePreviewItem =
   | PreviewItemAccess
   | PreviewProjectAccess
   | PreviewDocumentAccess
-  | PreviewChannelAccess;
+  | PreviewChannelAccess
+  | PreviewCalendarEventAccess;
 
 export type PreviewItem =
   | PreviewItemLoading
@@ -110,4 +126,10 @@ export const isChannelPreviewItem = (
   item: PreviewItem
 ): item is PreviewChannelAccess => {
   return isAccessiblePreviewItem(item) && item.type === 'channel';
+};
+
+export const isCalendarEventPreviewItem = (
+  item: PreviewItem
+): item is PreviewCalendarEventAccess => {
+  return isAccessiblePreviewItem(item) && item.type === 'calendar_event';
 };

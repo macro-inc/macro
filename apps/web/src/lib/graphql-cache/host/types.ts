@@ -1,25 +1,33 @@
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
  * imperative writers (websocket handlers). Implementations:
- * - worker-host.ts: browser (SharedWorker + wasm engine, or no-op fallback)
+ * - worker-host.ts: browser (SharedWorker coordinator + elected WASM engine,
+ *   or no-op fallback)
  * - tauri-host.ts (Phase 3b): Tauri IPC to the native engine
  */
 
 import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
+  AffectedOperationsResult,
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   CacheReadPriority,
+  CacheRevision,
   ClaimedMutation,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
+  HydrationResult,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   QueryVariableFilter,
-  ReadRecordsArgs,
+  ReadRecordsByKeysArgs,
+  ReadRecordsByKeysResult,
   ReadResult,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
   WriteResult,
 } from '../protocol';
 
@@ -52,6 +60,8 @@ export type InspectQueryVariantsArgs = Omit<
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   data: unknown;
+  /** Installs this active query's dependencies from the normalized response. */
+  registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
 }
@@ -72,13 +82,23 @@ export interface InitialMutationClaimArgs {
 export interface CacheHost {
   /** Stable id of this context; used to namespace operation ids. */
   readonly clientId: string;
-  /** True for the storage-free fallback used without SharedWorker support. */
+  /** True for the storage-free fallback when browser cache APIs are unsupported. */
   readonly disabled?: boolean;
 
+  /** Returns the current revision of the active cache-engine generation. */
+  currentRevision(): Promise<CacheRevision>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
-  /** Projects normalized records through a named GraphQL fragment. */
-  readRecords(args: ReadRecordsArgs): Promise<SelectedRecordPageWire>;
+  /** Projects a bounded explicit set of normalized entity keys. */
+  readRecordsByKeys(
+    args: ReadRecordsByKeysArgs
+  ): Promise<ReadRecordsByKeysResult>;
+  /** Searches the compact write-through materialized projection. */
+  search(args: SearchCacheArgs): Promise<SearchCachePage>;
+  /** Evaluates an exact initial Soup filter page over complete local projections. */
+  entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
+  /** Stores a query response and returns only fields not marked `@cacheOnly`. */
+  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
     args: EnqueueOptimisticMutationArgs,
@@ -116,13 +136,13 @@ export interface CacheHost {
     error: string
   ): Promise<WriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
-  invalidate(keys: string[]): Promise<string[]>;
+  invalidate(keys: string[]): Promise<AffectedOperationsResult>;
   /** Apply explicit server-provided cache-deletion effects. */
-  deleteRecords(keys: string[]): Promise<string[]>;
+  deleteRecords(keys: string[]): Promise<AffectedOperationsResult>;
   /** urql teardown for an operation key. */
   teardown(opKey: number): Promise<void>;
   /** Wipe all cached state (logout). */
-  clear(): Promise<void>;
+  clear(): Promise<CacheRevision>;
 
   /**
    * Subscribes to "these urql operation keys must re-execute" pushes
@@ -132,7 +152,10 @@ export interface CacheHost {
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
 
   /** Subscribes whenever the effective normalized-cache view changes. */
-  onCacheChanged(cb: () => void): () => void;
+  onCacheChanged(cb: (revision: CacheRevision) => void): () => void;
+
+  /** Invalidates revision watermarks before a replacement engine is used. */
+  onCacheGenerationChanged(cb: () => void): () => void;
 
   /** Subscribes to final commit/rollback events for queued mutations. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;

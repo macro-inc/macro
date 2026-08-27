@@ -41,6 +41,65 @@ async fn test_dynamic_query_inbox_view(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
+async fn test_dynamic_query_notification_seen_filters_by_is_read(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let read_thread = Uuid::parse_str("20000001-0000-0000-0000-000000000001")?;
+    let unread_thread = Uuid::parse_str("20000004-0000-0000-0000-000000000004")?;
+
+    // Fixture inbox threads all start unread; mark one read so the filter
+    // has both sides of the partition to distinguish.
+    sqlx::query("UPDATE email_threads SET is_read = TRUE WHERE id = $1")
+        .bind(read_thread)
+        .execute(&pool)
+        .await?;
+
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let unread_filter = Arc::new(Expr::Literal(EmailLiteral::NotificationSeen(false)));
+    let unread_query = Query::new(None, SimpleSortMethod::UpdatedAt, unread_filter);
+    let unread_results =
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, unread_query, "", None)
+            .await?;
+
+    assert!(
+        unread_results.iter().all(|r| !r.is_read),
+        "unread filter must not return read threads: {:?}",
+        unread_results
+            .iter()
+            .map(|r| (r.id, r.is_read))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        unread_results.iter().any(|r| r.id == unread_thread),
+        "unread filter should still return unread inbox threads"
+    );
+    assert!(
+        !unread_results.iter().any(|r| r.id == read_thread),
+        "unread filter must exclude the thread marked read"
+    );
+
+    let read_filter = Arc::new(Expr::Literal(EmailLiteral::NotificationSeen(true)));
+    let read_query = Query::new(None, SimpleSortMethod::UpdatedAt, read_filter);
+    let read_results =
+        dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, read_query, "", None)
+            .await?;
+
+    assert_eq!(
+        read_results.len(),
+        1,
+        "read filter should return only the marked-read inbox thread"
+    );
+    assert_eq!(read_results[0].id, read_thread);
+    assert!(read_results[0].is_read);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
 async fn test_dynamic_query_sent_view(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);

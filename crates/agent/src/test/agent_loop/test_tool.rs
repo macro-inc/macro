@@ -5,6 +5,7 @@ use crate::stream::ToolResponse;
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolCallError, ToolResult,
 };
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
 use schemars::JsonSchema;
@@ -16,6 +17,10 @@ use std::sync::Arc;
 #[schemars(title = "echo_tool", description = "Echoes its input back.")]
 struct EchoTool {
     value: String,
+}
+
+impl ToolAnnotated for EchoTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Echo");
 }
 
 #[async_trait]
@@ -35,6 +40,10 @@ impl AsyncTool<()> for EchoTool {
 #[derive(Deserialize, JsonSchema)]
 #[schemars(title = "boom_tool", description = "Always fails.")]
 struct BoomTool {}
+
+impl ToolAnnotated for BoomTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Boom");
+}
 
 #[async_trait]
 impl AsyncTool<()> for BoomTool {

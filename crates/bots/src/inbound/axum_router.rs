@@ -445,13 +445,12 @@ async fn add_channel_bot_handler<
 >(
     State(state): State<BotsRouterState<S, Svc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
-    Path(path): Path<ChannelPath>,
+    Path(_path): Path<ChannelPath>,
     Json(req): Json<AddChannelBotRequest>,
 ) -> Result<StatusCode, BotsHandlerErr> {
-    let caller = caller_from_receipt(&access.entity_access_receipt)?;
     state
         .service
-        .add_bot_to_channel(caller, path.channel_id, req.bot_id)
+        .add_bot_to_channel(access.entity_access_receipt, req.bot_id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

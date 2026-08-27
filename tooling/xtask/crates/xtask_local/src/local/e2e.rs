@@ -122,6 +122,7 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
             env: EnvArgs::default(),
             build: BuildArgs::default(),
             no_frontend: true,
+            enable_onboarding: false,
             traces: None,
             verbose: false,
         },

@@ -354,20 +354,21 @@ pub(crate) async fn delete_draft_message(
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    let deleted = sqlx::query!(
+    let deleted_link_id = sqlx::query_scalar!(
         r#"
         DELETE FROM email_messages
         WHERE id = $1 AND thread_id = $2 AND is_draft = true AND is_sent = false
+        RETURNING link_id
         "#,
         message_id,
         thread_db_id,
     )
-    .execute(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await?;
 
-    if deleted.rows_affected() == 0 {
+    let Some(link_id) = deleted_link_id else {
         return Err(sqlx::Error::RowNotFound);
-    }
+    };
 
     let messages_remain = sqlx::query_scalar!(
         r#"SELECT EXISTS(SELECT 1 FROM email_messages WHERE thread_id = $1) AS "exists!""#,
@@ -381,8 +382,11 @@ pub(crate) async fn delete_draft_message(
             .execute(&mut *tx)
             .await?;
     } else {
-        // The discarded draft may have been the thread's only signal message.
-        super::thread::sync_thread_signal_flag(&mut tx, thread_db_id).await?;
+        // Saving the draft inflated the thread's denormalized state — drafts
+        // count toward inbox_visible, latest_inbound_message_ts, and
+        // is_signal — so a full metadata recompute (which piggybacks the
+        // is_signal sync) is needed to put the thread back where it was.
+        super::thread::update_thread_metadata(&mut tx, thread_db_id, link_id).await?;
     }
 
     tx.commit().await?;
@@ -395,24 +399,27 @@ pub(super) async fn process_scheduled_message(
     link_id: Uuid,
     message_db_id: Uuid,
     send_time: Option<DateTime<Utc>>,
+    actor_id: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     if let Some(send_time) = send_time {
         sqlx::query!(
             r#"
             INSERT INTO email_scheduled_messages (
-                link_id, message_id, send_time, sent,
+                link_id, message_id, send_time, sent, actor_id,
                 created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
             ON CONFLICT (link_id, message_id) DO UPDATE SET
                 send_time = EXCLUDED.send_time,
                 sent = EXCLUDED.sent,
+                actor_id = EXCLUDED.actor_id,
                 updated_at = NOW()
             "#,
             link_id,
             message_db_id,
             send_time,
             false,
+            actor_id,
         )
         .execute(&mut *tx)
         .await?;

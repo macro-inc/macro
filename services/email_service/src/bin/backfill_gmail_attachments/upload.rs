@@ -1,18 +1,25 @@
 use anyhow::{Context, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use email_api_client::GmailApiClientRepository;
+use email_api_client::domain::ports::AlwaysAllowRateLimiter;
+use email_api_client::domain::service::EmailApiClientServiceImpl;
+use email_service::outbound::email_api::StaticTokenSource;
 use model::document::response::CreateDocumentRequest;
+use models_email::email::service::link::Link;
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use tracing::instrument;
-use uuid::Uuid;
 
 /// A helper struct to manage clients and tokens required for processing.
 pub struct AttachmentProcessor {
     db: PgPool,
     dss_client: document_storage_service_client::DocumentStorageServiceClient,
-    gmail_client: gmail_client::GmailClient,
-    gmail_access_token: String,
+    email_api: EmailApiClientServiceImpl<
+        GmailApiClientRepository,
+        StaticTokenSource,
+        AlwaysAllowRateLimiter,
+    >,
     macro_id_destination: String,
 }
 
@@ -20,15 +27,17 @@ impl AttachmentProcessor {
     pub fn new(
         db: PgPool,
         dss_client: document_storage_service_client::DocumentStorageServiceClient,
-        gmail_client: gmail_client::GmailClient,
-        gmail_access_token: String,
+        email_api: EmailApiClientServiceImpl<
+            GmailApiClientRepository,
+            StaticTokenSource,
+            AlwaysAllowRateLimiter,
+        >,
         macro_id_destination: String,
     ) -> Self {
         Self {
             db,
             dss_client,
-            gmail_client,
-            gmail_access_token,
+            email_api,
             macro_id_destination,
         }
     }
@@ -37,12 +46,12 @@ impl AttachmentProcessor {
     #[instrument(skip(self), fields(file_name = ?attachment.filename, mime_type = %attachment.mime_type))]
     pub async fn upload(
         &self,
-        link_id: Uuid,
+        link: &Link,
         attachment: &AttachmentUploadMetadata,
     ) -> anyhow::Result<()> {
         let exists = email_db_client::attachments::provider::get_document_id_by_att_id_and_link(
             &self.db,
-            link_id,
+            link.id,
             attachment.attachment_db_id,
         )
         .await?
@@ -56,34 +65,37 @@ impl AttachmentProcessor {
         }
 
         // 1. Fetch attachment data from Gmail.
-        let data = self.fetch_gmail_data(attachment).await?;
+        let data = self.fetch_attachment(link, attachment).await?;
 
         // 2. Calculate hashes required for validation.
         let (sha256_hex, sha256_base64) = Self::calculate_hashes(&data);
 
-        // 3. Get a presigned URL from the Document Storage Service.
-        let (presigned_url, content_type) = self.get_presigned_url(attachment, &sha256_hex).await?;
+        let Some((presigned_url, content_type)) =
+            self.get_presigned_url(attachment, &sha256_hex).await?
+        else {
+            return Ok(());
+        };
 
-        // 4. Upload the data to the presigned URL (e.g., S3).
         self.upload_to_storage(&presigned_url, &content_type, &sha256_base64, data)
             .await?;
 
         Ok(())
     }
 
-    /// Fetches the raw attachment data from the Gmail API.
-    async fn fetch_gmail_data(
+    /// Fetches the raw attachment data from the email provider.
+    async fn fetch_attachment(
         &self,
+        link: &Link,
         attachment: &AttachmentUploadMetadata,
     ) -> anyhow::Result<Vec<u8>> {
-        self.gmail_client
-            .get_attachment_data(
-                &self.gmail_access_token,
+        self.email_api
+            .get_attachment(
+                link.id,
                 &attachment.email_provider_id,
                 &attachment.provider_attachment_id,
             )
             .await
-            .context("Failed to get attachment data from Gmail")
+            .context("Failed to get attachment data from email provider")
     }
 
     /// Calculates the hex and base64 encoded SHA256 hash of the attachment data.
@@ -103,7 +115,7 @@ impl AttachmentProcessor {
         &self,
         attachment: &AttachmentUploadMetadata,
         sha256_hex: &str,
-    ) -> anyhow::Result<(String, String)> {
+    ) -> anyhow::Result<Option<(String, String)>> {
         // we filter out null filenames in the db query, but set to default just in case
         let file_name = attachment
             .filename
@@ -143,13 +155,11 @@ impl AttachmentProcessor {
             .await
             .context("DSS create_document call failed")?;
 
-        let presigned_url = dss_response
-            .data
-            .document_response
-            .presigned_url
-            .context("DSS response did not include a presigned URL")?;
+        let Some(presigned_url) = dss_response.data.document_response.presigned_url else {
+            return Ok(None);
+        };
 
-        Ok((presigned_url, dss_response.data.content_type))
+        Ok(Some((presigned_url, dss_response.data.content_type)))
     }
 
     /// Performs the final PUT request to upload the file data to cloud storage.

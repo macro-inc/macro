@@ -32,7 +32,7 @@ export function OnboardingCreateAccount() {
 
       <div class="flex flex-col gap-2 pt-2">
         <Button
-          variant="contrast"
+          variant="strong"
           size="lg"
           onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
         >

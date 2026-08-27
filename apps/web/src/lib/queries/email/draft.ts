@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
-import { refetchSoupEntity } from '@queries/soup/cache';
+import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
@@ -99,13 +99,18 @@ export function useDeleteDraftMutation(
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
-          // Refetch the thread (not the deleted draft) so it drops from the
-          // drafts tab without a manual refresh. No-op for compose drafts,
-          // whose thread is deleted along with the draft, so the refetch
-          // finds nothing to update.
-          if (vars.threadId && !vars.skipSoupRefetch) {
+          if (vars.skipSoupRefetch) return;
+          // Refetch the thread (not the deleted draft) so its draft-derived
+          // fields settle. No-op for compose drafts, whose thread is deleted
+          // along with the draft, so the refetch finds nothing to update.
+          if (vars.threadId) {
             refetchSoupEntity(vars.threadId, 'emailThread');
           }
+          // Discarding a draft changes view membership — the thread leaves
+          // Signal/Drafts and a noise thread re-enters Noise — which a
+          // single-entity patch can't express, so the soup list queries must
+          // refetch. Mirrors the archive flow in EmailContext.
+          invalidateAllSoup();
         },
       },
       callbacks

@@ -180,8 +180,8 @@ export function ToolBar() {
 
   return (
     <ScopedPortal scope="block">
-      {/* Full-frame mobile: rest above the floating bottom chrome. */}
-      <div class="absolute left-1/2 bottom-2 mobile:bottom-[calc(var(--mobile-content-inset-bottom,0)+0.5rem)] flex flex-row p-1 bg-surface border border-edge -translate-x-1/2">
+      {/* Full-frame mobile/tablet: rest above the floating bottom chrome. */}
+      <div class="absolute left-1/2 bottom-2 touch:bottom-[calc(var(--mobile-content-inset-bottom,0)+0.5rem)] flex flex-row p-1 bg-surface border border-edge -translate-x-1/2">
         <div
           class={cn(
             'flex flex-row items-center space-x-2',
@@ -189,7 +189,7 @@ export function ToolBar() {
           )}
         >
           <Button
-            variant={activeTool() === Tools.Grab ? 'active' : 'ghost'}
+            variant={activeTool() === Tools.Grab ? 'accent' : 'ghost'}
             size="icon-md"
             label="Hand tool"
             hotkey={TOKENS.canvas.handTool}
@@ -204,7 +204,7 @@ export function ToolBar() {
             <Button
               variant={
                 activeTool() === Tools.ZoomIn || activeTool() === Tools.ZoomOut
-                  ? 'active'
+                  ? 'accent'
                   : 'ghost'
               }
               size="icon-md"
@@ -227,7 +227,7 @@ export function ToolBar() {
                 activeTool() === Tools.Select ||
                 activeTool() === Tools.Resize ||
                 activeTool() === Tools.Move
-                  ? 'active'
+                  ? 'accent'
                   : 'ghost'
               }
               size="icon-md"
@@ -244,7 +244,7 @@ export function ToolBar() {
         <Show when={canEdit()}>
           <div class="flex flex-row px-2 items-center space-x-2">
             <Button
-              variant={activeTool() === Tools.Shape ? 'active' : 'ghost'}
+              variant={activeTool() === Tools.Shape ? 'accent' : 'ghost'}
               size="icon-md"
               label="Rectangle"
               hotkey={TOKENS.canvas.shapeTool}
@@ -256,7 +256,7 @@ export function ToolBar() {
             </Button>
 
             <Button
-              variant={activeTool() === Tools.Pencil ? 'active' : 'ghost'}
+              variant={activeTool() === Tools.Pencil ? 'accent' : 'ghost'}
               size="icon-md"
               label="Pencil"
               hotkey={TOKENS.canvas.pencilTool}
@@ -268,7 +268,7 @@ export function ToolBar() {
             </Button>
 
             <Button
-              variant={activeTool() === Tools.Line ? 'active' : 'ghost'}
+              variant={activeTool() === Tools.Line ? 'accent' : 'ghost'}
               size="icon-md"
               label="Connector"
               hotkey={TOKENS.canvas.lineTool}
@@ -284,7 +284,7 @@ export function ToolBar() {
               <Button
                 variant={
                   activeTool() === Tools.Text || activeTool() === Tools.Typing
-                    ? 'active'
+                    ? 'accent'
                     : 'ghost'
                 }
                 size="icon-md"

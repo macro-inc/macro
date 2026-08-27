@@ -182,6 +182,7 @@ export function fileTypeToBlockName(
   if (!blockOrFiletype) return 'unknown';
 
   if (blockOrFiletype === 'channel_message') return 'channel';
+  if (blockOrFiletype === 'calendar_event') return 'calendar';
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (blockOrFiletype === 'crm_company') return 'company';
@@ -235,7 +236,7 @@ export function blockNameToDefaultFile(block?: BlockName | string | null) {
 }
 
 export type ItemLike = {
-  type: ItemType | 'call' | 'crm_company' | 'reminder';
+  type: ItemType | 'call' | 'crm_company' | 'reminder' | 'calendar_event';
   fileType?: BasicDocumentFileType;
   subType?: SubType | BasicDocumentSubTypeProperty;
   name?: string;

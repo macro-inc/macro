@@ -166,8 +166,8 @@ function makeCreateBlock({
       try {
         const id = await createFn();
         return id;
-      } catch (e) {
-        toast.failure(e.message);
+      } catch (cause) {
+        toast.failure(cause instanceof Error ? cause.message : String(cause));
         return null;
       }
     };
@@ -324,7 +324,7 @@ export function ProjectCreateMenu(props: { id: string }) {
     <Dropdown open={open()} onOpenChange={setOpen}>
       <div class="flex items-center">
         <Dropdown.Trigger
-          variant="base"
+          variant="outline"
           size="sm"
           class="bg-surface py-3"
           depth={2}

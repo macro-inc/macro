@@ -8,16 +8,19 @@
 #[cfg(test)]
 mod test;
 
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::time::Duration;
 
 use either::Either;
 use macro_env::Environment;
+use opentelemetry::propagation::{Extractor, Injector};
 use rdkafka::consumer::{CommitMode, Consumer, ConsumerContext, StreamConsumer};
 use rdkafka::error::{KafkaError, KafkaResult};
-use rdkafka::message::{BorrowedMessage, Message as _};
+use rdkafka::message::{BorrowedMessage, Header, Headers, Message, OwnedHeaders};
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::{ClientConfig, Offset, TopicPartitionList};
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use uuid::Uuid;
 
 pub use msk_iam::{MskIamClientContext, configure_sasl_iam};
@@ -27,6 +30,97 @@ mod msk_iam;
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
 const MESSAGE_TIMEOUT_MS: &str = "5000";
 const SEND_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Default)]
+struct TraceHeaderInjector(HashMap<String, String>);
+
+impl Injector for TraceHeaderInjector {
+    fn set(&mut self, key: &str, value: String) {
+        self.0.insert(key.to_owned(), value);
+    }
+}
+
+struct TraceHeaderExtractor<'a, H: Headers>(&'a H);
+
+impl<H: Headers> Extractor for TraceHeaderExtractor<'_, H> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.iter().find_map(|header| {
+            (header.key == key)
+                .then(|| {
+                    header
+                        .value
+                        .and_then(|value| std::str::from_utf8(value).ok())
+                })
+                .flatten()
+        })
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.iter().map(|header| header.key).collect()
+    }
+}
+
+fn current_trace_headers() -> OwnedHeaders {
+    let context = tracing::Span::current().context();
+    let mut injector = TraceHeaderInjector::default();
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&context, &mut injector);
+    });
+
+    injector
+        .0
+        .into_iter()
+        .fold(OwnedHeaders::new(), |headers, (key, value)| {
+            headers.insert(Header {
+                key: &key,
+                value: Some(&value),
+            })
+        })
+}
+
+fn remote_trace_context<M: Message>(message: &M) -> opentelemetry::Context {
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        message
+            .headers()
+            .map_or_else(opentelemetry::Context::new, |headers| {
+                propagator.extract(&TraceHeaderExtractor(headers))
+            })
+    })
+}
+
+/// Creates a Kafka processing span parented to the message's propagated W3C context.
+///
+/// The caller should instrument the complete decode, handling, and commit future
+/// with this span so the consumer operation represents all record processing.
+pub fn consumer_span<M: Message>(message: &M, consumer_group: &'static str) -> tracing::Span {
+    let span = tracing::info_span!(
+        "kafka.process",
+        otel.kind = "consumer",
+        messaging.system = "kafka",
+        messaging.operation.name = "process",
+        messaging.operation.type = "process",
+        messaging.consumer.group.name = consumer_group,
+        messaging.destination.name = message.topic(),
+        messaging.destination.partition.id = %message.partition(),
+        messaging.kafka.offset = message.offset(),
+        macro.event.id = tracing::field::Empty,
+        macro.event.type = tracing::field::Empty,
+        agent.session.id = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+    );
+    let parent = remote_trace_context(message);
+    // Setting an empty context is intentional: headerless records must not
+    // inherit an unrelated process- or task-lifetime ambient span.
+    let _ = span.set_parent(parent);
+    span
+}
+
+/// Marks a manually-created messaging span as failed.
+pub fn record_span_error(span: &tracing::Span, error: &(impl std::fmt::Display + ?Sized)) {
+    span.record("otel.status_code", "ERROR");
+    span.record("otel.status_description", tracing::field::display(error));
+}
 
 /// Failure to construct an environment-specific Kafka consumer.
 #[derive(Debug, thiserror::Error)]
@@ -246,9 +340,23 @@ impl KafkaEventProducer {
     }
 
     /// Sends a keyed payload to `topic` and waits for delivery confirmation.
-    #[tracing::instrument(err, skip(self, payload), fields(topic, key))]
+    #[tracing::instrument(
+        name = "kafka.publish",
+        err,
+        skip(self, payload),
+        fields(
+            otel.kind = "producer",
+            messaging.system = "kafka",
+            messaging.operation.name = "publish",
+            messaging.operation.type = "send",
+            messaging.destination.name = topic,
+        )
+    )]
     pub async fn send(&self, topic: &str, key: &str, payload: &[u8]) -> KafkaResult<()> {
-        let record = FutureRecord::to(topic).key(key).payload(payload);
+        let record = FutureRecord::to(topic)
+            .key(key)
+            .payload(payload)
+            .headers(current_trace_headers());
         either::for_both!(&self.producer.0, producer => producer.send(record, SEND_TIMEOUT).await)
             .map(|_| ())
             .map_err(|(error, _)| error)

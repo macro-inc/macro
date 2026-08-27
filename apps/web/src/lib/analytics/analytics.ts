@@ -10,7 +10,7 @@ import {
 import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform } from '@core/util/platform';
-import { PostHog } from 'posthog-js';
+import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 import { getPlanAnalyticsProperties } from './planProperties';
 
@@ -53,10 +53,15 @@ const DEFAULT_ANALYTICS_PROVIDERS: AnalyticsProvider[] = ['posthog'];
 
 type EventName = AppEventNames | (string & {});
 
+type TrackOptions = {
+  posthog?: CaptureOptions;
+};
+
 type TrackFn = <E extends EventName>(
   event: E,
   data?: E extends keyof AppEvents ? AppEvents[E] : Record<string, unknown>,
-  providersToSendTo?: AnalyticsProvider[]
+  providersToSendTo?: AnalyticsProvider[],
+  options?: TrackOptions
 ) => void;
 
 interface UserIdentifyInfo {
@@ -180,7 +185,7 @@ const createAnalytics = () => {
     provider: AnalyticsProvider,
     event: EventName,
     data?: Record<string, unknown>,
-    options?: { eventID?: string }
+    options?: TrackOptions & { eventID?: string }
   ) => {
     if (disabled) return;
 
@@ -207,7 +212,7 @@ const createAnalytics = () => {
           );
         })
         .with('posthog', () => {
-          posthog.capture(event, enriched);
+          posthog.capture(event, enriched, options?.posthog);
         })
         .exhaustive();
     } catch (e) {
@@ -218,10 +223,11 @@ const createAnalytics = () => {
   const track: TrackFn = (
     event: EventName,
     data?: Record<string, unknown>,
-    providersToSendTo: AnalyticsProvider[] = DEFAULT_ANALYTICS_PROVIDERS
+    providersToSendTo: AnalyticsProvider[] = DEFAULT_ANALYTICS_PROVIDERS,
+    options?: TrackOptions
   ) => {
     for (const provider of providersToSendTo) {
-      sendEvent(provider, event, data);
+      sendEvent(provider, event, data, options);
     }
   };
 

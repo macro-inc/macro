@@ -9,17 +9,19 @@ export const makeAttachmentPublic = async (attachmentId: string) => {
   const permissions = await storageServiceClient.getDocumentPermissions({
     document_id: attachmentId,
   });
-  if (!permissions.isErr()) {
-    if (permissions.value.isPublic) {
-      return;
-    }
+  if (
+    !permissions.isErr() &&
+    permissions.value.linkShare === 'PUBLIC' &&
+    permissions.value.linkShareAccessLevel === 'view'
+  ) {
+    return;
   }
-  // Change file permissions to public view-only
+
   const result = await storageServiceClient.editDocument({
     documentId: attachmentId,
     sharePermission: {
-      isPublic: true,
-      publicAccessLevel: 'view',
+      linkShare: 'PUBLIC',
+      linkShareAccessLevel: 'view',
     },
   });
   if (!result.isErr()) {

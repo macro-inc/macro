@@ -1,4 +1,4 @@
-import { SERVER_HOSTS } from '../constant/servers';
+import { proxyImageUrl } from '../util/imageProxy';
 
 /**
  * Serves images through image proxy service to avoid storing data.
@@ -13,10 +13,10 @@ export function proxyEmailImages(html: string): string {
   for (const img of images) {
     const src = img.getAttribute('src')?.replace(/\s/g, '');
     if (!src) continue;
-    if (!src.startsWith('http://') && !src.startsWith('https://')) continue;
+    const proxied = proxyImageUrl(src);
+    if (proxied === src) continue;
 
-    const proxiedUrl = `${SERVER_HOSTS['image-proxy-service']}/proxy?url=${encodeURIComponent(src)}`;
-    img.setAttribute('src', proxiedUrl);
+    img.setAttribute('src', proxied);
   }
 
   return container.innerHTML;

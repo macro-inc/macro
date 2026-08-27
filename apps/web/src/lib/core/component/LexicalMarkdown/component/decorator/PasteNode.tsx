@@ -201,7 +201,9 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
                   </Button>
                 </div>
               </div>
-              <div class="flex-1 min-h-0 overflow-auto">{fullText()}</div>
+              <MobileDrawer.ScrollBody class="overflow-x-auto">
+                {fullText()}
+              </MobileDrawer.ScrollBody>
             </MobileDrawer.Content>
           </MobileDrawer.Portal>
         </MobileDrawer>

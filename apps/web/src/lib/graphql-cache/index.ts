@@ -19,6 +19,10 @@ export {
   selectAll,
 } from './exchange/inspection';
 export {
+  type NormalizedCacheResultMetadata,
+  normalizedCacheResultMetadata,
+} from './exchange/normalized-cache-exchange';
+export {
   executeOptimisticMutation,
   type LinkDiff,
   type ListSelection,
@@ -37,8 +41,7 @@ export {
 } from './exchange/optimistic';
 export {
   type RecordSelection,
-  readRecords,
-  type SelectedRecordPage,
+  readRecordsByKeys,
   selectRecords,
 } from './exchange/record-selection';
 export { createTauriCacheHost } from './host/tauri-host';
@@ -57,18 +60,29 @@ export type {
   CacheReadPriority,
   CacheRequest,
   CacheResponse,
+  CacheRevision,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
   InitialMutationClaim,
   MutationSettlement,
   OptimisticWriteResult,
   QueryVariableFilter,
-  ReadRecordsArgs,
+  ReadRecordsByKeysArgs,
+  ReadRecordsByKeysResult,
   ReadResult,
-  RecordCursor,
-  SelectedRecordPageWire,
+  SearchCacheArgs,
+  SearchCachePage,
+  SearchCursor,
+  SearchDocumentWire,
+  SearchProfile,
+  SelectedRecordByKeyWire,
   WriteResult,
 } from './protocol';
 export {
+  INITIAL_CACHE_REVISION,
+  MAX_CACHE_SEARCH_QUERY_BYTES,
   MAX_RECORD_SELECTION_PAGE_SIZE,
-  validateRecordSelectionLimit,
+  validateCacheSearchArgs,
+  validateRecordSelectionKeys,
 } from './protocol';

@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 mention_utils = { path = "../mention_utils" }
 model-entity = { path = "../model-entity" }

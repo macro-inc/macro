@@ -31,7 +31,12 @@ pub async fn create_instructions_document(
             file_type: Some(FileType::Md),
             project_id: None,
             project_name: None,
-            share_permission: &SharePermissionV2::new_document_share_permission(Some(FileType::Md)),
+            // System-created singleton, not a user "creating an item": the
+            // team default link-share preference intentionally does not apply.
+            share_permission: &SharePermissionV2::new_document_share_permission(
+                Some(FileType::Md),
+                None,
+            ),
             skip_history: false,
             email_attachment_id: None,
             created_at: None,

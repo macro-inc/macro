@@ -6,6 +6,7 @@ import {
   $isUnknownMentionNode,
   type UnknownMentionNode,
 } from '../nodes/UnknownMentionNode';
+import { $isUserMentionNode } from '../nodes/UserMentionNode';
 import { ALL_TRANSFORMERS } from '../transformers';
 
 async function importMarkdown(markdown: string) {
@@ -80,6 +81,21 @@ describe('internal transformer fallbacks', () => {
     });
   });
 
+  it('ignores malformed user mention displayName values', async () => {
+    const editor = await importMarkdown(
+      '<m-user-mention>{"userId":"u1","email":"a@b.com","displayName":{"first":"A"}}</m-user-mention>'
+    );
+
+    editor.getEditorState().read(() => {
+      const paragraph = $getRoot().getFirstChild();
+      const node = $isParagraphNode(paragraph)
+        ? paragraph.getFirstChild()
+        : null;
+      expect($isUserMentionNode(node)).toBe(true);
+      expect(node?.getTextContent()).toBe('a');
+    });
+  });
+
   it.each([
     ['<m-user-mention>{bad}</m-user-mention>', 'Unknown User'],
     ['<m-user-mention>{"email":"a@b.com"}</m-user-mention>', 'Unknown User'],
@@ -90,6 +106,11 @@ describe('internal transformer fallbacks', () => {
     ],
     ['<m-snapshot>{bad}</m-snapshot>', 'Unknown Snapshot'],
     ['<m-await>{bad}</m-await>', 'Unknown Await'],
+    ['<m-magic-chip>{bad}</m-magic-chip>', 'Unknown Magic Chip'],
+    [
+      '<m-magic-chip>{"agentSessionId":"session","channelId":"channel","promptedMessage":{"turn":0,"author":"user"},"status":"invalid"}</m-magic-chip>',
+      'Unknown Magic Chip',
+    ],
     ['<m-link>{bad}</m-link>', 'Unknown Link'],
   ])(
     'falls back for malformed text transformer payload %#',
@@ -102,6 +123,19 @@ describe('internal transformer fallbacks', () => {
       });
     }
   );
+
+  it.each([
+    '<m-agent-context>{bad}</m-agent-context>',
+    '<m-agent-context>{"version":2,"text":"private"}</m-agent-context>',
+    '<m-agent-context>{"version":1,"text":42}</m-agent-context>',
+    '<m-agent-context>{"version":1,"text":"private","extra":true}</m-agent-context>',
+  ])('rejects malformed trusted agent context %#', async (markdown) => {
+    const editor = await importMarkdown(markdown);
+
+    editor.getEditorState().read(() => {
+      expect(findUnknownMention()?.getName()).toBe('Unknown Agent Context');
+    });
+  });
 
   it.each([
     ['<m-document-card>{bad}</m-document-card>', 'Unknown Item'],

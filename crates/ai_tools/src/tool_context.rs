@@ -1,5 +1,10 @@
 use anthropic::toolset::AnthropicToolContext;
 use axum::extract::FromRef;
+use bots::{
+    domain::service::BotServiceImpl, inbound::toolset::BotToolContext,
+    outbound::pg_bots_repo::PgBotsRepo,
+};
+use calendar_events::inbound::toolset::CalendarToolContext;
 use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use call::domain::ports::CallRtcClient;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
@@ -34,12 +39,16 @@ use foreign_entity::{
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
 };
 use lexical_mention_extractor::LexicalMentionExtractor;
-use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_event_broker::{
+    EventBrokerError, KafkaEventPublisher, MacroEvent, MacroEventBroker, MacroEventBrokerService,
+    NoopMacroEventBroker,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
 use projects::inbound::toolset::ProjectToolContext;
 use properties::inbound::toolset::PropertiesToolContext;
+use reminders::inbound::toolset::RemindersToolContext;
 use skills::inbound::toolset::SkillToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
@@ -50,6 +59,9 @@ use system_properties::{
 use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamRepositoryImpl};
 use tokio_util::task::TaskTracker;
 
+mod activity_metadata;
+
+use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
 
 /// Type alias for the frecency service implementation
@@ -86,6 +98,51 @@ pub type ToolEmailService = EmailServiceImpl<
 /// Event broker used by AI tools, with spawned publish tasks tracked for
 /// graceful shutdown by the hosting process.
 pub type ToolEventBroker = MacroEventBrokerService<KafkaEventPublisher, TaskTracker>;
+
+/// Event broker used by bot tools across hosts that either do or do not have
+/// Kafka lifecycle publishing configured.
+#[derive(Clone)]
+pub enum ToolBotEventBroker {
+    /// Publish bot lifecycle events through the shared Kafka broker.
+    Real(ToolEventBroker),
+    /// Drop lifecycle events in hosts that do not configure Kafka.
+    NoOp(NoopMacroEventBroker),
+}
+
+impl MacroEventBroker for ToolBotEventBroker {
+    fn send_event<E: MacroEvent + ?Sized>(
+        &self,
+        event: &E,
+    ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
+        match self {
+            Self::Real(broker) => broker.send_event(event),
+            Self::NoOp(broker) => broker.send_event(event),
+        }
+    }
+}
+
+/// Concrete bot domain service used by AI tools.
+pub type ToolBotService = BotServiceImpl<PgBotsRepo, ToolBotEventBroker>;
+
+/// Bot-management AI tool context.
+pub type ToolBotToolContext = BotToolContext<ToolBotService, ToolEntityAccessService>;
+
+/// Build bot-management tools over the canonical Postgres repository and
+/// entity-access service.
+pub fn build_bot_tool_context(
+    pool: sqlx::PgPool,
+    event_broker: ToolBotEventBroker,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    document_storage_service_url: String,
+) -> ToolBotToolContext {
+    BotToolContext {
+        service: Arc::new(BotServiceImpl::new(PgBotsRepo::new(pool), event_broker)),
+        entity_access_service,
+        document_storage_service_url: document_storage_service_url
+            .trim_end_matches('/')
+            .to_string(),
+    }
+}
 
 /// Type alias for the send-capable email service implementation used by user
 /// tools. Carries the real event broker: these tools mutate email state, and
@@ -211,6 +268,44 @@ pub fn build_channel_tool_context_with_dispatcher(
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),
+    )
+}
+
+/// Type alias for the calendar occurrence read service used by AI tools.
+pub type ToolCalendarReadService = calendar_events::domain::service::CalendarService<
+    calendar_events::outbound::pg::PgCalendarRepository,
+>;
+
+/// Type alias for the calendar mutation client used by AI tools. Mutations
+/// call the email service — the calendar write authority holding the Google
+/// client, token minting, and request gate — with internal auth on behalf
+/// of the requesting user, so tool-driven edits behave identically to
+/// UI-driven ones.
+pub type ToolCalendarMutationService =
+    calendar_events::outbound::email_service_mutations::EmailServiceCalendarMutations;
+
+/// Type alias for the calendar AI tool context.
+pub type ToolCalendarToolContext =
+    CalendarToolContext<ToolCalendarMutationService, ToolCalendarReadService>;
+
+/// Build the calendar AI tool context: reads query the local occurrence
+/// projections from `pool`; mutations call the email service at
+/// `email_service_url` with the shared internal API key.
+pub fn build_calendar_tool_context(
+    pool: sqlx::PgPool,
+    email_service_url: String,
+    internal_api_key: String,
+) -> ToolCalendarToolContext {
+    CalendarToolContext::new(
+        Arc::new(
+            calendar_events::outbound::email_service_mutations::EmailServiceCalendarMutations::new(
+                email_service_url,
+                internal_api_key,
+            ),
+        ),
+        Arc::new(calendar_events::domain::service::CalendarService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(pool),
+        )),
     )
 }
 
@@ -733,6 +828,31 @@ pub type ToolNotificationService = notification::domain::service::NotificationRe
 /// Type alias for the notification tool context.
 pub type ToolNotificationToolContext = NotificationToolContext<ToolNotificationService>;
 
+/// Type alias for the reminders service implementation used by AI tools.
+pub type ToolRemindersService = reminders::domain::service::RemindersServiceImpl<
+    reminders::outbound::pg_reminders_repo::PgRemindersRepo,
+>;
+
+/// Type alias for the reminders tool context.
+pub type ToolRemindersToolContext =
+    RemindersToolContext<ToolRemindersService, ToolEntityAccessService>;
+
+/// Build the reminders tool context from a database pool.
+///
+/// The reminder tools go through the same access receipts the HTTP API does,
+/// so this needs the entity access service as well as the repository.
+pub fn build_reminders_tool_context(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+) -> ToolRemindersToolContext {
+    RemindersToolContext::new(
+        reminders::domain::service::RemindersServiceImpl::new(
+            reminders::outbound::pg_reminders_repo::PgRemindersRepo::new(pool),
+        ),
+        entity_access_service,
+    )
+}
+
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
 pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
@@ -831,7 +951,12 @@ impl ToolEntityCreator {
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
         let document = documents::domain::create::NewPlainTextDocument::builder(
-            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
+            documents::domain::create::NewDocumentMetadata::builder(name.to_string())
+                .attribution(activity::Attribution::delegated(
+                    activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+                    user.clone(),
+                ))
+                .build(),
         )
         .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
         .text(markdown.to_string())
@@ -1088,9 +1213,24 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
 }
 
 /// Type alias for the import service implementation used by AI tools.
+/// The MCP connection to Pipedream's remote server: `None` on deployments
+/// where Pipedream isn't configured (its toolsets then come up empty).
+pub type ToolPipedreamConnection =
+    Option<std::sync::Arc<pipedream_mcp::outbound::api::PipedreamClient>>;
+
+/// The MCP stack selector wired to the concrete DCS stores: the native
+/// server store and the Pipedream connection store. Picks which stack
+/// serves a user's tools (Pipedream connectors win; see `mcp_select`).
+pub type ToolMcpSelector = mcp_select::McpToolSelector<
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    ToolPipedreamConnection,
+>;
+
+/// Type alias for the import service implementation used by AI tools.
 pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
-    mcp_client::outbound::pg_server_repo::PgServerRepo,
+    ToolMcpSelector,
     ToolEntityCreator,
 >;
 
@@ -1098,6 +1238,24 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
 /// context builder; hosts that can run the import pipeline (DCS) replace it
 /// with a wired one after constructing the import service.
 pub type ToolImportToolContext = import::inbound::toolset::ImportToolContext<ToolImportService>;
+
+pub type ToolActivityToolContext = activity::inbound::toolset::ActivityToolContext<
+    activity::outbound::pg_activity_repo::PgActivityRepo,
+>;
+
+pub fn build_activity_tool_context(
+    pool: sqlx::PgPool,
+    properties: Arc<ToolPropertiesService>,
+    entity_access_service: Arc<ToolEntityAccessService>,
+) -> ToolActivityToolContext {
+    activity::inbound::toolset::ActivityToolContext::new(
+        activity::outbound::pg_activity_repo::PgActivityRepo::new(pool),
+    )
+    .with_metadata_resolver(ToolActivityMetadataResolver::new(
+        properties,
+        entity_access_service,
+    ))
+}
 
 #[derive(Clone, Default)]
 pub struct NoOpScheduleContext;
@@ -1115,11 +1273,14 @@ pub struct ToolServiceContext {
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
+    pub activity_tool_context: ToolActivityToolContext,
     pub document_tool_context: ToolDocumentToolContext,
     pub properties_tool_context: ToolPropertiesToolContext,
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
+    pub calendar_tool_context: ToolCalendarToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
+    pub reminders_tool_context: ToolRemindersToolContext,
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
@@ -1129,6 +1290,7 @@ pub struct ToolServiceContext {
     #[from_ref(skip)]
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
+    pub bot_tool_context: ToolBotToolContext,
     pub project_tool_context: ToolProjectToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,

@@ -1,13 +1,13 @@
-import {
-  type EnqueueOptimisticMutationResult,
-  type ReadRecordsArgs,
-  type ReadResult,
-  validateRecordSelectionLimit,
-  type WriteResult,
+import type {
+  EnqueueOptimisticMutationResult,
+  ReadResult,
+  WriteResult,
 } from '../protocol';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import type { CacheHost } from './types';
 
 const emptyWriteResult = (): WriteResult => ({
+  revision: INITIAL_CACHE_REVISION,
   changed: [],
   affectedOps: [],
   reset: false,
@@ -24,15 +24,26 @@ export function createNoopCacheHost(reason: string): CacheHost {
   return {
     clientId: 'noop',
     disabled: true,
+    async currentRevision() {
+      return INITIAL_CACHE_REVISION;
+    },
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
-    async readRecords(args: ReadRecordsArgs) {
-      validateRecordSelectionLimit(args.limit);
-      return { records: [], nextCursor: null };
+    async readRecordsByKeys() {
+      return { revision: INITIAL_CACHE_REVISION, records: [] };
+    },
+    async search() {
+      return { documents: [], nextCursor: null };
+    },
+    async entityFilter() {
+      return { kind: 'unsupported' };
     },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
+    },
+    async hydrateQuery() {
+      throw new Error('normalized GraphQL cache is unavailable');
     },
     async enqueueOptimisticMutation(): Promise<EnqueueOptimisticMutationResult> {
       throw new Error('normalized GraphQL cache is unavailable');
@@ -53,18 +64,23 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async rollbackOptimisticWrite(): Promise<WriteResult> {
       return emptyWriteResult();
     },
-    async invalidate(): Promise<string[]> {
-      return [];
+    async invalidate() {
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     },
-    async deleteRecords(): Promise<string[]> {
-      return [];
+    async deleteRecords() {
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     },
     async teardown(): Promise<void> {},
-    async clear(): Promise<void> {},
+    async clear() {
+      return INITIAL_CACHE_REVISION;
+    },
     onOpsAffected() {
       return () => undefined;
     },
     onCacheChanged() {
+      return () => undefined;
+    },
+    onCacheGenerationChanged() {
       return () => undefined;
     },
     onMutationSettled() {

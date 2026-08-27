@@ -36,6 +36,8 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
+            | EmailLiteral::NotificationSeen(_)
+            | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
             | EmailLiteral::Property(_),
@@ -56,6 +58,8 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
+            | EmailLiteral::NotificationSeen(_)
+            | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
             | EmailLiteral::Property(_),
@@ -875,13 +879,20 @@ pub(super) fn build_thread_email_filter(
             build_thread_property_predicate(lit)
         }
 
+        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(true)) => {
+            SqlFragment::raw("t.is_read = TRUE")
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(false)) => {
+            SqlFragment::raw("t.is_read = FALSE")
+        }
+
         filter_ast::ExprFrame::Literal(
             EmailLiteral::Sender(_)
             | EmailLiteral::Cc(_)
             | EmailLiteral::Bcc(_)
             | EmailLiteral::Recipient(_)
             | EmailLiteral::NotificationDone(_)
-            | EmailLiteral::NotificationSeen(_)
             | EmailLiteral::Shared(_),
         ) => SqlFragment::raw("TRUE"),
     });

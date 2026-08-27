@@ -6,6 +6,6 @@
  */
 
 /**
- * HTML body (base64 URL_SAFE_NO_PAD encoded).
+ * HTML body (base64 URL_SAFE_NO_PAD encoded). Sanitized before storage.
  */
 export type ApiDraftInputBodyHtml = string | null;

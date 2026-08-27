@@ -3,6 +3,7 @@
 //! A user execues a tool T by posting to /tools/call/{:tool_id} with body appliction/json T
 //! User tools are _opaque_ to the tool loop. IE it will call the `call` method like it would
 //! for any other tool, but the call method won't trigger execution
+use crate::annotations::{ToolAnnotated, ToolAnnotations};
 use crate::{AsyncTool, ToolResult};
 use crate::{RequestContext, ServiceContext};
 use async_trait::async_trait;
@@ -24,8 +25,15 @@ impl<T: JsonSchema> JsonSchema for UserTool<T> {
     }
 }
 
+/// A user tool carries the wrapped tool's annotations: deferring execution to
+/// the user changes when the effect happens, not what the effect is.
+impl<T: ToolAnnotated> ToolAnnotated for UserTool<T> {
+    const ANNOTATIONS: ToolAnnotations = T::ANNOTATIONS;
+}
+
 /// User tools are pending until a user executes them
 #[derive(Serialize, Deserialize, JsonSchema, ToSchema, Debug, Clone, PartialEq)]
+#[schemars(rename = "UserToolResponseFor{T}")]
 pub enum UserToolResponse<T> {
     /// Tool has not yet been executed
     PendingUserExecution,

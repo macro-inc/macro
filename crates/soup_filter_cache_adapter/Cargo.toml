@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "soup-filter-cache-adapter"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+cache-core = { path = "../client/cache-core" }
+chrono = { workspace = true }
+graphql_soup_filter_input = { path = "../graphql_soup_filter_input" }
+indexmap = { workspace = true }
+item-filter-index = { path = "../item_filter_index" }
+predicate-index = { path = "../predicate_index" }
+serde_json = { workspace = true }
+soup-filter-projection = { path = "../soup_filter_projection", default-features = false }
+thiserror = { workspace = true }
+uuid = { workspace = true }

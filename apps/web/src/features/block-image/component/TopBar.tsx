@@ -61,6 +61,7 @@ export function TopBar() {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
+      group: 'file',
       label: 'Download',
       icon: Download,
       action: downloadDocument,
@@ -83,6 +84,7 @@ export function TopBar() {
       ),
     },
     {
+      group: 'sharing',
       label: 'Share',
       icon: IconShared,
       action: () => shareCtx.open(),

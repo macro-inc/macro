@@ -10,6 +10,7 @@ mod comments;
 mod create_company;
 mod create_contact;
 mod get_company_for_team;
+mod get_contact_by_email_for_team;
 mod get_contact_for_team;
 mod link_contact_pairs_with_sources;
 mod list_companies_for_soup;

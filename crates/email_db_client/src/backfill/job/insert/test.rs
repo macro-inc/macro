@@ -22,11 +22,11 @@ async fn create_backfill_job_dedupes_active_job(pool: Pool<Postgres>) -> anyhow:
     let link_id = Uuid::new_v4();
     insert_link(&pool, link_id).await;
 
-    let first = create_backfill_job(&pool, link_id, "fusion-x", None).await?;
+    let first = create_backfill_job(&pool, link_id, "fusion-x", None, false).await?;
     assert!(first.is_some(), "first create should insert a job");
 
     // A second create while one is active no-ops (partial unique index) and returns None.
-    let second = create_backfill_job(&pool, link_id, "fusion-x", None).await?;
+    let second = create_backfill_job(&pool, link_id, "fusion-x", None, false).await?;
     assert!(
         second.is_none(),
         "second create should no-op while a job is active"

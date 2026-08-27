@@ -1,14 +1,14 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openInNewSplitForMention } from './openInNewSplit';
 
-vi.mock('@core/mobile/isMobile', () => ({
-  isMobile: vi.fn(() => false),
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
 }));
 
 describe('openInNewSplitForMention', () => {
   afterEach(() => {
-    vi.mocked(isMobile).mockReturnValue(false);
+    vi.mocked(isTouchDevice).mockReturnValue(false);
   });
 
   it('opens in a new split by default for mouse/keyboard interactions', () => {
@@ -23,8 +23,8 @@ describe('openInNewSplitForMention', () => {
     expect(openInNewSplitForMention(undefined, false)).toBe(false);
   });
 
-  it('always opens in the current split on mobile', () => {
-    vi.mocked(isMobile).mockReturnValue(true);
+  it('always opens in the current split on touch devices', () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
     expect(openInNewSplitForMention(false, true)).toBe(false);
   });
 });

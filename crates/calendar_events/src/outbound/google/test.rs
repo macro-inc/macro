@@ -558,3 +558,407 @@ fn rsvp_patch_updates_only_the_connected_attendee() {
     assert_eq!(attendees[0]["responseStatus"], "declined");
     assert_eq!(attendees[0]["comment"], "unrelated state that must survive");
 }
+
+fn google_attendee(email: &str, is_self: bool) -> GoogleAttendee {
+    serde_json::from_value(serde_json::json!({
+        "email": email,
+        "self": is_self,
+        "responseStatus": "needsAction",
+    }))
+    .unwrap()
+}
+
+#[test]
+fn rsvp_patches_the_actor_row_not_the_google_self_flag() {
+    let attendees = vec![
+        google_attendee("jacob@example.com", true),
+        google_attendee("jackson@example.com", false),
+    ];
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
+    let found = find_actor_attendee(&attendees, &actor);
+    assert_eq!(
+        found.and_then(|attendee| attendee.email.as_deref()),
+        Some("jackson@example.com")
+    );
+}
+
+#[test]
+fn rsvp_does_not_patch_another_attendee_when_the_requester_is_absent() {
+    let attendees = vec![google_attendee("jacob@example.com", true)];
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
+    assert!(find_actor_attendee(&attendees, &actor).is_none());
+}
+
+#[test]
+fn google_attendees_write_an_explicit_response_status() {
+    let body = google_attendees_body(&[
+        CalendarAttendeeInput {
+            email: "self@example.com".to_string(),
+            is_optional: false,
+            response_status: Some(AttendeeResponseStatus::Accepted),
+        },
+        CalendarAttendeeInput {
+            email: "guest@example.com".to_string(),
+            is_optional: true,
+            response_status: None,
+        },
+    ]);
+
+    assert_eq!(body[0]["email"], "self@example.com");
+    assert_eq!(body[0]["responseStatus"], "accepted");
+    assert_eq!(body[0]["optional"], false);
+    assert_eq!(body[1]["email"], "guest@example.com");
+    assert_eq!(body[1]["optional"], true);
+    assert!(
+        body[1].get("responseStatus").is_none(),
+        "a guest without a status must keep Google's default"
+    );
+}
+
+#[test]
+fn reminders_round_trip_between_google_and_the_domain() {
+    let master: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-event",
+        "iCalUID": "alarms@example.com",
+        "summary": "Alarmed",
+        "start": {"dateTime": "2026-07-24T14:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-07-24T15:00:00Z", "timeZone": "UTC"},
+        "reminders": {"useDefault": false, "overrides": [
+            {"method": "popup", "minutes": 10},
+            {"method": "email", "minutes": 60}
+        ]},
+        "created": "2026-07-20T14:00:00Z",
+        "updated": "2026-07-21T14:00:00Z"
+    }))
+    .unwrap();
+    let range = OccurrenceRange {
+        starts_at: DateTime::parse_from_rfc3339("2026-07-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        ends_at: DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        start_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+    };
+    let target = GoogleCalendarTarget {
+        owner_id: "macro|alarms@example.com".to_string(),
+        email_link_id: Uuid::now_v7(),
+        account_id: Uuid::now_v7(),
+        calendar_id: Uuid::now_v7(),
+        provider_calendar_id: "primary".to_string(),
+        is_read_only: false,
+        range,
+    };
+
+    let upsert = map_upsert(&target, master.clone(), Vec::new(), Vec::new()).unwrap();
+    assert_eq!(
+        upsert.event.reminders,
+        EventReminders {
+            use_default: false,
+            overrides: vec![
+                EventReminderOverride {
+                    method: "popup".to_string(),
+                    minutes: 10,
+                },
+                EventReminderOverride {
+                    method: "email".to_string(),
+                    minutes: 60,
+                },
+            ],
+        },
+    );
+
+    // The raw payload keeps the field, so nothing is lost at ingestion.
+    let CalendarEventSource::Google(source) = &upsert.source;
+    assert_eq!(
+        source.raw_payload["reminders"]["overrides"][0]["minutes"],
+        serde_json::json!(10),
+    );
+
+    // An event without the field follows its calendar's defaults.
+    let mut bare = master;
+    bare.reminders = None;
+    let upsert = map_upsert(&target, bare, Vec::new(), Vec::new()).unwrap();
+    assert_eq!(upsert.event.reminders, EventReminders::default());
+}
+
+#[test]
+fn mutation_bodies_serialize_reminders_in_google_shape() {
+    let reminders = EventReminders {
+        use_default: false,
+        overrides: vec![EventReminderOverride {
+            method: "popup".to_string(),
+            minutes: 15,
+        }],
+    };
+    let expected = serde_json::json!({
+        "useDefault": false,
+        "overrides": [{"method": "popup", "minutes": 15}],
+    });
+
+    let draft = CalendarEventDraft {
+        title: "New".to_string(),
+        description: None,
+        location: None,
+        time: EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339("2026-07-24T14:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339("2026-07-24T15:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_zone: None,
+        },
+        attendees: Vec::new(),
+        recurrence_lines: Vec::new(),
+        visibility: None,
+        transparency: None,
+        reminders: Some(reminders.clone()),
+        conference: None,
+    };
+    assert_eq!(draft_body(&draft)["reminders"], expected);
+
+    let patch = CalendarEventPatch {
+        reminders: Some(reminders),
+        ..CalendarEventPatch::default()
+    };
+    assert_eq!(patch_body(&patch)["reminders"], expected);
+    assert_eq!(
+        patch_body(&CalendarEventPatch::default())
+            .as_object()
+            .unwrap()
+            .get("reminders"),
+        None,
+        "an untouched patch must not clobber provider reminders"
+    );
+}
+
+/// The provider write for a patch must carry exactly the supplied fields:
+/// a stray key overwrites provider state the user never asked to change —
+/// a time-only patch that also wrote `recurrence` or `summary` would mangle
+/// a recurring series' rules or revert its title.
+#[test]
+fn patch_bodies_carry_only_the_supplied_fields() {
+    let time_only = patch_body(&CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339("2026-08-18T20:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339("2026-08-18T22:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_zone: None,
+        }),
+        ..CalendarEventPatch::default()
+    });
+    let mut keys: Vec<_> = time_only.as_object().unwrap().keys().cloned().collect();
+    keys.sort();
+    assert_eq!(keys, ["end", "start"]);
+
+    let title_only = patch_body(&CalendarEventPatch {
+        title: Some("Renamed".to_string()),
+        ..CalendarEventPatch::default()
+    });
+    let keys: Vec<_> = title_only.as_object().unwrap().keys().cloned().collect();
+    assert_eq!(keys, ["summary"]);
+
+    assert!(
+        patch_body(&CalendarEventPatch::default())
+            .as_object()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn attaching_a_meet_asks_google_to_generate_one() {
+    let body = patch_body(&CalendarEventPatch {
+        conference: Some(ConferenceChange::GoogleMeet),
+        ..CalendarEventPatch::default()
+    });
+
+    let create_request = &body["conferenceData"]["createRequest"];
+    assert_eq!(
+        create_request["conferenceSolutionKey"]["type"],
+        "hangoutsMeet"
+    );
+    // Google treats a repeated requestId as a duplicate and ignores the
+    // request, so each attach must mint a fresh one.
+    let other = patch_body(&CalendarEventPatch {
+        conference: Some(ConferenceChange::GoogleMeet),
+        ..CalendarEventPatch::default()
+    });
+    assert_ne!(
+        create_request["requestId"],
+        other["conferenceData"]["createRequest"]["requestId"]
+    );
+}
+
+#[test]
+fn detaching_a_conference_sends_an_explicit_null() {
+    let body = patch_body(&CalendarEventPatch {
+        conference: Some(ConferenceChange::Removed),
+        ..CalendarEventPatch::default()
+    });
+
+    // A missing key would leave the conference in place; only JSON null
+    // detaches it.
+    assert!(body.get("conferenceData").is_some());
+    assert!(body["conferenceData"].is_null());
+}
+
+#[test]
+fn a_patch_that_leaves_conferencing_alone_omits_the_field_and_the_parameter() {
+    let body = patch_body(&CalendarEventPatch {
+        title: Some("Renamed".to_string()),
+        ..CalendarEventPatch::default()
+    });
+
+    assert!(body.get("conferenceData").is_none());
+    assert_eq!(conference_query(&body), None);
+}
+
+#[test]
+fn conference_writes_declare_conference_support() {
+    for change in [ConferenceChange::GoogleMeet, ConferenceChange::Removed] {
+        let patch = patch_body(&CalendarEventPatch {
+            conference: Some(change),
+            ..CalendarEventPatch::default()
+        });
+        assert_eq!(conference_query(&patch), Some(CONFERENCE_DATA_VERSION));
+    }
+}
+
+#[test]
+fn drafts_carry_conference_requests_and_their_parameter() {
+    let draft = CalendarEventDraft {
+        title: "Kickoff".to_string(),
+        description: None,
+        location: None,
+        time: EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339("2026-07-24T14:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339("2026-07-24T15:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_zone: None,
+        },
+        attendees: Vec::new(),
+        recurrence_lines: Vec::new(),
+        visibility: None,
+        transparency: None,
+        reminders: None,
+        conference: Some(ConferenceChange::GoogleMeet),
+    };
+
+    let body = draft_body(&draft);
+
+    assert_eq!(
+        body["conferenceData"]["createRequest"]["conferenceSolutionKey"]["type"],
+        "hangoutsMeet"
+    );
+    assert_eq!(conference_query(&body), Some(CONFERENCE_DATA_VERSION));
+}
+
+#[test]
+fn a_meet_conference_is_classified_as_google_meet() {
+    let data: GoogleConferenceData = serde_json::from_value(serde_json::json!({
+        "conferenceSolution": {"key": {"type": "hangoutsMeet"}},
+        "entryPoints": [{"entryPointType": "video", "uri": "https://meet.google.com/abc-defg-hij"}]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        conference_url(Some(&data)).as_deref(),
+        Some("https://meet.google.com/abc-defg-hij")
+    );
+    assert_eq!(
+        conference_provider(Some(&data), true),
+        Some(ConferenceProvider::GoogleMeet)
+    );
+}
+
+/// A third-party conference stays joinable but must never be reported as a
+/// Meet: the product offers to detach only conferences Macro owns, so
+/// misclassifying a Zoom link here is what would let an edit destroy it.
+#[test]
+fn a_third_party_conference_is_not_classified_as_google_meet() {
+    let data: GoogleConferenceData = serde_json::from_value(serde_json::json!({
+        "conferenceSolution": {"key": {"type": "addOn"}},
+        "entryPoints": [{"entryPointType": "video", "uri": "https://example.zoom.us/j/123"}]
+    }))
+    .unwrap();
+
+    assert_eq!(
+        conference_provider(Some(&data), true),
+        Some(ConferenceProvider::Other)
+    );
+}
+
+#[test]
+fn an_event_without_a_conference_has_no_provider() {
+    assert_eq!(conference_provider(None, false), None);
+}
+
+/// A legacy classic Hangout arrives as a bare `hangoutLink` with no
+/// conference data, and Macro cannot regenerate it.
+#[test]
+fn a_bare_hangout_link_is_not_classified_as_google_meet() {
+    assert_eq!(
+        conference_provider(None, true),
+        Some(ConferenceProvider::Other)
+    );
+}
+
+#[test]
+fn a_conference_google_is_still_generating_is_pending() {
+    let pending: GoogleConferenceData = serde_json::from_value(serde_json::json!({
+        "createRequest": {"status": {"statusCode": "pending"}}
+    }))
+    .unwrap();
+    let settled: GoogleConferenceData = serde_json::from_value(serde_json::json!({
+        "conferenceSolution": {"key": {"type": "hangoutsMeet"}},
+        "createRequest": {"status": {"statusCode": "success"}},
+        "entryPoints": [{"entryPointType": "video", "uri": "https://meet.google.com/abc-defg-hij"}]
+    }))
+    .unwrap();
+
+    assert!(conference_is_pending(Some(&pending)));
+    assert!(!conference_is_pending(Some(&settled)));
+    assert!(!conference_is_pending(None));
+}
+
+/// Mutations serialize the provider echo into `raw_payload`, so conference
+/// fields must survive a deserialize/serialize round trip or a later sync
+/// would read the event back without its conference.
+#[test]
+fn conference_data_survives_the_raw_payload_round_trip() {
+    let event: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-event",
+        "iCalUID": "meet@example.com",
+        "hangoutLink": "https://meet.google.com/abc-defg-hij",
+        "conferenceData": {
+            "conferenceSolution": {"key": {"type": "hangoutsMeet"}},
+            "entryPoints": [
+                {"entryPointType": "video", "uri": "https://meet.google.com/abc-defg-hij"}
+            ]
+        }
+    }))
+    .unwrap();
+
+    let round_tripped: GoogleEvent =
+        serde_json::from_value(serde_json::to_value(&event).unwrap()).unwrap();
+
+    assert_eq!(
+        conference_provider(round_tripped.conference_data.as_ref(), true),
+        Some(ConferenceProvider::GoogleMeet)
+    );
+    assert_eq!(
+        conference_url(round_tripped.conference_data.as_ref()).as_deref(),
+        Some("https://meet.google.com/abc-defg-hij")
+    );
+}

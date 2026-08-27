@@ -11,11 +11,13 @@ export {
 export type {
   AccessiblePreviewItem,
   ItemEntity,
+  PreviewCalendarEventAccess,
   PreviewItem,
   PreviewItemNoAccess,
 } from './types';
 export {
   isAccessiblePreviewItem,
+  isCalendarEventPreviewItem,
   isChannelPreviewItem,
   isPreviewItemNoAccess,
 } from './types';

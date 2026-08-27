@@ -1,4 +1,5 @@
 import {
+  AgentContextNode,
   AwaitNode,
   ContactMentionNode,
   DateMentionNode,
@@ -10,6 +11,7 @@ import {
   HorizontalRuleNode,
   HtmlRenderNode,
   ImageNode,
+  MagicChipNode,
   PasteNode as PasteNodeClass,
   PullRequestMentionNode,
   SnapshotNode,
@@ -24,6 +26,7 @@ import {
   clearDecorators,
   setDecorator,
 } from '@macro-inc/lexical-core/decoratorRegistry';
+import { AgentContext } from './component/decorator/AgentContext';
 import { Await } from './component/decorator/Await';
 import { ContactMention } from './component/decorator/ContactMention';
 import { DateMention } from './component/decorator/DateMention';
@@ -34,6 +37,7 @@ import { Equation } from './component/decorator/Equation';
 import { GroupMention } from './component/decorator/GroupMention';
 import { HorizontalRule } from './component/decorator/HorizontalRule';
 import { HtmlRender } from './component/decorator/HtmlRender';
+import { MagicChip } from './component/decorator/MagicChip';
 import { MarkdownImage } from './component/decorator/MarkdownImage';
 import { MarkdownVideo } from './component/decorator/MarkdownVideo';
 import { PasteNode } from './component/decorator/PasteNode';
@@ -51,6 +55,7 @@ import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
  */
 export function initializeLexical() {
   clearDecorators();
+  setDecorator(AgentContextNode, AgentContext);
   setDecorator(HorizontalRuleNode, HorizontalRule);
   setDecorator(UserMentionNode, UserMention);
   setDecorator(GroupMentionNode, GroupMention);
@@ -71,5 +76,6 @@ export function initializeLexical() {
   setDecorator(UnknownMentionNode, UnknownMention);
   setDecorator(WatermarkNode, Watermark);
   setDecorator(AwaitNode, Await);
+  setDecorator(MagicChipNode, MagicChip);
   registerDiffNodeFactory();
 }

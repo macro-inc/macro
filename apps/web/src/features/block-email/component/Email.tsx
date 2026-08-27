@@ -14,7 +14,6 @@ import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { useEmail, useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   blockElementSignal,
@@ -44,6 +43,7 @@ import { scrollToMessage } from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailParticipants } from './EmailParticipants';
+import { EmailThreadTitle } from './EmailThreadTitle';
 import { openEmailReplyComposerForMessage } from './emailReplyActions';
 import { MessageList } from './MessageList';
 import { MobileEmailComposeDrawer } from './MobileEmailComposeDrawer';
@@ -612,7 +612,7 @@ function EmailContent(props: EmailViewProps) {
     const lastMessage = filtered.at(-1);
     if (!lastMessage?.db_id) return;
     if (context.drafts.getDraftForMessage(lastMessage.db_id)) {
-      if (isMobile()) {
+      if (isTouchDevice()) {
         context.mobileReplyComposer.openForMessage(lastMessage.db_id);
       } else {
         context.messages.setBottomReplyOpen(true);
@@ -683,7 +683,7 @@ function EmailContent(props: EmailViewProps) {
             {(draft) => (
               // The email block is bottom-anchored (no default panel inset),
               // so the compose branch pads around the chrome itself.
-              <div class="size-full mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
+              <div class="size-full touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                 <EmailCompose draftID={draft().db_id!} />
               </div>
             )}
@@ -704,7 +704,7 @@ function EmailContent(props: EmailViewProps) {
                   ),
               }}
             >
-              {/* Edge-to-edge on mobile: the message list carries its own
+              {/* Edge-to-edge on mobile/tablet: the message list carries its own
                   insets in-scroll and under-scrolls the floating chrome. */}
               <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
                 <TopBar
@@ -743,7 +743,7 @@ function EmailContent(props: EmailViewProps) {
                   class="w-full flex-1 flex flex-col items-center overflow-hidden"
                   ref={context.registerMessagesContainer}
                 >
-                  <Show when={!isMobile()}>
+                  <Show when={!isTouchDevice()}>
                     <div class="shrink-0 w-full flex justify-center">
                       <div
                         class="macro-message-width macro-message-padding w-full border-b"
@@ -753,9 +753,11 @@ function EmailContent(props: EmailViewProps) {
                         }}
                       >
                         <div class="h-12" />
-                        <h1 class="ph-no-capture text-2xl font-semibold text-ink pb-1.5 tracking-tight text-balance">
-                          {props.title}
-                        </h1>
+                        <EmailThreadTitle
+                          title={props.title}
+                          copyReveal="hover"
+                          class="text-2xl pb-1.5"
+                        />
                         <div class="pb-2.5">
                           <EmailParticipants />
                         </div>
@@ -776,12 +778,12 @@ function EmailContent(props: EmailViewProps) {
                     scrollContainer={context.messagesListRef}
                   />
                 </div>
-                <Show when={isMobile() && mobileBottomReplyMessage()}>
+                <Show when={isTouchDevice() && mobileBottomReplyMessage()}>
                   {(lastMessage) => (
                     <BottomReplyButtons lastMessage={lastMessage()} />
                   )}
                 </Show>
-                <Show when={isMobile()}>
+                <Show when={isTouchDevice()}>
                   <MobileEmailComposeDrawer
                     markdownDomRef={(el) => {
                       markdownDomRef = el;

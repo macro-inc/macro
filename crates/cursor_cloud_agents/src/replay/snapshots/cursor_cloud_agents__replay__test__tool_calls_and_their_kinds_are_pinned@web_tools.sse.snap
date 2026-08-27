@@ -1,0 +1,14 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 199
+expression: calls
+input_file: crates/cursor_acp/fixtures/real/web_tools.sse
+---
+[
+    "tool_call \"web_fetch\" kind=Fetch status=InProgress",
+    "  update   Some(\"web_fetch\") kind=Some(Fetch) status=Some(InProgress)",
+    "tool_call \"web_search\" kind=Fetch status=InProgress",
+    "  update   Some(\"web_search\") kind=Some(Fetch) status=Some(InProgress)",
+    "  update   Some(\"web_fetch\") kind=Some(Fetch) status=Some(Completed)",
+    "  update   Some(\"web_search\") kind=Some(Fetch) status=Some(Completed)",
+]

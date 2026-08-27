@@ -10,7 +10,7 @@ use axum::{
     extract::{FromRef, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use macro_authorization::{
@@ -18,11 +18,12 @@ use macro_authorization::{
 };
 use models_pagination::Base64Str;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        CalendarEvent, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
-        OccurrenceRange,
+        CalendarEvent, CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem,
+        CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceRange,
     },
     ports::CalendarOccurrenceService,
     service::CalendarValidationError,
@@ -69,6 +70,10 @@ where
     Router::new()
         .route("/calendar-events", get(list_occurrences::<S, Auth>))
         .route("/calendar-events/", get(list_occurrences::<S, Auth>))
+        .route(
+            "/calendar-events/preview",
+            post(mention_previews::<S, Auth>),
+        )
         .with_state(state)
 }
 
@@ -229,6 +234,150 @@ where
         next_cursor,
         sync_status,
     }))
+}
+
+/// One mentioned event to resolve for the requester.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionPreviewRequestItem {
+    /// Mentioned calendar event id.
+    event_id: Uuid,
+    /// Occurrence the mention points at, when it targets one instance.
+    occurrence_key: Option<String>,
+}
+
+/// Batch calendar mention preview request.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionPreviewRequest {
+    /// Mentioned events to resolve, at most 100.
+    items: Vec<CalendarMentionPreviewRequestItem>,
+}
+
+/// Requester-relative visibility of one mentioned event.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarMentionPreviewKind {
+    /// The requester holds a copy of the meeting on a visible calendar.
+    Access,
+    /// The event exists but is on no calendar the requester can see.
+    NoAccess,
+    /// No live event has this id.
+    DoesNotExist,
+}
+
+/// Resolution of one mentioned event, in request order.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionPreviewItem {
+    /// The mentioned event id, echoed from the request.
+    event_id: Uuid,
+    /// Visibility of the mentioned event to the requester.
+    #[serde(rename = "type")]
+    kind: CalendarMentionPreviewKind,
+    /// Preview of the requester's own copy, present only with access.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event: Option<CalendarMentionEvent>,
+}
+
+/// Batch calendar mention preview response.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionPreviewResponse {
+    items: Vec<CalendarMentionPreviewItem>,
+}
+
+/// Resolve mentioned calendar events to the requester's own projections.
+#[tracing::instrument(skip_all, err)]
+#[utoipa::path(
+    post,
+    path = "/calendar-events/preview",
+    tag = "calendar_events",
+    request_body = CalendarMentionPreviewRequest,
+    responses(
+        (status = 200, description = "Requester-relative previews for the mentioned events", body = CalendarMentionPreviewResponse),
+        (status = 400, description = "Too many events in one request"),
+        (status = 401, description = "Authentication required"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn mention_previews<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(request): Json<CalendarMentionPreviewRequest>,
+) -> Result<Json<CalendarMentionPreviewResponse>, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let requested_ids: Vec<Uuid> = request.items.iter().map(|item| item.event_id).collect();
+    let items = request
+        .items
+        .into_iter()
+        .map(|item| CalendarMentionRequestItem {
+            event_id: item.event_id,
+            occurrence_key: item.occurrence_key,
+        })
+        .collect();
+    let previews = state
+        .service
+        .mention_previews(user.authorization.user.macro_user_id.as_ref(), items)
+        .await
+        .map_err(|error| {
+            if error
+                .as_ref()
+                .downcast_current_context::<CalendarValidationError>()
+                .is_some()
+            {
+                return CalendarApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    message: "calendar mention previews accept at most 100 events per request",
+                };
+            }
+            tracing::error!(error = ?error, "failed to resolve calendar mention previews");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to resolve calendar mention previews",
+            }
+        })?;
+
+    // Positional pairing is only sound with one preview per requested item,
+    // which the port guarantees — treat any drift as a server error rather
+    // than silently mispairing.
+    if previews.len() != requested_ids.len() {
+        tracing::error!(
+            requested = requested_ids.len(),
+            resolved = previews.len(),
+            "calendar mention preview resolution returned a mismatched item count"
+        );
+        return Err(CalendarApiError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: "unable to resolve calendar mention previews",
+        });
+    }
+    let items = requested_ids
+        .into_iter()
+        .zip(previews)
+        .map(|(event_id, preview)| match preview {
+            CalendarMentionPreview::Accessible(event) => CalendarMentionPreviewItem {
+                event_id,
+                kind: CalendarMentionPreviewKind::Access,
+                event: Some(*event),
+            },
+            CalendarMentionPreview::NoAccess => CalendarMentionPreviewItem {
+                event_id,
+                kind: CalendarMentionPreviewKind::NoAccess,
+                event: None,
+            },
+            CalendarMentionPreview::DoesNotExist => CalendarMentionPreviewItem {
+                event_id,
+                kind: CalendarMentionPreviewKind::DoesNotExist,
+                event: None,
+            },
+        })
+        .collect();
+
+    Ok(Json(CalendarMentionPreviewResponse { items }))
 }
 
 fn decode_cursor(

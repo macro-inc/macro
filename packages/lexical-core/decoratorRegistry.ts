@@ -1,4 +1,8 @@
 import type { Klass, LexicalNode } from 'lexical';
+import type {
+  AgentContextDecoratorProps,
+  AgentContextNode,
+} from './nodes/AgentContextNode';
 import type { AwaitDecoratorProps, AwaitNode } from './nodes/AwaitNode';
 import type {
   ContactMentionDecoratorProps,
@@ -37,6 +41,10 @@ import type {
   HtmlRenderNode,
 } from './nodes/HtmlRenderNode';
 import type { ImageDecoratorProps, ImageNode } from './nodes/ImageNode';
+import type {
+  MagicChipDecoratorProps,
+  MagicChipNode,
+} from './nodes/MagicChipNode';
 import type { PasteNode, PasteNodeDecoratorProps } from './nodes/PasteNode';
 import type {
   PullRequestMentionDecoratorProps,
@@ -75,6 +83,10 @@ export type DecoratorComponent<P extends {}> = (props: P) => any;
 // Maps node type names to their class and props types
 // This provides compile-time type safety for decorator registration
 export interface NodeDecoratorMap {
+  AgentContextNode: {
+    klass: typeof AgentContextNode;
+    props: AgentContextDecoratorProps;
+  };
   DiffInsertNode: {
     klass: typeof DiffInsertNode;
     props: DiffInsertDecoratorProps;
@@ -154,6 +166,10 @@ export interface NodeDecoratorMap {
   AwaitNode: {
     klass: typeof AwaitNode;
     props: AwaitDecoratorProps;
+  };
+  MagicChipNode: {
+    klass: typeof MagicChipNode;
+    props: MagicChipDecoratorProps;
   };
 }
 

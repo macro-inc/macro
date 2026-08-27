@@ -37,20 +37,20 @@ fn test_list_notifications_deserialization() {
     assert_eq!(
         tool.include_types,
         Some(vec![
-            NotificationItemType::Email,
-            NotificationItemType::Message,
-            NotificationItemType::Github
+            NotificationCategory::Email,
+            NotificationCategory::Message,
+            NotificationCategory::Github
         ])
     );
     assert_eq!(
         tool.entities,
         Some(vec![
-            NotificationEntityRef {
-                entity_type: NotificationItemType::Email,
+            NotificationEntityFilter {
+                entity_type: NotificationEntityType::EmailThread,
                 id: "thread-1".to_string()
             },
-            NotificationEntityRef {
-                entity_type: NotificationItemType::Github,
+            NotificationEntityFilter {
+                entity_type: NotificationEntityType::ForeignEntity,
                 id: "foreign-entity-1".to_string()
             }
         ])

@@ -33,3 +33,10 @@ infra/local/generated/
 **/target/
 **/ai_tools/schemas/
 .pi/outputs/
+.commandcode/
+**/.webhook.json
+/artifacts
+
+# Raw SSE captures from CURSOR_ACP_RECORD_DIR; sanitize into
+# crates/cursor_acp/fixtures/real/ before committing one.
+/recordings/

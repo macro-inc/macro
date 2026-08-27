@@ -48,6 +48,23 @@ impl ImportSource {
         ]
     }
 
+    /// The Pipedream app slug backing this source's connector.
+    pub fn pipedream_app_slug(self) -> &'static str {
+        match self {
+            ImportSource::Linear => "linear",
+            ImportSource::Notion => "notion",
+            ImportSource::Slack => "slack",
+        }
+    }
+
+    /// This source's connector on both MCP stacks.
+    pub fn connector_ref(self) -> mcp_select::ConnectorRef<'static> {
+        mcp_select::ConnectorRef {
+            pipedream_app_slug: self.pipedream_app_slug(),
+            native_server_url: self.mcp_server_url(),
+        }
+    }
+
     /// The MCP server URL backing this source's connector.
     pub fn mcp_server_url(self) -> &'static str {
         match self {

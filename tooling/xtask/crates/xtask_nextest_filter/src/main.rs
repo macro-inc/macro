@@ -31,6 +31,7 @@ const EMBEDDED_ASSET_PACKAGES: &[(&str, &[&str])] = &[(
     "static_assets",
     &[
         "cache-core",
+        "collab_surface",
         "complete_graph",
         "documents",
         "seed_cli",

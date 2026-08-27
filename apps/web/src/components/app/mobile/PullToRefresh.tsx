@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { hapticImpact } from '@core/mobile/haptics';
-import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Spinner from '@phosphor-icons/core/bold/spinner-bold.svg';
 import { cn } from '@ui';
 import {
@@ -101,7 +101,7 @@ export function PullToRefresh(props: {
   };
 
   const onTouchStart = (e: TouchEvent) => {
-    if (!isMobile() || phase() !== 'idle') return;
+    if (!isTouchDevice() || phase() !== 'idle') return;
     if (e.touches.length !== 1) return;
 
     const container = props.scrollContainer();
@@ -220,7 +220,7 @@ export function PullToRefresh(props: {
   const isRefreshing = () => phase() === 'refreshing';
 
   return (
-    <Show when={isMobile()}>
+    <Show when={isTouchDevice()}>
       <div
         class="pointer-events-none absolute inset-x-0 flex justify-center"
         style={{

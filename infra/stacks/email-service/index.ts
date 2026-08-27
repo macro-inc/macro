@@ -118,6 +118,9 @@ const inbox_sync_queue = new Queue('email-service-gmail-webhook', {
   tags,
   maxReceiveCount: 3,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 300, // 5 minutes
+  },
 });
 
 export const inboxSyncQueueArn = pulumi.interpolate`${inbox_sync_queue.queue.arn}`;
@@ -127,6 +130,9 @@ const inbox_sync_retry_queue = new Queue('email-service-gmail-webhook-retry', {
   tags,
   maxReceiveCount: 100,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 300, // 5 minutes
+  },
 });
 
 export const inboxSyncRetryQueueArn = pulumi.interpolate`${inbox_sync_retry_queue.queue.arn}`;
@@ -136,6 +142,9 @@ const gmail_ops_queue = new Queue('email-service-gmail-ops', {
   tags,
   maxReceiveCount: 3,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 300, // 5 minutes
+  },
 });
 
 export const gmailOpsQueueArn = pulumi.interpolate`${gmail_ops_queue.queue.arn}`;
@@ -145,6 +154,9 @@ const gmail_ops_retry_queue = new Queue('email-service-gmail-ops-retry', {
   tags,
   maxReceiveCount: 100,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 300, // 5 minutes
+  },
 });
 
 export const gmailOpsRetryQueueArn = pulumi.interpolate`${gmail_ops_retry_queue.queue.arn}`;
@@ -170,6 +182,9 @@ const backfill_queue = new Queue('email-service-backfill', {
   tags,
   maxReceiveCount: 20,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 600, // 10 minutes
+  },
 });
 
 export const backfillQueueArn = pulumi.interpolate`${backfill_queue.queue.arn}`;
@@ -179,6 +194,9 @@ const crm_cleanup_queue = new Queue('email-service-crm-cleanup', {
   tags,
   maxReceiveCount: 5,
   visibilityTimeoutSeconds: 60,
+  alarm: {
+    approximateAgeOfOldestMessageThreshold: 600, // 10 minutes
+  },
 });
 
 export const crmCleanupQueueArn = pulumi.interpolate`${crm_cleanup_queue.queue.arn}`;

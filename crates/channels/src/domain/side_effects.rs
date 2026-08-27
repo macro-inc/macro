@@ -25,23 +25,31 @@ use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::Instrument as _;
 use uuid::Uuid;
 
 /// Entity type used by message mentions that target a bot.
 pub const BOT_MENTION_ENTITY_TYPE: &str = "bot";
 
-/// A trigger derived from a channel message that mentions one or more bots.
+/// A bot-trigger candidate derived from a user-authored channel message.
+///
+/// Every user-authored message is a candidate; whether it actually triggers a
+/// bot (explicit mention or inferred invocation) is decided downstream by the
+/// consumer.
 #[derive(Debug, Clone)]
 pub struct ChannelBotTrigger {
-    /// Channel containing the triggering message.
+    /// Channel containing the candidate message.
     pub channel_id: Uuid,
-    /// The user-authored message that mentioned the bot(s).
+    /// The user-authored message.
     pub message: MutatedMessage,
-    /// Bots mentioned in the message.
-    pub bot_ids: Vec<BotId>,
+    /// Bots explicitly mentioned in the message that are active in the
+    /// channel. Empty when the message mentions no bot.
+    pub mentioned_bot_ids: Vec<BotId>,
+    /// Trace active when the candidate was dispatched.
+    pub span: tracing::Span,
 }
 
-/// Sender for bot triggers derived from channel messages.
+/// Sender for bot-trigger candidates derived from channel messages.
 pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 
 /// Collect the bot ids mentioned in a message.
@@ -52,7 +60,12 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 ///
 /// Ids must be in the canonical `bot|<uuid>` principal form; bare UUIDs are
 /// rejected (historical bare-UUID content is normalized by migration).
-fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
+///
+/// Public because out-of-process consumers have to derive the same answer: the
+/// in-process path gets [`ChannelBotTrigger::bot_ids`] for free, while anything
+/// reading `channel.message_posted` off Kafka only has the mention list and
+/// would otherwise reimplement these rules.
+pub fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions
         .iter()
@@ -84,9 +97,10 @@ fn active_bot_mention_ids(
                 .map(|id| id.bot_id())
         })
         .collect();
-    // Macro AI is a code-defined system bot available in every channel; it
-    // has no participant row.
+    // Code-defined system bots are available in every channel and have no
+    // participant rows.
     active_bot_ids.insert(bot_id::MACRO_AI_BOT_ID);
+    active_bot_ids.insert(bot_id::MACRO_CODER_BOT_ID);
 
     bot_mention_ids(mentions)
         .into_iter()
@@ -392,7 +406,7 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
         }
     }
 
-    /// Dispatch bot triggers for any bots mentioned in a user-authored message.
+    /// Dispatch a bot-trigger candidate for a user-authored message.
     fn dispatch_bot_triggers(
         &self,
         channel_id: Uuid,
@@ -405,17 +419,18 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
         if message.sender_id.as_user().is_none() {
             return;
         }
-        let bot_ids = active_bot_mention_ids(mentions, participants);
-        if bot_ids.is_empty() {
-            return;
-        }
 
         if let Some(bot_triggers) = &self.bot_triggers
             && bot_triggers
                 .send(ChannelBotTrigger {
                     channel_id,
                     message: message.clone(),
-                    bot_ids,
+                    mentioned_bot_ids: active_bot_mention_ids(mentions, participants),
+                    span: tracing::info_span!(
+                        "channel.bot_trigger",
+                        channel.id = %channel_id,
+                        channel.message.id = %message.id,
+                    ),
                 })
                 .is_err()
         {
@@ -447,9 +462,12 @@ where
 {
     fn dispatch(&self, event: ChannelEvent) {
         let handler = self.handler.clone();
-        tokio::spawn(async move {
-            handler.handle(event).await;
-        });
+        tokio::spawn(
+            async move {
+                handler.handle(event).await;
+            }
+            .instrument(tracing::info_span!("channel.side_effects")),
+        );
     }
 }
 

@@ -77,7 +77,7 @@ sfs_delete = []
 
 [dependencies]
 calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres"] }
-ammonia = "4.1.4"
+ammonia = { workspace = true }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3", "sqs"] }
@@ -100,13 +100,14 @@ ego-tree = { workspace = true }
 email = { path = "../../crates/email", features = ["axum", "gmail_token", "inbound", "outbound"] }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
+email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail"] }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
 filter_ast = { path = "../../crates/filter_ast" }
 frecency = { path = "../../crates/frecency", features = ["postgres"] }
 futures = { workspace = true }
 gmail_client = { path = "../../crates/gmail_client" }
-html-escape = "0.2"
+html-escape = { workspace = true }
 http-body-util = { workspace = true }
 infer = "0.19.0"
 item_filters = { path = "../../crates/item_filters" }
@@ -119,7 +120,6 @@ macro_db_client = { path = "../../crates/macro_db_client" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_event_broker = { path = "../../crates/macro_event_broker" }
-mailparse = "0.16.1"
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false }

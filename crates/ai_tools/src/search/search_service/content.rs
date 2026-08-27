@@ -4,6 +4,7 @@ use super::types::{
     tag_filter_mode,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
@@ -34,7 +35,7 @@ pub struct ContentSearch {
     pub match_type: SearchMatchType,
 
     #[schemars(
-        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']."
+        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']. Projects and calendar events carry no indexed content, so they never match here — search those by name with NameSearch instead."
     )]
     #[serde(default)]
     pub entity_types: Vec<UnifiedSearchIndex>,
@@ -63,6 +64,10 @@ exists in both the personal and team sets is ambiguous — set scope on that ent
 Ignored unless tags is set.")]
     #[serde(default)]
     pub tags_match: TagMatch,
+}
+
+impl ToolAnnotated for ContentSearch {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Search content");
 }
 
 #[async_trait]

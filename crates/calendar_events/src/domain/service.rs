@@ -5,17 +5,21 @@ use futures::future::{Either, select};
 use rootcause::Report;
 use uuid::Uuid;
 
+use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarTopicEvent};
+use macro_event_broker::MacroEventBroker;
+
 use super::{
     models::{
-        AppliedGoogleGrant, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
-        CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarEventUpsert,
-        CalendarOccurrenceCursor, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
-        GoogleScopeSet, OccurrenceRange,
+        ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
+        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
+        CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor,
+        GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventWrite, CalendarOccurrenceService,
-        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, GoogleProviderError, GoogleProviderErrorKind,
+        CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
+        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarRepository,
+        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
+        GoogleProviderError, GoogleProviderErrorKind, RetiredCalendarEvent,
     },
 };
 
@@ -36,7 +40,13 @@ pub enum CalendarValidationError {
     /// A page size was outside the supported bound.
     #[error("calendar repository query limit must be between 1 and 2001")]
     InvalidLimit,
+    /// A mention preview batch exceeded the supported size.
+    #[error("calendar mention previews accept at most {MENTION_PREVIEWS_MAX} events per request")]
+    TooManyMentions,
 }
+
+/// The most mentioned events one preview request resolves.
+pub const MENTION_PREVIEWS_MAX: usize = 100;
 
 /// Calendar use cases with provider and persistence details behind ports.
 pub struct CalendarService<R> {
@@ -55,15 +65,18 @@ where
     /// Apply an OAuth grant using actual scopes returned by Google.
     ///
     /// The repository owns the transaction that increments the grant version
-    /// and inserts the two idempotent backfill jobs.
+    /// and inserts the two idempotent backfill jobs. `intent` states whether
+    /// the consent flow behind this grant explicitly asked for calendar
+    /// access, which is what clears a standing calendar opt-out.
     #[tracing::instrument(skip(self, scopes), err)]
     pub async fn apply_google_grant(
         &self,
         email_link_id: Uuid,
         scopes: GoogleScopeSet,
+        intent: CalendarGrantIntent,
     ) -> Result<AppliedGoogleGrant, Report> {
         self.repository
-            .apply_google_grant(email_link_id, scopes)
+            .apply_google_grant(email_link_id, scopes, intent)
             .await
     }
 
@@ -83,9 +96,18 @@ where
         Report,
     > {
         validate_query(&range, limit)?;
-        self.repository
+        let mut rows = self
+            .repository
             .list_occurrences(requester_id, range, cursor, limit)
-            .await
+            .await?;
+        if let Some(viewer) =
+            ActorInboxes::from_owned(self.repository.owned_inbox_emails(requester_id).await?)
+        {
+            for (event, _) in &mut rows {
+                viewer.mark_attendees(&mut event.attendees);
+            }
+        }
+        Ok(rows)
     }
 
     /// Return the aggregate ingestion state of the requester's visible accounts.
@@ -95,6 +117,24 @@ where
         requester_id: &str,
     ) -> Result<super::models::CalendarSyncStatus, Report> {
         self.repository.sync_status(requester_id).await
+    }
+
+    /// Resolve mentioned events to the requester's own projections.
+    #[tracing::instrument(skip(self, requester_id, items), err)]
+    pub async fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<super::models::CalendarMentionRequestItem>,
+    ) -> Result<Vec<super::models::CalendarMentionPreview>, Report> {
+        if items.len() > MENTION_PREVIEWS_MAX {
+            return Err(rootcause::report!(CalendarValidationError::TooManyMentions).into());
+        }
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.repository
+            .mention_previews(requester_id, items, Utc::now())
+            .await
     }
 
     /// Re-arm the watched inbox's sync job for a push notification whose
@@ -148,12 +188,22 @@ where
     ) -> impl Future<Output = Result<super::models::CalendarSyncStatus, Report>> + Send {
         CalendarService::sync_status(self, requester_id)
     }
+
+    fn mention_previews(
+        &self,
+        requester_id: &str,
+        items: Vec<super::models::CalendarMentionRequestItem>,
+    ) -> impl Future<Output = Result<Vec<super::models::CalendarMentionPreview>, Report>> + Send
+    {
+        CalendarService::mention_previews(self, requester_id, items)
+    }
 }
 
 /// Orchestrates a Google account backfill while keeping HTTP and SQL behind ports.
-pub struct GoogleCalendarBackfillService<R, G> {
+pub struct GoogleCalendarBackfillService<R, G, B> {
     repository: R,
     provider: G,
+    macro_event_broker: B,
     watch: Option<super::models::GoogleWatchConfig>,
 }
 
@@ -249,18 +299,20 @@ pub enum GoogleCalendarBackfillRunError {
 }
 
 /// Application service that owns Google backfill claim, lease, and terminal policy.
-pub struct GoogleCalendarBackfillCoordinator<R, G, L> {
+pub struct GoogleCalendarBackfillCoordinator<R, G, L, B> {
     repository: R,
     provider: G,
     lifecycle: L,
+    macro_event_broker: B,
     watch: Option<super::models::GoogleWatchConfig>,
 }
 
-impl<R, G, L> GoogleCalendarBackfillCoordinator<R, G, L>
+impl<R, G, L, B> GoogleCalendarBackfillCoordinator<R, G, L, B>
 where
     R: CalendarRepository + Clone,
     G: GoogleCalendarProvider + Clone,
     L: CalendarBackfillRepository,
+    B: MacroEventBroker + Clone,
 {
     /// Construct a coordinator from domain ports; supplying a watch config
     /// makes every backfill maintain push notification channels.
@@ -268,12 +320,14 @@ where
         repository: R,
         provider: G,
         lifecycle: L,
+        macro_event_broker: B,
         watch: Option<super::models::GoogleWatchConfig>,
     ) -> Self {
         Self {
             repository,
             provider,
             lifecycle,
+            macro_event_broker,
             watch,
         }
     }
@@ -331,6 +385,7 @@ where
         let backfill = GoogleCalendarBackfillService::new(
             self.repository.clone(),
             self.provider.clone(),
+            self.macro_event_broker.clone(),
             self.watch.clone(),
         );
         let work = backfill.backfill(
@@ -416,21 +471,75 @@ where
     }
 }
 
-impl<R, G> GoogleCalendarBackfillService<R, G>
+impl<R, G, B> GoogleCalendarBackfillService<R, G, B>
 where
     R: CalendarRepository,
     G: GoogleCalendarProvider,
+    B: MacroEventBroker,
 {
     /// Construct the provider backfill service.
     pub fn new(
         repository: R,
         provider: G,
+        macro_event_broker: B,
         watch: Option<super::models::GoogleWatchConfig>,
     ) -> Self {
         Self {
             repository,
             provider,
+            macro_event_broker,
             watch,
+        }
+    }
+
+    /// Publish one calendar topic event. Sync progress is already committed by
+    /// the time this runs, so a publish failure is logged and dropped rather
+    /// than failing the run — the search backfill re-enumerates present rows.
+    fn publish_calendar_event(&self, event: CalendarTopicEvent) {
+        let _ = self
+            .macro_event_broker
+            .send_event(&CalendarMacroEvent::for_change(event))
+            .inspect_err(|error| {
+                tracing::error!(error=?error, "failed to publish calendar event");
+            });
+    }
+
+    /// Announce what a write did to the canonical row. A write that changed
+    /// nothing publishes nothing, so a full snapshot re-observing thousands of
+    /// unchanged events stays off the topic.
+    fn publish_write_outcome(&self, outcome: &CalendarEventWriteOutcome) {
+        let metadata = CalendarEventMetadata {
+            event_id: outcome.event_id,
+            owner_id: outcome.owner_id.clone(),
+        };
+        match outcome.change {
+            CalendarEventChange::Created => {
+                self.publish_calendar_event(CalendarTopicEvent::Created(metadata));
+            }
+            CalendarEventChange::Updated => {
+                self.publish_calendar_event(CalendarTopicEvent::Updated(metadata));
+            }
+            CalendarEventChange::Unchanged => {}
+        }
+    }
+
+    /// Announce every event a source retirement touched. Retiring a source
+    /// does not necessarily remove the event — the row survives, rewritten
+    /// from its next-best remaining source — so each event reports its own
+    /// fate. Without this a provider-side deletion would leave a permanently
+    /// stale search document: the row is gone, so the backfill can never
+    /// re-enumerate it.
+    fn publish_retirements(&self, retired: Vec<RetiredCalendarEvent>) {
+        for event in retired {
+            let metadata = CalendarEventMetadata {
+                event_id: event.event_id,
+                owner_id: event.owner_id,
+            };
+            self.publish_calendar_event(if event.deleted {
+                CalendarTopicEvent::Deleted(metadata)
+            } else {
+                CalendarTopicEvent::Updated(metadata)
+            });
         }
     }
 
@@ -516,13 +625,15 @@ where
                 }
                 let super::models::CalendarEventSource::Google(source) = &upsert.source;
                 debug_assert_eq!(source.calendar_id, calendar_id);
-                self.repository
+                let outcome = self
+                    .repository
                     .upsert_event(CalendarEventWrite::GoogleBackfill {
                         key,
                         lease_token,
                         upsert,
                     })
                     .await?;
+                self.publish_write_outcome(&outcome);
                 calendar_count += 1;
             }
             // The upserts above committed individually, so they count even
@@ -532,7 +643,8 @@ where
             // Committing per calendar keeps earlier calendars' sync tokens
             // durable when a later calendar's poll fails, so the retry only
             // re-pulls what never committed.
-            self.repository
+            let retired = self
+                .repository
                 .commit_google_calendar_sync(
                     key,
                     lease_token,
@@ -547,6 +659,10 @@ where
                     calendar_count,
                 )
                 .await?;
+            // A provider-side deletion reaches search only here: the row is
+            // gone once the commit lands, so nothing downstream can rediscover
+            // it by re-reading Postgres.
+            self.publish_retirements(retired);
             // Tombstones only apply inside the snapshot commit, so they
             // count once it succeeds.
             report.cancellations_observed += cancellation_count;
@@ -601,9 +717,13 @@ where
             }
         }
 
-        self.repository
+        // A calendar dropped from the provider's list retires its sources, so
+        // the events it backed announce their own fate here too.
+        let retired = self
+            .repository
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
+        self.publish_retirements(retired);
 
         Ok(())
     }

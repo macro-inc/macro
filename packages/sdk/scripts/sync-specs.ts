@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import { services } from '../services';
 
 const serviceClientDirectories = {
+  'agent-harness': 'service-agent-harness',
   auth: 'service-auth',
   cognition: 'service-cognition',
   connection: 'service-connection',

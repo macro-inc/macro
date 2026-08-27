@@ -242,7 +242,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu',
+            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -348,7 +348,7 @@ function DropdownItem(props: DropdownItemProps) {
 function DropdownTrigger(props: DropdownTriggerProps) {
   return (
     <KobalteDropdownMenu.Trigger
-      variant="base"
+      variant="outline"
       as={Button}
       size="sm"
       {...props}

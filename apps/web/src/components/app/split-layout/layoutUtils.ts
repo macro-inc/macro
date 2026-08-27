@@ -1,4 +1,4 @@
-import { LIST_VIEW_ID } from '@app/constants/list-views';
+import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -128,6 +128,27 @@ export function globalRemoveFromSplitHistory(
   for (const split of manager.splits()) {
     const handle = manager.getSplit(split.id);
     handle?.removeFromHistory(predicate);
+  }
+}
+
+/**
+ * Send a split back to the most recent soup list view in its history — e.g.
+ * after deleting the entity it was showing — falling back to a reset (the
+ * default inbox) when the history holds none. Reuses the stored entry, so
+ * its captured state (scroll, focus) restores like a history-back, while
+ * `mergeHistory` drops the split's current entry so the deleted entity does
+ * not linger as a back target.
+ */
+export function returnSplitToRecentListView(handle: SplitHandle) {
+  const target = handle
+    .history()
+    .slice(0, -1)
+    .reverse()
+    .find((item) => item.type === 'component' && isListViewID(item.id));
+  if (target) {
+    handle.replace({ next: target, mergeHistory: true });
+  } else {
+    handle.reset();
   }
 }
 

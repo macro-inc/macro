@@ -1,3 +1,4 @@
+import { scrubActiveContent } from '@core/email';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
@@ -178,13 +179,16 @@ const $appendPreviousEmail = (
   } else {
     const parser = new DOMParser();
     const dom = parser.parseFromString(replyingToBodyHTML, 'text/html');
+    // The quoted body ends up in the live document (adopted nodes, or a shadow
+    // root inside the html-render node), so scrub it while it is still inert.
+    scrubActiveContent(dom);
     // Forwards always embed the original as a non-editable HTML Render Node so
     // the recipient gets the exact original markup. For replies, a table is a
     // good indicator of content we can't convert into editable nodes correctly.
     const hasTable = Boolean(dom.querySelector('table'));
     if (replyType === 'forward' || hasTable) {
       const htmlNode = $createHtmlRenderNode({
-        html: replyingToBodyHTML,
+        html: dom.documentElement.innerHTML,
         // Same branch the message view takes: personal or table-less emails
         // get theme-adapted colors, table-layout emails get a white panel
         adaptColors: Boolean(isPersonal) || !hasTable,
@@ -356,6 +360,9 @@ function getAppendedReplyElement(
       replyingToBodyHTML,
       'text/html'
     );
+    // These nodes are adopted into the live document below, which starts image
+    // loads — scrub before that, not after.
+    scrubActiveContent(innerDom);
     // Extract style tags from head to preserve email styling for weirdo emails with initial style tags.
     const styleTags = innerDom.head?.querySelectorAll('style');
     styleTags?.forEach((style) => {
@@ -453,6 +460,25 @@ export function prepareEmailBody(
     return $generateHtmlFromNodes(editor);
   });
 
+  return prepareEmailBodyFromHtml(generatedHtml, appendReply);
+}
+
+/**
+ * Same pipeline as {@link prepareEmailBody}, but starting from
+ * editor-generated HTML instead of a live editor — for callers holding a
+ * snapshot of editor content (e.g. undo-send restoring a draft).
+ */
+export function prepareEmailBodyFromHtml(
+  generatedHtml: string,
+  appendReply?: {
+    replyType: ReplyType | undefined;
+    replyingTo: ApiMessage;
+  }
+): {
+  bodyHtml: string;
+  bodyText: string;
+  mentions: DocumentMentionInfo[];
+} {
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
 
   flattenConsecutiveParagraphs(parsed.body);

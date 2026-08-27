@@ -39,9 +39,13 @@ export function FloatRegionHost() {
       <div
         ref={setHostRef}
         class={cn(
-          'pointer-events-none absolute inset-x-0 bottom-0 z-mobile-nav-bar flex flex-col gap-3 pb-3',
-          isNativeMobilePlatform() && 'pb-7',
-          virtualKeyboardVisible() && 'pb-3'
+          // The stack's own spacing rides the px --mobile-chrome-* vars
+          // (see index.css): chrome must not track the OS text-size setting.
+          // Only the chrome pins itself — accessory contributions (compose /
+          // reply bars) keep rem sizing.
+          'pointer-events-none absolute inset-x-0 bottom-0 z-mobile-nav-bar flex flex-col gap-(--mobile-chrome-gutter) pb-(--mobile-chrome-gutter)',
+          isNativeMobilePlatform() && 'pb-[28px]',
+          virtualKeyboardVisible() && 'pb-(--mobile-chrome-gutter)'
         )}
       >
         <For each={FLOAT_REGIONS}>

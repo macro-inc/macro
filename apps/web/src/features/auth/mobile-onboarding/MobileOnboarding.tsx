@@ -106,7 +106,7 @@ export function MobileOnboarding() {
         <Show when={step() > CREATE_ACCOUNT_STEP}>
           <div class="mx-auto w-full max-w-md shrink-0 px-6 pt-6 pb-6">
             <Button
-              variant="contrast"
+              variant="strong"
               size="lg"
               class="w-full"
               onClick={onContinue}

@@ -10,7 +10,7 @@ import {
 export const I_VIDEO: ElementTransformer = {
   dependencies: [VideoNode, UnknownMentionNode],
   type: 'element',
-  regExp: /<m-video>(.*?)<\/m-video>/,
+  regExp: /^<m-video>(.*?)<\/m-video>\s*$/,
   export: (node: LexicalNode) => {
     if (!$isVideoNode(node)) return null;
     if (node.getSrcType() === 'local') return null;
