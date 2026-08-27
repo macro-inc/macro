@@ -30,6 +30,15 @@ fn finished(run: &str) -> CursorEvent {
     }
 }
 
+fn cancelled(run: &str) -> CursorEvent {
+    CursorEvent::Result {
+        run_id: CursorRunId::new(run),
+        status: RunStatus::Cancelled,
+        text: None,
+        duration_ms: Some(1),
+    }
+}
+
 #[tokio::test]
 async fn first_prompt_creates_the_agent_with_the_session_repo() {
     let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
@@ -121,15 +130,13 @@ async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
     );
 }
 
-/// The turn ends on the client's cancel alone, with the run's stream still
-/// wide open and still delivering.
+/// Cancel is a notification: POST it, keep reading until Cursor's `result`.
 ///
-/// This is the shape seen live: Cursor accepts the cancel and keeps streaming
-/// anyway, so a turn that waits for the stream to end waits for the agent to
-/// finish of its own accord — which is the whole bug. Note what this test does
-/// *not* do: drop `events`.
+/// Chunks that land after the POST are still the run — the Cloud Agents stream
+/// is scoped to that run through `result` then `done`. Dropping the stream at
+/// the POST used to resolve the ACP prompt while Cursor was still emitting.
 #[tokio::test]
-async fn cancel_ends_the_turn_while_the_stream_stays_open() {
+async fn cancel_keeps_reading_until_the_result_frame() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
 
@@ -147,22 +154,33 @@ async fn cancel_ends_the_turn_while_the_stream_stays_open() {
         .expect("stream open");
     notifier.wait_for_updates(1).await;
 
-    // The stream is live and mid-turn at the moment the cancel lands: no
-    // terminal event has been sent, and none ever will be.
     assert!(!events.is_closed());
     service.cancel(&session).await.expect("cancel works");
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..)))
+    );
+
+    events
+        .send(CursorEvent::Assistant {
+            text: " winding down".to_owned(),
+        })
+        .expect("stream still open after cancel");
+    notifier.wait_for_updates(2).await;
+
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
 
     let stop = turn.await.expect("task joins").expect("prompt resolves");
     assert_eq!(stop, StopReason::Cancelled);
-    // Only the one chunk from before the cancel: nothing arrived to end the
-    // turn, so the turn ended itself. The sender reads as closed from here on
-    // precisely because the turn dropped the stream rather than draining it.
-    assert_eq!(notifier.updates().len(), 1);
+    assert_eq!(notifier.updates().len(), 2);
 }
 
-/// A tool call still running when the client cancels never gets Cursor's own
-/// terminal event — the stream is abandoned, not drained — so it must be
-/// closed out locally rather than left rendering "in progress" forever.
+/// A cancelled `result` does not always complete in-flight tool calls, so the
+/// turn must fail them locally when that frame arrives — otherwise they stay
+/// "running" in the transcript forever.
 #[tokio::test]
 async fn cancel_mid_tool_call_closes_it_as_failed() {
     let (service, cursor, notifier) = service(None);
@@ -188,6 +206,8 @@ async fn cancel_mid_tool_call_closes_it_as_failed() {
     notifier.wait_for_updates(1).await;
 
     service.cancel(&session).await.expect("cancel works");
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
 
     let stop = turn.await.expect("task joins").expect("prompt resolves");
     assert_eq!(stop, StopReason::Cancelled);
@@ -195,6 +215,7 @@ async fn cancel_mid_tool_call_closes_it_as_failed() {
     let closing = notifier
         .updates()
         .into_iter()
+        .rev()
         .find_map(|(_, update)| match update {
             SessionUpdate::ToolCallUpdate(update) if &*update.tool_call_id.0 == "call-1" => {
                 Some(update)

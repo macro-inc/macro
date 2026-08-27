@@ -13,12 +13,15 @@
 //! a turn is streaming, so cancellation state lives behind a lock the
 //! streaming loop never holds across an await.
 //!
-//! Cancelling is local. A turn ends on its own cancellation token, not on
-//! Cursor's answer to `POST /runs/{run}/cancel` — that call is best-effort and
-//! only decides whether the run stops burning credits server-side. The
-//! distinction matters because Cursor keeps a cancelled run's stream open often
-//! enough that waiting for it meant the client's stop button did nothing until
-//! the agent finished of its own accord.
+//! `session/cancel` is a notification we pump into Cursor: `POST
+//! /v1/agents/{id}/runs/{runId}/cancel`. The turn itself keeps reading the
+//! run's stream until Cursor's terminal `result` frame (then `done`) — the
+//! same way a finished run ends. Cancellation is terminal on Cursor's side;
+//! that `result` is what closes the ACP prompt.
+//!
+//! The cancellation token is for waits that have no stream to drain: a prompt
+//! queued behind `agent_busy`, and the fallback poll once the stream has
+//! already gone quiet or died. It does not cut a live stream short.
 //!
 //! The remote cancel still needs a run id, and this process only remembers
 //! one for a turn it is itself streaming. A session restored after a restart,
@@ -512,11 +515,10 @@ where
         let (agent, active_run) = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.cancelled = true;
-            // Fired before the network call, and the turn ends on it alone:
-            // whether Cursor honours the cancel decides only whether the run
-            // keeps burning credits server-side, never whether this client
-            // gets its turn back. A cancel Cursor refuses used to leave the
-            // turn streaming to natural completion.
+            // Unblocks waits that have no stream (busy-agent queue, quiet-stream
+            // poll). The live stream is not abandoned — Cursor's `result`
+            // frame is what ends the turn. The POST below is the notification
+            // that asks for that frame.
             state.cancel.cancel();
             (state.agent.clone(), state.active_run.clone())
         };
@@ -658,14 +660,6 @@ where
                     .await;
             }
         };
-        // Opening the stream is a network call that is not itself in the
-        // select below. If the client cancelled while it was in flight, the
-        // turn must still end immediately rather than draining a stream
-        // nobody asked to keep.
-        if cancel.is_cancelled() {
-            self.close_open_tool_calls(session_id, session).await;
-            return Ok(StopReason::Cancelled);
-        }
         pin_mut!(stream);
 
         // The run's own verdict, set only by a `result` event. Every recorded
@@ -678,27 +672,11 @@ where
         // not to repeat it from the run's final result.
         let mut streamed_text = false;
         loop {
-            // The client's cancel outranks anything still on the wire. Without
-            // this the turn ran to the stream's natural end and only *then*
-            // reported `Cancelled` — the stop button stayed lit for as long as
-            // the agent felt like working.
-            let next = match tokio::time::timeout(STREAM_QUIET_TIMEOUT, async {
-                tokio::select! {
-                    biased;
-                    // Outer `None` means cancelled; outer `Some` carries the
-                    // stream's own `Option`, whose `None` means it ended.
-                    () = cancel.cancelled() => None,
-                    next = stream.next() => Some(next),
-                }
-            })
-            .await
-            {
-                Ok(None) => {
-                    tracing::info!(%agent, %run, "turn cancelled by the client; abandoning the stream");
-                    self.close_open_tool_calls(session_id, session).await;
-                    return Ok(StopReason::Cancelled);
-                }
-                Ok(Some(next)) => next,
+            // A client cancel is a notification already POSTed; it does not
+            // outrank the stream. Cursor's `result` frame is what ends the
+            // turn, including a cancelled one.
+            let next = match tokio::time::timeout(STREAM_QUIET_TIMEOUT, stream.next()).await {
+                Ok(next) => next,
                 // The stream has gone quiet. If the run is already over, the
                 // stream's terminal event is the only thing anyone is waiting
                 // for — take the answer from the record instead of holding
@@ -771,7 +749,10 @@ where
 
         match outcome {
             Some(RunStatus::Finished) => Ok(StopReason::EndTurn),
-            Some(RunStatus::Cancelled) => Ok(StopReason::Cancelled),
+            Some(RunStatus::Cancelled) => {
+                self.close_open_tool_calls(session_id, session).await;
+                Ok(StopReason::Cancelled)
+            }
             // A run that ended in any other state did not succeed, and ACP
             // answers a prompt with a stop reason or an error — there is no
             // stop reason for "it failed", so this is an error.
@@ -794,12 +775,11 @@ where
         }
     }
 
-    /// Close out every tool call left open when a turn ends on the client's
-    /// cancel rather than Cursor's own terminal event.
+    /// Close out every tool call still open when a turn ends cancelled.
     ///
-    /// The abandoned stream (see the `Ok(None)` arm above) means Cursor may
-    /// still be mid-call and will never get the chance to say how it ended,
-    /// so without this the client renders that call running forever.
+    /// Cursor's `result` with `CANCELLED` is the terminal frame; it does not
+    /// always include a completed `tool_call` for work that was mid-flight,
+    /// so without this the client would render that call running forever.
     async fn close_open_tool_calls(&self, session_id: &SessionId, session: &Session) {
         let updates = session
             .state
@@ -1050,15 +1030,7 @@ where
                 self.close_open_tool_calls(session_id, session).await;
                 return Ok(StopReason::Cancelled);
             }
-            let outcome = tokio::select! {
-                biased;
-                () = cancel.cancelled() => {
-                    self.close_open_tool_calls(session_id, session).await;
-                    return Ok(StopReason::Cancelled);
-                }
-                outcome = self.cursor.run_result(agent, run) => outcome,
-            };
-            let outcome = match outcome {
+            let outcome = match self.cursor.run_result(agent, run).await {
                 Ok(outcome) => outcome,
                 // A blip mid-poll is survivable; the same failure over and
                 // over is the API saying no.
@@ -1104,7 +1076,10 @@ where
             }
             return match outcome.status {
                 RunStatus::Finished => Ok(StopReason::EndTurn),
-                RunStatus::Cancelled => Ok(StopReason::Cancelled),
+                RunStatus::Cancelled => {
+                    self.close_open_tool_calls(session_id, session).await;
+                    Ok(StopReason::Cancelled)
+                }
                 status => Err(SessionError::Cursor(rootcause::report!(
                     "cursor run {run} ended in {status:?}"
                 ))),
