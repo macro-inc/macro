@@ -74,7 +74,7 @@ const FIXTURE_MESSAGE: FoldedMessage = {
   parts: [
     {
       kind: 'text',
-      text: "I'll look at the fold implementation and tighten it up.\n\nThe quadratic formula is $$ x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a} $$.",
+      text: "I'll look at the fold implementation and tighten it up.\n\nInline math: $a^2 + b^2 = c^2$ and TeX \\( E = mc^2 \\).\n\nThe quadratic formula is\n$$\nx = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}\n$$\n\nDisplay TeX:\n\\[\n\\int_0^1 x^2 \\, dx = \\frac{1}{3}\n\\]",
     },
     {
       kind: 'thought',
