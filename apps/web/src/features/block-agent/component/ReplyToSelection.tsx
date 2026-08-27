@@ -1,9 +1,13 @@
 /**
  * ChatGPT / Claude-style quote-reply: selecting transcript text shows a
- * "Reply to this" chip above the selection; choosing it hands the selected
- * text to `onReply` (the composer inserts it as a referenced paste chip).
+ * "Reply to this" chip; choosing it hands the selected text to `onReply`
+ * (the composer inserts it as a referenced paste chip).
+ *
+ * Positioning is the same `floatWithSelection` directive the format / mention
+ * menus use. This component only decides when the chip is allowed to mount.
  */
 
+import { floatWithSelection } from '@core/component/LexicalMarkdown/directive/floatWithSelection';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isMobile } from '@core/mobile/isMobile';
 import { debouncedDependent } from '@core/util/debounce';
@@ -11,8 +15,7 @@ import Quote from '@phosphor/quotes.svg';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { readReplyableSelection } from '../state/reply-selection';
 
-/** Gap between the top of the selection and the chip. */
-const SPACING_PX = 8;
+false && floatWithSelection;
 
 export function ReplyToSelection(props: {
   /** Selections outside this element (e.g. in the composer) are ignored. */
@@ -22,51 +25,44 @@ export function ReplyToSelection(props: {
   // On mobile the native selection toolbar takes this chip's place.
   if (isMobile()) return '';
 
-  // Viewport coordinates of the selection: top edge, horizontal center.
-  const [anchor, setAnchor] = createSignal<{ top: number; left: number }>();
+  const [domSelection, setDomSelection] = createSignal<Selection>();
+  // Lag the appearance so the chip doesn't flash while a selection is being
+  // dragged out (same delay as the floating format menu).
+  const show = debouncedDependent(() => domSelection() !== undefined, 100);
 
-  const sync = () => {
+  const syncFromDocument = () => {
     const replyable = readReplyableSelection(props.container);
-    const range = replyable
-      ? document.getSelection()?.getRangeAt(0)
-      : undefined;
-    if (!range) {
-      setAnchor(undefined);
-      return;
-    }
-    const rect = range.getBoundingClientRect();
-    setAnchor({ top: rect.top, left: rect.left + rect.width / 2 });
+    setDomSelection(
+      replyable ? (document.getSelection() ?? undefined) : undefined
+    );
   };
 
-  document.addEventListener('selectionchange', sync);
-  // Fixed positioning means the chip must follow the text when the
-  // transcript scrolls under a live selection (scroll doesn't bubble, so
-  // listen in the capture phase).
-  document.addEventListener('scroll', sync, { capture: true, passive: true });
+  document.addEventListener('selectionchange', syncFromDocument);
   onCleanup(() => {
-    document.removeEventListener('selectionchange', sync);
-    document.removeEventListener('scroll', sync, { capture: true });
+    document.removeEventListener('selectionchange', syncFromDocument);
   });
-
-  // Lag the appearance so the chip doesn't flash while a selection is being
-  // dragged out. Disappearance is immediate: `Show` also needs a live anchor.
-  const show = debouncedDependent(() => anchor() !== undefined, 100);
 
   const reply = () => {
     const text = readReplyableSelection(props.container);
     document.getSelection()?.removeAllRanges();
-    setAnchor(undefined);
+    setDomSelection(undefined);
     if (text) props.onReply(text);
   };
 
   return (
-    <Show when={show() && anchor()}>
-      {(a) => (
+    <Show when={show() && domSelection()}>
+      {(selection) => (
         <ScopedPortal scope="block">
           <button
             type="button"
-            class="fixed z-highlight-menu flex -translate-x-1/2 -translate-y-full items-center gap-1.5 rounded-full border border-edge bg-surface px-2.5 py-1 text-xs font-medium text-ink shadow-lg hover:overlay-hover"
-            style={{ top: `${a().top - SPACING_PX}px`, left: `${a().left}px` }}
+            class="fixed top-0 left-0 z-highlight-menu flex items-center gap-1.5 rounded-full border border-edge bg-surface px-2.5 py-1 text-xs font-medium text-ink shadow-lg hover:overlay-hover"
+            use:floatWithSelection={{
+              selection: selection(),
+              reactiveOnContainer: props.container,
+              useBlockBoundary: true,
+              moveWithSelection: true,
+              floatingOptions: { placement: 'top' },
+            }}
             on:mousedown={(event: MouseEvent) => {
               // Keep the selection alive through the click: a default
               // mousedown would collapse it, hiding the chip before the
