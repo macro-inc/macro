@@ -7,13 +7,12 @@ import { openExternalUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
 import NewTab from '@phosphor/arrow-square-out.svg';
 import Check from '@phosphor/check-circle.svg';
-import Copy from '@phosphor/copy.svg';
 import Link from '@phosphor/link.svg';
 import Trash from '@phosphor/link-break.svg';
 import Pencil from '@phosphor/pencil-simple.svg';
 import LinkText from '@phosphor/text-t.svg';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
-import { Button, Tooltip } from '@ui';
+import { Button, CopyButton, Tooltip } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
@@ -173,14 +172,6 @@ export function FloatingLinkMenu(props: {
     const url = pendingLinkInfo()?.url;
     if (!url) return;
     openExternalUrl(url);
-  };
-
-  const copyLink = () => {
-    if (!pendingLinkInfo()) return;
-    try {
-      navigator.clipboard.writeText(pendingLinkInfo()!.url || '');
-      toast.success('Copied link to clipboard');
-    } catch {}
   };
 
   const handleEditClick = () => {
@@ -457,15 +448,13 @@ export function FloatingLinkMenu(props: {
                 >
                   <Pencil />
                 </Button>
-                <Button
-                  onClick={copyLink}
+                <CopyButton
                   class="p-1 hover:bg-hover hover-transition-bg"
-                  variant="ghost"
-                  size="icon-sm"
                   tooltip="Copy link"
-                >
-                  <Copy />
-                </Button>
+                  text={() => pendingLinkInfo()?.url ?? ''}
+                  onCopied={() => toast.success('Copied link to clipboard')}
+                  onCopyError={() => toast.failure('Failed to copy link')}
+                />
                 <Button
                   onClick={handleUnlink}
                   class="p-1 hover:bg-hover hover-transition-bg"

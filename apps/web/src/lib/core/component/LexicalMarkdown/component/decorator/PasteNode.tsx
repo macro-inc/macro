@@ -11,7 +11,7 @@ import Copy from '@phosphor/copy.svg';
 import DotsThree from '@phosphor/list.svg';
 import TextT from '@phosphor/text-t.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
-import { Button, cn, Dialog, Dropdown, Layer } from '@ui';
+import { CopyButton, cn, Dialog, Dropdown, Layer } from '@ui';
 import { $createNodeSelection, $getNodeByKey, $setSelection } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
@@ -166,15 +166,17 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
               <span>Pasted text</span>
               <div class="flex items-center gap-2">
                 <span>{lineLabel()}</span>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
+                <CopyButton
                   class="text-ink-extra-muted/50"
                   tooltip="Copy"
-                  on:click={() => copyText()}
-                >
-                  <Copy />
-                </Button>
+                  text={props.content}
+                  onCopied={() =>
+                    toast.success('Copied pasted text to clipboard')
+                  }
+                  onCopyError={() =>
+                    toast.failure('Failed to copy pasted text')
+                  }
+                />
               </div>
             </div>
             <div class="max-h-[70vh] overflow-auto">{fullText()}</div>
@@ -190,15 +192,17 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
                 <span>Pasted text</span>
                 <div class="flex items-center gap-2">
                   <span>{lineLabel()}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
+                  <CopyButton
                     class="text-ink-extra-muted/50"
                     tooltip="Copy"
-                    on:click={() => copyText()}
-                  >
-                    <Copy />
-                  </Button>
+                    text={props.content}
+                    onCopied={() =>
+                      toast.success('Copied pasted text to clipboard')
+                    }
+                    onCopyError={() =>
+                      toast.failure('Failed to copy pasted text')
+                    }
+                  />
                 </div>
               </div>
               <MobileDrawer.ScrollBody class="overflow-x-auto">
