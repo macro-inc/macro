@@ -783,7 +783,7 @@ where
 
         // Applied before any content patch: a replacement body would clobber
         // the rewrite anyway, and its own MessageChanged carries the result.
-        if let Some(url) = remove_preview_url {
+        if let Some(url) = remove_preview_url.filter(|url| !url.is_empty()) {
             let message = self
                 .repo
                 .remove_link_preview(channel_id, message_id, url)

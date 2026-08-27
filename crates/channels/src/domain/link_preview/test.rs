@@ -50,6 +50,12 @@ fn flips_existing_preview_true() {
 }
 
 #[test]
+fn empty_url_is_a_no_op() {
+    let content = m_link_content(URL);
+    assert_eq!(remove_link_preview_from_content(&content, ""), content);
+}
+
+#[test]
 fn is_idempotent() {
     let once = remove_link_preview_from_content(&m_link_content(URL), URL);
     let twice = remove_link_preview_from_content(&once, URL);

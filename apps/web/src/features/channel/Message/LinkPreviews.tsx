@@ -8,14 +8,7 @@ import { useRemoveLinkPreviewMutation } from '@queries/channel/message';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  type JSX,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, For, type JSX, Show } from 'solid-js';
 import { useMessage } from './context';
 import {
   hiddenUrlsForMessage,
@@ -97,15 +90,23 @@ function LinkPreviewCard(props: {
       </Show>
       <Show when={props.unfurled.image_url && !imageFailed()}>
         {(_) => (
-          <img
-            src={proxyResource(props.unfurled.image_url!)}
-            class="mt-1 max-h-64 w-auto max-w-full cursor-pointer self-start rounded-md border border-edge-muted"
-            crossorigin="anonymous"
-            alt={props.unfurled.title}
+          <a
+            href={props.unfurled.url}
+            target="_blank"
+            rel="noopener"
+            class="mt-1 self-start"
             draggable={false}
             onClick={openLink(props.unfurled.url)}
-            on:error={() => setImageFailed(true)}
-          />
+          >
+            <img
+              src={proxyResource(props.unfurled.image_url!)}
+              class="max-h-64 w-auto max-w-full rounded-md border border-edge-muted"
+              crossorigin="anonymous"
+              alt={props.unfurled.title}
+              draggable={false}
+              on:error={() => setImageFailed(true)}
+            />
+          </a>
         )}
       </Show>
     </div>
@@ -117,11 +118,11 @@ function LinkPreview(props: {
   onRemove: (() => void) | undefined;
 }) {
   const [unfurlData] = useUnfurl(props.url);
-  const renderable = createMemo(() => {
+  const renderable = () => {
     const data = unfurlData();
     if (data?.type !== 'success') return undefined;
     return shouldRenderUnfurl(data.data) ? data.data : undefined;
-  });
+  };
 
   return (
     <Show when={renderable()}>
@@ -150,14 +151,12 @@ export function LinkPreviews(props: LinkPreviewsProps) {
   const removePreview = useRemoveLinkPreviewMutation();
   // Extraction already drops `preview: false` links; the local hidden set is
   // the optimistic layer covering the gap until rewritten content arrives.
-  const previewable = createMemo(() =>
-    message().deleted_at ? [] : extractUnfurlableUrls(message().content ?? '')
-  );
-  const urls = createMemo(() =>
+  const previewable = () =>
+    message().deleted_at ? [] : extractUnfurlableUrls(message().content ?? '');
+  const urls = () =>
     showLinkPreviews()
       ? previewable().filter((url) => !isLinkPreviewHidden(message().id, url))
-      : []
-  );
+      : [];
 
   // Sender-only, per link: the server sets `preview: false` on the matching
   // link node, hiding the card for every participant.

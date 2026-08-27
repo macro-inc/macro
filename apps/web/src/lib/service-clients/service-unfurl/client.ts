@@ -16,7 +16,7 @@ export const UnfurlServiceClient = {
   async unfurl(args: GetUnfurlParams) {
     return (
       await fetchWithToken<GetUnfurlResponse>(
-        `${SERVER_HOSTS['unfurl-service']}/unfurl?url=${args.url}`
+        `${SERVER_HOSTS['unfurl-service']}/unfurl?url=${encodeURIComponent(args.url)}`
       )
     ).map((result) => result);
   },

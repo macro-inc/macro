@@ -14,14 +14,10 @@ export const [showLinkPreviews, setShowLinkPreviews] = makePersisted(
 const MAX_HIDDEN_ENTRIES = 500;
 
 /**
- * Newest-last `messageId|url` keys of previews hidden on this client. Acts as
- * the optimistic layer for the sender's server-side "remove preview": entries
- * only need to survive until the rewritten content lands in the cache.
+ * Optimistic hides until rewritten content arrives. In-memory so a failed
+ * server write cannot survive a reload.
  */
-const [hiddenPreviews, setHiddenPreviews] = makePersisted(
-  createSignal<string[]>([]),
-  { name: 'channel.hiddenLinkPreviews' }
-);
+const [hiddenPreviews, setHiddenPreviews] = createSignal<string[]>([]);
 
 function hiddenKey(messageId: string, url: string): string {
   return `${messageId}|${url}`;
@@ -52,4 +48,9 @@ export function hiddenUrlsForMessage(messageId: string): string[] {
   return hiddenPreviews()
     .filter((entry) => entry.startsWith(prefix))
     .map((entry) => entry.slice(prefix.length));
+}
+
+/** Drop every optimistic hide. Used to isolate tests. */
+export function clearHiddenLinkPreviews(): void {
+  setHiddenPreviews([]);
 }

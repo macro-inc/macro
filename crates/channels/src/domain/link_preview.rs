@@ -127,6 +127,10 @@ fn wrap_plain_occurrences(segment: &str, url: &str) -> String {
 /// into an equivalent suppressed m-link. Idempotent, and a no-op when the
 /// URL does not appear outside of other links' payload text.
 pub fn remove_link_preview_from_content(content: &str, url: &str) -> String {
+    // `str::find("")` is 0, so an empty needle would loop forever in wrap.
+    if url.is_empty() {
+        return content.to_string();
+    }
     map_segments(
         content,
         |outside| wrap_plain_occurrences(outside, url),

@@ -4,9 +4,10 @@
 
 import { render } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LinkPreviews } from '../LinkPreviews';
 import {
+  clearHiddenLinkPreviews,
   hideLinkPreview,
   isLinkPreviewHidden,
   setShowLinkPreviews,
@@ -210,6 +211,13 @@ function renderPreviews(
 }
 
 describe('LinkPreviews', () => {
+  beforeEach(() => {
+    suppressMutate.mockReset();
+    unfurlResults.clear();
+    clearHiddenLinkPreviews();
+    setShowLinkPreviews(true);
+  });
+
   it('renders a card once the unfurl succeeds', () => {
     const url = 'https://example.com/article';
     unfurlResults.set(url, {
