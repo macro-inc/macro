@@ -24,6 +24,7 @@ import { createSignal, onCleanup, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { Message } from './AgentMessage';
+import { ReplyToSelection } from './ReplyToSelection';
 
 /** The channel's `NEAR_BOTTOM_THRESHOLD`: within this, the view follows. */
 const NEAR_BOTTOM_PX = 50;
@@ -33,13 +34,14 @@ const SETTLE_MS = 1000;
 const ITEM_SIZE = 96;
 
 export function Transcript() {
-  const { messages, loadFailed } = useAgentSession();
+  const { messages, loadFailed, quoteSelection } = useAgentSession();
 
   let scrollRef: HTMLDivElement | undefined;
   let handle: VirtualizerHandle | undefined;
   let cancelPin: (() => void) | undefined;
   let growthObserver: ResizeObserver | undefined;
   let viewportObserver: ResizeObserver | undefined;
+  const [transcriptEl, setTranscriptEl] = createSignal<HTMLDivElement>();
 
   onCleanup(() => {
     cancelPin?.();
@@ -157,7 +159,11 @@ export function Transcript() {
   };
 
   return (
-    <div class="relative flex-1 min-h-0">
+    <div
+      class="relative flex-1 min-h-0"
+      ref={setTranscriptEl}
+      data-agent-transcript
+    >
       <Scroll scrollRef={attachScroller}>
         <div
           class="flex flex-col [overflow-anchor:none]"
@@ -205,6 +211,7 @@ export function Transcript() {
         scrollState={scrollState}
         onScrollToBottom={pinToBottom}
       />
+      <ReplyToSelection container={transcriptEl()} onReply={quoteSelection} />
     </div>
   );
 }

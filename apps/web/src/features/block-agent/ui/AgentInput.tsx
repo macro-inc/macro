@@ -9,8 +9,14 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import { insertReferencedPaste } from '@macro-inc/lexical-core';
 import { Button, SendButton, Surface } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+
+export type AgentInputApi = {
+  /** Quote selected transcript text into the composer as a referenced chip. */
+  insertReferencedText: (text: string) => void;
+};
 
 export interface AgentInputProps {
   placeholder?: string;
@@ -28,6 +34,11 @@ export interface AgentInputProps {
   onStop?: () => void;
   /** Sits as a pill above the input box, e.g. the session's model selector. */
   modelControl?: JSX.Element;
+  /**
+   * Called once the editor is mounted (and with `undefined` on unmount) so
+   * the transcript's "Reply to this" chip can insert a referenced paste.
+   */
+  onReady?: (api: AgentInputApi | undefined) => void;
 }
 
 /** Past this height the controls drop below the text instead of overlaying it. */
@@ -69,6 +80,17 @@ export function AgentInput(props: AgentInputProps) {
       return true;
     })
     .onChange(setMarkdown);
+
+  onMount(() => {
+    props.onReady?.({
+      insertReferencedText: (text: string) => {
+        if (insertReferencedPaste(editor.lexical, text)) {
+          editor.controls.focus();
+        }
+      },
+    });
+    onCleanup(() => props.onReady?.(undefined));
+  });
 
   return (
     <div class="flex flex-col gap-1.5">

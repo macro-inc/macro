@@ -9,19 +9,30 @@ import { Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
   AgentInput,
+  type AgentInputApi,
   AgentModelSelector,
   ComposerNotice,
   QueuedPromptList,
 } from '../ui';
 
 export function AgentComposer() {
-  const { composer, loadFailed, metadata, pending, resuming } =
-    useAgentSession();
+  const {
+    composer,
+    loadFailed,
+    metadata,
+    pending,
+    resuming,
+    registerQuoteInsert,
+  } = useAgentSession();
 
   // A session still being created was created by this user, one action ago,
   // and has an empty transcript: the only thing to do with it is type. The
   // wait for the sandbox is exactly when that matters most.
   const autofocus = pending();
+
+  const onInputReady = (api: AgentInputApi | undefined) => {
+    registerQuoteInsert(api?.insertReferencedText);
+  };
 
   return (
     <>
@@ -43,6 +54,7 @@ export function AgentComposer() {
         commands={() => metadata()?.availableCommands ?? []}
         onSend={composer.send}
         onStop={composer.stop}
+        onReady={onInputReady}
         modelControl={
           <AgentModelSelector
             model={metadata()?.model ?? null}
