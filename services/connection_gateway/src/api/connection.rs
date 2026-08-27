@@ -1,5 +1,6 @@
 use crate::{
     config::Config,
+    constants::SLOW_WEBSOCKET_OPERATION_THRESHOLD,
     context::{ApiContext, AppState, AuthorizationService},
     model::{
         connection::ConnectionContext,
@@ -76,7 +77,8 @@ async fn handle_websocket_connection(
     // Create guard that records last online time when websocket connection closes
     let last_online_guard = ctx.last_online_worker.new_guard(macro_user_id.clone());
 
-    let sender_task = tokio::spawn(async move { forwarder(sink, receiver).await });
+    let sender_connection_id = connection_id.clone();
+    let sender_task = tokio::spawn(forwarder(sink, receiver, sender_connection_id));
 
     if let Err(err) = ctx
         .connection_manager
@@ -136,17 +138,24 @@ async fn handle_websocket_connection(
 
 /// Forwards messages from a [Receiver] to a [SplitSink]
 /// This is useful as [SplitSink] does not implement [Clone]
-pub async fn forwarder(
+async fn forwarder(
     mut sink: SplitSink<WebSocket, AxumWebsocketMessage>,
     mut receiver: Receiver<OutgoingMessage>,
+    connection_id: String,
 ) -> Result<()> {
     while let Some(mut message) = receiver.recv().await {
+        let queue_depth = receiver.len();
+        let queue_max_capacity = receiver.max_capacity();
         let span = match &message {
             OutgoingMessage::Message(message) => {
                 let span = tracing::info_span!(
                     "connection_gateway.websocket_send",
                     otel.kind = "producer",
                     message_type = %message.message_type,
+                    connection.id = %connection_id,
+                    connection.queue.observed_depth = queue_depth,
+                    connection.queue.max_capacity = queue_max_capacity,
+                    websocket.write_ms = tracing::field::Empty,
                     otel.status_code = tracing::field::Empty,
                     otel.status_description = tracing::field::Empty,
                 );
@@ -162,7 +171,28 @@ pub async fn forwarder(
         }
 
         if let Ok(msg) = message.try_into() {
-            let result = sink.send(msg).instrument(span.clone()).await;
+            let write_span = span.clone();
+            let result = async {
+                let started = tokio::time::Instant::now();
+                let mut send = std::pin::pin!(sink.send(msg));
+                let result = tokio::select! {
+                    result = &mut send => result,
+                    () = tokio::time::sleep(SLOW_WEBSOCKET_OPERATION_THRESHOLD) => {
+                        tracing::warn!(
+                            connection.id = %connection_id,
+                            connection.queue.observed_depth = receiver.len(),
+                            connection.queue.max_capacity = queue_max_capacity,
+                            "websocket write is blocked"
+                        );
+                        send.await
+                    }
+                };
+                (result, started.elapsed())
+            }
+            .instrument(write_span)
+            .await;
+            let (result, write) = result;
+            span.record("websocket.write_ms", write.as_millis() as u64);
             if let Err(err) = result {
                 record_span_error(&span, &err);
                 tracing::warn!(
