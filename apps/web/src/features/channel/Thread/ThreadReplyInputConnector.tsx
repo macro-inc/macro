@@ -13,7 +13,7 @@ export function ThreadReplyInputConnector(props: {
 
   return (
     <div
-      class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-rail rounded-bl-[14px]"
+      class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
       style={{
         left: isThreadRail()
           ? 'calc(var(--user-icon-width) / 2 - var(--thread-shift) - var(--channel-rail-width) / 2)'

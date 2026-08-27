@@ -56,10 +56,7 @@ export function Replies(props: RepliesProps) {
   return (
     <Show when={ctx.hasReplies() || ctx.isReplying()}>
       <div class="relative w-full">
-        <Thread.ReplyRailDecorations
-          isReplying={ctx.isReplying}
-          firstThreadReplyNewMessage={false}
-        />
+        <Thread.ReplyRailDecorations />
         <Thread.RepliesContainer>
           <For each={ctx.displayReplies()}>
             {(reply) => {

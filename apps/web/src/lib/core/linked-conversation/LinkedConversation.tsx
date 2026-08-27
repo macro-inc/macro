@@ -73,10 +73,7 @@ export function LinkedConversation(props: LinkedConversationProps) {
           </Show>
           <Show when={hasReplies()}>
             <div class="relative w-full">
-              <Thread.ReplyRailDecorations
-                isReplying={() => false}
-                firstThreadReplyNewMessage={false}
-              />
+              <Thread.ReplyRailDecorations />
               <Thread.RepliesContainer>
                 <For each={displayReplies()}>
                   {(reply) => (

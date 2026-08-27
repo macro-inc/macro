@@ -322,11 +322,11 @@ body.tauri-ios {
   --color-alert-ink: var(--color-warning-ink);
 
   /* Utility outputs. */
-  --color-channel-rail: color-mix(in oklch, var(--color-edge) 90%, var(--color-ink));
-  --color-channel-rail-active: var(--color-accent);
+  /* Thread rail segments overlap to form continuous paths, so this must stay
+     opaque or their intersections render darker than the straight runs. */
+  --color-thread-rail: color-mix(in oklch, var(--color-surface) 90%, var(--color-ink));
   --color-modal-overlay: oklch(0 0 0 / 0.25);
   --color-drop-shadow: oklch(0.15 0 0 / 0.04);
-  --color-rail: var(--color-channel-rail);
   --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
   --color-list-hover: color-mix(in oklch, var(--color-hover) 65%, transparent);
   --color-list-highlighted: var(--color-hover);
@@ -488,6 +488,11 @@ body.tauri-ios {
 @custom-variant light-mode (&:where(html[data-theme-light="true"] *));
 @custom-variant dark-mode (&:where(html[data-theme-light="false"] *));
 
+/* Dark surfaces need a larger ink step for the thread path to remain visible.
+   Both inputs stay opaque, so overlapping rail segments still render evenly. */
+html[data-theme-light='false'] {
+  --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
+}
 
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
    and other floating mobile controls. Consumers add their own shape classes
