@@ -96,11 +96,18 @@ export function createComposerController(options: {
      * (nor an older refusal of the same model) can answer this request.
      */
     requestedActionId: string | undefined;
+    /**
+     * A stop has been posted and the fold has not settled the turn yet.
+     * Further clicks must not stack another `session/cancel`, each of which
+     * the fold renders as its own accepted Stopped line.
+     */
+    stopping: boolean;
   }>({
     queue: [],
     post: { type: 'idle' },
     requestedModel: undefined,
     requestedActionId: undefined,
+    stopping: false,
   });
 
   const postHead = async (sessionId: string, prompt: QueuedPrompt) => {
@@ -150,10 +157,11 @@ export function createComposerController(options: {
       .control(sessionId, { type: 'stop' })
       .catch(() => undefined);
     if (result === undefined || result.isErr()) {
+      setState('stopping', false);
       toast.failure('The agent could not be stopped');
     }
     // Success is observed through the fold: the turn settles and `working`
-    // flips false, which re-runs the drain.
+    // flips false, which re-runs the drain and releases the latch.
   };
 
   // The drain: whenever any fact changes, ask the model what to do and do
@@ -224,6 +232,13 @@ export function createComposerController(options: {
     onCleanup(() => clearTimeout(timer));
   });
 
+  // The stop is done when the fold says the turn is no longer running. The
+  // release is read off `working` rather than off the POST returning, because
+  // the POST only means the cancel was accepted, not that the turn is over.
+  createEffect(() => {
+    if (!options.working()) setState('stopping', false);
+  });
+
   // A session switch resets the composer: queued prompts belong to the
   // session they were typed in, never the next one.
   //
@@ -246,6 +261,7 @@ export function createComposerController(options: {
       post: { type: 'idle' },
       requestedModel: undefined,
       requestedActionId: undefined,
+      stopping: false,
     });
   });
 
@@ -284,7 +300,8 @@ export function createComposerController(options: {
     stop: () => {
       const sessionId = options.sessionId();
       if (!sessionId) return;
-      if (!isBusy(state.post, options.working())) return;
+      if (!isBusy(state.post, options.working()) || state.stopping) return;
+      setState('stopping', true);
       void postStop(sessionId);
     },
     setModel: (model) => {

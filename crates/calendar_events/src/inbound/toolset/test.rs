@@ -10,7 +10,7 @@ use super::*;
 use crate::domain::models::{
     AttendeeResponseStatus, CalendarAttendee, CalendarEventDraft, CalendarEventPatch,
     CalendarOccurrence, CalendarSyncStatus, ConferenceChange, EventReminderOverride,
-    EventReminders, EventStatus, EventTransparency, EventVisibility, OccurrenceRange,
+    EventReminders, EventStatus, EventTransparency, EventType, EventVisibility, OccurrenceRange,
     VisibleCalendar,
 };
 use crate::domain::ports::{
@@ -81,6 +81,7 @@ fn sample_event(recurrence_lines: Vec<String>) -> crate::domain::models::Calenda
         status: EventStatus::Confirmed,
         visibility: EventVisibility::Default,
         transparency: EventTransparency::Opaque,
+        event_type: EventType::Default,
         time: EventTime::Timed {
             starts_at: Utc.with_ymd_and_hms(2026, 8, 20, 17, 0, 0).unwrap(),
             ends_at: Utc.with_ymd_and_hms(2026, 8, 20, 18, 0, 0).unwrap(),

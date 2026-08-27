@@ -43,13 +43,13 @@ export function MobileAuthWelcome() {
           <div class="flex flex-col gap-3 px-8 pb-8">
             <Button
               variant="strong"
-              size="lg"
+              size="xl"
               onClick={() => navigate('/onboarding')}
             >
               Create new account
             </Button>
             <Button
-              size="lg"
+              size="xl"
               class="border border-edge-muted"
               onClick={() => navigate('/login')}
             >

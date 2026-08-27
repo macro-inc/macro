@@ -604,6 +604,7 @@ export * from './eventTimeOneOfFourKind';
 export * from './eventTimeOneOfKind';
 export * from './eventTimeOneOfTimeZone';
 export * from './eventTransparency';
+export * from './eventType';
 export * from './eventVisibility';
 export * from './excludeDefaultViewRequest';
 export * from './excludedDefaultView';

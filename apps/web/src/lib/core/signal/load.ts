@@ -11,6 +11,8 @@ import type { DocumentMetadata } from '@service-storage/generated/schemas/docume
 export const blockErrorSignal = createBlockSignal<
   keyof typeof LoadErrors | 'UNKNOWN' | null
 >();
+/** Bumped by load-failure views to re-run the block's load. */
+export const blockLoadRetrySignal = createBlockSignal<number>();
 export const blockFileSignal = createBlockSignal<IDocumentStorageServiceFile>();
 export const blockTextSignal = createBlockSignal<string>();
 export const blockUserAccessSignal = createBlockSignal<UserAccessLevel>();

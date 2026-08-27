@@ -72,6 +72,8 @@ struct FakeCursorState {
     run_listings: Vec<RunListing>,
     /// Errors the next `create_run` calls answer with, consumed in order.
     create_run_errors: Vec<String>,
+    /// Held by the next create call until the test lets it finish.
+    create_gate: Option<tokio::sync::oneshot::Receiver<()>>,
     /// The answer every `list_models` call gets.
     models: Vec<CursorModel>,
 }
@@ -117,6 +119,18 @@ impl FakeCursor {
         }
     }
 
+    /// Hold the next create call open until the returned sender fires.
+    ///
+    /// How a test acts inside the window where a turn has started but has no
+    /// run id yet — the ten seconds a real first prompt spends creating the
+    /// Cursor agent, and the only window in which a stop has nothing to name.
+    #[must_use]
+    pub fn script_create_gate(&self) -> tokio::sync::oneshot::Sender<()> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.inner.lock().expect("fake cursor poisoned").create_gate = Some(receiver);
+        sender
+    }
+
     /// Set the models `list_models` answers with.
     pub fn script_models(&self, models: Vec<CursorModel>) {
         self.inner.lock().expect("fake cursor poisoned").models = models;
@@ -158,6 +172,20 @@ impl FakeCursor {
         }
     }
 
+    /// Wait out the scripted create gate, if a test set one. Taken out of the
+    /// lock first: the mutex is never held across an await.
+    async fn await_create_gate(&self) {
+        let gate = self
+            .inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .create_gate
+            .take();
+        if let Some(gate) = gate {
+            let _ = gate.await;
+        }
+    }
+
     /// Record a call and wake anything waiting on one.
     fn record(&self, call: CursorCall) {
         self.inner
@@ -183,6 +211,7 @@ impl CursorAgents for FakeCursor {
             mcp_servers.to_vec(),
             model.cloned(),
         ));
+        self.await_create_gate().await;
         let mut state = self.inner.lock().expect("fake cursor poisoned");
         state.next_run += 1;
         Ok((

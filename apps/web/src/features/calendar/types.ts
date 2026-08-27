@@ -2,6 +2,7 @@ import type { EventInput } from '@fullcalendar/core';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventType } from '@service-storage/generated/schemas/eventType';
 import { multiDayTimedDisplayRange } from './utils/calendar-date';
 import { canEditCalendarEventTime } from './utils/event-interaction';
 
@@ -67,6 +68,8 @@ export interface CalendarEvent {
   attendees: CalendarAttendee[];
   /** Per-user reminder configuration; absent means the calendar default. */
   reminders?: EventReminders;
+  /** Provider event type; absent means a regular event. */
+  eventType?: EventType;
   /** Canonical calendar entity id, for resolving default reminders. */
   calendarId?: string;
   /** Raw recurrence rules attached to the canonical event. */
@@ -131,6 +134,7 @@ export function mapCalendarOccurrence(
     creatorEmail: optionalText(event.creatorEmail),
     attendees: event.attendees ?? [],
     reminders: event.reminders ?? undefined,
+    eventType: event.eventType ?? undefined,
     calendarId: event.calendarId ?? undefined,
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: event.title,
