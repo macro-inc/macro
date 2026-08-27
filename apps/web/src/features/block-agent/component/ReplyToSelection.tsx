@@ -54,8 +54,12 @@ export function ReplyToSelection(props: {
       {(selection) => (
         <ScopedPortal scope="block">
           <Layer depth={2}>
+            {/* The solid surface lives on this container, not the button:
+                the pill floats over transcript rows, and a ghost button's
+                overlay-* hover scrim needs an opaque base behind it or the
+                row underneath reads through on hover. */}
             <div
-              class="fixed top-0 left-0 z-highlight-menu"
+              class="fixed top-0 left-0 z-highlight-menu rounded-full border border-edge bg-surface shadow-xl"
               use:floatWithSelection={{
                 selection: selection(),
                 reactiveOnContainer: props.container,
@@ -64,9 +68,9 @@ export function ReplyToSelection(props: {
               }}
             >
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                class="rounded-full shadow-xl border-edge bg-surface"
+                class="rounded-full"
                 on:mousedown={(event: MouseEvent) => {
                   // Keep the selection alive through the click: a default
                   // mousedown would collapse it, hiding the chip before the
