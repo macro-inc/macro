@@ -6,6 +6,7 @@
  */
 import type { CalendarEventMetadataConferenceUrl } from './calendarEventMetadataConferenceUrl';
 import type { CalendarEventMetadataOccurrence } from './calendarEventMetadataOccurrence';
+import type { CalendarEventMetadataOrganizer } from './calendarEventMetadataOrganizer';
 import type { CalendarEventSearchTime } from './calendarEventSearchTime';
 
 /**
@@ -25,6 +26,7 @@ export interface CalendarEventMetadata {
 recurring badge without parsing the rules. */
   isRecurring: boolean;
   occurrence?: CalendarEventMetadataOccurrence;
+  organizer?: CalendarEventMetadataOrganizer;
   /** Canonical status (`confirmed`, `tentative`, `cancelled`). */
   status: string;
   /** The series' own span. */

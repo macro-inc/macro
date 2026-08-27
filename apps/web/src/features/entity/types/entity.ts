@@ -370,6 +370,9 @@ export type CalendarEventEntity = EntityBase & {
   /** Whether the series carries a recurrence rule, so a row can flag it
    * without parsing the rules. Only search rows populate it. */
   isRecurring?: boolean;
+  /** The event's organizer (its creator, in Google's model), when named.
+   * Only search rows populate it. */
+  organizer?: { name?: string; email?: string };
   /** Direct join URL when known. */
   conferenceUrl?: string;
   /** Whether the canonical source prohibits mutation. */
