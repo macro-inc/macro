@@ -2,7 +2,7 @@ import type {
   MultilineElementTransformer,
   TextMatchTransformer,
 } from '@lexical/markdown';
-import type { ElementNode, TextNode } from 'lexical';
+import type { ElementNode, LexicalNode, TextNode } from 'lexical';
 import {
   $createEquationNode,
   $isEquationNode,
@@ -78,10 +78,10 @@ function replaceBlockEquation(
 
 function replaceMultilineEquationBlock(
   rootNode: ElementNode,
-  children: Array<unknown> | null | undefined,
-  startMatch: RegExpMatchArray | null,
-  endMatch: RegExpMatchArray | null,
-  linesInBetween: Array<string> | null | undefined,
+  children: Array<LexicalNode> | null,
+  startMatch: Array<string>,
+  endMatch: Array<string> | null,
+  linesInBetween: Array<string> | null,
   forbidden: string
 ): boolean | void {
   if ((children?.length ?? 0) > 0) {
