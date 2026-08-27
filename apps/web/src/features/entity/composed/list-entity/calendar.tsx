@@ -107,11 +107,10 @@ function organizerName(entity: CalendarEventEntity): string {
 const Dot = () => <span class="shrink-0 text-ink/30">·</span>;
 
 /**
- * Left-justified content for a calendar event row, laid out in the same three
- * columns as an email row so the two align: the organizer takes the fixed
- * identity column an email gives its sender (avatars line up across row types),
- * then the title reads like a subject, then time and description fill the rest
- * like a snippet. The date rides the trailing timestamp.
+ * Left-justified content for a calendar event row: the title sits right after
+ * the icon like a document or task row, then a muted trailing line carries the
+ * time, the organizer (avatar + name), and a description preview — the same
+ * reading order those rows use. The date rides the trailing timestamp.
  */
 export function CalendarWideContent(props: { entity: CalendarEventEntity }) {
   const iconProps = () => organizerIconProps(props.entity);
@@ -120,23 +119,6 @@ export function CalendarWideContent(props: { entity: CalendarEventEntity }) {
 
   return (
     <>
-      <span class="flex w-(--title-width) shrink-0 items-center gap-2">
-        <Show when={iconProps()}>
-          {(props_) => (
-            <span class="flex min-w-0 items-center gap-2 truncate">
-              <span class="size-4 shrink-0 overflow-hidden rounded-full">
-                <UserIcon
-                  {...props_()}
-                  size="fill"
-                  suppressClick
-                  showTooltip={false}
-                />
-              </span>
-              <span class="truncate">{organizerName(props.entity)}</span>
-            </span>
-          )}
-        </Show>
-      </span>
       <span class="min-w-0 truncate">
         <Entity.Title entity={props.entity} />
       </span>
@@ -147,10 +129,26 @@ export function CalendarWideContent(props: { entity: CalendarEventEntity }) {
         <Show when={time()}>
           <span class="shrink-0">{time()}</span>
         </Show>
-        <Show when={time() && description()}>
-          <Dot />
+        <Show when={iconProps()}>
+          {(props_) => (
+            <span class="flex shrink-0 items-center gap-1.5">
+              <Dot />
+              <span class="size-4 shrink-0 overflow-hidden rounded-full">
+                <UserIcon
+                  {...props_()}
+                  size="fill"
+                  suppressClick
+                  showTooltip={false}
+                />
+              </span>
+              <span class="max-w-40 truncate">
+                {organizerName(props.entity)}
+              </span>
+            </span>
+          )}
         </Show>
         <Show when={description()}>
+          <Dot />
           <span class="truncate">{description()}</span>
         </Show>
       </span>
