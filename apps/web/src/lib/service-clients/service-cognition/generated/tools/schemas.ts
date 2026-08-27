@@ -1027,6 +1027,59 @@ export const CreateChannelResponse = z.object({
   summary: z.string(),
 });
 
+export const CreateCustomProperty = z.object({
+  display_name: z.string(),
+  data_type: z.enum([
+    'string',
+    'number',
+    'boolean',
+    'date',
+    'select',
+    'select_number',
+    'entity',
+    'link',
+  ]),
+  scope: z
+    .intersection(z.enum(['team', 'user']), z.any().default('team'))
+    .optional(),
+  options: z.array(z.string()).optional(),
+  multi: z.boolean().optional(),
+  referenced_entity_type: z
+    .union([
+      z.enum([
+        'document',
+        'task',
+        'project',
+        'chat',
+        'thread',
+        'channel',
+        'call',
+        'user',
+        'company',
+      ]),
+      z.null(),
+    ])
+    .optional(),
+});
+
+export const CreateCustomPropertyResponse = z.object({
+  propertyDefinitionId: z.string().uuid(),
+  displayName: z.string(),
+  dataType: z.string(),
+  isMultiSelect: z.boolean(),
+  scope: z.enum(['team', 'user']),
+  options: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        displayOrder: z.number().int(),
+        displayValue: z.string(),
+      })
+    )
+    .optional(),
+  summary: z.string(),
+});
+
 export const CreateDocument = z.object({
   documentName: z.string(),
   fileContent: z.string(),

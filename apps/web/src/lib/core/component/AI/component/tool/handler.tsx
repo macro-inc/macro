@@ -26,6 +26,7 @@ import {
   manageChannelParticipantsHandler,
   renameChannelHandler,
 } from './ChannelMutations';
+import { createCustomPropertyHandler } from './CreateCustomProperty';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
@@ -100,6 +101,7 @@ import { webSearchHandler } from './WebSearch';
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ConfigureBot: configureBotHandler,
   CreateChannel: createChannelHandler,
+  CreateCustomProperty: createCustomPropertyHandler,
   CreateBot: createBotHandler,
   DeleteBot: deleteBotHandler,
   GetBotWebhooks: getBotWebhooksHandler,

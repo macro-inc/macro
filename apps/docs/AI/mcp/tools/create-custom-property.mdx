@@ -1,0 +1,19 @@
+---
+title: CreateCustomProperty
+description: "Create a new custom property — a structured field the user can attach to documents, tasks, emails, CRM companies, and other items. This is not a tag: for a colored label, use CreateTag instead. Defaults to the user's team so everyone on the team can use the field; set scope to \"user\" for a personal-only field. Returns the new property_definition_id, which you pass to SetEntityProperty to set a value on an item. If a property with this name already exists, do not create another — call GetEntityProperties on a relevant item to find its id. For select / select_number, pass the choices in `options` in this same call (e.g. Department with options [\"Engineering\", \"Sales\"]). Set `multi` true for multi-select. For entity properties, optionally set `referenced_entity_type` to restrict what can be linked (user, document, task, and so on)."
+---
+
+# CreateCustomProperty
+
+Create a new custom property — a structured field the user can attach to documents, tasks, emails, CRM companies, and other items. This is not a tag: for a colored label, use CreateTag instead. Defaults to the user's team so everyone on the team can use the field; set scope to "user" for a personal-only field. Returns the new property_definition_id, which you pass to SetEntityProperty to set a value on an item. If a property with this name already exists, do not create another — call GetEntityProperties on a relevant item to find its id. For select / select_number, pass the choices in `options` in this same call (e.g. Department with options ["Engineering", "Sales"]). Set `multi` true for multi-select. For entity properties, optionally set `referenced_entity_type` to restrict what can be linked (user, document, task, and so on).
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `display_name` | string | Yes | The property's display name, e.g. "Department" or "Renewal date". |
+| `data_type` | `"string"` \| `"number"` \| `"boolean"` \| `"date"` \| `"select"` \| `"select_number"` \| `"entity"` \| `"link"` | Yes | The data type of the custom property to create. |
+| `scope` | `"team"` \| `"user"` | No | Who owns the new custom property. |
+| `options` | string[] | No | For select and select_number, the choices to create with the property, in display order. For select_number each value must be a number (e.g. ["1", "2", "3"]). Omit for other types. |
+| `multi` | boolean | No | True if the property should accept multiple values. Only valid for select, select_number, entity, and link. Defaults to false. |
+| `referenced_entity_type` | `"document"` \| `"task"` \| `"project"` \| `"chat"` \| `"thread"` \| `"channel"` \| `"call"` \| `"user"` \| `"company"` | No | For entity properties, restrict links to this entity type (user, document, task, project, channel, chat, thread, call, company). Omit to allow any entity. |

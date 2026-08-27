@@ -213,6 +213,32 @@ export type UserToolResponseForToolCalendarEvent =
  */
 export type NewChannelType = 'private' | 'team';
 /**
+ * The data type of the custom property to create.
+ */
+export type ToolPropertyDataType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'date'
+  | 'select'
+  | 'select_number'
+  | 'entity'
+  | 'link';
+/**
+ * Who owns the new custom property.
+ */
+export type ToolPropertyScope = 'team' | 'user';
+export type ToolEntityType =
+  | 'document'
+  | 'task'
+  | 'project'
+  | 'chat'
+  | 'thread'
+  | 'channel'
+  | 'call'
+  | 'user'
+  | 'company';
+/**
  * External systems items can be imported from.
  */
 export type ImportSource = 'linear' | 'notion' | 'slack';
@@ -742,16 +768,6 @@ export type SendEmailResponse =
         draft_id: string;
       };
     };
-export type ToolEntityType =
-  | 'document'
-  | 'task'
-  | 'project'
-  | 'chat'
-  | 'thread'
-  | 'channel'
-  | 'call'
-  | 'user'
-  | 'company';
 /**
  * Where future mail from this sender lands: `signal`, `noise`, or `block`.
  */
@@ -1984,6 +2000,76 @@ export interface CreateChannelResponse {
   summary: string;
 }
 /**
+ * Create a new custom property — a structured field the user can attach to documents, tasks, emails, CRM companies, and other items. This is not a tag: for a colored label, use CreateTag instead. Defaults to the user's team so everyone on the team can use the field; set scope to "user" for a personal-only field. Returns the new property_definition_id, which you pass to SetEntityProperty to set a value on an item. If a property with this name already exists, do not create another — call GetEntityProperties on a relevant item to find its id. For select / select_number, pass the choices in `options` in this same call (e.g. Department with options ["Engineering", "Sales"]). Set `multi` true for multi-select. For entity properties, optionally set `referenced_entity_type` to restrict what can be linked (user, document, task, and so on).
+ */
+export interface CreateCustomProperty {
+  /**
+   * The property's display name, e.g. "Department" or "Renewal date".
+   */
+  display_name: string;
+  data_type: ToolPropertyDataType;
+  scope?: ToolPropertyScope & string;
+  /**
+   * For select and select_number, the choices to create with the property, in display order. For select_number each value must be a number (e.g. ["1", "2", "3"]). Omit for other types.
+   */
+  options?: string[];
+  /**
+   * True if the property should accept multiple values. Only valid for select, select_number, entity, and link. Defaults to false.
+   */
+  multi?: boolean;
+  /**
+   * For entity properties, restrict links to this entity type (user, document, task, project, channel, chat, thread, call, company). Omit to allow any entity.
+   */
+  referenced_entity_type?: ToolEntityType | null;
+}
+/**
+ * Response from the [`CreateCustomProperty`] tool.
+ */
+export interface CreateCustomPropertyResponse {
+  /**
+   * The new property definition id. Use it as propertyDefinitionId with SetEntityProperty.
+   */
+  propertyDefinitionId: string;
+  /**
+   * The property's display name.
+   */
+  displayName: string;
+  /**
+   * The data type (string, number, boolean, date, select_string, select_number, entity, link).
+   */
+  dataType: string;
+  /**
+   * Whether the property accepts multiple values.
+   */
+  isMultiSelect: boolean;
+  scope: ToolPropertyScope;
+  /**
+   * Select options created with the property, empty for non-select types.
+   */
+  options?: ToolPropertyOption[];
+  /**
+   * Human-readable summary.
+   */
+  summary: string;
+}
+/**
+ * A property option in the tool response.
+ */
+export interface ToolPropertyOption {
+  /**
+   * The option ID to use when setting select values.
+   */
+  id: string;
+  /**
+   * Display order.
+   */
+  displayOrder: number;
+  /**
+   * The display value of this option.
+   */
+  displayValue: string;
+}
+/**
  * Create a plaintext document.
  */
 export interface CreateDocument {
@@ -2717,23 +2803,6 @@ export interface ToolPropertyItem {
    * Available options for select-type properties.
    */
   options?: ToolPropertyOption[];
-}
-/**
- * A property option in the tool response.
- */
-export interface ToolPropertyOption {
-  /**
-   * The option ID to use when setting select values.
-   */
-  id: string;
-  /**
-   * Display order.
-   */
-  displayOrder: number;
-  /**
-   * The display value of this option.
-   */
-  displayValue: string;
 }
 /**
  * Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has.
@@ -4962,7 +5031,7 @@ export interface EmailRecipient {
  * - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
  * Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
  *
- * For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options.
+ * For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options. To create a new custom property (not a tag), use CreateCustomProperty.
  */
 export interface SetEntityProperty {
   /**
