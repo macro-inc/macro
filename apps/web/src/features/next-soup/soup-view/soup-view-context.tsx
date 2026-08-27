@@ -776,11 +776,20 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  // A row the status filter admitted stays admitted for the rest of the visit
+  // (see `admittedByStatusFilter`). The inbox opens rows in a preview pane, and
+  // previewing marks the row read — so without this the row the user just
+  // clicked drops out from under the preview they are still reading, taking the
+  // list position with it. The row re-renders in its read styling, it just keeps
+  // its place.
   const entityMatchesInboxReadFilter = (entity: EntityData): boolean => {
     const filter = readFilter();
     if (filter === 'all' || !isInboxView()) return true;
     const isUnread = unreadFilterFn(entity);
-    return filter === 'unread' ? isUnread : !isUnread;
+    return (
+      (filter === 'unread' ? isUnread : !isUnread) ||
+      admittedByStatusFilter().ids.has(entity.id)
+    );
   };
 
   const applyViewFilters = (state: QueryState): QueryState => {
@@ -1050,6 +1059,32 @@ export const SoupViewContextProvider: FlowComponent<
       equals: false,
     }
   );
+
+  // Ids that have matched the inbox status filter at some point during this
+  // visit, so `entityMatchesInboxReadFilter` can keep admitting a row after the
+  // user reads it.
+  //
+  // A visit is one view/tab/filter combination: changing any of them starts a
+  // new set, and returning a new object is what re-runs every consumer. An
+  // effect that emptied the set in place would not — a plain Set notifies
+  // nothing — and the list would keep rendering the previous visit's rows.
+  const admittedByStatusFilter = createMemo<{
+    scope: string;
+    ids: Set<string>;
+  }>((prev) => {
+    const filter = readFilter();
+    const scope = `${activeListView()}:${activeTab()}:${filter}`;
+    const ids = prev?.scope === scope ? new Set(prev.ids) : new Set<string>();
+
+    if (filter !== 'all' && isInboxView()) {
+      const wantUnread = filter === 'unread';
+      for (const entity of items()) {
+        if (unreadFilterFn(entity) === wantUnread) ids.add(entity.id);
+      }
+    }
+
+    return { scope, ids };
+  });
 
   const baseEntities = () => {
     let transformed = items();
