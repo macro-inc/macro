@@ -501,6 +501,83 @@ async fn spawn_uses_the_owners_default_model() {
     );
 }
 
+/// The owner's egress-proxied MCP servers reach the agent Cursor mints: each
+/// one named by its slug, pointed at the proxy, authenticated by the session
+/// token — even though the ACP client named none on `session/new`.
+#[tokio::test]
+async fn spawn_hands_the_egress_mcp_servers_to_the_created_agent() {
+    let (base_url, _, created) = fake_cursor_api().await;
+    let sessions = StubSessions::default();
+    let session_id = AgentSessionId::new();
+    let manager = manager(base_url, sessions);
+
+    let mut egress = test_egress();
+    egress.mcp_servers = vec![
+        agent_egress::domain::model::McpServerSlug::from_server_name("linear").expect("slug"),
+        agent_egress::domain::model::McpServerSlug::from_server_name("google_sheets")
+            .expect("slug"),
+    ];
+
+    let transport = manager
+        .spawn(SpawnContainer {
+            session_id,
+            kind: AgentKind::Cursor,
+            size: SandboxSize::Default,
+            egress,
+        })
+        .await
+        .expect("spawn");
+    let (sender, mut receiver) = transport.split();
+
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}),
+    )
+    .await;
+    next_acp(&mut receiver).await;
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}),
+    )
+    .await;
+    let acp_session = next_acp(&mut receiver).await["result"]["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{
+            "sessionId": acp_session,
+            "prompt": [{"type":"text","text":"go"}],
+        }}),
+    )
+    .await;
+    loop {
+        if next_acp(&mut receiver).await["id"] == 3 {
+            break;
+        }
+    }
+
+    let body = created.lock().expect("create log poisoned")[0].clone();
+    assert_eq!(
+        body["mcpServers"],
+        serde_json::json!([
+            {
+                "name": "linear",
+                "type": "http",
+                "url": "https://egress.test/mcp/linear",
+                "headers": { "Authorization": "Bearer test-session-token" },
+            },
+            {
+                "name": "google-sheets",
+                "type": "http",
+                "url": "https://egress.test/mcp/google-sheets",
+                "headers": { "Authorization": "Bearer test-session-token" },
+            },
+        ])
+    );
+}
+
 /// Resume restores the persisted identity: the harness's `session/load` is
 /// answered, and the next prompt is a follow-up run on the restored agent —
 /// not a fresh agent.

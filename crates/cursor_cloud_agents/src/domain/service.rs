@@ -161,6 +161,18 @@ pub struct CursorSessionService<Cursor, Notifier, Repos> {
     /// A model id this deployment pins, applied to every new session. `None`
     /// leaves the choice to Cursor's own default resolution.
     default_model_id: Option<String>,
+    /// MCP servers the embedding process attaches to every session, alongside
+    /// whatever the client names over the protocol.
+    ///
+    /// This is how servers that exist on *our* side of the ACP pipe - the
+    /// harness's egress-proxied connectors - reach a Cursor agent: the ACP
+    /// client never names them, so they cannot arrive through `session/new`,
+    /// and they survive a `session/load` restating the client's own list.
+    /// Cursor requires server names to be unique, so a client naming one of
+    /// these names would fail agent creation - the two lists come from
+    /// namespaces that do not overlap in practice (proxy slugs vs. client
+    /// config), and Cursor's refusal is the honest error if they ever do.
+    attached_mcp_servers: Vec<McpServer>,
     /// `GET /v1/models`, fetched once. The table is static for the life of a
     /// process and every `session/new` would otherwise re-fetch it.
     models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
@@ -181,8 +193,17 @@ where
             sessions: Mutex::new(HashMap::new()),
             next_session: Mutex::new(0),
             default_model_id: None,
+            attached_mcp_servers: Vec::new(),
             models: tokio::sync::Mutex::new(None),
         }
+    }
+
+    /// Attach MCP servers to every session this service opens or restores,
+    /// alongside whatever the client names over the protocol.
+    #[must_use]
+    pub fn with_mcp_servers(mut self, mcp_servers: Vec<McpServer>) -> Self {
+        self.attached_mcp_servers = mcp_servers;
+        self
     }
 
     /// Pin the model every new session starts on, by id.
@@ -459,12 +480,20 @@ where
             None => {
                 // Snapshotted out of the lock: `create_agent` is a network
                 // call, and the state mutex must never be held across an await.
-                let mcp_servers = session
+                let client_named = session
                     .state
                     .lock()
                     .expect("session state poisoned")
                     .mcp_servers
                     .clone();
+                // The client's list plus the attached ones, joined only here,
+                // at the one moment Cursor learns an agent's MCP config: the
+                // client half stays replaceable by `session/load` without ever
+                // touching the attached half.
+                let mcp_servers: Vec<McpServer> = client_named
+                    .into_iter()
+                    .chain(self.attached_mcp_servers.iter().cloned())
+                    .collect();
                 self.cursor
                     .create_agent(prompt, session.repo.as_ref(), &mcp_servers, model.as_ref())
                     .await?

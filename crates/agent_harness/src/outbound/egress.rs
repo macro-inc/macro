@@ -28,7 +28,7 @@ mod test;
 /// would mint a session token for a repository the proxy cannot reach.
 const GITHUB_HOST: &str = "github.com";
 
-/// Mints session tokens and generates the sandbox's opencode config.
+/// Mints session tokens and gathers the MCP servers a sandbox may dial.
 pub struct EgressProvisioner<Connections> {
     connections: Arc<Connections>,
     base_url: String,
@@ -86,19 +86,13 @@ where
         repo_slug(repo_url)?;
 
         let token = SessionToken::mint();
-        let config = opencode_config(&self.base_url, token.as_str(), &self.slugs(owner).await?)
-            .map_err(|error| {
-                HarnessError::Egress(rootcause::report!(
-                    "could not render opencode config: {error}"
-                ))
-            })?;
 
         Ok(ProvisionedEgress {
             session_token_hash: token.hash(),
             sandbox: SandboxEgress {
                 base_url: self.base_url.clone(),
                 session_token: token.as_str().to_owned(),
-                opencode_config: config,
+                mcp_servers: self.slugs(owner).await?,
             },
         })
     }
@@ -133,41 +127,4 @@ fn repo_slug(repo_url: &str) -> Result<RepoSlug> {
     }
 
     RepoSlug::parse(owner, name.trim_end_matches(".git")).ok_or_else(unusable)
-}
-
-/// The opencode config a sandbox starts with.
-///
-/// opencode merges `OPENCODE_CONFIG_CONTENT` last, over the baked global config
-/// and over whatever `opencode.json` the repository itself carries, so this is
-/// the final word on which MCP servers exist and how they are reached.
-///
-/// Every server is `"type": "remote"` pointed at the egress proxy, never at the
-/// server itself, and carries the session token - the sandbox holds no upstream
-/// credential to point anywhere with.
-///
-/// `"oauth": false` is load-bearing. Without it opencode notices the 401 an
-/// unauthorized server returns and starts its own interactive OAuth flow, which
-/// wants a loopback redirect and a browser; in a headless sandbox that can
-/// never complete, so the agent hangs instead of getting an error it can read.
-fn opencode_config(
-    base_url: &str,
-    session_token: &str,
-    slugs: &[McpServerSlug],
-) -> serde_json::Result<String> {
-    let servers = slugs
-        .iter()
-        .map(|slug| {
-            (
-                slug.to_string(),
-                serde_json::json!({
-                    "type": "remote",
-                    "url": format!("{base_url}/mcp/{slug}"),
-                    "headers": { "Authorization": format!("Bearer {session_token}") },
-                    "oauth": false,
-                }),
-            )
-        })
-        .collect::<serde_json::Map<_, _>>();
-
-    serde_json::to_string(&serde_json::json!({ "mcp": servers }))
 }

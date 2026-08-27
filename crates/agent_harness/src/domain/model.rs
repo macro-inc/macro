@@ -1,5 +1,6 @@
 //! Commands and values used by the harness domain.
 
+use agent_egress::domain::model::McpServerSlug;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
@@ -248,14 +249,20 @@ pub struct SpawnContainer {
 /// short-lived session token and a URL rather than any upstream credential:
 /// the credentials stay in the egress proxy, which stamps them on as requests
 /// pass through.
+///
+/// The MCP servers are carried as data rather than any provider's rendered
+/// config, because two providers speak two configs from it: the sandbox image
+/// gets an opencode config through [`SandboxEgress::environment`], and a
+/// Cursor cloud agent gets the same servers through Cursor's own API. One
+/// source, two renderings, nothing to drift.
 #[derive(Clone)]
 pub struct SandboxEgress {
     /// Base URL of the egress proxy, as the sandbox should dial it.
     pub base_url: String,
     /// The session token, presented on every proxied call.
     pub session_token: String,
-    /// A complete opencode config, merged over everything else in the image.
-    pub opencode_config: String,
+    /// The owner's connected MCP servers, by the slug the proxy resolves.
+    pub mcp_servers: Vec<McpServerSlug>,
 }
 
 /// Where the sandbox finds the egress proxy.
@@ -275,6 +282,17 @@ pub const SESSION_TOKEN_VARIABLE: &str = "MACRO_SESSION_TOKEN";
 pub const OPENCODE_CONFIG_VARIABLE: &str = "OPENCODE_CONFIG_CONTENT";
 
 impl SandboxEgress {
+    /// Where the proxy serves `slug` - the URL a client dials to reach that
+    /// server, whichever client it is.
+    pub fn mcp_url(&self, slug: &McpServerSlug) -> String {
+        format!("{}/mcp/{slug}", self.base_url)
+    }
+
+    /// The `Authorization` value presented on every proxied call.
+    pub fn authorization_header(&self) -> String {
+        format!("Bearer {}", self.session_token)
+    }
+
     /// The sandbox environment this becomes.
     ///
     /// Unsized on purpose: a fourth variable should be one more line here and
@@ -286,11 +304,44 @@ impl SandboxEgress {
                 SESSION_TOKEN_VARIABLE.to_owned(),
                 self.session_token.clone(),
             ),
-            (
-                OPENCODE_CONFIG_VARIABLE.to_owned(),
-                self.opencode_config.clone(),
-            ),
+            (OPENCODE_CONFIG_VARIABLE.to_owned(), self.opencode_config()),
         ]
+    }
+
+    /// The opencode config a sandbox starts with.
+    ///
+    /// opencode merges `OPENCODE_CONFIG_CONTENT` last, over the baked global
+    /// config and over whatever `opencode.json` the repository itself carries,
+    /// so this is the final word on which MCP servers exist and how they are
+    /// reached.
+    ///
+    /// Every server is `"type": "remote"` pointed at the egress proxy, never
+    /// at the server itself, and carries the session token - the sandbox holds
+    /// no upstream credential to point anywhere with.
+    ///
+    /// `"oauth": false` is load-bearing. Without it opencode notices the 401
+    /// an unauthorized server returns and starts its own interactive OAuth
+    /// flow, which wants a loopback redirect and a browser; in a headless
+    /// sandbox that can never complete, so the agent hangs instead of getting
+    /// an error it can read.
+    fn opencode_config(&self) -> String {
+        let servers = self
+            .mcp_servers
+            .iter()
+            .map(|slug| {
+                (
+                    slug.to_string(),
+                    serde_json::json!({
+                        "type": "remote",
+                        "url": self.mcp_url(slug),
+                        "headers": { "Authorization": self.authorization_header() },
+                        "oauth": false,
+                    }),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>();
+
+        serde_json::json!({ "mcp": servers }).to_string()
     }
 }
 
@@ -310,14 +361,13 @@ pub struct ProvisionedEgress {
     pub sandbox: SandboxEgress,
 }
 
-// The config carries the token too, so neither field prints.
 impl std::fmt::Debug for SandboxEgress {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("SandboxEgress")
             .field("base_url", &self.base_url)
             .field("session_token", &"[REDACTED]")
-            .field("opencode_config", &"[REDACTED]")
+            .field("mcp_servers", &self.mcp_servers)
             .finish()
     }
 }

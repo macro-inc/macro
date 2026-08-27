@@ -31,19 +31,29 @@ fn refuses_a_url_that_does_not_name_a_repository() {
     }
 }
 
+fn egress(slugs: &[&str]) -> SandboxEgress {
+    SandboxEgress {
+        base_url: "https://egress.macro.com".to_owned(),
+        session_token: "session-token".to_owned(),
+        mcp_servers: slugs.iter().map(|name| slug(name)).collect(),
+    }
+}
+
+fn rendered_opencode_config(egress: &SandboxEgress) -> serde_json::Value {
+    let config = egress
+        .environment()
+        .into_iter()
+        .find_map(|(name, value)| (name == "OPENCODE_CONFIG_CONTENT").then_some(value))
+        .expect("an opencode config in the environment");
+    serde_json::from_str(&config).expect("json")
+}
+
 /// Every server points at the proxy, carries the session token rather than any
 /// upstream credential, and has opencode's own OAuth flow switched off - it
 /// wants a browser, and there is not one.
 #[test]
 fn points_every_server_at_the_proxy_with_oauth_disabled() {
-    let config = opencode_config(
-        "https://egress.macro.com",
-        "session-token",
-        &[slug("Datadog (US5)"), slug("Linear")],
-    )
-    .expect("rendered");
-
-    let parsed: serde_json::Value = serde_json::from_str(&config).expect("json");
+    let parsed = rendered_opencode_config(&egress(&["Datadog (US5)", "Linear"]));
     let servers = parsed["mcp"].as_object().expect("mcp object");
 
     assert_eq!(servers.len(), 2);
@@ -59,21 +69,16 @@ fn points_every_server_at_the_proxy_with_oauth_disabled() {
 
 #[test]
 fn an_owner_with_no_servers_still_gets_a_valid_config() {
-    let config =
-        opencode_config("https://egress.macro.com", "session-token", &[]).expect("rendered");
+    let parsed = rendered_opencode_config(&egress(&[]));
 
-    assert_eq!(config, r#"{"mcp":{}}"#);
+    assert_eq!(parsed, serde_json::json!({ "mcp": {} }));
 }
 
-/// The token is in the config as well as the environment, so nothing about
-/// this value may reach a log.
+/// The rendered config carries the token as well as the environment, so
+/// nothing about this value may reach a log.
 #[test]
 fn the_egress_environment_does_not_print_its_secrets() {
-    let egress = SandboxEgress {
-        base_url: "https://egress.macro.com".to_owned(),
-        session_token: "session-token".to_owned(),
-        opencode_config: r#"{"mcp":{}}"#.to_owned(),
-    };
+    let egress = egress(&["Linear"]);
 
     let printed = format!("{egress:?}");
     assert!(!printed.contains("session-token"), "{printed}");
