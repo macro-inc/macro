@@ -4,7 +4,6 @@ import {
   alignmentDelta,
   type OpenTargetMessage,
   openTargetMessageId,
-  reversedChildIndex,
   shouldPageForOldestUnread,
   collapsedRowShowsDivider,
   isTruncatedMiddleMessage,
@@ -41,18 +40,6 @@ function box(
     },
   });
 }
-
-describe('reversedChildIndex', () => {
-  it('maps oldest-first index onto a reversed DOM list', () => {
-    expect(reversedChildIndex(0, 3)).toBe(2);
-    expect(reversedChildIndex(2, 3)).toBe(0);
-    expect(reversedChildIndex(1, 3)).toBe(1);
-  });
-
-  it('returns -1 when the message is missing', () => {
-    expect(reversedChildIndex(-1, 3)).toBe(-1);
-  });
-});
 
 describe('openTargetMessageId', () => {
   it('returns newest when every message is unread', () => {
@@ -142,7 +129,6 @@ describe('threadMessageIsExpanded', () => {
       threadMessageIsExpanded({
         chronologicalIndex: 2,
         listLength: 3,
-        isManuallyExpanded: false,
         isUnread: false,
         hasDraft: false,
       })
@@ -151,7 +137,6 @@ describe('threadMessageIsExpanded', () => {
       threadMessageIsExpanded({
         chronologicalIndex: 0,
         listLength: 3,
-        isManuallyExpanded: false,
         isUnread: true,
         hasDraft: false,
       })
@@ -160,8 +145,28 @@ describe('threadMessageIsExpanded', () => {
       threadMessageIsExpanded({
         chronologicalIndex: 1,
         listLength: 3,
-        isManuallyExpanded: false,
         isUnread: false,
+        hasDraft: false,
+      })
+    ).toBe(false);
+  });
+
+  it('lets an explicit collapse win over newest or unread', () => {
+    expect(
+      threadMessageIsExpanded({
+        chronologicalIndex: 2,
+        listLength: 3,
+        expansionOverride: false,
+        isUnread: false,
+        hasDraft: false,
+      })
+    ).toBe(false);
+    expect(
+      threadMessageIsExpanded({
+        chronologicalIndex: 0,
+        listLength: 3,
+        expansionOverride: false,
+        isUnread: true,
         hasDraft: false,
       })
     ).toBe(false);

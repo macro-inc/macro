@@ -27,10 +27,6 @@ import { EmailParticipants } from './EmailParticipants';
 import { EmailThreadTitle } from './EmailThreadTitle';
 import { MessageContainer } from './MessageContainer';
 
-// Fraction of the list height reserved below the newest message so it rests
-// toward the middle of the view instead of pinned to the bottom edge.
-const LAST_MESSAGE_REST_FRACTION = 0.4;
-
 interface MessageListProps {
   initialLoadComplete: boolean;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -82,25 +78,16 @@ export function MessageList(props: MessageListProps) {
     }
   });
 
-  // Since the list is bottom-anchored (col-reverse), extra bottom padding is
-  // the only way to let the newest message rest above the bottom edge. A
-  // thread that fills the screen gets its oldest messages pushed above the
-  // fold (still one scroll away) — the newest message resting at a
-  // consistent height wins over keeping the whole thread in view.
   createEffect(() => {
     const list = context.messagesListRef();
-    if (!list || isTouchDevice()) return;
+    if (!list) return;
 
-    const applyPad = () => {
-      const restPad = Math.round(
-        list.clientHeight * LAST_MESSAGE_REST_FRACTION
-      );
-      list.style.setProperty('--thread-bottom-pad', `${restPad}px`);
+    const applyHeight = () => {
       list.style.setProperty('--thread-height', `${list.clientHeight}px`);
     };
 
-    applyPad();
-    const observer = new ResizeObserver(applyPad);
+    applyHeight();
+    const observer = new ResizeObserver(applyHeight);
     observer.observe(list);
     onCleanup(() => observer.disconnect());
   });
@@ -108,31 +95,20 @@ export function MessageList(props: MessageListProps) {
   return (
     <div
       class={cn(
-        'pt-1 pb-[calc(1.5rem+var(--thread-bottom-pad,0px))] w-full flex flex-col-reverse items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm',
-        // In-scroll top inset: messages rest below the floating split chrome
-        // but under-scroll it.
+        'pt-1 pb-6 w-full flex flex-col items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm',
         'touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
         props.underScrollsBottom &&
           'touch:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
       )}
       ref={context.registerMessagesList}
       onscroll={(e) => {
-        // Since the list is reversed, calculate scroll from visual top
-        const scrollFromTop =
-          e.currentTarget.scrollHeight +
-          e.currentTarget.scrollTop -
-          e.currentTarget.clientHeight;
-
+        const scrollFromTop = e.currentTarget.scrollTop;
         props.onScrollPositionChange?.(scrollFromTop);
 
-        // Don't load more if we're programmatically scrolling to a message
         if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
 
-        const threshold = 300;
-        const isNearBeginning = scrollFromTop <= threshold;
-
         if (
-          isNearBeginning &&
+          scrollFromTop <= 300 &&
           !context.query.isFetching() &&
           context.query.hasMore()
         ) {
@@ -140,39 +116,55 @@ export function MessageList(props: MessageListProps) {
         }
       }}
     >
+      <Show when={props.title}>
+        <div class="shrink-0 w-full flex justify-center">
+          <div
+            class={cn(
+              'macro-message-width macro-message-padding w-full',
+              isTouchDevice()
+                ? 'pt-6 pb-3'
+                : 'border-b border-edge-muted/50 pt-12 pb-2.5'
+            )}
+          >
+            <EmailThreadTitle
+              title={props.title ?? ''}
+              copyReveal={isTouchDevice() ? 'always' : 'hover'}
+              class={isTouchDevice() ? 'text-xl pt-1 pb-0' : 'text-2xl pb-1.5'}
+            />
+            <Show when={!isTouchDevice()}>
+              <EmailParticipants />
+            </Show>
+          </div>
+        </div>
+      </Show>
       <StaticMarkdownContext>
         {/* We use Index because the index of the messages should always be stable and
           only the value changes. This also helps prevent nested inputs from rerendering
         */}
-        <Index each={context.messages.list().toReversed()}>
+        <Index each={context.messages.list()}>
           {(message, index) => {
-            // We need the index as if the list was not reversed
             const normalizedIndex = createMemo(() => {
-              const listLength = context.messages.list().length;
-
-              const normalized = listLength - 1 - index;
-
               // The element at the 0th index isn't actually the first message
               // if there is more data to load so we return -1 so that `isFirstMessage`
               // evaluates to false. This fixes an issue with the "first" message' full
               // html to show in `EmailMessageBody`
-              if (normalized === 0 && context.query.hasMore()) {
+              if (index === 0 && context.query.hasMore()) {
                 return -1;
               }
 
-              return normalized;
+              return index;
             });
 
             const isLastMessage = createMemo(() => {
-              return (
-                normalizedIndex() === (context.messages.list().length ?? 0) - 1
-              );
+              return index === (context.messages.list().length ?? 0) - 1;
             });
             const hideMiddle = createMemo(() => {
-              const listLength = context.messages.list().length;
               return (
                 !showMiddleMessages() &&
-                isTruncatedMiddleMessage(listLength - 1 - index, listLength)
+                isTruncatedMiddleMessage(
+                  index,
+                  context.messages.list().length
+                )
               );
             });
 
@@ -197,9 +189,9 @@ export function MessageList(props: MessageListProps) {
               const messageID = message().db_id;
               if (!messageID) return false;
               return threadMessageIsExpanded({
-                chronologicalIndex: context.messages.list().length - 1 - index,
+                chronologicalIndex: index,
                 listLength: context.messages.list().length,
-                isManuallyExpanded: context.messages.isBodyExpanded(messageID),
+                expansionOverride: context.messages.expandedBodyIds[messageID],
                 isUnread: isNewMessage(),
                 hasDraft: hasDraft(),
               });
@@ -207,9 +199,8 @@ export function MessageList(props: MessageListProps) {
 
             const cardFlush = createMemo(() => {
               const list = context.messages.list();
-              const chronologicalIndex = list.length - 1 - index;
               return shownOpenCardFlush(
-                chronologicalIndex,
+                index,
                 list.length,
                 showMiddleMessages(),
                 (neighborIndex) => {
@@ -219,8 +210,8 @@ export function MessageList(props: MessageListProps) {
                   return threadMessageIsExpanded({
                     chronologicalIndex: neighborIndex,
                     listLength: list.length,
-                    isManuallyExpanded:
-                      context.messages.isBodyExpanded(neighborId),
+                    expansionOverride:
+                      context.messages.expandedBodyIds[neighborId],
                     isUnread: isUnreadMessage(neighbor),
                     hasDraft:
                       !isTouchDevice() &&
@@ -233,9 +224,8 @@ export function MessageList(props: MessageListProps) {
             const showBottomBorder = createMemo(() => {
               if (isExpanded()) return false;
               const list = context.messages.list();
-              const chronologicalIndex = list.length - 1 - index;
               const nextIndex = nextShownChronologicalIndex(
-                chronologicalIndex,
+                index,
                 list.length,
                 showMiddleMessages()
               );
@@ -245,14 +235,17 @@ export function MessageList(props: MessageListProps) {
                 nextIndex != null &&
                 !!next &&
                 !!nextId &&
-                !context.messages.isBodyExpanded(nextId) &&
-                nextIndex !== list.length - 1 &&
-                !next.labels.some((l) => l.provider_label_id === 'UNREAD') &&
-                !(
-                  !isTouchDevice() && !!context.drafts.getDraftForMessage(nextId)
-                );
+                !threadMessageIsExpanded({
+                  chronologicalIndex: nextIndex,
+                  listLength: list.length,
+                  expansionOverride: context.messages.expandedBodyIds[nextId],
+                  isUnread: isUnreadMessage(next),
+                  hasDraft:
+                    !isTouchDevice() &&
+                    !!context.drafts.getDraftForMessage(nextId),
+                });
               return collapsedRowShowsDivider(
-                chronologicalIndex,
+                index,
                 list.length,
                 showMiddleMessages(),
                 nextIsCollapsed
@@ -261,9 +254,25 @@ export function MessageList(props: MessageListProps) {
 
             return (
               <>
+                <Show when={!hideMiddle()}>
+                  <MessageContainer
+                    isFirstMessage={normalizedIndex() === 0}
+                    isLastMessage={isLastMessage()}
+                    isFocused={isFocusedSelector(message().db_id ?? undefined)}
+                    isTarget={isTargetSelector(message().db_id ?? undefined)}
+                    message={message()}
+                    isExpanded={isExpanded()}
+                    flushTop={cardFlush().top}
+                    flushBottom={cardFlush().bottom}
+                    showBottomBorder={showBottomBorder()}
+                    markdownDomRef={
+                      isLastMessage() ? props.markdownDomRef : undefined
+                    }
+                  />
+                </Show>
                 <Show
                   when={
-                    context.messages.list().length - 1 - index === 0 &&
+                    index === 0 &&
                     !showMiddleMessages() &&
                     truncatedMiddleCount(context.messages.list().length) > 0
                   }
@@ -274,7 +283,7 @@ export function MessageList(props: MessageListProps) {
                         variant="ghost"
                         size="sm"
                         fullWidth
-                        class="group h-auto min-h-6 justify-start gap-0 px-0 py-1 font-semibold macro-thread-avatar-axis"
+                        class="group justify-start gap-0 px-0 font-semibold macro-thread-avatar-axis"
                         label={`Show ${truncatedMiddleCount(context.messages.list().length)} hidden messages`}
                         onClick={() => setShowMiddleMessages(true)}
                       >
@@ -294,48 +303,11 @@ export function MessageList(props: MessageListProps) {
                     </div>
                   </div>
                 </Show>
-                <Show when={!hideMiddle()}>
-                  <MessageContainer
-                    isFirstMessage={normalizedIndex() === 0}
-                    isLastMessage={isLastMessage()}
-                    isFocused={isFocusedSelector(message().db_id ?? undefined)}
-                    isTarget={isTargetSelector(message().db_id ?? undefined)}
-                    message={message()}
-                    isExpanded={isExpanded()}
-                    flushTop={cardFlush().top}
-                    flushBottom={cardFlush().bottom}
-                    showBottomBorder={showBottomBorder()}
-                    markdownDomRef={
-                      isLastMessage() ? props.markdownDomRef : undefined
-                    }
-                  />
-                </Show>
               </>
             );
           }}
         </Index>
       </StaticMarkdownContext>
-      <Show when={props.title}>
-        <div class="shrink-0 w-full flex justify-center">
-          <div
-            class={cn(
-              'macro-message-width macro-message-padding w-full',
-              isTouchDevice()
-                ? 'pt-6 pb-3'
-                : 'border-b border-edge-muted/50 pt-12 pb-2.5'
-            )}
-          >
-            <EmailThreadTitle
-              title={props.title ?? ''}
-              copyReveal={isTouchDevice() ? 'always' : 'hover'}
-              class={isTouchDevice() ? 'text-xl pt-1 pb-0' : 'text-2xl pb-1.5'}
-            />
-            <Show when={!isTouchDevice()}>
-              <EmailParticipants />
-            </Show>
-          </div>
-        </div>
-      </Show>
     </div>
   );
 }

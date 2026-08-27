@@ -6,10 +6,7 @@ import {
 } from '@block-email/component/EmailContext';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import {
-  useCanAutofocusSplitContent,
-  useSplitPanel,
-} from '@components/app/split-layout/layoutUtils';
+import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { useEmail, useUserContext } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -42,6 +39,7 @@ import type { ReplyType } from '../util/replyType';
 import {
   type ScrollAlign,
   scrollToMessage,
+  threadMessageIsExpanded,
 } from '../util/scrollToMessage';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
@@ -82,7 +80,6 @@ function EmailContent(props: EmailViewProps) {
   const blockElement = blockElementSignal.get;
 
   const context = useEmailContext();
-  const splitPanel = useSplitPanel();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { isLoading: isUserLoading } = useUserContext();
   const userEmail = useEmail();
@@ -193,15 +190,8 @@ function EmailContent(props: EmailViewProps) {
     return true;
   };
 
-  const canRunInitialEmailScroll = () =>
-    !isTouchDevice() || splitPanel?.isPanelActive() !== false;
-
-  // Open at the visual top. Do not hunt a message or pin the list.
   context.onInitialDataLoad(() => {
-    if (!canRunInitialEmailScroll()) return false;
-
-    const list = untrack(context.messagesListRef);
-    if (!list) return false;
+    if (!untrack(context.messagesListRef)) return false;
 
     const targetMessageId_ = context.messages.targetMessageID();
     if (targetMessageId_ && typeof targetMessageId_ !== 'string') return true;
@@ -209,8 +199,6 @@ function EmailContent(props: EmailViewProps) {
       void revealTargetMessage(targetMessageId_);
     }
 
-    // col-reverse: scrollTop 0 is the newest (visual bottom).
-    list.scrollTop = list.clientHeight - list.scrollHeight;
     return true;
   });
 
@@ -316,11 +304,20 @@ function EmailContent(props: EmailViewProps) {
       (label) => label.provider_label_id === 'UNREAD'
     );
 
-    return (
-      context.messages.isBodyExpanded(messageId) ||
-      target.isLastMessage ||
-      isNewMessage
+    const list = context.messages.list();
+    const chronologicalIndex = list.findIndex(
+      (message) => message.db_id === messageId
     );
+    if (chronologicalIndex < 0) return false;
+
+    return threadMessageIsExpanded({
+      chronologicalIndex,
+      listLength: list.length,
+      expansionOverride: context.messages.expandedBodyIds[messageId],
+      isUnread: isNewMessage,
+      hasDraft:
+        !isTouchDevice() && !!context.drafts.getDraftForMessage(messageId),
+    });
   };
 
   const openHotkeyTarget = (replyType: ReplyType) => {
@@ -405,14 +402,10 @@ function EmailContent(props: EmailViewProps) {
         return true;
       }
 
-      // If message is expanded and not the last message, collapse it
-      if (context.messages.isBodyExpanded(focusedId)) {
-        const messages = context.messages.list();
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage?.db_id !== focusedId) {
-          context.messages.setExpandedBodyId(focusedId, false);
-          return true;
-        }
+      const target = getHotkeyTarget();
+      if (target && isMessageRenderedExpanded(target)) {
+        context.messages.setExpandedBodyId(focusedId, false);
+        return true;
       }
       return false;
     },
@@ -577,10 +570,7 @@ function EmailContent(props: EmailViewProps) {
                     title={props.title}
                     underScrollsBottom={!replyInputInFlow()}
                   />
-                  <CustomScrollbar
-                    reverse
-                    scrollContainer={context.messagesListRef}
-                  />
+                  <CustomScrollbar scrollContainer={context.messagesListRef} />
                 </div>
                 <Show when={isTouchDevice() && mobileBottomReplyMessage()}>
                   {(lastMessage) => (

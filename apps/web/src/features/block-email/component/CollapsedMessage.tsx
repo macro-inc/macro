@@ -53,12 +53,23 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     }
   };
 
+  const handleRowClick = (e: MouseEvent) => {
+    const target = e.target;
+    if (
+      target instanceof Element &&
+      target.closest('[data-button], a[href]')
+    ) {
+      return;
+    }
+    props.onClick();
+  };
+
   return (
     <div class="shrink-0 flex justify-center w-full">
       <div class="macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'relative macro-thread-collapsed-row p-4 min-w-0 border border-transparent macro-thread-card-outdent',
+            'relative macro-thread-collapsed-row p-4 min-w-0 border border-transparent cursor-pointer macro-thread-card-outdent',
             props.showBottomBorder && 'border-b-edge-muted',
             props.isFocused && !isTouchDevice() && 'bg-list-highlighted',
             !props.isFocused && !isTouchDevice() && 'hover:bg-list-hover'
@@ -68,7 +79,8 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           }}
           data-message-body-id={props.message.db_id}
           tabIndex={0}
-          onClick={props.onClick}
+          onClick={handleRowClick}
+          onClickCapture={handleRowClick}
           onFocus={props.onFocus}
           onKeyDown={handleKeyDown}
         >
@@ -81,21 +93,22 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
                 suppressClick={true}
               />
             </div>
-            <EmailUserTooltip recipient={props.message.from}>
-              <span class="text-ink truncate cursor-default min-w-0">
-                {senderDisplay()}
-              </span>
-            </EmailUserTooltip>
+            <div class="min-w-0">
+              <EmailUserTooltip recipient={props.message.from}>
+                <span class="text-ink line-clamp-1">{senderDisplay()}</span>
+              </EmailUserTooltip>
+            </div>
           </div>
           <div class="min-w-0 text-sm text-ink-extra-muted truncate">
             {snippet()}
           </div>
           <Show when={props.message.internal_date_ts}>
             <Tooltip
+              as="span"
               class="justify-self-end"
               label={formatFullDate(props.message.internal_date_ts!)}
             >
-              <span class="text-sm text-ink-extra-muted/60 tabular-nums cursor-default">
+              <span class="text-sm text-ink-extra-muted/60 tabular-nums">
                 {formatShortDate(props.message.internal_date_ts!)}
               </span>
             </Tooltip>

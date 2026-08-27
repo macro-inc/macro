@@ -5,14 +5,6 @@ export type OpenTargetMessage = {
   labels: Array<{ provider_label_id?: string | null }>;
 };
 
-export function reversedChildIndex(
-  chronologicalIndex: number,
-  length: number
-): number {
-  if (chronologicalIndex < 0) return -1;
-  return length - 1 - chronologicalIndex;
-}
-
 export function isUnreadMessage(message: OpenTargetMessage): boolean {
   return message.labels.some((label) => label.provider_label_id === 'UNREAD');
 }
@@ -79,12 +71,13 @@ export function prevShownChronologicalIndex(
 export function threadMessageIsExpanded(args: {
   chronologicalIndex: number;
   listLength: number;
-  isManuallyExpanded: boolean;
+  expansionOverride?: boolean;
   isUnread: boolean;
   hasDraft: boolean;
 }): boolean {
+  if (args.expansionOverride === false) return false;
+  if (args.expansionOverride === true) return true;
   return (
-    args.isManuallyExpanded ||
     args.chronologicalIndex === args.listLength - 1 ||
     args.isUnread ||
     args.hasDraft
@@ -151,8 +144,7 @@ export function alignmentDelta(
 export function messageElement(
   container: HTMLElement,
   messages: Array<{ db_id?: string | null }>,
-  messageId: string,
-  _reversed = true
+  messageId: string
 ): HTMLElement | undefined {
   if (!messages.some((message) => message.db_id === messageId)) return undefined;
   const el = container.querySelector(
@@ -189,20 +181,13 @@ export function scrollToMessage(
   messagesContainer: HTMLElement,
   {
     behavior = 'smooth',
-    reversed = true,
     align = 'start',
   }: {
     behavior?: ScrollBehavior;
-    reversed?: boolean;
     align?: ScrollAlign;
   } = {}
 ): boolean {
-  const targetElement = messageElement(
-    messagesContainer,
-    messages,
-    messageId,
-    reversed
-  );
+  const targetElement = messageElement(messagesContainer, messages, messageId);
   if (!targetElement) return false;
 
   alignElementInContainer(messagesContainer, targetElement, align, behavior);
