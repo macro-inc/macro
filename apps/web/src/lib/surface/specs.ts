@@ -7,14 +7,21 @@
 /** A surface method in its natural, possibly-synchronous form. */
 export type SurfaceMethod = (...args: never[]) => unknown;
 
-/** A named map of surface methods in natural form. */
+/**
+ * A named map of surface methods in natural form.
+ *
+ * Convention: a method that a feature may implement either synchronously or
+ * asynchronously must be declared with a `T | Promise<T>` return (see
+ * SharedSurfaceMethods). Providers then pass plain implementations checked
+ * against Partial<MethodsFor<N>> — no provider-side mapped type exists.
+ */
 export type SurfaceMethodMap = Record<string, SurfaceMethod>;
 
 /**
  * Methods every surface handle exposes without the surface declaring them.
  * Declared in natural form; the handle side async-wraps (see AsHandleMethods).
  * A surface that never provides them yields the bounded-await/no-op behavior
- * described in §3.4.
+ * documented on SurfaceDirectory.handle.
  */
 export type SharedSurfaceMethods = {
   /** Re-aim an already-mounted surface at a location described by params. */
@@ -80,22 +87,6 @@ declare const _surfaceSpecsConform: SurfaceSpecs extends Record<
 /** Catalog keys; every registered surface name. */
 export type SurfaceName = keyof SurfaceSpecs & string;
 
-/**
- * Alias names routable to a base surface (URL-visible, dedupe-transparent).
- * Must stay in sync with `aliases` declared in catalog.ts — directory.test.ts
- * asserts the sync (§7). DRAFT: empty; migration adds
- * 'task' | 'snippet' | 'skill' | 'csv' | 'write'.
- */
-export type SurfaceAliasName = never;
-
-/** The alias used in the URL together with the catalog surface it resolves to. */
-export type SurfaceAliasContext = {
-  /** The alias used in the URL / SplitContent.type (e.g. 'task'). */
-  alias: SurfaceAliasName;
-  /** The catalog surface it resolves to (e.g. 'md'). */
-  baseName: SurfaceName;
-};
-
 /** Mount params for the named surface. */
 export type ParamsFor<N extends SurfaceName> = SurfaceSpecs[N]['params'];
 
@@ -106,23 +97,13 @@ export type MethodsFor<N extends SurfaceName> = SharedSurfaceMethods &
 /**
  * Handle-side view of a method map. Exactly the orchestrator BlockHandle
  * mapped type, with one honesty fix: the promise can resolve `undefined`
- * when the surface never provides the method within the timeout (§3.4) —
- * the legacy type claimed `Promise<Awaited<ReturnType<...>>>` but resolved
+ * when the surface never provides the method within the timeout — the
+ * bounded-await/no-op behavior documented on SurfaceDirectory.handle.
+ * The legacy type claimed `Promise<Awaited<ReturnType<...>>>` but resolved
  * undefined in that case anyway.
  */
 export type AsHandleMethods<M extends SurfaceMethodMap> = {
   [K in keyof M]: (
     ...args: Parameters<M[K]>
   ) => Promise<Awaited<ReturnType<M[K]>> | undefined>;
-};
-
-/**
- * Provider-side view: a feature may register a subset, and may implement an
- * async-declared method synchronously or vice versa (successor of the
- * orchestrator's MakeOptionalAsyncMethod).
- */
-export type AsProvidedMethods<M extends SurfaceMethodMap> = {
-  [K in keyof M]?: (
-    ...args: Parameters<M[K]>
-  ) => ReturnType<M[K]> | Promise<Awaited<ReturnType<M[K]>>>;
 };

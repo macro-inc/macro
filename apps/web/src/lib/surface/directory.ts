@@ -1,11 +1,6 @@
 import { createEffect, createRoot, untrack } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type {
-  AsHandleMethods,
-  AsProvidedMethods,
-  MethodsFor,
-  SurfaceName,
-} from './specs';
+import type { AsHandleMethods, MethodsFor, SurfaceName } from './specs';
 
 /** Composite key identifying a live surface instance. */
 export type SurfaceKey = `${SurfaceName}:${string}`;
@@ -22,41 +17,31 @@ export type SurfaceHandle<N extends SurfaceName> = {
   readonly surface: { readonly name: N; readonly id: string };
 } & AsHandleMethods<MethodsFor<N>>;
 
-/** Options for a handle's per-call bounded await. */
-export type SurfaceHandleOptions = {
-  /** Per-method-call bounded await. Default DEFAULT_METHOD_TIMEOUT_MS. */
-  timeoutMs?: number;
-};
-
 /** Runtime registry of live surface instances and their public methods. */
 export type SurfaceDirectory = {
   /**
    * Declare that a live, non-nested instance of (name, id) exists.
-   * Returns a disposer. Refcounted (§3.5).
+   * Returns a disposer (refcounted; see announce disposer).
    */
   announce(name: SurfaceName, id: string): Disposer;
 
   /**
    * Merge typed methods for (name, id). Independent of announce — neither
    * requires the other, in either order. Returns a disposer that removes
-   * exactly the methods this call registered, guarded by registration
-   * identity (§3.6). Later provides win per method name.
+   * exactly the methods this call registered (guarded by the registration
+   * token below). Later provides win per method name.
    */
   provide<N extends SurfaceName>(
     name: N,
     id: string,
-    methods: AsProvidedMethods<MethodsFor<N>> // every key optional by construction
+    methods: Partial<MethodsFor<N>>
   ): Disposer;
 
   /**
-   * Synchronous, infallible, cheap. Pins (name, id) at creation; resolves
-   * registrations lazily at each method call (§3.7).
+   * Synchronous, infallible, cheap. Pins (name, id) at creation; method
+   * lookups are resolved lazily at each call.
    */
-  handle<N extends SurfaceName>(
-    name: N,
-    id: string,
-    options?: SurfaceHandleOptions
-  ): SurfaceHandle<N>;
+  handle<N extends SurfaceName>(name: N, id: string): SurfaceHandle<N>;
 
   /** Reactive: true while announce-count > 0 for (name, id). */
   isLive(name: SurfaceName, id: string): boolean;
@@ -64,7 +49,7 @@ export type SurfaceDirectory = {
 
 const DEFAULT_AWAIT_TIMEOUT_MS = 5_000;
 
-/** Per-method-call bounded await used when the caller does not pass timeoutMs. */
+/** Per-method-call bounded await used by handle(). */
 export const DEFAULT_METHOD_TIMEOUT_MS = 10_000;
 
 type RegisteredMethod = {
@@ -80,8 +65,9 @@ type DirectoryEntry = {
 /**
  * Moved verbatim from orchestrator.tsx (createRoot + createEffect + timer;
  * re-checks the condition at timeout before rejecting). Default 5_000ms.
- * Exported because features use it directly (e.g. NewChannelBlockAdapter's
- * messagesHandle wait).
+ * Exported so the re-check-at-expiry path can be unit-tested directly
+ * (unreachable through the reactive handle) and as the landing spot for
+ * orchestrator callers at migration time.
  */
 export function awaitCondition(
   condition: () => boolean,
@@ -205,9 +191,8 @@ export function createSurfaceDirectory(): SurfaceDirectory {
       };
     },
 
-    handle(name, id, options) {
+    handle(name, id) {
       const key = surfaceKey(name, id);
-      const timeoutMs = options?.timeoutMs ?? DEFAULT_METHOD_TIMEOUT_MS;
       const surface = { name, id };
       return new Proxy({} as SurfaceHandle<typeof name>, {
         get(_, prop) {
@@ -219,7 +204,7 @@ export function createSurfaceDirectory(): SurfaceDirectory {
           return async (...args: unknown[]) => {
             await awaitCondition(
               () => entries[key]?.methods[prop] !== undefined,
-              timeoutMs
+              DEFAULT_METHOD_TIMEOUT_MS
             ).catch(() => {
               if (import.meta.env.DEV) {
                 console.warn(`surface method timed out: ${key}.${prop}`);

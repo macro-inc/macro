@@ -5,7 +5,7 @@
 import { createEffect, createSignal, type JSX, on } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSurfaceDirectory } from './directory';
+import { createSurfaceDirectory, DEFAULT_METHOD_TIMEOUT_MS } from './directory';
 import {
   SurfaceProvider,
   useMaybeSurface,
@@ -63,21 +63,17 @@ describe('SurfaceProvider', () => {
     expect(directory.isLive('image', 'mounted')).toBe(false);
   });
 
-  it('nested provider sets nested/parent and neither announces nor provides', async () => {
+  it('nested provider sets nested and neither announces nor provides', async () => {
     vi.useFakeTimers();
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const directory = createSurfaceDirectory();
     let outerRan = false;
     let innerRan = false;
     let nested = false;
-    let parentName: string | undefined;
-    let parentId: string | undefined;
 
     const Inner = () => {
       const surface = useSurface();
       nested = surface.nested;
-      parentName = surface.parent?.name;
-      parentId = surface.parent?.id();
       useSurfaceMethods('image', {
         goToLatest: () => {
           innerRan = true;
@@ -106,8 +102,6 @@ describe('SurfaceProvider', () => {
     ));
 
     expect(nested).toBe(true);
-    expect(parentName).toBe('image');
-    expect(parentId).toBe('outer');
     expect(directory.isLive('image', 'outer')).toBe(true);
     expect(directory.isLive('image', 'inner')).toBe(false);
 
@@ -115,10 +109,8 @@ describe('SurfaceProvider', () => {
     expect(outerRan).toBe(true);
     expect(innerRan).toBe(false);
 
-    const innerCall = directory
-      .handle('image', 'inner', { timeoutMs: 20 })
-      .goToLatest();
-    await vi.advanceTimersByTimeAsync(20);
+    const innerCall = directory.handle('image', 'inner').goToLatest();
+    await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS);
     await expect(innerCall).resolves.toBeUndefined();
   });
 
@@ -149,10 +141,8 @@ describe('SurfaceProvider', () => {
 
     ran = false;
     setShow(false);
-    const gone = directory
-      .handle('image', 'owner', { timeoutMs: 20 })
-      .goToLatest();
-    await vi.advanceTimersByTimeAsync(20);
+    const gone = directory.handle('image', 'owner').goToLatest();
+    await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS);
     await expect(gone).resolves.toBeUndefined();
     expect(ran).toBe(false);
   });

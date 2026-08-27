@@ -12,26 +12,17 @@ import {
   surfaceDirectory as appSurfaceDirectory,
   type SurfaceDirectory,
 } from './directory';
-import type {
-  AsProvidedMethods,
-  MethodsFor,
-  ParamsFor,
-  SurfaceAliasName,
-  SurfaceName,
-} from './specs';
+import type { MethodsFor, ParamsFor, SurfaceName } from './specs';
 
 /** Context value established by SurfaceProvider for a mounted surface. */
 export type SurfaceContextValue<N extends SurfaceName = SurfaceName> = {
   readonly name: N;
-  readonly alias: SurfaceAliasName | undefined;
   /** Reactive: changes in place on adoptContentId (placeholder → real id). */
   readonly id: Accessor<string>;
-  /** Stable accessor over the mount-time params snapshot (§4.4). */
+  /** Stable accessor over the mount-time params snapshot; never re-fires. */
   readonly params: Accessor<ParamsFor<N> | undefined>;
-  /** True when mounted inside another SurfaceProvider (derived, §4.5). */
+  /** True when mounted inside another SurfaceProvider (derived from context). */
   readonly nested: boolean;
-  /** The enclosing surface's context, when nested. Replaces NestedState. */
-  readonly parent: SurfaceContextValue | undefined;
 };
 
 type InternalSurfaceContextValue<N extends SurfaceName = SurfaceName> =
@@ -54,13 +45,9 @@ function directoryOf(surface: SurfaceContextValue): SurfaceDirectory {
 export function SurfaceProvider<N extends SurfaceName>(
   props: FlowProps<{
     name: N;
-    /** Reactive id. The mount creator passes an accessor into the split
-     *  content id (e.g. () => contentId()). */
     id: Accessor<string>;
     /** One-shot mount params. Snapshotted at setup; never re-read. */
     params?: ParamsFor<N>;
-    /** Alias this mount was opened under, from surfaceAliasContextFor. */
-    alias?: SurfaceAliasName;
     /** Injectable for tests. Defaults to the app-wide surfaceDirectory. */
     directory?: SurfaceDirectory;
   }>
@@ -76,11 +63,9 @@ export function SurfaceProvider<N extends SurfaceName>(
 
   const value: InternalSurfaceContextValue<N> = {
     name: untrack(() => props.name),
-    alias: untrack(() => props.alias),
     id: () => props.id(),
     params: () => paramsSnapshot,
     nested,
-    parent,
     directory,
   };
 
@@ -136,7 +121,7 @@ export function useSurfaceParams<N extends SurfaceName>(
  */
 export function useSurfaceMethods<N extends SurfaceName>(
   name: N,
-  methods: AsProvidedMethods<MethodsFor<N>>
+  methods: Partial<MethodsFor<N>>
 ): void {
   const surface = useSurface();
   if (import.meta.env.DEV && surface.name !== name) {

@@ -1,18 +1,13 @@
 import { createEffect, createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  isSurfaceAlias,
-  resolveSurfaceAlias,
-  surfaceCatalog,
-  verifySurfaceName,
-} from './catalog';
+import { sameSurfaceIdentity } from './catalog';
 import {
   awaitCondition,
   createSurfaceDirectory,
   DEFAULT_METHOD_TIMEOUT_MS,
   type SurfaceDirectory,
 } from './directory';
-import type { SurfaceAliasName, SurfaceName } from './specs';
+import type { SurfaceName } from './specs';
 
 function provideLatest(
   directory: SurfaceDirectory,
@@ -102,51 +97,18 @@ describe('surface directory await semantics', () => {
 });
 
 describe('surface directory timeout', () => {
-  it('never-provided method resolves undefined after timeoutMs without throwing or rejecting', async () => {
+  it('never-provided method resolves undefined after DEFAULT_METHOD_TIMEOUT_MS without throwing or rejecting', async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const directory = createSurfaceDirectory();
-    const pending = directory
-      .handle('image', 'missing', { timeoutMs: 50 })
-      .goToLatest();
-    await vi.advanceTimersByTimeAsync(50);
+    const pending = directory.handle('image', 'missing').goToLatest();
+    await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS);
     await expect(pending).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining(
         'surface method timed out: image:missing.goToLatest'
       )
     );
-  });
-
-  it('respects options.timeoutMs and uses DEFAULT_METHOD_TIMEOUT_MS otherwise', async () => {
-    vi.useFakeTimers();
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const directory = createSurfaceDirectory();
-
-    let customSettled = false;
-    const custom = directory
-      .handle('image', 'custom', { timeoutMs: 100 })
-      .goToLatest();
-    void custom.then(() => {
-      customSettled = true;
-    });
-    await vi.advanceTimersByTimeAsync(99);
-    expect(customSettled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(customSettled).toBe(true);
-    await expect(custom).resolves.toBeUndefined();
-
-    let defaultSettled = false;
-    const fallback = directory.handle('image', 'default').goToLatest();
-    void fallback.then(() => {
-      defaultSettled = true;
-    });
-    await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS - 1);
-    expect(defaultSettled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(defaultSettled).toBe(true);
-    await expect(fallback).resolves.toBeUndefined();
-    expect(DEFAULT_METHOD_TIMEOUT_MS).toBe(10_000);
   });
 
   it('re-checks awaitCondition at timer expiry before rejecting', async () => {
@@ -181,8 +143,8 @@ describe('surface directory dispose ordering', () => {
 
     vi.useFakeTimers();
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const gone = directory.handle('image', 'b', { timeoutMs: 20 }).goToLatest();
-    await vi.advanceTimersByTimeAsync(20);
+    const gone = directory.handle('image', 'b').goToLatest();
+    await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS);
     await expect(gone).resolves.toBeUndefined();
   });
 
@@ -205,8 +167,8 @@ describe('surface directory dispose ordering', () => {
 
     vi.useFakeTimers();
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const gone = directory.handle('image', 'x', { timeoutMs: 20 }).goToLatest();
-    await vi.advanceTimersByTimeAsync(20);
+    const gone = directory.handle('image', 'x').goToLatest();
+    await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS);
     await expect(gone).resolves.toBeUndefined();
   });
 
@@ -329,25 +291,38 @@ describe('surface directory reactive rekey', () => {
       /* new */
     });
 
-    const stale = directory
-      .handle('image', 'pending-x', { timeoutMs: 30 })
-      .goToLatest();
-    await vi.advanceTimersByTimeAsync(30);
+    const stale = directory.handle('image', 'pending-x').goToLatest();
+    await vi.advanceTimersByTimeAsync(DEFAULT_METHOD_TIMEOUT_MS);
     await expect(stale).resolves.toBeUndefined();
   });
 });
 
-describe('catalog alias sync', () => {
-  it('every catalog alias is a SurfaceAliasName and round-trips to its owner', () => {
-    for (const name of Object.keys(surfaceCatalog) as SurfaceName[]) {
-      for (const alias of surfaceCatalog[name].aliases ?? []) {
-        expect(isSurfaceAlias(alias.name)).toBe(true);
-        const aliasName: SurfaceAliasName = alias.name;
-        expect(resolveSurfaceAlias(aliasName)).toBe(name);
-      }
-    }
-    expect(verifySurfaceName('junk')).toBeUndefined();
-    expect(verifySurfaceName('image')).toBe('image');
-    expect(isSurfaceAlias('image')).toBe(false);
+describe('catalog dedupe identity', () => {
+  // The singleton branch stays uncovered until a singleton catalog entry exists.
+  it('entity surfaces dedupe on id; app surfaces never dedupe; names must match', () => {
+    expect(
+      sameSurfaceIdentity(
+        { name: 'image', id: 'a' },
+        { name: 'image', id: 'a' }
+      )
+    ).toBe(true);
+    expect(
+      sameSurfaceIdentity(
+        { name: 'image', id: 'a' },
+        { name: 'image', id: 'b' }
+      )
+    ).toBe(false);
+    expect(
+      sameSurfaceIdentity(
+        { name: 'image', id: 'a' },
+        { name: 'inbox', id: 'a' }
+      )
+    ).toBe(false);
+    expect(
+      sameSurfaceIdentity(
+        { name: 'inbox', id: 'a' },
+        { name: 'inbox', id: 'a' }
+      )
+    ).toBe(false);
   });
 });
