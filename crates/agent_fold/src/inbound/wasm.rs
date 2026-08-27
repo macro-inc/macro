@@ -3,7 +3,7 @@
 //! Two entry points over one fold. [`fold_session`] takes a session id and
 //! that session's whole log and gives back the messages it derives.
 //! [`FoldStream`] is the same fold kept open: construct one per live session,
-//! push frames as they arrive, and each push reports the single message it
+//! push frames as they arrive, and each push reports the messages it
 //! changed. The log arrives in exactly the shape the raw-log endpoint serves,
 //! a recording stores, and the realtime event carries - `{userId?, direction,
 //! content}` per frame - so a caller passes bytes through rather than

@@ -33,7 +33,7 @@ const SETTLE_MS = 1000;
 const ITEM_SIZE = 96;
 
 export function Transcript() {
-  const { messages, loadFailed } = useAgentSession();
+  const { messages, loadFailed, working } = useAgentSession();
 
   let scrollRef: HTMLDivElement | undefined;
   let handle: VirtualizerHandle | undefined;
@@ -194,7 +194,14 @@ export function Transcript() {
             >
               {(message) => (
                 <div class="w-full max-w-3xl mx-auto px-4 pb-4 min-w-0">
-                  <Message message={message} />
+                  <Message
+                    message={message}
+                    inFlight={
+                      message.author.kind === 'agent' &&
+                      message.stop == null &&
+                      working()
+                    }
+                  />
                 </div>
               )}
             </Virtualizer>

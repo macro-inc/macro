@@ -658,6 +658,14 @@ where
                     .await;
             }
         };
+        // Opening the stream is a network call that is not itself in the
+        // select below. If the client cancelled while it was in flight, the
+        // turn must still end immediately rather than draining a stream
+        // nobody asked to keep.
+        if cancel.is_cancelled() {
+            self.close_open_tool_calls(session_id, session).await;
+            return Ok(StopReason::Cancelled);
+        }
         pin_mut!(stream);
 
         // The run's own verdict, set only by a `result` event. Every recorded
@@ -1039,9 +1047,18 @@ where
             // open for minutes. Read from the token rather than the flag so
             // the exit is immediate instead of up to one interval late.
             if cancel.is_cancelled() {
+                self.close_open_tool_calls(session_id, session).await;
                 return Ok(StopReason::Cancelled);
             }
-            let outcome = match self.cursor.run_result(agent, run).await {
+            let outcome = tokio::select! {
+                biased;
+                () = cancel.cancelled() => {
+                    self.close_open_tool_calls(session_id, session).await;
+                    return Ok(StopReason::Cancelled);
+                }
+                outcome = self.cursor.run_result(agent, run) => outcome,
+            };
+            let outcome = match outcome {
                 Ok(outcome) => outcome,
                 // A blip mid-poll is survivable; the same failure over and
                 // over is the API saying no.
@@ -1049,6 +1066,7 @@ where
                     consecutive_errors += 1;
                     tracing::warn!(%agent, %run, %error, consecutive_errors, "run poll failed");
                     if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
+                        self.close_open_tool_calls(session_id, session).await;
                         return Ok(StopReason::Cancelled);
                     }
                     continue;
@@ -1058,6 +1076,7 @@ where
             consecutive_errors = 0;
             if !outcome.is_terminal() {
                 if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
+                    self.close_open_tool_calls(session_id, session).await;
                     return Ok(StopReason::Cancelled);
                 }
                 continue;

@@ -6,7 +6,11 @@
 
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
-import { isControlMessage, lastTurnMessage } from './control-message';
+import {
+  isControlMessage,
+  isTurnInFlight,
+  lastTurnMessage,
+} from './control-message';
 
 const message = (
   id: number,
@@ -36,6 +40,14 @@ const modelChange = (id: number) =>
     {
       kind: 'control',
       control: { kind: 'set_model', model: 'github-copilot/gpt-5.6-terra' },
+      outcome: { kind: 'accepted' },
+    },
+  ]);
+const stop = (id: number) =>
+  message(id, 'user', [
+    {
+      kind: 'control',
+      control: { kind: 'stop' },
       outcome: { kind: 'accepted' },
     },
   ]);
@@ -71,5 +83,29 @@ describe('lastTurnMessage', () => {
 
   it('is undefined when a session has only ever had controls', () => {
     expect(lastTurnMessage([modelChange(0)])).toBeUndefined();
+  });
+});
+
+describe('isTurnInFlight', () => {
+  it('is true while the agent message has no stop reason', () => {
+    expect(isTurnInFlight([prompt(0), reply(0, false)])).toBe(true);
+  });
+
+  it('is false once the agent message has a stop reason', () => {
+    expect(isTurnInFlight([prompt(0), reply(0, true)])).toBe(false);
+  });
+
+  it('treats a later stop as ending a still-open thought', () => {
+    expect(isTurnInFlight([prompt(0), reply(0, false), stop(1)])).toBe(false);
+  });
+
+  it('treats a stop after a prompt with no reply as ending the wait', () => {
+    expect(isTurnInFlight([prompt(0), stop(1)])).toBe(false);
+  });
+
+  it('does not treat a model change as ending a running turn', () => {
+    expect(isTurnInFlight([prompt(0), reply(0, false), modelChange(1)])).toBe(
+      true
+    );
   });
 });

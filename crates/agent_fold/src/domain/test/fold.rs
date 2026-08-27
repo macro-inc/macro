@@ -217,6 +217,116 @@ fn folds_session_controls_as_typed_parts() {
 }
 
 #[test]
+fn a_stop_settles_an_open_turn_without_waiting_on_the_prompt_response() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"hmm"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3, "{messages:#?}");
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Thought {
+            text: "hmm".to_owned()
+        }]
+    );
+    assert_eq!(
+        messages[1].stop,
+        Some(StopReason::Cancelled),
+        "the thought must not stay in flight after a user stop"
+    );
+    assert_eq!(
+        messages[2].parts.as_slice(),
+        &[MessagePart::Control {
+            control: Control::Stop,
+            outcome: ControlOutcome::Accepted,
+        }]
+    );
+}
+
+#[test]
+fn a_second_stop_does_not_stack_another_stopped_line() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"hmm"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+    ));
+
+    let messages = fold(log);
+    let stops = messages
+        .iter()
+        .filter(|message| {
+            matches!(
+                message.parts.as_slice(),
+                [MessagePart::Control {
+                    control: Control::Stop,
+                    ..
+                }]
+            )
+        })
+        .count();
+    assert_eq!(stops, 1, "repeated cancels must not stack Stopped lines");
+}
+
+#[test]
+fn thinking_after_a_stop_does_not_reopen_the_turn() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"hmm"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":" still going"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"cancelled"}}}"#,
+    ));
+
+    let (messages, warnings) = fold_capturing_warnings(log);
+    assert_eq!(
+        warnings,
+        vec![],
+        "a late prompt response is not uncorrelated"
+    );
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Thought {
+            text: "hmm".to_owned()
+        }],
+        "late thought chunks must not grow a cancelled turn"
+    );
+    assert_eq!(messages[1].stop, Some(StopReason::Cancelled));
+}
+
+#[test]
+fn a_stop_fails_a_tool_call_still_running() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"c1","title":"Bash","kind":"execute","status":"in_progress"}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+    ));
+
+    let messages = fold(log);
+    let MessagePart::ToolUse { status, .. } = &messages[1].parts[0] else {
+        panic!("agent opened a tool: {:?}", messages[1].parts);
+    };
+    assert_eq!(*status, ToolStatus::Failed);
+    assert_eq!(messages[1].stop, Some(StopReason::Cancelled));
+}
+
+#[test]
 fn a_rejected_control_reports_the_runtime_error() {
     let log = parse_log(concat!(
         r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"claude-fable-5"}}}"#,

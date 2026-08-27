@@ -32,7 +32,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
-import { lastTurnMessage } from '../state/control-message';
+import { isTurnInFlight } from '../state/control-message';
 
 export type AgentSessionFeed = {
   /** Session metadata, absent until the load resolves. */
@@ -183,12 +183,10 @@ export function createAgentSessionFeed(
   // it is a control, which is user-authored, never gets a stop reason, and
   // starts no turn. Counting one would latch this signal true forever, and
   // the composer's drain holds every prompt behind it: changing the model
-  // would silently stop the session from accepting anything again.
-  const working = () => {
-    const last = lastTurnMessage(list);
-    if (!last) return false;
-    return last.author.kind === 'user' || last.stop == null;
-  };
+  // would silently stop the session from accepting anything again. A stop
+  // after an open turn is the other half of that: it ends the turn even if
+  // the agent message has not yet received a stop reason.
+  const working = () => isTurnInFlight(list);
 
   // The external identity — the Cursor agent's id, name, and the link out to
   // it — is minted inside the session's *first prompt*, so the snapshot
