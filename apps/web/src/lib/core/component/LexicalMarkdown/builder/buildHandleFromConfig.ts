@@ -58,6 +58,23 @@ type InlineMenuOps = {
 };
 
 type LexicalPlugins = ReturnType<typeof createLexicalWrapper>['plugins'];
+type MenuOperations = ReturnType<typeof createMenuOperations>;
+
+function menuIsOpen(ops: MenuOperations | undefined): boolean {
+  return ops?.isOpen() ?? false;
+}
+
+function isAnyInlineMenuOpen(menuOps: InlineMenuOps): boolean {
+  return (
+    menuIsOpen(menuOps.actionsMenuOps) ||
+    menuIsOpen(menuOps.mentionsMenuOps) ||
+    menuIsOpen(menuOps.tagsMenuOps) ||
+    menuIsOpen(menuOps.emojisMenuOps) ||
+    menuIsOpen(menuOps.snippetsMenuOps) ||
+    menuIsOpen(menuOps.skillsMenuOps) ||
+    menuIsOpen(menuOps.agentCommandsMenuOps)
+  );
+}
 
 function createLexicalWrapperForConfig(
   config: EditorConfig,
@@ -339,14 +356,7 @@ function applyRemainingPlugins(
       keyboardFocusPlugin({
         onFocusLeaveStart: config.focusLeave.onStart,
         onFocusLeaveEnd: config.focusLeave.onEnd,
-        ignoreKeys: () =>
-          (menuOps.actionsMenuOps?.isOpen() ?? false) ||
-          (menuOps.mentionsMenuOps?.isOpen() ?? false) ||
-          (menuOps.tagsMenuOps?.isOpen() ?? false) ||
-          (menuOps.emojisMenuOps?.isOpen() ?? false) ||
-          (menuOps.snippetsMenuOps?.isOpen() ?? false) ||
-          (menuOps.skillsMenuOps?.isOpen() ?? false) ||
-          (menuOps.agentCommandsMenuOps?.isOpen() ?? false),
+        ignoreKeys: () => isAnyInlineMenuOpen(menuOps),
       })
     );
   }
@@ -371,24 +381,7 @@ function createEditorControls(
     setState: (state: SerializedEditorState) =>
       initializeEditorWithState(editor, state),
     getLexical: () => editor,
-    isInlineMenuOpen: () => {
-      const mentions = menuOps.mentionsMenuOps?.isOpen() ?? false;
-      const tags = menuOps.tagsMenuOps?.isOpen() ?? false;
-      const emojis = menuOps.emojisMenuOps?.isOpen() ?? false;
-      const actions = menuOps.actionsMenuOps?.isOpen() ?? false;
-      const snippets = menuOps.snippetsMenuOps?.isOpen() ?? false;
-      const skills = menuOps.skillsMenuOps?.isOpen() ?? false;
-      const agentCommands = menuOps.agentCommandsMenuOps?.isOpen() ?? false;
-      return (
-        mentions ||
-        tags ||
-        emojis ||
-        actions ||
-        snippets ||
-        skills ||
-        agentCommands
-      );
-    },
+    isInlineMenuOpen: () => isAnyInlineMenuOpen(menuOps),
   };
 }
 
