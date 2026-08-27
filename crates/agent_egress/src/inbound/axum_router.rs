@@ -85,20 +85,13 @@ async fn mcp_handler<Service>(
 where
     Service: EgressService,
 {
-    let token = session_token(request.headers())?;
     // A slug that does not parse names no server, and that is the same answer
     // as a slug naming nobody's server: not found, with nothing said about
     // which of the two it was.
     let slug = McpServerSlug::parse(&slug)
         .ok_or_else(|| EgressError::Unroutable(format!("{slug} is not a server name")))?;
 
-    proxy(
-        state,
-        token,
-        EgressTarget::McpServer(McpDestination::Connected(slug)),
-        request,
-    )
-    .await
+    mcp_proxy(state, McpDestination::Connected(slug), request).await
 }
 
 /// Macro's own MCP server, on its own route rather than under `/mcp/{slug}`:
@@ -111,36 +104,37 @@ async fn macro_mcp_handler<Service>(
 where
     Service: EgressService,
 {
+    mcp_proxy(state, McpDestination::Macro, request).await
+}
+
+/// One MCP request through the proxy, whichever destination its route named.
+async fn mcp_proxy<Service>(
+    state: EgressRouterState<Service>,
+    destination: McpDestination,
+    request: Request,
+) -> Result<Response, EgressError>
+where
+    Service: EgressService,
+{
     let token = session_token(request.headers())?;
-    proxy(
-        state,
-        token,
-        EgressTarget::McpServer(McpDestination::Macro),
-        request,
-    )
-    .await
+    dispatch(state, token, EgressTarget::McpServer(destination), request).await
 }
 
 /// The whole git route: no repository in the path, because the session has
 /// exactly one and the service reads it from the grant. The sandbox's remote
 /// is just `<egress>/git`, and git appends these suffixes itself.
-///
-/// Returns a `Response` rather than a `Result` so an unauthenticated one can
-/// carry the challenge git needs - see [`with_basic_challenge`].
 async fn git_handler<Service>(
     State(state): State<EgressRouterState<Service>>,
     Path(path): Path<String>,
     request: Request,
-) -> Response
+) -> Result<Response, GitRefusal>
 where
     Service: EgressService,
 {
-    match git_proxy(state, path, request).await {
-        Ok(response) => response,
-        Err(error) => with_basic_challenge(error),
-    }
+    git_proxy(state, path, request).await.map_err(GitRefusal)
 }
 
+/// One git smart-HTTP request through the proxy.
 async fn git_proxy<Service>(
     state: EgressRouterState<Service>,
     path: String,
@@ -155,34 +149,41 @@ where
         EgressError::Unroutable(format!("git endpoint {path} is not served here"))
     })?;
 
-    proxy(state, token, EgressTarget::GitHubGit { endpoint }, request).await
+    dispatch(state, token, EgressTarget::GitHubGit { endpoint }, request).await
 }
 
-/// Advertise Basic on an unauthenticated git response.
+/// A refusal on the git route, which renders like any other except that an
+/// unauthenticated one advertises Basic.
 ///
-/// Load-bearing, and only on this route. git does not send a credential
-/// up front: it makes the request bare, and only reaches for its credential
-/// helper once the server asks. Asking is this header - libcurl picks an auth
-/// scheme from it, and with no header there is no scheme to pick, so git holds
-/// a perfectly good token it never sends and the clone fails as
-/// "Authentication failed" with nothing to point at the cause.
+/// The advertisement is load-bearing, and only on this route. git does not
+/// send a credential up front: it makes the request bare, and only reaches for
+/// its credential helper once the server asks. Asking is this header - libcurl
+/// picks an auth scheme from it, and with no header there is no scheme to
+/// pick, so git holds a perfectly good token it never sends and the clone
+/// fails as "Authentication failed" with nothing to point at the cause.
 ///
 /// Not on `/mcp`, where the credential is a bearer token the client already
 /// sends up front, and where advertising Basic would only invite an MCP client
 /// to prompt somebody for a password that does not exist.
-fn with_basic_challenge(error: EgressError) -> Response {
-    let unauthenticated = matches!(error, EgressError::Unauthenticated);
-    let mut response = error.into_response();
-    if unauthenticated {
-        response.headers_mut().insert(
-            http::header::WWW_AUTHENTICATE,
-            http::HeaderValue::from_static(r#"Basic realm="Macro egress", charset="UTF-8""#),
-        );
+struct GitRefusal(EgressError);
+
+impl IntoResponse for GitRefusal {
+    fn into_response(self) -> Response {
+        let unauthenticated = matches!(self.0, EgressError::Unauthenticated);
+        let mut response = self.0.into_response();
+        if unauthenticated {
+            response.headers_mut().insert(
+                http::header::WWW_AUTHENTICATE,
+                http::HeaderValue::from_static(r#"Basic realm="Macro egress", charset="UTF-8""#),
+            );
+        }
+        response
     }
-    response
 }
 
-async fn proxy<Service>(
+/// The shared tail of both proxies: hand the request to the domain service,
+/// converting the body types in both directions.
+async fn dispatch<Service>(
     state: EgressRouterState<Service>,
     token: SessionToken,
     target: EgressTarget,
