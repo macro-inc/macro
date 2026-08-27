@@ -5,10 +5,10 @@ use std::future::Future;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser, GithubError,
-    GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, GithubSetupAccessToken,
-    GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference, TeamTaskReference,
-    ValidatedGithubWebhookEvent,
+    AppJwt, EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
+    GithubError, GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails,
+    GithubSetupAccessToken, GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference,
+    TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -160,7 +160,7 @@ pub trait GithubSyncClient: Send + Sync + 'static {
     /// Generates an installation access token for a given GitHub App installation.
     fn generate_installation_access_token(
         &self,
-        jwt: &str,
+        jwt: &AppJwt,
         installation_id: u64,
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
 
@@ -171,7 +171,7 @@ pub trait GithubSyncClient: Send + Sync + 'static {
     /// exist, and deliberately so.
     fn get_repository_installation(
         &self,
-        jwt: &str,
+        jwt: &AppJwt,
         owner: &str,
         repository: &str,
     ) -> impl Future<Output = Result<Option<u64>, GithubError>> + Send;
@@ -185,7 +185,7 @@ pub trait GithubSyncClient: Send + Sync + 'static {
     /// GitHub's own names and levels, e.g. `("contents", "write")`.
     fn generate_scoped_installation_access_token(
         &self,
-        jwt: &str,
+        jwt: &AppJwt,
         installation_id: u64,
         repository: &str,
         permissions: &[(&str, &str)],

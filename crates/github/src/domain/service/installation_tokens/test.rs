@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::AppJwt;
 use crate::domain::models::{
     EnrichedGithubPullRequest, GithubAuthenticatedUser, GithubKey, GithubPullRequestDetails,
     GithubSetupAccessToken, GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference,
@@ -160,7 +161,7 @@ impl FakeClient {
 impl GithubSyncClient for FakeClient {
     async fn get_repository_installation(
         &self,
-        _jwt: &str,
+        _jwt: &AppJwt,
         _owner: &str,
         _repository: &str,
     ) -> Result<Option<u64>, GithubError> {
@@ -169,7 +170,7 @@ impl GithubSyncClient for FakeClient {
 
     async fn generate_scoped_installation_access_token(
         &self,
-        _jwt: &str,
+        _jwt: &AppJwt,
         installation_id: u64,
         repository: &str,
         permissions: &[(&str, &str)],
@@ -214,7 +215,7 @@ impl GithubSyncClient for FakeClient {
 
     async fn generate_installation_access_token(
         &self,
-        _jwt: &str,
+        _jwt: &AppJwt,
         _installation_id: u64,
     ) -> Result<GithubInstallationAccessToken, GithubError> {
         unimplemented!("this service only ever mints scoped tokens")

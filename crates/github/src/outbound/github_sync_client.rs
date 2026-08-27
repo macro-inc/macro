@@ -8,7 +8,7 @@ use super::pull_request_metadata::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAuthenticatedUser, GithubError,
+        AppJwt, EnrichedGithubPullRequest, GithubAuthenticatedUser, GithubError,
         GithubInstallationAccessToken, GithubPullRequestDetails, GithubSetupAccessToken,
         GithubUserInstallation, GithubUserInstallationsPage,
     },
@@ -222,7 +222,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
     #[tracing::instrument(skip(self, jwt), err)]
     async fn generate_installation_access_token(
         &self,
-        jwt: &str,
+        jwt: &AppJwt,
         installation_id: u64,
     ) -> Result<GithubInstallationAccessToken, GithubError> {
         let response = self
@@ -230,7 +230,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
             .post(format!(
                 "https://api.github.com/app/installations/{installation_id}/access_tokens"
             ))
-            .header("Authorization", format!("Bearer {jwt}"))
+            .header("Authorization", format!("Bearer {}", jwt.as_str()))
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "Macro-Auth-Service")
             .header("X-GitHub-Api-Version", "2022-11-28")
@@ -260,7 +260,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
     #[tracing::instrument(skip(self, jwt), err)]
     async fn get_repository_installation(
         &self,
-        jwt: &str,
+        jwt: &AppJwt,
         owner: &str,
         repository: &str,
     ) -> Result<Option<u64>, GithubError> {
@@ -275,7 +275,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
                 "{}/repos/{owner}/{repository}/installation",
                 self.api_base_url()
             ))
-            .header("Authorization", format!("Bearer {jwt}"))
+            .header("Authorization", format!("Bearer {}", jwt.as_str()))
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "Macro-Auth-Service")
             .header("X-GitHub-Api-Version", "2022-11-28")
@@ -311,7 +311,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
     #[tracing::instrument(skip(self, jwt), err)]
     async fn generate_scoped_installation_access_token(
         &self,
-        jwt: &str,
+        jwt: &AppJwt,
         installation_id: u64,
         repository: &str,
         permissions: &[(&str, &str)],
@@ -339,7 +339,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
                 "{}/app/installations/{installation_id}/access_tokens",
                 self.api_base_url()
             ))
-            .header("Authorization", format!("Bearer {jwt}"))
+            .header("Authorization", format!("Bearer {}", jwt.as_str()))
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "Macro-Auth-Service")
             .header("X-GitHub-Api-Version", "2022-11-28")

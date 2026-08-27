@@ -9,6 +9,7 @@ mod link;
 mod pull_request;
 mod sync;
 
+pub use app_jwt::AppJwt;
 pub(crate) use app_jwt::app_jwt;
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
