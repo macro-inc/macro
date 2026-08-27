@@ -78,7 +78,7 @@ function replaceBlockEquation(
 
 function replaceMultilineEquationBlock(
   rootNode: ElementNode,
-  children: Array<unknown> | undefined,
+  children: Array<unknown> | null | undefined,
   startMatch: RegExpMatchArray | null,
   endMatch: RegExpMatchArray | null,
   linesInBetween: Array<string> | null | undefined,
