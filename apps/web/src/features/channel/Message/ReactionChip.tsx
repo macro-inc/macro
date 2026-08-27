@@ -90,12 +90,11 @@ export function ReactionChip(props: ReactionChipProps) {
             size="sm"
             variant="base"
             class={cn(
-              'flex flex-row items-center h-7 min-w-7 gap-2 rounded-sm',
+              'flex flex-row items-center h-7 min-w-7 gap-1 rounded-full',
               {
-                'border-edge-muted hover:bg-hover hover:scale-105':
-                  props.interactive,
-                'border-edge-muted': !props.selected && !props.interactive,
-                'text-accent border-accent hover:bg-accent-hover':
+                'border-rail hover:bg-hover': props.interactive,
+                'border-rail': !props.selected && !props.interactive,
+                'text-accent border-accent bg-accent-bg hover:bg-accent-hover':
                   props.selected,
                 'pointer-events-auto': !props.interactive,
               }
@@ -108,7 +107,7 @@ export function ReactionChip(props: ReactionChipProps) {
           >
             <span class="text-lg leading-0">{props.emoji}</span>
             <Show when={props.count > 1}>
-              <span class="text-xs">{props.count}</span>
+              <span class="text-xs tabular-nums">{props.count}</span>
             </Show>
           </Button>
         </HoverCard>

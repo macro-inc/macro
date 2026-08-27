@@ -2,7 +2,7 @@ import { createMemo, For, Show } from 'solid-js';
 import { Message, type MessageActions, type MessageData } from '../Message';
 import { Thread } from '../Thread';
 import { buildThreadReplyListMeta } from '../Thread/reply-list-meta';
-import { ThreadRail } from '../Thread/ThreadRail';
+import { ThreadReplyRail } from '../Thread/ThreadReplyRail';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
@@ -70,7 +70,7 @@ export function Replies(props: RepliesProps) {
                 props.getMessageActions?.(replyMessage());
               return (
                 <div class="relative">
-                  <ThreadRail />
+                  <ThreadReplyRail grouped={meta()?.isGroupedWithPrevious} />
                   <Message.Root
                     message={replyMessage()}
                     actions={replyActions()}
@@ -98,14 +98,14 @@ export function Replies(props: RepliesProps) {
                           placement="header"
                           class="flex flex-col gap-0.5 min-w-0"
                         >
-                          <div class="flex items-center gap-1 min-w-0">
+                          <div class="flex items-baseline gap-1.5 min-w-0">
                             <Message.SenderName />
                             <Message.AgentBadge />
-                            <Message.EditedIndicator />
                             <Message.Timestamp
-                              class="ml-auto shrink-0"
+                              class="shrink-0"
                               format="dateAndTime"
                             />
+                            <Message.EditedIndicator class="shrink-0" />
                           </div>
                           <Message.FromPill />
                         </Message.Slot>

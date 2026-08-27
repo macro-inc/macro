@@ -813,8 +813,12 @@ const TableRow: TypedRenderableElement<TableRowNode> = {
     node.__type === 'tablerow',
   render: (props) => {
     const isFirstRow = props.node.getIndexWithinParent() === 0;
+    const height = props.node.getHeight();
     return (
-      <tr class={cn(props.theme.tableRow, isFirstRow && 'font-bold')}>
+      <tr
+        class={cn(props.theme.tableRow, isFirstRow && 'font-bold')}
+        style={height ? { height: `${height}px` } : undefined}
+      >
         {props.children}
       </tr>
     );

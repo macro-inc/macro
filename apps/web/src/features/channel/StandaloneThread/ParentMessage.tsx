@@ -32,14 +32,11 @@ export function ParentMessage(props: ParentMessageProps) {
               placement="header"
               class="flex flex-col gap-0.5 min-w-0"
             >
-              <div class="flex items-center gap-1 min-w-0">
+              <div class="flex items-baseline gap-1.5 min-w-0">
                 <Message.SenderName />
                 <Message.AgentBadge />
-                <Message.EditedIndicator />
-                <Message.Timestamp
-                  class="ml-auto shrink-0"
-                  format="dateAndTime"
-                />
+                <Message.Timestamp class="shrink-0" format="dateAndTime" />
+                <Message.EditedIndicator class="shrink-0" />
               </div>
               <Message.FromPill />
             </Message.Slot>

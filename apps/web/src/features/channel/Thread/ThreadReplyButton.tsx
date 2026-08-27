@@ -14,7 +14,7 @@ export function ThreadReplyButton(props: ThreadReplyButtonProps) {
     <button
       type="button"
       class={cn(
-        'w-min rounded-sm icon-plus mb-2 ring-1 ring-rail bg-surface hover:bg-hover hover-transition-bg flex flex-row justify-center items-center size-(--user-icon-width) touch:min-h-(--user-icon-width) touch:min-w-(--user-icon-width) text-ink-muted',
+        'w-min rounded-full icon-plus mb-2 border border-rail bg-surface hover:bg-hover flex flex-row justify-center items-center size-8 touch:min-h-(--user-icon-width) touch:min-w-(--user-icon-width) text-ink-muted hover:text-ink',
         local.class
       )}
       ref={(el) => {
@@ -23,7 +23,7 @@ export function ThreadReplyButton(props: ThreadReplyButtonProps) {
       }}
       {...rest}
     >
-      <IconPlus class="size-1/2" />
+      <IconPlus class="size-4" />
     </button>
   );
 }

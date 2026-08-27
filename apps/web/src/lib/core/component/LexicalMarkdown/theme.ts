@@ -72,7 +72,7 @@ export const theme: EditorThemeClasses = {
   code: 'bg-code-buffer font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
   static: {
     'code-container': 'bg-code-buffer rounded',
-    'table-container': 'my-4 max-w-full',
+    'table-container': 'my-4 max-w-full overflow-x-auto pb-2',
   },
   codeHighlight,
   'inline-search': 'md-inline-search bg-hover text-ink-muted rounded-sm p-0.5',

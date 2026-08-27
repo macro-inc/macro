@@ -14,8 +14,13 @@ export function NewDivider(props: NewDividerProps) {
 
   return (
     <Show when={isVisible()}>
-      <button type="button" class="w-full text-left" onClick={props.onDismiss}>
-        <MessageFlag text="New" highlightBelow />
+      <button
+        type="button"
+        class="w-full text-left"
+        title="Mark as read"
+        onClick={props.onDismiss}
+      >
+        <MessageFlag text="New" highlight />
       </button>
     </Show>
   );

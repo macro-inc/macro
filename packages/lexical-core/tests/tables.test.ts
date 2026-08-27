@@ -146,6 +146,32 @@ describe('m-table internal transformer', () => {
     });
   });
 
+  it('serializes height only on rows that have one', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const autoRow = $createTableRowNode();
+      autoRow.append($createCell('a'));
+      const tallRow = $createTableRowNode();
+      tallRow.setHeight(48);
+      tallRow.append($createCell('b'));
+      table.append(autoRow, tallRow);
+      $getRoot().append(table);
+    });
+
+    expect(exportMarkdown(editor)).toBe(
+      '<m-table><m-table-row><m-table-cell>a</m-table-cell></m-table-row><m-table-row height="48"><m-table-cell>b</m-table-cell></m-table-row></m-table>'
+    );
+
+    await importMarkdown(editor, exportMarkdown(editor));
+    editor.getEditorState().read(() => {
+      const rows = $getFirstTable().getChildren().filter($isTableRowNode);
+      expect((rows[0] as TableRowNode).getHeight()).toBeUndefined();
+      expect((rows[1] as TableRowNode).getHeight()).toBe(48);
+    });
+  });
+
   it('serializes plain tables without attributes, identical to the legacy format', async () => {
     const editor = createTestEditor();
 

@@ -56,7 +56,7 @@ export function createConfiguredChannelMarkdownEditor(
 
   editor
     .withEmojis()
-    .withActions({ ignoreActionIds: ['hr', 'table', 'latex'] })
+    .withActions({ ignoreActionIds: ['hr', 'latex'] })
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()

@@ -1,6 +1,3 @@
-/* components */
-
-/* types */
 export type {
   AvatarGroupProps,
   AvatarGroupSize,
@@ -104,7 +101,6 @@ export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export { ToggleSwitch } from './components/ToggleSwitch';
 export { Tooltip } from './components/Tooltip';
 
-/* utils */
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
 export {
