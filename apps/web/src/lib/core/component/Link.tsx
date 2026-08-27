@@ -19,14 +19,20 @@ function extractDomain(url: string) {
 }
 
 const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
-type UnfurlLinkProps = { unfurled: GetUnfurlResponse };
+type UnfurlLinkProps = {
+  unfurled: GetUnfurlResponse;
+  size?: 'xs' | 'sm';
+};
 
 export function UnfurlLink(props: UnfurlLinkProps) {
   const domain = extractDomain(props.unfurled.url);
 
   return (
     <div
-      class="hover:bg-hover p-1 px-1.5 overflow-clip text-xs transition-colors hover:transition-none"
+      class={cn(
+        'hover:bg-hover p-1 px-1.5 overflow-clip transition-colors hover:transition-none',
+        props.size === 'sm' ? 'text-sm' : 'text-xs'
+      )}
       onClick={() => openExternalUrl(props.unfurled.url)}
     >
       <div class="flex flex-row items-center gap-1.5 size-full">
@@ -57,7 +63,14 @@ export function UnfurlLink(props: UnfurlLinkProps) {
           <h1 class="font-medium truncate text-ink">
             {props.unfurled.title || domain}
           </h1>
-          <h2 class="font-medium text-xxs text-ink-muted">{domain}</h2>
+          <h2
+            class={cn(
+              'font-medium text-ink-muted',
+              props.size === 'sm' ? 'text-sm' : 'text-xxs'
+            )}
+          >
+            {domain}
+          </h2>
         </div>
       </div>
     </div>

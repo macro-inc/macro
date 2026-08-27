@@ -45,6 +45,14 @@ type FallbackContent = {
   documentationUrl?: string;
 };
 
+/** Whether a failed request has no trustworthy local result to render. */
+export function shouldShowLoadError(options: {
+  hasData: boolean;
+  forceEmptyState: boolean;
+}): boolean {
+  return !options.hasData && !options.forceEmptyState;
+}
+
 const FALLBACK_CONTENT: Partial<Record<ListView, FallbackContent>> = {
   documents: {
     plural: 'documents',

@@ -44,6 +44,8 @@ export type AgentSessionFeed = {
   /** The folded transcript, ordered by turn (prompt before reply). */
   messages: Accessor<FoldedMessage[]>;
   loadFailed: Accessor<boolean>;
+  /** Re-runs a failed load. */
+  retry: () => void;
   /** The newest turn has no stop reason yet — the agent is working. */
   working: Accessor<boolean>;
 };
@@ -113,46 +115,49 @@ export function createAgentSessionFeed(
     release = undefined;
   });
 
-  const [resource, { mutate }] = createResource(sessionId, async (id) => {
-    const run = ++generation;
-    const renameRefreshAtStart = renameRefresh;
-    const superseded = () => closed || generation !== run;
+  const [resource, { mutate, refetch }] = createResource(
+    sessionId,
+    async (id) => {
+      const run = ++generation;
+      const renameRefreshAtStart = renameRefresh;
+      const superseded = () => closed || generation !== run;
 
-    release?.();
-    release = undefined;
-    batch(() => {
-      setList(reconcile([]));
-      setBot(undefined);
-      setMetadata(undefined);
-    });
+      release?.();
+      release = undefined;
+      batch(() => {
+        setList(reconcile([]));
+        setBot(undefined);
+        setMetadata(undefined);
+      });
 
-    const session = await agentHarnessServiceClient.get(id);
-    if (session.isErr()) {
-      throw new Error(`agent session could not be fetched: ${id}`);
+      const session = await agentHarnessServiceClient.get(id);
+      if (session.isErr()) {
+        throw new Error(`agent session could not be fetched: ${id}`);
+      }
+      if (superseded()) return session.value;
+
+      const fold = await acquireAgentSessionFold({
+        agentSessionId: id,
+        onChange: upsert,
+        onMetadata: setMetadata,
+      });
+      if (superseded()) {
+        fold.release();
+        return session.value;
+      }
+      release = fold.release;
+      batch(() => {
+        setBot(fold.bot);
+        setMetadata(fold.metadata);
+        upsert(fold.messages);
+      });
+
+      return renameRefresh > renameRefreshAtStart &&
+        latestRename?.agentSessionId === id
+        ? { ...session.value, name: latestRename.name }
+        : session.value;
     }
-    if (superseded()) return session.value;
-
-    const fold = await acquireAgentSessionFold({
-      agentSessionId: id,
-      onChange: upsert,
-      onMetadata: setMetadata,
-    });
-    if (superseded()) {
-      fold.release();
-      return session.value;
-    }
-    release = fold.release;
-    batch(() => {
-      setBot(fold.bot);
-      setMetadata(fold.metadata);
-      upsert(fold.messages);
-    });
-
-    return renameRefresh > renameRefreshAtStart &&
-      latestRename?.agentSessionId === id
-      ? { ...session.value, name: latestRename.name }
-      : session.value;
-  });
+  );
 
   onCleanup(
     subscribeAgentSessionRenamed((event) => {
@@ -221,6 +226,7 @@ export function createAgentSessionFeed(
     metadata,
     messages,
     loadFailed: () => resource.error !== undefined,
+    retry: () => void refetch(),
     working,
   };
 }

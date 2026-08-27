@@ -454,7 +454,7 @@ export function ChannelInput(props: ChannelInputProps) {
           </Input.FormatRibbon>
           <Input.EditorShell
             ref={setScrollContainer}
-            onClick={(event) => {
+            on:click={(event) => {
               if (!isTouchDevice()) {
                 event.stopPropagation();
                 markdownEditor.controls.focus();

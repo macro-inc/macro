@@ -26,6 +26,7 @@ import {
   ENABLE_EMAIL_SCHEDULED_SEND,
   ENABLE_EMAIL_SIGNATURES_FLAG,
   ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  ENABLE_GRAPHQL_SOUP,
 } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -70,10 +71,11 @@ import {
   usePrimaryEmailLinkId,
 } from '@queries/email/link';
 import {
+  fetchAndCacheThread,
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
-import { invalidateSoupEntity, refetchSoupEntity } from '@queries/soup/cache';
+import { refetchSoupEntity } from '@queries/soup/cache';
 import type { UndoHandle } from '@queries/undo';
 import { emailClient } from '@service-email/client';
 import type {
@@ -107,7 +109,6 @@ import {
   clearEmailBody,
   hasDraftContent,
   prepareEmailBody,
-  prepareEmailBodyFromHtml,
   prepareMacroBody,
   registerToggleAppendedThread,
   TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
@@ -116,9 +117,9 @@ import { convertEmailRecipientToContactInfo } from '../util/recipientConversion'
 import { getReplyTypeFromDraft } from '../util/replyType';
 import {
   endUndoSend,
-  tryBeginUndoSend,
-  unscheduleWithRetry,
-} from '../util/undoSendGuard';
+  restoreDraftBodyAfterUndo,
+  runUndoSend,
+} from '../util/undoSend';
 import { SignaturePreview } from './compose/SignaturePreview';
 import {
   type EmailRecipient,
@@ -274,6 +275,15 @@ export function BaseInput(props: {
   draft?: ApiMessage;
   preloadedBody?: string;
   preloadedHtml?: string;
+  /** Seed identity of the draft this composer mounted from — becomes part of
+   * the form-state cache key so a remount on a newer draft version gets a
+   * freshly seeded form. See EmailInput's seed key. */
+  formSeed?: string;
+  /** Reports the composer gaining local state worth keeping — a first edit
+   * or save (every modification funnels through scheduleDraftSave) or an
+   * undo-send restore. The parent latches the seed key on it so the input
+   * stops remounting on later draft versions. */
+  onEngaged?: () => void;
   sideEffectOnSend?: (newMessageId: ApiDraftOutputDbId | null) => void;
   onMarkDone?: (opts?: {
     silent?: boolean;
@@ -304,6 +314,7 @@ export function BaseInput(props: {
       return getOrInitEmailFormContext({
         type: 'replying_to',
         messageID: replyingTo.db_id,
+        seed: props.formSeed,
       });
     }
 
@@ -313,6 +324,7 @@ export function BaseInput(props: {
       return getOrInitEmailFormContext({
         type: 'draft',
         messageID: props.draft.db_id,
+        seed: props.formSeed,
       });
     }
 
@@ -387,15 +399,18 @@ export function BaseInput(props: {
     recipient: EmailRecipient;
     sourceField: 'to' | 'cc' | 'bcc';
   } | null>(null);
+  // A pending undo-send restore that belongs to this thread (inline reply
+  // remount case). It carries a just-undone send. Consumed below.
+  const restoredSnapshot =
+    undoReplySnapshot?.threadId === ctx.thread()?.db_id
+      ? undoReplySnapshot
+      : null;
+
+  // The draft row this composer upserts into: the server draft when one
+  // exists, else the one the undone send restores.
   const [savedDraftId, setSavedDraftId] = createSignal<
     ApiDraftOutputDbId | undefined
-  >(
-    props.draft?.db_id ??
-      (undoReplySnapshot?.threadId === ctx.thread()?.db_id
-        ? undoReplySnapshot?.draftId
-        : undefined) ??
-      undefined
-  );
+  >(props.draft?.db_id ?? restoredSnapshot?.draftId ?? undefined);
 
   const editorConfig = createConfiguredEmailMarkdownEditor({
     namespace: 'email-base-input-markdown',
@@ -430,15 +445,14 @@ export function BaseInput(props: {
   const markdownHandle = editorConfig.buildHandle();
   const editor = () => markdownHandle.lexical;
 
-  // Consume undo-send snapshot if one exists and belongs to this thread (inline reply remount case).
-  // Use bodyHtml as initialHtml for the editor, restore attachments on mount.
-  const restoredSnapshot =
-    undoReplySnapshot?.threadId === ctx.thread()?.db_id
-      ? undoReplySnapshot
-      : null;
+  // Consume the undo-send snapshot so a later composer mount doesn't restore
+  // it again. Use bodyHtml as initialHtml for the editor, restore attachments
+  // on mount.
   if (restoredSnapshot) {
     undoReplySnapshot = null;
     onMount(() => {
+      // Restored content is local state worth keeping — latch the seed.
+      props.onEngaged?.();
       for (const attachment of restoredSnapshot.attachments) {
         form().attachments.add(attachment);
       }
@@ -452,6 +466,7 @@ export function BaseInput(props: {
   // Register a callback so stale undoSend closures from a previous mount can
   // restore state into this (the live) component instance.
   restoreUndoCallback = (snapshot, draftId) => {
+    props.onEngaged?.();
     setSavedDraftId(draftId);
     const currentEditor = editor();
     if (currentEditor && snapshot.bodyHtml) {
@@ -492,128 +507,100 @@ export function BaseInput(props: {
   let markDoneUndoHandle: UndoHandle | undefined;
   let pendingMarkDoneNavigationTargetId: string | undefined;
 
+  // Everything that follows a successful unschedule: consume the send
+  // snapshot, scrub the sent message from the thread cache, restore the
+  // server-side draft and the composer, and reverse the send's mark-done.
+  const restoreAfterUndoSend = async (
+    draftId: string,
+    linkId: string | undefined
+  ) => {
+    let snapshot: UndoReplySnapshot | null = null;
+    if (undoSendSnapshot?.draftId === draftId) {
+      snapshot = undoSendSnapshot;
+      undoSendSnapshot = null;
+    }
+
+    // Remove the sent message from the thread cache so it disappears from
+    // the list. Prefer the snapshot's threadId — captured at send time, it
+    // survives navigation — while the context read covers snapshotless undos
+    // in a still-mounted thread.
+    const threadId = snapshot?.threadId ?? ctx.thread()?.db_id;
+    if (threadId && !ENABLE_GRAPHQL_SOUP()) {
+      queryClient.setQueryData(
+        emailKeys.threadMessages(threadId).queryKey,
+        (old: any) => {
+          if (!old?.pages) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page: any) => ({
+              ...page,
+              messages: page.messages.filter((m: any) => m.db_id !== draftId),
+            })),
+          };
+        }
+      );
+      // Wipe the thread cache on unmount so the next visit fetches fresh
+      // data (with the restored draft). Deferred to avoid Suspense DOM
+      // detach while the thread is open.
+      markThreadDraftSaved(threadId);
+    }
+
+    // Overwrite the server-side draft with the pre-send content before
+    // anything loads it into a composer (thread revisit, refetch, next
+    // session).
+    if (snapshot) {
+      await restoreDraftBodyAfterUndo(
+        snapshot.draftRestore,
+        snapshot.bodyHtml,
+        linkId
+      );
+    }
+
+    // GraphQL mode renders the thread from the normalized cache, which the
+    // setQueryData surgery above can't reach — refetch through it instead.
+    // After the draft-body restore, so the single fetch returns the message
+    // as a draft with the pre-send content, dropping it from the message
+    // list and re-seeding the draft map in one pass.
+    if (threadId && ENABLE_GRAPHQL_SOUP()) {
+      void fetchAndCacheThread(threadId);
+    }
+
+    if (snapshot && restoreUndoCallback) {
+      // A live BaseInput is mounted — restore after reactive updates from
+      // setQueryData have settled (form may have re-keyed).
+      const cb = restoreUndoCallback;
+      setTimeout(() => cb(snapshot, draftId), 0);
+    } else if (snapshot) {
+      // No live component (e.g. inline reply was unmounted).
+      // Stash for mount-time restore.
+      undoReplySnapshot = snapshot;
+      props.setShowReply?.(true);
+    }
+
+    // Reverse the mark-done this send triggered (restores the soup rows,
+    // notification state, and unarchives), then refresh the thread's soup
+    // item the same way a send does so inbox views show the restored draft.
+    const doneHandle = markDoneUndoHandle;
+    markDoneUndoHandle = undefined;
+    if (doneHandle) {
+      await doneHandle.undo({
+        onError: () => toast.failure('Failed to restore thread to inbox'),
+      });
+    }
+    if (threadId) {
+      void refetchSoupEntity(threadId, 'emailThread');
+    }
+  };
+
   // linkId is the X-Email-Link-Id header value the send itself used, resolved
   // at send time. Undo can fire after navigation has disposed this component's
   // reactive state (mark-done navigates away).
-  const undoSend = async (draftId: string, linkId: string | undefined) => {
-    if (!tryBeginUndoSend(draftId)) return;
-    try {
-      const result = await unscheduleWithRetry(draftId, linkId);
-      // A non-2xx response comes back as an Err Result (it doesn't throw), so
-      // bail before reverting the send appearance in the UI.
-      if (result.isErr()) {
-        endUndoSend(draftId);
-        Telemetry.error(
-          new Error(
-            `Failed to undo send for draft ${draftId}: ${result.error
-              .map((e) => `${e.code}: ${e.message}`)
-              .join(', ')}`
-          )
-        );
-        // 400 is the backend's "already sent" — the undo window has passed.
-        const alreadySent = result.error.some(
-          (e) => e.code === 'HTTP_ERROR' && e.message.includes('status: 400')
-        );
-        toast.failure(
-          alreadySent
-            ? 'Too late to undo — the email was already sent'
-            : 'Failed to undo send'
-        );
-        return;
-      }
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.previews._def,
-      });
-
-      let snapshot: UndoReplySnapshot | null = null;
-      if (undoSendSnapshot?.draftId === draftId) {
-        snapshot = undoSendSnapshot;
-        undoSendSnapshot = null;
-      }
-
-      // Remove the sent message from the thread cache so it disappears from
-      // the list. Prefer the snapshot's threadId (send-time captured value), survives navigation; the context
-      // read covers snapshotless undos in a still-mounted thread.
-      const threadId = snapshot?.threadId ?? ctx.thread()?.db_id;
-      if (threadId) {
-        queryClient.setQueryData(
-          emailKeys.threadMessages(threadId).queryKey,
-          (old: any) => {
-            if (!old?.pages) return old;
-            return {
-              ...old,
-              pages: old.pages.map((page: any) => ({
-                ...page,
-                messages: page.messages.filter((m: any) => m.db_id !== draftId),
-              })),
-            };
-          }
-        );
-        // Wipe the thread cache on unmount so the next visit fetches fresh
-        // data (with the restored draft). Deferred to avoid Suspense DOM
-        // detach while the thread is open.
-        markThreadDraftSaved(threadId);
-      }
-
-      // The unscheduled message still carries the sent body — appended reply
-      // chain and injected signature included — so overwrite the server-side
-      // draft with the pre-send content before anything loads it into a
-      // composer (thread revisit, refetch, next session).
-      if (snapshot) {
-        const prepared = prepareEmailBodyFromHtml(snapshot.bodyHtml);
-        const saveResult = await emailClient.createDraft(
-          {
-            draft: { ...snapshot.draftRestore, body_html: prepared.bodyHtml },
-          },
-          linkId
-        );
-        if (saveResult.isErr()) {
-          // Non-fatal: the composer restores from the snapshot either way,
-          // and the next draft autosave overwrites the stale body.
-          Telemetry.error(
-            new Error('Failed to restore draft body after undo-send')
-          );
-        }
-      }
-
-      if (snapshot && restoreUndoCallback) {
-        // A live BaseInput is mounted — restore after reactive updates from
-        // setQueryData have settled (form may have re-keyed).
-        const cb = restoreUndoCallback;
-        setTimeout(() => cb(snapshot, draftId), 0);
-      } else if (snapshot) {
-        // No live component (e.g. inline reply was unmounted).
-        // Stash for mount-time restore.
-        undoReplySnapshot = snapshot;
-        props.setShowReply?.(true);
-      }
-
-      // Reverse the mark-done this send triggered (restores the soup rows,
-      // notification state, and unarchives), then refresh the thread's soup
-      // item the same way a send does so inbox views show the restored draft.
-      const doneHandle = markDoneUndoHandle;
-      markDoneUndoHandle = undefined;
-      if (doneHandle) {
-        await doneHandle.undo({
-          onError: () => toast.failure('Failed to restore thread to inbox'),
-        });
-      }
-      if (threadId) {
-        void refetchSoupEntity(threadId, 'emailThread');
-      }
-
-      toast.success('Send cancelled');
-      invalidateSoupEntity(draftId);
-    } catch (e) {
-      endUndoSend(draftId);
-      Telemetry.error(
-        e instanceof Error
-          ? e
-          : new Error(`Failed to undo send for draft ${draftId}`)
-      );
-      toast.failure('Failed to undo send');
-    }
-  };
+  const undoSend = (draftId: string, linkId: string | undefined) =>
+    runUndoSend({
+      draftId,
+      linkId,
+      onUndone: () => restoreAfterUndoSend(draftId, linkId),
+    });
 
   const sendMutation = useSendMessageMutation({
     onSuccess: async ({ message }, vars) => {
@@ -894,21 +881,58 @@ export function BaseInput(props: {
     }
   }
 
+  // The reply target the pending debounced save was scheduled against.
+  // Captured at schedule time — a live interactive context — because the
+  // unmount flush below cannot trust props during disposal.
+  let pendingSaveReplyingToId: string | undefined;
+
   function scheduleDraftSave() {
+    props.onEngaged?.();
+    pendingSaveReplyingToId = untrack(() => props.replyingTo()?.db_id);
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     draftSaveTimer = window.setTimeout(() => {
+      draftSaveTimer = undefined;
       void executeSaveDraft();
     }, DRAFT_DEBOUNCE_MS);
   }
 
   onCleanup(() => {
-    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+    const flushPending = draftSaveTimer !== undefined;
+    if (draftSaveTimer) {
+      window.clearTimeout(draftSaveTimer);
+      draftSaveTimer = undefined;
+    }
+    // A send or discard already owns this composer's state; saving here
+    // would resurrect content those flows just cleared.
+    if (pendingSend || pendingDeletion) return;
+
+    // Flush the pending debounced save so dismissal doesn't drop the last
+    // edits server-side; a failure surfaces through the mutation's toast.
+    if (flushPending) {
+      try {
+        // Only while the reply target still reads as the one the save was
+        // scheduled against — mid-disposal it can come back empty or stale,
+        // and a save without replying_to_id would unlink the server draft
+        // from its message.
+        if (
+          untrack(() => props.replyingTo()?.db_id) === pendingSaveReplyingToId
+        ) {
+          // The mutation's own onError reports the failure (toast + console);
+          // this catch only keeps the post-disposal rejection from surfacing
+          // as unhandled.
+          executeSaveDraft().catch(() => {});
+        }
+      } catch {
+        // Props already disposed; the next mount's autosave persists it.
+      }
+    }
   });
 
   // Persist the draft immediately when the user switches the sending inbox, even
   // without a text edit, so it moves to the new inbox and the choice survives a
   // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
   const persistDraftOnSenderSwitch = (linkId: string) => {
+    props.onEngaged?.();
     form().setSelectedFromLink(linkId);
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     void executeSaveDraft();
@@ -2157,7 +2181,12 @@ export function BaseInput(props: {
             {(html) => (
               <SignaturePreview
                 html={html()}
-                onDismiss={() => setIncludeSignature(false)}
+                onDismiss={() => {
+                  // Dismissal is composer-local state worth keeping — latch
+                  // the seed so a draft upgrade can't remount it away.
+                  props.onEngaged?.();
+                  setIncludeSignature(false);
+                }}
               />
             )}
           </Show>
@@ -2219,7 +2248,12 @@ export function BaseInput(props: {
             {(html) => (
               <SignaturePreview
                 html={html()}
-                onDismiss={() => setIncludeSignature(false)}
+                onDismiss={() => {
+                  // Dismissal is composer-local state worth keeping — latch
+                  // the seed so a draft upgrade can't remount it away.
+                  props.onEngaged?.();
+                  setIncludeSignature(false);
+                }}
               />
             )}
           </Show>

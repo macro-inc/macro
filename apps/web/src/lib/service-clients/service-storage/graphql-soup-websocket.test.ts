@@ -202,7 +202,7 @@ describe('GraphQL Soup subscription lifecycle', () => {
 
     expect(toastFailure).toHaveBeenCalledOnce();
     expect(toastFailure).toHaveBeenCalledWith('Live updates disconnected', {
-      subtext: 'Refresh the app to reconnect.',
+      subtext: 'Refresh to reconnect.',
     });
     lifecycle.dispose();
   });

@@ -478,6 +478,7 @@ export const storageServiceClient = {
   async getSoupAstItems(args: {
     params: { cursor?: string | null };
     body: PostSoupAstRequest;
+    signal?: AbortSignal;
   }) {
     const searchParams = args.params.cursor
       ? `?cursor=${args.params.cursor}`
@@ -486,6 +487,7 @@ export const storageServiceClient = {
     return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
       body: JSON.stringify(args.body),
+      signal: args.signal,
     });
   },
 
@@ -496,6 +498,7 @@ export const storageServiceClient = {
       sort_method?: GroupedSoupSort;
     };
     body: PostSoupAstRequest;
+    signal?: AbortSignal;
   }) {
     const { limit: _limit, ...filters } = args.body;
     const body = {
@@ -511,6 +514,7 @@ export const storageServiceClient = {
     return await dssFetch<GroupedSoupInitialPage>(`/items/soup/ast/grouped`, {
       method: 'POST',
       body: JSON.stringify(body),
+      signal: args.signal,
     });
   },
 
