@@ -103,6 +103,10 @@ where
     Egress: SandboxEgressProvisioner,
 {
     /// Build the orchestrator from its ports.
+    ///
+    /// One argument per port, however many ports there are: bundling some of
+    /// them into a struct would only move the same list one level down.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         sessions: Sessions,
         containers: Containers,

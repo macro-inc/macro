@@ -5,11 +5,10 @@ use crate::domain::model::{McpServerSlug, RepoSlug};
 /// Everything that can stop a sandbox's request from reaching its upstream.
 ///
 /// The variants are separated by what the caller should *do*, not by where
-/// they arose: a sandbox that gets [`EgressError::NeedsReauthorization`] is
-/// told the server needs reconnecting in Macro, whereas one that gets
-/// [`EgressError::Upstream`] should retry. Collapsing them would leave the
-/// agent guessing, and an agent that guesses retries a dead OAuth grant until
-/// its turn times out.
+/// they arose: a sandbox that gets [`EgressError::UnknownServer`] should stop
+/// dialling that slug, whereas one that gets [`EgressError::Upstream`] should
+/// retry. Collapsing them would leave the agent guessing, and an agent that
+/// guesses retries until its turn times out.
 #[derive(Debug, thiserror::Error)]
 pub enum EgressError {
     /// The session token was missing, malformed, expired, or signed by
@@ -36,12 +35,6 @@ pub enum EgressError {
     /// owner's settings to code the model wrote.
     #[error("no connected MCP server named {0}")]
     UnknownServer(McpServerSlug),
-
-    /// The server exists but its stored grant can no longer be refreshed.
-    /// The owner has to reconnect it in Macro; nothing the sandbox does will
-    /// fix it.
-    #[error("MCP server {0} needs to be reconnected in Macro")]
-    NeedsReauthorization(McpServerSlug),
 
     /// We cannot mint a credential for the session's repository: our GitHub
     /// App is not installed on it, or the installation belongs to somebody

@@ -483,12 +483,13 @@ impl EgressTarget {
 /// The fields are private and the constructors validate, so a credential
 /// paired with a destination nobody checked cannot be built. Both upstreams
 /// here are reached over the public internet, and one of the two URLs -
-/// `mcp_servers.url` - is typed in by a person, so "https" is not an assumption
-/// this crate is entitled to make.
+/// Pipedream's MCP endpoint - is deployment configuration, so "https" is not
+/// an assumption this crate is entitled to make.
 #[derive(Clone, Debug)]
 pub struct UpstreamCall {
     url: Url,
     authorization: UpstreamCredential,
+    scope: Vec<(HeaderName, HeaderValue)>,
 }
 
 impl UpstreamCall {
@@ -517,7 +518,40 @@ impl UpstreamCall {
             return Err(EgressError::InsecureUpstream(url));
         }
 
-        Ok(Self { url, authorization })
+        Ok(Self {
+            url,
+            authorization,
+            scope: Vec::new(),
+        })
+    }
+
+    /// The same call with scoping headers attached, validated here for the
+    /// same reason [`UpstreamCredential::header_value`] validates: these
+    /// values travel next to a credential, and one carrying a newline would
+    /// be a header injection, not a header.
+    ///
+    /// Scoping headers are part of the credential story, not decoration:
+    /// Pipedream decides *whose* connected account a request spends from
+    /// `x-pd-external-user-id` alone, so these pairs must come from the same
+    /// resolution that produced the token - never from the request.
+    pub fn scoped_by(
+        mut self,
+        headers: impl IntoIterator<Item = (String, String)>,
+    ) -> Result<Self, EgressError> {
+        for (name, value) in headers {
+            let name = HeaderName::from_bytes(name.as_bytes()).map_err(|error| {
+                EgressError::Internal(rootcause::report!(
+                    "scope header name {name:?} is not a header name: {error}"
+                ))
+            })?;
+            let value = HeaderValue::from_str(&value).map_err(|error| {
+                EgressError::Internal(rootcause::report!(
+                    "scope header {name} value is not a header value: {error}"
+                ))
+            })?;
+            self.scope.push((name, value));
+        }
+        Ok(self)
     }
 
     /// Where the request goes.
@@ -530,13 +564,21 @@ impl UpstreamCall {
         &self.authorization
     }
 
+    /// Headers stamped alongside the credential, scoping what it may spend.
+    pub fn scope_headers(&self) -> &[(HeaderName, HeaderValue)] {
+        &self.scope
+    }
+
     /// The same call with `url` replaced, revalidated.
     ///
     /// Used to append a git endpoint to the repository base an adapter
     /// returned. Going back through the constructor rather than assigning is
     /// the point: the replacement is checked exactly as the original was.
     pub fn redirected_to(self, url: Url) -> Result<Self, EgressError> {
-        Self::new(url, self.authorization)
+        let scope = self.scope;
+        let mut call = Self::new(url, self.authorization)?;
+        call.scope = scope;
+        Ok(call)
     }
 }
 
@@ -600,6 +642,16 @@ const STRIPPED_RESPONSE_HEADERS: &[HeaderName] = &[
     header::SET_COOKIE,
 ];
 
+/// The prefix of Pipedream's scoping headers, all of which are stripped from
+/// requests.
+///
+/// These headers *are* the authorization: `x-pd-external-user-id` alone
+/// decides whose connected account a request spends. The ones this proxy
+/// stamps would overwrite a sandbox's copy anyway; the prefix strip is for
+/// the ones it does not stamp, so a scoping header Pipedream understands and
+/// we have never heard of cannot ride through from model-authored code.
+const STRIPPED_REQUEST_PREFIX: &str = "x-pd-";
+
 /// Drop everything the upstream must not see.
 ///
 /// Everything MCP needs to work across a proxy survives: `mcp-session-id`
@@ -607,6 +659,13 @@ const STRIPPED_RESPONSE_HEADERS: &[HeaderName] = &[
 /// stream, and `accept` is how a client asks for one.
 pub fn sanitize_request_headers(headers: &mut HeaderMap) {
     strip(headers, STRIPPED_REQUEST_HEADERS);
+
+    let scoping: Vec<HeaderName> = headers
+        .keys()
+        .filter(|name| name.as_str().starts_with(STRIPPED_REQUEST_PREFIX))
+        .cloned()
+        .collect();
+    strip(headers, &scoping);
 }
 
 /// Drop everything the sandbox must not see.

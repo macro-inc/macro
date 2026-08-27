@@ -1,8 +1,8 @@
 use crate::domain::models::{
-    CatalogEntry, CatalogPage, ConnectToken, McpServer, PipedreamAccount, PipedreamConnection,
-    client_info,
+    CatalogEntry, CatalogPage, ConnectToken, McpServer, McpUpstreamCall, PipedreamAccount,
+    PipedreamConnection, client_info,
 };
-use crate::domain::ports::{ConnectorDirectory, McpConnection, PipedreamConnect};
+use crate::domain::ports::{ConnectorDirectory, McpConnection, McpUpstream, PipedreamConnect};
 use anyhow::Context;
 use rmcp::service::ServiceExt;
 use rmcp::transport::StreamableHttpClientTransport;
@@ -289,30 +289,54 @@ impl ConnectorDirectory for PipedreamClient {
     }
 }
 
+impl McpUpstream for PipedreamClient {
+    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
+    async fn upstream(&self, record: &PipedreamConnection) -> anyhow::Result<McpUpstreamCall> {
+        Ok(McpUpstreamCall {
+            url: self.config.mcp_url.clone(),
+            bearer_token: self.access_token().await?,
+            headers: vec![
+                ("x-pd-project-id".to_owned(), self.config.project_id.clone()),
+                (
+                    "x-pd-environment".to_owned(),
+                    self.config.environment.clone(),
+                ),
+                (
+                    "x-pd-external-user-id".to_owned(),
+                    record.user_id.to_string(),
+                ),
+                ("x-pd-app-slug".to_owned(), record.app_slug.clone()),
+                // Flat per-app tools; no configuration meta-tools.
+                ("x-pd-tool-mode".to_owned(), "tools-only".to_owned()),
+            ],
+        })
+    }
+}
+
 impl McpConnection for PipedreamClient {
     #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
     async fn connect(&self, record: &PipedreamConnection) -> anyhow::Result<McpServer> {
-        let token = self.access_token().await?;
+        let upstream = self.upstream(record).await?;
 
         let mut headers = reqwest::header::HeaderMap::new();
-        let mut auth = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-            .map_err(|e| anyhow::anyhow!("invalid bearer token: {e}"))?;
+        let mut auth =
+            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", upstream.bearer_token))
+                .map_err(|e| anyhow::anyhow!("invalid bearer token: {e}"))?;
         auth.set_sensitive(true);
         headers.insert(reqwest::header::AUTHORIZATION, auth);
-        let header = |v: &str| reqwest::header::HeaderValue::from_str(v);
-        headers.insert("x-pd-project-id", header(&self.config.project_id)?);
-        headers.insert("x-pd-environment", header(&self.config.environment)?);
-        headers.insert("x-pd-external-user-id", header(record.user_id.as_ref())?);
-        headers.insert("x-pd-app-slug", header(&record.app_slug)?);
-        // Flat per-app tools; no configuration meta-tools.
-        headers.insert("x-pd-tool-mode", header("tools-only")?);
+        for (name, value) in &upstream.headers {
+            headers.insert(
+                reqwest::header::HeaderName::from_bytes(name.as_bytes())?,
+                reqwest::header::HeaderValue::from_str(value)?,
+            );
+        }
 
         let client = reqwest::Client::builder()
             .default_headers(headers)
             .build()
             .context("building Pipedream MCP HTTP client")?;
 
-        let config = StreamableHttpClientTransportConfig::with_uri(&*self.config.mcp_url.clone());
+        let config = StreamableHttpClientTransportConfig::with_uri(&*upstream.url);
         let transport = StreamableHttpClientTransport::with_client(client, config);
         Ok(client_info().serve(transport).await?)
     }

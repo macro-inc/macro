@@ -1,5 +1,6 @@
 use super::models::{
-    CatalogPage, ConnectToken, MacroUserIdStr, McpServer, PipedreamAccount, PipedreamConnection,
+    CatalogPage, ConnectToken, MacroUserIdStr, McpServer, McpUpstreamCall, PipedreamAccount,
+    PipedreamConnection,
 };
 
 /// Port for persisting Pipedream-connected apps, keyed by user and app slug.
@@ -57,6 +58,22 @@ impl<P: McpConnection> McpConnection for Option<std::sync::Arc<P>> {
             None => anyhow::bail!("Pipedream is not configured"),
         }
     }
+}
+
+/// Port for addressing Pipedream's remote MCP server without opening a
+/// session on it.
+///
+/// What [`McpConnection`] uses under the hood, exposed for callers that
+/// proxy raw MCP-over-HTTP traffic instead of speaking MCP themselves: they
+/// need the URL, bearer, and scoping headers to stamp onto a request that
+/// already exists. The returned call carries our project-level bearer, so it
+/// must never travel anywhere user-controlled.
+pub trait McpUpstream: Send + Sync + 'static {
+    /// The upstream call scoped to `record`'s app for `record.user_id`.
+    fn upstream(
+        &self,
+        record: &PipedreamConnection,
+    ) -> impl Future<Output = anyhow::Result<McpUpstreamCall>> + Send;
 }
 
 /// Port for Pipedream Connect: managed auth for MCP connectors.

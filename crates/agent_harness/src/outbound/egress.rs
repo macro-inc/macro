@@ -1,7 +1,7 @@
 //! Handing a sandbox its one secret, and telling opencode where to spend it.
 //!
 //! Two adapter concerns the domain has no business with: minting a token, and
-//! listing the owner's connected MCP servers, which needs their rows.
+//! listing the owner's Pipedream-connected apps, which needs their rows.
 //!
 //! Both the minting and the hashing are `agent_egress`'s, not a second
 //! implementation of either. The two ends of this token are written in
@@ -11,7 +11,7 @@
 
 use agent_egress::domain::model::{McpServerSlug, RepoSlug, SessionToken};
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::ports::McpServerStore;
+use pipedream_mcp::domain::ports::ConnectionStore;
 use std::sync::Arc;
 use url::Url;
 
@@ -29,47 +29,49 @@ mod test;
 const GITHUB_HOST: &str = "github.com";
 
 /// Mints session tokens and generates the sandbox's opencode config.
-pub struct EgressProvisioner<Servers> {
-    servers: Arc<Servers>,
+pub struct EgressProvisioner<Connections> {
+    connections: Arc<Connections>,
     base_url: String,
 }
 
-impl<Servers> EgressProvisioner<Servers>
+impl<Connections> EgressProvisioner<Connections>
 where
-    Servers: McpServerStore,
+    Connections: ConnectionStore,
 {
-    /// Build the provisioner over the MCP server store and the egress
-    /// proxy's public address.
-    pub fn new(servers: Arc<Servers>, base_url: impl Into<String>) -> Self {
+    /// Build the provisioner over the Pipedream connection store and the
+    /// egress proxy's public address.
+    pub fn new(connections: Arc<Connections>, base_url: impl Into<String>) -> Self {
         Self {
-            servers,
+            connections,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
         }
     }
 
-    /// The slugs of the owner's enabled MCP servers.
+    /// The slugs of the owner's enabled Pipedream connections.
     ///
-    /// A server the owner turned off is left out here as well as refused by
-    /// the proxy: an agent that can see a server in its config will try it,
-    /// and a tool call that always fails is worse than a tool that is absent.
+    /// Slugged from `app_slug`, exactly as the proxy resolves them - the two
+    /// derivations meeting is what makes a config entry dialable. An app the
+    /// owner turned off is left out here as well as refused by the proxy: an
+    /// agent that can see a server in its config will try it, and a tool call
+    /// that always fails is worse than a tool that is absent.
     async fn slugs(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<McpServerSlug>> {
-        let records = self.servers.list(owner).await.map_err(|error| {
+        let records = self.connections.list(owner).await.map_err(|error| {
             HarnessError::Egress(rootcause::report!(
-                "could not list connected MCP servers: {error:?}"
+                "could not list Pipedream connections: {error:?}"
             ))
         })?;
 
         Ok(records
             .into_iter()
             .filter(|record| record.enabled)
-            .filter_map(|record| McpServerSlug::from_server_name(&record.server_name))
+            .filter_map(|record| McpServerSlug::from_server_name(&record.app_slug))
             .collect())
     }
 }
 
-impl<Servers> SandboxEgressProvisioner for EgressProvisioner<Servers>
+impl<Connections> SandboxEgressProvisioner for EgressProvisioner<Connections>
 where
-    Servers: McpServerStore,
+    Connections: ConnectionStore,
 {
     #[tracing::instrument(err, skip(self), fields(%session, %owner))]
     async fn provision(

@@ -12,11 +12,26 @@ macro_env_var::env_vars!(
     /// Comma-separated Kafka bootstrap servers.
     #[derive(Clone)]
     pub struct KafkaBrokers;
-    /// AES-256 key the owner's MCP OAuth grants are encrypted at rest with.
-    pub struct McpCredentialsKeySecretName;
     /// PEM private key of the GitHub App installation tokens are minted with.
     pub struct GithubSyncAppPemSecretKey;
+    /// OAuth client ID for the Pipedream API. The same credentials
+    /// `document_cognition_service` uses: the connections a sandbox spends
+    /// are the ones the person connected in Macro, in the same rows.
+    pub struct PipedreamClientId;
+    /// OAuth client secret for the Pipedream API.
+    pub struct PipedreamClientSecret;
+    /// The Pipedream Connect project ID (`proj_...`).
+    pub struct PipedreamProjectId;
 );
+
+/// The Pipedream project environment matching this deployment: production in
+/// prd, development everywhere else.
+fn default_pipedream_environment() -> String {
+    match Environment::new_or_prod() {
+        Environment::Production => "production".to_owned(),
+        _ => "development".to_owned(),
+    }
+}
 
 /// The configuration parameters for the agent harness service.
 #[derive(macro_config::MacroConfig)]
@@ -125,11 +140,21 @@ pub struct Config {
     /// whatever ingress fronts the deployment, not on the container's own port.
     #[macro_config_default(String::from("http://localhost:8102"))]
     pub egress_base_url: String,
-    /// AES-256 key (base64) the owner's MCP OAuth grants are encrypted with.
-    ///
-    /// The same key `document_cognition_service` uses: the grants the sandbox
-    /// spends are the ones the person connected in Macro, in the same rows.
-    pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
+    /// OAuth client ID for the Pipedream API.
+    pub pipedream_client_id: PipedreamClientId,
+    /// OAuth client secret for the Pipedream API.
+    pub pipedream_client_secret: PipedreamClientSecret,
+    /// The Pipedream Connect project ID.
+    pub pipedream_project_id: PipedreamProjectId,
+    /// The Pipedream project environment (`development` or `production`).
+    #[macro_config_default(default_pipedream_environment())]
+    pub pipedream_environment: String,
+    /// Base URL of the Pipedream API.
+    #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_API_URL))]
+    pub pipedream_api_url: String,
+    /// URL of Pipedream's remote MCP server.
+    #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_MCP_URL))]
+    pub pipedream_mcp_url: String,
     /// Client id of the GitHub App installation tokens are minted for.
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.

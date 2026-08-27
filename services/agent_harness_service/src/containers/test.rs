@@ -1,6 +1,6 @@
 use super::*;
 use agent_fold::domain::service::FoldedMessageService;
-use agent_harness::outbound::daytona::{AnthropicApiKey, GithubToken};
+use agent_harness::outbound::daytona::AnthropicApiKey;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
@@ -13,7 +13,6 @@ fn unreachable_sandbox() -> HarnessContainers {
         docker_binary: "false".to_owned(),
         image: "unused".to_owned(),
         network: "unused".to_owned(),
-        github_token: GithubToken::new(String::new()),
         anthropic_api_key: AnthropicApiKey::new(String::new()),
     }))
 }

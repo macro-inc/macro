@@ -18,7 +18,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use agent_egress::domain::service::EgressServiceImpl;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
-use agent_egress::outbound::mcp_credentials::RmcpMcpCredentials;
+use agent_egress::outbound::mcp_credentials::PipedreamMcpCredentials;
 use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{HarnessCommand, HarnessDefaults, SessionDefaults};
@@ -83,8 +83,8 @@ use macro_event_broker::{
     MacroEventCollection as _, MacroEventConsumerService,
 };
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
-use mcp_client::domain::models::AesKey;
-use mcp_client::outbound::pg_server_repo::PgServerRepo;
+use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
+use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
@@ -373,14 +373,25 @@ async fn run() -> anyhow::Result<()> {
             .with_managed_bot(bot);
     }
 
-    // MCP servers: the same encrypted rows the chat tool path reads, so a grant
-    // refreshed by a sandbox and one refreshed by a chat message are the same
-    // grant.
-    let mcp_servers = Arc::new(PgServerRepo::new(
-        pool.clone(),
-        AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
-            .context("invalid MCP credentials encryption key")?,
-    ));
+    // MCP connections: the same rows the chat tool path reads, so an app
+    // connected in Macro is an app the sandbox can reach, with nothing to
+    // keep in sync. The rows hold no secrets - Pipedream owns the grants.
+    let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
+
+    // The client that addresses Pipedream's remote MCP server, built from the
+    // same credentials `document_cognition_service` uses.
+    let pipedream = PipedreamClient::new(PipedreamConfig {
+        client_id: config.pipedream_client_id.to_string(),
+        client_secret: config.pipedream_client_secret.to_string(),
+        project_id: config.pipedream_project_id.to_string(),
+        environment: config.pipedream_environment.clone(),
+        api_url: config.pipedream_api_url.clone(),
+        mcp_url: config.pipedream_mcp_url.clone(),
+        // Only Connect tokens carry allowed origins, and this service never
+        // mints one: connecting apps stays in the app.
+        allowed_origins: Vec::new(),
+    })
+    .context("failed to build Pipedream client")?;
 
     let harness = Arc::new(AgentHarnessService::new(
         sessions,
@@ -389,7 +400,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::clone(&runtimes),
         prompt_context,
         prompt_composer,
-        EgressProvisioner::new(mcp_servers.clone(), config.egress_base_url.clone()),
+        EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
         defaults,
     ));
 
@@ -458,7 +469,7 @@ async fn run() -> anyhow::Result<()> {
     // The egress proxy: one binary today, its own listener from the start.
     let egress = EgressServiceImpl::new(
         StoredTokenSessionAuthority::new(PgAgentSessionRepo::new(pool.clone())),
-        RmcpMcpCredentials::new(mcp_servers),
+        PipedreamMcpCredentials::new(mcp_connections, pipedream),
         GithubAppTokens::new(InstallationTokenService::new(
             InstallationTokenConfig {
                 client_id: config.github_sync_app_client_id.clone(),

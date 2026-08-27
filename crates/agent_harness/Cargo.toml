@@ -27,7 +27,7 @@ dashmap = { workspace = true }
 futures = { workspace = true }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
-mcp_client = { path = "../mcp_client" }
+pipedream_mcp = { path = "../pipedream_mcp" }
 macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_tower_layers = { path = "../macro_tower_layers" }

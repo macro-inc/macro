@@ -114,6 +114,44 @@ fn strips_every_value_of_a_repeated_header() {
     assert_eq!(names(&headers), ["accept"]);
 }
 
+/// The `x-pd-*` headers are Pipedream's authorization vocabulary -
+/// `x-pd-external-user-id` alone picks whose account a request spends - so
+/// none of them may ride through from the sandbox, including ones this proxy
+/// never stamps itself.
+#[test]
+fn strips_every_pipedream_scoping_header() {
+    let mut headers = header_map(&[
+        ("x-pd-external-user-id", "somebody-else"),
+        ("X-PD-Tool-Mode", "full-config"),
+        ("x-pd-anything-future", "1"),
+        ("accept", "text/event-stream"),
+    ]);
+
+    sanitize_request_headers(&mut headers);
+
+    assert_eq!(names(&headers), ["accept"]);
+}
+
+/// Scope headers travel next to a credential, so a value that could smuggle a
+/// newline is a header injection and the call must refuse to exist.
+#[test]
+fn a_scope_header_that_could_inject_is_refused() {
+    let call = UpstreamCall::bearer(
+        Url::parse("https://remote.mcp.pipedream.net").expect("url"),
+        BearerToken::new("token"),
+    )
+    .expect("call");
+
+    let refusal = call
+        .scoped_by([(
+            "x-pd-external-user-id".to_owned(),
+            "owner\r\nx-pd-external-user-id: somebody-else".to_owned(),
+        )])
+        .expect_err("refused");
+
+    assert!(matches!(refusal, EgressError::Internal(_)), "{refusal}");
+}
+
 /// The headers MCP needs to work across a proxy at all: the server's session
 /// id, event-stream resumption, and the accept header that asks for a stream.
 #[test]

@@ -125,6 +125,13 @@ where
         request
             .headers_mut()
             .insert(AUTHORIZATION, call.authorization().header_value()?);
+        // Scoping headers are half of the credential - for Pipedream they are
+        // what says whose account the bearer spends - so they get the same
+        // treatment: stamped from the resolved call after the strip, never
+        // taken from the request.
+        for (name, value) in call.scope_headers() {
+            request.headers_mut().insert(name.clone(), value.clone());
+        }
 
         let mut response = self.forward.forward(request).await?;
         sanitize_response_headers(response.headers_mut());

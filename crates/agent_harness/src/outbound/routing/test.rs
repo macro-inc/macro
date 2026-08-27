@@ -96,13 +96,6 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never looks sessions up by egress token")
     }
 
-    async fn find_all_for_thread(
-        &self,
-        _thread_id: macro_uuid::Uuid,
-    ) -> SessionResult<Vec<AgentSession>> {
-        unimplemented!("the router never lists a thread's sessions")
-    }
-
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
             id,

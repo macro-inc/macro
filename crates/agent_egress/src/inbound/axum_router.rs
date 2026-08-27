@@ -226,9 +226,6 @@ impl IntoResponse for EgressError {
             Self::UnknownServer(_) | Self::Unroutable(_) => StatusCode::NOT_FOUND,
             Self::RepoUnavailable(_) => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
-            // 424 Failed Dependency: the request was fine, something it
-            // depends on is not, and no retry will change that.
-            Self::NeedsReauthorization(_) => StatusCode::FAILED_DEPENDENCY,
             // The named upstream is unusable as configured. Someone has to
             // fix the URL; the agent cannot.
             Self::InsecureUpstream(_) => StatusCode::BAD_GATEWAY,
@@ -242,29 +239,18 @@ impl IntoResponse for EgressError {
         // request we had just stamped the owner's credential onto. Detail goes
         // to `tracing`, where the person debugging can see it and the model
         // cannot.
-        //
-        // The exception is the one refusal an agent can act on. An agent given
-        // an opaque error retries, and retrying a dead OAuth grant burns a turn
-        // to no end, so that case says what has to happen instead - naming only
-        // the slug the sandbox already dialled.
         let body = match &self {
-            Self::NeedsReauthorization(slug) => format!(
-                "The MCP server \"{slug}\" is no longer authorized. Do not retry: ask the person \
-                 you are working for to reconnect \"{slug}\" in Macro's settings, then try again.",
-            ),
-            Self::Unauthenticated => "Not authenticated.".to_owned(),
-            Self::SessionClosed => "This session is no longer open.".to_owned(),
-            Self::Unroutable(_) => "Nothing is served at that path.".to_owned(),
-            Self::UnknownServer(_) => "No such connected MCP server.".to_owned(),
+            Self::Unauthenticated => "Not authenticated.",
+            Self::SessionClosed => "This session is no longer open.",
+            Self::Unroutable(_) => "Nothing is served at that path.",
+            Self::UnknownServer(_) => "No such connected MCP server.",
             Self::RepoUnavailable(_) => {
-                "This session's repository is not reachable with Macro's GitHub App.".to_owned()
+                "This session's repository is not reachable with Macro's GitHub App."
             }
-            Self::MethodNotAllowed(_) => "That method is not allowed here.".to_owned(),
-            Self::InsecureUpstream(_) => {
-                "That upstream is misconfigured and cannot be reached.".to_owned()
-            }
-            Self::Upstream(_) => "The upstream could not be reached.".to_owned(),
-            Self::Internal(_) => "Egress failed.".to_owned(),
+            Self::MethodNotAllowed(_) => "That method is not allowed here.",
+            Self::InsecureUpstream(_) => "That upstream is misconfigured and cannot be reached.",
+            Self::Upstream(_) => "The upstream could not be reached.",
+            Self::Internal(_) => "Egress failed.",
         };
 
         (status, body).into_response()

@@ -61,13 +61,6 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never looks sessions up by egress token")
     }
 
-    async fn find_all_for_thread(
-        &self,
-        _thread_id: macro_uuid::Uuid,
-    ) -> SessionResult<Vec<AgentSession>> {
-        unimplemented!("the manager never lists a thread's sessions")
-    }
-
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
             id,
@@ -462,8 +455,8 @@ async fn spawn_uses_the_owners_default_model() {
         .spawn(SpawnContainer {
             session_id,
             kind: AgentKind::Cursor,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
+            egress: crate::testing::helpers::egress::test_egress(),
         })
         .await
         .expect("spawn");

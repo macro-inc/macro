@@ -65,9 +65,6 @@ impl EgressService for SpyService {
                 *response.status_mut() = StatusCode::ACCEPTED;
                 Ok(response)
             }
-            Some(EgressError::NeedsReauthorization(slug)) => {
-                Err(EgressError::NeedsReauthorization(slug.clone()))
-            }
             Some(EgressError::RepoUnavailable(repo)) => {
                 Err(EgressError::RepoUnavailable(repo.clone()))
             }
@@ -205,10 +202,6 @@ async fn maps_each_refusal_to_the_status_that_tells_the_agent_what_to_do() {
             StatusCode::METHOD_NOT_ALLOWED,
         ),
         (
-            EgressError::NeedsReauthorization(McpServerSlug::parse("datadog").expect("slug")),
-            StatusCode::FAILED_DEPENDENCY,
-        ),
-        (
             EgressError::Upstream(rootcause::report!("nope")),
             StatusCode::BAD_GATEWAY,
         ),
@@ -217,21 +210,6 @@ async fn maps_each_refusal_to_the_status_that_tells_the_agent_what_to_do() {
         let response = call(&service, get("/mcp/datadog", Some("Bearer session"))).await;
         assert_eq!(response.status(), expected);
     }
-}
-
-/// An agent that gets an opaque error retries. The one error nothing it does
-/// can fix has to say so, and say who can.
-#[tokio::test]
-async fn a_dead_oauth_grant_tells_the_agent_not_to_retry() {
-    let service = SpyService::refusing(EgressError::NeedsReauthorization(
-        McpServerSlug::parse("datadog").expect("slug"),
-    ));
-    let response = call(&service, get("/mcp/datadog", Some("Bearer session"))).await;
-
-    let body = body_text(response).await;
-    assert!(body.contains("datadog"), "{body}");
-    assert!(body.contains("Do not retry"), "{body}");
-    assert!(body.contains("reconnect"), "{body}");
 }
 
 /// The sandbox runs model-authored code, so a response body is something the

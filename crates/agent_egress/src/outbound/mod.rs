@@ -3,7 +3,7 @@
 /// Minting a scoped GitHub App installation credential.
 pub mod github_tokens;
 
-/// Resolving an owner's connected MCP servers to live OAuth tokens.
+/// Resolving an owner's Pipedream-connected apps to scoped upstream calls.
 pub mod mcp_credentials;
 
 /// Resolving a sandbox's session token to the session it stands for.

@@ -1,19 +1,22 @@
-//! Resolving a slug to one of the owner's connected MCP servers, with a live
-//! token.
+//! Resolving a slug to one of the owner's Pipedream-connected apps.
 //!
-//! The freshness is rmcp's: `AuthorizationManager::get_access_token` refreshes
-//! a grant that is near expiry and writes the rotated one back through the
-//! credential store, which here is `mcp_client`'s
-//! [`PersistingCredentialStore`] - the same one the MCP tool path uses, so a
-//! refresh triggered by a sandbox and one triggered by a chat message land in
-//! the same row. Reusing it is the point: a second store would rotate a token
-//! the other path then fails to find.
+//! There is no OAuth here to manage. Pipedream owns every user grant - the
+//! consent flow, the stored tokens, the refresh - and its remote MCP server
+//! injects the account's credentials server-side. What a request needs from
+//! us is our own project-level API token and the `x-pd-*` headers that say
+//! which user and app to act as, and *that* pair is exactly why this traffic
+//! must flow through the proxy: the bearer is project-wide, so whoever holds
+//! it picks the user. The sandbox never does; the user id is stamped from the
+//! session's grant.
+//!
+//! Both halves come from `pipedream_mcp`'s own ports - the same rows the chat
+//! tool path reads, the same client that dials Pipedream for it - so an app
+//! connected in Macro is an app the sandbox can reach, with nothing to keep
+//! in sync.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::models::McpServerRecord;
-use mcp_client::domain::ports::McpServerStore;
-use mcp_client::domain::service::PersistingCredentialStore;
-use rmcp::transport::auth::{AuthError, AuthorizationManager};
+use pipedream_mcp::domain::models::PipedreamConnection;
+use pipedream_mcp::domain::ports::{ConnectionStore, McpUpstream};
 use std::sync::Arc;
 use url::Url;
 
@@ -21,50 +24,62 @@ use crate::domain::error::EgressError;
 use crate::domain::model::{BearerToken, McpServerSlug, UpstreamCall};
 use crate::domain::ports::McpCredentials;
 
-/// Resolves MCP slugs against an owner's stored server records.
-pub struct RmcpMcpCredentials<Servers> {
-    servers: Arc<Servers>,
+#[cfg(test)]
+mod test;
+
+/// Resolves MCP slugs against an owner's Pipedream connections.
+pub struct PipedreamMcpCredentials<Connections, Upstream> {
+    connections: Arc<Connections>,
+    upstream: Upstream,
 }
 
-impl<Servers> RmcpMcpCredentials<Servers>
+impl<Connections, Upstream> PipedreamMcpCredentials<Connections, Upstream>
 where
-    Servers: McpServerStore,
+    Connections: ConnectionStore,
+    Upstream: McpUpstream,
 {
-    /// Build the adapter over the store holding the owner's servers.
-    pub fn new(servers: Arc<Servers>) -> Self {
-        Self { servers }
+    /// Build the adapter over the store holding the owner's connections and
+    /// the client that addresses Pipedream's MCP server.
+    pub fn new(connections: Arc<Connections>, upstream: Upstream) -> Self {
+        Self {
+            connections,
+            upstream,
+        }
     }
 
-    /// The owner's enabled server whose name slugs to `slug`.
+    /// The owner's enabled connection whose app slugs to `slug`.
     ///
     /// Scoped to the owner by the store call itself, and filtered to `enabled`
-    /// here because the store does not: a disabled server is one the owner
+    /// here because the store does not: a disabled connector is one the owner
     /// turned off, and turning it off has to take the sandbox's access with it.
-    async fn record(
+    async fn connection(
         &self,
         owner: &MacroUserIdStr<'static>,
         slug: &McpServerSlug,
-    ) -> Result<McpServerRecord, EgressError> {
-        self.servers
+    ) -> Result<PipedreamConnection, EgressError> {
+        self.connections
             .list(owner)
             .await
             .map_err(|error| {
                 EgressError::Internal(rootcause::report!(
-                    "could not list connected MCP servers: {error:?}"
+                    "could not list Pipedream connections: {error:?}"
                 ))
             })?
             .into_iter()
             .filter(|record| record.enabled)
-            .find(|record| {
-                McpServerSlug::from_server_name(&record.server_name).as_ref() == Some(slug)
-            })
+            // Slugged from `app_slug`, not `server_name`: the app slug is
+            // Pipedream's stable identifier, and the display name is the
+            // user's to rename. The provisioner derives the sandbox's config
+            // keys the same way, which is what makes them meet.
+            .find(|record| McpServerSlug::from_server_name(&record.app_slug).as_ref() == Some(slug))
             .ok_or_else(|| EgressError::UnknownServer(slug.clone()))
     }
 }
 
-impl<Servers> McpCredentials for RmcpMcpCredentials<Servers>
+impl<Connections, Upstream> McpCredentials for PipedreamMcpCredentials<Connections, Upstream>
 where
-    Servers: McpServerStore,
+    Connections: ConnectionStore,
+    Upstream: McpUpstream,
 {
     #[tracing::instrument(skip_all, err, fields(%owner, %slug))]
     async fn resolve(
@@ -72,68 +87,27 @@ where
         owner: &MacroUserIdStr<'static>,
         slug: &McpServerSlug,
     ) -> Result<UpstreamCall, EgressError> {
-        let record = self.record(owner, slug).await?;
+        let record = self.connection(owner, slug).await?;
 
-        // Parsed, but not yet vetted: `UpstreamCall`'s constructor is what
-        // refuses a non-https server, and it is the only way to pair this URL
-        // with a credential.
-        let url = Url::parse(&record.url).map_err(|error| {
-            EgressError::Internal(rootcause::report!(
-                "stored MCP server url is not a url: {error}"
+        // A dead grant is Pipedream's to notice, not ours: we hold no
+        // refresh token to fail on. If the account behind this connection has
+        // gone unhealthy, Pipedream answers the forwarded call with its own
+        // error and the status passes through to the agent.
+        let call = self.upstream.upstream(&record).await.map_err(|error| {
+            EgressError::Upstream(rootcause::report!(
+                "could not address Pipedream for {slug}: {error:?}"
             ))
         })?;
 
-        // No stored grant at all is the same fact as one that cannot be
-        // refreshed: the owner has to reconnect the server.
-        let credentials = record
-            .credentials
-            .clone()
-            .ok_or_else(|| EgressError::NeedsReauthorization(slug.clone()))?;
+        // Parsed, but not yet vetted: `UpstreamCall`'s constructor is what
+        // refuses a non-https endpoint, and it is the only way to pair this
+        // URL with a credential.
+        let url = Url::parse(&call.url).map_err(|error| {
+            EgressError::Internal(rootcause::report!(
+                "configured Pipedream MCP url is not a url: {error}"
+            ))
+        })?;
 
-        // The order matters and is `McpServerRecord::connect`'s: seed the store
-        // with what we have, hand it to the manager, then let the manager
-        // discover the server's OAuth metadata. Without the last step the
-        // manager has no client to refresh with, so any expired grant fails.
-        let mut authorization = AuthorizationManager::new(&record.url)
-            .await
-            .map_err(|error| authorization_error(slug, error))?;
-        let store = PersistingCredentialStore::new(record, Arc::clone(&self.servers));
-        store
-            .seed(credentials)
-            .await
-            .map_err(|error| authorization_error(slug, error))?;
-        authorization.set_credential_store(store);
-        authorization
-            .initialize_from_store()
-            .await
-            .map_err(|error| authorization_error(slug, error))?;
-
-        let token = authorization
-            .get_access_token()
-            .await
-            .map_err(|error| authorization_error(slug, error))?;
-
-        UpstreamCall::bearer(url, BearerToken::new(token))
-    }
-}
-
-/// Split rmcp's auth failures by what the caller should do.
-///
-/// The distinction is the reason [`EgressError::NeedsReauthorization`] exists:
-/// a grant that cannot be refreshed needs a person, and an agent told only
-/// "error" will retry it until its turn times out. Everything else is
-/// somebody's server or network being unreachable, which is worth retrying.
-fn authorization_error(slug: &McpServerSlug, error: AuthError) -> EgressError {
-    match error {
-        AuthError::AuthorizationRequired
-        | AuthError::TokenExpired
-        | AuthError::TokenRefreshFailed(_)
-        | AuthError::NoAuthorizationSupport => {
-            tracing::warn!(error = ?error, %slug, "an MCP grant needs reconnecting");
-            EgressError::NeedsReauthorization(slug.clone())
-        }
-        other => EgressError::Upstream(rootcause::report!(
-            "MCP server {slug} would not authorize us: {other}"
-        )),
+        UpstreamCall::bearer(url, BearerToken::new(call.bearer_token))?.scoped_by(call.headers)
     }
 }

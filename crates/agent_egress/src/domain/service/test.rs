@@ -65,6 +65,7 @@ struct SpyCredentials {
     asked: Mutex<Vec<(String, String)>>,
     known: bool,
     url: String,
+    scope: Vec<(String, String)>,
 }
 
 impl SpyCredentials {
@@ -78,6 +79,19 @@ impl SpyCredentials {
             asked: Mutex::default(),
             known: true,
             url: url.to_owned(),
+            scope: Vec::new(),
+        }
+    }
+
+    /// A resolution that scopes its credential with extra headers, the way
+    /// the Pipedream adapter does.
+    fn scoped(scope: &[(&str, &str)]) -> Self {
+        Self {
+            scope: scope
+                .iter()
+                .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+                .collect(),
+            ..Self::knowing()
         }
     }
 
@@ -86,6 +100,7 @@ impl SpyCredentials {
             asked: Mutex::default(),
             known: false,
             url: String::new(),
+            scope: Vec::new(),
         }
     }
 }
@@ -108,7 +123,8 @@ impl McpCredentials for SpyCredentials {
         UpstreamCall::bearer(
             Url::parse(&self.url).expect("url"),
             BearerToken::new("upstream-token"),
-        )
+        )?
+        .scoped_by(self.scope.iter().cloned())
     }
 }
 
@@ -275,6 +291,64 @@ async fn replaces_the_sandboxs_token_with_the_owners() {
             .map(str::to_owned)
             .collect::<Vec<_>>()),
         ["mcp-session-id", "authorization"]
+    );
+}
+
+/// Pipedream reads *whose* connected account to spend off
+/// `x-pd-external-user-id`, so those headers are part of the credential: the
+/// stamped values must come from resolution, and a sandbox that sends its own
+/// must not be able to act as anybody else.
+#[tokio::test]
+async fn stamps_the_resolved_scope_over_whatever_the_sandbox_claimed() {
+    let service = EgressServiceImpl::new(
+        StubSessions::granting(),
+        SpyCredentials::scoped(&[
+            ("x-pd-external-user-id", "the-owner"),
+            ("x-pd-app-slug", "datadog"),
+        ]),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+
+    service
+        .proxy(
+            &SessionToken::new("session-token"),
+            datadog(),
+            request(
+                Method::POST,
+                &[
+                    ("authorization", "Bearer session-token"),
+                    // The sandbox claiming to be somebody else, and a scoping
+                    // header resolution never stamps at all.
+                    ("x-pd-external-user-id", "somebody-else"),
+                    ("x-pd-tool-mode", "full-config"),
+                ],
+            ),
+        )
+        .await
+        .expect("proxied");
+
+    let scope = service.forward.forwarded(|parts| {
+        parts
+            .headers
+            .iter()
+            .filter(|(name, _)| name.as_str().starts_with("x-pd-"))
+            .map(|(name, value)| {
+                (
+                    name.as_str().to_owned(),
+                    value.to_str().expect("ascii").to_owned(),
+                )
+            })
+            .collect::<Vec<_>>()
+    });
+
+    assert_eq!(
+        scope,
+        [
+            ("x-pd-external-user-id".to_owned(), "the-owner".to_owned()),
+            ("x-pd-app-slug".to_owned(), "datadog".to_owned()),
+        ],
+        "exactly the resolved scope, nothing the sandbox sent"
     );
 }
 

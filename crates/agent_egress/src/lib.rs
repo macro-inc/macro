@@ -5,8 +5,9 @@
 //! every permission allowed. Anything handed to that sandbox has been handed
 //! to the model, so the sandbox holds exactly one secret: a short-lived
 //! session token minted by the harness. Every upstream credential - the
-//! owner's MCP OAuth grants today, GitHub App installation tokens next -
-//! stays here, and is stamped onto requests as they pass through.
+//! Pipedream project token that spends the owner's connected apps, GitHub
+//! App installation tokens - stays here, and is stamped onto requests as
+//! they pass through.
 //!
 //! That is the whole point of the indirection. A proxy that only forwarded
 //! bytes would be pointless; this one is the single place where "which
@@ -21,8 +22,9 @@
 //!    spend - or refuses it because the token is bad, expired, or the session
 //!    has since closed
 //! 3. one of two credential ports resolves the destination:
-//!    [`ports::McpCredentials`] finds the named server among *that owner's*
-//!    connected servers and produces a fresh bearer token, or
+//!    [`ports::McpCredentials`] finds the named app among *that owner's*
+//!    Pipedream connections and produces our project bearer plus the
+//!    `x-pd-*` headers that pin it to that owner and app, or
 //!    [`ports::GithubTokens`] mints an installation token scoped to the
 //!    session's own repository
 //! 4. the service strips the sandbox's own credentials from the request and
@@ -34,10 +36,12 @@
 //! decisions be tested without a socket.
 //!
 //! The sandbox never names a destination, and that is the property everything
-//! else rests on. For MCP it names a server slug, which resolves only through
-//! the owner's own rows, so it cannot ask to reach somewhere its owner never
-//! connected. For git it names nothing at all: the repository comes from the
-//! session's grant, and the endpoint from a three-entry allowlist.
+//! else rests on. For MCP it names an app slug, which resolves only through
+//! the owner's own rows, so it cannot ask to act as anyone its owner is not -
+//! which matters doubly here, because the Pipedream bearer alone could act as
+//! anyone, and the header saying *who* is stamped from the session's grant.
+//! For git it names nothing at all: the repository comes from the session's
+//! grant, and the endpoint from a three-entry allowlist.
 
 /// Domain models, ports, errors, and the service that decides what gets
 /// stamped onto which upstream.
