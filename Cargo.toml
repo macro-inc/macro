@@ -193,6 +193,7 @@ http-body-util = "0.1.2"
 httpdate = "1"
 image = "0.25"
 indexmap = "2"
+indoc = "2"
 inquire = "0.7"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
@@ -275,6 +276,7 @@ sqlx = { version = "0.8.6", features = [
 ] }
 sqlx-core = { version = "0.8.6" }
 strum = { version = "0.27.1", features = ["derive"] }
+tempfile = "3"
 thiserror = "2.0.0"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
