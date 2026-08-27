@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import {
+  adjustScrollAfterPrepend,
   alignmentDelta,
   isTruncatedMiddleMessage,
   nearestDelta,
@@ -208,5 +209,26 @@ describe('pageThenAdvanceDelta', () => {
     box(container, 0, 800);
     box(element, -400, 600);
     expect(pageThenAdvanceDelta(container, element, 'prev')).toBe(-400);
+  });
+});
+
+describe('adjustScrollAfterPrepend', () => {
+  it('keeps the same card on screen when height grows above', () => {
+    const container = document.createElement('div');
+    let scrollHeight = 200;
+    Object.defineProperty(container, 'scrollHeight', {
+      get: () => scrollHeight,
+    });
+    container.scrollTop = 50;
+    scrollHeight = 400;
+    adjustScrollAfterPrepend(container, 200, 50);
+    expect(container.scrollTop).toBe(250);
+  });
+
+  it('leaves the title pinned when you were already at the top', () => {
+    const container = document.createElement('div');
+    container.scrollTop = 0;
+    adjustScrollAfterPrepend(container, 200, 0);
+    expect(container.scrollTop).toBe(0);
   });
 });

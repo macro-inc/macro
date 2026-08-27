@@ -194,6 +194,17 @@ export function revealMessageInView(
   container.scrollBy({ top, behavior: nativeBehavior });
 }
 
+/** Older pages insert above. Keep the card you were reading on screen. */
+export function adjustScrollAfterPrepend(
+  container: HTMLElement,
+  previousScrollHeight: number,
+  previousScrollTop: number
+): void {
+  if (previousScrollTop <= 0) return;
+  const delta = container.scrollHeight - previousScrollHeight;
+  if (delta > 0) container.scrollTop = previousScrollTop + delta;
+}
+
 export function revealMessageAfterLayout(
   messageId: string,
   messages: Array<{ db_id?: string | null }>,

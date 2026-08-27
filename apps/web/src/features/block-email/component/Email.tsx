@@ -226,7 +226,7 @@ function EmailContent(props: EmailViewProps) {
       performScrollToMessage(messageId, {
         behavior: 'instant',
         focus: true,
-        align: 'nearest',
+        align: 'start',
       });
     });
   }

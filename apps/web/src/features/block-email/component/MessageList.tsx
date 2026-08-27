@@ -12,6 +12,7 @@ import {
   Show,
 } from 'solid-js';
 import {
+  adjustScrollAfterPrepend,
   isTruncatedMiddleMessage,
   isUnreadMessage,
   threadMessageIsExpanded,
@@ -42,6 +43,9 @@ export function MessageList(props: MessageListProps) {
     context.messages.focusedID,
     (a, b) => !!a && !!b && a === b
   );
+  const hiddenCount = createMemo(() =>
+    truncatedMiddleCount(context.messages.list().length)
+  );
   createEffect(() => {
     const list = context.messagesListRef();
     if (!list) return;
@@ -66,7 +70,8 @@ export function MessageList(props: MessageListProps) {
       )}
       ref={context.registerMessagesList}
       onscroll={(e) => {
-        const scrollFromTop = e.currentTarget.scrollTop;
+        const list = e.currentTarget;
+        const scrollFromTop = list.scrollTop;
 
         if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
 
@@ -75,7 +80,17 @@ export function MessageList(props: MessageListProps) {
           !context.query.isFetching() &&
           context.query.hasMore()
         ) {
-          context.query.fetchNextPage();
+          const previousScrollHeight = list.scrollHeight;
+          const previousScrollTop = list.scrollTop;
+          void Promise.resolve(context.query.fetchNextPage()).then(() => {
+            requestAnimationFrame(() => {
+              adjustScrollAfterPrepend(
+                list,
+                previousScrollHeight,
+                previousScrollTop
+              );
+            });
+          });
         }
       }}
     >
@@ -176,7 +191,7 @@ export function MessageList(props: MessageListProps) {
                   when={
                     chronologicalIndex() === 0 &&
                     !props.showMiddleMessages &&
-                    truncatedMiddleCount(context.messages.list().length) > 0
+                    hiddenCount() > 0
                   }
                 >
                   <div class="shrink-0 w-full flex justify-center">
@@ -192,9 +207,8 @@ export function MessageList(props: MessageListProps) {
                           class="relative bg-panel px-2 text-xs font-medium text-ink-muted"
                           onClick={() => props.onOpenMiddle()}
                         >
-                          Show{' '}
-                          {truncatedMiddleCount(context.messages.list().length)}{' '}
-                          hidden messages
+                          Show {hiddenCount()} hidden{' '}
+                          {hiddenCount() === 1 ? 'message' : 'messages'}
                         </Button>
                       </div>
                     </div>
