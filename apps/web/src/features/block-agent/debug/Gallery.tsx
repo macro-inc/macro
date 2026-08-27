@@ -74,7 +74,7 @@ const FIXTURE_MESSAGE: FoldedMessage = {
   parts: [
     {
       kind: 'text',
-      text: "I'll look at the fold implementation and tighten it up.",
+      text: "I'll look at the fold implementation and tighten it up.\n\nThe quadratic formula is $$ x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a} $$.",
     },
     {
       kind: 'thought',

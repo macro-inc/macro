@@ -22,7 +22,13 @@ import { $isParagraphNode, $isTextNode, type LexicalNode } from "lexical";
 import { z } from "zod";
 import { CUSTOM_TRANSFORMERS } from "./customTransformers";
 import { I_IMAGE_CONSTRAINED, IMAGE } from "./image";
-import { E_BLOCK_EQUATION_NODE, I_EQUATION_NODE } from "./katex";
+import {
+	E_BLOCK_EQUATION_NODE,
+	E_INLINE_EQUATION_NODE,
+	E_LATEX_BRACKET_BLOCK,
+	E_LATEX_PAREN_INLINE,
+	I_EQUATION_NODE,
+} from "./katex";
 import {
 	E_CONTACT_MENTION,
 	E_DOCUMENT_MENTION,
@@ -246,6 +252,9 @@ const externalTransformersWithinTables: Transformer[] = [
 	E_DOCUMENT_MENTION,
 	E_CONTACT_MENTION,
 	E_BLOCK_EQUATION_NODE,
+	E_LATEX_BRACKET_BLOCK,
+	E_INLINE_EQUATION_NODE,
+	E_LATEX_PAREN_INLINE,
 	IMAGE,
 	...HTML_ENTITY_TRANSFORMERS,
 	...TRANSFORMERS,

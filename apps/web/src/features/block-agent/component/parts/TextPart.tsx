@@ -5,11 +5,14 @@ import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 
 export function TextPart(props: { text: string }) {
   return (
-    <div class="whitespace-pre-wrap wrap-break-word max-w-full text-sm">
+    // `chat-markdown-container` is the overflow host for KaTeX display math
+    // (see index.css). Agent replies are GFM (`$$` / `\( \)`), not internal
+    // XML, so parse both transformer sets.
+    <div class="chat-markdown-container whitespace-pre-wrap wrap-break-word max-w-full text-sm">
       <StaticMarkdown
         markdown={props.text}
         theme={channelTheme}
-        target="internal"
+        target="both"
       />
     </div>
   );
