@@ -390,6 +390,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             "agent.session.command",
             agent.session.id = %id,
             agent.action.name = action.as_ref(),
+            agent.command.queue_wait_ms = tracing::field::Empty,
+            agent.session.runtime_phase_at_dequeue = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
@@ -400,6 +402,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                 action_id,
                 completed,
                 span,
+                enqueued_at: tokio::time::Instant::now(),
             })
             .await
             .is_err()
@@ -908,6 +911,12 @@ where
     Rt: AgentSessionRealtime,
 {
     /// Push the frame just appended out to whoever is watching the session.
+    #[tracing::instrument(
+        name = "agent.session.realtime.publish",
+        err,
+        skip(self, agent_session_id, entry),
+        fields(agent.session.id = %agent_session_id)
+    )]
     async fn stream(
         &mut self,
         agent_session_id: AgentSessionId,

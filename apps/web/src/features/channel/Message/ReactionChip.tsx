@@ -88,14 +88,11 @@ export function ReactionChip(props: ReactionChipProps) {
               }))
             }
             size="sm"
-            variant="outline"
+            variant={props.selected ? 'accent' : 'outline'}
             class={cn(
               'flex flex-row items-center h-7 min-w-7 gap-1 rounded-full',
               {
-                'border-rail hover:bg-hover': props.interactive,
-                'border-rail': !props.selected && !props.interactive,
-                'text-accent border-accent bg-accent-bg hover:bg-accent-hover':
-                  props.selected,
+                'border-accent/10': props.selected,
                 'pointer-events-auto': !props.interactive,
               }
             )}

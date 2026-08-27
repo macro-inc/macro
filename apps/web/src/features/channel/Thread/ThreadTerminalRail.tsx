@@ -1,17 +1,8 @@
-import { cn } from '@ui';
-
-type ThreadTerminalRailProps = {
-  newMessage?: boolean;
-};
-
 /** Curves the parent spine toward the reply action without touching it. */
-export function ThreadTerminalRail(props: ThreadTerminalRailProps) {
+export function ThreadTerminalRail() {
   return (
     <div
-      class={cn(
-        'pointer-events-none absolute -z-1 channel-rail-left channel-rail-bottom border-rail rounded-bl-[14px] left-(--left-of-channel-rail) h-8',
-        props.newMessage && 'border-accent'
-      )}
+      class="pointer-events-none absolute -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px] left-(--left-of-channel-rail) h-8"
       style={{
         bottom: 'calc(var(--thread-padding-y) + 1.5rem)',
         width:

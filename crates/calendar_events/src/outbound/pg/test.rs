@@ -139,6 +139,8 @@ fn timed_upsert(
             recurrence_lines: vec!["RRULE:FREQ=DAILY;COUNT=2".to_string()],
             organizer_email: Some("organizer@example.com".to_string()),
             organizer_name: Some("Organizer".to_string()),
+            creator_email: Some("creator@example.com".to_string()),
+            creator_name: Some("Creator".to_string()),
             conference_url: None,
             conference_provider: None,
             sequence,
@@ -1203,6 +1205,10 @@ async fn occurrence_range_uses_overlap_indexes_and_preserves_attendees(pool: PgP
 
     assert_eq!(result.len(), 2);
     assert!(result.iter().all(|(event, _)| event.attendees.len() == 1));
+    assert!(result.iter().all(|(event, _)| {
+        event.creator_email.as_deref() == Some("creator@example.com")
+            && event.creator_name.as_deref() == Some("Creator")
+    }));
 }
 
 /// A Google out-of-office auto-decline records the decline on the exception
@@ -2610,6 +2616,8 @@ fn reminder_upsert(
             recurrence_lines: Vec::new(),
             organizer_email: None,
             organizer_name: None,
+            creator_email: None,
+            creator_name: None,
             conference_url: None,
             conference_provider: None,
             sequence: 0,

@@ -229,10 +229,7 @@ export function GithubMessageView(props: {
       <GithubCommentMessage comment={props.comment} />
       <Show when={replies().length > 0}>
         <div class="relative w-full">
-          <Thread.ReplyRailDecorations
-            isReplying={() => false}
-            firstThreadReplyNewMessage={false}
-          />
+          <Thread.ReplyRailDecorations />
           <Thread.RepliesContainer>
             <Key each={replies()} by="id">
               {(reply) => (

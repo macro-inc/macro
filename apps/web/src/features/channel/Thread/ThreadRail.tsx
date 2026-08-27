@@ -1,16 +1,7 @@
-import { cn } from '@ui/utils/classname';
-
-interface ThreadRailProps {
-  newMessage?: boolean;
-}
-
-export function ThreadRail(props: ThreadRailProps) {
+export function ThreadRail() {
   return (
     <div
-      class={cn(
-        'pointer-events-none absolute top-0 bottom-0 channel-rail-left border-rail -z-1',
-        props.newMessage && 'border-accent'
-      )}
+      class="pointer-events-none absolute top-0 bottom-0 channel-rail-left border-thread-rail -z-1"
       style={{
         left: 'var(--left-of-channel-rail)',
       }}

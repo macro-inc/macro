@@ -170,6 +170,8 @@ export * from './calendarEvent';
 export * from './calendarEventCalendarId';
 export * from './calendarEventConferenceProvider';
 export * from './calendarEventConferenceUrl';
+export * from './calendarEventCreatorEmail';
+export * from './calendarEventCreatorName';
 export * from './calendarEventDescription';
 export * from './calendarEventFilters';
 export * from './calendarEventFiltersEndsAfter';

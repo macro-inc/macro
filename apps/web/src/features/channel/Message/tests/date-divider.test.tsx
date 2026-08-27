@@ -66,6 +66,7 @@ describe('NewDivider', () => {
 
     render(() => (
       <NewDivider
+        createdAt="2026-02-21T10:00:00.000Z"
         listMeta={{
           index: 2,
           isNewMessage: true,
@@ -79,5 +80,30 @@ describe('NewDivider', () => {
     const button = screen.getByRole('button', { name: 'New' });
     await user.click(button);
     expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it('combines coincident date and new dividers into one accent divider', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-22T12:00:00.000Z'));
+    const listMeta = {
+      index: 2,
+      isNewMessage: true,
+      isFirstNewMessage: true,
+      previousTopLevelCreatedAt: '2026-02-21T09:00:00.000Z',
+    };
+
+    render(() => (
+      <>
+        <NewDivider createdAt="2026-02-22T10:00:00.000Z" listMeta={listMeta} />
+        <DateDivider createdAt="2026-02-22T10:00:00.000Z" listMeta={listMeta} />
+      </>
+    ));
+
+    const label = screen.getByText('Today - New');
+    expect(label.classList.contains('text-accent')).toBe(true);
+    expect(
+      label.previousElementSibling?.classList.contains('border-accent/40')
+    ).toBe(true);
+    expect(screen.queryByText('Today')).toBeNull();
   });
 });

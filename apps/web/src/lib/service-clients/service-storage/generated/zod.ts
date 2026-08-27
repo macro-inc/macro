@@ -841,6 +841,16 @@ export const listOccurrencesResponse = zod
                 .nullish()
                 .describe('Direct join URL when known.'),
               createdAt: zod.iso.datetime({}).describe('Entity creation time.'),
+              creatorEmail: zod
+                .string()
+                .nullish()
+                .describe(
+                  'Provider-reported creator email. Distinct from the organizer when\nsomeone writes onto a calendar they do not own. Omitted from stored\nprojections when unknown so events ingested before this field still\ncompare equal.'
+                ),
+              creatorName: zod
+                .string()
+                .nullish()
+                .describe('Provider-reported creator display name.'),
               description: zod
                 .string()
                 .nullish()

@@ -28,6 +28,10 @@ export interface CalendarSource {
   name: string;
   /** Semantic CSS color used for events from this source. */
   color: string;
+  /** Connected inbox address, when the source came from a visible calendar. */
+  emailAddress?: string;
+  /** Whether this source is its connected inbox's primary calendar. */
+  isPrimary?: boolean;
 }
 
 /** Calendar occurrence data, independent from FullCalendar. */
@@ -55,6 +59,10 @@ export interface CalendarEvent {
   organizerName?: string;
   /** Event organizer email address. */
   organizerEmail?: string;
+  /** Provider-reported creator display name. */
+  creatorName?: string;
+  /** Provider-reported creator email address. */
+  creatorEmail?: string;
   /** Attendees and their RSVP metadata. */
   attendees: CalendarAttendee[];
   /** Per-user reminder configuration; absent means the calendar default. */
@@ -88,6 +96,10 @@ export const DEFAULT_CALENDAR_SOURCE: CalendarSource = {
   color: 'var(--color-accent)',
 };
 
+function optionalText(value: string | null | undefined) {
+  return value ?? undefined;
+}
+
 /** Maps one backend occurrence projection into the calendar event model. */
 export function mapCalendarOccurrence(
   item: CalendarOccurrenceItem,
@@ -115,6 +127,8 @@ export function mapCalendarOccurrence(
       undefined,
     organizerName: event.organizerName ?? undefined,
     organizerEmail: event.organizerEmail ?? undefined,
+    creatorName: optionalText(event.creatorName),
+    creatorEmail: optionalText(event.creatorEmail),
     attendees: event.attendees ?? [],
     reminders: event.reminders ?? undefined,
     calendarId: event.calendarId ?? undefined,

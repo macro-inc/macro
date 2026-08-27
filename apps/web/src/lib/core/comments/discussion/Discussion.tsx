@@ -306,10 +306,7 @@ export function DiscussionThreadView(props: {
 
               <Show when={hasReplies() || isReplying()}>
                 <div class="relative w-full">
-                  <Thread.ReplyRailDecorations
-                    isReplying={isReplying}
-                    firstThreadReplyNewMessage={false}
-                  />
+                  <Thread.ReplyRailDecorations />
                   <Thread.RepliesContainer>
                     <For each={replies()}>
                       {(reply) => {

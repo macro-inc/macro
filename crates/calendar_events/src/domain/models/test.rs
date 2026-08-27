@@ -162,6 +162,8 @@ fn default_reminders_stay_out_of_serialized_projections() {
         recurrence_lines: Vec::new(),
         organizer_email: None,
         organizer_name: None,
+        creator_email: None,
+        creator_name: None,
         conference_url: None,
         conference_provider: None,
         sequence: 0,
@@ -174,9 +176,12 @@ fn default_reminders_stay_out_of_serialized_projections() {
 
     // Projections stored before reminders were modeled have no `reminders`
     // key. Serializing the default as nothing keeps them comparing equal to
-    // fresh normalizations, so full snapshots stay no-ops.
+    // fresh normalizations, so full snapshots stay no-ops. The same holds
+    // for creator fields added later.
     let serialized = serde_json::to_value(&event).unwrap();
     assert!(serialized.get("reminders").is_none());
+    assert!(serialized.get("creatorEmail").is_none());
+    assert!(serialized.get("creatorName").is_none());
     let legacy: CalendarEvent = serde_json::from_value(serialized).unwrap();
     assert_eq!(legacy.reminders, EventReminders::default());
 

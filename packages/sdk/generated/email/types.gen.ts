@@ -613,6 +613,17 @@ export type CalendarEvent = {
      */
     createdAt: string;
     /**
+     * Provider-reported creator email. Distinct from the organizer when
+     * someone writes onto a calendar they do not own. Omitted from stored
+     * projections when unknown so events ingested before this field still
+     * compare equal.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
      * Optional event body.
      */
     description?: string | null;

@@ -45,6 +45,7 @@ pub(crate) struct SessionCommand {
     pub(crate) action_id: AgentActionId,
     pub(crate) completed: oneshot::Sender<Result<()>>,
     pub(crate) span: tracing::Span,
+    pub(crate) enqueued_at: Instant,
 }
 
 pub(crate) struct SessionCompletion {
@@ -156,11 +157,21 @@ where
             let input = tokio::select! {
             () = handshake_timeout => Input::Closed(CloseReason::HandshakeTimedOut),
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, action_id, completed, span }) => Input::Command {
-                    from: user_id,
-                    action,
-                    action_id,
-                    token: SessionCompletion { completed, span },
+                Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
+                    span.record(
+                        "agent.command.queue_wait_ms",
+                        enqueued_at.elapsed().as_millis() as u64,
+                    );
+                    span.record(
+                        "agent.session.runtime_phase_at_dequeue",
+                        self.machine.status().as_ref(),
+                    );
+                    Input::Command {
+                        from: user_id,
+                        action,
+                        action_id,
+                        token: SessionCompletion { completed, span },
+                    }
                 },
                 // The service dropped every handle; nobody can reach us.
                 None => Input::Closed(CloseReason::Abandoned),

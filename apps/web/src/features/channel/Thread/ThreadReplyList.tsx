@@ -26,8 +26,6 @@ export function ThreadReplyList(props: {
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
-  /** The thread rail is one path, so all of its pieces share this state. */
-  hasNewMessages?: boolean;
   onReady?: (handle: ThreadReplyListHandle) => void;
   positionTarget?: (
     threadRow: HTMLElement,
@@ -79,7 +77,6 @@ export function ThreadReplyList(props: {
           >
             <ThreadReplyRail
               grouped={listMetaByReplyId()[reply.id].isGroupedWithPrevious}
-              newMessage={props.hasNewMessages}
             />
             <MarkMessageNotifications
               messageId={reply.id}
