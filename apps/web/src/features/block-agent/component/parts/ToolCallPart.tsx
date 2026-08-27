@@ -107,7 +107,11 @@ export function ToolCallPart(props: {
         // email/calendar compose flows resume a chat stream); if one throws
         // here, fall back to the generic card rather than losing the row.
         <ErrorBoundary fallback={<GenericToolCall part={props.part} />}>
-          <MacroToolCall name={name} part={props.part} context={props.context} />
+          <MacroToolCall
+            name={name}
+            part={props.part}
+            context={props.context}
+          />
         </ErrorBoundary>
       )}
     </Show>
