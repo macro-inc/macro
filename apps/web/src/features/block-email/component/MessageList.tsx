@@ -278,7 +278,7 @@ export function MessageList(props: MessageListProps) {
                         label={`Show ${truncatedMiddleCount(context.messages.list().length)} hidden messages`}
                         onClick={() => setShowMiddleMessages(true)}
                       >
-                        <span class="relative shrink-0 size-6 flex items-center justify-center bg-panel text-xs font-semibold text-ink rounded-sm">
+                        <span class="relative shrink-0 size-6 flex items-center justify-center border border-edge-muted bg-panel text-xs font-semibold text-ink rounded-sm">
                           <span class="group-hover:invisible">
                             {truncatedMiddleCount(
                               context.messages.list().length

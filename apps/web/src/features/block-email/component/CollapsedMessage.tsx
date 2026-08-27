@@ -2,10 +2,10 @@ import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { cn } from '@ui/utils/classname';
+import { cn, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
-import { formatShortDate } from './EmailMessageTopBar';
+import { formatFullDate, formatShortDate } from './EmailMessageTopBar';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
 interface CollapsedMessageProps {
@@ -91,9 +91,14 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             {snippet()}
           </div>
           <Show when={props.message.internal_date_ts}>
-            <span class="justify-self-end text-sm text-ink-extra-muted/60 tabular-nums">
-              {formatShortDate(props.message.internal_date_ts!)}
-            </span>
+            <Tooltip
+              class="justify-self-end"
+              label={formatFullDate(props.message.internal_date_ts!)}
+            >
+              <span class="text-sm text-ink-extra-muted/60 tabular-nums cursor-default">
+                {formatShortDate(props.message.internal_date_ts!)}
+              </span>
+            </Tooltip>
           </Show>
         </div>
       </div>

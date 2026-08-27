@@ -39,7 +39,7 @@ interface Recipient {
   email?: string | null;
 }
 
-function formatFullDate(date: DateValue): string {
+export function formatFullDate(date: DateValue): string {
   return new Date(date)
     .toLocaleString('en-US', {
       weekday: 'long',
