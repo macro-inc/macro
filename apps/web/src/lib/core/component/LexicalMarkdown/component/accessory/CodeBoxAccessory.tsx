@@ -3,7 +3,6 @@
  * language selector.
  */
 import { isInBlock, useIsNestedBlock } from '@core/block';
-import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import { Switch } from '@kobalte/core/switch';
 import { $isCodeNode, CodeNode } from '@lexical/code';
@@ -14,7 +13,6 @@ import {
   type SupportedLanguage,
 } from '@macro-inc/lexical-core';
 import Braces from '@phosphor/brackets-curly.svg';
-import Copy from '@phosphor/copy.svg';
 import FileC from '@phosphor/file-c.svg';
 import FileCode from '@phosphor/file-code.svg';
 import FileCpp from '@phosphor/file-cpp.svg';
@@ -27,7 +25,7 @@ import FileRs from '@phosphor/file-rs.svg';
 import FileSql from '@phosphor/file-sql.svg';
 import FileTs from '@phosphor/file-ts.svg';
 import TrashCan from '@phosphor/trash-simple.svg';
-import { Button, cn, Dropdown } from '@ui';
+import { Button, CopyButton, cn, Dropdown } from '@ui';
 import {
   $getNodeByKey,
   type EditorThemeClasses,
@@ -181,21 +179,6 @@ export function CodeBoxAccessory(props: {
     );
   }
 
-  const copyCode = () => {
-    const code = props.editor.read(() => {
-      const node = $getNodeByKey(props.nodeKey);
-      if (!node) return '';
-      return node.getTextContent();
-    });
-    if (!code) return;
-    try {
-      navigator.clipboard.writeText(code);
-      toast.success('Copied code to clipboard');
-    } catch (e) {
-      console.error('Failed to copy code to clipboard', e);
-    }
-  };
-
   const deleteCode = () => {
     deleteCodeNode(props.editor, props.nodeKey);
   };
@@ -276,19 +259,19 @@ export function CodeBoxAccessory(props: {
                 <TrashCan />
               </Button>
             </Show>
-            <Button
-              variant="ghost"
-              size="icon-sm"
+            <CopyButton
               class="text-ink-extra-muted/50 h-full"
-              tooltip="Copy Code"
-              on:click={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                copyCode();
-              }}
-            >
-              <Copy />
-            </Button>
+              label="Copy Code"
+              successLabel="Copied code"
+              failureLabel="Failed to copy code"
+              text={() =>
+                props.editor.read(() => {
+                  const node = $getNodeByKey(props.nodeKey);
+                  if (!node) return '';
+                  return node.getTextContent();
+                })
+              }
+            />
           </div>
         </div>
         <Show when={isPreviewMode() && showPreviewToggle()}>
@@ -403,17 +386,6 @@ export const StaticCodeBoxAccessory = (props: {
   const isPreviewMode = () => props.isPreviewMode?.() ?? localPreviewMode();
   const setIsPreviewMode = props.setIsPreviewMode ?? setLocalPreviewMode;
 
-  const copyCode = () => {
-    const code = props.code;
-    if (!code) return;
-    try {
-      navigator.clipboard.writeText(code);
-      toast.success('Copied code to clipboard');
-    } catch (e) {
-      console.error('Failed to copy code to clipboard', e);
-    }
-  };
-
   const textColor = () => 'text-ink-extra-muted/50';
   const language = () => normalizedLanguage(props.language);
 
@@ -443,19 +415,13 @@ export const StaticCodeBoxAccessory = (props: {
               </Switch>
             </div>
           </Show>
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <CopyButton
             class="text-ink-extra-muted/50 h-full"
-            tooltip="Copy Code"
-            on:click={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              copyCode();
-            }}
-          >
-            <Copy />
-          </Button>
+            label="Copy Code"
+            successLabel="Copied code"
+            failureLabel="Failed to copy code"
+            text={props.code}
+          />
         </div>
       </div>
       <Show when={isPreviewMode() && showPreviewToggle()}>
