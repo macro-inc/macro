@@ -6,10 +6,10 @@ use crate::domain::{
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
         CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
         CalendarSyncStatus, DisconnectedGoogleCalendar, EventReminders, EventStatus, EventTime,
-        EventTransparency, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES,
-        GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleEventSource,
-        GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar,
-        StoredGoogleCalendar,
+        EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE,
+        GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
+        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
+        ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
@@ -206,6 +206,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             status: EventStatus::Confirmed,
             visibility: EventVisibility::Default,
             transparency: EventTransparency::Opaque,
+            event_type: EventType::Default,
             time: EventTime::Timed {
                 starts_at,
                 ends_at,

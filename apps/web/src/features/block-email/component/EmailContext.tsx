@@ -22,7 +22,6 @@ import {
   useContacts,
   type WithCustomUserInput,
 } from '@core/user';
-import { whenSettled } from '@core/util/whenSettled';
 import {
   compositeEntity,
   createEffectOnEntityTypeNotification,
@@ -287,31 +286,55 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     },
   });
 
-  const [messageDraftMap, setMessageDraftMap] = createStore<
-    Record<string, ApiMessage | undefined>
+  // The newest version of each reply draft seen across query snapshots,
+  // keyed by the replied-to message id. A cached snapshot populates this the
+  // moment it's available (the composer must not wait on the network), and a
+  // later fetch upgrades an entry only when its updated_at is newer — so the
+  // revalidation of a stale cache wins, but an out-of-order response can't
+  // downgrade a draft. Entries missing from a fetch are kept: deletes are
+  // handled locally below, and dropping one would collapse an open composer.
+  const serverDrafts = createMemo<
+    { threadDbId: string; map: Record<string, ApiMessage> } | undefined
+  >((prev) => {
+    const data = threadQuery.data;
+    if (!data) return undefined;
+    const next = data.draftMap;
+    if (!prev || prev.threadDbId !== data.db_id) {
+      return { threadDbId: data.db_id, map: next };
+    }
+    const map: Record<string, ApiMessage> = { ...next };
+    for (const [messageId, prevDraft] of Object.entries(prev.map)) {
+      const nextDraft = map[messageId];
+      if (
+        !nextDraft ||
+        new Date(nextDraft.updated_at).getTime() <
+          new Date(prevDraft.updated_at).getTime()
+      ) {
+        map[messageId] = prevDraft;
+      }
+    }
+    return { threadDbId: data.db_id, map };
+  });
+
+  // Drafts the user discarded this session. Kept apart from the server map so
+  // a fetch that still contains the deleted draft (delete propagation lag)
+  // can't resurrect it.
+  const [deletedDraftIds, setDeletedDraftIds] = createStore<
+    Record<string, true>
   >({});
 
   const deleteDraftForMessage = (messageID: string) => {
-    setMessageDraftMap(messageID, undefined!);
+    setDeletedDraftIds(messageID, true);
   };
 
   const getDraftForMessage = (messageID: string) => {
-    return messageDraftMap[messageID];
+    if (deletedDraftIds[messageID]) return undefined;
+    return serverDrafts()?.map[messageID];
   };
 
-  const [draftsSettled, setDraftsSettled] = createSignal(false);
-
-  whenSettled(
-    threadQuery,
-    (data) => {
-      setMessageDraftMap(data.draftMap);
-      setDraftsSettled(true);
-    },
-    (error) => {
-      console.error('Failed to load thread data:', error);
-      toast.failure('Failed to load email thread. Please try again.');
-    }
-  );
+  // Drafts derive straight from the query, so "settled" is simply "we have a
+  // thread snapshot" — cached or fresh, revalidating or not.
+  const initialDraftsSettled = () => serverDrafts() !== undefined;
 
   const contacts = useContacts();
 
@@ -933,7 +956,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           drafts: {
             deleteDraftForMessage,
             getDraftForMessage,
-            initialDraftsSettled: draftsSettled,
+            initialDraftsSettled,
           },
           messages: {
             focusedID: focusedMessageId,

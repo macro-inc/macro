@@ -806,7 +806,7 @@ export const listOccurrencesResponse = zod
                       isSelf: zod
                         .boolean()
                         .describe(
-                          "Whether this attendee is one of the viewing requester's inboxes.\n\nOutbound projections use the requester's owned inboxes only.\nPersisted rows keep the provider's flag, which reminder decline reads."
+                          "Whether this attendee is one of the viewing requester's inboxes."
                         ),
                       responseStatus: zod
                         .enum([
@@ -855,6 +855,19 @@ export const listOccurrencesResponse = zod
                 .string()
                 .nullish()
                 .describe('Optional event body.'),
+              eventType: zod
+                .enum([
+                  'default',
+                  'out_of_office',
+                  'focus_time',
+                  'working_location',
+                  'birthday',
+                  'from_gmail',
+                ])
+                .optional()
+                .describe(
+                  "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation."
+                ),
               icalUid: zod
                 .string()
                 .describe(

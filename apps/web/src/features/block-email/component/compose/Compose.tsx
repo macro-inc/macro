@@ -15,14 +15,13 @@ import {
   clearEmailBody,
   hasDraftContent,
   prepareEmailBody,
-  prepareEmailBodyFromHtml,
 } from '@block-email/util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '@block-email/util/recipientConversion';
 import {
   endUndoSend,
-  tryBeginUndoSend,
-  unscheduleWithRetry,
-} from '@block-email/util/undoSendGuard';
+  restoreDraftBodyAfterUndo,
+  runUndoSend,
+} from '@block-email/util/undoSend';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -38,6 +37,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_EMAIL_SIGNATURES_FLAG,
   ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  ENABLE_GRAPHQL_SOUP,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
@@ -58,7 +58,6 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import { queryClient } from '@queries/client';
 import {
   useRemoveDraftAttachmentMutation,
   useRemoveForwardedAttachmentMutation,
@@ -68,7 +67,6 @@ import {
   useDeleteDraftMutation,
   useSaveDraftMutation,
 } from '@queries/email/draft';
-import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
   useEmailSignature,
@@ -76,6 +74,7 @@ import {
   usePrimaryEmailLinkId,
 } from '@queries/email/link';
 import {
+  fetchAndCacheThread,
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
@@ -404,103 +403,69 @@ export function EmailCompose(props: EmailComposeProps) {
   const [validationError, setValidationError] =
     createSignal<ComposeValidationError | null>(null);
 
-  // `linkId` is the X-Email-Link-Id header value the send itself used, resolved
-  // at send time.
-  const undoSend = async (
+  // Everything that follows a successful unschedule: scrub the new thread's
+  // cache, restore the server-side draft, and remount the compose view so it
+  // restores the form from the undo snapshot.
+  const restoreAfterUndoSend = async (
     draftId: string,
     threadId: string | undefined,
     linkId: string | undefined
   ) => {
-    if (!tryBeginUndoSend(draftId)) return;
-    try {
-      const result = await unscheduleWithRetry(draftId, linkId);
-      // A non-2xx response comes back as an Err Result (it doesn't throw), so
-      // bail before reverting the send appearance in the UI.
-      if (result.isErr()) {
-        endUndoSend(draftId);
-        Telemetry.error(
-          new Error(
-            `Failed to undo send for draft ${draftId}: ${result.error
-              .map((e) => `${e.code}: ${e.message}`)
-              .join(', ')}`
-          )
-        );
-        // 400 is the backend's "already sent" — the undo window has passed.
-        const alreadySent = result.error.some(
-          (e) => e.code === 'HTTP_ERROR' && e.message.includes('status: 400')
-        );
-        toast.failure(
-          alreadySent
-            ? 'Too late to undo — the email was already sent'
-            : 'Failed to undo send'
-        );
-        return;
-      }
-      queryClient.invalidateQueries({
-        queryKey: emailKeys.previews._def,
-      });
-      // Wipe the new thread's cache when its view unmounts (replaceSplit
-      // below) so the next visit fetches fresh data without the sent message.
-      if (threadId) markThreadDraftSaved(threadId);
+    // Wipe the new thread's cache when its view unmounts (replaceSplit
+    // below) so the next visit fetches fresh data without the sent message.
+    if (threadId && !ENABLE_GRAPHQL_SOUP()) markThreadDraftSaved(threadId);
 
-      // The unscheduled message still carries the sent body (watermark and
-      // injected signature baked in), so overwrite the server-side draft with
-      // the pre-send content. The snapshot itself stays for the compose
-      // remount below to restore the form from.
-      const snapshot =
-        undoComposeSnapshot?.draftId === draftId ? undoComposeSnapshot : null;
-      if (snapshot) {
-        const prepared = prepareEmailBodyFromHtml(snapshot.bodyHtml);
-        const saveResult = await emailClient.createDraft(
-          {
-            draft: {
-              bcc: snapshot.recipients.bcc.map(
-                convertEmailRecipientToContactInfo
-              ),
-              body_html: prepared.bodyHtml,
-              cc: snapshot.recipients.cc.map(
-                convertEmailRecipientToContactInfo
-              ),
-              db_id: draftId,
-              subject: snapshot.subject,
-              to: snapshot.recipients.to.map(
-                convertEmailRecipientToContactInfo
-              ),
-            },
-          },
-          linkId
-        );
-        if (saveResult.isErr()) {
-          // Non-fatal: the compose remount restores from the snapshot either
-          // way, and the next draft autosave overwrites the stale body.
-          Telemetry.error(
-            new Error('Failed to restore draft body after undo-send')
-          );
-        }
-      }
-
-      replaceSplit({
-        content: {
-          type: 'component',
-          id: 'email-compose',
-          params: { draftID: draftId },
-          // reattach() strips params by default; keep draftID so the compose
-          // remount can restore the undo snapshot.
-          preserveParams: true,
+    // Overwrite the server-side draft with the pre-send content. The
+    // snapshot itself stays for the compose remount below to restore the
+    // form from.
+    const snapshot =
+      undoComposeSnapshot?.draftId === draftId ? undoComposeSnapshot : null;
+    if (snapshot) {
+      await restoreDraftBodyAfterUndo(
+        {
+          bcc: snapshot.recipients.bcc.map(convertEmailRecipientToContactInfo),
+          cc: snapshot.recipients.cc.map(convertEmailRecipientToContactInfo),
+          db_id: draftId,
+          subject: snapshot.subject,
+          to: snapshot.recipients.to.map(convertEmailRecipientToContactInfo),
         },
-      });
-      toast.success('Send cancelled');
-      invalidateSoupEntity(draftId);
-    } catch (e) {
-      endUndoSend(draftId);
-      Telemetry.error(
-        e instanceof Error
-          ? e
-          : new Error(`Failed to undo send for draft ${draftId}`)
+        snapshot.bodyHtml,
+        linkId
       );
-      toast.failure('Failed to undo send');
     }
+
+    // GraphQL mode renders threads from the normalized cache, which
+    // markThreadDraftSaved's TanStack cleanup can't reach — refetch through
+    // it (after the draft-body restore) so a revisit doesn't replay the
+    // undone message from cache.
+    if (threadId && ENABLE_GRAPHQL_SOUP()) {
+      void fetchAndCacheThread(threadId);
+    }
+
+    replaceSplit({
+      content: {
+        type: 'component',
+        id: 'email-compose',
+        params: { draftID: draftId },
+        // reattach() strips params by default; keep draftID so the compose
+        // remount can restore the undo snapshot.
+        preserveParams: true,
+      },
+    });
   };
+
+  // `linkId` is the X-Email-Link-Id header value the send itself used, resolved
+  // at send time.
+  const undoSend = (
+    draftId: string,
+    threadId: string | undefined,
+    linkId: string | undefined
+  ) =>
+    runUndoSend({
+      draftId,
+      linkId,
+      onUndone: () => restoreAfterUndoSend(draftId, threadId, linkId),
+    });
 
   const sendMutation = useSendMessageMutation({
     onSuccess: (data, vars) => {

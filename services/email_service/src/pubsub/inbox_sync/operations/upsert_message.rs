@@ -22,7 +22,6 @@ use email_db_client::threads;
 use email_utils::dedupe_emails;
 use filter_ast::Expr;
 use item_filters::{SharedEmailFilter, ast::email::EmailLiteral};
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
@@ -756,6 +755,40 @@ async fn send_notifications(
     Ok(())
 }
 
+/// Who should get an in-app / push `new_email` notification for a synced inbox
+/// message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NewEmailNotifyPolicy {
+    /// Every non-sent, non-draft inbox message. Used for `@macro.com` dogfood.
+    AllInbox,
+    /// Signal-tab messages only. Default for customers.
+    SignalOnly,
+}
+
+fn new_email_notify_policy(user_id: &MacroUserIdStr<'_>) -> NewEmailNotifyPolicy {
+    if user_id.is_macro_staff() {
+        NewEmailNotifyPolicy::AllInbox
+    } else {
+        NewEmailNotifyPolicy::SignalOnly
+    }
+}
+
+/// Inbox-view filter for a synced thread. `AllInbox` keeps the Inbox view
+/// (so spam, trash, and archive stay out) and skips only Signal predicates.
+fn new_email_preview_filter(thread_id: Uuid, policy: NewEmailNotifyPolicy) -> Expr<EmailLiteral> {
+    let thread = Expr::Literal(EmailLiteral::ThreadId(thread_id));
+    match policy {
+        NewEmailNotifyPolicy::AllInbox => thread,
+        NewEmailNotifyPolicy::SignalOnly => Expr::and(
+            thread,
+            Expr::and(
+                Expr::Literal(EmailLiteral::Importance(true)),
+                Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
+            ),
+        ),
+    }
+}
+
 // filter out messages we don't want to send notifications for
 #[tracing::instrument(skip(ctx, link))]
 async fn filter_notifiable_message(
@@ -786,23 +819,12 @@ async fn filter_notifiable_message(
         return Ok(None);
     }
 
-    // 2. Use the same dynamic email preview path as the Signal tab:
-    //    emailView=inbox AND ef=(Importance(true) AND Shared(exclude)), scoped to this thread.
-    let signal_filter = Expr::and(
-        Expr::Literal(EmailLiteral::ThreadId(new_message.thread_db_id)),
-        Expr::and(
-            Expr::Literal(EmailLiteral::Importance(true)),
-            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
-        ),
+    // 2. Inbox view membership, scoped to this thread. SignalOnly also
+    //    requires Importance(true) AND Shared(exclude).
+    let preview_filter = new_email_preview_filter(
+        new_message.thread_db_id,
+        new_email_notify_policy(&link.macro_id),
     );
-
-    let macro_id_str = link.macro_id.to_string();
-    let user_id = MacroUserIdStr::parse_from_str(&macro_id_str).map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::InvalidData,
-            source: anyhow::anyhow!("failed to parse macro user id: {}", e),
-        })
-    })?;
 
     let query = PreviewCursorQuery {
         view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
@@ -810,13 +832,13 @@ async fn filter_notifiable_message(
         limit: 1,
         query: models_pagination::Query::Sort(
             models_pagination::SimpleSortMethod::UpdatedAt,
-            Some(Arc::new(signal_filter)),
+            Some(Arc::new(preview_filter)),
         ),
         team_id: None,
     };
 
     let previews = EmailPgRepo::new(ctx.db.clone())
-        .previews_for_view_cursor(query, user_id.into_owned())
+        .previews_for_view_cursor(query, link.macro_id.clone())
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {

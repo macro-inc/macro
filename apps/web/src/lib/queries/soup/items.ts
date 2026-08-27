@@ -37,6 +37,10 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
+import {
+  createSoupRequestSignal,
+  SOUP_NETWORK_QUERY_OPTIONS,
+} from './request-timeout';
 
 export type SoupParams = Params;
 
@@ -163,6 +167,8 @@ const useRestSoupAstItemsQuery = (
       queryKey: soupKeys.astItems({ params, body, groupBy, transport })
         .queryKey,
       queryFn: async (ctx): Promise<SoupAstItemsPage> => {
+        const signal = createSoupRequestSignal(ctx.signal);
+
         if (groupBy) {
           const sort_method = groupedSortMethod(params.sort_method);
 
@@ -176,6 +182,7 @@ const useRestSoupAstItemsQuery = (
                     sort_method,
                   },
                   body,
+                  signal,
                 })
             );
 
@@ -206,6 +213,7 @@ const useRestSoupAstItemsQuery = (
                   ...body,
                   ...params,
                 },
+                signal,
               })
           );
 
@@ -273,6 +281,12 @@ const useRestSoupAstItemsQuery = (
         return { entities, groups: undefined };
       },
       enabled: options?.().enabled,
+      // Do not spin through background retries while the explicit load-error
+      // state is visible. NWPathMonitor lets TanStack pause an offline query
+      // and resume it automatically when the path becomes available again.
+      ...SOUP_NETWORK_QUERY_OPTIONS,
+      // A timed-out native request should reach the view's load-error state.
+      // Retry remains available explicitly from that state.
       staleTime: options?.().staleTime,
       placeholderData: (prev, prevQuery) => {
         // Keep the previous rows on screen while params/filters change, but

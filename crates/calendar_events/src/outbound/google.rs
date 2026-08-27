@@ -14,9 +14,9 @@ use crate::domain::{
         CalendarEvent, CalendarEventDraft, CalendarEventOverride, CalendarEventPatch,
         CalendarEventSource, CalendarEventUpsert, CalendarOccurrence, ConferenceChange,
         ConferenceProvider, EventReminderOverride, EventReminders, EventStart, EventStatus,
-        EventTime, EventTransparency, EventVisibility, GoogleCalendarTarget, GoogleEventSource,
-        GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig,
-        OccurrenceRange, ProviderCalendar,
+        EventTime, EventTransparency, EventType, EventVisibility, GoogleCalendarTarget,
+        GoogleEventSource, GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel,
+        GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
     },
     ports::{
         CalendarRsvpScope, GoogleCalendarMutationProvider, GoogleCalendarProvider,
@@ -1772,6 +1772,7 @@ fn map_upsert(
         status: google_status(master.status.as_deref()),
         visibility: google_visibility(master.visibility.as_deref()),
         transparency: google_transparency(master.transparency.as_deref()),
+        event_type: google_event_type(master.event_type.as_deref()),
         time,
         recurrence_lines: master.recurrence.clone(),
         organizer_email: master
@@ -2046,6 +2047,19 @@ fn google_visibility(value: Option<&str>) -> EventVisibility {
     }
 }
 
+/// Unknown provider types fall back to `default` so a new Google event type
+/// never breaks ingestion.
+fn google_event_type(value: Option<&str>) -> EventType {
+    match value {
+        Some("outOfOffice") => EventType::OutOfOffice,
+        Some("focusTime") => EventType::FocusTime,
+        Some("workingLocation") => EventType::WorkingLocation,
+        Some("birthday") => EventType::Birthday,
+        Some("fromGmail") => EventType::FromGmail,
+        _ => EventType::Default,
+    }
+}
+
 fn google_transparency(value: Option<&str>) -> EventTransparency {
     if value == Some("transparent") {
         EventTransparency::Transparent
@@ -2136,6 +2150,8 @@ struct GoogleEvent {
     location: Option<String>,
     visibility: Option<String>,
     transparency: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event_type: Option<String>,
     start: Option<GoogleEventDateTime>,
     end: Option<GoogleEventDateTime>,
     #[serde(default)]

@@ -3,11 +3,9 @@ import type { ApiMessage } from '@service-email/generated/schemas';
 import type { Setter } from 'solid-js';
 import type { ReplyType } from '../util/replyType';
 import type { useEmailContext } from './EmailContext';
-import type { getEmailFormRegistry } from './EmailFormContext';
 
 export function openEmailReplyComposerForMessage(args: {
   ctx: ReturnType<typeof useEmailContext>;
-  formRegistry?: ReturnType<typeof getEmailFormRegistry>;
   message: ApiMessage;
   replyType: ReplyType;
   isLastMessage?: boolean;
@@ -16,16 +14,11 @@ export function openEmailReplyComposerForMessage(args: {
   const messageId = args.message.db_id;
   if (!messageId) return false;
 
+  // The reply type and focus land through the reply request: the mounted
+  // composer's effect applies them to its own (seed-keyed) form instance.
+  // Writing to the form registry from here would target the wrong entry —
+  // the registry key includes a seed only the composer knows.
   args.ctx.replyRequest.set(messageId, args.replyType);
-
-  if (args.formRegistry) {
-    const form = args.formRegistry.getOrInit({
-      type: 'replying_to',
-      messageID: messageId,
-    });
-    form.setReplyType(args.replyType);
-    form.setShouldFocusInput(true);
-  }
 
   if (isMobile()) {
     args.ctx.mobileReplyComposer.openForMessage(messageId);
