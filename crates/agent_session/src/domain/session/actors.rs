@@ -154,8 +154,29 @@ where
                     std::future::pending::<()>().await;
                 }
             };
+            let log_flush_deadline = self.logs.flush_deadline();
+            let log_flush_due = async {
+                match log_flush_deadline {
+                    Some(deadline) => tokio::time::sleep_until(deadline).await,
+                    None => std::future::pending().await,
+                }
+            };
             let input = tokio::select! {
             () = handshake_timeout => Input::Closed(CloseReason::HandshakeTimedOut),
+            // Buffered log frames have waited long enough; write them out. A
+            // failed flush is a failed log write, and the machine decides
+            // what that means, same as a failed append.
+            () = log_flush_due => match self.logs.flush().await {
+                Ok(()) => continue,
+                Err(error) => {
+                    tracing::error!(
+                        error = ?error,
+                        id = %self.machine.id(),
+                        "agent session failed to flush buffered log frames"
+                    );
+                    Input::Closed(CloseReason::LogFailed)
+                }
+            },
             command = self.commands.recv() => match command {
                 Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
                     span.record(

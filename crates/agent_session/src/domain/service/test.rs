@@ -408,6 +408,22 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
         AgentSessionLogRepo::create(&self.repo, log).await
     }
 
+    async fn create_batch(&self, entries: Vec<StoredAgentSessionLog>) -> Result<()> {
+        if self.hang_disconnect
+            && entries.iter().any(|stored| {
+                matches!(
+                    &stored.entry.content,
+                    Message::ToServer(ToServerMessage::Event {
+                        event: SystemEvent::Disconnected
+                    })
+                )
+            })
+        {
+            return std::future::pending().await;
+        }
+        AgentSessionLogRepo::create_batch(&self.repo, entries).await
+    }
+
     async fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
@@ -760,6 +776,9 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
 
     let mut persisted = false;
     for _ in 0..20 {
+        // A streamed update sits in the writer's buffer until its flush
+        // interval elapses; time is paused, so elapse it by hand.
+        tokio::time::advance(LOG_FLUSH_INTERVAL).await;
         tokio::task::yield_now().await;
         persisted = AgentSessionLogRepo::list_by_session(&repo, session)
             .await
@@ -835,6 +854,159 @@ async fn appending_persists_the_event() {
         .await
         .expect("in-memory repo cannot fail");
     assert_eq!(log.len(), 2);
+}
+
+/// A streamed output chunk, the frame shape that makes up the bulk of a live
+/// session's log - the kind the writer holds back for a batch.
+fn streamed_chunk(session: AgentSessionId) -> AgentSessionLog {
+    AgentSessionLog {
+        agent_session_id: session,
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({ "sessionId": "acp-1", "update": {} }),
+            )
+            .expect("a notification builds"),
+        ))),
+    }
+}
+
+/// A frame headed to the runtime - the kind that must be durable before the
+/// agent can have acted on it.
+fn runtime_bound(session: AgentSessionId) -> AgentSessionLog {
+    AgentSessionLog {
+        agent_session_id: session,
+        user_id: None,
+        content: Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::notification(
+                "session/cancel".to_owned(),
+                serde_json::json!({ "sessionId": "acp-1" }),
+            )
+            .expect("a notification builds"),
+        ))),
+    }
+}
+
+/// Streamed chunks wait for the batch: they are published to viewers at once,
+/// but only reach the store when the writer flushes.
+#[tokio::test]
+async fn streamed_frames_are_buffered_until_flushed() {
+    let fx = fixture();
+    let realtime = RecordingRealtime::new();
+    let mut logs = streaming_connection(fx.repo.clone(), realtime.clone());
+
+    AgentSessionLogWriter::append(&mut logs, streamed_chunk(fx.session))
+        .await
+        .expect("append succeeds");
+    AgentSessionLogWriter::append(&mut logs, streamed_chunk(fx.session))
+        .await
+        .expect("append succeeds");
+
+    assert_eq!(realtime.published().len(), 2, "viewers see frames live");
+    assert!(
+        AgentSessionLogRepo::list_by_session(&fx.repo, fx.session)
+            .await
+            .expect("in-memory repo cannot fail")
+            .is_empty(),
+        "streamed chunks wait for the batch"
+    );
+    assert!(
+        logs.flush_deadline().is_some(),
+        "a buffering writer names its deadline so the actor can wake for it"
+    );
+
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
+
+    let stored = AgentSessionLogRepo::list_by_session(&fx.repo, fx.session)
+        .await
+        .expect("in-memory repo cannot fail");
+    assert_eq!(stored.len(), 2, "the flush wrote the whole buffer");
+    assert_eq!(
+        stored
+            .iter()
+            .map(|entry| entry.created_at)
+            .collect::<Vec<_>>(),
+        realtime
+            .published()
+            .iter()
+            .map(|event| event.entry.created_at)
+            .collect::<Vec<_>>(),
+        "stored frames keep the stamps they were published with"
+    );
+    assert!(
+        logs.flush_deadline().is_none(),
+        "an empty buffer must not wake the actor"
+    );
+}
+
+/// A frame the rest of the system reacts to cannot wait: it flushes whatever
+/// is buffered through with itself, in append order.
+#[tokio::test]
+async fn runtime_bound_frames_flush_the_buffer_through() {
+    let fx = fixture();
+    let mut logs = connection(fx.repo.clone());
+
+    AgentSessionLogWriter::append(&mut logs, streamed_chunk(fx.session))
+        .await
+        .expect("append succeeds");
+    AgentSessionLogWriter::append(&mut logs, runtime_bound(fx.session))
+        .await
+        .expect("append succeeds");
+
+    let stored = AgentSessionLogRepo::list_by_session(&fx.repo, fx.session)
+        .await
+        .expect("in-memory repo cannot fail");
+    assert!(
+        matches!(
+            &stored[..],
+            [
+                StoredAgentSessionLog {
+                    entry: AgentSessionLog {
+                        content: Message::ToServer(_),
+                        ..
+                    },
+                    ..
+                },
+                StoredAgentSessionLog {
+                    entry: AgentSessionLog {
+                        content: Message::ToRuntime(_),
+                        ..
+                    },
+                    ..
+                },
+            ]
+        ),
+        "both frames are durable before the append returns, in append order"
+    );
+}
+
+/// The buffer is bounded: filling it flushes without waiting for the interval.
+#[tokio::test]
+async fn a_full_buffer_flushes_without_waiting() {
+    let fx = fixture();
+    let mut logs = connection(fx.repo.clone());
+
+    for _ in 0..MAX_BUFFERED_LOG_FRAMES {
+        AgentSessionLogWriter::append(&mut logs, streamed_chunk(fx.session))
+            .await
+            .expect("append succeeds");
+    }
+
+    let stored = AgentSessionLogRepo::list_by_session(&fx.repo, fx.session)
+        .await
+        .expect("in-memory repo cannot fail");
+    assert_eq!(
+        stored.len(),
+        MAX_BUFFERED_LOG_FRAMES,
+        "filling the buffer is a flush trigger of its own"
+    );
+    assert!(
+        logs.flush_deadline().is_none(),
+        "nothing is left buffered after the size-triggered flush"
+    );
 }
 
 #[tokio::test]
@@ -943,6 +1115,11 @@ async fn a_connections_frames_are_published_to_its_channel() {
             .await
             .expect("append succeeds");
     }
+    // Streamed chunks may still be buffered; the durable log is only complete
+    // once the writer has flushed.
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
 
     let published = realtime.published();
     assert_eq!(published.len(), log.len(), "one event per frame, no more");
@@ -1036,6 +1213,9 @@ async fn a_failed_publish_does_not_fail_the_append() {
             .await
             .expect("a refused publish does not fail the append");
     }
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
 
     let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
         .await

@@ -463,6 +463,86 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn log_create_batch_stores_stamps_and_projects_the_last_event(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session_id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    let user = user_id("macro|agent-session-log-batch-test@example.com");
+    let stamp = |offset_ms: i64| {
+        chrono::Utc::now() - chrono::Duration::milliseconds(1_000)
+            + chrono::Duration::milliseconds(offset_ms)
+    };
+    let entries = vec![
+        StoredAgentSessionLog {
+            created_at: stamp(0),
+            entry: AgentSessionLog {
+                agent_session_id: session_id,
+                user_id: Some(user.clone()),
+                content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
+            },
+        },
+        StoredAgentSessionLog {
+            created_at: stamp(1),
+            entry: AgentSessionLog {
+                agent_session_id: session_id,
+                user_id: None,
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::AcpReady,
+                }),
+            },
+        },
+        StoredAgentSessionLog {
+            created_at: stamp(2),
+            entry: AgentSessionLog {
+                agent_session_id: session_id,
+                user_id: None,
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::Disconnected,
+                }),
+            },
+        },
+    ];
+
+    AgentSessionLogRepo::create_batch(&repo, entries.clone())
+        .await
+        .expect("create log batch");
+
+    let logs = repo
+        .list_by_session(session_id)
+        .await
+        .expect("list agent session log entries");
+    assert_eq!(logs.len(), 3, "every entry in the batch is durable");
+    // The writer's stamps survive the batch (to Postgres's microsecond
+    // resolution), so ordering reflects when frames were appended, not when
+    // the flush landed.
+    for (stored, given) in logs.iter().zip(&entries) {
+        assert_eq!(stored.entry.user_id, given.entry.user_id);
+        assert!((stored.created_at - given.created_at).abs() < chrono::Duration::milliseconds(1));
+    }
+    assert!(matches!(
+        logs[0].entry.content,
+        Message::ToRuntime(ToRuntimeMessage::Acp(_))
+    ));
+
+    // Only the last event projects onto the session status.
+    let session = AgentSessionRepo::get(&repo, session_id)
+        .await
+        .expect("get session after batch");
+    assert!(matches!(
+        session.status,
+        SessionStatus::Event(SystemEvent::Disconnected)
+    ));
+
+    // An empty batch is a no-op, not an invalid statement.
+    AgentSessionLogRepo::create_batch(&repo, Vec::new())
+        .await
+        .expect("empty batch is fine");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_a = create_test_bot(&pool).await;

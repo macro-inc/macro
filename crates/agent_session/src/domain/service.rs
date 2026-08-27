@@ -722,8 +722,29 @@ fn validate_agent_session_name(raw: &str) -> Result<&str> {
     Ok(name)
 }
 
+/// How long an appended frame may sit buffered before it must be durably
+/// flushed. The crash window: a process dying loses at most this much of the
+/// *tail* of a session's streamed output - flushes happen in append order, so
+/// a lost suffix never punches a hole in the middle of the log.
+const LOG_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+/// How many frames may accumulate before a flush happens regardless of age,
+/// bounding both memory and the size of the batch a crash could lose.
+const MAX_BUFFERED_LOG_FRAMES: usize = 32;
+
 /// The [`AgentSessionLogRepo`] a session's actor writes through: the durable
 /// append, then the push to whoever is watching the session right now.
+///
+/// Writes are batched. Streamed output chunks - the overwhelming bulk of a
+/// live session's frames - are buffered and written [`MAX_BUFFERED_LOG_FRAMES`]
+/// at a time or every [`LOG_FLUSH_INTERVAL`], whichever comes first, instead
+/// of costing a Postgres transaction each. Frames the rest of the system
+/// reacts to keep the old durable-before-anything contract: anything headed
+/// to the runtime (a prompt the agent will act on must never be missing from
+/// history) and system events (they project onto the session's status) flush
+/// the buffer through with themselves before this writer does anything else
+/// with them. Streaming to viewers stays per-frame either way - a buffered
+/// frame is published immediately, durability deferred, which is the whole
+/// point.
 ///
 /// This is also where a writer's fold lives, and the fold is what makes
 /// re-attaching correct: [`TurnId`](agent_fold::domain::model::TurnId)s are a
@@ -739,6 +760,14 @@ pub struct LiveSessionLogWriter<R, Rt> {
     repo: R,
     realtime: Rt,
     fold: Option<FoldMachineImpl>,
+    /// Frames appended but not yet durably written, stamped when they arrived.
+    buffer: Vec<StoredAgentSessionLog>,
+    /// When the oldest buffered frame must be flushed by; `None` while the
+    /// buffer is empty.
+    flush_due: Option<tokio::time::Instant>,
+    /// The model last projected onto the session row, so a thousand streamed
+    /// frames under one model cost one `UPDATE`, not a thousand.
+    projected_model: Option<String>,
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
@@ -753,6 +782,9 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             repo,
             realtime,
             fold: None,
+            buffer: Vec::new(),
+            flush_due: None,
+            projected_model: None,
         }
     }
 }
@@ -780,12 +812,31 @@ where
             );
         }
 
-        // Durable first: projections are rebuildable, but a frame omitted from
-        // session history is not.
-        let stored = AgentSessionLogRepo::create(&self.repo, log.clone()).await?;
+        // A frame the rest of the system reacts to must be durable before it
+        // is acted on: anything headed to the runtime (session history must
+        // never lack a message its agent received) and system events (they
+        // project onto the session's status). Streamed output chunks are the
+        // volume, and only ever get read back, so they can wait for the batch.
+        let flush_through = matches!(
+            &log.content,
+            Message::ToRuntime(_) | Message::ToServer(ToServerMessage::Event { .. })
+        );
+
+        // Stamped now rather than at flush: `created_at` records when the log
+        // accepted the frame, and it is all a reader has to order by.
+        let stored = StoredAgentSessionLog {
+            created_at: chrono::Utc::now(),
+            entry: log.clone(),
+        };
+        self.buffer.push(stored.clone());
+        self.flush_due
+            .get_or_insert_with(|| tokio::time::Instant::now() + LOG_FLUSH_INTERVAL);
+        if flush_through || self.buffer.len() >= MAX_BUFFERED_LOG_FRAMES {
+            AgentSessionLogWriter::flush(self).await?;
+        }
 
         if let Some(fold) = &mut self.fold {
-            let _ = fold.push(log.clone());
+            let _ = fold.push(log);
         } else {
             match self.catch_up(session).await {
                 Ok(fold) => self.fold = Some(fold),
@@ -799,25 +850,33 @@ where
             }
         }
 
-        // Projected on every frame - idempotent, rebuildable from the log,
+        // Projected when it changes - idempotent, rebuildable from the log,
         // and best-effort like the stream below, so a failed write must not
-        // fail the append. Batch if the write rate ever matters.
+        // fail the append.
         if let Some(model) = self
             .fold
             .as_ref()
             .and_then(|fold| fold.metadata().model.clone())
-            && let Err(error) = self.repo.set_model(session, &model).await
+            && self.projected_model.as_ref() != Some(&model)
         {
-            tracing::error!(
-                error = ?error,
-                %session,
-                "failed to project agent session model"
-            );
+            match self.repo.set_model(session, &model).await {
+                Ok(()) => self.projected_model = Some(model),
+                Err(error) => {
+                    tracing::error!(
+                        error = ?error,
+                        %session,
+                        "failed to project agent session model"
+                    );
+                }
+            }
         }
 
-        // Best-effort once the durable append has succeeded: the port drops
-        // frames by contract, and the log this was derived from is already
-        // durable, so the worst a failure costs is a viewer who has to reload.
+        // Best-effort, and for a buffered frame it deliberately runs ahead of
+        // durability: viewers watch streamed output live, so it cannot wait
+        // for the batch. The port drops frames by contract, and a reader who
+        // reloads folds the stored log - so the worst a dropped publish costs
+        // is a viewer who has to reload, and the worst a crash costs is a
+        // viewer who briefly saw frames the log lost with the buffer.
         if let Err(error) = self.stream(session, stored).await {
             tracing::error!(
                 error = ?error,
@@ -826,6 +885,26 @@ where
             );
         }
         Ok(())
+    }
+
+    async fn flush(&mut self) -> Result<()> {
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
+        let result = AgentSessionLogRepo::create_batch(&self.repo, self.buffer.clone()).await;
+        // Cleared on failure too: retrying a batch whose commit may have
+        // landed would duplicate frames, so a failed flush loses its frames
+        // the same way a failed per-frame write used to lose its one - and
+        // the caller tears the session down over the error either way. Only
+        // cancellation (this future dropped mid-write) keeps the buffer, for
+        // the shutdown path to retry.
+        self.buffer.clear();
+        self.flush_due = None;
+        result
+    }
+
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        self.flush_due
     }
 }
 
@@ -930,12 +1009,13 @@ where
             .await
     }
 
-    /// Walk this connection's fold through the session's stored log, so it
-    /// starts from where the session actually is rather than from nothing.
+    /// Walk this connection's fold through the session's stored log and then
+    /// through anything still buffered, so it starts from where the session
+    /// actually is rather than from nothing.
     ///
     /// Runs once per connection, on its first frame - by which point that
-    /// frame is already in the log, so replaying the log folds it too and the
-    /// caller must not push it again.
+    /// frame is in the log or in the buffer, so replaying both folds it too
+    /// and the caller must not push it again.
     ///
     /// This is what makes re-attaching correct.
     /// [`TurnId`](agent_fold::domain::model::TurnId)s are a counter over the
@@ -954,6 +1034,9 @@ where
         let mut fold = FoldMachineImpl::new();
         for stored in log {
             let _ = fold.push(stored.entry);
+        }
+        for stored in &self.buffer {
+            let _ = fold.push(stored.entry.clone());
         }
         Ok(fold)
     }

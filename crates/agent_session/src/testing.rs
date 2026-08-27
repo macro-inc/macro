@@ -338,6 +338,45 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         Ok(stored)
     }
 
+    async fn create_batch(&self, entries: Vec<StoredAgentSessionLog>) -> Result<()> {
+        // The last event wins the status projection, same as the Postgres
+        // adapter - statuses overwrite, so intermediates were never
+        // observable.
+        let event = entries
+            .iter()
+            .rev()
+            .find_map(|stored| match &stored.entry.content {
+                crate::domain::model::Message::ToServer(ToServerMessage::Event { event }) => {
+                    Some((stored.entry.agent_session_id, event.clone()))
+                }
+                _ => None,
+            });
+        {
+            let mut logs = self
+                .logs
+                .lock()
+                .expect("in-memory log store is not poisoned");
+            for stored in entries {
+                // Entries keep the writer's stamp: they carry the time they
+                // were appended, not the time the flush landed.
+                logs.entry(stored.entry.agent_session_id)
+                    .or_default()
+                    .push(stored);
+            }
+        }
+        if let Some((session_id, event)) = event
+            && let Some(session) = self
+                .sessions
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .get_mut(&session_id)
+        {
+            session.status = SessionStatus::Event(event);
+            session.modified_at = chrono::Utc::now();
+        }
+        Ok(())
+    }
+
     async fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
