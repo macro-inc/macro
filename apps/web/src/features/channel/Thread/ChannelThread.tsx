@@ -334,32 +334,14 @@ export function ChannelThread(props: ThreadProps) {
             when={hasReplies() || (props.isReplying() && !isUnifiedInputMode())}
           >
             <div class="relative w-full">
-              {/* Spine bridge: spans the replies container's top padding,
-                  connecting the root segment to the reply rows' own spine
-                  segments below. */}
-              <div
-                class={cn(
-                  'pointer-events-none absolute top-0 -z-1 channel-rail-left border-rail left-(--left-of-channel-rail) h-(--thread-padding-y)',
-                  threadHasNewMessages() && 'border-accent'
-                )}
-              />
+              <Thread.RepliesBridgeRail newMessage={threadHasNewMessages()} />
               {/* Terminal branch: the spine's final curve into the footer
                   button's left edge. Its vertical part starts exactly at the
                   last reply row's bottom (button h-8 + mb-2 + container pb). */}
               <Show
                 when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
               >
-                <div
-                  class={cn(
-                    'pointer-events-none absolute -z-1 channel-rail-left channel-rail-bottom border-rail rounded-bl-[14px] left-(--left-of-channel-rail) h-8',
-                    threadHasNewMessages() && 'border-accent'
-                  )}
-                  style={{
-                    bottom: 'calc(var(--thread-padding-y) + 1.5rem)',
-                    width:
-                      'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
-                  }}
-                />
+                <Thread.TerminalRail newMessage={threadHasNewMessages()} />
               </Show>
               <DebugSuspense name="ChannelThread.replies">
                 <Thread.RepliesContainer>
