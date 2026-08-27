@@ -66,10 +66,10 @@ function LinkPreviewCard(props: {
           <button
             type="button"
             aria-label="Remove link preview"
-            class="shrink-0 rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+            class="shrink-0 rounded p-0.5 text-ink hover:bg-hover"
             onClick={props.onHide}
           >
-            <XIcon class="size-3.5" />
+            <XIcon class="size-4" />
           </button>
         </Show>
       </div>
