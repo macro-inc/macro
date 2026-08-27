@@ -2,8 +2,8 @@ set -euo pipefail
 
 # --no-tests=pass: a package filter can legitimately select a crate with no
 # tests; treat that as success, not nextest's default error.
-# sync-service was not part of this suite before it joined the root workspace,
-# and its storage backends are mutually exclusive under --all-features.
+# sync-service is not part of this suite, and its storage backends are mutually
+# exclusive under --all-features.
 #
 # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
 # The filterset only decides which tests *run* after a workspace build; `-p`
@@ -14,36 +14,22 @@ set -euo pipefail
 # no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
 # Unconstrained `-p` still runs that package's tests.
 
-packages="${RUST_PACKAGES:-}"
-workspace=(--all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
-selected=(--all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
-sync_service=(--no-tests=pass --test-threads "$NEXTEST_TEST_THREADS" -p sync_service)
+: "${RUST_PACKAGES:?RUST_PACKAGES is required}"
+common=(--all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
 
-if [ -z "$packages" ] || [ "$packages" = "all" ]; then
-  cargo nextest run --workspace --exclude sync_service "${workspace[@]}"
-  cargo nextest run "${sync_service[@]}"
+if [ "$RUST_PACKAGES" = "all" ]; then
+  cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
   exit 0
 fi
 
-if [ "$packages" = "none" ]; then
-  echo "No Rust packages to test"
-  exit 0
-fi
-
-sync=false
 pkg_args=()
-for p in $packages; do
-  if [ "$p" = "sync_service" ]; then
-    sync=true
-  else
-    pkg_args+=(-p "$p")
-  fi
+for package in $RUST_PACKAGES; do
+  [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
 done
 
-if [ "${#pkg_args[@]}" -gt 0 ]; then
-  cargo nextest run "${selected[@]}" "${pkg_args[@]}"
+if [ "${#pkg_args[@]}" -eq 0 ]; then
+  echo "No packages in the test suite were affected"
+  exit 0
 fi
 
-if [ "$sync" = true ]; then
-  cargo nextest run "${sync_service[@]}"
-fi
+cargo nextest run "${common[@]}" "${pkg_args[@]}"

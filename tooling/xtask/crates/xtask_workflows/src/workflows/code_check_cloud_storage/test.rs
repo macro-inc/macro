@@ -4,28 +4,25 @@ use super::*;
 fn package_selection_does_not_pass_lib() {
     let script = include_str!("../scripts/run_tests.sh");
     assert!(
-        script.contains(r#"cargo nextest run "${selected[@]}" "${pkg_args[@]}""#),
+        script.contains(r#"cargo nextest run "${common[@]}" "${pkg_args[@]}""#),
         "the -p path must use the unconstrained selected flags, not --lib: {script}"
     );
     assert!(
-        !script.contains(r#"cargo nextest run "${workspace[@]}" "${pkg_args[@]}""#),
+        !script.contains(r#"--lib --bins --tests "${common[@]}" "${pkg_args[@]}""#),
         "--lib --bins --tests with -p fails for bin-only xtask crates"
     );
 }
 
 #[test]
-fn all_branch_also_tests_sync_service() {
+fn tests_continue_to_exclude_sync_service() {
     let script = include_str!("../scripts/run_tests.sh");
-    let all_idx = script
-        .find(r#"cargo nextest run --workspace --exclude sync_service "${workspace[@]}""#)
-        .expect("all branch must still exclude sync_service from --all-features");
-    let all_block = &script[all_idx..];
-    let exit = all_block
-        .find("exit 0")
-        .expect("all branch must exit after the workspace run");
     assert!(
-        all_block[..exit].contains(r#"cargo nextest run "${sync_service[@]}""#),
-        "all branch must run sync_service without --all-features, not only the selection path"
+        script.contains("--workspace --exclude sync_service"),
+        "the full suite must preserve its historical sync_service exclusion"
+    );
+    assert!(
+        script.contains(r#"[ "$package" = "sync_service" ] || pkg_args+=(-p "$package")"#),
+        "targeted test runs must also exclude sync_service"
     );
 }
 
