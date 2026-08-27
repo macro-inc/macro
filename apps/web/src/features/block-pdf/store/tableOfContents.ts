@@ -913,451 +913,387 @@ class Helpers {
  * Reducer
  * -------------------------------------------------------------------------- */
 
-function handleLoadAiToc(
-  draft: ITableOfContentsContext,
-  action: LoadAiTocAction
-): void {
-  const firstChild = XMLUtils.parse(action.coparse.toc || '').firstChild as
-    | Element
-    | undefined;
-  const children: TocItem[] = [...(firstChild?.children ?? [])]
-    .filter((child) => child.tagName === 'section')
-    .map((node) => Helpers.parseItem(node, undefined));
-
-  // In case `window` was undefined when we created the default state
-  draft.width = getDefaultWidth();
-  draft.pageToSectionMap = [];
-  draft.original.aiToc = [...children];
-
-  // include everything from action.coparse except for toc because PDF
-  // bookmarks on page load, so LOAD_PDF_BOOKMARKS sets the value for toc
-  const existingCoParseToc = draft.coparse?.toc;
-  draft.coparse = action.coparse;
-  draft.coparse.toc = existingCoParseToc;
-
-  new Builder(draft)
-    .computePageToSectionMap()
-    .computeIDToSectionMap(true)
-    .computeIDToPathMap()
-    .addLinksBetweenSections()
-    .computeIDToNearestTitleMap(); // TODO call this in more places
-
-  draft.isLoaded = !!draft.original.aiToc && !!draft.original.pdfBookmarks;
-}
-
-function handleLoadPdfBookmarks(
-  draft: ITableOfContentsContext,
-  action: LoadPdfBookmarksAction
-): void {
-  draft.original.pdfBookmarks = action.bookmarks;
-  draft.items = Helpers.cloneTocTree(action.bookmarks);
-  draft.isLoaded = !!draft.original.aiToc && !!draft.original.pdfBookmarks;
-
-  const coparse = Object.assign({}, draft.coparse);
-  coparse.toc = Helpers.tocItemsToXml(action.bookmarks);
-  draft.coparse = coparse;
-
-  new Builder(draft)
-    .computePageToSectionMap()
-    .computeIDToSectionMap()
-    .computeIDToPathMap()
-    .addLinksBetweenSections()
-    .computeIDToNearestTitleMap()
-    .setDefaultOpenState();
-}
-
-function handleSwitchCurrentMode(draft: ITableOfContentsContext): void {
-  const { currentMode, original } = draft;
-  const originalBookmarks = original.pdfBookmarks;
-  const originalToc = original.aiToc;
-
-  if (originalBookmarks === null || originalToc === null) {
-    return;
-  }
-
-  if (currentMode === 'ai-toc') {
-    draft.currentMode = 'bookmarks';
-    draft.items = Helpers.cloneTocTree(originalBookmarks);
-    const coparse = Object.assign({}, draft.coparse);
-    coparse.toc = Helpers.tocItemsToXml(originalBookmarks);
-    draft.coparse = coparse;
-    draft.openItems =
-      originalBookmarks.length === 1
-        ? { [originalBookmarks[0].section.id]: true }
-        : {};
-  } else if (currentMode === 'bookmarks') {
-    draft.currentMode = 'ai-toc';
-    draft.items = Helpers.cloneTocTree(originalToc);
-    const coparse = Object.assign({}, draft.coparse);
-    coparse.toc = Helpers.tocItemsToXml(originalToc);
-    draft.coparse = coparse;
-    draft.openItems =
-      originalToc.length === 1 ? { [originalToc[0].section.id]: true } : {};
-  }
-
-  new Builder(draft)
-    .computePageToSectionMap()
-    .computeIDToSectionMap()
-    .computeIDToPathMap()
-    .addLinksBetweenSections()
-    .computeIDToNearestTitleMap();
-}
-
-function handleSetTableOfContentsWidth(
-  draft: ITableOfContentsContext,
-  action: SetTableOfContentsWidth
-): void {
-  if (action.width <= 0) {
-    console.error('Table of contents width must be positive');
-    return;
-  }
-
-  if (action.width > window.innerWidth) {
-    console.error('Table of contents cannot be wider than the window');
-    return;
-  }
-
-  draft.width = action.width;
-}
-
-function handleToggleBookmark(
-  draft: ITableOfContentsContext,
-  action: ToggleBookmarkAction
-): void {
-  const { secID } = action;
-  draft.openItems[secID] = !draft.openItems[secID];
-}
-
-function handleDeleteBookmark(
-  draft: ITableOfContentsContext,
-  action: DeleteBookmarkAction
-): void {
-  const { secID } = action;
-
-  if (secID === null) {
-    console.error('Invalid state to delete bookmark');
-    return;
-  }
-
-  new Builder(draft).deleteSection(secID);
-
-  draft.unsavedBookmarks = true;
-
-  // draft.items = newItems;
-  draft.sectionToDeleteID = null;
-}
-
-function handleLeftIndentSection(
-  draft: ITableOfContentsContext,
-  action: LeftIndentSectionAction
-): void {
-  const { secID } = action;
-  const path = draft.idToPathMap[secID];
-  if (!path) {
-    console.error('Section not found');
-    return;
-  }
-
-  if (!TocUtils.canLeftIndent({ path })) {
-    console.error('Cannot left indent the section provided');
-    return;
-  }
-
-  const parent = TocUtils.getTocItemParentFromPath({
-    items: draft.items,
-    path,
-  });
-
-  const siblings = parent.children;
-  const idx = path[path.length - 1];
-  const item = siblings[idx];
-
-  if (!item) {
-    console.error('Failed to find item ');
-    return;
-  }
-
-  // Update parent children
-  parent.children = siblings.slice(0, idx);
-  const newChildren = siblings.slice(idx + 1);
-
-  // If not this, then there are no changes to the node's children
-  if (newChildren.length) {
-    item.children = [...item.children, ...newChildren];
-  }
-
-  const newIndex = path[path.length - 2] + 1;
-
-  let newParent: TocItem | null = null;
-
-  if (path.length < 3) {
-    // Item will now be at root of tree
-    // Inserted right after its parent
-    draft.items = ArrayUtils.withItemAtIndex(draft.items, item, newIndex);
-  } else {
-    newParent = TocUtils.getTocItemFromPath({
-      items: draft.items,
-      path: path.slice(0, path.length - 2),
-    });
-    newParent.children = ArrayUtils.withItemAtIndex(
-      newParent.children,
-      item,
-      newIndex
-    );
-  }
-
-  // Expand the relocated item if it is not already expanded
-  draft.openItems[secID] = true;
-
-  new Builder(draft).computeIDToPathMap().computeIDToNearestTitleMap();
-
-  if (!draft.coparse) {
-    throw new Error(
-      'CoParse data structure is not defined when trying to update section html'
-    );
-  }
-
-  Helpers.updateCoParseSectionXML({
-    type: 'LEFT_INDENT',
-    id: secID,
-    // TODO or could give parent path for more efficient access
-    parentID: newParent?.section.id ?? null,
-    newChildrenIDs: newChildren.map((child) => child.section.id),
-    coparse: draft.coparse,
-  });
-  draft.unsavedBookmarks = true;
-}
-
-function handleRightIndentSection(
-  draft: ITableOfContentsContext,
-  action: RightIndentSectionAction
-): void {
-  const { secID } = action;
-  const path = draft.idToPathMap[secID];
-
-  if (!path) {
-    console.error('Section not found');
-    return;
-  }
-  if (!TocUtils.canRightIndent({ path })) {
-    console.error('Cannot right indent the section provided');
-    return;
-  }
-
-  // Append the child to the new parent
-  // It comes last in the list of children (top to bottom order maintained)
-  const item = TocUtils.getTocItemFromPath({ items: draft.items, path });
-
-  new Builder(draft).removeSectionFromParent({
-    path,
-    secID,
-  });
-
-  // New parent is the sibling directly above it
-  const newParentPath = (() => {
-    const newPath = path.slice(0, path.length - 1);
-    newPath.push(path[path.length - 1] - 1);
-    return newPath;
-  })();
-  const newParent = TocUtils.getTocItemFromPath({
-    items: draft.items,
-    path: newParentPath,
-  });
-  newParent.children.push(item);
-
-  // Expand the new parent to show where the node went
-  draft.openItems[newParent.section.id] = true;
-
-  if (!draft.coparse) {
-    throw new Error('CoParse data structure is not defined');
-  }
-
-  Helpers.updateCoParseSectionXML({
-    type: 'RIGHT_INDENT',
-    id: secID,
-    // TODO or could give parent path for more efficient access
-    parentID: newParent.section.id,
-    coparse: draft.coparse,
-  });
-
-  draft.unsavedBookmarks = true;
-
-  new Builder(draft).computeIDToPathMap().computeIDToNearestTitleMap();
-}
-
-function handleRenameBookmark(
-  draft: ITableOfContentsContext,
-  action: RenameBookmarkAction
-): void {
-  const { secID, value } = action;
-
-  if (!value) {
-    console.error('Missing value');
-    return;
-  }
-
-  new Builder(draft).renameSection(secID, value);
-
-  draft.unsavedBookmarks = true;
-
-  draft.renameFormValue = '';
-  draft.sectionToRenameID = null;
-}
-
-function flattenAllBookmarkSections(items: TocItem[]): Section[] {
-  let allSections: Section[] = [];
-  items.forEach((sectionItem) => {
-    allSections = [...allSections, ...Helpers.flattenAllSections(sectionItem)];
-  });
-  return allSections;
-}
-
-function findNearestSectionBefore(
-  allSections: Section[],
-  section: Section
-): Section | null {
-  let nearestSection: Section | null = null;
-  allSections.forEach((sectionItem: Section) => {
-    if (
-      sectionItem.page < section.page ||
-      (sectionItem.page === section.page && sectionItem.y <= section.y)
-    ) {
-      nearestSection = sectionItem;
-    }
-  });
-  return nearestSection;
-}
-
-function handleAddBookmark(
-  draft: ITableOfContentsContext,
-  action: AddBookmarkAction
-): void {
-  const { yPos, pageNum, initialEmpty, titleForPlaceable, uuid } = action;
-  const selection = window.getSelection();
-  const text =
-    titleForPlaceable || (selection ? selection.toString().trim() : null);
-
-  if (!text && !initialEmpty) {
-    console.error('You must select text to add a bookmark');
-    return;
-  }
-
-  if (pageNum < 0) {
-    console.error('Invalid page for bookmark');
-    return;
-  }
-
-  if (yPos < 0) {
-    console.error('Invalid Y position for bookmark');
-    return;
-  }
-
-  const title = text || '';
-
-  const section = new Section({
-    id: Math.floor(Math.random() * 10 ** 10), // TODO replace this with uuid when section IDs are no longer numbers
-    title,
-    page: pageNum,
-    y: yPos,
-    showBookmark: true,
-    fullTitle: title,
-    literal: null,
-    qualified: '',
-    numRefs: 0,
-    bookmarkTitle: title,
-    type: 'SECTION',
-    uuid, // pass in UUID if recreating an existing bookmark, otherwise section constructor will generate a UUID
-  });
-
-  // flattened list of all bookmark sections in document
-  const allSections = flattenAllBookmarkSections(draft.items);
-
-  // find the closest section before the new bookmark's position
-  const nearestSection = findNearestSectionBefore(allSections, section);
-
-  if (!draft.coparse) {
-    throw new Error('CoParse data structure is not defined');
-  }
-
-  // add new section to items
-  draft.items = Helpers.insertSectionIntoItems({
-    section,
-    parentSectionId: nearestSection?.id ?? null,
-    items: draft.items,
-  });
-
-  // add new section to XML
-  draft.coparse = Helpers.updateCoParseSectionXML({
-    section,
-    type: 'INSERT',
-    parentSectionID: nearestSection?.id ?? null,
-    insertAtIndex: 0,
-    coparse: draft.coparse,
-  });
-
-  // open all ancestors of new section in outline
-  const ancestors = Helpers.findAllAncestors(section.uuid, draft.items);
-  if (ancestors.length > 0) {
-    [...ancestors, ...(nearestSection ? [nearestSection.id] : [])].forEach(
-      (sectionId) => {
-        draft.openItems[sectionId] = true;
-      }
-    );
-  } else {
-    console.error(
-      'Error: Newly created outline section could not be found in tree'
-    );
-  }
-
-  new Builder(draft)
-    .computeIDToNearestTitleMap()
-    .computePageToSectionMap()
-    .computeIDToSectionMap()
-    .computeIDToPathMap();
-}
-
-function handleResetOpenItems(draft: ITableOfContentsContext): void {
-  draft.openItems = {};
-}
-
 const producer = (
   draft: ITableOfContentsContext,
   action: ITableOfContentsAction
 ) => {
   switch (action.type) {
-    case 'LOAD_AI_TOC':
-      handleLoadAiToc(draft, action);
+    case 'LOAD_AI_TOC': {
+      const firstChild = XMLUtils.parse(action.coparse.toc || '').firstChild as
+        | Element
+        | undefined;
+      const children: TocItem[] = [...(firstChild?.children ?? [])]
+        .filter((child) => child.tagName === 'section')
+        .map((node) => Helpers.parseItem(node, undefined));
+
+      // In case `window` was undefined when we created the default state
+      draft.width = getDefaultWidth();
+      draft.pageToSectionMap = [];
+      draft.original.aiToc = [...children];
+
+      // include everything from action.coparse except for toc because PDF
+      // bookmarks on page load, so LOAD_PDF_BOOKMARKS sets the value for toc
+      const existingCoParseToc = draft.coparse?.toc;
+      draft.coparse = action.coparse;
+      draft.coparse.toc = existingCoParseToc;
+
+      new Builder(draft)
+        .computePageToSectionMap()
+        .computeIDToSectionMap(true)
+        .computeIDToPathMap()
+        .addLinksBetweenSections()
+        .computeIDToNearestTitleMap(); // TODO call this in more places
+
+      draft.isLoaded = !!draft.original.aiToc && !!draft.original.pdfBookmarks;
       break;
-    case 'LOAD_PDF_BOOKMARKS':
-      handleLoadPdfBookmarks(draft, action);
+    }
+    case 'LOAD_PDF_BOOKMARKS': {
+      draft.original.pdfBookmarks = action.bookmarks;
+      draft.items = Helpers.cloneTocTree(action.bookmarks);
+      draft.isLoaded = !!draft.original.aiToc && !!draft.original.pdfBookmarks;
+
+      const coparse = Object.assign({}, draft.coparse);
+      coparse.toc = Helpers.tocItemsToXml(action.bookmarks);
+      draft.coparse = coparse;
+
+      new Builder(draft)
+        .computePageToSectionMap()
+        .computeIDToSectionMap()
+        .computeIDToPathMap()
+        .addLinksBetweenSections()
+        .computeIDToNearestTitleMap()
+        .setDefaultOpenState();
+
       break;
-    case 'SWITCH_CURRENT_MODE':
-      handleSwitchCurrentMode(draft);
+    }
+    case 'SWITCH_CURRENT_MODE': {
+      const { currentMode, original } = draft;
+      const originalBookmarks = original.pdfBookmarks;
+      const originalToc = original.aiToc;
+
+      if (originalBookmarks === null || originalToc === null) {
+        break;
+      }
+
+      if (currentMode === 'ai-toc') {
+        draft.currentMode = 'bookmarks';
+        draft.items = Helpers.cloneTocTree(originalBookmarks);
+        const coparse = Object.assign({}, draft.coparse);
+        coparse.toc = Helpers.tocItemsToXml(originalBookmarks);
+        draft.coparse = coparse;
+        draft.openItems =
+          originalBookmarks.length === 1
+            ? { [originalBookmarks[0].section.id]: true }
+            : {};
+      } else if (currentMode === 'bookmarks') {
+        draft.currentMode = 'ai-toc';
+        draft.items = Helpers.cloneTocTree(originalToc);
+        const coparse = Object.assign({}, draft.coparse);
+        coparse.toc = Helpers.tocItemsToXml(originalToc);
+        draft.coparse = coparse;
+        draft.openItems =
+          originalToc.length === 1 ? { [originalToc[0].section.id]: true } : {};
+      }
+
+      new Builder(draft)
+        .computePageToSectionMap()
+        .computeIDToSectionMap()
+        .computeIDToPathMap()
+        .addLinksBetweenSections()
+        .computeIDToNearestTitleMap();
+
       break;
-    case 'SET_TABLE_OF_CONTENTS_WIDTH':
-      handleSetTableOfContentsWidth(draft, action);
+    }
+    case 'SET_TABLE_OF_CONTENTS_WIDTH': {
+      if (action.width <= 0) {
+        console.error('Table of contents width must be positive');
+        return;
+      }
+
+      if (action.width > window.innerWidth) {
+        console.error('Table of contents cannot be wider than the window');
+        return;
+      }
+
+      draft.width = action.width;
       break;
-    case 'TOGGLE_BOOKMARK':
-      handleToggleBookmark(draft, action);
+    }
+    case 'TOGGLE_BOOKMARK': {
+      const { secID } = action;
+      draft.openItems[secID] = !draft.openItems[secID];
       break;
-    case 'DELETE_BOOKMARK':
-      handleDeleteBookmark(draft, action);
+    }
+    case 'DELETE_BOOKMARK': {
+      const { secID } = action;
+
+      if (secID === null) {
+        console.error('Invalid state to delete bookmark');
+        return;
+      }
+
+      new Builder(draft).deleteSection(secID);
+
+      draft.unsavedBookmarks = true;
+
+      // draft.items = newItems;
+      draft.sectionToDeleteID = null;
       break;
-    case 'LEFT_INDENT_SECTION':
-      handleLeftIndentSection(draft, action);
+    }
+    case 'LEFT_INDENT_SECTION': {
+      const { secID } = action;
+      const path = draft.idToPathMap[secID];
+      if (!path) {
+        console.error('Section not found');
+        return;
+      }
+
+      if (!TocUtils.canLeftIndent({ path })) {
+        console.error('Cannot left indent the section provided');
+        return;
+      }
+
+      const parent = TocUtils.getTocItemParentFromPath({
+        items: draft.items,
+        path,
+      });
+
+      const siblings = parent.children;
+      const idx = path[path.length - 1];
+      const item = siblings[idx];
+
+      if (!item) {
+        console.error('Failed to find item ');
+        return;
+      }
+
+      // Update parent children
+      parent.children = siblings.slice(0, idx);
+      const newChildren = siblings.slice(idx + 1);
+
+      // If not this, then there are no changes to the node's children
+      if (newChildren.length) {
+        item.children = [...item.children, ...newChildren];
+      }
+
+      const newIndex = path[path.length - 2] + 1;
+
+      let newParent: TocItem | null = null;
+
+      if (path.length < 3) {
+        // Item will now be at root of tree
+        // Inserted right after its parent
+        draft.items = ArrayUtils.withItemAtIndex(draft.items, item, newIndex);
+      } else {
+        newParent = TocUtils.getTocItemFromPath({
+          items: draft.items,
+          path: path.slice(0, path.length - 2),
+        });
+        newParent.children = ArrayUtils.withItemAtIndex(
+          newParent.children,
+          item,
+          newIndex
+        );
+      }
+
+      // Expand the relocated item if it is not already expanded
+      draft.openItems[secID] = true;
+
+      new Builder(draft).computeIDToPathMap().computeIDToNearestTitleMap();
+
+      if (!draft.coparse) {
+        throw new Error(
+          'CoParse data structure is not defined when trying to update section html'
+        );
+      }
+
+      Helpers.updateCoParseSectionXML({
+        type: 'LEFT_INDENT',
+        id: secID,
+        // TODO or could give parent path for more efficient access
+        parentID: newParent?.section.id ?? null,
+        newChildrenIDs: newChildren.map((child) => child.section.id),
+        coparse: draft.coparse,
+      });
+      draft.unsavedBookmarks = true;
+
       break;
-    case 'RIGHT_INDENT_SECTION':
-      handleRightIndentSection(draft, action);
+    }
+    case 'RIGHT_INDENT_SECTION': {
+      const { secID } = action;
+      const path = draft.idToPathMap[secID];
+
+      if (!path) {
+        console.error('Section not found');
+        return;
+      }
+      if (!TocUtils.canRightIndent({ path })) {
+        console.error('Cannot right indent the section provided');
+        return;
+      }
+
+      // Append the child to the new parent
+      // It comes last in the list of children (top to bottom order maintained)
+      const item = TocUtils.getTocItemFromPath({ items: draft.items, path });
+
+      new Builder(draft).removeSectionFromParent({
+        path,
+        secID,
+      });
+
+      // New parent is the sibling directly above it
+      const newParentPath = (() => {
+        const newPath = path.slice(0, path.length - 1);
+        newPath.push(path[path.length - 1] - 1);
+        return newPath;
+      })();
+      const newParent = TocUtils.getTocItemFromPath({
+        items: draft.items,
+        path: newParentPath,
+      });
+      newParent.children.push(item);
+
+      // Expand the new parent to show where the node went
+      draft.openItems[newParent.section.id] = true;
+
+      if (!draft.coparse) {
+        throw new Error('CoParse data structure is not defined');
+      }
+
+      Helpers.updateCoParseSectionXML({
+        type: 'RIGHT_INDENT',
+        id: secID,
+        // TODO or could give parent path for more efficient access
+        parentID: newParent.section.id,
+        coparse: draft.coparse,
+      });
+
+      draft.unsavedBookmarks = true;
+
+      new Builder(draft).computeIDToPathMap().computeIDToNearestTitleMap();
+
       break;
-    case 'RENAME_BOOKMARK':
-      handleRenameBookmark(draft, action);
+    }
+    case 'RENAME_BOOKMARK': {
+      const { secID, value } = action;
+
+      if (!value) {
+        console.error('Missing value');
+        return;
+      }
+
+      new Builder(draft).renameSection(secID, value);
+
+      draft.unsavedBookmarks = true;
+
+      draft.renameFormValue = '';
+      draft.sectionToRenameID = null;
       break;
-    case 'ADD_BOOKMARK':
-      handleAddBookmark(draft, action);
+    }
+    case 'ADD_BOOKMARK': {
+      const { yPos, pageNum, initialEmpty, titleForPlaceable, uuid } = action;
+      const selection = window.getSelection();
+      const text =
+        titleForPlaceable || (selection ? selection.toString().trim() : null);
+
+      if (!text && !initialEmpty) {
+        console.error('You must select text to add a bookmark');
+        return;
+      }
+
+      if (pageNum < 0) {
+        console.error('Invalid page for bookmark');
+        return;
+      }
+
+      if (yPos < 0) {
+        console.error('Invalid Y position for bookmark');
+        return;
+      }
+
+      const title = text || '';
+
+      const section = new Section({
+        id: Math.floor(Math.random() * 10 ** 10), // TODO replace this with uuid when section IDs are no longer numbers
+        title,
+        page: pageNum,
+        y: yPos,
+        showBookmark: true,
+        fullTitle: title,
+        literal: null,
+        qualified: '',
+        numRefs: 0,
+        bookmarkTitle: title,
+        type: 'SECTION',
+        uuid, // pass in UUID if recreating an existing bookmark, otherwise section constructor will generate a UUID
+      });
+
+      // flattened list of all bookmark sections in document
+      let allSections: Section[] = [];
+      draft.items.forEach((sectionItem) => {
+        allSections = [
+          ...allSections,
+          ...Helpers.flattenAllSections(sectionItem),
+        ];
+      });
+
+      // find the closest section before the new bookmark's position
+      let nearestSection: Section | null = null;
+      allSections.forEach((sectionItem: Section) => {
+        if (
+          sectionItem.page < section.page ||
+          (sectionItem.page === section.page && sectionItem.y <= section.y)
+        ) {
+          nearestSection = sectionItem;
+        }
+      });
+      nearestSection = nearestSection as Section | null;
+
+      if (!draft.coparse) {
+        throw new Error('CoParse data structure is not defined');
+      }
+
+      // add new section to items
+      draft.items = Helpers.insertSectionIntoItems({
+        section,
+        parentSectionId: nearestSection?.id ?? null,
+        items: draft.items,
+      });
+
+      // add new section to XML
+      draft.coparse = Helpers.updateCoParseSectionXML({
+        section,
+        type: 'INSERT',
+        parentSectionID: nearestSection?.id ?? null,
+        insertAtIndex: 0,
+        coparse: draft.coparse,
+      });
+
+      // open all ancestors of new section in outline
+      const ancestors = Helpers.findAllAncestors(section.uuid, draft.items);
+      if (ancestors.length > 0) {
+        [...ancestors, ...(nearestSection ? [nearestSection.id] : [])].forEach(
+          (sectionId) => {
+            draft.openItems[sectionId] = true;
+          }
+        );
+      } else {
+        console.error(
+          'Error: Newly created outline section could not be found in tree'
+        );
+      }
+
+      new Builder(draft)
+        .computeIDToNearestTitleMap()
+        .computePageToSectionMap()
+        .computeIDToSectionMap()
+        .computeIDToPathMap();
+
       break;
-    case 'RESET_OPEN_ITEMS':
-      handleResetOpenItems(draft);
+    }
+    case 'RESET_OPEN_ITEMS': {
+      draft.openItems = {};
       break;
+    }
     default:
       throw new InvalidActionError(action);
   }

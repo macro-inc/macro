@@ -38,7 +38,6 @@ import { openExternalUrl } from '@core/util/url';
 import {
   type ChannelClickTarget,
   type EntityData,
-  type GithubPullRequestEntity,
   emailQueryKeyExcludesDone,
   getSnippetHit,
   isChannelEntity,
@@ -540,231 +539,6 @@ export const getRowClickFallbackLocation = (
     ? getSnippetHit(entity)?.location
     : undefined;
 
-type SplitManager = NonNullable<ReturnType<typeof globalSplitManager>>;
-
-function openNonMemberChannelInSplit(
-  entity: EntityData,
-  options: OpenEntityOptions,
-  splitManager: SplitManager
-): void {
-  const { splitHandle } = options;
-  if (isChannelEntity(entity) && splitHandle?.isControllerSplit()) {
-    const joinPromptContent = withPreviewSourceEntityId(
-      {
-        type: 'component',
-        id: 'non-member-channel',
-        params: {
-          channelId: entity.id,
-          channelName: entity.name,
-          memberCount: entity.participantIds?.length ?? 0,
-        },
-      },
-      entity.id
-    );
-    splitManager.openWithSplit(joinPromptContent, {
-      referredFrom: options.referredFrom,
-      activate: true,
-      handle: splitHandle,
-    });
-  }
-}
-
-function openGithubPrInSplit(
-  entity: GithubPullRequestEntity,
-  options: OpenEntityOptions,
-  splitManager: SplitManager
-): void {
-  if (USE_MACRO_PR_SUMMARY_BLOCK) {
-    splitManager.openWithSplit(
-      { type: 'pr', id: entity.id },
-      {
-        referredFrom: options.referredFrom,
-        activate: true,
-        preferNewSplit: options.openInNewSplit,
-        replacePreview: options.replacePreview,
-        handle: options.splitHandle,
-        mergeHistory: options.mergeHistory,
-      }
-    );
-  } else {
-    openExternalUrl(entity.metadata.url);
-  }
-}
-
-async function openCalendarEventInSplit(
-  entity: Extract<EntityData, { type: 'calendar_event' }>,
-  options: OpenEntityOptions,
-  splitManager: SplitManager
-): Promise<void> {
-  if (!ENABLE_CALENDAR_UI()) return;
-  const params = calendarBlockParamsForEntity(entity);
-  const existing = splitManager.getSplitByContent(
-    'calendar',
-    CALENDAR_BLOCK_ID
-  );
-  if (existing) {
-    existing.activate();
-  } else {
-    splitManager.openWithSplit(
-      { type: 'calendar', id: CALENDAR_BLOCK_ID, params },
-      {
-        activate: true,
-        referredFrom: null,
-        preferNewSplit: options.openInNewSplit,
-        handle: options.splitHandle,
-      }
-    );
-  }
-  const calendarHandle = await splitManager
-    .getOrchestrator()
-    .getBlockHandle(CALENDAR_BLOCK_ID, 'calendar');
-  await calendarHandle?.goToLocationFromParams(params);
-}
-
-function splitParamsForOpenedEntity(
-  entity: EntityData,
-  location: SearchLocation | undefined,
-  channelMessageTarget:
-    | Extract<ChannelClickTarget, { kind: 'message' }>
-    | undefined
-): Record<string, string> | undefined {
-  if (entity.type === 'channel' && location?.type === 'channel') {
-    return getChannelParams(location.messageId, location.threadId);
-  }
-  if (channelMessageTarget) {
-    return getChannelParams(
-      channelMessageTarget.messageId,
-      channelMessageTarget.threadId
-    );
-  }
-  if (entity.type === 'call' && location?.type === 'call_record') {
-    return { [CALL_PARAMS.transcriptId]: location.transcriptId };
-  }
-  return undefined;
-}
-
-async function navigateAfterOpeningEntity(
-  contentId: string,
-  location: SearchLocation | undefined,
-  channelMessageTarget:
-    | Extract<ChannelClickTarget, { kind: 'message' }>
-    | undefined,
-  openChannelAtLatest: boolean,
-  blockOrchestrator: BlockOrchestrator
-): Promise<void> {
-  if (location) {
-    await navigateToLocation(contentId, location, blockOrchestrator);
-    return;
-  }
-  if (channelMessageTarget) {
-    // NOTE: This will force target message navigation in case the split is already open.
-    await navigateToLocation(
-      contentId,
-      {
-        type: 'channel',
-        messageId: channelMessageTarget.messageId,
-        threadId: channelMessageTarget.threadId,
-      },
-      blockOrchestrator
-    );
-    return;
-  }
-  if (openChannelAtLatest) {
-    // Force the scroll-to-bottom even when the channel is already open in a
-    // (preview) split, where reopen: 'latest' only reactivates the parked
-    // split without re-pinning it to the newest message.
-    await goToChannelLatest(blockOrchestrator, contentId);
-  }
-}
-
-async function openSpecialEntityInSplit(
-  entity: EntityData,
-  options: OpenEntityOptions,
-  splitManager: SplitManager
-): Promise<boolean> {
-  if (isNonMemberChannelEntity(entity)) {
-    openNonMemberChannelInSplit(entity, options, splitManager);
-    return true;
-  }
-  if (isGithubPrEntity(entity)) {
-    openGithubPrInSplit(entity, options, splitManager);
-    return true;
-  }
-  if (entity.type === 'foreign') return true;
-  if (entity.type === 'reminder' && !entity.referencedEntity) return true;
-  if (entity.type === 'calendar_event') {
-    await openCalendarEventInSplit(entity, options, splitManager);
-    return true;
-  }
-  return false;
-}
-
-function shouldPreventDuplicatePreviewOpen(
-  entity: EntityData,
-  options: OpenEntityOptions
-): boolean {
-  const { allowDuplicate, openInNewSplit, replacePreview, splitHandle } =
-    options;
-  return (
-    !allowDuplicate &&
-    !openInNewSplit &&
-    !replacePreview &&
-    !!splitHandle &&
-    preventDuplicatePreviewEntityOpen(entity, splitHandle)
-  );
-}
-
-function channelOpenFlags(entity: EntityData): {
-  channelMessageTarget:
-    | Extract<ChannelClickTarget, { kind: 'message' }>
-    | undefined;
-  openChannelAtLatest: boolean;
-} {
-  const channelTarget = getChannelEntityTarget(entity);
-  return {
-    channelMessageTarget:
-      channelTarget?.kind === 'message' ? channelTarget : undefined,
-    openChannelAtLatest: channelTarget?.kind === 'latest',
-  };
-}
-
-function referredFromForOpenedEntity(
-  options: OpenEntityOptions,
-  splitManager: SplitManager
-): ReferredFrom | undefined {
-  const sourceContent =
-    options.splitHandle?.content() ?? splitManager.activeSplit()?.content();
-  const sourceListView =
-    sourceContent?.type === 'component' && isListViewID(sourceContent.id)
-      ? sourceContent.id
-      : undefined;
-  return options.referredFrom ?? sourceListView;
-}
-
-function splitContentForOpenedEntity(
-  entity: EntityData,
-  content: SplitContent,
-  params: Record<string, string> | undefined,
-  options: OpenEntityOptions
-): SplitContent {
-  const splitContent: SplitContent = { ...content, params };
-  if (options.splitHandle?.isControllerSplit() && !options.replacePreview) {
-    return withPreviewSourceEntityId(splitContent, entity.id);
-  }
-  return splitContent;
-}
-
-function channelReopenMode(
-  entity: EntityData,
-  location: SearchLocation | undefined,
-  openChannelAtLatest: boolean
-): 'latest' | undefined {
-  if (entity.type === 'channel' && !location && openChannelAtLatest) {
-    return 'latest';
-  }
-  return undefined;
-}
-
 /**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
  * Supports both regular entities (channel, email, etc.) and document entities.
@@ -789,6 +563,7 @@ export const openEntityInSplitFromUnifiedList = async (
     location = getRowClickFallbackLocation(entity);
   }
 
+  // Get dependencies internally
   const splitManager = globalSplitManager();
   if (!splitManager) {
     console.error('No split manager found');
@@ -797,35 +572,129 @@ export const openEntityInSplitFromUnifiedList = async (
 
   // Channels the viewer hasn't joined can't be read. In a Preview Pair, offer
   // the Join prompt in the Viewer; otherwise the row's inline Join button is
-  // the only affordance. Foreign rows and standalone reminders have nothing to
-  // open. Calendar is a singleton block and retargets that instance.
-  if (await openSpecialEntityInSplit(entity, options, splitManager)) {
+  // the only affordance.
+  if (isNonMemberChannelEntity(entity)) {
+    if (isChannelEntity(entity) && splitHandle?.isControllerSplit()) {
+      const joinPromptContent = withPreviewSourceEntityId(
+        {
+          type: 'component',
+          id: 'non-member-channel',
+          params: {
+            channelId: entity.id,
+            channelName: entity.name,
+            memberCount: entity.participantIds?.length ?? 0,
+          },
+        },
+        entity.id
+      );
+      splitManager.openWithSplit(joinPromptContent, {
+        referredFrom: options.referredFrom,
+        activate: true,
+        handle: splitHandle,
+      });
+    }
     return;
   }
+
+  if (isGithubPrEntity(entity)) {
+    if (USE_MACRO_PR_SUMMARY_BLOCK) {
+      splitManager.openWithSplit(
+        { type: 'pr', id: entity.id },
+        {
+          referredFrom: options.referredFrom,
+          activate: true,
+          preferNewSplit: openInNewSplit,
+          replacePreview,
+          handle: splitHandle,
+          mergeHistory,
+        }
+      );
+    } else {
+      openExternalUrl(entity.metadata.url);
+    }
+    return;
+  }
+  if (entity.type === 'foreign') return;
 
   const blockOrchestrator = splitManager.getOrchestrator();
-  const content = getEntitySplitContent(entity);
 
-  if (shouldPreventDuplicatePreviewOpen(entity, options)) {
+  // A standalone reminder points at nothing, so there is nothing to open.
+  if (entity.type === 'reminder' && !entity.referencedEntity) return;
+
+  // Calendar is a singleton block. Event opens retarget that one instance
+  // with a locator range, including repeat clicks on an already-open split.
+  if (entity.type === 'calendar_event') {
+    if (!ENABLE_CALENDAR_UI()) return;
+    const params = calendarBlockParamsForEntity(entity);
+    const existing = splitManager.getSplitByContent(
+      'calendar',
+      CALENDAR_BLOCK_ID
+    );
+    if (existing) {
+      existing.activate();
+    } else {
+      splitManager.openWithSplit(
+        { type: 'calendar', id: CALENDAR_BLOCK_ID, params },
+        {
+          activate: true,
+          referredFrom: null,
+          preferNewSplit: openInNewSplit,
+          handle: splitHandle,
+        }
+      );
+    }
+    const calendarHandle = await blockOrchestrator.getBlockHandle(
+      CALENDAR_BLOCK_ID,
+      'calendar'
+    );
+    await calendarHandle?.goToLocationFromParams(params);
     return;
   }
 
-  const { channelMessageTarget, openChannelAtLatest } =
-    channelOpenFlags(entity);
-  const params = splitParamsForOpenedEntity(
-    entity,
-    location,
-    channelMessageTarget
-  );
-  const referredFrom = referredFromForOpenedEntity(options, splitManager);
+  const content = getEntitySplitContent(entity);
+
+  if (
+    !allowDuplicate &&
+    !openInNewSplit &&
+    !replacePreview &&
+    splitHandle &&
+    preventDuplicatePreviewEntityOpen(entity, splitHandle)
+  ) {
+    return;
+  }
+
+  const channelTarget = getChannelEntityTarget(entity);
+  const channelMessageTarget =
+    channelTarget?.kind === 'message' ? channelTarget : undefined;
+  const openChannelAtLatest = channelTarget?.kind === 'latest';
+
+  let params: Record<string, string> | undefined;
+  if (entity.type === 'channel' && location?.type === 'channel') {
+    params = getChannelParams(location.messageId, location.threadId);
+  } else if (channelMessageTarget) {
+    params = getChannelParams(
+      channelMessageTarget.messageId,
+      channelMessageTarget.threadId
+    );
+  } else if (entity.type === 'call' && location?.type === 'call_record') {
+    params = { [CALL_PARAMS.transcriptId]: location.transcriptId };
+  }
+
+  const sourceContent =
+    splitHandle?.content() ?? splitManager.activeSplit()?.content();
+
+  const sourceListView =
+    sourceContent?.type === 'component' && isListViewID(sourceContent.id)
+      ? sourceContent.id
+      : undefined;
+  const referredFrom = options.referredFrom ?? sourceListView;
+
+  let splitContent: SplitContent = { ...content, params };
   // Preview source metadata belongs on Viewer entries; a replacement takes the
   // Preview Pair's place, so its entry is ordinary split history.
-  const splitContent = splitContentForOpenedEntity(
-    entity,
-    content,
-    params,
-    options
-  );
+  if (splitHandle?.isControllerSplit() && !replacePreview) {
+    splitContent = withPreviewSourceEntityId(splitContent, entity.id);
+  }
 
   splitManager.openWithSplit(splitContent, {
     referredFrom,
@@ -835,16 +704,32 @@ export const openEntityInSplitFromUnifiedList = async (
     handle: splitHandle,
     mergeHistory,
     allowDuplicate,
-    reopen: channelReopenMode(entity, location, openChannelAtLatest),
+    reopen:
+      entity.type === 'channel' && !location && openChannelAtLatest
+        ? 'latest'
+        : undefined,
   });
 
-  await navigateAfterOpeningEntity(
-    content.id,
-    location,
-    channelMessageTarget,
-    openChannelAtLatest,
-    blockOrchestrator
-  );
+  // Navigate to specific location if provided
+  if (location) {
+    await navigateToLocation(content.id, location, blockOrchestrator);
+  } else if (channelMessageTarget) {
+    // NOTE: This will force target message navigation in case the split is already open.
+    await navigateToLocation(
+      content.id,
+      {
+        type: 'channel',
+        messageId: channelMessageTarget.messageId,
+        threadId: channelMessageTarget.threadId,
+      },
+      blockOrchestrator
+    );
+  } else if (openChannelAtLatest) {
+    // Force the scroll-to-bottom even when the channel is already open in a
+    // (preview) split, where reopen: 'latest' only reactivates the parked
+    // split without re-pinning it to the newest message.
+    await goToChannelLatest(blockOrchestrator, content.id);
+  }
 };
 
 /**

@@ -47,40 +47,10 @@ import type {
   MediaOptions,
 } from './types';
 
-type InlineMenuOps = {
-  actionsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
-  mentionsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
-  tagsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
-  emojisMenuOps: ReturnType<typeof createMenuOperations> | undefined;
-  snippetsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
-  skillsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
-  agentCommandsMenuOps: ReturnType<typeof createMenuOperations> | undefined;
-};
+export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
+  const [isInteractable, setIsInteractable] = createSignal(true);
 
-type LexicalPlugins = ReturnType<typeof createLexicalWrapper>['plugins'];
-type MenuOperations = ReturnType<typeof createMenuOperations>;
-
-function menuIsOpen(ops: MenuOperations | undefined): boolean {
-  return ops?.isOpen() ?? false;
-}
-
-function isAnyInlineMenuOpen(menuOps: InlineMenuOps): boolean {
-  return (
-    menuIsOpen(menuOps.actionsMenuOps) ||
-    menuIsOpen(menuOps.mentionsMenuOps) ||
-    menuIsOpen(menuOps.tagsMenuOps) ||
-    menuIsOpen(menuOps.emojisMenuOps) ||
-    menuIsOpen(menuOps.snippetsMenuOps) ||
-    menuIsOpen(menuOps.skillsMenuOps) ||
-    menuIsOpen(menuOps.agentCommandsMenuOps)
-  );
-}
-
-function createLexicalWrapperForConfig(
-  config: EditorConfig,
-  isInteractable: () => boolean
-) {
-  return config.withIds
+  const lexicalWrapper = config.withIds
     ? createLexicalWrapper({
         type: config.type as EditorType,
         namespace: config.namespace,
@@ -92,9 +62,15 @@ function createLexicalWrapperForConfig(
         namespace: config.namespace,
         isInteractable,
       });
-}
 
-function createInlineMenuOps(config: EditorConfig): InlineMenuOps {
+  if (config.skipPreviewFetch) {
+    lexicalWrapper.skipPreviewFetch = true;
+  }
+
+  const { editor, plugins, cleanup: cleanupLexical } = lexicalWrapper;
+
+  const [markdownState, setMarkdownState] = createSignal<string>('');
+
   const actionsMenuOps =
     config.actions !== false && config.type !== 'plain-text'
       ? createMenuOperations()
@@ -132,22 +108,11 @@ function createInlineMenuOps(config: EditorConfig): InlineMenuOps {
     config.type !== 'plain-text'
       ? createMenuOperations()
       : undefined;
-  return {
-    actionsMenuOps,
-    mentionsMenuOps,
-    tagsMenuOps,
-    emojisMenuOps,
-    snippetsMenuOps,
-    skillsMenuOps,
-    agentCommandsMenuOps,
-  };
-}
 
-function applyTextModePlugins(
-  config: EditorConfig,
-  plugins: LexicalPlugins,
-  setMarkdownState: (value: string) => void
-): void {
+  const accessoryStoreResult = config.code ? createAccessoryStore() : undefined;
+  const accessoryStore = accessoryStoreResult?.[0];
+  const setAccessoryStore = accessoryStoreResult?.[1];
+
   if (config.type === 'plain-text') {
     plugins.plainText().state<string>(setMarkdownState, 'plain');
   } else if (config.singleLine) {
@@ -161,120 +126,118 @@ function applyTextModePlugins(
       .delete()
       .state<string>(setMarkdownState, 'markdown');
   }
-}
 
-function applyHistoryAndLinePlugins(
-  config: EditorConfig,
-  plugins: LexicalPlugins
-): void {
+  // History
   if (config.history) {
     plugins.history(config.history.timeGap);
   }
+
+  // Single line mode
   if (config.singleLine) {
     plugins.use(singleLinePlugin());
   }
+
+  // Restore focus (registered early, before other plugins)
   if (config.restoreFocus) {
     plugins.use(restoreFocusPlugin());
   }
-}
 
-function applyClipboardAndStructurePlugins(
-  config: EditorConfig,
-  plugins: LexicalPlugins,
-  lexicalWrapper: ReturnType<typeof createLexicalWrapper>
-): void {
+  // Text paste handling
   plugins.use(textPastePlugin());
+
+  // Markdown paste handling (rich & full editors only)
   if (config.type !== 'plain-text') {
     plugins.use(markdownPastePlugin());
   }
+
+  // Tab indentation (unless custom handler)
   if (!config.handlers.onTab) {
     plugins.use(tabIndentationPlugin());
   }
+
+  // Horizontal rules & normalize-enter (full multi-line markdown only)
   if (config.type !== 'plain-text' && !config.singleLine) {
     plugins.use(horizontalRulePlugin());
     plugins.use(normalizeEnterPlugin());
   }
+
+  // Await placeholders for in-flight async operations (any non-plain-text editor).
   if (config.type !== 'plain-text') {
     plugins.use(awaitPlugin());
   }
+
+  // Selection / formatting state
   if (config.selectionData) {
     plugins.use(selectionDataPlugin(lexicalWrapper));
   }
-}
 
-function applyInlineMenuPlugins(
-  config: EditorConfig,
-  plugins: LexicalPlugins,
-  menuOps: InlineMenuOps
-): void {
-  if (menuOps.actionsMenuOps) {
-    plugins.use(actionsPlugin({ menu: menuOps.actionsMenuOps }));
+  // Actions / slash-command menu (not available for plain-text)
+  if (actionsMenuOps) {
+    plugins.use(actionsPlugin({ menu: actionsMenuOps }));
   }
-  if (config.type === 'plain-text') return;
-  if (config.mentions && menuOps.mentionsMenuOps) {
-    plugins.use(
-      mentionsPlugin({
-        menu: menuOps.mentionsMenuOps,
-        onCreateMention: config.mentions.onCreate,
-        onRemoveMention: config.mentions.onRemove,
-        sourceDocumentId: config.mentions.sourceDocumentId,
-      })
-    );
-  }
-  if (config.tags && menuOps.tagsMenuOps) {
-    plugins.use(
-      tagsPlugin({
-        menu: menuOps.tagsMenuOps,
-        insertTags: config.tags.insertTags,
-        onCreateTag: config.tags.applyTargetLabel
-          ? undefined
-          : config.tags.onCreate,
-        onRemoveTag: config.tags.onRemove,
-        setTags: config.tags.setTags,
-      })
-    );
-  }
-  if (menuOps.emojisMenuOps) {
-    plugins.use(emojisPlugin({ menu: menuOps.emojisMenuOps }));
-  }
-  if (menuOps.snippetsMenuOps) {
-    plugins.use(
-      snippetsPlugin({
-        menu: menuOps.snippetsMenuOps,
-        sourceDocumentId: config.mentions?.sourceDocumentId,
-      })
-    );
-  }
-  if (menuOps.skillsMenuOps) {
-    plugins.use(skillsPlugin({ menu: menuOps.skillsMenuOps }));
-  }
-  if (menuOps.agentCommandsMenuOps && config.agentCommands) {
-    plugins.use(
-      agentCommandsPlugin({
-        menu: menuOps.agentCommandsMenuOps,
-        commands: config.agentCommands.commands,
-      })
-    );
-  }
-}
 
-function applyMediaAndLayoutPlugins(
-  config: EditorConfig,
-  plugins: LexicalPlugins,
-  editor: ReturnType<typeof createLexicalWrapper>['editor']
-): {
-  dragInsertStore: ReturnType<typeof createDragInsertStore>[0] | undefined;
-  draggableBlockStore:
-    | ReturnType<typeof createDraggableBlockStore>[0]
-    | undefined;
-  fileDropConfig: MediaDropOptions | undefined;
-} {
+  // Mentions & Emojis (not available for plain-text — nodes not registered)
+  if (config.type !== 'plain-text') {
+    if (config.mentions && mentionsMenuOps) {
+      plugins.use(
+        mentionsPlugin({
+          menu: mentionsMenuOps,
+          onCreateMention: config.mentions.onCreate,
+          onRemoveMention: config.mentions.onRemove,
+          sourceDocumentId: config.mentions.sourceDocumentId,
+        })
+      );
+    }
+
+    if (config.tags && tagsMenuOps) {
+      plugins.use(
+        tagsPlugin({
+          menu: tagsMenuOps,
+          insertTags: config.tags.insertTags,
+          onCreateTag: config.tags.applyTargetLabel
+            ? undefined
+            : config.tags.onCreate,
+          onRemoveTag: config.tags.onRemove,
+          setTags: config.tags.setTags,
+        })
+      );
+    }
+
+    if (emojisMenuOps) {
+      plugins.use(emojisPlugin({ menu: emojisMenuOps }));
+    }
+
+    if (snippetsMenuOps) {
+      plugins.use(
+        snippetsPlugin({
+          menu: snippetsMenuOps,
+          sourceDocumentId: config.mentions?.sourceDocumentId,
+        })
+      );
+    }
+
+    if (skillsMenuOps) {
+      plugins.use(skillsPlugin({ menu: skillsMenuOps }));
+    }
+
+    if (agentCommandsMenuOps && config.agentCommands) {
+      plugins.use(
+        agentCommandsPlugin({
+          menu: agentCommandsMenuOps,
+          commands: config.agentCommands.commands,
+        })
+      );
+    }
+  }
+
+  // Media (images, videos)
   const mediaEnabled = !!config.media;
   const mediaConfig: MediaOptions | undefined =
     typeof config.media === 'object' ? config.media : undefined;
   const fileDropConfig: MediaDropOptions | undefined =
     mediaConfig?.fileDrop === true ? {} : mediaConfig?.fileDrop || undefined;
 
+  // Drag-insert store (shared between plugin and indicator)
   const dragInsertStoreResult = fileDropConfig
     ? createDragInsertStore()
     : undefined;
@@ -284,10 +247,14 @@ function applyMediaAndLayoutPlugins(
   if (mediaEnabled) {
     plugins.use(mediaPlugin());
   }
+
+  // File drag-and-drop from desktop
   if (fileDropConfig && setDragInsertStore) {
     plugins.use(dragInsertPlugin({ setState: setDragInsertStore }));
   }
 
+  // Drag-to-rearrange blocks (uses root element fallback since no anchor ref
+  // is available during builder-time configuration).
   const draggableBlockStoreResult = config.draggableBlocks
     ? createDraggableBlockStore()
     : undefined;
@@ -323,16 +290,7 @@ function applyMediaAndLayoutPlugins(
     );
   }
 
-  return { dragInsertStore, draggableBlockStore, fileDropConfig };
-}
-
-function applyRemainingPlugins(
-  config: EditorConfig,
-  plugins: LexicalPlugins,
-  menuOps: InlineMenuOps,
-  accessoryStore: ReturnType<typeof createAccessoryStore>[0] | undefined,
-  setAccessoryStore: ReturnType<typeof createAccessoryStore>[1] | undefined
-): void {
+  // Code blocks with syntax highlighting
   if (config.code && accessoryStore && setAccessoryStore) {
     plugins.use(
       codePlugin({
@@ -341,9 +299,13 @@ function applyRemainingPlugins(
       })
     );
   }
+
+  // Checkbox to task conversion
   if (config.checkboxToTask) {
     plugins.use(checkboxToTaskPlugin());
   }
+
+  // File paste handling
   if (config.filePaste) {
     plugins.use(
       filePastePlugin({
@@ -351,23 +313,26 @@ function applyRemainingPlugins(
       })
     );
   }
+
+  // Keyboard focus leave detection
   if (config.focusLeave) {
     plugins.use(
       keyboardFocusPlugin({
         onFocusLeaveStart: config.focusLeave.onStart,
         onFocusLeaveEnd: config.focusLeave.onEnd,
-        ignoreKeys: () => isAnyInlineMenuOpen(menuOps),
+        ignoreKeys: () =>
+          (actionsMenuOps?.isOpen() ?? false) ||
+          (mentionsMenuOps?.isOpen() ?? false) ||
+          (tagsMenuOps?.isOpen() ?? false) ||
+          (emojisMenuOps?.isOpen() ?? false) ||
+          (snippetsMenuOps?.isOpen() ?? false) ||
+          (skillsMenuOps?.isOpen() ?? false) ||
+          (agentCommandsMenuOps?.isOpen() ?? false),
       })
     );
   }
-}
 
-function createEditorControls(
-  editor: ReturnType<typeof createLexicalWrapper>['editor'],
-  markdownState: () => string,
-  menuOps: InlineMenuOps
-): EditorControls {
-  return {
+  const controls: EditorControls = {
     focus: () => editor.focus(),
     blur: () => {
       editor.getRootElement()?.blur();
@@ -381,43 +346,25 @@ function createEditorControls(
     setState: (state: SerializedEditorState) =>
       initializeEditorWithState(editor, state),
     getLexical: () => editor,
-    isInlineMenuOpen: () => isAnyInlineMenuOpen(menuOps),
+    isInlineMenuOpen: () => {
+      const mentions = mentionsMenuOps?.isOpen() ?? false;
+      const tags = tagsMenuOps?.isOpen() ?? false;
+      const emojis = emojisMenuOps?.isOpen() ?? false;
+      const actions = actionsMenuOps?.isOpen() ?? false;
+      const snippets = snippetsMenuOps?.isOpen() ?? false;
+      const skills = skillsMenuOps?.isOpen() ?? false;
+      const agentCommands = agentCommandsMenuOps?.isOpen() ?? false;
+      return (
+        mentions ||
+        tags ||
+        emojis ||
+        actions ||
+        snippets ||
+        skills ||
+        agentCommands
+      );
+    },
   };
-}
-
-export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
-  const [isInteractable, setIsInteractable] = createSignal(true);
-
-  const lexicalWrapper = createLexicalWrapperForConfig(config, isInteractable);
-
-  if (config.skipPreviewFetch) {
-    lexicalWrapper.skipPreviewFetch = true;
-  }
-
-  const { editor, plugins, cleanup: cleanupLexical } = lexicalWrapper;
-
-  const [markdownState, setMarkdownState] = createSignal<string>('');
-  const menuOps = createInlineMenuOps(config);
-
-  const accessoryStoreResult = config.code ? createAccessoryStore() : undefined;
-  const accessoryStore = accessoryStoreResult?.[0];
-  const setAccessoryStore = accessoryStoreResult?.[1];
-
-  applyTextModePlugins(config, plugins, setMarkdownState);
-  applyHistoryAndLinePlugins(config, plugins);
-  applyClipboardAndStructurePlugins(config, plugins, lexicalWrapper);
-  applyInlineMenuPlugins(config, plugins, menuOps);
-  const { dragInsertStore, draggableBlockStore, fileDropConfig } =
-    applyMediaAndLayoutPlugins(config, plugins, editor);
-  applyRemainingPlugins(
-    config,
-    plugins,
-    menuOps,
-    accessoryStore,
-    setAccessoryStore
-  );
-
-  const controls = createEditorControls(editor, markdownState, menuOps);
 
   return {
     controls,
@@ -432,13 +379,13 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       isInteractable,
       setIsInteractable,
       markdownState,
-      actionsMenuOps: menuOps.actionsMenuOps,
-      mentionsMenuOps: menuOps.mentionsMenuOps,
-      tagsMenuOps: menuOps.tagsMenuOps,
-      emojisMenuOps: menuOps.emojisMenuOps,
-      snippetsMenuOps: menuOps.snippetsMenuOps,
-      skillsMenuOps: menuOps.skillsMenuOps,
-      agentCommandsMenuOps: menuOps.agentCommandsMenuOps,
+      actionsMenuOps,
+      mentionsMenuOps,
+      tagsMenuOps,
+      emojisMenuOps,
+      snippetsMenuOps,
+      skillsMenuOps,
+      agentCommandsMenuOps,
       accessoryStore,
       dragInsertStore,
       draggableBlockStore,
