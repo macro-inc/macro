@@ -30,6 +30,7 @@ import {
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
+import { CalendarEventWhen } from './calendar';
 import { CallParticipants, CallWideContent } from './call';
 import {
   ChannelActiveCallBadge,
@@ -165,6 +166,9 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
+        <Show when={props.entity.type === 'calendar_event' && props.entity}>
+          {(entity) => <CalendarEventWhen entity={entity()} />}
+        </Show>
         <Show when={isProjectEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
@@ -292,6 +296,9 @@ export function WideLayout(props: LayoutProps) {
         <Show
           when={
             !props.hasNotifications &&
+            // Calendar rows carry their own when-label in the meta slot; the
+            // stamp would only repeat the sync time, which is not the event's.
+            props.entity.type !== 'calendar_event' &&
             !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
           }
         >

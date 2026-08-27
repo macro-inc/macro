@@ -567,6 +567,7 @@ export const useSearchResponseItemMapper = () => {
             status: metadata.status,
             time,
             occurrenceKey: metadata.occurrence?.occurrenceKey,
+            isRecurring: metadata.isRecurring,
             conferenceUrl: metadata.conferenceUrl ?? undefined,
             isReadOnly: metadata.isReadOnly,
             createdAt: metadata.createdAt,

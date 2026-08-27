@@ -367,6 +367,9 @@ export type CalendarEventEntity = EntityBase & {
    * than the master's original start; soup rows leave it unset.
    */
   occurrenceKey?: string;
+  /** Whether the series carries a recurrence rule, so a row can flag it
+   * without parsing the rules. Only search rows populate it. */
+  isRecurring?: boolean;
   /** Direct join URL when known. */
   conferenceUrl?: string;
   /** Whether the canonical source prohibits mutation. */
