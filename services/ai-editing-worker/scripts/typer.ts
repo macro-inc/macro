@@ -33,8 +33,9 @@ const argv = await yargs(hideBin(process.argv)).usage("$0 <wss-url>").help().par
 const wssUrl = argv._[0] as string | undefined;
 if (!wssUrl) { yargs().showHelp(); process.exit(1); }
 
-const source = createWorkerSyncSource(wssUrl, "", undefined);
+const { source, diagnostics } = createWorkerSyncSource(wssUrl, "", undefined);
 const initial = await source.doInitialSync();
+diagnostics.finish();
 if (initial.isErr()) throw new Error(`initial sync failed: ${initial.error.type}`);
 const { snapshot } = initial.value;
 

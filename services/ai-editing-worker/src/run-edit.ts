@@ -19,6 +19,7 @@ import type { UsageEntry } from './ai-editing/token-tracker';
 import type { CoderRunCode, DispatchEditTrace } from './ai-editing/tools';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
+import type { InitialSyncDiagnostics } from './sources';
 import { buildTraceSession, type TraceSession } from './trace-log';
 
 export type Model = {
@@ -41,6 +42,8 @@ export type ResolvedModels = {
 export type RunEditArgs = {
   /** Live sync source, already constructed by the caller (ws in prod). */
   source: SyncServiceSource;
+  /** Worker-only WebSocket lifecycle diagnostics for the initial sync span. */
+  syncDiagnostics?: InitialSyncDiagnostics;
   documentId: string;
   prompt: string;
   models: ResolvedModels;
@@ -82,25 +85,36 @@ export async function runEditSession(
   });
 
   await Telemetry.span('edit.sync_init', async (span) => {
-    const initialResult = await source.doInitialSync();
-    if (initialResult.isErr()) {
-      source.cleanup();
-      const e = initialResult.error;
-      const err = new Error(`initial sync failed: ${e.type} (${e.duration}ms)`);
-      span.error(err);
-      throw err;
-    }
-    const initial = initialResult.value;
-    span.setAttr('snapshot.bytes', initial.snapshot.byteLength);
+    args.syncDiagnostics?.attach(span);
+    try {
+      const initialResult = await source.doInitialSync();
+      if (initialResult.isErr()) {
+        source.cleanup();
+        const e = initialResult.error;
+        span.setAttr('sync.outcome', e.type);
+        span.event('sync.initial_sync.timeout');
+        const err = new Error(
+          `initial sync failed: ${e.type} (${e.duration}ms)`
+        );
+        span.error(err);
+        throw err;
+      }
+      const initial = initialResult.value;
+      span.setAttr('sync.outcome', 'success');
+      span.setAttr('snapshot.bytes', initial.snapshot.byteLength);
 
-    const initResult = await manager.initializeFromSnapshot(initial.snapshot);
-    if (initResult.isErr()) {
-      source.cleanup();
-      const err = new Error(
-        `failed to initialize from snapshot: ${initResult.error[0]?.message}`
-      );
-      span.error(err);
-      throw err;
+      const initResult = await manager.initializeFromSnapshot(initial.snapshot);
+      if (initResult.isErr()) {
+        source.cleanup();
+        span.setAttr('sync.outcome', 'invalid_snapshot');
+        const err = new Error(
+          `failed to initialize from snapshot: ${initResult.error[0]?.message}`
+        );
+        span.error(err);
+        throw err;
+      }
+    } finally {
+      args.syncDiagnostics?.finish();
     }
   });
 

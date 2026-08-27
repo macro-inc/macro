@@ -8,7 +8,13 @@ import { createFallback } from 'ai-fallback';
 import { Hono } from 'hono';
 import * as z from 'zod';
 import { type Bindings, getEnv } from '../env';
-import { type Model, type ResolvedModels, runEditSession } from '../run-edit';
+import { authorizeEditRequestIdentity } from '../request-identity';
+import {
+  type Model,
+  type ResolvedModels,
+  type RunEditResult,
+  runEditSession,
+} from '../run-edit';
 import { runInSandbox } from '../sandbox';
 import { watchPresenceSpeed } from '../service-clients';
 import { createWorkerSyncSource } from '../sources';
@@ -57,6 +63,10 @@ const ModelListSchema = z.array(ModelSchema).min(1);
 const EditBody = z.object({
   documentToken: z.string(),
   documentId: z.string(),
+  userId: z
+    .string()
+    .regex(/^ai-edit:[0-9a-f]{64}$/)
+    .optional(),
   prompt: z.string(),
   models: z.object({
     supervisor: ModelListSchema,
@@ -115,6 +125,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
   const {
     documentToken,
     documentId,
+    userId,
     prompt,
     models,
     typingAnimations,
@@ -124,6 +135,16 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     propagate,
   } = c.req.valid('json');
 
+  const identity = authorizeEditRequestIdentity(
+    userId,
+    c.req.header('x-internal-auth-key'),
+    env.INTERNAL_API_KEY
+  );
+  if (!identity.allowed) {
+    return c.json({ error: 'unauthorized user identity' }, 401);
+  }
+  const { pseudonymousUserId } = identity;
+
   // FYI cancellation only works on live cloudflare not workerd. And it requires enable_request_signal.
   const signal = c.req.raw.signal;
   signal.addEventListener('abort', () => {
@@ -132,7 +153,6 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
 
   try {
     const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${documentToken}`;
-    const source = createWorkerSyncSource(wsUrl, documentId, signal);
 
     // Animations play at 1x while a human is watching and speed up to
     // `unwatchedSpeed` when nobody is, so unseen edits finish faster without
@@ -154,23 +174,39 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       'edit.session',
       async (span) => {
         span.setAttr('document.id', documentId);
+        if (pseudonymousUserId !== undefined) {
+          span.setAttr('usr.id', pseudonymousUserId);
+        }
         span.setAttr('edit.interpret', interpret);
         span.setAttr('edit.propagate', propagate);
         let modelFallbacks = 0;
         try {
-          const result = await runEditSession({
-            source,
-            documentId,
-            prompt,
-            models: buildModels(env, models, () => modelFallbacks++),
-            typingAnimations,
-            sleep,
-            interpret,
-            debug,
-            propagate,
-            runner: runInSandbox,
-            signal,
-          }).finally(presence.stop);
+          let result: RunEditResult;
+          try {
+            const { source, diagnostics: syncDiagnostics } =
+              createWorkerSyncSource(
+                wsUrl,
+                documentId,
+                signal,
+                pseudonymousUserId
+              );
+            result = await runEditSession({
+              source,
+              syncDiagnostics,
+              documentId,
+              prompt,
+              models: buildModels(env, models, () => modelFallbacks++),
+              typingAnimations,
+              sleep,
+              interpret,
+              debug,
+              propagate,
+              runner: runInSandbox,
+              signal,
+            });
+          } finally {
+            presence.stop();
+          }
           span.setAttr(
             'edit.dispatch_count',
             result.session.dispatchEditTraces?.length ?? 0

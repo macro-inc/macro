@@ -11,10 +11,12 @@ use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
     ports::EntityAccessService,
 };
+use hmac::{Hmac, Mac};
 use model::document::{DocumentBasic, FileType};
 use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 
 use super::DocumentToolContext;
 
@@ -61,6 +63,15 @@ fn ensure_markdown(document: &DocumentBasic) -> Result<(), ToolCallError> {
         ),
         internal_error: anyhow::anyhow!("document file type {file_type} is not markdown"),
     })
+}
+
+fn observability_user_id(user_id: &str, secret: &str) -> String {
+    let mut digest = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+        .expect("HMAC-SHA256 accepts keys of any length");
+    digest.update(b"ai-editing-trace-user\0");
+    digest.update(user_id.as_bytes());
+    let digest = digest.finalize().into_bytes();
+    format!("ai-edit:{digest:x}")
 }
 
 #[derive(Debug, Serialize, JsonSchema)]
@@ -125,6 +136,12 @@ where
             description: "failed to mint document token".to_string(),
             internal_error: e.into(),
         })?;
+        // Macro user IDs contain email addresses. This backend-derived pseudonym
+        // remains stable only while the secret is unchanged.
+        let observability_user_id = observability_user_id(
+            request_context.user_id.as_ref(),
+            &ctx.document_permission_jwt_secret,
+        );
 
         // Honor user cancellation: if the request is cancelled mid-edit, drop the
         // in-flight worker call (closing the HTTP connection so the worker aborts
@@ -137,7 +154,12 @@ where
                     internal_error: anyhow::anyhow!("edit cancelled by user. document might be left in a partially edited state."),
                 });
             }
-            r = ctx.editing.edit(&self.document_id, &document_token, &self.instructions) => r,
+            r = ctx.editing.edit(
+                &observability_user_id,
+                &self.document_id,
+                &document_token,
+                &self.instructions,
+            ) => r,
         }
         .map_err(|e| ToolCallError {
             description: e.to_string(),

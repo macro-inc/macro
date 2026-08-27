@@ -390,12 +390,13 @@ impl EntityAccessService for FakeEntityAccessService {
 
 #[derive(Clone, Default)]
 struct FakeEditingWorker {
-    edit_calls: Arc<Mutex<Vec<String>>>,
+    edit_calls: Arc<Mutex<Vec<(String, String)>>>,
 }
 
 impl EditingWorkerService for FakeEditingWorker {
     async fn edit(
         &self,
+        observability_user_id: &str,
         document_id: &str,
         _document_token: &DocumentPermissionToken,
         _instructions: &str,
@@ -403,7 +404,7 @@ impl EditingWorkerService for FakeEditingWorker {
         self.edit_calls
             .lock()
             .expect("edit calls lock poisoned")
-            .push(document_id.to_string());
+            .push((observability_user_id.to_string(), document_id.to_string()));
 
         Ok(EditResult {
             edits_applied: 1,
@@ -503,8 +504,27 @@ async fn allows_markdown_document() {
     assert_eq!(response.summary, "Applied 1 edit(s) to the document.");
     assert_eq!(
         *editing.edit_calls.lock().expect("edit calls lock poisoned"),
-        vec![TEST_DOCUMENT_ID.to_string()]
+        vec![(
+            observability_user_id(TEST_USER_ID, "unused-jwt-secret"),
+            TEST_DOCUMENT_ID.to_string()
+        )]
     );
+    assert!(!observability_user_id(TEST_USER_ID, "unused-jwt-secret").contains('@'));
+}
+
+#[test]
+fn observability_user_id_is_pseudonymous_and_secret_scoped() {
+    let first = observability_user_id(TEST_USER_ID, "trace-secret");
+
+    assert_eq!(first, observability_user_id(TEST_USER_ID, "trace-secret"));
+    assert_ne!(
+        first,
+        observability_user_id("macro|other@example.com", "trace-secret")
+    );
+    assert_ne!(first, observability_user_id(TEST_USER_ID, "other-secret"));
+    assert_eq!(first.len(), "ai-edit:".len() + 64);
+    assert!(!first.contains("editor"));
+    assert!(!first.contains('@'));
 }
 
 #[test]

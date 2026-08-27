@@ -10,10 +10,11 @@ EXPOSE 8933
 
 CMD ["sh", "-c", "\
   bun scripts/generate-sandbox.ts && \
-  printf 'OPENAI_API_KEY=%s\\nANTHROPIC_API_KEY=%s\\nCEREBRAS_API_KEY=%s\\n' \
+  printf 'OPENAI_API_KEY=%s\\nANTHROPIC_API_KEY=%s\\nCEREBRAS_API_KEY=%s\\nINTERNAL_API_KEY=%s\\n' \
     \"${OPENAI_API_KEY}\" \
     \"${ANTHROPIC_API_KEY}\" \
     \"${CEREBRAS_API_KEY}\" \
+    \"${INTERNAL_API_KEY}\" \
     > .dev.vars && \
   npx wrangler dev \
     --env local \

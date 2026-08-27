@@ -269,7 +269,8 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
-        ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
+        ReqwestEditingWorkerClient::from_url(ai_editing_worker_url)
+            .with_internal_auth_key(Some(config.internal_api_key.to_string())),
         config.document_permission_jwt.to_string(),
     );
 
