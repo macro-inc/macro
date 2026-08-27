@@ -31,6 +31,14 @@ use crate::domain::ports::{
 };
 use crate::domain::sandbox::SandboxResizeEffect;
 
+fn apply_agent_instructions(instructions: &str, prompt: String) -> String {
+    let instructions = instructions.trim();
+    if instructions.is_empty() {
+        return prompt;
+    }
+    format!("<agent_instructions>\n{instructions}\n</agent_instructions>\n\n{prompt}")
+}
+
 type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
 struct QueuedCommand {
@@ -544,7 +552,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id: session.id,
-                kind: AgentKind::of(session.bot_id),
+                kind: AgentKind::for_session(session.bot_id, &session.harness),
                 size: sandbox_size,
                 egress: egress.sandbox,
             })
@@ -694,14 +702,14 @@ where
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match &command {
             HarnessCommand::Open(open)
-                if AgentKind::of(open.bot_id) == AgentKind::Cursor
+                if open.runtime.kind == AgentKind::Cursor
                     && !is_macro_staff(&open.origin.sender) =>
             {
                 return Err(AgentSessionError::Forbidden.into());
             }
             HarnessCommand::Deliver(deliver) => {
                 let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id) == AgentKind::Cursor
+                if AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::Cursor
                     && !deliver.actor.as_ref().is_some_and(is_macro_staff)
                 {
                     return Err(AgentSessionError::Forbidden.into());
@@ -775,7 +783,7 @@ where
         // runs in Cursor's cloud, the in-memory bot has no sandbox, and an
         // external bot provisions its own. For all three, the size is only
         // recorded below as a preference.
-        if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
+        if AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::SandboxedCoder
             && effect != SandboxResizeEffect::NoOp
         {
             if effect == SandboxResizeEffect::Restart {
@@ -812,7 +820,11 @@ where
         agent.session.id = tracing::field::Empty,
     ))]
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
-        let OpenSession { bot_id, origin } = command;
+        let OpenSession {
+            bot_id,
+            runtime,
+            origin,
+        } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
         let defaults = self.defaults.for_bot(bot_id);
         let repo_url = defaults.repo_url.clone();
@@ -820,10 +832,12 @@ where
         let prior_messages = self
             .load_prompt_context(origin.channel_id, origin.message_id, Some(&origin.sender))
             .await;
-        let composed_prompt = self
-            .prompt_composer
-            .compose(&origin.content, Some(&prior_messages))
-            .await?;
+        let composed_prompt = apply_agent_instructions(
+            &runtime.instructions,
+            self.prompt_composer
+                .compose(&origin.content, Some(&prior_messages))
+                .await?,
+        );
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.
@@ -842,8 +856,8 @@ where
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
-                model: defaults.model.clone(),
-                harness: defaults.harness.clone(),
+                model: runtime.model.clone(),
+                harness: runtime.harness.clone(),
                 repo_url: Some(repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
@@ -874,7 +888,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id,
-                kind: AgentKind::of(bot_id),
+                kind: runtime.kind,
                 size: sandbox_size,
                 egress: egress.sandbox,
             })
@@ -973,7 +987,7 @@ where
             // wire.
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id).is_managed() {
+                if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
                         .resumed_mcp_servers(session_id, &session.owner_id)

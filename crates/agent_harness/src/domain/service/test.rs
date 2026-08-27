@@ -29,11 +29,11 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use super::AgentHarnessService;
+use super::{AgentHarnessService, apply_agent_instructions};
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
-    OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults,
+    MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
@@ -60,6 +60,12 @@ fn open_command() -> OpenSession {
     let thread_id = macro_uuid::generate_uuid_v7();
     OpenSession {
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+        runtime: AgentRuntimeConfig {
+            kind: AgentKind::SandboxedCoder,
+            model: "agent-model".to_owned(),
+            harness: "opencode".to_owned(),
+            instructions: String::new(),
+        },
         origin: MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),
             thread_id,
@@ -68,6 +74,18 @@ fn open_command() -> OpenSession {
             content: "@claude fix the failing test".to_owned(),
         },
     }
+}
+
+#[test]
+fn agent_instructions_wrap_the_composed_initial_prompt() {
+    assert_eq!(
+        apply_agent_instructions(" Diagnose first. ", "channel context".to_owned()),
+        "<agent_instructions>\nDiagnose first.\n</agent_instructions>\n\nchannel context"
+    );
+    assert_eq!(
+        apply_agent_instructions("  ", "channel context".to_owned()),
+        "channel context"
+    );
 }
 
 /// A prompt arriving from a channel that is not the session's own, so it is
@@ -370,6 +388,8 @@ async fn open_creates_announces_and_delivers_the_mention() {
     assert_eq!(session.acp_session_id, Some(SessionId::new("acp-test")));
     assert_eq!(session.originating_message_id, Some(origin.message_id));
     assert_eq!(session.thread_id, Some(origin.thread_id));
+    assert_eq!(session.model, "agent-model");
+    assert_eq!(session.harness, "opencode");
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
     assert_eq!(announced[0].origin_channel_id, origin.channel_id);
@@ -945,6 +965,8 @@ async fn live_cursor_session(
 ) -> ContainerMock {
     let mut command = open_command();
     command.bot_id = bot_id::CURSOR_BOT_ID;
+    command.runtime.kind = AgentKind::Cursor;
+    command.runtime.harness = "cursor".to_owned();
     command.origin.sender = staff_sender();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
@@ -970,6 +992,8 @@ async fn a_non_staff_sender_cannot_open_a_cursor_session() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let mut command = open_command();
     command.bot_id = bot_id::CURSOR_BOT_ID;
+    command.runtime.kind = AgentKind::Cursor;
+    command.runtime.harness = "cursor".to_owned();
 
     let error = service
         .execute(AgentSessionId::new(), HarnessCommand::Open(command))

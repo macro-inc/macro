@@ -1,9 +1,10 @@
 //! Bot ports.
 
 use super::models::{
-    AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotToken,
-    BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
-    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotToken,
+    BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+    CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    PatchBotRequest, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -16,6 +17,35 @@ use uuid::Uuid;
 pub trait BotRepo: Send + Sync + 'static {
     /// Repository error.
     type Err: Into<anyhow::Error> + Send;
+
+    /// Create an owned agent and its selected channel memberships atomically.
+    fn create_agent(
+        &self,
+        owner: BotOwner,
+        created_by: MacroUserIdStr<'static>,
+        req: CreateAgentRequest,
+    ) -> impl Future<Output = Result<Agent, Self::Err>> + Send;
+
+    /// Replace an owned agent and its selected channel memberships atomically.
+    fn update_agent(
+        &self,
+        bot_id: BotId,
+        owner: BotOwner,
+        req: UpdateAgentRequest,
+    ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
+
+    /// List active agents manageable by a caller.
+    fn list_manageable_agents(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<Agent>, Self::Err>> + Send;
+
+    /// Check whether the caller is an active member of every supplied channel.
+    fn user_has_channels(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        channel_ids: &[Uuid],
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Create an owned bot.
     fn create_owned_bot(
@@ -45,6 +75,12 @@ pub trait BotRepo: Send + Sync + 'static {
     fn get_bot(&self, bot_id: BotId)
     -> impl Future<Output = Result<Option<Bot>, Self::Err>> + Send;
 
+    /// Get an active persisted agent by bot id.
+    fn get_agent(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
+
     /// Check team membership.
     fn user_has_team(
         &self,
@@ -61,6 +97,13 @@ pub trait BotRepo: Send + Sync + 'static {
 
     /// Check whether a user is an administrator or owner of a team.
     fn user_can_administer_team(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Check whether a user owns a team.
+    fn user_owns_team(
         &self,
         caller: MacroUserIdStr<'static>,
         team_id: Uuid,
@@ -144,6 +187,27 @@ pub trait BotRepo: Send + Sync + 'static {
 /// Bot service.
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait BotService: Send + Sync + 'static {
+    /// Create an agent owned by the caller or a team they administer.
+    fn create_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        req: CreateAgentRequest,
+    ) -> impl Future<Output = Result<Agent, BotError>> + Send;
+
+    /// Replace the editable configuration of a manageable agent.
+    fn update_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: UpdateAgentRequest,
+    ) -> impl Future<Output = Result<Agent, BotError>> + Send;
+
+    /// List agents manageable by the caller.
+    fn list_agents(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<Agent>, BotError>> + Send;
+
     /// Create a bot owned by the caller or a team they administer.
     fn create_bot(
         &self,

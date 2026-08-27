@@ -239,3 +239,20 @@ async fn resume_and_teardown_route_by_the_stored_bot() {
     assert_eq!(cursor.calls(), ["cursor:resume", "cursor:teardown"]);
     assert!(sandbox.calls().is_empty());
 }
+
+#[tokio::test]
+async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
+    let sandbox = TaggedManager::new("sandbox");
+    let cursor = TaggedManager::new("cursor");
+    let router = RoutedContainerManager::new(
+        sandbox.clone(),
+        cursor.clone(),
+        FixedBotSessions(BotId::TEST_A),
+    );
+
+    let session = AgentSessionId::new();
+    router.resume(session).await.expect("resume");
+    router.teardown(session).await.expect("teardown");
+    assert_eq!(cursor.calls(), ["cursor:resume", "cursor:teardown"]);
+    assert!(sandbox.calls().is_empty());
+}

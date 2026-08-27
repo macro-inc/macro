@@ -40,3 +40,9 @@ infra/local/generated/
 # Raw SSE captures from CURSOR_ACP_RECORD_DIR; sanitize into
 # crates/cursor_acp/fixtures/real/ before committing one.
 /recordings/
+
+# Per-developer macrod daemon config and the state files it writes next to
+# it (the credentials file holds this machine's harness bearer token).
+/macro.toml
+/macro.credentials.json
+/macro.webhook-state.json

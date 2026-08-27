@@ -156,6 +156,107 @@ impl Bot {
     }
 }
 
+/// Whether an agent is available everywhere or only in selected channels.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum AgentChannelScope {
+    /// The agent is available in every channel its owner can use.
+    All,
+    /// The agent is available only in its persisted channel memberships.
+    Selected,
+}
+
+impl AgentChannelScope {
+    /// Storage representation.
+    pub fn as_str(self) -> &'static str {
+        self.into()
+    }
+}
+
+/// A persisted user- or team-owned AI agent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct Agent {
+    /// The bot identity used for mentions and channel participation.
+    pub bot: Bot,
+    /// Instructions supplied to the agent at the start of a conversation.
+    pub instructions: String,
+    /// Harness used to run the agent.
+    pub harness: String,
+    /// Model selected specifically for this agent.
+    pub default_model: String,
+    /// Whether the agent is global or channel-specific.
+    pub channel_scope: AgentChannelScope,
+    /// Selected channel ids. Empty for a global agent.
+    pub channel_ids: Vec<Uuid>,
+}
+
+/// Request to create a persisted AI agent.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct CreateAgentRequest {
+    /// Team owner. Omit for a private, user-owned agent.
+    pub team_id: Option<Uuid>,
+    /// Display name.
+    pub name: String,
+    /// Stable `@` handle.
+    pub handle: String,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Optional avatar URL or data URL.
+    pub avatar_url: Option<String>,
+    /// Instructions supplied to the agent at the start of a conversation.
+    pub instructions: String,
+    /// Harness used to run the agent.
+    pub harness: String,
+    /// Model selected specifically for this agent.
+    pub default_model: String,
+    /// Whether the agent is global or channel-specific.
+    pub channel_scope: AgentChannelScope,
+    /// Selected channels. Must be non-empty only for `selected` scope.
+    #[serde(default)]
+    pub channel_ids: Vec<Uuid>,
+}
+
+/// Request to replace the editable configuration of a persisted AI agent.
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct UpdateAgentRequest {
+    /// Team owner. Omit to make the agent private to the caller.
+    pub team_id: Option<Uuid>,
+    /// Display name.
+    pub name: String,
+    /// Stable `@` handle.
+    pub handle: String,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Optional avatar URL or data URL.
+    pub avatar_url: Option<String>,
+    /// Instructions supplied to the agent at the start of a conversation.
+    pub instructions: String,
+    /// Harness used to run the agent.
+    pub harness: String,
+    /// Model selected specifically for this agent.
+    pub default_model: String,
+    /// Whether the agent is global or channel-specific.
+    pub channel_scope: AgentChannelScope,
+    /// Selected channels. Must be non-empty only for `selected` scope.
+    #[serde(default)]
+    pub channel_ids: Vec<Uuid>,
+}
+
 /// Channel containing a bot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]

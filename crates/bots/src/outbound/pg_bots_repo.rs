@@ -5,9 +5,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotToken,
-        BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        PatchBotRequest,
+        Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId,
+        BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
+        CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchBotRequest, UpdateAgentRequest,
     },
     ports::BotRepo,
 };
@@ -86,6 +86,64 @@ impl TryFrom<BotRow> for Bot {
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
             has_agent: row.has_agent,
+        })
+    }
+}
+
+#[derive(Debug)]
+struct AgentRow {
+    id: Uuid,
+    kind: String,
+    owner_user_id: Option<String>,
+    team_id: Option<Uuid>,
+    name: String,
+    handle: String,
+    description: Option<String>,
+    avatar_url: Option<String>,
+    created_by: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    has_agent: bool,
+    instructions: String,
+    harness: String,
+    default_model: String,
+    channel_scope: String,
+    channel_ids: Vec<Uuid>,
+}
+
+impl TryFrom<AgentRow> for Agent {
+    type Error = anyhow::Error;
+
+    fn try_from(row: AgentRow) -> Result<Self, Self::Error> {
+        let channel_scope = row
+            .channel_scope
+            .parse::<AgentChannelScope>()
+            .map_err(anyhow::Error::msg)?;
+        let bot = BotRow {
+            id: row.id,
+            kind: row.kind,
+            owner_user_id: row.owner_user_id,
+            team_id: row.team_id,
+            name: row.name,
+            handle: row.handle,
+            description: row.description,
+            avatar_url: row.avatar_url,
+            created_by: row.created_by,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            has_agent: row.has_agent,
+        }
+        .try_into()?;
+
+        Ok(Self {
+            bot,
+            instructions: row.instructions,
+            harness: row.harness,
+            default_model: row.default_model,
+            channel_scope,
+            channel_ids: row.channel_ids,
         })
     }
 }
@@ -195,6 +253,302 @@ fn map_token_row(row: BotTokenRow) -> BotToken {
 
 impl BotRepo for PgBotsRepo {
     type Err = anyhow::Error;
+
+    async fn create_agent(
+        &self,
+        owner: BotOwner,
+        created_by: MacroUserIdStr<'static>,
+        req: CreateAgentRequest,
+    ) -> Result<Agent, Self::Err> {
+        let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+        let (owner_user_id, team_id) = owner_columns(owner);
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("failed to begin agent creation transaction")?;
+
+        let bot_row = sqlx::query_as!(
+            BotRow,
+            r#"
+            INSERT INTO bots (
+                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
+                created_by, has_agent
+            )
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, true)
+            RETURNING
+                id,
+                kind,
+                owner_user_id,
+                team_id,
+                name,
+                handle,
+                description,
+                avatar_url,
+                created_by,
+                created_at,
+                updated_at,
+                deleted_at,
+                has_agent
+            "#,
+            bot_id.as_uuid(),
+            owner_user_id,
+            team_id,
+            &req.name,
+            &req.handle,
+            req.description.as_deref(),
+            req.avatar_url.as_deref(),
+            created_by.as_ref(),
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("failed to create agent bot")?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_configs (
+                bot_id, instructions, harness, default_model, channel_scope
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            bot_id.as_uuid(),
+            &req.instructions,
+            &req.harness,
+            &req.default_model,
+            req.channel_scope.as_str(),
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to create agent config")?;
+
+        if !req.channel_ids.is_empty() {
+            let bot_principal = principal_id(bot_id);
+            sqlx::query!(
+                r#"
+                INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+                SELECT channel_id, $2, 'member'::comms_participant_role, NULL
+                FROM UNNEST($1::uuid[]) AS channel_id
+                "#,
+                &req.channel_ids,
+                bot_principal,
+            )
+            .execute(&mut *tx)
+            .await
+            .context("failed to add agent to selected channels")?;
+        }
+
+        tx.commit()
+            .await
+            .context("failed to commit agent creation transaction")?;
+
+        Ok(Agent {
+            bot: map_bot_row(bot_row)?,
+            instructions: req.instructions,
+            harness: req.harness,
+            default_model: req.default_model,
+            channel_scope: req.channel_scope,
+            channel_ids: req.channel_ids,
+        })
+    }
+
+    async fn update_agent(
+        &self,
+        bot_id: BotId,
+        owner: BotOwner,
+        req: UpdateAgentRequest,
+    ) -> Result<Option<Agent>, Self::Err> {
+        let (owner_user_id, team_id) = owner_columns(owner);
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("failed to begin agent update transaction")?;
+
+        let Some(bot_row) = sqlx::query_as!(
+            BotRow,
+            r#"
+            UPDATE bots
+            SET owner_user_id = $2,
+                team_id = $3,
+                name = $4,
+                handle = $5,
+                description = $6,
+                avatar_url = $7,
+                updated_at = now()
+            WHERE id = $1
+              AND deleted_at IS NULL
+              AND EXISTS (SELECT 1 FROM agent_configs WHERE bot_id = $1)
+            RETURNING
+                id,
+                kind,
+                owner_user_id,
+                team_id,
+                name,
+                handle,
+                description,
+                avatar_url,
+                created_by,
+                created_at,
+                updated_at,
+                deleted_at,
+                has_agent
+            "#,
+            bot_id.as_uuid(),
+            owner_user_id,
+            team_id,
+            &req.name,
+            &req.handle,
+            req.description.as_deref(),
+            req.avatar_url.as_deref(),
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("failed to update agent bot")?
+        else {
+            tx.rollback().await?;
+            return Ok(None);
+        };
+
+        sqlx::query!(
+            r#"
+            UPDATE agent_configs
+            SET instructions = $2,
+                harness = $3,
+                default_model = $4,
+                channel_scope = $5,
+                updated_at = now()
+            WHERE bot_id = $1
+            "#,
+            bot_id.as_uuid(),
+            &req.instructions,
+            &req.harness,
+            &req.default_model,
+            req.channel_scope.as_str(),
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to update agent config")?;
+
+        let bot_principal = principal_id(bot_id);
+        sqlx::query!(
+            r#"
+            UPDATE comms_channel_participants
+            SET left_at = now()
+            WHERE user_id = $1
+              AND left_at IS NULL
+            "#,
+            &bot_principal,
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to clear the agent's previous channels")?;
+
+        if !req.channel_ids.is_empty() {
+            sqlx::query!(
+                r#"
+                INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+                SELECT channel_id, $2, 'member'::comms_participant_role, NULL
+                FROM UNNEST($1::uuid[]) AS channel_id
+                ON CONFLICT (channel_id, user_id)
+                DO UPDATE SET role = 'member'::comms_participant_role,
+                              left_at = NULL,
+                              joined_at = now()
+                "#,
+                &req.channel_ids,
+                &bot_principal,
+            )
+            .execute(&mut *tx)
+            .await
+            .context("failed to replace the agent's selected channels")?;
+        }
+
+        tx.commit()
+            .await
+            .context("failed to commit agent update transaction")?;
+
+        Ok(Some(Agent {
+            bot: map_bot_row(bot_row)?,
+            instructions: req.instructions,
+            harness: req.harness,
+            default_model: req.default_model,
+            channel_scope: req.channel_scope,
+            channel_ids: req.channel_ids,
+        }))
+    }
+
+    async fn list_manageable_agents(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Agent>, Self::Err> {
+        let rows = sqlx::query_as!(
+            AgentRow,
+            r#"
+            SELECT
+                b.id,
+                b.kind,
+                b.owner_user_id,
+                b.team_id,
+                b.name,
+                b.handle,
+                b.description,
+                b.avatar_url,
+                b.created_by,
+                b.created_at,
+                b.updated_at,
+                b.deleted_at,
+                b.has_agent,
+                a.instructions,
+                a.harness,
+                a.default_model,
+                a.channel_scope,
+                ARRAY(
+                    SELECT p.channel_id
+                    FROM comms_channel_participants p
+                    WHERE p.user_id = 'bot|' || b.id::text
+                      AND p.left_at IS NULL
+                    ORDER BY p.channel_id
+                ) AS "channel_ids!"
+            FROM bots b
+            INNER JOIN agent_configs a ON a.bot_id = b.id
+            WHERE b.kind = 'owned'
+              AND b.deleted_at IS NULL
+              AND (
+                b.owner_user_id = $1
+                OR b.team_id IN (
+                    SELECT team_id FROM team_user WHERE user_id = $1
+                )
+              )
+            ORDER BY b.created_at ASC, b.id ASC
+            "#,
+            caller.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list manageable agents")?;
+
+        rows.into_iter().map(Agent::try_from).collect()
+    }
+
+    async fn user_has_channels(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        channel_ids: &[Uuid],
+    ) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(DISTINCT channel_id) = CARDINALITY($2::uuid[]) AS "has_channels!"
+            FROM comms_channel_participants
+            WHERE user_id = $1
+              AND channel_id = ANY($2::uuid[])
+              AND left_at IS NULL
+            "#,
+            caller.as_ref(),
+            channel_ids,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check agent channel membership")
+    }
 
     async fn create_owned_bot(
         &self,
@@ -414,6 +768,50 @@ impl BotRepo for PgBotsRepo {
         row.map(map_bot_row).transpose()
     }
 
+    async fn get_agent(&self, bot_id: BotId) -> Result<Option<Agent>, Self::Err> {
+        let row = sqlx::query_as!(
+            AgentRow,
+            r#"
+            SELECT
+                b.id,
+                b.kind,
+                b.owner_user_id,
+                b.team_id,
+                b.name,
+                b.handle,
+                b.description,
+                b.avatar_url,
+                b.created_by,
+                b.created_at,
+                b.updated_at,
+                b.deleted_at,
+                b.has_agent,
+                a.instructions,
+                a.harness,
+                a.default_model,
+                a.channel_scope,
+                ARRAY(
+                    SELECT p.channel_id
+                    FROM comms_channel_participants p
+                    WHERE p.user_id = 'bot|' || b.id::text
+                      AND p.left_at IS NULL
+                    ORDER BY p.channel_id
+                ) AS "channel_ids!"
+            FROM bots b
+            INNER JOIN agent_configs a ON a.bot_id = b.id
+            WHERE b.id = $1
+              AND b.kind = 'owned'
+              AND b.deleted_at IS NULL
+            "#,
+            bot_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to get agent")?;
+
+        row.map(Agent::try_from).transpose()
+    }
+
     async fn user_has_team(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -483,6 +881,30 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to check team administration permission")?;
         Ok(can_administer)
+    }
+
+    async fn user_owns_team(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        let owns_team = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM team_user
+                WHERE user_id = $1
+                  AND team_id = $2
+                  AND team_role = 'owner'::team_role
+            ) AS "owns_team!"
+            "#,
+            caller.as_ref(),
+            team_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check team ownership")?;
+        Ok(owns_team)
     }
 
     async fn patch_bot(

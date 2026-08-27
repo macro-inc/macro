@@ -86,6 +86,41 @@ export type AddPinRequest = {
     pinType: string;
 };
 
+/**
+ * A persisted user- or team-owned AI agent.
+ */
+export type Agent = {
+    /**
+     * The bot identity used for mentions and channel participation.
+     */
+    bot: Bot;
+    /**
+     * Selected channel ids. Empty for a global agent.
+     */
+    channel_ids: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+};
+
+/**
+ * Whether an agent is available everywhere or only in selected channels.
+ */
+export type AgentChannelScope = 'all' | 'selected';
+
 export type Anchor = PdfAnchor;
 
 export type AnchorId = PdfAnchorId & {
@@ -2669,6 +2704,52 @@ export type CopyDocumentResponse = {
      * Indicates if an error occurred.
      */
     error: boolean;
+};
+
+/**
+ * Request to create a persisted AI agent.
+ */
+export type CreateAgentRequest = {
+    /**
+     * Optional avatar URL or data URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Selected channels. Must be non-empty only for `selected` scope.
+     */
+    channel_ids?: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. Omit for a private, user-owned agent.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -8228,6 +8309,52 @@ export type UnthreadedPdfUuidRequest = {
     uuid: string;
 };
 
+/**
+ * Request to replace the editable configuration of a persisted AI agent.
+ */
+export type UpdateAgentRequest = {
+    /**
+     * Optional avatar URL or data URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Selected channels. Must be non-empty only for `selected` scope.
+     */
+    channel_ids?: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. Omit to make the agent private to the caller.
+     */
+    team_id?: string | null;
+};
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -8620,6 +8747,74 @@ export type WithDocumentId = {
 export type WithProjectId = {
     id: string;
 };
+
+export type ListAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agents';
+};
+
+export type ListAgentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListAgentsError = ListAgentsErrors[keyof ListAgentsErrors];
+
+export type ListAgentsResponses = {
+    200: Array<Agent>;
+};
+
+export type ListAgentsResponse = ListAgentsResponses[keyof ListAgentsResponses];
+
+export type CreateAgentData = {
+    body: CreateAgentRequest;
+    path?: never;
+    query?: never;
+    url: '/agents';
+};
+
+export type CreateAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateAgentError = CreateAgentErrors[keyof CreateAgentErrors];
+
+export type CreateAgentResponses = {
+    201: Agent;
+};
+
+export type CreateAgentResponse = CreateAgentResponses[keyof CreateAgentResponses];
+
+export type UpdateAgentData = {
+    body: UpdateAgentRequest;
+    path: {
+        /**
+         * Agent bot ID
+         */
+        agent_id: BotId;
+    };
+    query?: never;
+    url: '/agents/{agent_id}';
+};
+
+export type UpdateAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateAgentError = UpdateAgentErrors[keyof UpdateAgentErrors];
+
+export type UpdateAgentResponses = {
+    200: Agent;
+};
+
+export type UpdateAgentResponse = UpdateAgentResponses[keyof UpdateAgentResponses];
 
 export type DeleteAnchorData = {
     body: DeleteUnthreadedAnchorRequest;

@@ -309,6 +309,7 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  'createAgent',
   'createAnchor',
   'createDocument',
   'createEntityMention',
@@ -331,6 +332,7 @@ export const storageBacklog = [
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
   'getReminder',
+  'listAgents',
   'listOccurrences',
   'listReminders',
   'listUserApiKeys',
@@ -339,6 +341,7 @@ export const storageBacklog = [
   'saveDocumentHandler',
   'simpleSave',
   'toggleShareWithTeam',
+  'updateAgent',
   'updateReminder',
   'validateDocumentPermissionsToken',
 ] as const satisfies readonly (keyof StorageSdk)[];

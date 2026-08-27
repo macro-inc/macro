@@ -255,6 +255,9 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::post_activity_handler,
 
         // bots
+        bots::inbound::axum_router::create_agent_handler,
+        bots::inbound::axum_router::list_agents_handler,
+        bots::inbound::axum_router::update_agent_handler,
         bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
@@ -562,6 +565,10 @@ use utoipa::OpenApi;
             PostActivityRequest,
 
             // Bots
+            bots::domain::models::Agent,
+            bots::domain::models::AgentChannelScope,
+            bots::domain::models::CreateAgentRequest,
+            bots::domain::models::UpdateAgentRequest,
             bots::domain::models::Bot,
             bots::domain::models::BotKind,
             bots::domain::models::BotOwner,
