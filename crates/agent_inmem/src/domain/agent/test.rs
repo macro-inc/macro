@@ -231,6 +231,124 @@ async fn cancel_stops_the_turn_with_the_cancelled_stop_reason() {
     assert_eq!(response.stop_reason, StopReason::Cancelled);
 }
 
+/// The model select carried on a response, as `(current, [(id, name)])`.
+fn model_select(options: &[SessionConfigOption]) -> (String, Vec<(String, String)>) {
+    let option = options
+        .iter()
+        .find(|option| option.id.to_string() == MODEL_CONFIG_ID)
+        .expect("a model config option");
+    let SessionConfigKind::Select(select) = &option.kind else {
+        panic!("the model option must be a select");
+    };
+    let SessionConfigSelectOptions::Ungrouped(options) = &select.options else {
+        panic!("the model options must be ungrouped");
+    };
+    (
+        select.current_value.to_string(),
+        options
+            .iter()
+            .map(|option| (option.value.to_string(), option.name.clone()))
+            .collect(),
+    )
+}
+
+#[tokio::test]
+async fn sessions_advertise_the_latest_claude_models() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+
+    with_agent(engine, async |connection, _session| {
+        let opened = connection
+            .send_request(NewSessionRequest::new("/"))
+            .block_task()
+            .await
+            .expect("session/new should succeed");
+        let options = opened.config_options.expect("session/new config options");
+        let (current, models) = model_select(&options);
+        assert_eq!(
+            models,
+            vec![
+                (
+                    "anthropic/claude-opus-4-8".to_owned(),
+                    "Claude Opus 4.8".to_owned()
+                ),
+                (
+                    "anthropic/claude-sonnet-5".to_owned(),
+                    "Claude Sonnet 5".to_owned()
+                ),
+                (
+                    "anthropic/claude-haiku-4-5".to_owned(),
+                    "Claude Haiku 4.5".to_owned()
+                ),
+            ]
+        );
+        // "test-model" is unroutable, so turns run the default model; the
+        // select rests on it rather than echoing the stored string.
+        assert_eq!(current, "anthropic/claude-opus-4-8");
+
+        let resumed = connection
+            .send_request(ResumeSessionRequest::new(opened.session_id, "/"))
+            .block_task()
+            .await
+            .expect("session/resume should succeed");
+        let options = resumed
+            .config_options
+            .expect("session/resume config options");
+        assert_eq!(model_select(&options), (current, models));
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn picking_an_advertised_model_moves_the_session_onto_it() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        let response = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-haiku-4-5",
+            ))
+            .block_task()
+            .await
+            .expect("an advertised model should be accepted");
+        // The response carries the whole option set with the new resting
+        // value - the shape a client folds config from.
+        let (current, _) = model_select(&response.config_options);
+        assert_eq!(current, "anthropic/claude-haiku-4-5");
+        connection
+            .send_request(text_prompt(&session, "hi"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+
+    assert_eq!(engine.requests()[0].0, "anthropic/claude-haiku-4-5");
+}
+
+#[tokio::test]
+async fn a_model_outside_the_advertised_set_is_refused() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+
+    with_agent(engine, async |connection, session| {
+        let error = connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "openai/gpt-5.5",
+            ))
+            .block_task()
+            .await
+            .expect_err("an unadvertised model must be refused");
+        assert_eq!(
+            error.code,
+            agent_client_protocol::schema::v1::ErrorCode::InvalidParams
+        );
+    })
+    .await;
+}
+
 #[tokio::test]
 async fn a_prompt_for_an_unknown_session_is_refused() {
     let engine = Arc::new(ScriptedEngine::new(vec![]));

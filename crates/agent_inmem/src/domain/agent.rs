@@ -13,12 +13,14 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent::types::{AssistantMessagePart, ChatMessage};
-use agent::{StreamAccumulator, StreamPart, ToolResponse};
+use agent::{PredefinedModel, StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, InitializeRequest,
     InitializeResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigId,
+    SessionConfigKind, SessionConfigOption, SessionConfigSelect, SessionConfigSelectOption,
+    SessionConfigSelectOptions, SessionConfigValueId, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, StopReason, ToolCall as AcpToolCall, ToolCallStatus,
     ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
@@ -39,6 +41,19 @@ mod test;
 /// A turn that produces nothing for this long is treated as hung and
 /// cancelled, so it cannot wedge the session's turn lock forever.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// The models the session's picker offers: the latest Claude of each family
+/// the engine serves (see [`PredefinedModel`]), strongest first, as
+/// `(model, display name)` pairs. Each model's `to_string()` is the
+/// provider-qualified routing id the engine dispatches on, so a picked model
+/// runs natively instead of falling back to the default.
+const fn advertised_models() -> [(PredefinedModel, &'static str); 3] {
+    [
+        (PredefinedModel::Smart, "Claude Opus 4.8"),
+        (PredefinedModel::Sonnet5, "Claude Sonnet 5"),
+        (PredefinedModel::Haiku4_5, "Claude Haiku 4.5"),
+    ]
+}
 
 /// Everything one agent task serves its session from.
 pub struct AgentState {
@@ -92,6 +107,47 @@ impl AgentState {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             state.model = model;
         }
+    }
+
+    /// The session's config options: the model select, and nothing else yet.
+    ///
+    /// This is the whole of how a client learns which models exist and which
+    /// one the session is on — ACP carries it as `configOptions` on the
+    /// `session/new`, `session/resume` and `session/set_config_option`
+    /// responses, the fold projects it into the session metadata, and the
+    /// model picker renders it verbatim.
+    ///
+    /// The select rests on the session's stored model when it is one of the
+    /// advertised ids. Anything else — the bare slugs deployments stamped
+    /// onto session rows before models were advertised (`claude`,
+    /// `claude-sonnet-5`) — is unroutable, so the engine runs the default
+    /// model instead; the select rests there, on what actually runs, rather
+    /// than echoing a string that doesn't.
+    fn config_options(&self) -> Vec<SessionConfigOption> {
+        let stored = self
+            .store
+            .get(&self.session_id)
+            .map(|state| state.model.clone())
+            .unwrap_or_default();
+        let current = advertised_models()
+            .iter()
+            .map(|(model, _)| model.to_string())
+            .find(|id| *id == stored)
+            .unwrap_or_else(|| PredefinedModel::default().to_string());
+        let options: Vec<SessionConfigSelectOption> = advertised_models()
+            .iter()
+            .map(|(model, name)| {
+                SessionConfigSelectOption::new(SessionConfigValueId::new(model.to_string()), *name)
+            })
+            .collect();
+        vec![SessionConfigOption::new(
+            SessionConfigId::new(MODEL_CONFIG_ID),
+            "Model",
+            SessionConfigKind::Select(SessionConfigSelect::new(
+                SessionConfigValueId::new(current),
+                SessionConfigSelectOptions::Ungrouped(options),
+            )),
+        )]
     }
 
     /// The messages and model for a turn answering `prompt`.
@@ -163,7 +219,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
-                    responder.respond(NewSessionResponse::new(acp_id))
+                    responder.respond(
+                        NewSessionResponse::new(acp_id).config_options(state.config_options()),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -178,7 +236,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id, true);
-                    responder.respond(ResumeSessionResponse::new())
+                    responder.respond(
+                        ResumeSessionResponse::new().config_options(state.config_options()),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -243,8 +303,20 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             AcpError::invalid_params().data("the model option takes a value id"),
                         );
                     };
-                    state.set_model(model.to_string());
-                    responder.respond(SetSessionConfigOptionResponse::new(Vec::new()))
+                    let model = model.to_string();
+                    if !advertised_models()
+                        .iter()
+                        .any(|(advertised, _)| advertised.to_string() == model)
+                    {
+                        return responder.respond_with_error(
+                            AcpError::invalid_params().data(format!("unknown model {model}")),
+                        );
+                    }
+                    state.set_model(model);
+                    // Answered with the whole option set, not just the new
+                    // value: that is the shape a client folds config from,
+                    // and it is the same shape `session/new` sent.
+                    responder.respond(SetSessionConfigOptionResponse::new(state.config_options()))
                 }
             },
             agent_client_protocol::on_receive_request!(),
