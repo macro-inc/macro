@@ -773,6 +773,22 @@ fn new_email_notify_policy(user_id: &MacroUserIdStr<'_>) -> NewEmailNotifyPolicy
     }
 }
 
+/// Inbox-view filter for a synced thread. `AllInbox` keeps the Inbox view
+/// (so spam, trash, and archive stay out) and skips only Signal predicates.
+fn new_email_preview_filter(thread_id: Uuid, policy: NewEmailNotifyPolicy) -> Expr<EmailLiteral> {
+    let thread = Expr::Literal(EmailLiteral::ThreadId(thread_id));
+    match policy {
+        NewEmailNotifyPolicy::AllInbox => thread,
+        NewEmailNotifyPolicy::SignalOnly => Expr::and(
+            thread,
+            Expr::and(
+                Expr::Literal(EmailLiteral::Importance(true)),
+                Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
+            ),
+        ),
+    }
+}
+
 // filter out messages we don't want to send notifications for
 #[tracing::instrument(skip(ctx, link))]
 async fn filter_notifiable_message(
@@ -803,19 +819,11 @@ async fn filter_notifiable_message(
         return Ok(None);
     }
 
-    match new_email_notify_policy(&link.macro_id) {
-        NewEmailNotifyPolicy::AllInbox => return Ok(Some(new_message)),
-        NewEmailNotifyPolicy::SignalOnly => {}
-    }
-
-    // 2. Use the same dynamic email preview path as the Signal tab:
-    //    emailView=inbox AND ef=(Importance(true) AND Shared(exclude)), scoped to this thread.
-    let signal_filter = Expr::and(
-        Expr::Literal(EmailLiteral::ThreadId(new_message.thread_db_id)),
-        Expr::and(
-            Expr::Literal(EmailLiteral::Importance(true)),
-            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
-        ),
+    // 2. Inbox view membership, scoped to this thread. SignalOnly also
+    //    requires Importance(true) AND Shared(exclude).
+    let preview_filter = new_email_preview_filter(
+        new_message.thread_db_id,
+        new_email_notify_policy(&link.macro_id),
     );
 
     let query = PreviewCursorQuery {
@@ -824,7 +832,7 @@ async fn filter_notifiable_message(
         limit: 1,
         query: models_pagination::Query::Sort(
             models_pagination::SimpleSortMethod::UpdatedAt,
-            Some(Arc::new(signal_filter)),
+            Some(Arc::new(preview_filter)),
         ),
         team_id: None,
     };
