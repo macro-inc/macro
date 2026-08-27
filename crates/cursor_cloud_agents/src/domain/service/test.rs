@@ -31,6 +31,64 @@ fn finished(run: &str) -> CursorEvent {
 }
 
 #[tokio::test]
+async fn active_turn_is_visible_to_the_host_idle_reaper() {
+    let (service, _cursor, _notifier) = service(None);
+    let session_id = service.new_session(Path::new(""), Vec::new());
+    assert!(!service.has_active_turn());
+
+    let session = service.session(&session_id).expect("session exists");
+    let turn = session.turn_gate.lock().await;
+
+    assert!(service.has_active_turn());
+    drop(turn);
+    assert!(!service.has_active_turn());
+}
+
+#[tokio::test]
+async fn cancel_after_prompt_receipt_survives_spawn_ordering() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let cancel = service
+        .prompt_cancel_token(&session)
+        .expect("session exists");
+
+    // ACP received prompt then cancel, but its independently spawned cancel
+    // task ran before the prompt task was first polled.
+    service.cancel(&session).await.expect("cancel works");
+    let stop = service
+        .prompt_with_cancel(&session, "do not start", cancel)
+        .await
+        .expect("prompt resolves");
+
+    assert_eq!(stop, StopReason::Cancelled);
+    assert!(
+        cursor.calls().is_empty(),
+        "the cancelled run was never created"
+    );
+}
+
+#[tokio::test]
+async fn prompt_after_cancel_receipt_starts_a_new_turn() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    service.cancel(&session).await.expect("cancel completes");
+    let cancel = service
+        .prompt_cancel_token(&session)
+        .expect("session exists");
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = service
+        .prompt_with_cancel(&session, "start now", cancel)
+        .await
+        .expect("prompt resolves");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert!(matches!(cursor.calls()[0], CursorCall::CreateAgent(..)));
+}
+
+#[tokio::test]
 async fn first_prompt_creates_the_agent_with_the_session_repo() {
     let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
     let (service, cursor, notifier) = service(Some(repo.clone()));

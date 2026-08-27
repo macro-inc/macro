@@ -7,24 +7,29 @@
  * fold's signal or on the timeout, whichever comes first.
  */
 
+import type { ControlRequest } from '@service-agent-harness/generated/schemas';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlOutcome } from '../state/control-message';
 import {
   createComposerController,
+  STOP_SETTLE_TIMEOUT_MS,
   TURN_OBSERVE_TIMEOUT_MS,
 } from './create-composer-controller';
 
 const control = vi.hoisted(() => ({
-  calls: [] as { sessionId: string; action: unknown }[],
+  calls: [] as { sessionId: string; action: ControlRequest }[],
   /** What the next `control` calls resolve to. */
   outcome: 'ok' as 'ok' | 'err' | 'reject',
+  promptGate: undefined as Promise<void> | undefined,
+  releasePrompt: undefined as (() => void) | undefined,
 }));
 
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: {
-    control: vi.fn(async (sessionId: string, action: unknown) => {
+    control: vi.fn(async (sessionId: string, action: ControlRequest) => {
       control.calls.push({ sessionId, action });
+      if (action.type === 'prompt') await control.promptGate;
       if (control.outcome === 'reject') throw new Error('network');
       return {
         isErr: () => control.outcome === 'err',
@@ -44,9 +49,9 @@ vi.mock('@core/component/Toast/Toast', () => ({
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const prompts = () =>
-  control.calls
-    .filter((c) => (c.action as { type: string }).type === 'prompt')
-    .map((c) => (c.action as { prompt: string }).prompt);
+  control.calls.flatMap((call) =>
+    call.action.type === 'prompt' ? [call.action.prompt] : []
+  );
 
 function setup(options?: {
   working?: boolean;
@@ -86,6 +91,8 @@ function setup(options?: {
 beforeEach(() => {
   control.calls = [];
   control.outcome = 'ok';
+  control.promptGate = undefined;
+  control.releasePrompt = undefined;
   vi.useRealTimers();
 });
 
@@ -264,6 +271,79 @@ describe('stop', () => {
     controller.stop();
     await flush();
     expect(control.calls.at(-1)?.action).toEqual({ type: 'stop' });
+    dispose();
+  });
+
+  it('posts only one stop until the running turn settles', async () => {
+    const { controller, setWorking, dispose } = setup({ working: true });
+
+    controller.stop();
+    controller.stop();
+    controller.stop();
+    await flush();
+
+    expect(
+      control.calls.filter((call) => call.action.type === 'stop')
+    ).toHaveLength(1);
+
+    setWorking(false);
+    await flush();
+    setWorking(true);
+    controller.stop();
+    await flush();
+
+    expect(
+      control.calls.filter((call) => call.action.type === 'stop')
+    ).toHaveLength(2);
+    dispose();
+  });
+
+  it('can stop a posted prompt before its turn is observed', async () => {
+    const { controller, dispose } = setup();
+    controller.send('starting');
+    await flush();
+    expect(controller.busy()).toBe(true); // awaiting_turn
+
+    controller.stop();
+    await flush();
+
+    expect(control.calls.at(-1)?.action).toEqual({ type: 'stop' });
+    dispose();
+  });
+
+  it('posts stop only after an in-flight prompt is accepted', async () => {
+    control.promptGate = new Promise<void>((resolve) => {
+      control.releasePrompt = resolve;
+    });
+    const { controller, dispose } = setup();
+    controller.send('starting');
+    await flush();
+
+    controller.stop();
+    await flush();
+    expect(control.calls.map((call) => call.action.type)).toEqual(['prompt']);
+
+    control.releasePrompt?.();
+    await flush();
+    expect(control.calls.map((call) => call.action.type)).toEqual([
+      'prompt',
+      'stop',
+    ]);
+    dispose();
+  });
+
+  it('releases a posted stop when the fold never settles', async () => {
+    vi.useFakeTimers();
+    const { controller, dispose } = setup({ working: true });
+    controller.stop();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(STOP_SETTLE_TIMEOUT_MS);
+
+    controller.stop();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(
+      control.calls.filter((call) => call.action.type === 'stop')
+    ).toHaveLength(2);
     dispose();
   });
 });

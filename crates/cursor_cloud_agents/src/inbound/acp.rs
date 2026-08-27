@@ -317,16 +317,23 @@ where
             {
                 let service = Arc::clone(&service);
                 async move |request: PromptRequest, responder, connection| {
+                    let session = request.session_id;
+                    let cancel = match service.prompt_cancel_token(&session) {
+                        Ok(cancel) => cancel,
+                        Err(error) => {
+                            return responder
+                                .respond_with_error(AcpError::new(-32603, error.to_string()));
+                        }
+                    };
                     // On its own task so the event loop keeps servicing
                     // cancels while the turn streams.
                     let service = Arc::clone(&service);
                     connection.spawn(async move {
-                        let session = request.session_id;
                         let text = prompt_text(&request.prompt);
                         // A failed respond means the client is gone; failing
                         // the spawned task would tear down the (already
                         // closing) connection, so it is dropped instead.
-                        match service.prompt(&session, &text).await {
+                        match service.prompt_with_cancel(&session, &text, cancel).await {
                             Ok(stop_reason) => {
                                 let _ = responder.respond(PromptResponse::new(stop_reason));
                             }
@@ -420,18 +427,14 @@ where
         .on_receive_notification(
             {
                 let service = Arc::clone(&service);
-                async move |notification: CancelNotification, connection| {
-                    // Spawned for the same reason prompts are: cancelling is a
-                    // Cursor API round trip, and the event loop must not wait
-                    // on it.
-                    let service = Arc::clone(&service);
-                    connection.spawn(async move {
-                        let session = notification.session_id;
-                        if let Err(error) = service.cancel(&session).await {
-                            tracing::error!(error = %error, "cancel failed");
-                        }
-                        Ok(())
-                    })
+                async move |notification: CancelNotification, _connection| {
+                    // Awaiting here preserves wire order: local cancellation
+                    // fires before the first network await, and the next ACP
+                    // frame is not admitted until the remote target is fixed.
+                    if let Err(error) = service.cancel(&notification.session_id).await {
+                        tracing::error!(error = %error, "cancel failed");
+                    }
+                    Ok(())
                 }
             },
             on_receive_notification!(),

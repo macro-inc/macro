@@ -64,6 +64,9 @@ const POLL_ERROR_TOLERANCE: usize = 5;
 /// interval.
 const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// Remote cancellation is best-effort; local cancellation must not wedge ACP.
+const REMOTE_CANCEL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// How long a prompt waits behind a run something else started (the same
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
@@ -98,17 +101,12 @@ struct SessionState {
     /// or restored session, whose history is already rendered or unknowable —
     /// so nothing is backfilled rather than everything replayed.
     last_run: Option<CursorRunId>,
-    /// Set by cancel; read by the turn when its stream ends.
-    ///
-    /// The *verdict*, not the mechanism: a cancel that raced the stream's own
-    /// ending still has to report `Cancelled`, so this outlives the token
-    /// below and is what the turn consults once it has stopped.
-    cancelled: bool,
     /// Fired by cancel; awaited by every wait a turn can be sitting in.
     ///
     /// The mechanism, and the reason a cancel is felt at once rather than
-    /// whenever Cursor happens to end the stream. Replaced per turn, so a
-    /// cancel can never carry into the next one.
+    /// whenever Cursor happens to end the stream. Replaced when cancel is
+    /// admitted, so prompts received afterward get a
+    /// fresh token while prompts received before it retain the fired one.
     cancel: tokio_util::sync::CancellationToken,
     /// The model this session's next run will use.
     ///
@@ -395,6 +393,36 @@ where
         session_id: &SessionId,
         prompt: &str,
     ) -> Result<StopReason, SessionError> {
+        let cancel = self.prompt_cancel_token(session_id)?;
+        self.prompt_with_cancel(session_id, prompt, cancel).await
+    }
+
+    /// Snapshot the cancellation token when an ACP prompt frame arrives.
+    ///
+    /// ACP handlers spawn prompt and cancel work independently. Carrying this
+    /// value into [`Self::prompt_with_cancel`] preserves their wire order if
+    /// the cancel task happens to run first.
+    pub(crate) fn prompt_cancel_token(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<tokio_util::sync::CancellationToken, SessionError> {
+        let session = self.session(session_id)?;
+        Ok(session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .cancel
+            .clone())
+    }
+
+    /// Run a prompt associated with the token captured when it was received.
+    #[tracing::instrument(skip(self, prompt), err)]
+    pub(crate) async fn prompt_with_cancel(
+        &self,
+        session_id: &SessionId,
+        prompt: &str,
+        cancel: tokio_util::sync::CancellationToken,
+    ) -> Result<StopReason, SessionError> {
         let session = self.session(session_id)?;
         // Wait behind an in-flight foreign-run mirror, so its frames and
         // this turn's never interleave — but never behind another turn: ACP
@@ -412,7 +440,11 @@ where
                 {
                     return Err(SessionError::TurnAlreadyActive(session_id.clone()));
                 }
-                session.turn_gate.lock().await
+                tokio::select! {
+                    biased;
+                    () = cancel.cancelled() => return Ok(StopReason::Cancelled),
+                    guard = session.turn_gate.lock() => guard,
+                }
             }
         };
 
@@ -421,40 +453,31 @@ where
         // Resolved before the turn commits to a path: both the create-agent
         // and the follow-up-run branch send it, and a mid-turn change must not
         // land on a run that is already going.
-        let model = self.effective_model(session_id).await?;
+        let model = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Ok(StopReason::Cancelled),
+            model = self.effective_model(session_id) => model?,
+        };
 
-        let (existing_agent, cancel) = {
-            let mut state = session.state.lock().expect("session state poisoned");
+        let existing_agent = {
+            let state = session.state.lock().expect("session state poisoned");
             if state.active_run.is_some() {
                 return Err(SessionError::TurnAlreadyActive(session_id.clone()));
             }
-            state.cancelled = false;
-            // A fresh token per turn: the previous one may already be fired,
-            // and reusing it would cancel this turn before it began.
-            state.cancel = tokio_util::sync::CancellationToken::new();
-            (state.agent.clone(), state.cancel.clone())
+            if cancel.is_cancelled() {
+                return Ok(StopReason::Cancelled);
+            }
+            state.agent.clone()
         };
 
-        let (agent, run) = match existing_agent {
+        let (agent, run, backfill) = match existing_agent {
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
                 let run = self
                     .create_run_when_free(&agent, prompt, model.as_ref(), &cancel)
                     .await?;
-                // Catch the session's view up on whatever it missed while it
-                // was not looking. After the create on purpose: creating
-                // proved the agent free, so every missed run is terminal and
-                // its text is readable — before it, a still-running
-                // cursor.com run is invisible to the backfill and the
-                // watermark then walks straight past it.
-                if let Err(error) = self
-                    .backfill_foreign_runs(session_id, &session, &agent, Some(&run))
-                    .await
-                {
-                    tracing::warn!(%agent, %error, "could not backfill cursor.com runs");
-                }
-                (agent, run)
+                (agent, run, true)
             }
             None => {
                 // Snapshotted out of the lock: `create_agent` is a network
@@ -465,9 +488,11 @@ where
                     .expect("session state poisoned")
                     .mcp_servers
                     .clone();
-                self.cursor
+                let created = self
+                    .cursor
                     .create_agent(prompt, session.repo.as_ref(), &mcp_servers, model.as_ref())
-                    .await?
+                    .await?;
+                (created.0, created.1, false)
             }
         };
         tracing::info!(%agent, %run, "cursor run started");
@@ -475,6 +500,36 @@ where
             let mut state = session.state.lock().expect("session state poisoned");
             state.agent = Some(agent.clone());
             state.active_run = Some(run.clone());
+        }
+
+        if backfill {
+            // Creating the run proved the agent free, so every missed run is
+            // terminal and readable. The active id is recorded first so a
+            // concurrent cancel targets the exact new run.
+            if let Err(error) = self
+                .backfill_foreign_runs(session_id, &session, &agent, Some(&run))
+                .await
+            {
+                tracing::warn!(%agent, %error, "could not backfill cursor.com runs");
+            }
+        }
+
+        if cancel.is_cancelled() {
+            match tokio::time::timeout(REMOTE_CANCEL_TIMEOUT, self.cursor.cancel_run(&agent, &run))
+                .await
+            {
+                Ok(Err(error)) => {
+                    tracing::warn!(%agent, %run, %error, "could not cancel a newly created cursor run");
+                }
+                Err(_) => {
+                    tracing::warn!(%agent, %run, "cancelling a newly created cursor run timed out");
+                }
+                Ok(Ok(())) => {}
+            }
+            let mut state = session.state.lock().expect("session state poisoned");
+            state.active_run = None;
+            state.last_run = Some(run);
+            return Ok(StopReason::Cancelled);
         }
 
         let outcome = self
@@ -485,7 +540,7 @@ where
             let mut state = session.state.lock().expect("session state poisoned");
             state.active_run = None;
             state.last_run = Some(run.clone());
-            state.cancelled
+            cancel.is_cancelled()
         };
         // A cancel that raced the stream's own ending still reports
         // Cancelled: ACP requires it once the client sent `session/cancel`.
@@ -511,32 +566,41 @@ where
         let session = self.session(session_id)?;
         let (agent, active_run) = {
             let mut state = session.state.lock().expect("session state poisoned");
-            state.cancelled = true;
             // Fired before the network call, and the turn ends on it alone:
             // whether Cursor honours the cancel decides only whether the run
             // keeps burning credits server-side, never whether this client
             // gets its turn back. A cancel Cursor refuses used to leave the
             // turn streaming to natural completion.
             state.cancel.cancel();
+            state.cancel = tokio_util::sync::CancellationToken::new();
             (state.agent.clone(), state.active_run.clone())
         };
         let Some(agent) = agent else {
             return Ok(());
         };
-        let runs = match active_run {
-            Some(run) => vec![run],
-            None => self.current_runs(&agent).await,
+        let remote = async {
+            let runs = match active_run {
+                Some(run) => vec![run],
+                None => self.current_runs(&agent).await,
+            };
+            // Concurrent rather than sequential so one failing cancel does
+            // not skip the rest.
+            let results = futures::future::join_all(
+                runs.iter().map(|run| self.cursor.cancel_run(&agent, run)),
+            )
+            .await;
+            for result in results {
+                result?;
+            }
+            Ok(())
         };
-        // Concurrent rather than sequential so one failing cancel does not
-        // skip the rest — every run found gets its own attempt regardless of
-        // how the others land.
-        let results =
-            futures::future::join_all(runs.iter().map(|run| self.cursor.cancel_run(&agent, run)))
-                .await;
-        for result in results {
-            result?;
+        match tokio::time::timeout(REMOTE_CANCEL_TIMEOUT, remote).await {
+            Ok(result) => result,
+            Err(_) => {
+                tracing::warn!(%agent, "cursor remote cancellation timed out");
+                Ok(())
+            }
         }
-        Ok(())
     }
 
     /// The agent's runs still in progress, per Cursor's own record.
@@ -631,6 +695,20 @@ where
             .lock()
             .expect("session map poisoned")
             .contains_key(session_id)
+    }
+
+    /// Whether this service is currently driving or preparing a Cursor turn.
+    ///
+    /// Used by the in-process host's idle reaper: a run can legitimately
+    /// produce no ACP frames while Cursor works or while a broken stream is
+    /// being polled, but that silence must not be mistaken for an idle pipe.
+    #[must_use]
+    pub fn has_active_turn(&self) -> bool {
+        self.sessions
+            .lock()
+            .expect("session map poisoned")
+            .values()
+            .any(|session| session.turn_gate.try_lock().is_err())
     }
 
     /// Stream one run, translating and delivering as events arrive.
@@ -826,7 +904,8 @@ where
                     "the prompt was cancelled while waiting for the agent to be free"
                 )));
             }
-            match self.cursor.create_run(agent, prompt, model).await {
+            let created = self.cursor.create_run(agent, prompt, model).await;
+            match created {
                 Ok(run) => return Ok(run),
                 Err(error) if error.to_string().contains("agent_busy") => {
                     tracing::info!(%agent, "agent busy (a run is active, possibly from cursor.com); waiting");

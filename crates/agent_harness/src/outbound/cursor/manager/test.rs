@@ -11,6 +11,7 @@ use agent_session::domain::model::{
 };
 use bot_id::BotId;
 use cursor_api_key::cipher::CursorApiKey;
+use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -275,6 +276,65 @@ async fn fake_cursor_api() -> (
         axum::serve(listener, app).await.expect("serve");
     });
     (base_url, archive_log, create_log)
+}
+
+/// A Cursor API whose run starts but stays quiet forever, matching the gap
+/// that previously let the host's ACP idle reaper kill a live turn.
+async fn quiet_cursor_api() -> (String, Arc<tokio::sync::Notify>) {
+    let stream_started = Arc::new(tokio::sync::Notify::new());
+    let app = axum::Router::new()
+        .route(
+            "/v1/agents",
+            axum::routing::post(|| async {
+                axum::Json(serde_json::json!({
+                    "agent": {
+                        "id": "bc-quiet-agent",
+                        "name": "Quiet agent",
+                        "status": "ACTIVE",
+                        "url": "https://cursor.com/agents/bc-quiet-agent",
+                    },
+                    "run": { "id": "run-quiet-1" },
+                }))
+            }),
+        )
+        .route(
+            "/v1/models",
+            axum::routing::get(|| async {
+                axum::Json(serde_json::json!({ "items": [] }))
+            }),
+        )
+        .route(
+            "/v1/agents/{id}/runs/{run}/stream",
+            axum::routing::get({
+                let stream_started = Arc::clone(&stream_started);
+                move || {
+                    let stream_started = Arc::clone(&stream_started);
+                    async move {
+                        stream_started.notify_one();
+                        let running = futures::stream::once(async {
+                            Ok::<_, std::convert::Infallible>(axum::body::Bytes::from_static(
+                                b"event: status\ndata: {\"runId\":\"run-quiet-1\",\"status\":\"RUNNING\"}\n\n",
+                            ))
+                        });
+                        let body = axum::body::Body::from_stream(
+                            running.chain(futures::stream::pending()),
+                        );
+                        (
+                            [(axum::http::header::CONTENT_TYPE, "text/event-stream")],
+                            body,
+                        )
+                    }
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let base_url = format!("http://{}", listener.local_addr().expect("addr"));
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("serve");
+    });
+    (base_url, stream_started)
 }
 
 /// A config source: `key` is `Some` for an owner who has connected Cursor,
@@ -618,6 +678,57 @@ async fn an_idle_pipe_is_shut_down() {
     assert!(
         receiver.recv().await.is_none(),
         "an idle pipe must close, not hang"
+    );
+}
+
+/// Silence on the ACP pipe is not idleness while Cursor is still running a
+/// turn. The pipe must remain available to carry its eventual completion.
+#[tokio::test(start_paused = true)]
+async fn an_active_quiet_turn_is_not_reaped() {
+    let (base_url, stream_started) = quiet_cursor_api().await;
+    let manager = manager(base_url, StubSessions::default());
+    let transport = manager
+        .spawn(SpawnContainer {
+            session_id: AgentSessionId::new(),
+            kind: AgentKind::Cursor,
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            size: SandboxSize::Default,
+        })
+        .await
+        .expect("spawn");
+    let (sender, mut receiver) = transport.split();
+
+    assert!(receiver.recv().await.is_some(), "acp ready arrives");
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}),
+    )
+    .await;
+    next_acp(&mut receiver).await;
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}),
+    )
+    .await;
+    let opened = next_acp(&mut receiver).await;
+    let acp_session = opened["result"]["sessionId"]
+        .as_str()
+        .expect("a session id");
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{
+            "sessionId": acp_session,
+            "prompt": [{"type":"text","text":"work quietly"}],
+        }}),
+    )
+    .await;
+    stream_started.notified().await;
+
+    tokio::time::advance(CURSOR_IDLE_TIMEOUT + CURSOR_IDLE_CHECK_INTERVAL).await;
+    tokio::task::yield_now().await;
+    assert!(
+        !receiver.is_closed(),
+        "the idle reaper must preserve a pipe with an active turn"
     );
 }
 

@@ -241,11 +241,12 @@ where
                 tokio::select! {
                     () = pipe_closed.cancelled() => break,
                     _ = reaper.tick() => {
-                        let idle = last_activity
+                        let mut last_activity = last_activity
                             .lock()
-                            .expect("activity clock poisoned")
-                            .elapsed();
-                        if idle >= CURSOR_IDLE_TIMEOUT {
+                            .expect("activity clock poisoned");
+                        if sync_service.has_active_turn() {
+                            *last_activity = tokio::time::Instant::now();
+                        } else if last_activity.elapsed() >= CURSOR_IDLE_TIMEOUT {
                             tracing::info!(%session_id, "idle cursor session; closing its pipe");
                             reaper_shutdown.cancel();
                             break;

@@ -63,6 +63,13 @@ export type ComposerController = {
  * the socket has genuinely gone quiet.
  */
 export const TURN_OBSERVE_TIMEOUT_MS = 10_000;
+export const STOP_SETTLE_TIMEOUT_MS = 10_000;
+
+type StopPhase =
+  | { type: 'idle' }
+  | { type: 'queued'; requestId: number }
+  | { type: 'posting'; requestId: number }
+  | { type: 'settling' };
 
 export function createComposerController(options: {
   /** The fold's current model, which is how a model change is seen to land. */
@@ -96,18 +103,30 @@ export function createComposerController(options: {
      * (nor an older refusal of the same model) can answer this request.
      */
     requestedActionId: string | undefined;
+    /** The one stop request holding the prompt drain, if any. */
+    stop: StopPhase;
   }>({
     queue: [],
     post: { type: 'idle' },
     requestedModel: undefined,
     requestedActionId: undefined,
+    stop: { type: 'idle' },
   });
+  let nextStopRequestId = 0;
 
   const postHead = async (sessionId: string, prompt: QueuedPrompt) => {
     setState('post', { type: 'posting', promptId: prompt.id });
     const result = await agentHarnessServiceClient
       .control(sessionId, { type: 'prompt', prompt: prompt.markdown })
       .catch(() => undefined);
+
+    if (
+      options.sessionId() !== sessionId ||
+      state.post.type !== 'posting' ||
+      state.post.promptId !== prompt.id
+    ) {
+      return;
+    }
 
     if (result === undefined || result.isErr()) {
       // The prompt stays at the head of the queue — visible and retryable,
@@ -145,13 +164,23 @@ export function createComposerController(options: {
     }
   };
 
-  const postStop = async (sessionId: string) => {
+  const postStop = async (sessionId: string, requestId: number) => {
     const result = await agentHarnessServiceClient
       .control(sessionId, { type: 'stop' })
       .catch(() => undefined);
-    if (result === undefined || result.isErr()) {
-      toast.failure('The agent could not be stopped');
+    if (
+      options.sessionId() !== sessionId ||
+      state.stop.type !== 'posting' ||
+      state.stop.requestId !== requestId
+    ) {
+      return;
     }
+    if (result === undefined || result.isErr()) {
+      setState('stop', { type: 'idle' });
+      toast.failure('The agent could not be stopped');
+      return;
+    }
+    setState('stop', { type: 'settling' });
     // Success is observed through the fold: the turn settles and `working`
     // flips false, which re-runs the drain.
   };
@@ -161,6 +190,7 @@ export function createComposerController(options: {
   // is what makes this wedge-proof: there is no exit event to miss.
   createEffect(() => {
     const sessionId = options.sessionId();
+    if (state.stop.type !== 'idle') return;
     const action = nextAction({
       post: state.post,
       head: state.queue[0],
@@ -224,6 +254,31 @@ export function createComposerController(options: {
     onCleanup(() => clearTimeout(timer));
   });
 
+  // Serialize stop behind a prompt POST, then keep it latched until that turn
+  // settles. Independent HTTP requests can arrive out of order, and the
+  // control itself has no response frame to deduplicate repeated clicks.
+  createEffect(() => {
+    const stop = state.stop;
+    if (stop.type === 'idle' || stop.type === 'posting') return;
+    if (stop.type === 'queued') {
+      if (state.post.type === 'posting') return;
+      const sessionId = options.sessionId();
+      if (!sessionId) return;
+      setState('stop', { type: 'posting', requestId: stop.requestId });
+      void postStop(sessionId, stop.requestId);
+      return;
+    }
+    if (!isBusy(state.post, options.working())) {
+      setState('stop', { type: 'idle' });
+      return;
+    }
+    const timer = setTimeout(
+      () => setState('stop', { type: 'idle' }),
+      STOP_SETTLE_TIMEOUT_MS
+    );
+    onCleanup(() => clearTimeout(timer));
+  });
+
   // A session switch resets the composer: queued prompts belong to the
   // session they were typed in, never the next one.
   //
@@ -246,6 +301,7 @@ export function createComposerController(options: {
       post: { type: 'idle' },
       requestedModel: undefined,
       requestedActionId: undefined,
+      stop: { type: 'idle' },
     });
   });
 
@@ -285,7 +341,11 @@ export function createComposerController(options: {
       const sessionId = options.sessionId();
       if (!sessionId) return;
       if (!isBusy(state.post, options.working())) return;
-      void postStop(sessionId);
+      if (state.stop.type !== 'idle') return;
+      setState('stop', {
+        type: 'queued',
+        requestId: ++nextStopRequestId,
+      });
     },
     setModel: (model) => {
       const sessionId = options.sessionId();
