@@ -14,6 +14,13 @@ macro_env_var::env_vars!(
     pub struct KafkaBrokers;
     /// PEM private key of the GitHub App installation tokens are minted with.
     pub struct GithubSyncAppPemSecretKey;
+    /// RSA key Macro API tokens are signed with - the same one
+    /// `authentication_service` signs with. The egress proxy mints
+    /// short-lived tokens for session owners inline.
+    pub struct MacroApiTokenPrivateSecretKey;
+    /// Issuer stamped into minted Macro API tokens; must match what the
+    /// validators expect.
+    pub struct MacroApiTokenIssuer;
     /// OAuth client ID for the Pipedream API. The same credentials
     /// `document_cognition_service` uses: the connections a sandbox spends
     /// are the ones the person connected in Macro, in the same rows.
@@ -160,6 +167,10 @@ pub struct Config {
     /// in-network `http://mcp-service:8080/mcp` on a local stack. Cleartext is
     /// refused at boot unless `ENVIRONMENT=local`.
     pub macro_mcp_url: String,
+    /// RSA key Macro API tokens are signed with.
+    pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
+    /// Issuer stamped into minted Macro API tokens.
+    pub macro_api_token_issuer: MacroApiTokenIssuer,
     /// Client id of the GitHub App installation tokens are minted for.
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.

@@ -317,10 +317,6 @@ services:
       # In-network lexical address; the local default (http://localhost:8096)
       # would point at this container itself.
       - OVERRIDE_LEXICAL_SERVICE_URL=http://lexical-service:8096
-      # In-network authentication service, where the egress proxy exchanges a
-      # session owner's identity for a Macro API token; the local default
-      # (http://localhost:8080) would point at this container itself.
-      - OVERRIDE_AUTH_SERVICE_URL=http://authentication-service:8080
     volumes:
       # The local container provider drives the host's Docker daemon, so
       # sandboxes are siblings of this container rather than children. Harmless

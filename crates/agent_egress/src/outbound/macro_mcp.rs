@@ -13,11 +13,11 @@
 //! single-user token already near its expiry.
 
 use chrono::{DateTime, Duration as ChronoDuration, TimeZone, Utc};
-use dashmap::DashMap;
-use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, INTERNAL_FUSIONAUTH_USER_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER,
-};
+use lru::LruCache;
+use macro_auth::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
 use macro_user_id::user_id::MacroUserIdStr;
+use std::num::NonZeroUsize;
+use std::sync::Mutex;
 use url::Url;
 
 use crate::domain::error::EgressError;
@@ -56,9 +56,16 @@ pub struct WithMacroMcp<Inner, Tokens> {
     /// Set only by a composition root that has checked `ENVIRONMENT=local`.
     local_cleartext: bool,
     /// Keyed by owner: the token *is* the owner's identity, so a cache hit
-    /// for one owner can never answer for another.
-    cached: DashMap<MacroUserIdStr<'static>, CachedToken>,
+    /// for one owner can never answer for another. Bounded, so the map cannot
+    /// grow with every owner ever seen; freshness still comes from each
+    /// token's own expiry, never from cache residency.
+    cached: Mutex<LruCache<MacroUserIdStr<'static>, CachedToken>>,
 }
+
+/// How many owners' tokens are kept at once. Far past any real concurrency;
+/// the bound exists so entries for owners who never come back are eventually
+/// evicted instead of holding expired credentials forever.
+const CACHE_CAPACITY: usize = 1024;
 
 #[derive(Clone)]
 struct CachedToken {
@@ -95,18 +102,28 @@ where
             tokens,
             url,
             local_cleartext,
-            cached: DashMap::new(),
+            cached: Mutex::new(LruCache::new(
+                NonZeroUsize::new(CACHE_CAPACITY).expect("a nonzero capacity"),
+            )),
         })
     }
 
     async fn token(&self, owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
-        if let Some(cached) = usable(self.cached.get(owner).map(|entry| entry.clone())) {
-            return Ok(cached.token);
+        {
+            let mut cached = self.cached.lock().expect("token cache poisoned");
+            match usable(cached.get(owner).cloned()) {
+                Some(live) => return Ok(live.token),
+                // A stale entry is evicted now rather than on capacity
+                // pressure: there is no reason to keep a dead credential.
+                None => {
+                    cached.pop(owner);
+                }
+            }
         }
 
         let token = self.tokens.mint(owner).await?;
         let expires_at = token_expiry(&token)?;
-        self.cached.insert(
+        self.cached.lock().expect("token cache poisoned").put(
             owner.clone(),
             CachedToken {
                 token: token.clone(),
@@ -186,44 +203,53 @@ fn token_expiry(token: &str) -> Result<DateTime<Utc>, EgressError> {
         .ok_or_else(|| unreadable("exp is not a timestamp"))
 }
 
-/// Mints tokens through `authentication_service`'s existing endpoint, as an
-/// internal caller acting for the owner.
+/// Mints tokens by signing them here, with the same key
+/// `authentication_service` signs with.
 ///
-/// The endpoint identifies the acting user by Macro id *and* FusionAuth id,
-/// and the session row only carries the first - so this adapter looks the
-/// second up from the owner's `User` row before it dials.
-pub struct AuthenticationServiceTokens {
-    http: reqwest::Client,
-    base_url: String,
-    internal_api_key: String,
+/// Inline rather than a call to the auth service's mint endpoint: minting is
+/// one signature over facts this process can read itself, the shared
+/// `macro_auth` vocabulary exists exactly so key-holders sign locally (the
+/// document-permission JWT follows the same pattern), and this process is
+/// already the credential concentrator - it holds the GitHub App key and the
+/// Pipedream project token on the same terms. The key can act as any user
+/// wherever Macro API tokens are accepted, which is why everything minted
+/// here is short-lived and names only the one owner the grant did.
+pub struct MacroApiTokenSigner {
     pool: sqlx::PgPool,
+    issuer: String,
+    private_key: String,
 }
 
-impl AuthenticationServiceTokens {
-    /// Build the exchange over `authentication_service`'s address, the
-    /// internal API key, and the database holding user rows.
+/// How long a minted token lives. Short on purpose - the cache re-mints
+/// freely - so a token that leaks out of a response somewhere is stale before
+/// anyone can do much with it.
+const MINTED_TOKEN_LIFETIME_SECONDS: usize = 900;
+
+impl MacroApiTokenSigner {
+    /// Build the signer over the database holding user rows, the token
+    /// issuer, and the RSA signing key.
     pub fn new(
-        base_url: impl Into<String>,
-        internal_api_key: impl Into<String>,
         pool: sqlx::PgPool,
+        issuer: impl Into<String>,
+        private_key: impl Into<String>,
     ) -> Self {
         Self {
-            http: reqwest::Client::new(),
-            base_url: base_url.into().trim_end_matches('/').to_owned(),
-            internal_api_key: internal_api_key.into(),
             pool,
+            issuer: issuer.into(),
+            private_key: private_key.into(),
         }
     }
 }
 
-impl MacroApiTokens for AuthenticationServiceTokens {
+impl MacroApiTokens for MacroApiTokenSigner {
     #[tracing::instrument(skip_all, err, fields(%owner))]
     async fn mint(&self, owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
-        // The session row names the owner as `macro|<email>`; the FusionAuth
-        // id lives on their `User` row. An owner with no row is a session
-        // created wrong, which is ours to fix - not something the sandbox can
-        // retry its way out of.
-        let (_, fusion_user_id) =
+        // The claims name the owner three ways - the FusionAuth root id, the
+        // Macro user id, and their organization - and the session row only
+        // carries the second, so the rest is read off their `User` row. An
+        // owner with no row is a session created wrong, which is ours to fix,
+        // not something the sandbox can retry its way out of.
+        let (fusion_root_id, macro_user_id) =
             macro_db_client::user::get::get_user_macro_user_id_and_id_by_email(
                 &self.pool,
                 owner.email_str(),
@@ -234,38 +260,29 @@ impl MacroApiTokens for AuthenticationServiceTokens {
                     "session owner has no user row to mint a token for: {error}"
                 ))
             })?;
-
-        let response = self
-            .http
-            .get(format!("{}/jwt/macro_api_token", self.base_url))
-            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
-            .header(INTERNAL_MACRO_USER_ID_HEADER, owner.as_ref())
-            .header(INTERNAL_FUSIONAUTH_USER_ID_HEADER, &fusion_user_id)
-            .send()
-            .await
-            .map_err(|error| {
-                EgressError::Upstream(rootcause::report!(
-                    "could not reach authentication_service to mint a token: {error}"
-                ))
-            })?;
-
-        let status = response.status();
-        if !status.is_success() {
-            return Err(EgressError::Upstream(rootcause::report!(
-                "authentication_service refused to mint a token: {status}"
-            )));
-        }
-
-        #[derive(serde::Deserialize)]
-        struct Minted {
-            macro_api_token: String,
-        }
-        let minted: Minted = response.json().await.map_err(|error| {
-            EgressError::Upstream(rootcause::report!(
-                "authentication_service answered unintelligibly: {error}"
+        let organization_id = macro_db_client::user::get_user_organization::get_user_organization(
+            self.pool.clone(),
+            &macro_user_id,
+        )
+        .await
+        .map_err(|error| {
+            EgressError::Internal(rootcause::report!(
+                "could not read the session owner's organization: {error}"
             ))
         })?;
 
-        Ok(minted.macro_api_token)
+        encode_macro_api_token(EncodeMacroApiTokenArgs {
+            fusionauth_id: fusion_root_id.to_string(),
+            macro_user_id,
+            organization_id,
+            issuer: self.issuer.clone(),
+            private_key: self.private_key.clone(),
+            expiry_seconds: MINTED_TOKEN_LIFETIME_SECONDS,
+        })
+        .map_err(|error| {
+            EgressError::Internal(rootcause::report!(
+                "could not sign a Macro API token: {error}"
+            ))
+        })
     }
 }

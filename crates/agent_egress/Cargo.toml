@@ -17,7 +17,6 @@ axum-extra = { workspace = true, features = ["typed-header"] }
 base64 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
-dashmap = { workspace = true }
 # The installation records that say whose installation an installation is, and
 # the team memberships that decide whether the session's owner is one of them.
 github = { path = "../github", default-features = false, features = [
@@ -27,9 +26,10 @@ github = { path = "../github", default-features = false, features = [
 ] }
 http = { workspace = true }
 http-body-util = { workspace = true }
-# Only the internal-auth header names the token exchange presents; restringing
-# them here would be shared knowledge held in two places.
-macro_authorization = { path = "../macro_authorization" }
+lru = { workspace = true }
+# Signing Macro API tokens, with the same shared vocabulary
+# `authentication_service` mints through.
+macro_auth = { path = "../macro_auth" }
 # The owner's `User` row, which carries the FusionAuth id the exchange needs.
 macro_db_client = { path = "../macro_db_client" }
 macro_user_id = { path = "../macro_user_id" }

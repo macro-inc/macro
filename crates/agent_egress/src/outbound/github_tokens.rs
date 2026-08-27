@@ -11,11 +11,13 @@
 //! spend rate limit for nothing.
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use dashmap::DashMap;
 use github::domain::models::GithubError;
 use github::domain::ports::{GithubSyncClient, GithubSyncRepo};
 use github::domain::service::InstallationTokenService;
+use lru::LruCache;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::num::NonZeroUsize;
+use std::sync::Mutex;
 use url::Url;
 
 use crate::domain::error::EgressError;
@@ -58,12 +60,19 @@ const AGENT_PERMISSIONS: &[(&str, &str)] = &[
 /// fails the whole clone.
 const EXPIRY_MARGIN_MINUTES: i64 = 5;
 
+/// How many (owner, repository) tokens are kept at once. Far past any real
+/// concurrency; the bound exists so entries for owners who never come back
+/// are eventually evicted instead of holding expired credentials forever.
+const CACHE_CAPACITY: usize = 1024;
+
 /// Hands out git credentials, caching each until it is nearly stale.
 pub struct GithubAppTokens<Installations, Client> {
     tokens: InstallationTokenService<Installations, Client>,
     /// Keyed by repository *and* owner: a cached token must never stand in for
-    /// an ownership check that did not happen for this user.
-    cached: DashMap<(MacroUserIdStr<'static>, RepoSlug), CachedToken>,
+    /// an ownership check that did not happen for this user. Bounded, so the
+    /// map cannot grow with every owner ever seen; freshness still comes from
+    /// each token's own expiry, never from cache residency.
+    cached: Mutex<LruCache<(MacroUserIdStr<'static>, RepoSlug), CachedToken>>,
 }
 
 #[derive(Clone)]
@@ -81,7 +90,9 @@ where
     pub fn new(tokens: InstallationTokenService<Installations, Client>) -> Self {
         Self {
             tokens,
-            cached: DashMap::new(),
+            cached: Mutex::new(LruCache::new(
+                NonZeroUsize::new(CACHE_CAPACITY).expect("a nonzero capacity"),
+            )),
         }
     }
 
@@ -92,8 +103,16 @@ where
     ) -> Result<String, EgressError> {
         let key = (owner.clone(), repo.clone());
 
-        if let Some(cached) = usable(self.cached.get(&key).map(|entry| entry.clone())) {
-            return Ok(cached.token);
+        {
+            let mut cached = self.cached.lock().expect("token cache poisoned");
+            match usable(cached.get(&key).cloned()) {
+                Some(live) => return Ok(live.token),
+                // A stale entry is evicted now rather than on capacity
+                // pressure: there is no reason to keep a dead credential.
+                None => {
+                    cached.pop(&key);
+                }
+            }
         }
 
         let minted = self
@@ -111,7 +130,7 @@ where
             .expires_at()
             .map_err(|error| EgressError::Upstream(rootcause::report!("{error}")))?;
 
-        self.cached.insert(
+        self.cached.lock().expect("token cache poisoned").put(
             key,
             CachedToken {
                 token: minted.token.clone(),
