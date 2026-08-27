@@ -63,149 +63,208 @@ function includePropertiesToFilters(
   return [...byPropId.values()];
 }
 
-function filterDataToQueryFilters(data: QueryState): EntityFilters {
-  const filters: EntityFilters = {};
-  const { include } = data;
-
+function applyCalendarEventFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   // Calendar events are searchable by title, so they are scoped like every
   // other entity type: a view that names ids gets them, one that names none
   // leaves the type unfiltered. Views that should not surface events keep
   // NIL-excluding them (the inbox feed does), and every view's client
   // predicates gate the merged pool regardless.
-  if (include.calendarEventId?.length) {
-    filters.calendar_event_filters = {
-      calendar_event_ids: include.calendarEventId,
-    };
-  }
+  if (!include.calendarEventId?.length) return;
+  filters.calendar_event_filters = {
+    calendar_event_ids: include.calendarEventId,
+  };
+}
 
-  // Document filters
+function applyDocumentFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   if (
-    include.documentId?.length ||
-    include.fileType?.length ||
-    include.subType?.length ||
-    include.projectId?.length ||
-    include.documentOwnerId?.length
+    !include.documentId?.length &&
+    !include.fileType?.length &&
+    !include.subType?.length &&
+    !include.projectId?.length &&
+    !include.documentOwnerId?.length
   ) {
-    filters.document_filters = {
-      document_ids: include.documentId,
-      file_types: include.fileType,
-      sub_types: include.subType,
-      project_ids: include.projectId,
-      owners: include.documentOwnerId,
-    };
+    return;
   }
+  filters.document_filters = {
+    document_ids: include.documentId,
+    file_types: include.fileType,
+    sub_types: include.subType,
+    project_ids: include.projectId,
+    owners: include.documentOwnerId,
+  };
+}
 
-  // Email filters
+function applyEmailFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   if (
-    include.threadId?.length ||
-    include.emailSender?.length ||
-    include.emailShared ||
-    include.emailImportance !== undefined ||
-    include.emailLinkId?.length
+    !include.threadId?.length &&
+    !include.emailSender?.length &&
+    !include.emailShared &&
+    include.emailImportance === undefined &&
+    !include.emailLinkId?.length
   ) {
-    filters.email_filters = {
-      email_thread_ids: include.threadId,
-      senders: include.emailSender,
-      shared: include.emailShared,
-      importance: include.emailImportance,
-      link_ids: include.emailLinkId,
-    };
+    return;
   }
+  filters.email_filters = {
+    email_thread_ids: include.threadId,
+    senders: include.emailSender,
+    shared: include.emailShared,
+    importance: include.emailImportance,
+    link_ids: include.emailLinkId,
+  };
+}
 
-  // Channel filters
+function applyChannelFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   if (
-    include.channelId?.length ||
-    include.channelType?.length ||
-    include.channelSenderId?.length ||
-    include.channelMessageThreadId?.length
+    !include.channelId?.length &&
+    !include.channelType?.length &&
+    !include.channelSenderId?.length &&
+    !include.channelMessageThreadId?.length
   ) {
-    filters.channel_filters = {
-      channel_ids: include.channelId,
-      channel_types: include.channelType,
-      sender_ids: include.channelSenderId,
-      thread_ids: include.channelMessageThreadId,
-    };
+    return;
   }
+  filters.channel_filters = {
+    channel_ids: include.channelId,
+    channel_types: include.channelType,
+    sender_ids: include.channelSenderId,
+    thread_ids: include.channelMessageThreadId,
+  };
+}
 
-  // Channel thread filters
+function applyChannelThreadFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   if (
-    include.channelThreadId?.length ||
-    include.channelThreadRootSenderId?.length ||
-    include.channelThreadParticipantId?.length
+    !include.channelThreadId?.length &&
+    !include.channelThreadRootSenderId?.length &&
+    !include.channelThreadParticipantId?.length
   ) {
-    filters.channel_thread_filters = {
-      thread_ids: include.channelThreadId,
-      root_sender_ids: include.channelThreadRootSenderId,
-      participant_ids: include.channelThreadParticipantId,
-    };
+    return;
   }
+  filters.channel_thread_filters = {
+    thread_ids: include.channelThreadId,
+    root_sender_ids: include.channelThreadRootSenderId,
+    participant_ids: include.channelThreadParticipantId,
+  };
+}
 
-  // Chat filters
+function applyChatFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   if (
-    include.chatId?.length ||
-    include.chatOwnerId?.length ||
-    include.chatProjectId?.length
+    !include.chatId?.length &&
+    !include.chatOwnerId?.length &&
+    !include.chatProjectId?.length
   ) {
-    filters.chat_filters = {
-      chat_ids: include.chatId,
-      owners: include.chatOwnerId,
-      project_ids: include.chatProjectId,
-    };
+    return;
   }
+  filters.chat_filters = {
+    chat_ids: include.chatId,
+    owners: include.chatOwnerId,
+    project_ids: include.chatProjectId,
+  };
+}
 
-  // Project/folder filters
-  if (include.folderId?.length || include.folderOwnerId?.length) {
-    filters.project_filters = {
-      project_ids: include.folderId,
-      owners: include.folderOwnerId,
-    };
-  }
+function applyProjectFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
+  if (!include.folderId?.length && !include.folderOwnerId?.length) return;
+  filters.project_filters = {
+    project_ids: include.folderId,
+    owners: include.folderOwnerId,
+  };
+}
 
-  // Call filters
+function applyCallFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   if (
-    include.callId?.length ||
-    include.callChannelId?.length ||
-    include.callSpeakerId?.length ||
-    include.callStatus !== undefined ||
-    include.callAttended !== undefined
+    !include.callId?.length &&
+    !include.callChannelId?.length &&
+    !include.callSpeakerId?.length &&
+    include.callStatus === undefined &&
+    include.callAttended === undefined
   ) {
-    filters.call_filters = {
-      call_ids: include.callId,
-      channel_ids: include.callChannelId,
-      speaker_ids: include.callSpeakerId,
-      status: include.callStatus,
-      attended:
-        include.callStatus === undefined ? include.callAttended : undefined,
-    };
+    return;
   }
+  filters.call_filters = {
+    call_ids: include.callId,
+    channel_ids: include.callChannelId,
+    speaker_ids: include.callSpeakerId,
+    status: include.callStatus,
+    attended:
+      include.callStatus === undefined ? include.callAttended : undefined,
+  };
+}
 
-  // Foreign entity filters
+function applyForeignEntityFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   if (
-    include.foreignEntityRecordId?.length ||
-    include.foreignEntitySource?.length
+    !include.foreignEntityRecordId?.length &&
+    !include.foreignEntitySource?.length
   ) {
-    filters.foreign_entity_filters = {
-      ids: include.foreignEntityRecordId,
-      foreign_entity_sources: include.foreignEntitySource,
-    };
+    return;
   }
+  filters.foreign_entity_filters = {
+    ids: include.foreignEntityRecordId,
+    foreign_entity_sources: include.foreignEntitySource,
+  };
+}
 
-  // Property filters (status, priority, assignees, custom)
+function applyPropertyFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   const propertyFilters = includePropertiesToFilters(include.properties);
-  if (propertyFilters.length) {
-    filters.property_filters = propertyFilters;
-  }
+  if (!propertyFilters.length) return;
+  filters.property_filters = propertyFilters;
+}
 
+function applyTagFilters(
+  filters: EntityFilters,
+  include: QueryState['include']
+): void {
   // Tags: match on the option ids alone (globally unique), combined across
   // all tag definitions. No definition id is sent — the backend matches
   // values only. The mode picks any-of (default) vs all-of combining.
-  if (include.tagFilters?.length) {
-    filters.tag_option_ids = include.tagFilters.map((t) => t.value);
-    if (include.tagFilterMode === 'all') {
-      filters.tag_filter_mode = 'all';
-    }
+  if (!include.tagFilters?.length) return;
+  filters.tag_option_ids = include.tagFilters.map((t) => t.value);
+  if (include.tagFilterMode === 'all') {
+    filters.tag_filter_mode = 'all';
   }
+}
 
+function filterDataToQueryFilters(data: QueryState): EntityFilters {
+  const filters: EntityFilters = {};
+  const { include } = data;
+  applyCalendarEventFilters(filters, include);
+  applyDocumentFilters(filters, include);
+  applyEmailFilters(filters, include);
+  applyChannelFilters(filters, include);
+  applyChannelThreadFilters(filters, include);
+  applyChatFilters(filters, include);
+  applyProjectFilters(filters, include);
+  applyCallFilters(filters, include);
+  applyForeignEntityFilters(filters, include);
+  applyPropertyFilters(filters, include);
+  applyTagFilters(filters, include);
   return filters;
 }
 
