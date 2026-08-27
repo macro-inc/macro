@@ -11,9 +11,11 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { Message } from '../component/AgentMessage';
+import { ReplyToSelection } from '../component/ReplyToSelection';
 import {
   ActionLine,
   AgentInput,
+  type AgentInputApi,
   AnimatedNumber,
   ComposerNotice,
   CountSummary,
@@ -36,6 +38,37 @@ function Item(props: { label: string; children: JSX.Element }) {
       </h2>
       <div class="flex flex-col gap-2">{props.children}</div>
     </section>
+  );
+}
+
+/**
+ * Select text in the fixture message: a "Reply to this" chip should appear
+ * and insert a referenced paste into the composer below.
+ */
+function ReplyToSelectionDemo() {
+  const [container, setContainer] = createSignal<HTMLDivElement>();
+  let insertReferencedText: AgentInputApi['insertReferencedText'] | undefined;
+
+  return (
+    <div class="flex flex-col gap-3">
+      <p class="text-xs text-ink-muted">
+        Select any of the message text, then click Reply to this.
+      </p>
+      <div ref={setContainer} class="relative">
+        <Message message={FIXTURE_MESSAGE} />
+        <ReplyToSelection
+          container={container()}
+          onReply={(text) => insertReferencedText?.(text)}
+        />
+      </div>
+      <AgentInput
+        placeholder="Referenced text lands here"
+        onSend={(content) => console.info('[gallery] send', content)}
+        onReady={(api) => {
+          insertReferencedText = api?.insertReferencedText;
+        }}
+      />
+    </div>
   );
 }
 
@@ -263,6 +296,10 @@ export default function AgentUiGallery() {
               <DiffChanges additions={18} deletions={6} variant="bars" />
               <DiffChanges additions={0} deletions={412} variant="bars" />
             </div>
+          </Item>
+
+          <Item label="Reply to selection">
+            <ReplyToSelectionDemo />
           </Item>
 
           <Item label="AgentInput (idle / busy)">
