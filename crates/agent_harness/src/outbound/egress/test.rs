@@ -1,7 +1,7 @@
 use super::*;
 
 fn slug(name: &str) -> McpServerSlug {
-    McpServerSlug::from_server_name(name).expect("sluggable")
+    McpServerSlug::parse(name).expect("a valid app slug")
 }
 
 #[test]
@@ -77,16 +77,17 @@ fn connection(app_slug: &str, enabled: bool) -> pipedream_mcp::domain::models::P
     }
 }
 
-/// The reserved slug leads every session's list, and a connected app that
-/// would collide with it is dropped rather than left to silently resolve to
-/// Macro's server under its own name.
+/// Provisioning lists the owner's enabled app slugs verbatim - nothing is
+/// derived, disabled apps are absent, and an app slug the strict parse
+/// refuses is skipped rather than repaired into something dialable.
 #[tokio::test]
-async fn every_session_gets_the_macro_server_first() {
+async fn lists_enabled_app_slugs_verbatim() {
     let provisioner = EgressProvisioner::new(
         Arc::new(FixedConnections(vec![
             connection("linear", true),
-            connection("macro", true),
+            connection("google_sheets", true),
             connection("datadog", false),
+            connection("Not A Slug!", true),
         ])),
         "https://egress.macro.com",
     );
@@ -106,7 +107,33 @@ async fn every_session_gets_the_macro_server_first() {
         .iter()
         .map(ToString::to_string)
         .collect();
-    assert_eq!(slugs, ["macro", "linear"]);
+    assert_eq!(slugs, ["linear", "google_sheets"]);
+}
+
+/// `restore` rebuilds the same environment around a token that already
+/// exists: nothing is minted, and the server list is read fresh.
+#[tokio::test]
+async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![connection("linear", true)])),
+        "https://egress.macro.com",
+    );
+
+    let restored = provisioner
+        .restore(
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            "already-minted-token".to_owned(),
+        )
+        .await
+        .expect("restored");
+
+    assert_eq!(restored.session_token, "already-minted-token");
+    let slugs: Vec<String> = restored
+        .mcp_servers
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(slugs, ["linear"]);
 }
 
 fn egress(slugs: &[&str]) -> SandboxEgress {
@@ -117,46 +144,73 @@ fn egress(slugs: &[&str]) -> SandboxEgress {
     }
 }
 
-fn rendered_opencode_config(egress: &SandboxEgress) -> serde_json::Value {
-    let config = egress
-        .environment()
+/// Every server points at the proxy and carries the session token rather than
+/// any upstream credential; Macro's own server leads the list on its own
+/// route.
+#[test]
+fn points_every_acp_server_at_the_proxy() {
+    let servers = egress(&["datadog", "linear"]).acp_servers();
+
+    let rendered: Vec<(String, String, Vec<(String, String)>)> = servers
         .into_iter()
-        .find_map(|(name, value)| (name == "OPENCODE_CONFIG_CONTENT").then_some(value))
-        .expect("an opencode config in the environment");
-    serde_json::from_str(&config).expect("json")
+        .map(|server| match server {
+            agent_client_protocol::schema::v1::McpServer::Http(http) => (
+                http.name,
+                http.url,
+                http.headers
+                    .into_iter()
+                    .map(|header| (header.name, header.value))
+                    .collect(),
+            ),
+            other => panic!("every egress server is http transport, got {other:?}"),
+        })
+        .collect();
+
+    let authorization = vec![(
+        "Authorization".to_owned(),
+        "Bearer session-token".to_owned(),
+    )];
+    assert_eq!(
+        rendered,
+        [
+            (
+                "macro".to_owned(),
+                "https://egress.macro.com/mcp-macro".to_owned(),
+                authorization.clone(),
+            ),
+            (
+                "datadog".to_owned(),
+                "https://egress.macro.com/mcp/datadog".to_owned(),
+                authorization.clone(),
+            ),
+            (
+                "linear".to_owned(),
+                "https://egress.macro.com/mcp/linear".to_owned(),
+                authorization,
+            ),
+        ]
+    );
 }
 
-/// Every server points at the proxy, carries the session token rather than any
-/// upstream credential, and has opencode's own OAuth flow switched off - it
-/// wants a browser, and there is not one.
+/// An owner with no connected apps still gets Macro's own server.
 #[test]
-fn points_every_server_at_the_proxy_with_oauth_disabled() {
-    let parsed = rendered_opencode_config(&egress(&["Datadog (US5)", "Linear"]));
-    let servers = parsed["mcp"].as_object().expect("mcp object");
+fn an_owner_with_no_connected_apps_still_gets_the_macro_server() {
+    let entries: Vec<(String, String)> = egress(&[]).server_entries().collect();
 
-    assert_eq!(servers.len(), 2);
-    for (slug, entry) in servers {
-        assert_eq!(entry["type"], "remote");
-        assert_eq!(entry["url"], format!("https://egress.macro.com/mcp/{slug}"));
-        assert_eq!(entry["headers"]["Authorization"], "Bearer session-token");
-        assert_eq!(entry["oauth"], false);
-    }
-    assert!(servers.contains_key("datadog-us5"));
-    assert!(servers.contains_key("linear"));
+    assert_eq!(
+        entries,
+        [(
+            "macro".to_owned(),
+            "https://egress.macro.com/mcp-macro".to_owned()
+        )]
+    );
 }
 
-#[test]
-fn an_owner_with_no_servers_still_gets_a_valid_config() {
-    let parsed = rendered_opencode_config(&egress(&[]));
-
-    assert_eq!(parsed, serde_json::json!({ "mcp": {} }));
-}
-
-/// The rendered config carries the token as well as the environment, so
-/// nothing about this value may reach a log.
+/// The environment carries the token, so nothing about this value may reach a
+/// log.
 #[test]
 fn the_egress_environment_does_not_print_its_secrets() {
-    let egress = egress(&["Linear"]);
+    let egress = egress(&["linear"]);
 
     let printed = format!("{egress:?}");
     assert!(!printed.contains("session-token"), "{printed}");
@@ -171,8 +225,7 @@ fn the_egress_environment_does_not_print_its_secrets() {
         environment,
         [
             "MACRO_EGRESS_URL".to_owned(),
-            "MACRO_SESSION_TOKEN".to_owned(),
-            "OPENCODE_CONFIG_CONTENT".to_owned(),
+            "MACRO_SESSION_TOKEN".to_owned()
         ]
     );
 }

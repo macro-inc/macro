@@ -1,5 +1,6 @@
 //! Commands and values used by the harness domain.
 
+use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::McpServerSlug;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
@@ -251,10 +252,10 @@ pub struct SpawnContainer {
 /// pass through.
 ///
 /// The MCP servers are carried as data rather than any provider's rendered
-/// config, because two providers speak two configs from it: the sandbox image
-/// gets an opencode config through [`SandboxEgress::environment`], and a
-/// Cursor cloud agent gets the same servers through Cursor's own API. One
-/// source, two renderings, nothing to drift.
+/// config, because two consumers speak two dialects of it: an ACP agent gets
+/// them in `session/new` through [`SandboxEgress::acp_servers`], and a Cursor
+/// cloud agent gets the same servers through Cursor's own API. One source,
+/// two renderings, nothing to drift.
 #[derive(Clone)]
 pub struct SandboxEgress {
     /// Base URL of the egress proxy, as the sandbox should dial it.
@@ -262,6 +263,8 @@ pub struct SandboxEgress {
     /// The session token, presented on every proxied call.
     pub session_token: String,
     /// The owner's connected MCP servers, by the slug the proxy resolves.
+    /// Macro's own server is not listed: every session has it, on its own
+    /// route.
     pub mcp_servers: Vec<McpServerSlug>,
 }
 
@@ -277,15 +280,23 @@ pub const EGRESS_URL_VARIABLE: &str = "MACRO_EGRESS_URL";
 /// `container/ensure_ready.sh` on the same terms as [`EGRESS_URL_VARIABLE`].
 pub const SESSION_TOKEN_VARIABLE: &str = "MACRO_SESSION_TOKEN";
 
-/// The opencode config, which opencode itself reads - baked into the image, not
-/// into the readiness script.
-pub const OPENCODE_CONFIG_VARIABLE: &str = "OPENCODE_CONFIG_CONTENT";
+/// The name every session's server list gives Macro's own MCP server.
+///
+/// Purely a display name now - resolution happens by route, not by name - but
+/// kept short and stable because agents namespace tool names under it.
+pub const MACRO_MCP_NAME: &str = "macro";
 
 impl SandboxEgress {
     /// Where the proxy serves `slug` - the URL a client dials to reach that
     /// server, whichever client it is.
     pub fn mcp_url(&self, slug: &McpServerSlug) -> String {
         format!("{}/mcp/{slug}", self.base_url)
+    }
+
+    /// Where the proxy serves Macro's own MCP server: its own route, so no
+    /// connected app's slug can ever name it.
+    pub fn macro_mcp_url(&self) -> String {
+        format!("{}/mcp-macro", self.base_url)
     }
 
     /// The `Authorization` value presented on every proxied call.
@@ -295,7 +306,7 @@ impl SandboxEgress {
 
     /// The sandbox environment this becomes.
     ///
-    /// Unsized on purpose: a fourth variable should be one more line here and
+    /// Unsized on purpose: a third variable should be one more line here and
     /// nothing at any call site.
     pub fn environment(&self) -> impl IntoIterator<Item = (String, String)> {
         [
@@ -304,44 +315,38 @@ impl SandboxEgress {
                 SESSION_TOKEN_VARIABLE.to_owned(),
                 self.session_token.clone(),
             ),
-            (OPENCODE_CONFIG_VARIABLE.to_owned(), self.opencode_config()),
         ]
     }
 
-    /// The opencode config a sandbox starts with.
+    /// Every server the session may dial, as `(name, url)` pairs: Macro's own
+    /// server first, then the owner's connected apps under their Pipedream
+    /// slugs.
     ///
-    /// opencode merges `OPENCODE_CONFIG_CONTENT` last, over the baked global
-    /// config and over whatever `opencode.json` the repository itself carries,
-    /// so this is the final word on which MCP servers exist and how they are
-    /// reached.
-    ///
-    /// Every server is `"type": "remote"` pointed at the egress proxy, never
-    /// at the server itself, and carries the session token - the sandbox holds
-    /// no upstream credential to point anywhere with.
-    ///
-    /// `"oauth": false` is load-bearing. Without it opencode notices the 401
-    /// an unauthorized server returns and starts its own interactive OAuth
-    /// flow, which wants a loopback redirect and a browser; in a headless
-    /// sandbox that can never complete, so the agent hangs instead of getting
-    /// an error it can read.
-    fn opencode_config(&self) -> String {
-        let servers = self
-            .mcp_servers
-            .iter()
-            .map(|slug| {
-                (
-                    slug.to_string(),
-                    serde_json::json!({
-                        "type": "remote",
-                        "url": self.mcp_url(slug),
-                        "headers": { "Authorization": self.authorization_header() },
-                        "oauth": false,
-                    }),
-                )
-            })
-            .collect::<serde_json::Map<_, _>>();
+    /// The one enumeration behind both renderings - [`Self::acp_servers`] and
+    /// the Cursor API's - so the two can never advertise different sets.
+    pub fn server_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        std::iter::once((MACRO_MCP_NAME.to_owned(), self.macro_mcp_url())).chain(
+            self.mcp_servers
+                .iter()
+                .map(|slug| (slug.as_str().to_owned(), self.mcp_url(slug))),
+        )
+    }
 
-        serde_json::json!({ "mcp": servers }).to_string()
+    /// The MCP servers an ACP agent is handed in `session/new`, `session/load`
+    /// and `session/resume`.
+    ///
+    /// Every server is HTTP transport pointed at the egress proxy, never at
+    /// the server itself, and carries the session token - the sandbox holds
+    /// no upstream credential to point anywhere with.
+    pub fn acp_servers(&self) -> Vec<AcpMcpServer> {
+        self.server_entries()
+            .map(|(name, url)| {
+                AcpMcpServer::Http(McpServerHttp::new(name, url).headers(vec![HttpHeader::new(
+                    "Authorization",
+                    self.authorization_header(),
+                )]))
+            })
+            .collect()
     }
 }
 

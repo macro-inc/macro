@@ -640,6 +640,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         session,
         None,
         "/workspace".to_owned(),
+        Vec::new(),
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,
@@ -713,6 +714,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         session,
         None,
         "/workspace".to_owned(),
+        Vec::new(),
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,

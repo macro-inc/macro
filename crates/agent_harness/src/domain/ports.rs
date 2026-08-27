@@ -8,7 +8,9 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::Result;
-use super::model::{PriorChannelMessage, ProvisionedEgress, SessionAnnouncement, SpawnContainer};
+use super::model::{
+    PriorChannelMessage, ProvisionedEgress, SandboxEgress, SessionAnnouncement, SpawnContainer,
+};
 use super::sandbox::SandboxResizeEffect;
 
 #[cfg(test)]
@@ -93,6 +95,18 @@ pub trait SandboxEgressProvisioner: Send + Sync + 'static {
         owner: &MacroUserIdStr<'static>,
         repo_url: &str,
     ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
+
+    /// The egress environment rebuilt around a token that already exists.
+    ///
+    /// For reattaching to a sandbox that was spawned earlier: the sandbox
+    /// still holds its raw token (the row holds only the hash), so nothing is
+    /// minted - but the owner's connected servers are listed fresh, so an app
+    /// connected since the spawn is advertised on the next attach.
+    fn restore(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session_token: String,
+    ) -> impl Future<Output = Result<SandboxEgress>> + Send;
 }
 
 /// Provisions the container transports agent sessions run through.
@@ -130,6 +144,21 @@ pub trait ContainerManager: Send + Sync + 'static {
         &self,
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Self::Transport>> + Send;
+
+    /// The raw egress session token the session's container holds, if this
+    /// provider's containers hold one.
+    ///
+    /// The harness keeps only the token's hash, so on a reattach the running
+    /// container is the one place the raw token still exists - it was handed
+    /// exactly one, at spawn, in its environment. Providers whose sessions
+    /// carry no egress environment (the in-process agent, Cursor's cloud)
+    /// answer `None`.
+    ///
+    /// Only meaningful for a running container; call it after [`Self::resume`].
+    fn session_token(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
 
     /// Destroy a session's container for good.
     ///

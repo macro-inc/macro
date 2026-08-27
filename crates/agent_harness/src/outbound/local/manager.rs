@@ -268,6 +268,26 @@ impl ContainerManager for LocalContainerManager {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        let Some(container) = self.find(session).await? else {
+            return Ok(None);
+        };
+        let (status, output) = self
+            .docker
+            .exec(
+                &container,
+                &provision::session_token_command(),
+                Duration::from_secs(15),
+            )
+            .await
+            .map_err(unavailable)?;
+        if status != 0 {
+            return Ok(None);
+        }
+        Ok(provision::parse_session_token(&output))
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
         let Some(container) = self.find(session).await? else {
             // Already the state the caller asked for.

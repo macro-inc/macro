@@ -354,6 +354,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             id,
             session.acp_session_id,
             session.workspace,
+            attachment.mcp_servers,
             attachment.connector,
             logs,
             command_rx,

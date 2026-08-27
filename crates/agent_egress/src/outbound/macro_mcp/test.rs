@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::McpServerSlug;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -6,8 +7,8 @@ fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")
 }
 
-fn slug(name: &str) -> McpServerSlug {
-    McpServerSlug::from_server_name(name).expect("sluggable")
+fn connected(slug: &str) -> McpDestination {
+    McpDestination::Connected(McpServerSlug::parse(slug).expect("a valid slug"))
 }
 
 /// A syntactically valid JWT whose payload carries `exp`, and nothing else
@@ -62,8 +63,11 @@ impl McpCredentials for &SpyInner {
     async fn resolve(
         &self,
         _owner: &MacroUserIdStr<'static>,
-        slug: &McpServerSlug,
+        destination: &McpDestination,
     ) -> Result<UpstreamCall, EgressError> {
+        let McpDestination::Connected(slug) = destination else {
+            unreachable!("the decorator answers Macro's own destination itself");
+        };
         self.asked.lock().expect("lock").push(slug.to_string());
         Err(EgressError::UnknownServer(slug.clone()))
     }
@@ -74,20 +78,20 @@ fn macro_url() -> Url {
 }
 
 #[tokio::test]
-async fn answers_the_macro_slug_with_a_minted_token() {
+async fn answers_macros_own_destination_with_a_minted_token() {
     let tokens = CountingTokens::fresh();
     let inner = SpyInner::default();
     let credentials = WithMacroMcp::new(&inner, &tokens, macro_url(), false).expect("constructed");
 
     let call = credentials
-        .resolve(&owner(), &McpServerSlug::macro_mcp())
+        .resolve(&owner(), &McpDestination::Macro)
         .await
         .expect("resolved");
 
     assert_eq!(call.url().as_str(), "https://mcp.macro.com/mcp");
     assert!(
         inner.asked.lock().expect("lock").is_empty(),
-        "the reserved slug must never consult the owner's rows"
+        "Macro's own destination must never consult the owner's rows"
     );
 }
 
@@ -101,7 +105,7 @@ async fn reuses_a_token_until_it_nears_expiry() {
 
     for _ in 0..3 {
         credentials
-            .resolve(&owner(), &McpServerSlug::macro_mcp())
+            .resolve(&owner(), &McpDestination::Macro)
             .await
             .expect("resolved");
     }
@@ -118,7 +122,7 @@ async fn a_token_about_to_expire_is_replaced() {
 
     for _ in 0..2 {
         credentials
-            .resolve(&owner(), &McpServerSlug::macro_mcp())
+            .resolve(&owner(), &McpDestination::Macro)
             .await
             .expect("resolved");
     }
@@ -133,7 +137,7 @@ async fn every_other_slug_delegates_to_the_inner_resolver() {
     let credentials = WithMacroMcp::new(&inner, &tokens, macro_url(), false).expect("constructed");
 
     let refusal = credentials
-        .resolve(&owner(), &slug("linear"))
+        .resolve(&owner(), &connected("linear"))
         .await
         .expect_err("the spy refuses everything");
 
@@ -142,7 +146,7 @@ async fn every_other_slug_delegates_to_the_inner_resolver() {
     assert_eq!(tokens.minted.load(Ordering::SeqCst), 0);
 }
 
-/// A deployed environment pointing the macro slug at cleartext is
+/// A deployed environment pointing Macro's own MCP server at cleartext is
 /// misconfigured; it must fail at boot, not at the first tool call.
 #[tokio::test]
 async fn refuses_a_cleartext_url_unless_local_dev_permits_it() {
@@ -157,7 +161,7 @@ async fn refuses_a_cleartext_url_unless_local_dev_permits_it() {
     let inner = SpyInner::default();
     let permitted = WithMacroMcp::new(&inner, &tokens, url, true).expect("constructed");
     let call = permitted
-        .resolve(&owner(), &McpServerSlug::macro_mcp())
+        .resolve(&owner(), &McpDestination::Macro)
         .await
         .expect("resolved");
     assert_eq!(call.url().as_str(), "http://mcp-service:8080/mcp");

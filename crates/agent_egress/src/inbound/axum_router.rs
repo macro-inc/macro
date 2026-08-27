@@ -20,7 +20,8 @@ use std::sync::Arc;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    BoxError, EgressTarget, GitEndpoint, McpServerSlug, ProxyRequest, ProxyResponse, SessionToken,
+    BoxError, EgressTarget, GitEndpoint, McpDestination, McpServerSlug, ProxyRequest,
+    ProxyResponse, SessionToken,
 };
 use crate::domain::service::EgressService;
 
@@ -64,6 +65,7 @@ where
     Router::new()
         .route("/health", get(health))
         .route("/mcp/{slug}", any(mcp_handler::<Service>))
+        .route("/mcp-macro", any(macro_mcp_handler::<Service>))
         .route(
             "/git/{*path}",
             get(git_handler::<Service>).post(git_handler::<Service>),
@@ -90,7 +92,33 @@ where
     let slug = McpServerSlug::parse(&slug)
         .ok_or_else(|| EgressError::Unroutable(format!("{slug} is not a server name")))?;
 
-    proxy(state, token, EgressTarget::McpServer(slug), request).await
+    proxy(
+        state,
+        token,
+        EgressTarget::McpServer(McpDestination::Connected(slug)),
+        request,
+    )
+    .await
+}
+
+/// Macro's own MCP server, on its own route rather than under `/mcp/{slug}`:
+/// with no name shared between the built-in server and the owner's connected
+/// apps, no connected app can collide with it.
+async fn macro_mcp_handler<Service>(
+    State(state): State<EgressRouterState<Service>>,
+    request: Request,
+) -> Result<Response, EgressError>
+where
+    Service: EgressService,
+{
+    let token = session_token(request.headers())?;
+    proxy(
+        state,
+        token,
+        EgressTarget::McpServer(McpDestination::Macro),
+        request,
+    )
+    .await
 }
 
 /// The whole git route: no repository in the path, because the session has

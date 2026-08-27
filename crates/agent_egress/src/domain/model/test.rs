@@ -16,34 +16,21 @@ fn names(headers: &HeaderMap) -> Vec<&str> {
     headers.keys().map(HeaderName::as_str).collect()
 }
 
-#[test]
-fn slugs_a_display_name() {
-    let slug = McpServerSlug::from_server_name("Datadog (US5)").expect("slug");
-    assert_eq!(slug.as_str(), "datadog-us5");
-}
-
-#[test]
-fn collapses_separator_runs_and_trims_them() {
-    let slug = McpServerSlug::from_server_name("  Google   Drive!!  ").expect("slug");
-    assert_eq!(slug.as_str(), "google-drive");
-}
-
-#[test]
-fn rejects_a_name_with_nothing_sluggable_in_it() {
-    assert_eq!(McpServerSlug::from_server_name("   !!!   "), None);
-}
-
-/// Parsing is the path-segment side, where repairing input would let a
-/// sandbox name one server and reach another.
+/// A slug is a Pipedream `app_slug`, taken as-is: repairing input would let a
+/// sandbox name one server and reach another, and there is no derivation for
+/// the two ends to disagree over.
 #[test]
 fn parsing_rejects_rather_than_repairs() {
     assert_eq!(McpServerSlug::parse("Datadog"), None);
     assert_eq!(McpServerSlug::parse("data dog"), None);
     assert_eq!(McpServerSlug::parse(""), None);
-    assert_eq!(
-        McpServerSlug::parse("datadog-us5").map(|slug| slug.as_str().to_owned()),
-        Some("datadog-us5".to_owned())
-    );
+    for verbatim in ["datadog-us5", "google_sheets", "linear"] {
+        assert_eq!(
+            McpServerSlug::parse(verbatim).map(|slug| slug.as_str().to_owned()),
+            Some(verbatim.to_owned()),
+            "{verbatim}"
+        );
+    }
 }
 
 /// A slug is a single path segment. Anything that could climb out of one -

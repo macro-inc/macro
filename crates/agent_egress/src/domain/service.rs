@@ -81,7 +81,9 @@ where
         let grant = self.sessions.authorize(token).await?;
 
         let call = match &target {
-            EgressTarget::McpServer(slug) => self.credentials.resolve(&grant.owner, slug).await?,
+            EgressTarget::McpServer(destination) => {
+                self.credentials.resolve(&grant.owner, destination).await?
+            }
             EgressTarget::GitHubGit { endpoint } => {
                 // The repository is the grant's, never the request's: a
                 // session works on exactly one, and the sandbox has no way to

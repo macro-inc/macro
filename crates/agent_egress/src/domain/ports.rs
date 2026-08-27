@@ -9,7 +9,7 @@
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    McpServerSlug, ProxyRequest, ProxyResponse, RepoSlug, SessionGrant, SessionToken, UpstreamCall,
+    McpDestination, ProxyRequest, ProxyResponse, RepoSlug, SessionGrant, SessionToken, UpstreamCall,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -27,21 +27,21 @@ pub trait SessionAuthority: Send + Sync {
     ) -> impl Future<Output = Result<SessionGrant, EgressError>> + Send;
 }
 
-/// Resolve one of an owner's connected MCP servers to a live upstream call.
+/// Resolve an MCP destination to a live upstream call.
 ///
 /// Implementations own token freshness: a returned [`UpstreamCall`] carries a
 /// credential good now, refreshing and persisting the owner's stored grant if
 /// that is what it took. The service above deliberately knows nothing about
 /// OAuth.
 pub trait McpCredentials: Send + Sync {
-    /// The upstream and credential for `owner`'s server named `slug`.
+    /// The upstream and credential for `destination`, on behalf of `owner`.
     ///
     /// Resolution is scoped to `owner`: a slug that names somebody else's
     /// server is [`EgressError::UnknownServer`], not somebody else's server.
     fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
-        slug: &McpServerSlug,
+        destination: &McpDestination,
     ) -> impl Future<Output = Result<UpstreamCall, EgressError>> + Send;
 }
 

@@ -501,29 +501,22 @@ async fn spawn_uses_the_owners_default_model() {
     );
 }
 
-/// The owner's egress-proxied MCP servers reach the agent Cursor mints: each
-/// one named by its slug, pointed at the proxy, authenticated by the session
-/// token — even though the ACP client named none on `session/new`.
+/// MCP servers ride the ACP protocol itself: whatever the client names in
+/// `session/new` reaches the agent Cursor mints - which is how the harness's
+/// egress-proxied servers arrive, on the same rail as every other transport.
 #[tokio::test]
-async fn spawn_hands_the_egress_mcp_servers_to_the_created_agent() {
+async fn session_new_mcp_servers_reach_the_created_agent() {
     let (base_url, _, created) = fake_cursor_api().await;
     let sessions = StubSessions::default();
     let session_id = AgentSessionId::new();
     let manager = manager(base_url, sessions);
-
-    let mut egress = test_egress();
-    egress.mcp_servers = vec![
-        agent_egress::domain::model::McpServerSlug::from_server_name("linear").expect("slug"),
-        agent_egress::domain::model::McpServerSlug::from_server_name("google_sheets")
-            .expect("slug"),
-    ];
 
     let transport = manager
         .spawn(SpawnContainer {
             session_id,
             kind: AgentKind::Cursor,
             size: SandboxSize::Default,
-            egress,
+            egress: test_egress(),
         })
         .await
         .expect("spawn");
@@ -537,7 +530,23 @@ async fn spawn_hands_the_egress_mcp_servers_to_the_created_agent() {
     next_acp(&mut receiver).await;
     send_acp(
         &sender,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{
+            "cwd":"/workspace",
+            "mcpServers":[
+                {
+                    "type": "http",
+                    "name": "macro",
+                    "url": "https://egress.test/mcp-macro",
+                    "headers": [{"name": "Authorization", "value": "Bearer test-session-token"}],
+                },
+                {
+                    "type": "http",
+                    "name": "google_sheets",
+                    "url": "https://egress.test/mcp/google_sheets",
+                    "headers": [{"name": "Authorization", "value": "Bearer test-session-token"}],
+                },
+            ],
+        }}),
     )
     .await;
     let acp_session = next_acp(&mut receiver).await["result"]["sessionId"]
@@ -563,15 +572,15 @@ async fn spawn_hands_the_egress_mcp_servers_to_the_created_agent() {
         body["mcpServers"],
         serde_json::json!([
             {
-                "name": "linear",
+                "name": "macro",
                 "type": "http",
-                "url": "https://egress.test/mcp/linear",
+                "url": "https://egress.test/mcp-macro",
                 "headers": { "Authorization": "Bearer test-session-token" },
             },
             {
-                "name": "google-sheets",
+                "name": "google_sheets",
                 "type": "http",
-                "url": "https://egress.test/mcp/google-sheets",
+                "url": "https://egress.test/mcp/google_sheets",
                 "headers": { "Authorization": "Bearer test-session-token" },
             },
         ])

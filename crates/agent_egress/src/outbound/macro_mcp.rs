@@ -1,4 +1,4 @@
-//! Macro's own MCP server, answered under the reserved `macro` slug.
+//! Macro's own MCP server, answered on its own route.
 //!
 //! Unlike the owner's connected apps, this destination is not resolved from
 //! their rows - every session gets it, because every session's owner is a
@@ -21,7 +21,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use url::Url;
 
 use crate::domain::error::EgressError;
-use crate::domain::model::{BearerToken, McpServerSlug, UpstreamCall};
+use crate::domain::model::{BearerToken, McpDestination, UpstreamCall};
 use crate::domain::ports::McpCredentials;
 
 #[cfg(test)]
@@ -43,11 +43,11 @@ pub trait MacroApiTokens: Send + Sync {
     ) -> impl Future<Output = Result<String, EgressError>> + Send;
 }
 
-/// Layers the reserved `macro` slug over another resolver.
+/// Layers Macro's own MCP destination over another resolver.
 ///
-/// Every other slug passes straight through to `Inner`, which also settles
-/// the collision story: `macro` is answered here first, so a connected app
-/// that would slug to the same word is shadowed, never consulted.
+/// [`McpDestination::Macro`] is answered here; everything else passes
+/// straight through to `Inner`. The two destinations arrive from different
+/// routes, so there is no name for a connected app to collide with.
 pub struct WithMacroMcp<Inner, Tokens> {
     inner: Inner,
     tokens: Tokens,
@@ -71,8 +71,8 @@ where
     Inner: McpCredentials,
     Tokens: MacroApiTokens,
 {
-    /// Wrap `inner`, answering the `macro` slug at `url` with tokens from
-    /// `tokens`.
+    /// Wrap `inner`, answering [`McpDestination::Macro`] at `url` with tokens
+    /// from `tokens`.
     ///
     /// `local_cleartext` permits an `http` URL, and the caller must gate it on
     /// `ENVIRONMENT=local` - it exists for the one destination that never
@@ -126,10 +126,10 @@ where
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
-        slug: &McpServerSlug,
+        destination: &McpDestination,
     ) -> Result<UpstreamCall, EgressError> {
-        if *slug != McpServerSlug::macro_mcp() {
-            return self.inner.resolve(owner, slug).await;
+        if *destination != McpDestination::Macro {
+            return self.inner.resolve(owner, destination).await;
         }
 
         let token = BearerToken::new(self.token(owner).await?);

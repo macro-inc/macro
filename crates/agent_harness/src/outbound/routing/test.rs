@@ -66,6 +66,11 @@ impl ContainerManager for TaggedManager {
         Ok(TaggedTransport)
     }
 
+    async fn session_token(&self, _session: AgentSessionId) -> Result<Option<String>> {
+        self.record("session_token");
+        Ok(None)
+    }
+
     async fn teardown(&self, _session: AgentSessionId) -> Result<()> {
         self.record("teardown");
         Ok(())

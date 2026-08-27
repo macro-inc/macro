@@ -50,6 +50,17 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
             session_token_hash: "test-token-hash".to_owned(),
         })
     }
+
+    async fn restore(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        session_token: String,
+    ) -> Result<SandboxEgress> {
+        Ok(SandboxEgress {
+            session_token,
+            ..test_egress()
+        })
+    }
 }
 
 /// An egress environment for tests that only need one to exist.

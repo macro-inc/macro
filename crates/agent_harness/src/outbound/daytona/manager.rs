@@ -24,6 +24,7 @@ use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
 
 const LOG_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
+const EXEC_TIMEOUT: Duration = Duration::from_secs(15);
 const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const REAP_INTERVAL: Duration = Duration::from_secs(1);
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
@@ -490,6 +491,29 @@ impl ContainerManager for DaytonaContainerManager {
                 Err(error)
             }
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        let Some(id) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+            .map(DaytonaSandboxId::new)
+        else {
+            return Ok(None);
+        };
+        let output = self
+            .client
+            .exec(
+                id.as_str(),
+                &provision::session_token_command(),
+                EXEC_TIMEOUT,
+            )
+            .await
+            .map_err(unavailable)?;
+        Ok(provision::parse_session_token(&output))
     }
 
     #[tracing::instrument(err, skip(self))]

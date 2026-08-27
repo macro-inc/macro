@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::model::{
-    AgentSessionId, BearerToken, GitEndpoint, GitService, McpServerSlug, ProxyBody, RepoSlug,
-    SessionGrant, UpstreamCall, UpstreamCredential,
+    AgentSessionId, BearerToken, GitEndpoint, GitService, McpDestination, McpServerSlug, ProxyBody,
+    RepoSlug, SessionGrant, UpstreamCall, UpstreamCredential,
 };
 use http::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use http::{Method, StatusCode};
@@ -109,8 +109,11 @@ impl McpCredentials for SpyCredentials {
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
-        slug: &McpServerSlug,
+        destination: &McpDestination,
     ) -> Result<UpstreamCall, EgressError> {
+        let McpDestination::Connected(slug) = destination else {
+            unreachable!("these tests only dial connected servers");
+        };
         self.asked
             .lock()
             .expect("lock")
@@ -219,7 +222,9 @@ fn request(method: Method, header_pairs: &[(&str, &str)]) -> ProxyRequest {
 }
 
 fn datadog() -> EgressTarget {
-    EgressTarget::McpServer(McpServerSlug::parse("datadog").expect("slug"))
+    EgressTarget::McpServer(McpDestination::Connected(
+        McpServerSlug::parse("datadog").expect("slug"),
+    ))
 }
 
 #[tokio::test]

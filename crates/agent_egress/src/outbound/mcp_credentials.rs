@@ -21,7 +21,7 @@ use std::sync::Arc;
 use url::Url;
 
 use crate::domain::error::EgressError;
-use crate::domain::model::{BearerToken, McpServerSlug, UpstreamCall};
+use crate::domain::model::{BearerToken, McpDestination, McpServerSlug, UpstreamCall};
 use crate::domain::ports::McpCredentials;
 
 #[cfg(test)]
@@ -47,7 +47,7 @@ where
         }
     }
 
-    /// The owner's enabled connection whose app slugs to `slug`.
+    /// The owner's enabled connection whose `app_slug` is exactly `slug`.
     ///
     /// Scoped to the owner by the store call itself, and filtered to `enabled`
     /// here because the store does not: a disabled connector is one the owner
@@ -67,11 +67,11 @@ where
             })?
             .into_iter()
             .filter(|record| record.enabled)
-            // Slugged from `app_slug`, not `server_name`: the app slug is
-            // Pipedream's stable identifier, and the display name is the
-            // user's to rename. The provisioner derives the sandbox's config
-            // keys the same way, which is what makes them meet.
-            .find(|record| McpServerSlug::from_server_name(&record.app_slug).as_ref() == Some(slug))
+            // `app_slug`, not `server_name`: the app slug is Pipedream's
+            // stable identifier, and the display name is the user's to
+            // rename. The provisioner advertises the same value, and equality
+            // is the whole match - nothing is derived at either end.
+            .find(|record| record.app_slug == slug.as_str())
             .ok_or_else(|| EgressError::UnknownServer(slug.clone()))
     }
 }
@@ -81,12 +81,21 @@ where
     Connections: ConnectionStore,
     Upstream: McpUpstream,
 {
-    #[tracing::instrument(skip_all, err, fields(%owner, %slug))]
+    #[tracing::instrument(skip_all, err, fields(%owner, ?destination))]
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
-        slug: &McpServerSlug,
+        destination: &McpDestination,
     ) -> Result<UpstreamCall, EgressError> {
+        // Macro's own server is the composition root's to layer on with
+        // [`crate::outbound::macro_mcp::WithMacroMcp`]; these rows can never
+        // answer for it.
+        let McpDestination::Connected(slug) = destination else {
+            return Err(EgressError::Internal(rootcause::report!(
+                "the Pipedream resolver was asked for Macro's own MCP server; \
+                 the composition root did not layer WithMacroMcp"
+            )));
+        };
         let record = self.connection(owner, slug).await?;
 
         // A dead grant is Pipedream's to notice, not ours: we hold no

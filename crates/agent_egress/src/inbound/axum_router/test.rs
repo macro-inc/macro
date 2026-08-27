@@ -119,9 +119,9 @@ async fn routes_a_slug_to_an_mcp_target() {
     assert_eq!(response.status(), StatusCode::ACCEPTED);
     assert_eq!(
         service.targets(),
-        [EgressTarget::McpServer(
+        [EgressTarget::McpServer(McpDestination::Connected(
             McpServerSlug::parse("datadog").expect("slug")
-        )]
+        ))]
     );
 }
 

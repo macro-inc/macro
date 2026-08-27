@@ -435,6 +435,7 @@ where
             })
             .await?;
 
+        let mcp_servers = egress.sandbox.acp_servers();
         let container = match self
             .inner
             .containers
@@ -468,7 +469,10 @@ where
         };
         self.inner
             .sessions
-            .attach_session(session.id, RuntimeAttachment::solo(container))
+            .attach_session(
+                session.id,
+                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+            )
             .await?;
 
         if let Some(prompt) = initial_prompt {
@@ -564,6 +568,29 @@ where
         }
     }
 
+    /// The MCP servers to advertise when reattaching to an existing container.
+    ///
+    /// The raw session token exists in exactly one place after spawn - the
+    /// container's own environment - so it is read back from there and wrapped
+    /// in a fresh listing of the owner's connected servers. A container that
+    /// holds no token (a provider whose sessions carry no egress environment,
+    /// or a sandbox from before tokens existed) gets no servers, which is
+    /// also everything it could do with them.
+    async fn resumed_mcp_servers(
+        &self,
+        session_id: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
+        let Some(session_token) = self.containers.session_token(session_id).await? else {
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .egress
+            .restore(owner, session_token)
+            .await?
+            .acp_servers())
+    }
+
     /// Release everything the session holds, then delete it.
     ///
     /// The durable delete goes last on purpose. Crashing between the two
@@ -603,8 +630,14 @@ where
             self.containers.resize(session_id, size).await?;
             if effect == SandboxResizeEffect::Restart {
                 let container = self.containers.resume(session_id).await?;
+                let mcp_servers = self
+                    .resumed_mcp_servers(session_id, &session.owner_id)
+                    .await?;
                 self.sessions
-                    .attach_session(session_id, RuntimeAttachment::solo(container))
+                    .attach_session(
+                        session_id,
+                        RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                    )
                     .await?;
             }
         }
@@ -678,6 +711,7 @@ where
             })
             .await?;
 
+        let mcp_servers = egress.sandbox.acp_servers();
         let container = match self
             .containers
             .spawn(SpawnContainer {
@@ -705,7 +739,10 @@ where
             }
         };
         self.sessions
-            .attach_session(session_id, RuntimeAttachment::solo(container))
+            .attach_session(
+                session_id,
+                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+            )
             .await?;
         let mut action = AgentAction::prompt(composed_prompt);
         let AgentAction::Prompt(prompt) = &mut action else {
@@ -780,8 +817,14 @@ where
                 let session = self.sessions.get_session(session_id).await?;
                 if AgentKind::of(session.bot_id).is_managed() {
                     let container = self.containers.resume(session_id).await?;
+                    let mcp_servers = self
+                        .resumed_mcp_servers(session_id, &session.owner_id)
+                        .await?;
                     self.sessions
-                        .attach_session(session_id, RuntimeAttachment::solo(container))
+                        .attach_session(
+                            session_id,
+                            RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                        )
                         .await?;
                 } else {
                     // An external runtime is not ours to start - only its

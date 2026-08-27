@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::McpDestination;
 use pipedream_mcp::domain::models::McpUpstreamCall;
 use std::sync::Mutex;
 
@@ -86,31 +87,29 @@ impl McpUpstream for SpyUpstream {
     }
 }
 
-fn slug(name: &str) -> McpServerSlug {
-    McpServerSlug::from_server_name(name).expect("sluggable")
+fn connected(slug: &str) -> McpDestination {
+    McpDestination::Connected(McpServerSlug::parse(slug).expect("a valid slug"))
 }
 
+/// The slug a sandbox dials is Pipedream's `app_slug`, byte for byte -
+/// nothing is derived at either end, so the docs' spelling is the dialable
+/// spelling.
 #[tokio::test]
-async fn resolves_an_underscored_app_slug_by_its_dashed_form() {
+async fn resolves_an_app_slug_verbatim() {
     let upstream = SpyUpstream::at("https://remote.mcp.pipedream.net");
     let credentials = PipedreamMcpCredentials::new(
         Arc::new(FixedConnections(vec![connection("google_sheets", true)])),
         upstream.clone(),
     );
 
-    // The sandbox dials the dashed form: `from_server_name` collapsed the
-    // underscore when the config was generated, and `parse` on the request
-    // path rejects underscores outright.
     let call = credentials
-        .resolve(&owner(), &slug("google_sheets"))
+        .resolve(&owner(), &connected("google_sheets"))
         .await
         .expect("resolved");
 
     assert_eq!(call.url().as_str(), "https://remote.mcp.pipedream.net/");
     let asked = upstream.asked_for.lock().expect("spy lock");
     assert_eq!(asked.len(), 1);
-    // The upstream is asked for the record as stored - Pipedream wants the
-    // underscored slug back, whatever the path segment looked like.
     assert_eq!(asked[0].app_slug, "google_sheets");
 }
 
@@ -123,7 +122,7 @@ async fn carries_the_scoping_headers_next_to_the_bearer() {
     );
 
     let call = credentials
-        .resolve(&owner(), &slug("linear"))
+        .resolve(&owner(), &connected("linear"))
         .await
         .expect("resolved");
 
@@ -150,7 +149,7 @@ async fn a_disabled_connection_is_an_unknown_server() {
     );
 
     let refusal = credentials
-        .resolve(&owner(), &slug("linear"))
+        .resolve(&owner(), &connected("linear"))
         .await
         .expect_err("refused");
 
@@ -171,7 +170,7 @@ async fn a_slug_nobody_connected_is_an_unknown_server() {
         PipedreamMcpCredentials::new(Arc::new(FixedConnections(Vec::new())), upstream.clone());
 
     let refusal = credentials
-        .resolve(&owner(), &slug("linear"))
+        .resolve(&owner(), &connected("linear"))
         .await
         .expect_err("refused");
 
@@ -190,7 +189,7 @@ async fn refuses_a_cleartext_upstream() {
     );
 
     let refusal = credentials
-        .resolve(&owner(), &slug("linear"))
+        .resolve(&owner(), &connected("linear"))
         .await
         .expect_err("refused");
 

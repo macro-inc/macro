@@ -307,67 +307,37 @@ impl fmt::Display for RepoSlug {
     }
 }
 
-/// The name a sandbox calls one of its owner's MCP servers by.
+/// The identifier a sandbox calls one of its owner's connected MCP servers by:
+/// the Pipedream `app_slug`, verbatim.
 ///
-/// Doubles as the key in the sandbox's generated opencode config and as the
-/// path segment it dials, so it is normalized to something safe in both: a
-/// server the owner named "Datadog (US5)" becomes `datadog-us5`.
+/// Not derived from anything. Pipedream's app slug is already a stable,
+/// URL-safe machine identifier (`google_drive`, `datadog`), so both ends use
+/// it as-is: the provisioner advertises it in the session's server list and
+/// the credential resolver matches it against the owner's rows by equality.
+/// Nothing is normalized, so no two servers can ever meet at one name.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct McpServerSlug(String);
 
 impl McpServerSlug {
-    /// The reserved slug for Macro's own MCP server, advertised to every
-    /// session alongside the owner's connected apps.
+    /// Accept a slug from a request path or a connection row.
     ///
-    /// Reserved here, in the type both ends already share: the provisioner
-    /// names it in every sandbox's config and the credential resolver answers
-    /// it before consulting the owner's rows, so a connected app that would
-    /// slug to the same word is shadowed rather than ambiguous.
-    pub fn macro_mcp() -> Self {
-        Self("macro".to_owned())
-    }
-
-    /// Derive a slug from a user-chosen server name.
-    ///
-    /// Lowercases, keeps `[a-z0-9]`, and collapses every other run of
-    /// characters into a single `-`. Returns `None` when nothing survives,
-    /// which is the only way this fails.
-    pub fn from_server_name(name: &str) -> Option<Self> {
-        let mut slug = String::with_capacity(name.len());
-        let mut pending_separator = false;
-
-        for character in name.chars() {
-            if character.is_ascii_alphanumeric() {
-                if pending_separator && !slug.is_empty() {
-                    slug.push('-');
-                }
-                pending_separator = false;
-                slug.push(character.to_ascii_lowercase());
-            } else {
-                pending_separator = true;
-            }
-        }
-
-        (!slug.is_empty()).then_some(Self(slug))
-    }
-
-    /// Accept a slug from a request path.
-    ///
-    /// Deliberately stricter than [`McpServerSlug::from_server_name`]: this
-    /// one rejects rather than repairs, because the input is a path segment
-    /// chosen by code the model wrote, and a slug that gets "cleaned up" into
-    /// a different valid slug is a way to ask for a server other than the one
-    /// named.
+    /// Rejects rather than repairs: the path-segment side of this is chosen
+    /// by code the model wrote, and a slug that gets "cleaned up" into a
+    /// different valid slug is a way to ask for a server other than the one
+    /// named. The charset is Pipedream's own for app slugs.
     pub fn parse(segment: &str) -> Option<Self> {
         let valid = !segment.is_empty()
             && segment.chars().all(|character| {
-                character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+                character.is_ascii_lowercase()
+                    || character.is_ascii_digit()
+                    || character == '-'
+                    || character == '_'
             });
 
         valid.then(|| Self(segment.to_owned()))
     }
 
-    /// The slug as it appears in a path and in the sandbox's config.
+    /// The slug as it appears in a path and in the session's server list.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -466,8 +436,8 @@ impl GitEndpoint {
 /// resolves to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EgressTarget {
-    /// One of the owner's connected MCP servers.
-    McpServer(McpServerSlug),
+    /// An MCP server the session may dial.
+    McpServer(McpDestination),
     /// A git operation against the session's own repository.
     ///
     /// Carries no repository: the session has exactly one, and it comes from
@@ -483,10 +453,24 @@ impl EgressTarget {
     /// What to call this target in a log line.
     pub fn name(&self) -> String {
         match self {
-            Self::McpServer(slug) => slug.as_str().to_owned(),
+            Self::McpServer(McpDestination::Macro) => "macro".to_owned(),
+            Self::McpServer(McpDestination::Connected(slug)) => slug.as_str().to_owned(),
             Self::GitHubGit { endpoint } => format!("git {}", endpoint.path_and_query()),
         }
     }
+}
+
+/// Which MCP server a request names.
+///
+/// Macro's own server and the owner's connected apps live on different
+/// routes (`/mcp-macro` vs `/mcp/{slug}`), so they can never collide: there
+/// is no reserved word to shadow, and no connected app a name could hide.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum McpDestination {
+    /// Macro's own MCP server, available to every session.
+    Macro,
+    /// One of the owner's Pipedream-connected apps.
+    Connected(McpServerSlug),
 }
 
 /// A resolved destination and the credential to reach it with.

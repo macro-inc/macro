@@ -28,7 +28,7 @@ use agent_session::domain::ports::{AgentSessionRepo, ExternalSessionRepo};
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use cursor_cloud_agents::domain::model::{
-    CursorAgentId, CursorModel, CursorRunId, McpHeader, McpServer, McpTransport, ModelChoice,
+    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice,
 };
 use cursor_cloud_agents::domain::ports::{CursorAgents, RepoResolver, RunStream};
 use cursor_cloud_agents::domain::service::CursorSessionService;
@@ -38,7 +38,7 @@ use futures::Stream;
 use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::{SandboxEgress, SpawnContainer};
+use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::SandboxResizeEffect;
 use agent_session::domain::model::SandboxSize;
@@ -48,29 +48,6 @@ mod test;
 
 /// The provider name stored on external-session rows this manager writes.
 pub const CURSOR_PROVIDER: &str = "cursor";
-
-/// The session's MCP servers as Cursor accepts them.
-///
-/// Every entry points at the egress proxy and authenticates with the session
-/// token - exactly what the sandbox's opencode config says, rendered for
-/// Cursor's API instead. The token is the same one secret either way: handing
-/// it to Cursor's VM hands it to the model, which is the trust the egress
-/// design already assumes, and it spends only this session's proxied access.
-fn egress_mcp_servers(egress: &SandboxEgress) -> Vec<McpServer> {
-    egress
-        .mcp_servers
-        .iter()
-        .map(|slug| McpServer {
-            name: slug.to_string(),
-            transport: McpTransport::Http,
-            url: egress.mcp_url(slug),
-            headers: vec![McpHeader {
-                name: "Authorization".to_owned(),
-                value: egress.authorization_header(),
-            }],
-        })
-        .collect()
-}
 
 /// Byte capacity of each session's in-process ACP pipe. Frames are single
 /// JSON lines; this only bounds how far one side can run ahead of the other.
@@ -214,7 +191,6 @@ where
         default_model_id: Option<String>,
         session_id: AgentSessionId,
         restore: Option<RestoredCursorSession>,
-        mcp_servers: Vec<McpServer>,
     ) -> PipeTransport {
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
@@ -229,8 +205,7 @@ where
         // was actually last using (carried in `restore.model_id`) over this.
         let service = Arc::new(
             CursorSessionService::new(cursor, notifier.clone(), FixedRepo(self.repo.clone()))
-                .with_default_model(default_model_id)
-                .with_mcp_servers(mcp_servers),
+                .with_default_model(default_model_id),
         );
         if let Some(restored) = restore {
             service.restore_session(
@@ -304,17 +279,11 @@ where
         // ignored me" into a sentence they can act on.
         let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
         let (client, default_model_id) = self.client_for(&session).await?;
-        // The owner's MCP servers ride along: a Cursor agent has no sandbox
-        // environment to read them from, so they travel through Cursor's own
-        // API instead - same proxy, same token, a different rendering.
-        let mcp_servers = egress_mcp_servers(&command.egress);
-        Ok(self.serve_session(
-            client,
-            default_model_id,
-            command.session_id,
-            None,
-            mcp_servers,
-        ))
+        // No MCP servers pass through here: they ride the ACP protocol
+        // itself. The harness's session actor names them in `session/new`,
+        // and the in-process adapter forwards them to Cursor's API - the same
+        // rail every other transport uses.
+        Ok(self.serve_session(client, default_model_id, command.session_id, None))
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
@@ -353,7 +322,14 @@ where
         // died with the process (only its hash is persisted). The one session
         // this loses servers for is one restored before its first prompt ever
         // landed, which then creates its agent bare rather than not at all.
-        Ok(self.serve_session(client, default_model_id, session, restore, Vec::new()))
+        Ok(self.serve_session(client, default_model_id, session, restore))
+    }
+
+    /// A Cursor session has no container of ours to hold a token: the raw
+    /// token went to Cursor's cloud at agent creation and is not readable
+    /// back.
+    async fn session_token(&self, _session: AgentSessionId) -> Result<Option<String>> {
+        Ok(None)
     }
 
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
