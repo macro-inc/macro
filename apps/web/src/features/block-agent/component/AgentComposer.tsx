@@ -9,7 +9,6 @@ import { Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
   AgentInput,
-  type AgentInputApi,
   AgentModelSelector,
   ComposerNotice,
   QueuedPromptList,
@@ -29,10 +28,6 @@ export function AgentComposer() {
   // and has an empty transcript: the only thing to do with it is type. The
   // wait for the sandbox is exactly when that matters most.
   const autofocus = pending();
-
-  const onInputReady = (api: AgentInputApi | undefined) => {
-    registerQuoteInsert(api?.insertReferencedText);
-  };
 
   return (
     <>
@@ -54,7 +49,7 @@ export function AgentComposer() {
         commands={() => metadata()?.availableCommands ?? []}
         onSend={composer.send}
         onStop={composer.stop}
-        onReady={onInputReady}
+        registerQuoteInsert={registerQuoteInsert}
         modelControl={
           <AgentModelSelector
             model={metadata()?.model ?? null}

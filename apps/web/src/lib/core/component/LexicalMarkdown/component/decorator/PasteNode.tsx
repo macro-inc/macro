@@ -35,9 +35,8 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
   const [open, setOpen] = createSignal(false);
   const [menuOpen, setMenuOpen] = createSignal(false);
 
+  // The origin value doubles as the pill label: "pasted" or "referenced".
   const origin = () => props.origin ?? 'pasted';
-  const originLabel = () =>
-    origin() === 'referenced' ? 'referenced' : 'pasted';
   const originTitle = () =>
     origin() === 'referenced' ? 'Referenced text' : 'Pasted text';
 
@@ -70,7 +69,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
   const copyText = () => {
     try {
       navigator.clipboard.writeText(props.content);
-      toast.success(`Copied ${originLabel()} text to clipboard`);
+      toast.success(`Copied ${origin()} text to clipboard`);
     } catch (e) {
       console.error('Failed to copy pasted text to clipboard', e);
     }
@@ -122,7 +121,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
         {/* Origin pill floating bottom-left: "pasted" for clipboard dumps,
             "referenced" for quote-replies from selected conversation text. */}
         <span class="absolute bottom-2 left-2 inline-flex items-center px-2 py-1 text-xs leading-none rounded-full border border-edge bg-surface">
-          {originLabel()}
+          {origin()}
         </span>
 
         {/* Hamburger menu floating top-right. Hidden in static / read-only

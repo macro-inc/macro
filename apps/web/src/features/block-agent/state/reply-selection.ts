@@ -10,7 +10,7 @@ export function normalizeReplySelection(text: string): string | undefined {
 
 export function selectionIsInside(
   container: Node | null | undefined,
-  range: AbstractRange
+  range: Range
 ): boolean {
   if (!container) return false;
   return container.contains(range.commonAncestorContainer);
@@ -19,7 +19,7 @@ export function selectionIsInside(
 export function readReplyableSelection(
   container: Node | null | undefined
 ): string | undefined {
-  if (!container || typeof document === 'undefined') return undefined;
+  if (!container) return undefined;
   const sel = document.getSelection();
   if (!sel || sel.isCollapsed || sel.rangeCount === 0) return undefined;
   const range = sel.getRangeAt(0);

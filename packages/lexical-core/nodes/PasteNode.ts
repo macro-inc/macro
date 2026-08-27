@@ -238,7 +238,8 @@ export function $convertPasteToText(pasteNode: PasteNode): void {
 /**
  * Insert a referenced paste chip at the top of the document, stacking above
  * any existing paste chips and the user's draft, then put the caret in the
- * first non-paste block so they can type a reply.
+ * first non-paste block so they can type a reply. No-op for whitespace-only
+ * content.
  */
 export function $insertReferencedPaste(content: string): void {
   const trimmed = content.trim();
@@ -257,34 +258,20 @@ export function $insertReferencedPaste(content: string): void {
     root.append(node);
   }
 
-  let lastPaste: LexicalNode = node;
-  while ($isPasteNode(lastPaste.getNextSibling())) {
-    lastPaste = lastPaste.getNextSibling() as PasteNode;
+  // Skip past any chips already stacked below to find the draft.
+  let lastPaste: PasteNode = node;
+  let next = lastPaste.getNextSibling();
+  while ($isPasteNode(next)) {
+    lastPaste = next;
+    next = lastPaste.getNextSibling();
   }
 
-  const after = lastPaste.getNextSibling();
-  if ($isElementNode(after)) {
-    after.selectEnd();
+  if ($isElementNode(next)) {
+    next.selectEnd();
     return;
   }
 
   const paragraph = $createParagraphNode();
   lastPaste.insertAfter(paragraph);
   paragraph.selectEnd();
-}
-
-/** Insert a referenced paste chip; no-op for whitespace-only content. */
-export function insertReferencedPaste(
-  editor: LexicalEditor,
-  content: string
-): boolean {
-  const trimmed = content.trim();
-  if (!trimmed) return false;
-  editor.update(
-    () => {
-      $insertReferencedPaste(trimmed);
-    },
-    { discrete: true }
-  );
-  return true;
 }

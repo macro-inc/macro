@@ -21,11 +21,11 @@ import {
   type Accessor,
   createContext,
   createEffect,
-  createSignal,
   type ParentProps,
   useContext,
 } from 'solid-js';
 import { controlOutcome } from '../state/control-message';
+import type { QuoteInsert } from '../ui';
 import { createAgentSessionFeed } from './create-agent-session-feed';
 import {
   type ComposerController,
@@ -81,9 +81,9 @@ export type AgentSessionState = {
    * Quote selected transcript text into the composer as a referenced paste
    * chip. No-op until the composer editor has mounted.
    */
-  quoteSelection: (text: string) => void;
-  /** The composer registers its insert handler here on mount. */
-  registerQuoteInsert: (insert: ((text: string) => void) | undefined) => void;
+  quoteSelection: QuoteInsert;
+  /** The composer registers its quote-insert handler here on mount. */
+  registerQuoteInsert: (insert: QuoteInsert | undefined) => void;
 };
 
 const AgentSessionCtx = createContext<AgentSessionState>();
@@ -119,17 +119,14 @@ export function AgentSessionProvider(
     controlOutcome: (requestId) => controlOutcome(feed.messages(), requestId),
   });
 
-  const [quoteInsert, setQuoteInsert] = createSignal<
-    ((text: string) => void) | undefined
-  >();
-  const registerQuoteInsert = (
-    insert: ((text: string) => void) | undefined
-  ) => {
-    setQuoteInsert(() => insert);
+  // The transcript's "Reply to this" chip hands selected text to the
+  // composer through here. A plain variable, not a signal: it is only read
+  // at call time, never rendered from.
+  let quoteInsert: QuoteInsert | undefined;
+  const registerQuoteInsert = (insert: QuoteInsert | undefined) => {
+    quoteInsert = insert;
   };
-  const quoteSelection = (text: string) => {
-    quoteInsert()?.(text);
-  };
+  const quoteSelection: QuoteInsert = (text) => quoteInsert?.(text);
 
   // Anything the service can only deliver over a live transport: a prompt on
   // the wire, or a model change waiting to be seen in the fold.

@@ -15,7 +15,6 @@ import {
   $createPasteNode,
   $insertReferencedPaste,
   $isPasteNode,
-  insertReferencedPaste,
 } from '../nodes/PasteNode';
 import { EXTERNAL_TRANSFORMERS, INTERNAL_TRANSFORMERS } from '../transformers';
 
@@ -295,8 +294,20 @@ describe('PasteNode - insert referenced', () => {
     });
   });
 
-  it('ignores whitespace-only content', () => {
+  it('ignores whitespace-only content', async () => {
     const editor = makeEditor();
-    expect(insertReferencedPaste(editor, '   \n')).toBe(false);
+
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          $insertReferencedPaste('   \n');
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+
+    editor.getEditorState().read(() => {
+      expect($getRoot().getChildren().some($isPasteNode)).toBe(false);
+    });
   });
 });

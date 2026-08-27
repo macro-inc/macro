@@ -15,13 +15,13 @@ import { ReplyToSelection } from '../component/ReplyToSelection';
 import {
   ActionLine,
   AgentInput,
-  type AgentInputApi,
   AnimatedNumber,
   ComposerNotice,
   CountSummary,
   DiffChanges,
   PierreDiff,
   QuestionAnswers,
+  type QuoteInsert,
   TextShimmer,
   Thought,
   TodoList,
@@ -47,7 +47,7 @@ function Item(props: { label: string; children: JSX.Element }) {
  */
 function ReplyToSelectionDemo() {
   const [container, setContainer] = createSignal<HTMLDivElement>();
-  let insertReferencedText: AgentInputApi['insertReferencedText'] | undefined;
+  let quoteInsert: QuoteInsert | undefined;
 
   return (
     <div class="flex flex-col gap-3">
@@ -58,14 +58,14 @@ function ReplyToSelectionDemo() {
         <Message message={FIXTURE_MESSAGE} />
         <ReplyToSelection
           container={container()}
-          onReply={(text) => insertReferencedText?.(text)}
+          onReply={(text) => quoteInsert?.(text)}
         />
       </div>
       <AgentInput
         placeholder="Referenced text lands here"
         onSend={(content) => console.info('[gallery] send', content)}
-        onReady={(api) => {
-          insertReferencedText = api?.insertReferencedText;
+        registerQuoteInsert={(insert) => {
+          quoteInsert = insert;
         }}
       />
     </div>

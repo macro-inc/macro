@@ -1,52 +1,56 @@
 /**
- * ChatGPT / Claude-style quote-reply: when the user selects transcript text,
- * a small "Reply to this" chip floats over the selection. Choosing it inserts
- * a referenced paste chip into the composer.
+ * ChatGPT / Claude-style quote-reply: selecting transcript text floats a
+ * "Reply to this" chip over the selection; choosing it hands the selected
+ * text to `onReply` (the composer inserts it as a referenced paste chip).
  */
 
 import { floatWithSelection } from '@core/component/LexicalMarkdown/directive/floatWithSelection';
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import { isMobile } from '@core/mobile/isMobile';
 import { debouncedDependent } from '@core/util/debounce';
 import Quote from '@phosphor/quotes.svg';
 import { Button, Layer } from '@ui';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { readReplyableSelection } from '../state/reply-selection';
 
 false && floatWithSelection;
 
 export function ReplyToSelection(props: {
+  /** Selections outside this element (e.g. in the composer) are ignored. */
   container: HTMLElement | undefined;
   onReply: (text: string) => void;
 }) {
-  const [anchor, setAnchor] = createSignal<Selection | undefined>();
-  const show = debouncedDependent(() => anchor() !== undefined, 100);
+  // On mobile the native selection toolbar takes this chip's place (the
+  // FloatingFormatMenu rule).
+  if (isMobile()) return '';
+
+  const [domSelection, setDomSelection] = createSignal<Selection>();
+  // Lag the appearance so the chip doesn't flash while a selection is being
+  // dragged out (same delay as the floating format menu). Disappearance is
+  // immediate: the `Show` below also requires a live selection.
+  const show = debouncedDependent(() => domSelection() !== undefined, 100);
 
   const syncFromDocument = () => {
-    const text = readReplyableSelection(props.container);
-    if (!text) {
-      setAnchor(undefined);
-      return;
-    }
-    const sel = document.getSelection();
-    setAnchor(sel ?? undefined);
+    const replyable = readReplyableSelection(props.container);
+    setDomSelection(
+      replyable ? (document.getSelection() ?? undefined) : undefined
+    );
   };
 
-  onMount(() => {
-    document.addEventListener('selectionchange', syncFromDocument);
-    onCleanup(() => {
-      document.removeEventListener('selectionchange', syncFromDocument);
-    });
+  document.addEventListener('selectionchange', syncFromDocument);
+  onCleanup(() => {
+    document.removeEventListener('selectionchange', syncFromDocument);
   });
 
   const reply = () => {
     const text = readReplyableSelection(props.container);
-    window.getSelection()?.removeAllRanges();
-    setAnchor(undefined);
+    document.getSelection()?.removeAllRanges();
+    setDomSelection(undefined);
     if (text) props.onReply(text);
   };
 
   return (
-    <Show when={show() && anchor()}>
+    <Show when={show() && domSelection()}>
       {(selection) => (
         <ScopedPortal scope="block">
           <Layer depth={2}>
@@ -57,7 +61,6 @@ export function ReplyToSelection(props: {
                 reactiveOnContainer: props.container,
                 useBlockBoundary: true,
                 moveWithSelection: true,
-                spacing: 8,
               }}
             >
               <Button
@@ -65,8 +68,9 @@ export function ReplyToSelection(props: {
                 size="sm"
                 class="rounded-full shadow-xl border-edge bg-surface"
                 on:mousedown={(event: MouseEvent) => {
-                  // Keep the selection alive through the click so we can
-                  // still read it, and so the chip doesn't vanish first.
+                  // Keep the selection alive through the click: a default
+                  // mousedown would collapse it, hiding the chip before the
+                  // click lands and leaving nothing to quote.
                   event.preventDefault();
                 }}
                 onClick={reply}

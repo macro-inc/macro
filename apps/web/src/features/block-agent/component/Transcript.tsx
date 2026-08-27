@@ -159,11 +159,7 @@ export function Transcript() {
   };
 
   return (
-    <div
-      class="relative flex-1 min-h-0"
-      ref={setTranscriptEl}
-      data-agent-transcript
-    >
+    <div class="relative flex-1 min-h-0" ref={setTranscriptEl}>
       <Scroll scrollRef={attachScroller}>
         <div
           class="flex flex-col [overflow-anchor:none]"
