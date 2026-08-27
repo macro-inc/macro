@@ -79,7 +79,8 @@ pub enum HandshakeStatus {
 }
 
 /// Observable phase of a session connection.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum RuntimeStatus {
     /// Waiting for the runtime to report its agent ready.
     Booting,

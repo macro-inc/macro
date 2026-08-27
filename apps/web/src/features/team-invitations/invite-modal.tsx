@@ -104,7 +104,7 @@ export const InviteModal = () => {
             <Button
               onClick={handleSend}
               variant={
-                sending() || !parseEmails(value()).length ? 'ghost' : 'active'
+                sending() || !parseEmails(value()).length ? 'ghost' : 'accent'
               }
               disabled={sending() || !parseEmails(value()).length}
               class="rounded-xs font-semibold"
@@ -131,7 +131,7 @@ export const InviteModal = () => {
                     type="button"
                     onClick={handleCopy}
                     size="md"
-                    variant="base"
+                    variant="outline"
                     class="font-medium rounded-xs border px-2"
                   >
                     <ClipboardIcon class="size-3" />

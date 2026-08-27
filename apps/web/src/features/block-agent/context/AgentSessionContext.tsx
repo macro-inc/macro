@@ -56,6 +56,13 @@ export type AgentSessionState = {
   messages: Accessor<FoldedMessage[]>;
   loadFailed: Accessor<boolean>;
   /**
+   * Retry can re-run the failed load. False when the create itself failed —
+   * there is no session to refetch, so offering Retry would do nothing.
+   */
+  loadRetryable: Accessor<boolean>;
+  /** Re-runs a failed load. */
+  retryLoad: () => void;
+  /**
    * The block's one answer to "is the agent working": the fold's
    * turn-in-flight signal, cut off when the runtime is known to be gone.
    * Every consumer — composer, shimmer, header — reads this, never
@@ -130,6 +137,8 @@ export function AgentSessionProvider(
         // A create that failed leaves the block with nothing to load, which
         // is the same dead end for the reader as a load that failed.
         loadFailed: () => feed.loadFailed() || failed(),
+        loadRetryable: feed.loadFailed,
+        retryLoad: feed.retry,
         working,
         status: status.status,
         resuming,

@@ -1,4 +1,10 @@
+import {
+  initializeNativeNetworkStatus,
+  subscribeNativeNetworkStatus,
+} from '@core/mobile/native-network-status';
+import { isPlatform } from '@core/util/platform';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import { onlineManager } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { setupQueryPersistence } from './persistence';
 import { createQueryPersistenceScopes } from './persistence-scopes';
@@ -25,6 +31,16 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+if (isPlatform('ios')) {
+  // Replace WKWebView's navigator.onLine integration with NWPathMonitor.
+  onlineManager.setEventListener((setOnline) =>
+    subscribeNativeNetworkStatus((status) => {
+      if (status !== 'unknown') setOnline(status === 'online');
+    })
+  );
+  void initializeNativeNetworkStatus();
+}
 
 const buster = import.meta.env.__APP_VERSION__ ?? 'dev';
 

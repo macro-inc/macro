@@ -1,3 +1,4 @@
+use crate::pubsub::backfill::db_error::map_db_error;
 use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
@@ -28,13 +29,10 @@ pub async fn backfill_thread(
     )
     .await
     .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context(format!(
-                "DB check for existing thread {} failed",
-                thread_provider_id
-            )),
-        })
+        map_db_error(
+            e,
+            format!("DB check for existing thread {} failed", thread_provider_id),
+        )
     })?;
 
     // If the thread already exists: recovery jobs refresh it (backfilling any
@@ -63,13 +61,10 @@ pub async fn backfill_thread(
     )
     .await
     .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context(format!(
-                "Failed to insert thread shell for {}",
-                thread_provider_id
-            )),
-        })
+        map_db_error(
+            e,
+            format!("Failed to insert thread shell for {}", thread_provider_id),
+        )
     })?;
 
     // create backfill pubsub message for each email message
@@ -106,13 +101,13 @@ async fn refresh_existing_thread(
         )
         .await
         .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context(format!(
+            map_db_error(
+                e,
+                format!(
                     "DB check for existing messages of thread {} failed",
                     p.thread_provider_id
-                )),
-            })
+                ),
+            )
         })?;
 
     let missing_message_ids: Vec<String> = message_ids

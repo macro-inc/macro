@@ -5,11 +5,12 @@ import PencilIcon from '@phosphor/pencil-simple.svg';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { Button, cn, HoverCard, Layer } from '@ui';
+import { Button, badgeTriggerClasses, cn, HoverCard, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
 import { TagPicker } from './TagPicker';
+import { TagPill } from './TagPill';
 import { useDocTags, useSoupDocTags } from './useDocTags';
 import { type ResolvedTag, useSoupResolvedTags } from './useSoupResolvedTags';
 
@@ -19,11 +20,6 @@ type CreateDocTags = () => DocTags;
 const DEFAULT_MAX_VISIBLE = 3;
 const MAX_OVERFLOW_DOTS = 3;
 
-const chipClass = cn(
-  'inline-flex items-center gap-1 shrink-0 max-w-[14ch]',
-  'px-1.5 py-0.5 leading-tight rounded-full bg-surface text-ink-muted text-xs',
-  'hover:text-ink'
-);
 const hoverMenuLabelClass = 'min-w-0 max-w-[30ch] truncate';
 const hoverMenuIconButtonClass =
   'size-5 shrink-0 p-0.5 text-ink-extra-muted [&_:where(svg)]:size-3.5';
@@ -199,16 +195,14 @@ function TagChip(props: {
           />
         }
       >
-        <TagPicker
+        <TagPill
+          tag={props.tag}
           createDocTags={props.createDocTags}
-          triggerClass={chipClass}
-          triggerLabel={`Change or select tag ${props.tag.label}`}
+          class="max-w-[14ch]"
+          dotClass="size-2"
           onOpenChange={setPickerOpen}
           withClickBlock={props.withClickBlock}
-        >
-          <TagDot color={props.tag.color} class="size-2" />
-          <span class="min-w-0 truncate">{props.tag.label}</span>
-        </TagPicker>
+        />
       </HoverCard>
     </Layer>
   );
@@ -247,7 +241,11 @@ function TagOverflow(props: {
       >
         <TagPicker
           createDocTags={props.createDocTags}
-          triggerClass={cn(chipClass, 'gap-1.5')}
+          triggerClass={badgeTriggerClasses({
+            variant: 'outline',
+            size: 'sm',
+            class: 'max-w-[14ch] gap-1.5',
+          })}
           triggerLabel="Edit tags"
           onOpenChange={setPickerOpen}
           withClickBlock={props.withClickBlock}
@@ -351,13 +349,15 @@ export function InlineTagsPill(props: {
       <Layer depth={2}>
         <TagPicker
           docTags={props.docTags}
-          triggerClass={cn(
-            'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
-            'px-2 py-1 leading-tight text-left rounded-full bg-surface',
-            'hover:bg-hover text-ink-muted focus-visible:bg-active focus-visible:ring-accent/10',
-            tags().length === 0 && 'text-ink-extra-muted',
-            props.class
-          )}
+          triggerClass={badgeTriggerClasses({
+            variant: 'outline',
+            size: 'sm',
+            class: cn(
+              'min-w-0 gap-1.5 text-left',
+              tags().length === 0 && 'text-ink-extra-muted',
+              props.class
+            ),
+          })}
           triggerLabel="Change or select tags"
         >
           <Switch>

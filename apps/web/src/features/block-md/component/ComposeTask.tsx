@@ -810,7 +810,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             tabIndex={-1}
             tooltip="Clear Draft"
             size="sm"
-            variant="base"
+            variant="outline"
             depth={3}
             class="bg-surface px-3"
           >
@@ -972,7 +972,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           <Button
             onClick={handleCreateTask}
             disabled={title().trim().length === 0 || isCreating()}
-            variant={title().trim().length === 0 ? 'ghost' : 'active'}
+            variant={title().trim().length === 0 ? 'ghost' : 'accent'}
             depth={3}
             class="gap-3 rounded-lg border-0"
           >

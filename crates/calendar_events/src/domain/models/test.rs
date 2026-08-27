@@ -154,6 +154,7 @@ fn default_reminders_stay_out_of_serialized_projections() {
         status: EventStatus::Confirmed,
         visibility: EventVisibility::Default,
         transparency: EventTransparency::Opaque,
+        event_type: EventType::Default,
         time: EventTime::Timed {
             starts_at,
             ends_at: starts_at + chrono::Duration::hours(1),
@@ -162,6 +163,8 @@ fn default_reminders_stay_out_of_serialized_projections() {
         recurrence_lines: Vec::new(),
         organizer_email: None,
         organizer_name: None,
+        creator_email: None,
+        creator_name: None,
         conference_url: None,
         conference_provider: None,
         sequence: 0,
@@ -174,11 +177,23 @@ fn default_reminders_stay_out_of_serialized_projections() {
 
     // Projections stored before reminders were modeled have no `reminders`
     // key. Serializing the default as nothing keeps them comparing equal to
-    // fresh normalizations, so full snapshots stay no-ops.
+    // fresh normalizations, so full snapshots stay no-ops. The same holds
+    // for creator fields and the event type added later.
     let serialized = serde_json::to_value(&event).unwrap();
     assert!(serialized.get("reminders").is_none());
+    assert!(serialized.get("creatorEmail").is_none());
+    assert!(serialized.get("creatorName").is_none());
+    assert!(serialized.get("eventType").is_none());
     let legacy: CalendarEvent = serde_json::from_value(serialized).unwrap();
     assert_eq!(legacy.reminders, EventReminders::default());
+    assert_eq!(legacy.event_type, EventType::Default);
+
+    event.event_type = EventType::WorkingLocation;
+    let serialized = serde_json::to_value(&event).unwrap();
+    assert_eq!(serialized["eventType"], "working_location");
+    let status_event: CalendarEvent = serde_json::from_value(serialized).unwrap();
+    assert_eq!(status_event.event_type, EventType::WorkingLocation);
+    event.event_type = EventType::Default;
 
     event.reminders = EventReminders {
         use_default: false,

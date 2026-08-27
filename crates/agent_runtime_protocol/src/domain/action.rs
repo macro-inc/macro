@@ -94,6 +94,22 @@ pub enum ActionError {
 pub struct AgentPromptAction {
     /// What to tell the agent.
     pub prompt: String,
+    /// Raw user text used for a visible session name when `prompt` is enriched.
+    #[serde(skip)]
+    name_source: Option<String>,
+}
+
+impl AgentPromptAction {
+    /// Keep the un-enriched user text for visible session naming.
+    pub fn set_name_source(&mut self, source: impl Into<String>) {
+        self.name_source = Some(source.into());
+    }
+
+    /// Text suitable for deriving a visible session name.
+    #[must_use]
+    pub fn name_source(&self) -> &str {
+        self.name_source.as_deref().unwrap_or(&self.prompt)
+    }
 }
 
 /// Ask the agent to run on a different model from here on.
@@ -147,6 +163,7 @@ impl AgentAction {
     pub fn prompt(prompt: impl Into<String>) -> Self {
         Self::Prompt(AgentPromptAction {
             prompt: prompt.into(),
+            name_source: None,
         })
     }
 

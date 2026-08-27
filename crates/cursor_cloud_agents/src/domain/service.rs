@@ -13,18 +13,27 @@
 //! a turn is streaming, so cancellation state lives behind a lock the
 //! streaming loop never holds across an await.
 //!
-//! Cancelling is local. A turn ends on its own cancellation token, not on
-//! Cursor's answer to `POST /runs/{run}/cancel` — that call is best-effort and
-//! only decides whether the run stops burning credits server-side. The
-//! distinction matters because Cursor keeps a cancelled run's stream open often
-//! enough that waiting for it meant the client's stop button did nothing until
-//! the agent finished of its own accord.
+//! `session/cancel` is a notification we pump into Cursor: `POST
+//! /v1/agents/{id}/runs/{runId}/cancel`. The turn itself keeps reading the
+//! run's stream until Cursor's terminal `result` frame (then `done`) — the
+//! same way a finished run ends. Cancellation is terminal on Cursor's side;
+//! that `result` is what closes the ACP prompt.
+//!
+//! The cancellation token never cuts a live stream short — that is the whole
+//! point of the paragraph above. It ends the waits where there is nothing to
+//! read: a prompt queued behind `agent_busy`, and the fallback poll, which
+//! only runs because the stream is gone. Reading `GET …/runs/{run}` once more
+//! after the user has stopped buys nothing a stopped turn reports anyway, so
+//! the poll's wait is where a stop lands.
 //!
 //! The remote cancel still needs a run id, and this process only remembers
 //! one for a turn it is itself streaming. A session restored after a restart,
 //! or one whose run started from cursor.com, has no such memory — cancelling
 //! it falls back to asking Cursor which run is current rather than silently
-//! skipping the remote call.
+//! skipping the remote call. A stop that beats the run into existence has
+//! nothing to fall back to, so [`CursorSessionService::prompt`] re-sends it
+//! the moment the run has an id; otherwise the stop would be swallowed and
+//! the turn would run to the agent's own natural end.
 
 #[cfg(test)]
 mod test;
@@ -439,9 +448,16 @@ where
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
-                let run = self
+                let run = match self
                     .create_run_when_free(&agent, prompt, model.as_ref(), &cancel)
-                    .await?;
+                    .await
+                {
+                    Ok(run) => run,
+                    // The wait ended because the client asked to stop, which
+                    // ACP answers with a stop reason rather than an error.
+                    Err(_) if cancel.is_cancelled() => return Ok(StopReason::Cancelled),
+                    Err(error) => return Err(error),
+                };
                 // Catch the session's view up on whatever it missed while it
                 // was not looking. After the create on purpose: creating
                 // proved the agent free, so every missed run is terminal and
@@ -471,10 +487,25 @@ where
             }
         };
         tracing::info!(%agent, %run, "cursor run started");
-        {
+        let cancelled_before_the_run = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.agent = Some(agent.clone());
             state.active_run = Some(run.clone());
+            state.cancelled
+        };
+        // A stop this run did not exist to receive. `cancel` had no run id to
+        // POST — a first prompt spends ten seconds creating the agent, and a
+        // session with no agent yet cannot name one — so the remote work was
+        // left going and the stream below would have read it to the agent's
+        // own natural end. Ask now, and the same stream ends on Cursor's
+        // cancelled `result` a second or two later.
+        if cancelled_before_the_run {
+            tracing::info!(%agent, %run, "stop arrived before this run existed; cancelling it now");
+            if let Err(error) = self.cursor.cancel_run(&agent, &run).await {
+                // Best-effort, exactly as in `cancel`: the turn still ends on
+                // whatever the stream reports.
+                tracing::warn!(%agent, %run, %error, "could not cancel a run stopped before it existed");
+            }
         }
 
         let outcome = self
@@ -512,14 +543,16 @@ where
         let (agent, active_run) = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.cancelled = true;
-            // Fired before the network call, and the turn ends on it alone:
-            // whether Cursor honours the cancel decides only whether the run
-            // keeps burning credits server-side, never whether this client
-            // gets its turn back. A cancel Cursor refuses used to leave the
-            // turn streaming to natural completion.
+            // Unblocks a prompt still queued behind `agent_busy`. The live
+            // stream is not abandoned — Cursor's `result` frame is what ends
+            // the turn. The POST below is the notification that asks for that
+            // frame.
             state.cancel.cancel();
             (state.agent.clone(), state.active_run.clone())
         };
+        // No agent yet: the session's first prompt is still creating one, so
+        // there is nothing to name in a remote cancel. `cancelled` is set,
+        // and `prompt` sends it as soon as the run has an id.
         let Some(agent) = agent else {
             return Ok(());
         };
@@ -670,27 +703,11 @@ where
         // not to repeat it from the run's final result.
         let mut streamed_text = false;
         loop {
-            // The client's cancel outranks anything still on the wire. Without
-            // this the turn ran to the stream's natural end and only *then*
-            // reported `Cancelled` — the stop button stayed lit for as long as
-            // the agent felt like working.
-            let next = match tokio::time::timeout(STREAM_QUIET_TIMEOUT, async {
-                tokio::select! {
-                    biased;
-                    // Outer `None` means cancelled; outer `Some` carries the
-                    // stream's own `Option`, whose `None` means it ended.
-                    () = cancel.cancelled() => None,
-                    next = stream.next() => Some(next),
-                }
-            })
-            .await
-            {
-                Ok(None) => {
-                    tracing::info!(%agent, %run, "turn cancelled by the client; abandoning the stream");
-                    self.close_open_tool_calls(session_id, session).await;
-                    return Ok(StopReason::Cancelled);
-                }
-                Ok(Some(next)) => next,
+            // A client cancel is a notification already POSTed; it does not
+            // outrank the stream. Cursor's `result` frame is what ends the
+            // turn, including a cancelled one.
+            let next = match tokio::time::timeout(STREAM_QUIET_TIMEOUT, stream.next()).await {
+                Ok(next) => next,
                 // The stream has gone quiet. If the run is already over, the
                 // stream's terminal event is the only thing anyone is waiting
                 // for — take the answer from the record instead of holding
@@ -706,7 +723,16 @@ where
                                 .poll_turn(session_id, session, agent, run, streamed_text, cancel)
                                 .await;
                         }
-                        Ok(_) => continue, // still running; keep listening
+                        // Still running: keep listening. Unless the client
+                        // stopped, in which case a silent stream and a run
+                        // the record says is still going is nothing left to
+                        // wait for.
+                        Ok(_) if cancel.is_cancelled() => {
+                            tracing::info!(%agent, %run, "stopped run's stream went quiet");
+                            self.close_open_tool_calls(session_id, session).await;
+                            return Ok(StopReason::Cancelled);
+                        }
+                        Ok(_) => continue,
                         Err(error) => {
                             tracing::warn!(%agent, %run, %error, "quiet-stream status check failed");
                             continue;
@@ -763,7 +789,10 @@ where
 
         match outcome {
             Some(RunStatus::Finished) => Ok(StopReason::EndTurn),
-            Some(RunStatus::Cancelled) => Ok(StopReason::Cancelled),
+            Some(RunStatus::Cancelled) => {
+                self.close_open_tool_calls(session_id, session).await;
+                Ok(StopReason::Cancelled)
+            }
             // A run that ended in any other state did not succeed, and ACP
             // answers a prompt with a stop reason or an error — there is no
             // stop reason for "it failed", so this is an error.
@@ -786,12 +815,32 @@ where
         }
     }
 
-    /// Close out every tool call left open when a turn ends on the client's
-    /// cancel rather than Cursor's own terminal event.
+    /// Wait out one poll interval, unless the client has stopped the turn.
+    /// `true` means it has, and the turn is over.
     ///
-    /// The abandoned stream (see the `Ok(None)` arm above) means Cursor may
-    /// still be mid-call and will never get the chance to say how it ended,
-    /// so without this the client renders that call running forever.
+    /// The only cancel check in the fallback poll. Ending here is not the
+    /// local settle this service refuses elsewhere: the poll runs precisely
+    /// because the stream is gone, so there are no frames left to abandon —
+    /// only a record to stop re-reading on the user's behalf.
+    async fn wait_unless_stopped(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> bool {
+        if !sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
+            return false;
+        }
+        tracing::info!("turn stopped while polling for its run's record");
+        self.close_open_tool_calls(session_id, session).await;
+        true
+    }
+
+    /// Close out every tool call still open when a turn ends cancelled.
+    ///
+    /// Cursor's `result` with `CANCELLED` is the terminal frame; it does not
+    /// always include a completed `tool_call` for work that was mid-flight,
+    /// so without this the client would render that call running forever.
     async fn close_open_tool_calls(&self, session_id: &SessionId, session: &Session) {
         let updates = session
             .state
@@ -1033,14 +1082,8 @@ where
     ) -> Result<StopReason, SessionError> {
         let mut consecutive_errors = 0;
         for _ in 0..POLL_ATTEMPTS {
-            // A client cancel ends the wait, not just the run: the server
-            // often closes a cancelled run's stream without a result, and
-            // polling an outcome nobody wants any more would hold the turn
-            // open for minutes. Read from the token rather than the flag so
-            // the exit is immediate instead of up to one interval late.
-            if cancel.is_cancelled() {
-                return Ok(StopReason::Cancelled);
-            }
+            // Both waits below go through `wait_unless_stopped`, the one
+            // place a stop ends this poll.
             let outcome = match self.cursor.run_result(agent, run).await {
                 Ok(outcome) => outcome,
                 // A blip mid-poll is survivable; the same failure over and
@@ -1048,7 +1091,7 @@ where
                 Err(error) if consecutive_errors < POLL_ERROR_TOLERANCE => {
                     consecutive_errors += 1;
                     tracing::warn!(%agent, %run, %error, consecutive_errors, "run poll failed");
-                    if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
+                    if self.wait_unless_stopped(session_id, session, cancel).await {
                         return Ok(StopReason::Cancelled);
                     }
                     continue;
@@ -1057,7 +1100,7 @@ where
             };
             consecutive_errors = 0;
             if !outcome.is_terminal() {
-                if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
+                if self.wait_unless_stopped(session_id, session, cancel).await {
                     return Ok(StopReason::Cancelled);
                 }
                 continue;
@@ -1085,7 +1128,10 @@ where
             }
             return match outcome.status {
                 RunStatus::Finished => Ok(StopReason::EndTurn),
-                RunStatus::Cancelled => Ok(StopReason::Cancelled),
+                RunStatus::Cancelled => {
+                    self.close_open_tool_calls(session_id, session).await;
+                    Ok(StopReason::Cancelled)
+                }
                 status => Err(SessionError::Cursor(rootcause::report!(
                     "cursor run {run} ended in {status:?}"
                 ))),

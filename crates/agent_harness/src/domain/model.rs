@@ -7,7 +7,6 @@ use bot_id::BotId;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-
 /// Where a mention happened.
 #[derive(Debug, Clone)]
 pub struct MentionOrigin {
@@ -101,6 +100,17 @@ pub struct AnnounceOrigin {
     pub channel_id: Uuid,
     /// Thread the announcement replies into.
     pub thread_id: Uuid,
+    /// The channel message that triggered the prompt.
+    pub message_id: Uuid,
+}
+
+/// One channel message supplied as untrusted prompt context.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PriorChannelMessage {
+    /// Sender identifier as represented by the channels service.
+    pub sender: String,
+    /// Message body.
+    pub content: String,
 }
 
 /// Do something in a session that already exists.

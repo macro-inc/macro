@@ -113,6 +113,11 @@ pub struct RunArgs {
     /// Do not start or serve the frontend.
     #[arg(long)]
     pub no_frontend: bool,
+    /// Turn on onboarding v4 for the attached vite server
+    /// (`VITE_ENABLE_ONBOARDING_V4=true`). Off by default so signing in does
+    /// not dump you into the stepper. No effect on `stack up` static bundles.
+    #[arg(long)]
+    pub enable_onboarding: bool,
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,

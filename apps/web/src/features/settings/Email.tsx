@@ -247,7 +247,7 @@ export function EmailCard() {
             >
               <Tooltip label="Add inbox">
                 <Button
-                  variant="base"
+                  variant="outline"
                   size="icon-sm"
                   depth={3}
                   aria-label="Add inbox"
@@ -299,7 +299,7 @@ export function EmailCard() {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 onClick={() => setRemoveTarget(null)}
               >
@@ -399,7 +399,7 @@ function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
         </div>
         <span class="text-xs text-ink-muted">Sync disabled</span>
       </div>
-      <Button variant="base" size="sm" depth={3} onClick={props.onEnable}>
+      <Button variant="outline" size="sm" depth={3} onClick={props.onEnable}>
         Enable
       </Button>
     </div>
@@ -485,7 +485,7 @@ function InboxRow(props: {
           <Show when={emailSignaturesFlag().enabled && props.isOwn}>
             <Tooltip label="Edit signature">
               <Button
-                variant="base"
+                variant="outline"
                 size="icon-sm"
                 depth={3}
                 onClick={() => toggleSignatureExpanded(props.link.id)}
@@ -504,7 +504,7 @@ function InboxRow(props: {
             }
           >
             <Button
-              variant="active"
+              variant="accent"
               size="sm"
               depth={3}
               onClick={props.onReconnect}
@@ -521,7 +521,7 @@ function InboxRow(props: {
             when={calendarUiEnabled() && props.link.needs_calendar_permission}
           >
             <Button
-              variant="active"
+              variant="accent"
               size="sm"
               depth={3}
               onClick={props.onEnableCalendar}
@@ -545,7 +545,7 @@ function InboxRow(props: {
           >
             <Tooltip label="Turn off calendar">
               <Button
-                variant="base"
+                variant="outline"
                 size="icon-sm"
                 depth={3}
                 onClick={props.onTurnOffCalendar}
@@ -558,7 +558,7 @@ function InboxRow(props: {
           <Show when={ENABLE_INBOX_RESYNC}>
             <Tooltip label="Force sync">
               <Button
-                variant="base"
+                variant="outline"
                 size="icon-sm"
                 depth={3}
                 disabled={
@@ -575,7 +575,7 @@ function InboxRow(props: {
           </Show>
           <Tooltip label="Remove inbox">
             <Button
-              variant="base"
+              variant="outline"
               size="icon-sm"
               depth={3}
               onClick={props.onRemove}

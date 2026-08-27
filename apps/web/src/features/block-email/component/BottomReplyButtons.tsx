@@ -13,7 +13,6 @@ import { Button, cn } from '@ui';
 import { type Component, Show } from 'solid-js';
 import type { ReplyType } from '../util/replyType';
 import { useEmailContext } from './EmailContext';
-import { getEmailFormRegistry } from './EmailFormContext';
 import { openEmailReplyComposerForMessage } from './emailReplyActions';
 
 function ReplyActionButton(props: {
@@ -29,7 +28,7 @@ function ReplyActionButton(props: {
       // matches the dock buttons. (The region host's Layer can't help —
       // Button's own Layer would reset it.)
       depth={isTouchDevice() ? 3 : undefined}
-      variant="base"
+      variant="outline"
       aria-label={props.ariaLabel}
       class={cn(
         // Island pills when floating in the mobile/tablet accessory region.
@@ -47,7 +46,6 @@ function ReplyActionButton(props: {
 
 export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
   const ctx = useEmailContext();
-  const formRegistry = getEmailFormRegistry();
   const currentUserEmail = useEmail();
 
   const open = (type: ReplyType) =>
@@ -56,7 +54,6 @@ export function BottomReplyButtons(props: { lastMessage: ApiMessage }) {
       if (!messageId) return;
       openEmailReplyComposerForMessage({
         ctx,
-        formRegistry,
         message: props.lastMessage,
         replyType: type,
         isLastMessage: true,

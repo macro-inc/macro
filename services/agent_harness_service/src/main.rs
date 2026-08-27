@@ -20,7 +20,9 @@ use agent_harness::domain::model::{HarnessCommand, HarnessDefaults, SessionDefau
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
+use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
+use agent_harness::outbound::channel_prompt_context::ChannelPromptContextAdapter;
 use agent_harness::outbound::containers::HarnessContainers;
 use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys};
 use agent_harness::outbound::daytona::{
@@ -317,13 +319,19 @@ async fn run() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(side_effects),
         channels::domain::service::NoopChannelReferenceSharePermissions,
     ));
-    let announcer = ChannelAnnouncer::new(
-        channel_service,
-        LexicalClient::new(
-            config.internal_api_key.clone(),
-            LexicalServiceUrl::new()?.to_string(),
+    let entity_access = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
+    let lexical = LexicalClient::new(
+        config.internal_api_key.clone(),
+        LexicalServiceUrl::new()?.to_string(),
+    );
+    let announcer = ChannelAnnouncer::new(Arc::clone(&channel_service), lexical.clone());
+    let prompt_composer = LexicalAgentPromptComposer::new(lexical);
+    let prompt_context =
+        ChannelPromptContextAdapter::new(channel_service, Arc::clone(&entity_access));
 
     // One connection per bot, shared by every session that bot runs. Held
     // here because the gateway puts dialed-in sockets into it and the harness
@@ -357,6 +365,8 @@ async fn run() -> anyhow::Result<()> {
         containers,
         announcer,
         Arc::clone(&runtimes),
+        prompt_context,
+        prompt_composer,
         defaults,
     ));
 
@@ -378,11 +388,6 @@ async fn run() -> anyhow::Result<()> {
             default_user_id: None,
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(pool.clone())),
-    );
-    let entity_access = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
-        ),
     );
     let read_state = AgentSessionRouterState::new(
         AgentSessionServiceImpl::new(

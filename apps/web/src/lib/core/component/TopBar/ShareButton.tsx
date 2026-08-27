@@ -321,7 +321,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
               setPermissions={props.setLinkShareAccessLevel}
             />
           </div>
-          <Button variant="base" onClick={props.copyLink}>
+          <Button variant="outline" onClick={props.copyLink}>
             <CopyIcon class="size-4" />
             <span>Copy Link</span>
           </Button>
@@ -1238,7 +1238,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   });
 
   return (
-    <ButtonGroup variant="base" size="sm" class="bg-surface" depth={2}>
+    <ButtonGroup variant="outline" size="sm" class="bg-surface" depth={2}>
       <Tooltip
         label={shareStatus()?.tooltip ?? 'This item has been shared with you.'}
       >
@@ -1376,7 +1376,7 @@ export function ShareOptions(props: {
   return (
     <Dropdown modal={false} open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.Trigger
-        variant="base"
+        variant="outline"
         disabled={props.disabled}
         class={`min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
         on:keydown={(e: KeyboardEvent) => {

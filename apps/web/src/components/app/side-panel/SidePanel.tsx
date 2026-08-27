@@ -256,7 +256,7 @@ function SidePanelHeaderToggle() {
   const ToggleButton = () => (
     <Button
       depth={2}
-      variant="base"
+      variant="outline"
       size="icon-sm"
       class={cn(
         !isTouchDevice() && 'bg-surface',

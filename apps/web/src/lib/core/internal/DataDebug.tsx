@@ -88,7 +88,7 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <Button variant="base" onClick={handleRefresh}>
+          <Button variant="outline" onClick={handleRefresh}>
             <Refresh /> Refresh
           </Button>
         }

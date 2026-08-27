@@ -2,51 +2,43 @@ import { cn } from '@ui';
 
 type MessageFlagProps = {
   text: string;
-  highlightAbove?: boolean;
-  highlightBelow?: boolean;
+  /** Accent treatment for the unread ("New") marker. */
+  highlight?: boolean;
   class?: string;
 };
 
+/**
+ * Horizontal list divider with a centered label pill — used for day
+ * boundaries and the unread marker. The hairline's left end lines up with
+ * the thread rail column.
+ */
 export function MessageFlag(props: MessageFlagProps) {
   return (
     <div
       class={cn(
-        'flex flex-row items-stretch h-20 justify-start ml-(--left-of-connector)',
+        'relative flex h-14 mobile:h-16 items-center justify-center px-2',
         props.class
       )}
     >
-      <div class="flex flex-col items-center justify-center">
-        <div
-          class={cn(
-            'border-l-1 border-rail min-h-1/2',
-            props.highlightAbove && 'border-accent'
-          )}
-        />
-        <div
-          class={cn(
-            'border-l-1 border-rail min-h-1/2',
-            props.highlightBelow && 'border-accent'
-          )}
-        />
-      </div>
-      <div class="flex items-center flex-1 py-2">
-        <div
-          class={cn(
-            'border-b-1 border-rail w-5',
-            props.highlightBelow && 'border-accent'
-          )}
-        />
-        <span
-          class={cn(
-            'text-xs px-3 ring-1 py-1 rounded-sm',
-            props.highlightBelow
-              ? 'text-accent ring-accent'
-              : 'text-ink-extra-muted ring-rail'
-          )}
-        >
-          {props.text}
-        </span>
-      </div>
+      {/* One hairline at an integer y-offset (flex-centering a 1px line in a
+          56px row lands on a half pixel and renders soft/fat). Border-drawn
+          like the rail so both strokes share one paint path. The label's
+          background masks its middle. */}
+      <div
+        class={cn(
+          'absolute top-7 mobile:top-8 h-0 border-t inset-x-0',
+          props.highlight ? 'border-accent/40' : 'border-thread-rail'
+        )}
+      />
+      {/* Plain label; its surface background carves the gap in the line. */}
+      <span
+        class={cn(
+          'relative text-xs font-medium px-2.5 bg-surface',
+          props.highlight ? 'text-accent' : 'text-ink-muted'
+        )}
+      >
+        {props.text}
+      </span>
     </div>
   );
 }
