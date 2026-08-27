@@ -152,7 +152,7 @@ export function revealMessageInView(
   messageId: string,
   messages: Array<{ db_id?: string | null }>,
   container: HTMLElement,
-  behavior: ScrollBehavior = 'auto'
+  behavior: ScrollBehavior = 'smooth'
 ): void {
   const element = messageElement(container, messages, messageId);
   if (!element) return;
@@ -167,7 +167,7 @@ export function revealMessageAfterLayout(
   messageId: string,
   messages: Array<{ db_id?: string | null }>,
   container: HTMLElement | undefined | null,
-  behavior: ScrollBehavior = 'auto'
+  behavior: ScrollBehavior = 'smooth'
 ): void {
   if (!container) return;
   requestAnimationFrame(() => {
