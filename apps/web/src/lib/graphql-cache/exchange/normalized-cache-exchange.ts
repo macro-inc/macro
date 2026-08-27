@@ -1036,224 +1036,261 @@ export function normalizedCacheExchange(
         }
       }
 
-      async function writeThrough(
+      async function writeThroughSubscription(
+        op: Operation,
+        result: OperationResult
+      ): Promise<void> {
+        // Serialize effects across every emission for this operation, as
+        // well as within buffered payloads, so a slower earlier write cannot
+        // overtake a later delete. Subscribers still receive each original
+        // result after its effects settle.
+        const previousEffects =
+          subscriptionEffectChains.get(op.key) ?? Promise.resolve();
+        const effects = previousEffects.then(() =>
+          applyOperationCacheEffects(op, operationCacheEffects(result.data))
+        );
+        subscriptionEffectChains.set(op.key, effects);
+        try {
+          await effects;
+        } finally {
+          if (subscriptionEffectChains.get(op.key) === effects) {
+            subscriptionEffectChains.delete(op.key);
+          }
+        }
+      }
+
+      async function writeThroughHydrateQuery(
+        op: Operation,
         result: OperationResult
       ): Promise<OperationResult> {
-        const op = result.operation;
-        let output =
-          op.kind === 'query'
-            ? withResultMetadata(result, { source: 'live-network' })
-            : result;
-        if (op.kind === 'subscription' && result.data != null) {
-          // Serialize effects across every emission for this operation, as
-          // well as within buffered payloads, so a slower earlier write cannot
-          // overtake a later delete. Subscribers still receive each original
-          // result after its effects settle.
-          const previousEffects =
-            subscriptionEffectChains.get(op.key) ?? Promise.resolve();
-          const effects = previousEffects.then(() =>
-            applyOperationCacheEffects(op, operationCacheEffects(result.data))
+        if (result.data == null) return result;
+        try {
+          const hydration = await host.hydrateQuery({
+            query: cacheQueryText(op),
+            operationName: operationName(op),
+            variables: op.variables as Record<string, unknown> | undefined,
+            data: result.data,
+            identity: options.extractIdentity?.(result.data),
+            entityResolvers,
+          });
+          return withResultMetadata(
+            {
+              ...result,
+              data: hydration.kind === 'data' ? hydration.data : undefined,
+            },
+            { source: 'live-network', revision: hydration.revision }
           );
-          subscriptionEffectChains.set(op.key, effects);
-          try {
-            await effects;
-          } finally {
-            if (subscriptionEffectChains.get(op.key) === effects) {
-              subscriptionEffectChains.delete(op.key);
-            }
-          }
-        } else if (op.kind === 'query' && isHydrateOnly(op)) {
-          if (result.data == null) return result;
-          try {
-            const hydration = await host.hydrateQuery({
-              query: cacheQueryText(op),
+        } catch (error) {
+          options.onCacheError?.(error, op);
+          return {
+            ...result,
+            data: undefined,
+            error: new CombinedError({
+              networkError:
+                error instanceof Error ? error : new Error(String(error)),
+            }),
+          };
+        }
+      }
+
+      async function writeThroughNetworkQuery(
+        op: Operation,
+        result: OperationResult
+      ): Promise<OperationResult> {
+        let output = withResultMetadata(result, { source: 'live-network' });
+        const releaseTurn = await acquireQueryResultTurn(op.key);
+        try {
+          const state = queryState(op.key);
+          const resultVersion = state.networkResultVersion + 1;
+          state.networkResultVersion = resultVersion;
+          // Every newer result supersedes an older retained payload, even an
+          // error or intermediate streamed result with no cache write.
+          await invalidateOlderRetainedFallback(op.key, resultVersion);
+          if (result.data != null) {
+            const readArgs = {
+              opKey: op.key,
+              query: queryText(op),
               operationName: operationName(op),
               variables: op.variables as Record<string, unknown> | undefined,
+              entityResolvers,
+            };
+            const writeArgs = {
+              ...readArgs,
               data: result.data,
               identity: options.extractIdentity?.(result.data),
-              entityResolvers,
-            });
-            return withResultMetadata(
-              {
-                ...result,
-                data: hydration.kind === 'data' ? hydration.data : undefined,
-              },
-              { source: 'live-network', revision: hydration.revision }
-            );
-          } catch (error) {
-            options.onCacheError?.(error, op);
-            return {
-              ...result,
-              data: undefined,
-              error: new CombinedError({
-                networkError:
-                  error instanceof Error ? error : new Error(String(error)),
-              }),
+              registerDependencies: activeOps.has(op.key),
             };
-          }
-        } else if (op.kind === 'query') {
-          const releaseTurn = await acquireQueryResultTurn(op.key);
-          try {
-            const state = queryState(op.key);
-            const resultVersion = state.networkResultVersion + 1;
-            state.networkResultVersion = resultVersion;
-            // Every newer result supersedes an older retained payload, even an
-            // error or intermediate streamed result with no cache write.
-            await invalidateOlderRetainedFallback(op.key, resultVersion);
-            if (result.data != null) {
-              const readArgs = {
-                opKey: op.key,
-                query: queryText(op),
-                operationName: operationName(op),
-                variables: op.variables as Record<string, unknown> | undefined,
-                entityResolvers,
-              };
-              const writeArgs = {
-                ...readArgs,
-                data: result.data,
-                identity: options.extractIdentity?.(result.data),
-                registerDependencies: activeOps.has(op.key),
-              };
-              const retained: RetainedReplacementFallback | undefined =
-                result.error === undefined &&
-                result.hasNext !== true &&
-                activeOps.has(op.key) &&
-                state.replacementFallback
-                  ? {
-                      version: resultVersion,
-                      writeArgs,
-                      readyPending: false,
-                      recovering: false,
-                      invalidated: false,
-                    }
-                  : undefined;
-              if (retained) {
-                // Install before the first write: replacement-ready pushes can
-                // arrive synchronously while the cache attempt is settling.
-                state.retainedReplacementFallback = retained;
+            const retained: RetainedReplacementFallback | undefined =
+              result.error === undefined &&
+              result.hasNext !== true &&
+              activeOps.has(op.key) &&
+              state.replacementFallback
+                ? {
+                    version: resultVersion,
+                    writeArgs,
+                    readyPending: false,
+                    recovering: false,
+                    invalidated: false,
+                  }
+                : undefined;
+            if (retained) {
+              // Install before the first write: replacement-ready pushes can
+              // arrive synchronously while the cache attempt is settling.
+              state.retainedReplacementFallback = retained;
+            }
+            try {
+              const write = await host.writeQuery(writeArgs);
+              output = withResultMetadata(result, {
+                source: 'live-network',
+                revision: write.revision,
+              });
+              state.networkRegistrationSatisfied =
+                writeArgs.registerDependencies;
+              if (state.retainedReplacementFallback === retained) {
+                state.retainedReplacementFallback = undefined;
               }
+            } catch (error) {
+              options.onCacheError?.(error, op);
+            }
+          }
+          if (result.hasNext !== true) {
+            const registrationSatisfied = state.networkRegistrationSatisfied;
+            state.networkRegistrationSatisfied = false;
+            finishNetworkQuery(op.key, registrationSatisfied);
+          }
+        } finally {
+          if (!activeOps.has(op.key)) queryStates.delete(op.key);
+          releaseTurn();
+        }
+        return output;
+      }
+
+      async function settleQueuedMutationAttempt(
+        op: Operation,
+        result: OperationResult,
+        attempt: QueueAttemptContext
+      ): Promise<OperationResult> {
+        const claim = {
+          owner: attempt.leaseOwner,
+          generation: attempt.leaseGeneration,
+        };
+        let retryAt: number | undefined;
+        let disposition: 'committed' | 'queued' | 'permanently-failed' =
+          'queued';
+        try {
+          if (result.error || result.data == null) {
+            let retry = false;
+            if (result.error && options.shouldRetryMutation) {
               try {
-                const write = await host.writeQuery(writeArgs);
-                output = withResultMetadata(result, {
-                  source: 'live-network',
-                  revision: write.revision,
-                });
-                state.networkRegistrationSatisfied =
-                  writeArgs.registerDependencies;
-                if (state.retainedReplacementFallback === retained) {
-                  state.retainedReplacementFallback = undefined;
-                }
+                retry = await options.shouldRetryMutation(result.error);
               } catch (error) {
                 options.onCacheError?.(error, op);
               }
             }
-            if (result.hasNext !== true) {
-              const registrationSatisfied = state.networkRegistrationSatisfied;
-              state.networkRegistrationSatisfied = false;
-              finishNetworkQuery(op.key, registrationSatisfied);
-            }
-          } finally {
-            if (!activeOps.has(op.key)) queryStates.delete(op.key);
-            releaseTurn();
-          }
-        } else if (op.kind === 'mutation') {
-          const attempt = queueAttemptOf(op);
-          if (attempt) {
-            const claim = {
-              owner: attempt.leaseOwner,
-              generation: attempt.leaseGeneration,
-            };
-            let retryAt: number | undefined;
-            let disposition: 'committed' | 'queued' | 'permanently-failed' =
-              'queued';
-            try {
-              if (result.error || result.data == null) {
-                let retry = false;
-                if (result.error && options.shouldRetryMutation) {
-                  try {
-                    retry = await options.shouldRetryMutation(result.error);
-                  } catch (error) {
-                    options.onCacheError?.(error, op);
-                  }
-                }
-                if (retry) {
-                  retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
-                  await host.deferOptimisticWrite(
-                    attempt.transactionId,
-                    claim,
-                    retryAt,
-                    result.error?.message ?? 'mutation returned no data'
-                  );
-                  disposition = 'queued';
-                } else {
-                  await host.rollbackOptimisticWrite(
-                    attempt.transactionId,
-                    claim,
-                    result.error?.message ?? 'mutation returned no data'
-                  );
-                  disposition = 'permanently-failed';
-                }
-              } else {
-                const committed = await host.commitOptimisticWrite(
-                  attempt.transactionId,
-                  claim,
-                  {
-                    query: queryText(op),
-                    operationName: operationName(op),
-                    variables: op.variables as
-                      | Record<string, unknown>
-                      | undefined,
-                    data: result.data,
-                  }
-                );
-                const effects = operationCacheEffects(result.data);
-                if (effects.some((effect) => effect.kind === 'delete')) {
-                  // Commit already normalized the complete result. Replay only
-                  // mixed explicit effects so their final write/delete order is
-                  // identical to a non-optimistic operation.
-                  await applyOperationCacheEffects(op, effects);
-                }
-                revalidateAfterCommit(committed.revalidations ?? [], op);
-                disposition = 'committed';
-              }
-            } catch (error) {
-              options.onCacheError?.(error, op);
-              retryAt = Date.now() + QUEUE_LEASE_MS;
-              // The durable transaction may still exist (or the settlement
-              // may have completed despite a lost response). Never tell the
-              // caller to roll back while settlement is uncertain.
-              disposition = 'queued';
-            } finally {
-              liveQueuedOps.delete(attempt.transactionId);
-              attemptInFlight = false;
-              deferredUntil = retryAt;
-              scheduleDrain(
-                retryAt === undefined ? 0 : Math.max(0, retryAt - Date.now())
+            if (retry) {
+              retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
+              await host.deferOptimisticWrite(
+                attempt.transactionId,
+                claim,
+                retryAt,
+                result.error?.message ?? 'mutation returned no data'
               );
+              disposition = 'queued';
+            } else {
+              await host.rollbackOptimisticWrite(
+                attempt.transactionId,
+                claim,
+                result.error?.message ?? 'mutation returned no data'
+              );
+              disposition = 'permanently-failed';
             }
-            return withOptimisticMutationDisposition(result, {
-              kind: disposition,
-              transactionId: attempt.transactionId,
-            });
-          }
-
-          const optimistic = optimisticContextOf(op);
-          if (result.data != null && !result.error) {
-            await applyOperationCacheEffects(
-              op,
-              operationCacheEffects(result.data)
+          } else {
+            const committed = await host.commitOptimisticWrite(
+              attempt.transactionId,
+              claim,
+              {
+                query: queryText(op),
+                operationName: operationName(op),
+                variables: op.variables as Record<string, unknown> | undefined,
+                data: result.data,
+              }
             );
+            const effects = operationCacheEffects(result.data);
+            if (effects.some((effect) => effect.kind === 'delete')) {
+              // Commit already normalized the complete result. Replay only
+              // mixed explicit effects so their final write/delete order is
+              // identical to a non-optimistic operation.
+              await applyOperationCacheEffects(op, effects);
+            }
+            revalidateAfterCommit(committed.revalidations ?? [], op);
+            disposition = 'committed';
           }
-          if (optimistic) {
-            return withOptimisticMutationDisposition(result, {
-              kind:
-                result.data != null && !result.error
-                  ? 'committed'
-                  : 'permanently-failed',
-            });
-          }
+        } catch (error) {
+          options.onCacheError?.(error, op);
+          retryAt = Date.now() + QUEUE_LEASE_MS;
+          // The durable transaction may still exist (or the settlement
+          // may have completed despite a lost response). Never tell the
+          // caller to roll back while settlement is uncertain.
+          disposition = 'queued';
+        } finally {
+          liveQueuedOps.delete(attempt.transactionId);
+          attemptInFlight = false;
+          deferredUntil = retryAt;
+          scheduleDrain(
+            retryAt === undefined ? 0 : Math.max(0, retryAt - Date.now())
+          );
         }
-        return output;
+        return withOptimisticMutationDisposition(result, {
+          kind: disposition,
+          transactionId: attempt.transactionId,
+        });
+      }
+
+      async function writeThroughMutation(
+        op: Operation,
+        result: OperationResult
+      ): Promise<OperationResult> {
+        const attempt = queueAttemptOf(op);
+        if (attempt) {
+          return settleQueuedMutationAttempt(op, result, attempt);
+        }
+
+        const optimistic = optimisticContextOf(op);
+        if (result.data != null && !result.error) {
+          await applyOperationCacheEffects(
+            op,
+            operationCacheEffects(result.data)
+          );
+        }
+        if (optimistic) {
+          return withOptimisticMutationDisposition(result, {
+            kind:
+              result.data != null && !result.error
+                ? 'committed'
+                : 'permanently-failed',
+          });
+        }
+        return result;
+      }
+
+      async function writeThrough(
+        result: OperationResult
+      ): Promise<OperationResult> {
+        const op = result.operation;
+        if (op.kind === 'subscription' && result.data != null) {
+          await writeThroughSubscription(op, result);
+          return result;
+        }
+        if (op.kind === 'query' && isHydrateOnly(op)) {
+          return await writeThroughHydrateQuery(op, result);
+        }
+        if (op.kind === 'query') {
+          return await writeThroughNetworkQuery(op, result);
+        }
+        if (op.kind === 'mutation') {
+          return await writeThroughMutation(op, result);
+        }
+        return result;
       }
 
       const cacheResults$ = pipe(
