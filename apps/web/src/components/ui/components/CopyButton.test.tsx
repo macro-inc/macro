@@ -81,7 +81,7 @@ describe('CopyButton', () => {
   });
 
   it('restores the copy icon after the feedback timeout', async () => {
-    render(() => <CopyButton text="hello world" feedbackDuration={20} />);
+    render(() => <CopyButton text="hello world" feedbackDuration={30} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     await waitFor(() => {

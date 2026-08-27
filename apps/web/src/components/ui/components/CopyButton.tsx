@@ -12,7 +12,7 @@ import {
 import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
 
-const DEFAULT_FEEDBACK_MS = 2000;
+const DEFAULT_FEEDBACK_MS = 3000;
 
 /** Visual state of a copy control after the last click. */
 export type CopyStatus = 'idle' | 'success' | 'failure';
@@ -56,8 +56,13 @@ export function CopyButton(props: CopyButtonProps) {
   ]);
   const [status, setStatus] = createSignal<CopyStatus>('idle');
   let resetTimeout: ReturnType<typeof setTimeout> | undefined;
+  let buttonEl: HTMLElement | undefined;
+  let handledEvent: Event | undefined;
 
-  onCleanup(() => clearTimeout(resetTimeout));
+  onCleanup(() => {
+    clearTimeout(resetTimeout);
+    buttonEl?.removeEventListener('click', onNativeClick);
+  });
 
   const idleLabel = () => local.label ?? local.tooltip ?? 'Copy';
   const statusLabel = () => {
@@ -79,7 +84,9 @@ export function CopyButton(props: CopyButtonProps) {
     );
   };
 
-  const handleClick: ButtonProps['onClick'] = async (event) => {
+  const handleClick = async (event: Event) => {
+    if (handledEvent === event) return;
+    handledEvent = event;
     event.preventDefault();
     event.stopPropagation();
     try {
@@ -100,6 +107,10 @@ export function CopyButton(props: CopyButtonProps) {
     scheduleReset();
   };
 
+  const onNativeClick = (event: Event) => {
+    void handleClick(event);
+  };
+
   return (
     <Button
       variant={local.variant ?? 'ghost'}
@@ -110,6 +121,11 @@ export function CopyButton(props: CopyButtonProps) {
         status() === 'failure' && 'text-warning hover:text-warning'
       )}
       {...rest}
+      ref={(el) => {
+        if (buttonEl) buttonEl.removeEventListener('click', onNativeClick);
+        buttonEl = el ?? undefined;
+        buttonEl?.addEventListener('click', onNativeClick);
+      }}
       data-copy-status={status()}
       label={statusLabel()}
       onClick={handleClick}
