@@ -30,7 +30,7 @@ import {
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
-import { CalendarEventWhen } from './calendar';
+import { CalendarStamp, CalendarWideContent } from './calendar';
 import { CallParticipants, CallWideContent } from './call';
 import {
   ChannelActiveCallBadge,
@@ -150,6 +150,9 @@ export function WideLayout(props: LayoutProps) {
           <Match when={isReminderEntity(props.entity) && props.entity}>
             {(entity) => <ReminderWideContent entity={entity()} />}
           </Match>
+          <Match when={props.entity.type === 'calendar_event' && props.entity}>
+            {(entity) => <CalendarWideContent entity={entity()} />}
+          </Match>
           <Match when={isGithubPrEntity(props.entity) && props.entity}>
             {(entity) => (
               <span class="flex min-w-0 items-center gap-1">
@@ -166,9 +169,6 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
-        <Show when={props.entity.type === 'calendar_event' && props.entity}>
-          {(entity) => <CalendarEventWhen entity={entity()} />}
-        </Show>
         <Show when={isProjectEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags
@@ -296,13 +296,17 @@ export function WideLayout(props: LayoutProps) {
         <Show
           when={
             !props.hasNotifications &&
-            // Calendar rows carry their own when-label in the meta slot; the
-            // stamp would only repeat the sync time, which is not the event's.
-            props.entity.type !== 'calendar_event' &&
             !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
           }
         >
-          <Entity.Timestamp entity={props.entity} />
+          <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
+            {/* The event's own date, not its sync time. */}
+            <Match
+              when={props.entity.type === 'calendar_event' && props.entity}
+            >
+              {(entity) => <CalendarStamp entity={entity()} />}
+            </Match>
+          </Switch>
         </Show>
       </Entity.Slot>
     </Entity.Layout>

@@ -1,31 +1,26 @@
+import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
+import { emailToMacroId, getDisplayName } from '@core/user';
 import RepeatIcon from '@phosphor/repeat.svg';
 import { Show } from 'solid-js';
+import { Entity } from '../../entity';
 import type {
   CalendarEventEntity,
   CalendarEventEntityTime,
 } from '../../types/entity';
 
-const dateWithYear = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-const dateNoYear = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-});
 const timeOnly = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
   minute: '2-digit',
 });
-
-function dateLabel(date: Date): string {
-  const formatter =
-    date.getFullYear() === new Date().getFullYear() ? dateNoYear : dateWithYear;
-  return formatter.format(date);
-}
+const stampSameYear = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+});
+const stampOtherYear = new Intl.DateTimeFormat(undefined, {
+  year: '2-digit',
+  month: 'numeric',
+  day: 'numeric',
+});
 
 /** Parse an all-day `YYYY-MM-DD` key as a local date, no UTC shift. */
 function parseAllDay(value: string): Date | undefined {
@@ -39,43 +34,158 @@ function parseAllDay(value: string): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-/** When the row's resolved occurrence happens, at the row's density. */
-function formatWhen(time: CalendarEventEntityTime | undefined): string {
-  if (!time) return '';
-  if (time.kind === 'allDay') {
-    const date = parseAllDay(time.startDate);
-    return date ? dateLabel(date) : '';
-  }
+/** Start instant of the row's resolved occurrence. */
+function occurrenceStart(
+  time: CalendarEventEntityTime | undefined
+): Date | undefined {
+  if (!time) return undefined;
+  if (time.kind === 'allDay') return parseAllDay(time.startDate);
   const start = new Date(time.startsAt);
-  if (Number.isNaN(start.getTime())) return '';
-  return `${dateLabel(start)} · ${timeOnly.format(start)}`;
+  return Number.isNaN(start.getTime()) ? undefined : start;
 }
 
-/** The organizer's display name, falling back to their email. */
-function organizerLabel(entity: CalendarEventEntity): string | undefined {
-  const organizer = entity.organizer;
-  if (!organizer) return undefined;
-  return organizer.name || organizer.email || undefined;
+/** Compact right-aligned date for the timestamp column (fits its 8ch slot). */
+export function formatStampDate(
+  time: CalendarEventEntityTime | undefined
+): string {
+  const date = occurrenceStart(time);
+  if (!date) return '';
+  return date.getFullYear() === new Date().getFullYear()
+    ? stampSameYear.format(date)
+    : stampOtherYear.format(date);
+}
+
+/** Time-of-day range for the left detail line; the date rides the stamp. */
+function formatTimeOfDay(time: CalendarEventEntityTime | undefined): string {
+  if (!time) return '';
+  if (time.kind === 'allDay') return 'All day';
+  const start = new Date(time.startsAt);
+  if (Number.isNaN(start.getTime())) return '';
+  const end = new Date(time.endsAt);
+  if (Number.isNaN(end.getTime()) || end.getTime() === start.getTime()) {
+    return timeOnly.format(start);
+  }
+  return `${timeOnly.format(start)}–${timeOnly.format(end)}`;
+}
+
+/** Plain-text preview of a description that may carry HTML from the source. */
+function descriptionPreview(raw: string | undefined): string {
+  if (!raw) return '';
+  return raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The organizer resolved to a Macro user (id) when their email is one, else
+ * keyed by the raw email so a non-Macro organizer still gets a contact icon. */
+function organizerIconProps(
+  entity: CalendarEventEntity
+): UserIconProps | undefined {
+  const email = entity.organizer?.email;
+  if (!email) return undefined;
+  const macroId = emailToMacroId(email);
+  return macroId ? { id: macroId } : { email };
+}
+
+/** Organizer display: the Macro profile name when resolved, else the source's
+ * own name, else the email. Read reactively so it fills in when the user's
+ * name cache resolves. */
+function organizerName(entity: CalendarEventEntity): string {
+  const email = entity.organizer?.email;
+  const macroId = email ? emailToMacroId(email) : undefined;
+  const resolved = macroId ? getDisplayName(macroId).trim() : '';
+  return resolved || entity.organizer?.name || email || '';
+}
+
+const Dot = () => <span class="shrink-0 text-ink/30">·</span>;
+
+/**
+ * Left-justified content for a calendar event row, matching how email and
+ * channel rows read: the title, then the occurrence time, the organizer as a
+ * Macro user (avatar + name), and a description preview — with the date on the
+ * trailing timestamp so recurring occurrences stay distinguishable.
+ */
+export function CalendarWideContent(props: { entity: CalendarEventEntity }) {
+  const iconProps = () => organizerIconProps(props.entity);
+  const time = () => formatTimeOfDay(props.entity.time);
+  const description = () => descriptionPreview(props.entity.description);
+
+  return (
+    <>
+      <span class="shrink-0 truncate">
+        <Entity.Title entity={props.entity} />
+      </span>
+      <span class="flex min-w-0 items-center gap-1.5 font-normal text-ink-muted">
+        <Show when={props.entity.isRecurring}>
+          <RepeatIcon class="size-3 shrink-0" aria-label="Repeats" />
+        </Show>
+        <Show when={time()}>
+          <span class="shrink-0">{time()}</span>
+        </Show>
+        <Show when={iconProps()}>
+          {(props_) => (
+            <span class="flex shrink-0 items-center gap-1">
+              <Dot />
+              <span class="size-4 shrink-0 overflow-hidden rounded-full">
+                <UserIcon
+                  {...props_()}
+                  size="fill"
+                  suppressClick
+                  showTooltip={false}
+                />
+              </span>
+              <span class="max-w-40 truncate">
+                {organizerName(props.entity)}
+              </span>
+            </span>
+          )}
+        </Show>
+        <Show when={description()}>
+          <Dot />
+          <span class="min-w-0 truncate">{description()}</span>
+        </Show>
+      </span>
+    </>
+  );
+}
+
+/** The date a calendar row resolved to, for the trailing timestamp slot. */
+export function CalendarStamp(props: { entity: CalendarEventEntity }) {
+  return <>{formatStampDate(props.entity.time)}</>;
 }
 
 /**
- * Trailing summary for a calendar event row in the mixed search list: the
- * resolved occurrence's date/time, a recurrence glyph when the event repeats,
- * and the organizer — enough to tell one hit from another at a glance.
+ * Compact single-line summary for the narrow mixed-search layout, where there
+ * is only one trailing slot: date/time, a recurrence glyph, and the organizer
+ * name (no avatar — the row is too tight for one).
  */
 export function CalendarEventWhen(props: { entity: CalendarEventEntity }) {
-  const when = () => formatWhen(props.entity.time);
-  const organizer = () => organizerLabel(props.entity);
+  const start = () => occurrenceStart(props.entity.time);
+  const when = () => {
+    const date = start();
+    if (!date) return '';
+    const time = formatTimeOfDay(props.entity.time);
+    return time === 'All day'
+      ? `${formatStampDate(props.entity.time)} · All day`
+      : `${formatStampDate(props.entity.time)} · ${timeOnly.format(date)}`;
+  };
   return (
     <span class="inline-flex min-w-0 items-center gap-1 whitespace-nowrap text-xs text-ink-extra-muted font-normal">
       <Show when={props.entity.isRecurring}>
         <RepeatIcon class="size-3 shrink-0" aria-label="Repeats" />
       </Show>
       <span class="shrink-0">{when()}</span>
-      <Show when={organizer()}>
+      <Show when={organizerName(props.entity)}>
         {(name) => (
           <>
-            <span class="shrink-0 text-ink/30">·</span>
+            <Dot />
             <span class="max-w-40 truncate">{name()}</span>
           </>
         )}

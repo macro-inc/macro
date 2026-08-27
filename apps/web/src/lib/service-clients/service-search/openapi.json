@@ -237,6 +237,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Free-text description, when the event carries one. May contain HTML from\nthe source; clients render a plain-text preview."
+          },
           "isReadOnly": {
             "type": "boolean",
             "description": "Whether the canonical source prohibits mutation."

@@ -175,6 +175,7 @@ pub fn construct_search_result(
                     conference_url: info.conference_url.clone(),
                     is_read_only: info.is_read_only,
                     organizer: to_organizer(info),
+                    description: info.description.clone(),
                 }),
                 properties: properties_map
                     .remove(&entity_id.to_string())

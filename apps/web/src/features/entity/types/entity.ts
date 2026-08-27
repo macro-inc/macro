@@ -373,6 +373,9 @@ export type CalendarEventEntity = EntityBase & {
   /** The event's organizer (its creator, in Google's model), when named.
    * Only search rows populate it. */
   organizer?: { name?: string; email?: string };
+  /** Free-text description, when the event carries one. May contain HTML from
+   * the source. Only search rows populate it. */
+  description?: string;
   /** Direct join URL when known. */
   conferenceUrl?: string;
   /** Whether the canonical source prohibits mutation. */

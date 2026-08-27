@@ -574,6 +574,7 @@ export const useSearchResponseItemMapper = () => {
                   email: metadata.organizer.email ?? undefined,
                 }
               : undefined,
+            description: metadata.description ?? undefined,
             conferenceUrl: metadata.conferenceUrl ?? undefined,
             isReadOnly: metadata.isReadOnly,
             createdAt: metadata.createdAt,

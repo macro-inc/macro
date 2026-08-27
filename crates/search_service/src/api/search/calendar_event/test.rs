@@ -28,6 +28,7 @@ fn timed_series(id: Uuid) -> CalendarEventSearchInfo {
         conference_url: None,
         organizer_email: Some("jacob@example.com".to_string()),
         organizer_name: Some("Jacob Beckerman".to_string()),
+        description: None,
         is_read_only: false,
         created_at: Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
         updated_at: Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),

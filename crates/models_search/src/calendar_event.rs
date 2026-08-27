@@ -129,6 +129,10 @@ pub struct CalendarEventMetadata {
     /// The event's organizer (creator), when the source names one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub organizer: Option<CalendarEventOrganizer>,
+    /// Free-text description, when the event carries one. May contain HTML from
+    /// the source; clients render a plain-text preview.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 /// CalendarEventSearchResponseItem with metadata fetched from macrodb.

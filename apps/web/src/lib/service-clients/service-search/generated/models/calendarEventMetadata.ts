@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CalendarEventMetadataConferenceUrl } from './calendarEventMetadataConferenceUrl';
+import type { CalendarEventMetadataDescription } from './calendarEventMetadataDescription';
 import type { CalendarEventMetadataOccurrence } from './calendarEventMetadataOccurrence';
 import type { CalendarEventMetadataOrganizer } from './calendarEventMetadataOrganizer';
 import type { CalendarEventSearchTime } from './calendarEventSearchTime';
@@ -20,6 +21,9 @@ export interface CalendarEventMetadata {
   /** Direct conference join URL when known. */
   conferenceUrl?: CalendarEventMetadataConferenceUrl;
   createdAt: string;
+  /** Free-text description, when the event carries one. May contain HTML from
+the source; clients render a plain-text preview. */
+  description?: CalendarEventMetadataDescription;
   /** Whether the canonical source prohibits mutation. */
   isReadOnly: boolean;
   /** Whether the series carries a recurrence rule. Lets a row render a

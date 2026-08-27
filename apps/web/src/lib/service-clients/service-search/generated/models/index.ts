@@ -10,6 +10,7 @@ export * from './calendarEventFiltersEndsAfter';
 export * from './calendarEventFiltersStartsBefore';
 export * from './calendarEventMetadata';
 export * from './calendarEventMetadataConferenceUrl';
+export * from './calendarEventMetadataDescription';
 export * from './calendarEventMetadataOccurrence';
 export * from './calendarEventMetadataOrganizer';
 export * from './calendarEventOrganizer';
