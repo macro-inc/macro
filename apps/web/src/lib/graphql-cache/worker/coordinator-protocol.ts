@@ -355,246 +355,246 @@ const isSearchRequest = (value: unknown): boolean => {
 const commonRequest = (record: UnknownRecord): boolean =>
   isSafeNonNegativeInteger(record.id) && isNonEmptyString(record.kind);
 
+const isInitCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, ['id', 'kind', 'scope', 'hotCapacity']) &&
+  isNonEmptyString(value.scope) &&
+  isOptionalPositiveInteger(value.hotCapacity);
+
+const isKindOnlyCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, ['id', 'kind']);
+
+const isReadCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'opId',
+    'query',
+    'operationName',
+    'variables',
+    'priority',
+    'entityResolvers',
+  ]) &&
+  isOptionalString(value.opId) &&
+  isString(value.query) &&
+  isOptionalString(value.operationName) &&
+  isOptionalRecord(value.variables) &&
+  (value.priority === undefined || value.priority === 'user-visible') &&
+  isEntityResolvers(value.entityResolvers);
+
+const isWriteCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'originOpId',
+    'registration',
+    'query',
+    'operationName',
+    'variables',
+    'data',
+    'identity',
+  ]) &&
+  isOptionalString(value.originOpId) &&
+  isWriteRegistration(value.registration) &&
+  isString(value.query) &&
+  isOptionalString(value.operationName) &&
+  isOptionalRecord(value.variables) &&
+  hasOwn(value, 'data') &&
+  isOptionalString(value.identity);
+
+const isHydrateCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'query',
+    'operationName',
+    'variables',
+    'data',
+    'identity',
+  ]) &&
+  isString(value.query) &&
+  isOptionalString(value.operationName) &&
+  isOptionalRecord(value.variables) &&
+  hasOwn(value, 'data') &&
+  isOptionalString(value.identity);
+
+const isEnqueueOptimisticMutationCacheRequest = (
+  value: UnknownRecord
+): boolean =>
+  hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'originOpId',
+    'query',
+    'operationName',
+    'variables',
+    'data',
+    'linkPatches',
+    'revalidations',
+    'createdAtMs',
+    'owner',
+    'nowMs',
+    'leaseExpiresAtMs',
+  ]) &&
+  isOptionalString(value.originOpId) &&
+  isString(value.query) &&
+  isOptionalString(value.operationName) &&
+  isOptionalRecord(value.variables) &&
+  hasOwn(value, 'data') &&
+  (value.linkPatches === undefined || Array.isArray(value.linkPatches)) &&
+  (value.revalidations === undefined || Array.isArray(value.revalidations)) &&
+  isSafeNonNegativeInteger(value.createdAtMs) &&
+  isString(value.owner) &&
+  isSafeNonNegativeInteger(value.nowMs) &&
+  isSafeNonNegativeInteger(value.leaseExpiresAtMs);
+
+const isClaimNextMutationCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, ['id', 'kind', 'owner', 'nowMs', 'leaseExpiresAtMs']) &&
+  isString(value.owner) &&
+  isSafeNonNegativeInteger(value.nowMs) &&
+  isSafeNonNegativeInteger(value.leaseExpiresAtMs);
+
+const isDeferOptimisticWriteCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'transactionId',
+    'leaseOwner',
+    'leaseGeneration',
+    'nextAttemptAtMs',
+    'error',
+  ]) &&
+  isString(value.transactionId) &&
+  isString(value.leaseOwner) &&
+  isString(value.leaseGeneration) &&
+  isSafeNonNegativeInteger(value.nextAttemptAtMs) &&
+  isString(value.error);
+
+const isCommitOptimisticWriteCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'transactionId',
+    'leaseOwner',
+    'leaseGeneration',
+    'query',
+    'operationName',
+    'variables',
+    'data',
+  ]) &&
+  isString(value.transactionId) &&
+  isString(value.leaseOwner) &&
+  isString(value.leaseGeneration) &&
+  isString(value.query) &&
+  isOptionalString(value.operationName) &&
+  isOptionalRecord(value.variables) &&
+  hasOwn(value, 'data');
+
+const isRollbackOptimisticWriteCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'transactionId',
+    'leaseOwner',
+    'leaseGeneration',
+    'error',
+  ]) &&
+  isString(value.transactionId) &&
+  isString(value.leaseOwner) &&
+  isString(value.leaseGeneration) &&
+  isString(value.error);
+
+const isReadRecordsByKeysCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, ['id', 'kind', 'document', 'fragmentName', 'keys']) &&
+  isString(value.document) &&
+  isString(value.fragmentName) &&
+  Array.isArray(value.keys) &&
+  value.keys.length <= MAX_RECORD_SELECTION_PAGE_SIZE &&
+  value.keys.every(isValidNormalizedRecordKey);
+
+const isSearchCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+  isSearchRequest(value.request);
+
+const ENTITY_FILTER_SORT_METHODS = [
+  'CREATED_AT',
+  'UPDATED_AT',
+  'VIEWED_AT',
+  'VIEWED_UPDATED',
+] as const;
+
+const isEntityFilterCacheRequest = (value: UnknownRecord): boolean => {
+  const request = value.request;
+  return (
+    hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+    isRecord(request) &&
+    hasOnlyKeys(request, ['filters', 'sortMethod', 'sortDirection', 'limit']) &&
+    isRecord(request.filters) &&
+    ENTITY_FILTER_SORT_METHODS.includes(
+      request.sortMethod as (typeof ENTITY_FILTER_SORT_METHODS)[number]
+    ) &&
+    (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
+    isValidCacheSearchLimit(request.limit)
+  );
+};
+
+const isInspectQueryCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, [
+    'id',
+    'kind',
+    'query',
+    'operationName',
+    'path',
+    'variableFilters',
+  ]) &&
+  isString(value.query) &&
+  isOptionalString(value.operationName) &&
+  isPath(value.path) &&
+  (value.variableFilters === undefined ||
+    (Array.isArray(value.variableFilters) &&
+      value.variableFilters.every(isRecord)));
+
+const isInspectQueryVariantsCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, ['id', 'kind', 'query', 'operationName', 'path']) &&
+  isString(value.query) &&
+  isOptionalString(value.operationName) &&
+  isPath(value.path);
+
+const isTeardownCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, ['id', 'kind', 'opId']) && isString(value.opId);
+
+const isKeysCacheRequest = (value: UnknownRecord): boolean =>
+  hasOnlyKeys(value, ['id', 'kind', 'keys']) && isStringArray(value.keys);
+
+const CACHE_REQUEST_VALIDATORS: Record<
+  string,
+  (value: UnknownRecord) => boolean
+> = {
+  init: isInitCacheRequest,
+  'current-revision': isKindOnlyCacheRequest,
+  read: isReadCacheRequest,
+  write: isWriteCacheRequest,
+  hydrate: isHydrateCacheRequest,
+  'enqueue-optimistic-mutation': isEnqueueOptimisticMutationCacheRequest,
+  'claim-next-mutation': isClaimNextMutationCacheRequest,
+  'defer-optimistic-write': isDeferOptimisticWriteCacheRequest,
+  'commit-optimistic-write': isCommitOptimisticWriteCacheRequest,
+  'rollback-optimistic-write': isRollbackOptimisticWriteCacheRequest,
+  'read-records-by-keys': isReadRecordsByKeysCacheRequest,
+  search: isSearchCacheRequest,
+  'entity-filter': isEntityFilterCacheRequest,
+  'inspect-query': isInspectQueryCacheRequest,
+  'inspect-query-variants': isInspectQueryVariantsCacheRequest,
+  teardown: isTeardownCacheRequest,
+  invalidate: isKeysCacheRequest,
+  'delete-records': isKeysCacheRequest,
+  clear: isKindOnlyCacheRequest,
+};
+
 /** Strictly validates a cache RPC request nested in a coordinator envelope. */
 export function isCacheRequest(value: unknown): value is CacheRequest {
   if (!isRecord(value) || !commonRequest(value)) return false;
-  switch (value.kind) {
-    case 'init':
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'scope', 'hotCapacity']) &&
-        isNonEmptyString(value.scope) &&
-        isOptionalPositiveInteger(value.hotCapacity)
-      );
-    case 'current-revision':
-      return hasOnlyKeys(value, ['id', 'kind']);
-    case 'read':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'opId',
-          'query',
-          'operationName',
-          'variables',
-          'priority',
-          'entityResolvers',
-        ]) &&
-        isOptionalString(value.opId) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isOptionalRecord(value.variables) &&
-        (value.priority === undefined || value.priority === 'user-visible') &&
-        isEntityResolvers(value.entityResolvers)
-      );
-    case 'write':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'originOpId',
-          'registration',
-          'query',
-          'operationName',
-          'variables',
-          'data',
-          'identity',
-        ]) &&
-        isOptionalString(value.originOpId) &&
-        isWriteRegistration(value.registration) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isOptionalRecord(value.variables) &&
-        hasOwn(value, 'data') &&
-        isOptionalString(value.identity)
-      );
-    case 'hydrate':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'query',
-          'operationName',
-          'variables',
-          'data',
-          'identity',
-        ]) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isOptionalRecord(value.variables) &&
-        hasOwn(value, 'data') &&
-        isOptionalString(value.identity)
-      );
-    case 'enqueue-optimistic-mutation':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'originOpId',
-          'query',
-          'operationName',
-          'variables',
-          'data',
-          'linkPatches',
-          'revalidations',
-          'createdAtMs',
-          'owner',
-          'nowMs',
-          'leaseExpiresAtMs',
-        ]) &&
-        isOptionalString(value.originOpId) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isOptionalRecord(value.variables) &&
-        hasOwn(value, 'data') &&
-        (value.linkPatches === undefined || Array.isArray(value.linkPatches)) &&
-        (value.revalidations === undefined ||
-          Array.isArray(value.revalidations)) &&
-        isSafeNonNegativeInteger(value.createdAtMs) &&
-        isString(value.owner) &&
-        isSafeNonNegativeInteger(value.nowMs) &&
-        isSafeNonNegativeInteger(value.leaseExpiresAtMs)
-      );
-    case 'claim-next-mutation':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'owner',
-          'nowMs',
-          'leaseExpiresAtMs',
-        ]) &&
-        isString(value.owner) &&
-        isSafeNonNegativeInteger(value.nowMs) &&
-        isSafeNonNegativeInteger(value.leaseExpiresAtMs)
-      );
-    case 'defer-optimistic-write':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'transactionId',
-          'leaseOwner',
-          'leaseGeneration',
-          'nextAttemptAtMs',
-          'error',
-        ]) &&
-        isString(value.transactionId) &&
-        isString(value.leaseOwner) &&
-        isString(value.leaseGeneration) &&
-        isSafeNonNegativeInteger(value.nextAttemptAtMs) &&
-        isString(value.error)
-      );
-    case 'commit-optimistic-write':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'transactionId',
-          'leaseOwner',
-          'leaseGeneration',
-          'query',
-          'operationName',
-          'variables',
-          'data',
-        ]) &&
-        isString(value.transactionId) &&
-        isString(value.leaseOwner) &&
-        isString(value.leaseGeneration) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isOptionalRecord(value.variables) &&
-        hasOwn(value, 'data')
-      );
-    case 'rollback-optimistic-write':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'transactionId',
-          'leaseOwner',
-          'leaseGeneration',
-          'error',
-        ]) &&
-        isString(value.transactionId) &&
-        isString(value.leaseOwner) &&
-        isString(value.leaseGeneration) &&
-        isString(value.error)
-      );
-    case 'read-records-by-keys':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'document',
-          'fragmentName',
-          'keys',
-        ]) &&
-        isString(value.document) &&
-        isString(value.fragmentName) &&
-        Array.isArray(value.keys) &&
-        value.keys.length <= MAX_RECORD_SELECTION_PAGE_SIZE &&
-        value.keys.every(isValidNormalizedRecordKey)
-      );
-    case 'search':
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
-        isSearchRequest(value.request)
-      );
-    case 'entity-filter': {
-      const request = value.request;
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
-        isRecord(request) &&
-        hasOnlyKeys(request, [
-          'filters',
-          'sortMethod',
-          'sortDirection',
-          'limit',
-        ]) &&
-        isRecord(request.filters) &&
-        ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
-          request.sortMethod as string
-        ) &&
-        (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
-        isValidCacheSearchLimit(request.limit)
-      );
-    }
-    case 'inspect-query':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'query',
-          'operationName',
-          'path',
-          'variableFilters',
-        ]) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isPath(value.path) &&
-        (value.variableFilters === undefined ||
-          (Array.isArray(value.variableFilters) &&
-            value.variableFilters.every(isRecord)))
-      );
-    case 'inspect-query-variants':
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'query', 'operationName', 'path']) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isPath(value.path)
-      );
-    case 'teardown':
-      return hasOnlyKeys(value, ['id', 'kind', 'opId']) && isString(value.opId);
-    case 'invalidate':
-    case 'delete-records':
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'keys']) && isStringArray(value.keys)
-      );
-    case 'clear':
-      return hasOnlyKeys(value, ['id', 'kind']);
-    default:
-      return false;
-  }
+  const validate = CACHE_REQUEST_VALIDATORS[value.kind as string];
+  return validate !== undefined && validate(value);
 }
 
 /** Validates an untrusted page-to-coordinator message. */
