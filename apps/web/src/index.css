@@ -927,7 +927,6 @@ a {
 
 @utility macro-message-padding {
   @container (width < 936px) { padding-inline: calc(var(--spacing) * 4); }
-  @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
 }
 
 @utility macro-thread-avatar-axis {
@@ -938,31 +937,12 @@ a {
 @utility macro-thread-card-outdent {
   --thread-avatar-axis: calc(0.5px + var(--spacing) * 1.5 + var(--spacing) * 2 - var(--spacing) * 3);
   --thread-card-outdent: calc(var(--spacing) * 4 - var(--thread-avatar-axis) + 0.5px);
-  @container (width < 640px) {
-    --thread-card-outdent: min(
-      calc(var(--spacing) * 4 - var(--thread-avatar-axis) + 0.5px),
-      calc(var(--spacing) * 2)
-    );
+  @container (width < 816px) {
+    --thread-card-outdent: 0px;
   }
   margin-inline: calc(-1 * var(--thread-card-outdent));
   width: calc(100% + 2 * var(--thread-card-outdent));
-  --thread-card-radius: var(--radius-lg);
-  /* Keep --radius-lg above 40rem. Sharpen to 0 by 20rem. */
-  --thread-card-radius-used: var(--thread-card-radius);
-  --thread-card-radius-used: clamp(
-    0px,
-    (100cqi - 20rem) / 20rem * var(--thread-card-radius),
-    var(--thread-card-radius)
-  );
-  border-top-left-radius: var(--thread-card-radius-used);
-  border-top-right-radius: var(--thread-card-radius-used);
-  border-bottom-left-radius: var(--thread-card-radius-used);
-  border-bottom-right-radius: var(--thread-card-radius-used);
-  transition:
-    border-top-left-radius 150ms ease-out,
-    border-top-right-radius 150ms ease-out,
-    border-bottom-left-radius 150ms ease-out,
-    border-bottom-right-radius 150ms ease-out;
+  border-radius: var(--radius-lg);
 }
 
 @utility macro-thread-collapsed-row {
