@@ -86,7 +86,7 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
                 </p>
               </div>
               <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-                <Button variant="cta" size="lg" onClick={props.onSkip}>
+                <Button variant="cta" size="xl" onClick={props.onSkip}>
                   Continue
                   <ArrowRightIcon />
                 </Button>
@@ -101,11 +101,11 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
             </p>
           </div>
           <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-            <Button variant="cta" size="lg" onClick={props.onStart}>
+            <Button variant="cta" size="xl" onClick={props.onStart}>
               Play tutorial
               <ArrowRightIcon />
             </Button>
-            <Button variant="ghost" size="lg" onClick={props.onSkip}>
+            <Button variant="ghost" size="xl" onClick={props.onSkip}>
               Skip tutorial
             </Button>
           </div>
@@ -127,11 +127,11 @@ function EndScreen(props: { onFinish: () => void; onReplay: () => void }) {
           </p>
         </div>
         <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-          <Button variant="cta" size="lg" onClick={props.onFinish}>
+          <Button variant="cta" size="xl" onClick={props.onFinish}>
             Let’s go
             <ArrowRightIcon />
           </Button>
-          <Button variant="ghost" size="lg" onClick={props.onReplay}>
+          <Button variant="ghost" size="xl" onClick={props.onReplay}>
             Replay tutorial
           </Button>
         </div>
@@ -160,7 +160,7 @@ function ModalFooter(props: { lesson: LessonState }) {
         <div class="flex items-center justify-end gap-2 shrink-0">
           <Button
             variant="ghost"
-            size="lg"
+            size="xl"
             onClick={onboarding.handleSkipLesson}
           >
             Skip lesson
@@ -168,7 +168,7 @@ function ModalFooter(props: { lesson: LessonState }) {
           <Button
             ref={onboarding.setContinueButtonRef}
             variant="cta"
-            size="lg"
+            size="xl"
             onClick={onboarding.handleContinue}
             disabled={!onboarding.readyToContinue()}
           >

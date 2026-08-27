@@ -35,12 +35,14 @@ const BUTTON_VARIANTS = [
   'cta',
 ] as const;
 const BUTTON_CONTENT_VARIANTS = ['outline', 'accent', 'strong', 'cta'] as const;
-const BUTTON_SIZES = ['sm', 'md', 'lg'] as const;
+const BUTTON_SIZES = ['sm', 'md', 'lg', 'xl'] as const;
+const BADGE_SIZES = ['sm', 'md', 'lg'] as const;
 const BADGE_VARIANTS = ['ghost', 'outline'] as const;
 const BUTTON_SIZE_LABELS = {
   sm: 'Small',
   md: 'Default',
   lg: 'Large',
+  xl: 'Extra Large',
 } as const;
 
 function ThemeDebug() {
@@ -366,7 +368,7 @@ function ThemeDebug() {
                     </Badge>
                   </div>
                 </div>
-                <For each={BUTTON_SIZES}>
+                <For each={BADGE_SIZES}>
                   {(size) => (
                     <div class="flex flex-col items-start gap-2">
                       <span class="text-xs text-ink-extra-muted font-mono">

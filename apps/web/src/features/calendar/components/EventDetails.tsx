@@ -373,7 +373,8 @@ function EventRemindersItem(props: {
   const reminders = createMemo(() =>
     resolveReminderOverrides(
       props.event.reminders,
-      props.defaultReminders
+      props.defaultReminders,
+      props.event.eventType
     ).toSorted((a, b) => a.minutes - b.minutes)
   );
 

@@ -51,6 +51,15 @@ local-e2e-seed:
   just initialize_dbs
   just tooling/seed_cli/local-e2e-smoke
 
+# Email rendering snapshots (Playwright HTML fixtures, not inbox e2e).
+# Add a fixture under apps/web/src/lib/core/email/tests/fixtures, then
+# `just test-email-rendering-update`.
+test-email-rendering:
+  just apps/web/test-email-rendering
+
+test-email-rendering-update:
+  just apps/web/test-email-rendering-update
+
 # Apply a seed scenario (teams/perms/entities) to the local stack, e.g.
 # `just seed-scenario apply --file seed/scenarios/team-perms.json`.
 # Add --force to drop and re-migrate the local database first (pristine world).

@@ -205,6 +205,7 @@ export * from './eventTimeOneOfFourKind';
 export * from './eventTimeOneOfKind';
 export * from './eventTimeOneOfTimeZone';
 export * from './eventTransparency';
+export * from './eventType';
 export * from './eventVisibility';
 export * from './getActiveBackfillJobResponse';
 export * from './getAttachmentDocumentIDResponse';

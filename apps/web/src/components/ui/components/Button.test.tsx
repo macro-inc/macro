@@ -47,6 +47,7 @@ describe('buttonClasses', () => {
     ['sm', 'h-6', 'px-2', 'text-xs', 'size-3'],
     ['md', 'h-8', 'px-2', 'text-sm', 'size-3.5'],
     ['lg', 'h-9', 'px-3', 'text-base', 'size-[1em]'],
+    ['xl', 'h-12', 'px-4', 'text-base', 'size-5'],
   ] as const)(
     'gives %s buttons the intended height, padding, text size, and icon size',
     (size, heightClass, paddingClass, textClass, iconClass) => {

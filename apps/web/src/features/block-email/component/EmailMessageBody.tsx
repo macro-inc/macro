@@ -24,6 +24,8 @@ import {
 } from 'solid-js';
 import { themeReactive } from '../../theme/signals/themeReactive';
 import { themeUpdate } from '../../theme/signals/themeSignals';
+import { EMAIL_BODY_CONTAINMENT_CSS } from '../util/emailBodyContainmentCss';
+import { fitToWidthZoom } from '../util/fitToWidthZoom';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import {
   fetchImagesViaPlatform,
@@ -144,16 +146,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       isPersonal() && !isMacroSender()
         ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
         : '';
-    // Let long &nbsp;-joined signature lines wrap (overflow-wrap is inherited)
-    // and fixed-width tables scroll, so a wide signature doesn't trip the
-    // fit-to-width zoom below and shrink the whole message.
-    const signatureContain = `.macro-email-signature{max-width:100%;overflow-x:auto;overflow-wrap:anywhere;}`;
-    // Browser default blockquote margins apply on both sides. In long email
-    // reply chains that compounds into a narrow column, so keep quote nesting
-    // as a left indent only.
-    const quoteContain =
-      'blockquote{margin-block:0.75em!important;margin-inline-start:1.5em!important;margin-inline-end:0!important;max-width:100%!important;box-sizing:border-box;}';
-    styleEl.textContent = `img{display: var(--macro-email-img-display, initial); max-width: 100% !important; height: auto !important;}${signatureContain}${quoteContain}${fontOverride}`;
+    // Containment (images, signatures, quotes, pre/code) lives in
+    // EMAIL_BODY_CONTAINMENT_CSS so the snapshot harness stays in lockstep.
+    styleEl.textContent = `${EMAIL_BODY_CONTAINMENT_CSS}${fontOverride}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = source()?.mainContent ?? '';
@@ -253,7 +248,8 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     );
   });
 
-  // Scale down wide HTML emails to fit the container width (like Gmail on mobile)
+  // After containment, shrink leftover wide canvases (newsletter tables)
+  // to the pane. Pathological width is floored so type stays readable.
   createEffect(() => {
     const container = host();
     // Re-run when source changes
@@ -266,6 +262,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       if (messageDiv instanceof HTMLElement) {
         messageDiv.style.zoom = '';
         messageDiv.style.overflow = '';
+        messageDiv.style.overflowX = '';
       }
     };
 
@@ -280,22 +277,28 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       const messageDiv = root.querySelector('div');
       if (!messageDiv || !(messageDiv instanceof HTMLElement)) return;
 
-      // Reset any previous scaling before measuring
+      // Reset any previous scaling before measuring. overflowX is a longhand
+      // and survives clearing the overflow shorthand.
       messageDiv.style.zoom = '';
       messageDiv.style.overflow = '';
+      messageDiv.style.overflowX = '';
 
-      const containerWidth = container.clientWidth;
-      const contentWidth = messageDiv.scrollWidth;
-
-      if (containerWidth > 0 && contentWidth > containerWidth) {
-        const scale = containerWidth / contentWidth;
-        // Use zoom instead of transform: scale() so that backgrounds,
-        // borders, and layout all shrink together without clipping.
-        messageDiv.style.zoom = `${scale}`;
+      const fit = fitToWidthZoom({
+        containerWidth: container.clientWidth,
+        contentWidth: messageDiv.scrollWidth,
+      });
+      if (!fit) {
+        // When content fits, leave overflow alone. overflow:auto on a fitting
+        // body turns hidden tracking-pixel divs into a message-height scrollbar.
+        return;
       }
-      // When content fits, leave overflow alone — an overflow:auto wrapper
-      // turns hidden tracking-pixel divs (e.g. max-height:1px) into a
-      // message-height scrollbar.
+      // Use zoom instead of transform: scale() so backgrounds, borders, and
+      // layout shrink together without clipping. The floor keeps leftover
+      // canvas overflow (a 600px newsletter on a skinny pane) readable.
+      messageDiv.style.zoom = `${fit.zoom}`;
+      if (fit.overflowsAfterZoom) {
+        messageDiv.style.overflowX = 'auto';
+      }
     };
 
     // Re-run on container resize (e.g. orientation change, split resize)

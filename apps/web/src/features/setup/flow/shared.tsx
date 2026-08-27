@@ -135,9 +135,14 @@ export function ContinueButton(props: {
   onClick: () => void;
 }) {
   return (
-    <Button variant="cta" disabled={props.disabled} onClick={props.onClick}>
+    <Button
+      variant="cta"
+      size="xl"
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
       {props.label ?? 'Continue'}
-      <ArrowRight class="size-4" />
+      <ArrowRight class="size-5" />
     </Button>
   );
 }
