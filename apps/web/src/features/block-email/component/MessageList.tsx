@@ -216,26 +216,24 @@ export function MessageList(props: MessageListProps) {
                 >
                   <div class="shrink-0 w-full flex justify-center">
                     <div class="macro-message-width macro-message-padding w-full">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        fullWidth
-                        class="relative h-6 justify-center px-0 text-xs font-medium text-ink-muted"
-                        label={`Show ${truncatedMiddleCount(context.messages.list().length)} hidden messages`}
-                        onClick={() => setShowMiddleMessages(true)}
-                      >
+                      <div class="relative flex h-6 items-center justify-center">
                         <span
                           aria-hidden="true"
                           class="absolute inset-x-0 top-1/2 border-t border-edge-muted"
                         />
-                        <span class="relative bg-panel px-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          class="relative bg-panel px-2 text-xs font-medium text-ink-muted"
+                          onClick={() => setShowMiddleMessages(true)}
+                        >
                           Show{' '}
                           {truncatedMiddleCount(
                             context.messages.list().length
                           )}{' '}
                           hidden messages
-                        </span>
-                      </Button>
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </Show>
