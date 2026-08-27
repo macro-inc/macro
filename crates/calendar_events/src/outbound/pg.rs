@@ -3504,7 +3504,7 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
                         FROM calendar_event_override_attendees attendee
                         JOIN email_links owner_inbox
                           ON owner_inbox.macro_id = event.owner_id
-                         AND lower(owner_inbox.email_address::text) = lower(attendee.email)
+                         AND lower(owner_inbox.email_address::text) = attendee.email
                         WHERE attendee.event_id = event.id
                           AND attendee.recurrence_id = occurrence.recurrence_id
                           AND attendee.response_status = 'declined'
@@ -3514,7 +3514,7 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
                         FROM calendar_event_attendees attendee
                         JOIN email_links owner_inbox
                           ON owner_inbox.macro_id = event.owner_id
-                         AND lower(owner_inbox.email_address::text) = lower(attendee.email)
+                         AND lower(owner_inbox.email_address::text) = attendee.email
                         WHERE attendee.event_id = event.id
                           AND attendee.response_status = 'declined'
                      )
