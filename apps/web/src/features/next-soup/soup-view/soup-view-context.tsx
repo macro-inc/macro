@@ -606,7 +606,7 @@ export const SoupViewContextProvider: FlowComponent<
     default: 'board',
   });
   const [readFilter, setReadFilter] = makeFlaggedPersisted(
-    useEntryState<ReadFilter>('soup.readFilter', { default: 'unread' }),
+    useEntryState<ReadFilter>('soup.readFilter', { default: 'all' }),
     {
       enabled: filterPersistenceEnabled,
       name: soupViewPersistenceKey('soup-view-read-filter'),
