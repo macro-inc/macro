@@ -50,6 +50,7 @@ const glassSizeStyles: Record<ButtonSize, string> = {
   'icon-md': 'glass',
   lg: 'glass',
   'icon-lg': 'glass',
+  xl: 'glass-lg',
 };
 
 // Literal strings only — Tailwind's scanner can't see template-built classes.
@@ -62,6 +63,7 @@ const hoverGlassSizeStyles: Record<ButtonSize, string> = {
   'icon-md': 'hover:glass',
   lg: 'hover:glass',
   'icon-lg': 'hover:glass',
+  xl: 'hover:glass-lg',
 };
 
 const HOVER_ONLY_GLASS_VARIANTS = new Set<ButtonVariant>(['ghost', 'outline']);

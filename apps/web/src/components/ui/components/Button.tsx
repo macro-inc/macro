@@ -140,7 +140,8 @@ export function buttonClasses(options: ButtonClassOptions = {}): string {
 // toolbar icon in the app. They pick the glass up on hover, where the
 // `overlay-*` scrim gives it something to sit on. The glass scales with the
 // button: compact sizes get the subtler `glass-sm` so dense toolbars don't
-// shimmer.
+// shimmer, and `xl` — the onboarding CTA, the one control in the app at the
+// scale of the marketing hero this was ported from — gets the full `glass-lg`.
 // Literal class strings only — Tailwind's scanner can't see classes built
 // from template strings, so the hover-variant map is spelled out in full.
 const glassSizeStyles: Record<ButtonSize, string> = {
@@ -152,6 +153,7 @@ const glassSizeStyles: Record<ButtonSize, string> = {
   'icon-md': 'glass',
   lg: 'glass',
   'icon-lg': 'glass',
+  xl: 'glass-lg',
 };
 
 const hoverGlassSizeStyles: Record<ButtonSize, string> = {
@@ -163,6 +165,7 @@ const hoverGlassSizeStyles: Record<ButtonSize, string> = {
   'icon-md': 'not-disabled:hover:glass',
   lg: 'not-disabled:hover:glass',
   'icon-lg': 'not-disabled:hover:glass',
+  xl: 'not-disabled:hover:glass-lg',
 };
 
 const HOVER_ONLY_GLASS_VARIANTS = new Set<ButtonVariant>(['ghost', 'outline']);
