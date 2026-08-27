@@ -439,6 +439,7 @@ dependencies = [
  "ai_usage",
  "anyhow",
  "bot_id",
+ "bots",
  "channel_sender",
  "channels",
  "chrono",

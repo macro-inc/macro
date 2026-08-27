@@ -17,8 +17,8 @@ use crate::domain::broker_events::{
 pub enum NoEventReason {
     /// No existing session and no mentioned bot identified the target agent.
     MissingBotContext,
-    /// The target bot is not configured with an agent.
-    BotHasNoAgent {
+    /// The target bot is not an available agent for this sender and channel.
+    BotUnavailable {
         /// Bot that was evaluated.
         bot_id: BotId,
     },
@@ -103,19 +103,19 @@ pub enum PotentialTriggerEvent<'a> {
 
 /// What to publish for one incoming message.
 ///
-/// Existing sessions carry their own bot identity. `has_agent` gates all
-/// event production.
+/// Existing sessions carry their own bot identity. Current agent availability
+/// gates all event production.
 #[must_use]
 pub fn yield_event(
     message: &PotentialTriggerEvent<'_>,
-    has_agent: bool,
+    available: bool,
 ) -> AgentSessionEventDecision {
     match message {
         PotentialTriggerEvent::Channel {
             posted,
             existing,
             mentioned_bot,
-        } => yield_channel_event(posted, existing, *mentioned_bot, has_agent),
+        } => yield_channel_event(posted, existing, *mentioned_bot, available),
     }
 }
 
@@ -123,7 +123,7 @@ fn yield_channel_event(
     posted: &ChannelMessagePostedMetadata,
     existing: &ChannelSession,
     mentioned_bot: Option<BotId>,
-    has_agent: bool,
+    available: bool,
 ) -> AgentSessionEventDecision {
     let session_bot = match existing {
         ChannelSession::CreatedFromThread(session) => session.bot_id,
@@ -135,8 +135,8 @@ fn yield_channel_event(
         },
     };
 
-    if !has_agent {
-        return AgentSessionEventDecision::NoEvent(NoEventReason::BotHasNoAgent {
+    if !available {
+        return AgentSessionEventDecision::NoEvent(NoEventReason::BotUnavailable {
             bot_id: session_bot,
         });
     }

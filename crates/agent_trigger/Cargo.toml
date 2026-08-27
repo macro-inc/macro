@@ -17,6 +17,7 @@ agent_session = { path = "../agent_session" }
 ai_usage = { path = "../ai_usage", optional = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
+bots = { path = "../bots", default-features = false, features = ["ports"] }
 lexical_client = { path = "../lexical_client", optional = true }
 channels = { path = "../channels", features = ["ports"] }
 chrono = { workspace = true }

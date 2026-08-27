@@ -41,6 +41,7 @@ const agentMocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
   currentUserId: 'macro|user@example.com',
+  currentTeam: { team: { id: 'team-1' } } as { team: { id: string } } | null,
   isTeamOwner: false,
 }));
 
@@ -66,7 +67,7 @@ vi.mock('@queries/agents/agents', () => ({
 }));
 
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: { team: { id: 'team-1' } } }),
+  useCurrentTeamQuery: () => ({ data: agentMocks.currentTeam }),
   useIsTeamOwner: () => () => agentMocks.isTeamOwner,
 }));
 
@@ -109,6 +110,7 @@ beforeEach(() => {
   agentMocks.delete.mockResolvedValue(undefined);
   agentMocks.update.mockResolvedValue(undefined);
   agentMocks.currentUserId = 'macro|user@example.com';
+  agentMocks.currentTeam = { team: { id: 'team-1' } };
   agentMocks.isTeamOwner = false;
 });
 
@@ -435,6 +437,25 @@ describe('Agents', () => {
       within(dialog).getByPlaceholderText('Search channels…');
     fireEvent.input(channelSearch, { target: { value: 'gen' } });
     expect(screen.getByRole('option', { name: 'general' })).toBeTruthy();
+  });
+
+  it('explains why team sharing is disabled without a team', () => {
+    agentMocks.currentTeam = null;
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    const teamOption = within(dialog).getByLabelText('Team');
+    expect(teamOption).toHaveProperty('disabled', true);
+    const teamCardClasses = teamOption.closest('label')?.classList;
+    expect(teamCardClasses?.contains('cursor-not-allowed')).toBe(true);
+    expect(teamCardClasses?.contains('opacity-50')).toBe(true);
+    expect(
+      within(dialog).getByText(
+        'Team agents need a team owner. Create or join a team in Team settings to enable this option.'
+      )
+    ).toBeTruthy();
   });
 
   it('persists creation through the agents API', async () => {

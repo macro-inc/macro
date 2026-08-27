@@ -23,21 +23,13 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
-    OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
+    OpenSession, SessionAnnouncement, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
     RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::sandbox::SandboxResizeEffect;
-
-fn apply_agent_instructions(instructions: &str, prompt: String) -> String {
-    let instructions = instructions.trim();
-    if instructions.is_empty() {
-        return prompt;
-    }
-    format!("<agent_instructions>\n{instructions}\n</agent_instructions>\n\n{prompt}")
-}
 
 type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
@@ -700,26 +692,6 @@ where
     }
 
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
-        match &command {
-            HarnessCommand::Open(open)
-                if open.runtime.kind == AgentKind::Cursor
-                    && !is_macro_staff(&open.origin.sender) =>
-            {
-                return Err(AgentSessionError::Forbidden.into());
-            }
-            HarnessCommand::Deliver(deliver) => {
-                let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::Cursor
-                    && !deliver.actor.as_ref().is_some_and(is_macro_staff)
-                {
-                    return Err(AgentSessionError::Forbidden.into());
-                }
-            }
-            HarnessCommand::Open(_)
-            | HarnessCommand::SetSandboxSize(_)
-            | HarnessCommand::Delete => {}
-        }
-
         match command {
             HarnessCommand::Open(command) => self.open(session_id, command).await,
             HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
@@ -832,12 +804,10 @@ where
         let prior_messages = self
             .load_prompt_context(origin.channel_id, origin.message_id, Some(&origin.sender))
             .await;
-        let composed_prompt = apply_agent_instructions(
-            &runtime.instructions,
-            self.prompt_composer
-                .compose(&origin.content, Some(&prior_messages))
-                .await?,
-        );
+        let composed_prompt = self
+            .prompt_composer
+            .compose(&origin.content, Some(&prior_messages))
+            .await?;
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.

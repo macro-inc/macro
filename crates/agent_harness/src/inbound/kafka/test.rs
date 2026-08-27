@@ -143,17 +143,16 @@ fn a_bot_authored_mention_is_skipped() {
 }
 
 #[test]
-fn a_non_staff_mention_is_skipped() {
+fn any_user_mention_can_open_a_managed_agent() {
     let user = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
 
-    assert_eq!(
+    assert!(matches!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user)),
             runtime(AgentKind::InMemory),
-        )
-        .unwrap_err(),
-        Skipped::NotMacroStaff
-    );
+        ),
+        Ok(RoutedTrigger::Command(_, HarnessCommand::Open(_)))
+    ));
 }
 
 #[test]
@@ -225,61 +224,27 @@ fn channel_message_from(bot: BotId, sender: ChannelSender<'static>) -> AgentTrig
     }))
 }
 
-/// The open gate alone does not protect an existing Cursor session: the
-/// mentioning channel can prompt it, so a non-staff follow-up must be
-/// refused there too — it is spend on Macro's Cursor account.
 #[test]
-fn a_non_staff_follow_up_to_a_cursor_session_is_skipped() {
-    let outsider = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
-    assert_eq!(
-        route_agent_trigger(
-            channel_message_from(
-                bot_id::CURSOR_BOT_ID,
-                ChannelSender::new_from_user(outsider)
-            ),
-            runtime(AgentKind::Cursor),
-        )
-        .unwrap_err(),
-        Skipped::NotMacroStaff
-    );
-    // A sender that is not a user at all fails closed the same way.
-    assert_eq!(
-        route_agent_trigger(
-            channel_message_from(
-                bot_id::CURSOR_BOT_ID,
-                ChannelSender::new_from_bot(BotId::TEST_B)
-            ),
-            runtime(AgentKind::Cursor),
-        )
-        .unwrap_err(),
-        Skipped::NotMacroStaff
-    );
-}
-
-/// Staff follow-ups to a Cursor session deliver like any managed session's.
-#[test]
-fn a_staff_follow_up_to_a_cursor_session_delivers() {
-    let routed = route_agent_trigger(
-        channel_message_from(bot_id::CURSOR_BOT_ID, ChannelSender::new_from_user(user())),
-        runtime(AgentKind::Cursor),
-    )
-    .expect("staff follow-up is ours to deliver");
+fn any_user_can_follow_up_to_their_cursor_session() {
+    let user = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
     assert!(matches!(
-        routed,
-        RoutedTrigger::Command(_, HarnessCommand::Deliver(_))
+        route_agent_trigger(
+            channel_message_from(bot_id::CURSOR_BOT_ID, ChannelSender::new_from_user(user)),
+            runtime(AgentKind::Cursor),
+        ),
+        Ok(RoutedTrigger::Command(_, HarnessCommand::Deliver(_)))
     ));
 }
 
-/// Coder-bot follow-ups keep working for non-staff senders: the staff rule
-/// on existing sessions is the Cursor bot's alone.
+/// Managed sessions accept follow-ups from channel users regardless of email domain.
 #[test]
-fn a_non_staff_follow_up_to_a_coder_session_still_delivers() {
-    let outsider = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
+fn any_user_can_follow_up_to_a_coder_session() {
+    let user = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
     let routed = route_agent_trigger(
-        channel_message_from(MACRO_CODER_BOT_ID, ChannelSender::new_from_user(outsider)),
+        channel_message_from(MACRO_CODER_BOT_ID, ChannelSender::new_from_user(user)),
         runtime(AgentKind::SandboxedCoder),
     )
-    .expect("coder follow-ups are not staff-gated");
+    .expect("channel users may follow up");
     assert!(matches!(
         routed,
         RoutedTrigger::Command(_, HarnessCommand::Deliver(_))

@@ -805,12 +805,18 @@ function AgentDialog(props: {
                   description={
                     props.canShareWithTeam
                       ? 'Your team can use this agent in shared channels.'
-                      : 'Join a team to create a team agent.'
+                      : 'Create or join a team before sharing agents.'
                   }
                   disabled={!props.canShareWithTeam}
                   onChange={() => setShare('Team')}
                 />
               </fieldset>
+              <Show when={!props.canShareWithTeam}>
+                <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                  Team agents need a team owner. Create or join a team in Team
+                  settings to enable this option.
+                </p>
+              </Show>
             </AgentFormSection>
           </form>
         </Panel.Body>
@@ -868,7 +874,13 @@ function ChoiceRow(props: {
   onChange: () => void;
 }) {
   return (
-    <label class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg">
+    <label
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
+      classList={{
+        'cursor-not-allowed opacity-50': props.disabled,
+        'cursor-pointer': !props.disabled,
+      }}
+    >
       <input
         type="radio"
         name={props.name}

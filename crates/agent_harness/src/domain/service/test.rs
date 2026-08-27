@@ -29,7 +29,7 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use super::{AgentHarnessService, apply_agent_instructions};
+use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults,
@@ -52,10 +52,6 @@ fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
 }
 
-fn staff_sender() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid staff user id")
-}
-
 fn open_command() -> OpenSession {
     let thread_id = macro_uuid::generate_uuid_v7();
     OpenSession {
@@ -74,18 +70,6 @@ fn open_command() -> OpenSession {
             content: "@claude fix the failing test".to_owned(),
         },
     }
-}
-
-#[test]
-fn agent_instructions_wrap_the_composed_initial_prompt() {
-    assert_eq!(
-        apply_agent_instructions(" Diagnose first. ", "channel context".to_owned()),
-        "<agent_instructions>\nDiagnose first.\n</agent_instructions>\n\nchannel context"
-    );
-    assert_eq!(
-        apply_agent_instructions("  ", "channel context".to_owned()),
-        "channel context"
-    );
 }
 
 /// A prompt arriving from a channel that is not the session's own, so it is
@@ -467,7 +451,7 @@ async fn composer_failure_stops_open_before_announcement_or_delivery() {
 }
 
 #[tokio::test]
-async fn open_sends_prior_messages_only_to_the_agent_prompt() {
+async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     let context = vec![PriorChannelMessage {
         sender: "previous@example.com".to_owned(),
         content: "previous channel message".to_owned(),
@@ -477,7 +461,8 @@ async fn open_sends_prior_messages_only_to_the_agent_prompt() {
         PromptContextMock::with_messages(context.clone()),
         composer.clone(),
     );
-    let command = open_command();
+    let mut command = open_command();
+    command.runtime.instructions = "Diagnose first.".to_owned();
     let raw = command.origin.content.clone();
     let id = AgentSessionId::new();
 
@@ -967,7 +952,7 @@ async fn live_cursor_session(
     command.bot_id = bot_id::CURSOR_BOT_ID;
     command.runtime.kind = AgentKind::Cursor;
     command.runtime.harness = "cursor".to_owned();
-    command.origin.sender = staff_sender();
+    command.origin.sender = sender();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
@@ -985,26 +970,6 @@ async fn live_cursor_session(
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("cursor session should open");
     container
-}
-
-#[tokio::test]
-async fn a_non_staff_sender_cannot_open_a_cursor_session() {
-    let (service, _repo, containers, _announcer, _runtimes) = harness();
-    let mut command = open_command();
-    command.bot_id = bot_id::CURSOR_BOT_ID;
-    command.runtime.kind = AgentKind::Cursor;
-    command.runtime.harness = "cursor".to_owned();
-
-    let error = service
-        .execute(AgentSessionId::new(), HarnessCommand::Open(command))
-        .await
-        .expect_err("non-staff must not open cursor sessions");
-
-    assert!(matches!(
-        error,
-        HarnessError::Session(AgentSessionError::Forbidden)
-    ));
-    assert_eq!(containers.spawned(), 0);
 }
 
 #[tokio::test]
@@ -1105,28 +1070,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 }
 
 #[tokio::test]
-async fn a_non_staff_control_event_cannot_drive_a_cursor_session() {
-    let (service, _repo, containers, _announcer, _runtimes) = harness();
-    let id = AgentSessionId::new();
-    let container = live_cursor_session(&service, &containers, id).await;
-
-    let error = service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::prompt("spend cursor credits"),
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect_err("non-staff must not control cursor sessions");
-
-    assert!(matches!(error, AgentSessionError::Forbidden));
-    assert_eq!(prompts(&container.agent()).len(), 1);
-}
-
-#[tokio::test]
-async fn a_staff_control_event_can_drive_a_cursor_session() {
+async fn a_user_control_event_can_drive_their_cursor_session() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     let container = live_cursor_session(&service, &containers, id).await;
@@ -1136,11 +1080,11 @@ async fn a_staff_control_event_can_drive_a_cursor_session() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("continue"),
-                actor: Some(staff_sender()),
+                actor: Some(sender()),
             },
         )
         .await
-        .expect("staff may control cursor sessions");
+        .expect("the session owner may control cursor sessions");
 
     assert_eq!(prompts(&container.agent()).len(), 2);
 }

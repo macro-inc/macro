@@ -3,6 +3,7 @@ use super::*;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession, SessionStatus};
 use agent_session::domain::ports::MockAgentSessionRepo;
+use bots::domain::models::{Agent, AgentChannelScope, Bot, BotKind, BotOwner};
 use channel_sender::ChannelSender;
 use channels::domain::models::{ChannelType, SimpleMention};
 use chrono::Utc;
@@ -25,6 +26,61 @@ fn mention_of(bot: BotId) -> SimpleMention {
     SimpleMention {
         entity_type: "bot".to_owned(),
         entity_id: bot.into_storage_id().as_ref().to_owned(),
+    }
+}
+
+fn owned_bot(bot_id: BotId, owner: BotOwner) -> Bot {
+    Bot {
+        id: bot_id,
+        kind: BotKind::Owned,
+        owner: Some(owner),
+        name: format!("Agent {bot_id}"),
+        handle: format!("agent-{bot_id}"),
+        description: None,
+        avatar_url: None,
+        created_by: Some(user().as_ref().to_owned()),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        deleted_at: None,
+        has_agent: true,
+    }
+}
+
+fn private_agent(bot_id: BotId) -> Agent {
+    agent_with(
+        bot_id,
+        BotOwner::User {
+            user_id: user().as_ref().to_owned(),
+        },
+        AgentChannelScope::All,
+    )
+}
+
+fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) -> Agent {
+    Agent {
+        bot: owned_bot(bot_id, owner),
+        instructions: String::new(),
+        harness: "in-memory".to_owned(),
+        default_model: "model".to_owned(),
+        channel_scope,
+        channel_ids: vec![],
+    }
+}
+
+fn system_bot(bot_id: BotId) -> Bot {
+    Bot {
+        id: bot_id,
+        kind: BotKind::System,
+        owner: None,
+        name: "System agent".to_owned(),
+        handle: "system-agent".to_owned(),
+        description: None,
+        avatar_url: None,
+        created_by: None,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        deleted_at: None,
+        has_agent: true,
     }
 }
 
@@ -78,30 +134,59 @@ fn thread_session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
 type TestService = AgentTriggerService<
     MockAgentSessionRepo,
     MockAgentBotLookup,
+    MockTeamMembershipLookup,
+    MockChannelParticipationLookup,
     MockReplyDetector,
     MockImplicitTriggerJudge,
     MockThreadHistory,
 >;
 
+/// Mocks holding the three fact ports one test scenario needs. Defaults to no
+/// expectations, so any unplanned membership or participation call fails.
+struct FactMocks {
+    bots: MockAgentBotLookup,
+    teams: MockTeamMembershipLookup,
+    channels: MockChannelParticipationLookup,
+}
+
+impl From<MockAgentBotLookup> for FactMocks {
+    fn from(bots: MockAgentBotLookup) -> Self {
+        Self {
+            bots,
+            teams: MockTeamMembershipLookup::new(),
+            channels: MockChannelParticipationLookup::new(),
+        }
+    }
+}
+
 /// A service over a thread that reads as empty; tests that care about thread
 /// context pass their own history with [`service_reading`].
 fn service(
     sessions: MockAgentSessionRepo,
-    bots: MockAgentBotLookup,
+    facts: impl Into<FactMocks>,
     replies: MockReplyDetector,
     judge: MockImplicitTriggerJudge,
 ) -> TestService {
-    AgentTriggerService::new(sessions, bots, replies, judge, thread_of(vec![]))
+    service_reading(sessions, facts, replies, judge, thread_of(vec![]))
 }
 
 fn service_reading(
     sessions: MockAgentSessionRepo,
-    bots: MockAgentBotLookup,
+    facts: impl Into<FactMocks>,
     replies: MockReplyDetector,
     judge: MockImplicitTriggerJudge,
     history: MockThreadHistory,
 ) -> TestService {
-    AgentTriggerService::new(sessions, bots, replies, judge, history)
+    let facts = facts.into();
+    AgentTriggerService::new(
+        sessions,
+        facts.bots,
+        facts.teams,
+        facts.channels,
+        replies,
+        judge,
+        history,
+    )
 }
 
 /// A history that reads the given messages for any thread.
@@ -132,6 +217,174 @@ fn existing_channel_metadata(
     metadata
 }
 
+fn sessions_without_existing() -> MockAgentSessionRepo {
+    let mut sessions = MockAgentSessionRepo::new();
+    sessions
+        .expect_find_for_channel()
+        .once()
+        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+    sessions
+}
+
+async fn mention_yields_event(
+    posted: &ChannelMessagePostedMetadata,
+    facts: impl Into<FactMocks>,
+) -> bool {
+    let (replies, judge) = no_implicit();
+    !service(sessions_without_existing(), facts, replies, judge)
+        .evaluate(posted)
+        .await
+        .expect("evaluate message")
+        .is_empty()
+}
+
+#[tokio::test]
+async fn a_private_global_agent_is_unavailable_to_another_user() {
+    let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+    posted.sender = ChannelSender::new_from_user(
+        MacroUserIdStr::try_from_email("outsider@example.com").expect("valid user id"),
+    );
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_get_agent()
+        .once()
+        .return_once(|bot_id| Box::pin(async move { Ok(Some(private_agent(bot_id))) }));
+
+    assert!(!mention_yields_event(&posted, bots).await);
+}
+
+#[tokio::test]
+async fn a_bot_authored_mention_cannot_trigger_an_agent() {
+    let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+    posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
+    let bots = MockAgentBotLookup::new();
+
+    assert!(!mention_yields_event(&posted, bots).await);
+}
+
+#[tokio::test]
+async fn a_team_global_agent_is_available_to_a_team_member() {
+    let team_id = Uuid::from_u128(99);
+    let posted = message(vec![mention_of(BotId::TEST_A)]);
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_get_agent().once().return_once(move |bot_id| {
+        Box::pin(async move {
+            Ok(Some(agent_with(
+                bot_id,
+                BotOwner::Team { team_id },
+                AgentChannelScope::All,
+            )))
+        })
+    });
+    let mut facts = FactMocks::from(bots);
+    facts
+        .teams
+        .expect_user_has_team()
+        .with(
+            mockall::predicate::eq(user()),
+            mockall::predicate::eq(team_id),
+        )
+        .once()
+        .return_once(|_, _| Box::pin(async { Ok(true) }));
+
+    assert!(mention_yields_event(&posted, facts).await);
+}
+
+#[tokio::test]
+async fn a_team_global_agent_is_unavailable_outside_its_team() {
+    let team_id = Uuid::from_u128(99);
+    let posted = message(vec![mention_of(BotId::TEST_A)]);
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_get_agent().once().return_once(move |bot_id| {
+        Box::pin(async move {
+            Ok(Some(agent_with(
+                bot_id,
+                BotOwner::Team { team_id },
+                AgentChannelScope::All,
+            )))
+        })
+    });
+    let mut facts = FactMocks::from(bots);
+    facts
+        .teams
+        .expect_user_has_team()
+        .once()
+        .return_once(|_, _| Box::pin(async { Ok(false) }));
+
+    assert!(!mention_yields_event(&posted, facts).await);
+}
+
+#[tokio::test]
+async fn a_selected_agent_requires_active_channel_membership() {
+    let posted = message(vec![mention_of(BotId::TEST_A)]);
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_get_agent().once().return_once(|bot_id| {
+        Box::pin(async move {
+            Ok(Some(agent_with(
+                bot_id,
+                BotOwner::User {
+                    user_id: "macro|some-owner@example.com".to_owned(),
+                },
+                AgentChannelScope::Selected,
+            )))
+        })
+    });
+    let mut facts = FactMocks::from(bots);
+    facts
+        .channels
+        .expect_bot_active_in_channel()
+        .with(
+            mockall::predicate::eq(posted.channel_id),
+            mockall::predicate::eq(BotId::TEST_A),
+        )
+        .once()
+        .return_once(|_, _| Box::pin(async { Ok(false) }));
+
+    assert!(!mention_yields_event(&posted, facts).await);
+}
+
+#[tokio::test]
+async fn an_active_selected_agent_is_available_to_channel_members() {
+    let posted = message(vec![mention_of(BotId::TEST_A)]);
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_get_agent().once().return_once(|bot_id| {
+        Box::pin(async move {
+            Ok(Some(agent_with(
+                bot_id,
+                BotOwner::User {
+                    user_id: "macro|some-owner@example.com".to_owned(),
+                },
+                AgentChannelScope::Selected,
+            )))
+        })
+    });
+    let mut facts = FactMocks::from(bots);
+    facts
+        .channels
+        .expect_bot_active_in_channel()
+        .with(
+            mockall::predicate::eq(posted.channel_id),
+            mockall::predicate::eq(BotId::TEST_A),
+        )
+        .once()
+        .return_once(|_, _| Box::pin(async { Ok(true) }));
+
+    assert!(mention_yields_event(&posted, facts).await);
+}
+
+#[tokio::test]
+async fn a_system_agent_is_available_without_channel_membership() {
+    let posted = message(vec![mention_of(BotId::TEST_A)]);
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_get_agent()
+        .once()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    bots.expect_get_bot()
+        .once()
+        .return_once(|bot_id| Box::pin(async move { Ok(Some(system_bot(bot_id))) }));
+
+    assert!(mention_yields_event(&posted, bots).await);
+}
+
 #[tokio::test]
 async fn forwards_a_mentioned_thread_reply_to_its_session() {
     let posted = message(vec![mention_of(BotId::TEST_A)]);
@@ -152,10 +405,10 @@ async fn forwards_a_mentioned_thread_reply_to_its_session() {
             })
         });
     let mut bots = MockAgentBotLookup::new();
-    bots.expect_has_agent()
+    bots.expect_get_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
-        .return_once(|_| Box::pin(async { Ok(true) }));
+        .return_once(|bot_id| Box::pin(async move { Ok(Some(private_agent(bot_id))) }));
     let (replies, judge) = no_implicit();
     let service = service(sessions, bots, replies, judge);
 
@@ -194,9 +447,9 @@ async fn evaluates_every_mentioned_agent_bot() {
         .times(2)
         .returning(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
     let mut bots = MockAgentBotLookup::new();
-    bots.expect_has_agent()
+    bots.expect_get_agent()
         .times(2)
-        .returning(|_| Box::pin(async { Ok(true) }));
+        .returning(|bot_id| Box::pin(async move { Ok(Some(private_agent(bot_id))) }));
     let (replies, judge) = no_implicit();
     let service = service(sessions, bots, replies, judge);
 
@@ -228,10 +481,10 @@ async fn evaluates_a_repeated_bot_mention_once() {
         .once()
         .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
     let mut bots = MockAgentBotLookup::new();
-    bots.expect_has_agent()
+    bots.expect_get_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
-        .return_once(|_| Box::pin(async { Ok(true) }));
+        .return_once(|bot_id| Box::pin(async move { Ok(Some(private_agent(bot_id))) }));
     let (replies, judge) = no_implicit();
     let service = service(sessions, bots, replies, judge);
 
@@ -254,10 +507,14 @@ async fn ignores_a_mentioned_bot_without_an_agent() {
         .once()
         .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
     let mut bots = MockAgentBotLookup::new();
-    bots.expect_has_agent()
+    bots.expect_get_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
-        .return_once(|_| Box::pin(async { Ok(false) }));
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    bots.expect_get_bot()
+        .with(mockall::predicate::eq(BotId::TEST_A))
+        .once()
+        .return_once(|_| Box::pin(async { Ok(None) }));
     let (replies, judge) = no_implicit();
     let service = service(sessions, bots, replies, judge);
 
@@ -286,10 +543,10 @@ async fn deduplicates_a_session_found_for_multiple_mentions() {
             })
         });
     let mut bots = MockAgentBotLookup::new();
-    bots.expect_has_agent()
+    bots.expect_get_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
-        .return_once(|_| Box::pin(async { Ok(true) }));
+        .return_once(|bot_id| Box::pin(async move { Ok(Some(private_agent(bot_id))) }));
     let (replies, judge) = no_implicit();
     let service = service(sessions, bots, replies, judge);
 
@@ -316,8 +573,8 @@ fn implicit_sessions(found: Vec<AgentSession>) -> MockAgentSessionRepo {
 
 fn agent_bots() -> MockAgentBotLookup {
     let mut bots = MockAgentBotLookup::new();
-    bots.expect_has_agent()
-        .returning(|_| Box::pin(async { Ok(true) }));
+    bots.expect_get_agent()
+        .returning(|bot_id| Box::pin(async move { Ok(Some(private_agent(bot_id))) }));
     bots
 }
 
@@ -460,14 +717,18 @@ async fn implicit_triggering_skips_sessions_of_agentless_bots() {
         thread_session(AgentSessionId::TEST_B, BotId::TEST_B),
     ]);
     let mut bots = MockAgentBotLookup::new();
-    bots.expect_has_agent()
+    bots.expect_get_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
         .once()
-        .return_once(|_| Box::pin(async { Ok(false) }));
-    bots.expect_has_agent()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    bots.expect_get_agent()
         .with(mockall::predicate::eq(BotId::TEST_B))
         .once()
-        .return_once(|_| Box::pin(async { Ok(true) }));
+        .return_once(|bot_id| Box::pin(async move { Ok(Some(private_agent(bot_id))) }));
+    bots.expect_get_bot()
+        .with(mockall::predicate::eq(BotId::TEST_A))
+        .once()
+        .return_once(|_| Box::pin(async { Ok(None) }));
     let service = service(
         sessions,
         bots,

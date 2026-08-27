@@ -8,7 +8,7 @@ use bot_id::BotId;
 
 use super::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand,
-    MentionOrigin, OpenSession, is_macro_staff,
+    MentionOrigin, OpenSession,
 };
 
 /// What one trigger event asks this deployment to do.
@@ -33,8 +33,6 @@ pub enum Skipped {
     /// vocabulary is non-exhaustive on purpose, and unknown shapes are
     /// skipped rather than wedging the partition.
     Unrecognized,
-    /// We are in beta and only allow Macro employees to use this harness system.
-    NotMacroStaff,
 }
 
 /// Bot targeted by a recognized trigger event shape.
@@ -65,17 +63,6 @@ pub fn route_agent_trigger(
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-            // TODO: remove once the beta gate opens. Managed agents remain
-            // staff-only while the new harness system is still in beta.
-            if mentioned
-                .message
-                .sender
-                .as_user()
-                .is_some_and(|user| !is_macro_staff(user))
-            {
-                return Err(Skipped::NotMacroStaff);
-            }
-
             let Some(runtime) = runtime.filter(|runtime| runtime.kind.is_managed()) else {
                 return Err(Skipped::ForeignBot);
             };
@@ -119,17 +106,6 @@ pub fn route_agent_trigger(
                 .as_ref()
                 .map_or(AgentKind::External, |runtime| runtime.kind);
             if kind.is_managed() {
-                // The mentioning channel holds editor access to the session,
-                // so anyone in the thread can prompt it. Cursor prompts spend
-                // on the owner's account and remain staff-only during beta.
-                if kind == AgentKind::Cursor
-                    && !message
-                        .sender
-                        .as_user()
-                        .is_some_and(|user| is_macro_staff(user))
-                {
-                    return Err(Skipped::NotMacroStaff);
-                }
                 return Ok(RoutedTrigger::Command(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction::prompt(
