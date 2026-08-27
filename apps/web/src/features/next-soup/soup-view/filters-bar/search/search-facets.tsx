@@ -1,3 +1,4 @@
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import type {
   CallStatus,
   PropertyFilter,
@@ -65,6 +66,17 @@ export const SEARCH_INDEX_OPTIONS: {
     icon: () => <EntityIcon targetType="chat" size="xs" theme="monochrome" />,
   },
 ];
+
+/**
+ * Calendar is offered as a search type only where the calendar UI is enabled:
+ * opening an event needs the calendar block, which the same flag gates, so a
+ * disabled workspace would surface events it can't open.
+ */
+const CALENDAR_TYPE_OPTION: (typeof SEARCH_INDEX_OPTIONS)[number] = {
+  value: 'calendar',
+  label: 'Calendar',
+  icon: () => <EntityIcon targetType="calendar" size="xs" theme="monochrome" />,
+};
 
 const CALL_STATUS_LABELS: Record<CallStatus, string> = {
   ATTENDED: 'Attended',
@@ -299,22 +311,25 @@ export function useSearchFacets(
   });
 
   const tagSource = useTagOptions();
+  const calendarUiEnabled = useCalendarUiFlag();
 
-  const type = singleFacet({
-    id: 'type',
-    label: 'Type',
-    options: [
-      { id: 'all', label: 'All' },
-      ...SEARCH_INDEX_OPTIONS.map((o) => ({
-        id: o.value,
-        label: o.label,
-        icon: o.icon,
-      })),
-    ],
-    defaultId: 'all',
-    selectedId: controller.type,
-    onSelect: (id) => controller.setType(id as SearchTypeValue),
-  });
+  const typeOptions = createMemo<FacetOption[]>(() => [
+    { id: 'all', label: 'All' },
+    ...[
+      ...SEARCH_INDEX_OPTIONS,
+      ...(calendarUiEnabled() ? [CALENDAR_TYPE_OPTION] : []),
+    ].map((o) => ({ id: o.value, label: o.label, icon: o.icon })),
+  ]);
+
+  const buildTypeFacet = () =>
+    singleFacet({
+      id: 'type',
+      label: 'Type',
+      options: typeOptions(),
+      defaultId: 'all',
+      selectedId: controller.type,
+      onSelect: (id) => controller.setType(id as SearchTypeValue),
+    });
 
   const importance = singleFacet({
     id: 'importance',
@@ -486,6 +501,7 @@ export function useSearchFacets(
   const tagFacets = (): SearchFacetVM[] => (tagSource.hasTags() ? [tags] : []);
 
   return createMemo(() => {
+    const type = buildTypeFacet();
     switch (controller.type()) {
       case 'email':
         return inboxPicker.hasMultiple()
@@ -509,6 +525,9 @@ export function useSearchFacets(
       case 'folders':
       case 'all':
         return [type, ...tagFacets()];
+      // Calendar keyword search only for now; who/where/when facets come later.
+      case 'calendar':
+        return [type];
       default:
         return [type];
     }

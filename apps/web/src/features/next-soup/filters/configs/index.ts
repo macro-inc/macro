@@ -27,6 +27,7 @@ import {
 } from './email';
 import {
   activeAgentFilter,
+  calendarFilter,
   callsFilter,
   channelsFilter,
   crmCompanyActiveFilter,
@@ -91,6 +92,7 @@ export const SOUP_FILTERS = [
   notTaskFilter,
   documentOrFileFilter,
   activeTaskFilter,
+  calendarFilter,
   callsFilter,
   crmCompanyFilter,
   crmCompanyActiveFilter,
