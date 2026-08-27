@@ -104,5 +104,14 @@ describe('fetchGraphqlEmailThread', () => {
     await expect(fetchGraphqlEmailThread('thread-1')).rejects.toMatchObject({
       errors: [{ code: 'UNKNOWN', message: 'offline' }],
     });
+
+    // The persisted fallback was attempted before giving up.
+    expect(queryMock).toHaveBeenCalledTimes(2);
+    expect(queryMock).toHaveBeenNthCalledWith(
+      2,
+      EmailThreadPageDocument,
+      { threadId: 'thread-1', offset: 0, limit: 20 },
+      { requestPolicy: 'cache-only' }
+    );
   });
 });

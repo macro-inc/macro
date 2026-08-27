@@ -2205,7 +2205,12 @@ export function BaseInput(props: {
             {(html) => (
               <SignaturePreview
                 html={html()}
-                onDismiss={() => setIncludeSignature(false)}
+                onDismiss={() => {
+                  // Dismissal is composer-local state worth keeping — latch
+                  // the seed so a draft upgrade can't remount it away.
+                  props.onEngaged?.();
+                  setIncludeSignature(false);
+                }}
               />
             )}
           </Show>
@@ -2267,7 +2272,12 @@ export function BaseInput(props: {
             {(html) => (
               <SignaturePreview
                 html={html()}
-                onDismiss={() => setIncludeSignature(false)}
+                onDismiss={() => {
+                  // Dismissal is composer-local state worth keeping — latch
+                  // the seed so a draft upgrade can't remount it away.
+                  props.onEngaged?.();
+                  setIncludeSignature(false);
+                }}
               />
             )}
           </Show>
