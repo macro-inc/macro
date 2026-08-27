@@ -38,6 +38,57 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
 }
 
 #[test]
+fn creator_is_mapped_separately_from_the_organizer() {
+    let master: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-event",
+        "iCalUID": "created@example.com",
+        "summary": "On someone else's calendar",
+        "start": {"dateTime": "2026-08-27T19:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-08-27T20:45:00Z", "timeZone": "UTC"},
+        "organizer": {"email": "jackson@example.com", "displayName": "Jackson Kustec"},
+        "creator": {"email": "teo@example.com", "displayName": "Teo Nys"},
+        "created": "2026-08-27T01:00:00Z",
+        "updated": "2026-08-27T01:00:00Z"
+    }))
+    .unwrap();
+    let range = OccurrenceRange {
+        starts_at: DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        ends_at: DateTime::parse_from_rfc3339("2026-09-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        start_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
+    };
+    let target = GoogleCalendarTarget {
+        owner_id: "macro|jackson@example.com".to_string(),
+        email_link_id: Uuid::now_v7(),
+        account_id: Uuid::now_v7(),
+        calendar_id: Uuid::now_v7(),
+        provider_calendar_id: "primary".to_string(),
+        is_read_only: false,
+        range,
+    };
+
+    let upsert = map_upsert(&target, master, Vec::new(), Vec::new()).unwrap();
+
+    assert_eq!(
+        upsert.event.organizer_email.as_deref(),
+        Some("jackson@example.com")
+    );
+    assert_eq!(
+        upsert.event.organizer_name.as_deref(),
+        Some("Jackson Kustec")
+    );
+    assert_eq!(
+        upsert.event.creator_email.as_deref(),
+        Some("teo@example.com")
+    );
+    assert_eq!(upsert.event.creator_name.as_deref(), Some("Teo Nys"));
+}
+
+#[test]
 fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
     let master: GoogleEvent = serde_json::from_value(serde_json::json!({
         "id": "provider-master",

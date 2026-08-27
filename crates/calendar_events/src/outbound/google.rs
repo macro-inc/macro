@@ -1782,6 +1782,14 @@ fn map_upsert(
             .organizer
             .as_ref()
             .and_then(|value| value.display_name.clone()),
+        creator_email: master
+            .creator
+            .as_ref()
+            .and_then(|value| value.email.clone()),
+        creator_name: master
+            .creator
+            .as_ref()
+            .and_then(|value| value.display_name.clone()),
         conference_provider: conference_provider(
             master.conference_data.as_ref(),
             join_url.is_some(),
@@ -2135,6 +2143,8 @@ struct GoogleEvent {
     recurring_event_id: Option<String>,
     original_start_time: Option<GoogleEventDateTime>,
     organizer: Option<GooglePerson>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    creator: Option<GooglePerson>,
     #[serde(default)]
     attendees: Option<Vec<GoogleAttendee>>,
     hangout_link: Option<String>,

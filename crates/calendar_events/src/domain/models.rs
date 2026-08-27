@@ -470,6 +470,15 @@ pub struct CalendarEvent {
     pub organizer_email: Option<String>,
     /// Organizer display name.
     pub organizer_name: Option<String>,
+    /// Provider-reported creator email. Distinct from the organizer when
+    /// someone writes onto a calendar they do not own. Omitted from stored
+    /// projections when unknown so events ingested before this field still
+    /// compare equal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator_email: Option<String>,
+    /// Provider-reported creator display name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator_name: Option<String>,
     /// Direct join URL when known.
     pub conference_url: Option<String>,
     /// Which conferencing system backs `conference_url`. `None` whenever no

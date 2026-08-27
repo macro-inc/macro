@@ -89,6 +89,8 @@ fn sample_event(recurrence_lines: Vec<String>) -> crate::domain::models::Calenda
         recurrence_lines,
         organizer_email: Some("owner@example.com".to_string()),
         organizer_name: None,
+        creator_email: None,
+        creator_name: None,
         conference_url: Some("https://meet.google.com/abc".to_string()),
         conference_provider: Some(crate::domain::models::ConferenceProvider::GoogleMeet),
         sequence: 0,

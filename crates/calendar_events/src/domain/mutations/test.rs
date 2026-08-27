@@ -87,6 +87,8 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             recurrence_lines: Vec::new(),
             organizer_email: None,
             organizer_name: None,
+            creator_email: None,
+            creator_name: None,
             conference_url: None,
             conference_provider: None,
             sequence: 0,

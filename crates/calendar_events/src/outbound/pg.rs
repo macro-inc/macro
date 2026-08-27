@@ -299,6 +299,8 @@ struct OccurrenceJoinRow {
     recurrence_lines: Vec<String>,
     organizer_email: Option<String>,
     organizer_name: Option<String>,
+    creator_email: Option<String>,
+    creator_name: Option<String>,
     conference_url: Option<String>,
     conference_provider: Option<String>,
     sequence: i32,
@@ -712,6 +714,7 @@ impl CalendarRepository for PgCalendarRepository {
                 status, visibility, transparency,
                 starts_at, ends_at, start_date, end_date, time_zone,
                 recurrence_lines, organizer_email, organizer_name,
+                creator_email, creator_name,
                 conference_url, conference_provider, sequence, is_read_only,
                 canonical_source_kind,
                 canonical_source_updated_at,
@@ -723,6 +726,7 @@ impl CalendarRepository for PgCalendarRepository {
                 $8, $9, $10,
                 $11, $12, $13, $14, $15,
                 $16, $17, $18,
+                $28, $29,
                 $19, $27, $20, $21, $22, $24,
                 $25, $26,
                 $23, $24
@@ -742,6 +746,8 @@ impl CalendarRepository for PgCalendarRepository {
                 recurrence_lines = EXCLUDED.recurrence_lines,
                 organizer_email = EXCLUDED.organizer_email,
                 organizer_name = EXCLUDED.organizer_name,
+                creator_email = EXCLUDED.creator_email,
+                creator_name = EXCLUDED.creator_name,
                 conference_url = EXCLUDED.conference_url,
                 conference_provider = EXCLUDED.conference_provider,
                 sequence = EXCLUDED.sequence,
@@ -792,6 +798,8 @@ impl CalendarRepository for PgCalendarRepository {
                 .event
                 .conference_provider
                 .map(ConferenceProvider::as_str),
+            upsert.event.creator_email.as_deref(),
+            upsert.event.creator_name.as_deref(),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -897,6 +905,8 @@ impl CalendarRepository for PgCalendarRepository {
                 event.recurrence_lines,
                 event.organizer_email,
                 event.organizer_name,
+                event.creator_email,
+                event.creator_name,
                 event.conference_url,
                 event.conference_provider,
                 event.sequence,
@@ -2617,6 +2627,8 @@ async fn restore_best_source_or_delete(
             recurrence_lines = $13,
             organizer_email = $14,
             organizer_name = $15,
+            creator_email = $26,
+            creator_name = $27,
             conference_url = $16,
             conference_provider = $25,
             sequence = $17,
@@ -2657,6 +2669,8 @@ async fn restore_best_source_or_delete(
             .event
             .conference_provider
             .map(ConferenceProvider::as_str),
+        projection.event.creator_email.as_deref(),
+        projection.event.creator_name.as_deref(),
     )
     .execute(&mut **tx)
     .await
@@ -3293,6 +3307,8 @@ fn event_from_join(
         recurrence_lines: row.recurrence_lines,
         organizer_email: row.organizer_email,
         organizer_name: row.organizer_name,
+        creator_email: row.creator_email,
+        creator_name: row.creator_name,
         conference_url: row.conference_url,
         conference_provider: row.conference_provider.as_deref().map(conference_provider),
         sequence: u32::try_from(row.sequence).unwrap_or_default(),
