@@ -398,15 +398,18 @@ export function BaseInput(props: {
     recipient: EmailRecipient;
     sourceField: 'to' | 'cc' | 'bcc';
   } | null>(null);
+  // A pending undo-send restore that belongs to this thread (inline reply
+  // remount case). It carries a just-undone send. Consumed below.
+  const restoredSnapshot =
+    undoReplySnapshot?.threadId === ctx.thread()?.db_id
+      ? undoReplySnapshot
+      : null;
+
+  // The draft row this composer upserts into: the server draft when one
+  // exists, else the one the undone send restores.
   const [savedDraftId, setSavedDraftId] = createSignal<
     ApiDraftOutputDbId | undefined
-  >(
-    props.draft?.db_id ??
-      (undoReplySnapshot?.threadId === ctx.thread()?.db_id
-        ? undoReplySnapshot?.draftId
-        : undefined) ??
-      undefined
-  );
+  >(props.draft?.db_id ?? restoredSnapshot?.draftId ?? undefined);
 
   const editorConfig = createConfiguredEmailMarkdownEditor({
     namespace: 'email-base-input-markdown',
@@ -441,12 +444,9 @@ export function BaseInput(props: {
   const markdownHandle = editorConfig.buildHandle();
   const editor = () => markdownHandle.lexical;
 
-  // Consume undo-send snapshot if one exists and belongs to this thread (inline reply remount case).
-  // Use bodyHtml as initialHtml for the editor, restore attachments on mount.
-  const restoredSnapshot =
-    undoReplySnapshot?.threadId === ctx.thread()?.db_id
-      ? undoReplySnapshot
-      : null;
+  // Consume the undo-send snapshot so a later composer mount doesn't restore
+  // it again. Use bodyHtml as initialHtml for the editor, restore attachments
+  // on mount.
   if (restoredSnapshot) {
     undoReplySnapshot = null;
     onMount(() => {
@@ -908,16 +908,48 @@ export function BaseInput(props: {
     }
   }
 
+  // The reply target the pending debounced save was scheduled against.
+  // Captured at schedule time — a live interactive context — because the
+  // unmount flush below cannot trust props during disposal.
+  let pendingSaveReplyingToId: string | undefined;
+
   function scheduleDraftSave() {
     props.onEngaged?.();
+    pendingSaveReplyingToId = untrack(() => props.replyingTo()?.db_id);
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     draftSaveTimer = window.setTimeout(() => {
+      draftSaveTimer = undefined;
       void executeSaveDraft();
     }, DRAFT_DEBOUNCE_MS);
   }
 
   onCleanup(() => {
-    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+    const flushPending = draftSaveTimer !== undefined;
+    if (draftSaveTimer) {
+      window.clearTimeout(draftSaveTimer);
+      draftSaveTimer = undefined;
+    }
+    // A send or discard already owns this composer's state; saving here
+    // would resurrect content those flows just cleared.
+    if (pendingSend || pendingDeletion) return;
+
+    // Flush the pending debounced save so dismissal doesn't drop the last
+    // edits server-side; a failure surfaces through the mutation's toast.
+    if (flushPending) {
+      try {
+        // Only while the reply target still reads as the one the save was
+        // scheduled against — mid-disposal it can come back empty or stale,
+        // and a save without replying_to_id would unlink the server draft
+        // from its message.
+        if (
+          untrack(() => props.replyingTo()?.db_id) === pendingSaveReplyingToId
+        ) {
+          void executeSaveDraft();
+        }
+      } catch {
+        // Props already disposed; the next mount's autosave persists it.
+      }
+    }
   });
 
   // Persist the draft immediately when the user switches the sending inbox, even

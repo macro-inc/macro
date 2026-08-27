@@ -1,7 +1,7 @@
 import { getNativeNetworkAbortSignal } from '@core/mobile/native-network-status';
 
 /** Maximum time an active Soup view may wait for its network response. */
-export const SOUP_REQUEST_TIMEOUT_MS = 8_000;
+export const SOUP_REQUEST_TIMEOUT_MS = 12_000;
 
 /** Soup failures remain user-retryable instead of retrying in the background. */
 export const SOUP_NETWORK_QUERY_OPTIONS = {

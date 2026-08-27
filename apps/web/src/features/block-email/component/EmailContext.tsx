@@ -22,7 +22,6 @@ import {
   useContacts,
   type WithCustomUserInput,
 } from '@core/user';
-import { ThrownResultError } from '@core/util/result';
 import {
   compositeEntity,
   createEffectOnEntityTypeNotification,
