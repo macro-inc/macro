@@ -316,6 +316,17 @@ impl fmt::Display for RepoSlug {
 pub struct McpServerSlug(String);
 
 impl McpServerSlug {
+    /// The reserved slug for Macro's own MCP server, advertised to every
+    /// session alongside the owner's connected apps.
+    ///
+    /// Reserved here, in the type both ends already share: the provisioner
+    /// names it in every sandbox's config and the credential resolver answers
+    /// it before consulting the owner's rows, so a connected app that would
+    /// slug to the same word is shadowed rather than ambiguous.
+    pub fn macro_mcp() -> Self {
+        Self("macro".to_owned())
+    }
+
     /// Derive a slug from a user-chosen server name.
     ///
     /// Lowercases, keeps `[a-z0-9]`, and collapses every other run of
@@ -496,6 +507,25 @@ impl UpstreamCall {
     /// A call authorized by a bearer token.
     pub fn bearer(url: Url, token: BearerToken) -> Result<Self, EgressError> {
         Self::new(url, UpstreamCredential::Bearer(token))
+    }
+
+    /// A call authorized by a bearer token, permitted over cleartext http.
+    ///
+    /// The one sanctioned exception to the https rule, for a destination that
+    /// never leaves the machine: a local dev stack's own Macro MCP server,
+    /// dialed across the compose bridge. TLS there would be theater - the
+    /// bytes never touch a wire anyone else can see - and the alternative,
+    /// looping through a public tunnel for a same-host hop, only *adds* an
+    /// internet round trip to the same cleartext segment.
+    ///
+    /// The composition root must gate every call to this on
+    /// `ENVIRONMENT=local`. It is named this way so a grep for it audits that.
+    pub fn bearer_over_local_cleartext(url: Url, token: BearerToken) -> Self {
+        Self {
+            url,
+            authorization: UpstreamCredential::Bearer(token),
+            scope: Vec::new(),
+        }
     }
 
     /// A call authorized by Basic credentials.

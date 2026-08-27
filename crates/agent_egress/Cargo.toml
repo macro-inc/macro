@@ -24,6 +24,11 @@ github = { path = "../github", default-features = false, features = [
 ] }
 http = { workspace = true }
 http-body-util = { workspace = true }
+# Only the internal-auth header names the token exchange presents; restringing
+# them here would be shared knowledge held in two places.
+macro_authorization = { path = "../macro_authorization" }
+# The owner's `User` row, which carries the FusionAuth id the exchange needs.
+macro_db_client = { path = "../macro_db_client" }
 macro_user_id = { path = "../macro_user_id" }
 # The rows saying which apps an owner connected, and the client that turns one
 # into Pipedream's MCP endpoint plus the headers scoping a call to it.
@@ -31,7 +36,9 @@ pipedream_mcp = { path = "../pipedream_mcp" }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

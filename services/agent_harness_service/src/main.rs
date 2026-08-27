@@ -18,6 +18,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use agent_egress::domain::service::EgressServiceImpl;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
+use agent_egress::outbound::macro_mcp::{AuthenticationServiceTokens, WithMacroMcp};
 use agent_egress::outbound::mcp_credentials::PipedreamMcpCredentials;
 use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
@@ -82,7 +83,7 @@ use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
     MacroEventCollection as _, MacroEventConsumerService,
 };
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use macro_service_urls::{AuthServiceUrl, ConnectionGatewayUrl, LexicalServiceUrl};
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
@@ -466,10 +467,29 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
     ));
 
+    // Every session's MCP servers: Macro's own under the reserved `macro`
+    // slug, then the owner's Pipedream connections. The `macro` credential is
+    // exchanged, never signed here - authentication_service keeps the key,
+    // this process only ever holds a single-user, short-lived token.
+    let mcp_credentials = WithMacroMcp::new(
+        PipedreamMcpCredentials::new(mcp_connections, pipedream),
+        AuthenticationServiceTokens::new(
+            AuthServiceUrl::new()?.to_string(),
+            config.internal_api_key.clone(),
+            pool.clone(),
+        ),
+        url::Url::parse(&config.macro_mcp_url).context("MACRO_MCP_URL is not a url")?,
+        // The one gate on cleartext: a local stack's mcp-service is dialed
+        // across the compose bridge, where TLS would be theater. Everywhere
+        // else, an http URL refuses to boot.
+        matches!(config.environment, Environment::Local),
+    )
+    .context("the macro MCP upstream is misconfigured")?;
+
     // The egress proxy: one binary today, its own listener from the start.
     let egress = EgressServiceImpl::new(
         StoredTokenSessionAuthority::new(PgAgentSessionRepo::new(pool.clone())),
-        PipedreamMcpCredentials::new(mcp_connections, pipedream),
+        mcp_credentials,
         GithubAppTokens::new(InstallationTokenService::new(
             InstallationTokenConfig {
                 client_id: config.github_sync_app_client_id.clone(),

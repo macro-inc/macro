@@ -47,13 +47,22 @@ where
         }
     }
 
-    /// The slugs of the owner's enabled Pipedream connections.
+    /// Macro's own MCP server first, then the slugs of the owner's enabled
+    /// Pipedream connections.
     ///
-    /// Slugged from `app_slug`, exactly as the proxy resolves them - the two
-    /// derivations meeting is what makes a config entry dialable. An app the
-    /// owner turned off is left out here as well as refused by the proxy: an
-    /// agent that can see a server in its config will try it, and a tool call
-    /// that always fails is worse than a tool that is absent.
+    /// The `macro` slug is unconditional: every session's owner is a Macro
+    /// user, so unlike the connected apps there is no row to consult. A
+    /// connected app that would slug to the same word is dropped here with a
+    /// warning, because the proxy answers the reserved slug first and an
+    /// entry that silently reaches a different server than its name says is
+    /// worse than one that is absent.
+    ///
+    /// Pipedream slugs come from `app_slug`, exactly as the proxy resolves
+    /// them - the two derivations meeting is what makes a config entry
+    /// dialable. An app the owner turned off is left out here as well as
+    /// refused by the proxy: an agent that can see a server in its config
+    /// will try it, and a tool call that always fails is worse than a tool
+    /// that is absent.
     async fn slugs(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<McpServerSlug>> {
         let records = self.connections.list(owner).await.map_err(|error| {
             HarnessError::Egress(rootcause::report!(
@@ -61,11 +70,25 @@ where
             ))
         })?;
 
-        Ok(records
-            .into_iter()
-            .filter(|record| record.enabled)
-            .filter_map(|record| McpServerSlug::from_server_name(&record.app_slug))
-            .collect())
+        let mut slugs = vec![McpServerSlug::macro_mcp()];
+        slugs.extend(
+            records
+                .into_iter()
+                .filter(|record| record.enabled)
+                .filter_map(|record| McpServerSlug::from_server_name(&record.app_slug))
+                .filter(|slug| {
+                    let shadowed = *slug == McpServerSlug::macro_mcp();
+                    if shadowed {
+                        tracing::warn!(
+                            %owner,
+                            "a Pipedream connection slugs to the reserved `macro` name; \
+                             it is shadowed by Macro's own MCP server"
+                        );
+                    }
+                    !shadowed
+                }),
+        );
+        Ok(slugs)
     }
 }
 

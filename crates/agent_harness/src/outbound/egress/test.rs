@@ -31,6 +31,84 @@ fn refuses_a_url_that_does_not_name_a_repository() {
     }
 }
 
+struct FixedConnections(Vec<pipedream_mcp::domain::models::PipedreamConnection>);
+
+impl ConnectionStore for FixedConnections {
+    type Err = std::convert::Infallible;
+
+    async fn save(
+        &self,
+        _record: &pipedream_mcp::domain::models::PipedreamConnection,
+    ) -> Result<(), Self::Err> {
+        unreachable!("provisioning never writes")
+    }
+
+    async fn load(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _app_slug: &str,
+    ) -> Result<Option<pipedream_mcp::domain::models::PipedreamConnection>, Self::Err> {
+        unreachable!("provisioning lists, never loads one")
+    }
+
+    async fn delete(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _app_slug: &str,
+    ) -> Result<(), Self::Err> {
+        unreachable!("provisioning never deletes")
+    }
+
+    async fn list(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<pipedream_mcp::domain::models::PipedreamConnection>, Self::Err> {
+        Ok(self.0.clone())
+    }
+}
+
+fn connection(app_slug: &str, enabled: bool) -> pipedream_mcp::domain::models::PipedreamConnection {
+    pipedream_mcp::domain::models::PipedreamConnection {
+        user_id: MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+        app_slug: app_slug.to_owned(),
+        server_name: app_slug.to_owned(),
+        account_id: format!("apn_{app_slug}"),
+        enabled,
+    }
+}
+
+/// The reserved slug leads every session's list, and a connected app that
+/// would collide with it is dropped rather than left to silently resolve to
+/// Macro's server under its own name.
+#[tokio::test]
+async fn every_session_gets_the_macro_server_first() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![
+            connection("linear", true),
+            connection("macro", true),
+            connection("datadog", false),
+        ])),
+        "https://egress.macro.com",
+    );
+
+    let provisioned = provisioner
+        .provision(
+            AgentSessionId::new(),
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            "https://github.com/macro-inc/macro",
+        )
+        .await
+        .expect("provisioned");
+
+    let slugs: Vec<String> = provisioned
+        .sandbox
+        .mcp_servers
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(slugs, ["macro", "linear"]);
+}
+
 fn egress(slugs: &[&str]) -> SandboxEgress {
     SandboxEgress {
         base_url: "https://egress.macro.com".to_owned(),

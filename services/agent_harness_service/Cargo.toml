@@ -37,6 +37,7 @@ github = { path = "../../crates/github", default-features = false, features = [
   "sync",
 ] }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
+url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
