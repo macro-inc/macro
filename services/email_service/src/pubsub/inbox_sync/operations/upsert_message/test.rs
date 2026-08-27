@@ -193,3 +193,63 @@ fn suppresses_existing_immutable_non_drafts() {
     assert_eq!(select_message_sync_event(Some(false), false, false), None);
     assert_eq!(select_message_sync_event(Some(false), false, true), None);
 }
+
+#[test]
+fn macro_staff_gets_all_inbox_new_email_policy() {
+    assert_eq!(
+        new_email_notify_policy(&id("macro|teo@macro.com")),
+        NewEmailNotifyPolicy::AllInbox
+    );
+}
+
+#[test]
+fn macro_staff_plus_alias_gets_all_inbox_new_email_policy() {
+    assert_eq!(
+        new_email_notify_policy(&id("macro|teo+notify@macro.com")),
+        NewEmailNotifyPolicy::AllInbox
+    );
+}
+
+#[test]
+fn customer_gets_signal_only_new_email_policy() {
+    assert_eq!(
+        new_email_notify_policy(&id("macro|user@example.com")),
+        NewEmailNotifyPolicy::SignalOnly
+    );
+}
+
+#[test]
+fn all_inbox_preview_filter_is_thread_only() {
+    let thread_id = Uuid::nil();
+    match new_email_preview_filter(thread_id, NewEmailNotifyPolicy::AllInbox) {
+        Expr::Literal(EmailLiteral::ThreadId(id)) => assert_eq!(id, thread_id),
+        other => panic!("expected thread-only filter, got {other:?}"),
+    }
+}
+
+#[test]
+fn signal_only_preview_filter_requires_importance_and_unshared() {
+    let thread_id = Uuid::nil();
+    match new_email_preview_filter(thread_id, NewEmailNotifyPolicy::SignalOnly) {
+        Expr::And(thread, rest) => {
+            assert!(matches!(
+                *thread,
+                Expr::Literal(EmailLiteral::ThreadId(id)) if id == thread_id
+            ));
+            match *rest {
+                Expr::And(importance, shared) => {
+                    assert!(matches!(
+                        *importance,
+                        Expr::Literal(EmailLiteral::Importance(true))
+                    ));
+                    assert!(matches!(
+                        *shared,
+                        Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude))
+                    ));
+                }
+                other => panic!("expected importance AND shared, got {other:?}"),
+            }
+        }
+        other => panic!("expected thread AND signal predicates, got {other:?}"),
+    }
+}
