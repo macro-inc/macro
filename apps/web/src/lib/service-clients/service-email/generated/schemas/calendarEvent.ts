@@ -18,6 +18,7 @@ import type { EventReminders } from './eventReminders';
 import type { EventStatus } from './eventStatus';
 import type { EventTime } from './eventTime';
 import type { EventTransparency } from './eventTransparency';
+import type { EventType } from './eventType';
 import type { EventVisibility } from './eventVisibility';
 
 /**
@@ -43,6 +44,10 @@ compare equal. */
   creatorName?: CalendarEventCreatorName;
   /** Optional event body. */
   description?: CalendarEventDescription;
+  /** Provider event type. Skipped when it is the regular type so
+projections stored before event types were modeled still compare
+equal. */
+  eventType?: EventType;
   /** RFC 5545 UID used to reconcile provider and email sources. */
   icalUid: string;
   /** Macro entity identifier. */

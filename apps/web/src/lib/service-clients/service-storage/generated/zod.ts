@@ -855,6 +855,19 @@ export const listOccurrencesResponse = zod
                 .string()
                 .nullish()
                 .describe('Optional event body.'),
+              eventType: zod
+                .enum([
+                  'default',
+                  'out_of_office',
+                  'focus_time',
+                  'working_location',
+                  'birthday',
+                  'from_gmail',
+                ])
+                .optional()
+                .describe(
+                  "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation."
+                ),
               icalUid: zod
                 .string()
                 .describe(

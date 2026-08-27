@@ -13343,6 +13343,10 @@
             "type": ["string", "null"],
             "description": "Optional event body."
           },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType",
+            "description": "Provider event type. Skipped when it is the regular type so\nprojections stored before event types were modeled still compare\nequal."
+          },
           "icalUid": {
             "type": "string",
             "description": "RFC 5545 UID used to reconcile provider and email sources."
@@ -18480,6 +18484,18 @@
         "type": "string",
         "description": "Whether an event blocks availability.",
         "enum": ["opaque", "transparent"]
+      },
+      "EventType": {
+        "type": "string",
+        "description": "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation.",
+        "enum": [
+          "default",
+          "out_of_office",
+          "focus_time",
+          "working_location",
+          "birthday",
+          "from_gmail"
+        ]
       },
       "EventVisibility": {
         "type": "string",

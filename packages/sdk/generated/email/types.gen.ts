@@ -628,6 +628,12 @@ export type CalendarEvent = {
      */
     description?: string | null;
     /**
+     * Provider event type. Skipped when it is the regular type so
+     * projections stored before event types were modeled still compare
+     * equal.
+     */
+    eventType?: EventType;
+    /**
      * RFC 5545 UID used to reconcile provider and email sources.
      */
     icalUid: string;
@@ -960,6 +966,13 @@ export type EventTime = {
  * Whether an event blocks availability.
  */
 export type EventTransparency = 'opaque' | 'transparent';
+
+/**
+ * Google's event type: ordinary meetings versus the status-style entries
+ * (working location, out of office, focus time, birthdays) Google renders
+ * and notifies differently. Immutable at the provider after creation.
+ */
+export type EventType = 'default' | 'out_of_office' | 'focus_time' | 'working_location' | 'birthday' | 'from_gmail';
 
 /**
  * Visibility of event details.

@@ -19,9 +19,10 @@ use crate::domain::{
         CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
         CalendarOccurrenceCursor, CalendarReminderFiring, CalendarSyncStatus, CalendarWatchRelease,
         ConferenceProvider, DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride,
-        EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventVisibility,
-        GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
-        OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+        EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventType,
+        EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet,
+        GoogleWatchChannel, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
+        VisibleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -291,6 +292,7 @@ struct OccurrenceJoinRow {
     status: String,
     visibility: String,
     transparency: String,
+    event_type: String,
     starts_at: Option<DateTime<Utc>>,
     ends_at: Option<DateTime<Utc>>,
     start_date: Option<NaiveDate>,
@@ -711,7 +713,7 @@ impl CalendarRepository for PgCalendarRepository {
             r#"
             INSERT INTO calendar_events (
                 id, owner_id, source_link_id, ical_uid, title, description, location,
-                status, visibility, transparency,
+                status, visibility, transparency, event_type,
                 starts_at, ends_at, start_date, end_date, time_zone,
                 recurrence_lines, organizer_email, organizer_name,
                 creator_email, creator_name,
@@ -723,7 +725,7 @@ impl CalendarRepository for PgCalendarRepository {
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7,
-                $8, $9, $10,
+                $8, $9, $10, $30,
                 $11, $12, $13, $14, $15,
                 $16, $17, $18,
                 $28, $29,
@@ -738,6 +740,7 @@ impl CalendarRepository for PgCalendarRepository {
                 status = EXCLUDED.status,
                 visibility = EXCLUDED.visibility,
                 transparency = EXCLUDED.transparency,
+                event_type = EXCLUDED.event_type,
                 starts_at = EXCLUDED.starts_at,
                 ends_at = EXCLUDED.ends_at,
                 start_date = EXCLUDED.start_date,
@@ -800,6 +803,7 @@ impl CalendarRepository for PgCalendarRepository {
                 .map(ConferenceProvider::as_str),
             upsert.event.creator_email.as_deref(),
             upsert.event.creator_name.as_deref(),
+            upsert.event.event_type.as_str(),
         )
         .fetch_optional(&mut *tx)
         .await
@@ -851,6 +855,7 @@ impl CalendarRepository for PgCalendarRepository {
                 &mut tx,
                 event_id,
                 upsert.event.status,
+                upsert.event.event_type,
                 &upsert.event.reminders,
                 calendar.as_ref(),
             )
@@ -897,6 +902,7 @@ impl CalendarRepository for PgCalendarRepository {
                 event.status,
                 event.visibility,
                 event.transparency,
+                event.event_type,
                 event.starts_at,
                 event.ends_at,
                 event.start_date,
@@ -2619,6 +2625,7 @@ async fn restore_best_source_or_delete(
             status = $5,
             visibility = $6,
             transparency = $7,
+            event_type = $28,
             starts_at = $8,
             ends_at = $9,
             start_date = $10,
@@ -2671,6 +2678,7 @@ async fn restore_best_source_or_delete(
             .map(ConferenceProvider::as_str),
         projection.event.creator_email.as_deref(),
         projection.event.creator_name.as_deref(),
+        projection.event.event_type.as_str(),
     )
     .execute(&mut **tx)
     .await
@@ -2689,6 +2697,7 @@ async fn restore_best_source_or_delete(
         tx,
         event_id,
         projection.event.status,
+        projection.event.event_type,
         &projection.event.reminders,
         calendar.as_ref(),
     )
@@ -2937,6 +2946,7 @@ async fn rebuild_event_reminder_firings(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
     status: EventStatus,
+    event_type: EventType,
     reminders: &EventReminders,
     calendar: Option<&CalendarReminderContext>,
 ) -> Result<(), Report> {
@@ -2950,7 +2960,11 @@ async fn rebuild_event_reminder_firings(
     if status == EventStatus::Cancelled {
         return Ok(());
     }
-    let defaults = calendar.map_or(&[] as &[_], |calendar| &calendar.default_reminders);
+    let defaults = if event_type.uses_calendar_default_reminders() {
+        calendar.map_or(&[] as &[_], |calendar| &calendar.default_reminders)
+    } else {
+        &[]
+    };
     let minutes: Vec<i32> = reminders
         .popup_minutes(defaults)
         .into_iter()
@@ -3053,7 +3067,12 @@ async fn rebuild_calendar_reminder_firings(
             SELECT (reminder.value ->> 'minutes')::int AS minutes
             FROM jsonb_array_elements(
                 CASE
-                    WHEN event.reminders_use_default THEN $3::jsonb
+                    -- Status-style events never resolve the calendar
+                    -- defaults, mirroring EventType::uses_calendar_default_reminders.
+                    WHEN event.reminders_use_default
+                        AND event.event_type IN ('default', 'from_gmail')
+                        THEN $3::jsonb
+                    WHEN event.reminders_use_default THEN '[]'::jsonb
                     ELSE event.reminder_overrides
                 END
             ) AS reminder(value)
@@ -3297,6 +3316,7 @@ fn event_from_join(
         status: event_status(&row.status),
         visibility: event_visibility(&row.visibility),
         transparency: event_transparency(&row.transparency),
+        event_type: event_type(&row.event_type),
         time: row_time(
             row.starts_at,
             row.ends_at,
@@ -3376,6 +3396,17 @@ fn event_transparency(value: &str) -> EventTransparency {
         EventTransparency::Transparent
     } else {
         EventTransparency::Opaque
+    }
+}
+
+fn event_type(value: &str) -> EventType {
+    match value {
+        "out_of_office" => EventType::OutOfOffice,
+        "focus_time" => EventType::FocusTime,
+        "working_location" => EventType::WorkingLocation,
+        "birthday" => EventType::Birthday,
+        "from_gmail" => EventType::FromGmail,
+        _ => EventType::Default,
     }
 }
 

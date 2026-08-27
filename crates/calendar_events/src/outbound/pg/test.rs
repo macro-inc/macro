@@ -131,6 +131,7 @@ fn timed_upsert(
             status: EventStatus::Confirmed,
             visibility: EventVisibility::Default,
             transparency: EventTransparency::Opaque,
+            event_type: EventType::Default,
             time: EventTime::Timed {
                 starts_at,
                 ends_at,
@@ -2608,6 +2609,7 @@ fn reminder_upsert(
             status: EventStatus::Confirmed,
             visibility: EventVisibility::Default,
             transparency: EventTransparency::Opaque,
+            event_type: EventType::Default,
             time: EventTime::Timed {
                 starts_at,
                 ends_at,
@@ -2791,6 +2793,111 @@ async fn calendar_default_reminders_fan_out_to_use_default_events(pool: PgPool) 
             starts_at - Duration::minutes(10)
         )],
         "explicit overrides are untouched by a defaults change"
+    );
+}
+
+/// Status-style events (working location, out of office, focus time,
+/// birthdays) never resolve the calendar's default reminders — Google's
+/// clients offer no notification setting on them — while explicit overrides
+/// still schedule firings.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn status_events_ignore_calendar_default_reminders(pool: PgPool) {
+    let owner_id = "macro|working-location@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, calendar_id) = provider_ids(&repo, link_id).await;
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let primary_with_defaults = |minutes: &[u32]| ProviderCalendar {
+        provider_calendar_id: "primary".to_string(),
+        name: "Primary".to_string(),
+        description: None,
+        time_zone: Some("UTC".to_string()),
+        color: None,
+        access_role: Some("owner".to_string()),
+        is_primary: true,
+        is_selected: true,
+        default_reminders: minutes
+            .iter()
+            .map(|minutes| EventReminderOverride {
+                method: REMINDER_METHOD_POPUP.to_string(),
+                minutes: *minutes,
+            })
+            .collect(),
+    };
+    let updated = repo
+        .upsert_calendar_fixture(account_id, primary_with_defaults(&[10]))
+        .await
+        .unwrap();
+    assert_eq!(updated, calendar_id);
+
+    let mut working_location = reminder_upsert(
+        owner_id,
+        link_id,
+        (account_id, calendar_id),
+        "office",
+        starts_at,
+        EventReminders::default(),
+    );
+    working_location.event.event_type = EventType::WorkingLocation;
+    let follows_defaults = repo.upsert_event_fixture(working_location).await.unwrap();
+    let meeting = repo
+        .upsert_event_fixture(reminder_upsert(
+            owner_id,
+            link_id,
+            (account_id, calendar_id),
+            "meeting",
+            starts_at,
+            EventReminders::default(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, follows_defaults).await,
+        Vec::new(),
+        "useDefault resolves to nothing on a status event"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, meeting).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            10,
+            starts_at - Duration::minutes(10)
+        )],
+        "an ordinary event on the same calendar still follows the defaults"
+    );
+
+    let mut with_override = reminder_upsert(
+        owner_id,
+        link_id,
+        (account_id, calendar_id),
+        "office-override",
+        starts_at,
+        popup_reminders(&[5]),
+    );
+    with_override.event.event_type = EventType::WorkingLocation;
+    let overridden = repo.upsert_event_fixture(with_override).await.unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, overridden).await,
+        vec![(starts_at.to_rfc3339(), 5, starts_at - Duration::minutes(5))],
+        "an explicit override on a status event still fires"
+    );
+
+    repo.upsert_calendar_fixture(account_id, primary_with_defaults(&[30]))
+        .await
+        .unwrap();
+    assert_eq!(
+        scheduled_firings(&pool, follows_defaults).await,
+        Vec::new(),
+        "a defaults change never schedules a status event"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, meeting).await,
+        vec![(
+            starts_at.to_rfc3339(),
+            30,
+            starts_at - Duration::minutes(30)
+        )],
+        "the same defaults change still fans out to ordinary events"
     );
 }
 
