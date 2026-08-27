@@ -12,6 +12,10 @@ path = "src/main.rs"
 name = "agent_harness_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "agent_harness_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [dependencies]
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
@@ -57,6 +61,7 @@ serde_json = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 macro_config = { path = "../../crates/macro_config" }
+doppler-config = { workspace = true }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
