@@ -96,20 +96,8 @@ export const DEFAULT_CALENDAR_SOURCE: CalendarSource = {
   color: 'var(--color-accent)',
 };
 
-type OccurrenceEvent = CalendarOccurrenceItem['event'] & {
-  creatorEmail?: string | null;
-  creatorName?: string | null;
-};
-
 function optionalText(value: string | null | undefined) {
   return value ?? undefined;
-}
-
-function occurrenceCreator(event: OccurrenceEvent) {
-  return {
-    name: optionalText(event.creatorName),
-    email: optionalText(event.creatorEmail),
-  };
 }
 
 /** Maps one backend occurrence projection into the calendar event model. */
@@ -139,8 +127,8 @@ export function mapCalendarOccurrence(
       undefined,
     organizerName: event.organizerName ?? undefined,
     organizerEmail: event.organizerEmail ?? undefined,
-    creatorName: occurrenceCreator(event).name,
-    creatorEmail: occurrenceCreator(event).email,
+    creatorName: optionalText(event.creatorName),
+    creatorEmail: optionalText(event.creatorEmail),
     attendees: event.attendees ?? [],
     reminders: event.reminders ?? undefined,
     calendarId: event.calendarId ?? undefined,
