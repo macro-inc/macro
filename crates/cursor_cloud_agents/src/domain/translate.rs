@@ -113,6 +113,12 @@ impl TranslateMachine {
         let is_new = self.open.insert(call_id.clone());
         if matches!(status, ToolCallStatus::Completed | ToolCallStatus::Failed) {
             self.open.remove(&call_id);
+            // A finished call's learned kind must not outlive it: if Cursor
+            // ever reuses a call id, `learned_kinds` reapplying a stale kind
+            // (a shell call's `Execute` sticking to a later `read` reusing
+            // its id) would be worse than the unrefined name-only guess a
+            // truly fresh id gets.
+            self.learned_kinds.remove(&call_id);
         }
 
         if is_new {
@@ -159,6 +165,7 @@ impl TranslateMachine {
     /// status, and Cursor never actually reported an outcome for these, so
     /// `Completed` would claim a success nobody witnessed.
     pub fn close_open_calls(&mut self) -> Vec<SessionUpdate> {
+        self.learned_kinds.clear();
         self.open
             .drain()
             .map(|call_id| {
@@ -175,9 +182,14 @@ impl TranslateMachine {
         match update {
             InteractionUpdate::ToolCallStarted { call_id, tool_type }
             | InteractionUpdate::ToolCallCompleted { call_id, tool_type } => {
-                if let Some(kind) = tool_type.as_deref().and_then(kind_from_cursor_type) {
-                    self.learned_kinds
-                        .insert(collapse_whitespace(call_id), kind);
+                let call_id = collapse_whitespace(call_id);
+                // Real streams put `tool-call-completed` after the terminal
+                // `tool_call` frame. Do not resurrect metadata that the
+                // terminal frame already removed.
+                if self.open.contains(&call_id)
+                    && let Some(kind) = tool_type.as_deref().and_then(kind_from_cursor_type)
+                {
+                    self.learned_kinds.insert(call_id, kind);
                 }
             }
             InteractionUpdate::UserMessage { .. }

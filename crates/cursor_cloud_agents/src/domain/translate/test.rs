@@ -1,10 +1,14 @@
 use super::*;
-use crate::domain::event::Truncation;
+use crate::domain::event::{InteractionUpdate, Truncation};
 
 fn tool_call(call_id: &str, status: &str) -> CursorEvent {
+    named_tool_call(call_id, "run_terminal_cmd", status)
+}
+
+fn named_tool_call(call_id: &str, name: &str, status: &str) -> CursorEvent {
     CursorEvent::ToolCall(ToolCallEvent {
         call_id: call_id.to_owned(),
-        name: "run_terminal_cmd".to_owned(),
+        name: name.to_owned(),
         status: Some(status.to_owned()),
         args: None,
         result: None,
@@ -48,6 +52,40 @@ fn only_calls_still_open_are_closed() {
         panic!("expected a tool_call_update, got {updates:?}");
     };
     assert_eq!(&*update.tool_call_id.0, "call-2");
+}
+
+/// A finished call's learned kind must not leak onto a later call that
+/// reuses its id — the fresh call gets classified from its own name, not the
+/// old call's typed descriptor.
+#[test]
+fn a_reused_call_id_does_not_inherit_a_finished_calls_kind() {
+    let mut machine = TranslateMachine::new();
+    machine.push(named_tool_call("call-1", "run_terminal_cmd", "running"));
+    machine.push(CursorEvent::Interaction(
+        InteractionUpdate::ToolCallStarted {
+            call_id: "call-1".to_owned(),
+            tool_type: Some("shell".to_owned()),
+        },
+    ));
+    machine.push(named_tool_call("call-1", "run_terminal_cmd", "completed"));
+    // Cursor's recorded ordering puts this descriptor after the terminal
+    // tool-call frame. It must not recreate metadata for the finished call.
+    machine.push(CursorEvent::Interaction(
+        InteractionUpdate::ToolCallCompleted {
+            call_id: "call-1".to_owned(),
+            tool_type: Some("shell".to_owned()),
+        },
+    ));
+
+    let update = machine.push(named_tool_call("call-1", "read_file", "running"));
+    let SessionUpdate::ToolCall(announcement) = &update[0] else {
+        panic!("a reused id is a fresh announcement, got {update:?}");
+    };
+    assert_eq!(
+        announcement.kind,
+        ToolKind::Read,
+        "must classify from read_file's own name, not shell's stale learned kind"
+    );
 }
 
 #[test]

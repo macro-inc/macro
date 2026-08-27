@@ -489,11 +489,21 @@ where
         };
         // A cancel that raced the stream's own ending still reports
         // Cancelled: ACP requires it once the client sent `session/cancel`.
-        match outcome {
+        let stop_reason = match outcome {
             _ if cancelled => Ok(StopReason::Cancelled),
             Ok(stop_reason) => Ok(stop_reason),
             Err(error) => Err(error),
+        };
+        // Centralized rather than duplicated at every place stream_turn or
+        // poll_turn can end in Cancelled (the client's cancel racing the
+        // stream, a quiet-stream poll, a busy-wait poll, Cursor's own record
+        // reporting the run cancelled): whatever ends a turn as Cancelled
+        // may have left a tool call open with no terminal frame ever coming,
+        // and this is the one place that always sees the final verdict.
+        if matches!(stop_reason, Ok(StopReason::Cancelled)) {
+            self.close_open_tool_calls(session_id, &session).await;
         }
+        stop_reason
     }
 
     /// Cancel the session's active turn, if any. Idempotent; a session with
@@ -687,7 +697,6 @@ where
             {
                 Ok(None) => {
                     tracing::info!(%agent, %run, "turn cancelled by the client; abandoning the stream");
-                    self.close_open_tool_calls(session_id, session).await;
                     return Ok(StopReason::Cancelled);
                 }
                 Ok(Some(next)) => next,
@@ -786,12 +795,14 @@ where
         }
     }
 
-    /// Close out every tool call left open when a turn ends on the client's
-    /// cancel rather than Cursor's own terminal event.
+    /// Close out every tool call left open when a turn ends `Cancelled`
+    /// rather than on Cursor's own terminal event for that call.
     ///
-    /// The abandoned stream (see the `Ok(None)` arm above) means Cursor may
-    /// still be mid-call and will never get the chance to say how it ended,
-    /// so without this the client renders that call running forever.
+    /// Called once from [`Self::prompt`], after the verdict is final: a
+    /// cancelled stream is abandoned rather than drained, and a cancelled
+    /// poll gives up rather than waiting out the run, so either way Cursor
+    /// may still be mid-call and will never get the chance to say how it
+    /// ended. Without this the client renders that call running forever.
     async fn close_open_tool_calls(&self, session_id: &SessionId, session: &Session) {
         let updates = session
             .state

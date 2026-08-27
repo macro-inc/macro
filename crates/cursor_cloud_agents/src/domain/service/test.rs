@@ -481,10 +481,20 @@ async fn a_truncated_stream_is_finished_by_the_poll_without_repeating_text() {
 /// the result, not the envelope's end-of-turn marker.
 #[tokio::test]
 async fn a_cancelled_run_reports_cancelled_from_its_result() {
-    let (service, cursor, _notifier) = service(None);
+    let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
+    events
+        .send(CursorEvent::ToolCall(ToolCallEvent {
+            call_id: "call-1".to_owned(),
+            name: "run_terminal_cmd".to_owned(),
+            status: Some("running".to_owned()),
+            args: None,
+            result: None,
+            truncated: Truncation::default(),
+        }))
+        .expect("stream open");
     events
         .send(CursorEvent::Result {
             run_id: CursorRunId::new("run-fake-1"),
@@ -502,6 +512,12 @@ async fn a_cancelled_run_reports_cancelled_from_its_result() {
             .expect("prompt answers"),
         StopReason::Cancelled
     );
+    assert!(notifier.updates().iter().any(|(_, update)| matches!(
+        update,
+        SessionUpdate::ToolCallUpdate(update)
+            if &*update.tool_call_id.0 == "call-1"
+                && update.fields.status == Some(ToolCallStatus::Failed)
+    )));
 }
 
 /// MCP servers named at `session/new` reach agent creation.
