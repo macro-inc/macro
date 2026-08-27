@@ -1,20 +1,26 @@
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
-import { Show, type Signal } from 'solid-js';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createSignal, Show } from 'solid-js';
 
 /**
- * Split title that renames in place on double-click, the gesture the rest of
- * the app's titles use — no pencil affordance, and a single click still
- * belongs to the split chrome (the title menu on touch).
+ * Split title that renames in place, the way the rest of the app's titles are
+ * renamed: no pencil affordance, double-click to edit (a tap on touch, which
+ * has no double-click), commit on blur/Enter and discard on Escape.
  */
 export function RenamableSplitTitle(props: {
   label: string;
   ariaLabel: string;
   onRename: (name: string) => void;
-  /** Edit state, owned by the caller so its own chrome (e.g. a Rename menu
-   * item) can open the editor too. */
-  editing: Signal<boolean>;
 }) {
-  const [editing, setEditing] = props.editing;
+  const [editing, setEditing] = createSignal(false);
+
+  // The split label's own handlers open the context menu on double-click and
+  // the title menu on tap, so an edit gesture stops there.
+  const startEditing = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setEditing(true);
+  };
 
   return (
     <Show
@@ -22,11 +28,9 @@ export function RenamableSplitTitle(props: {
       fallback={
         <span
           class="inline-block truncate text-sm font-semibold"
-          onDblClick={(event) => {
-            // The split label's own double-click opens the context menu.
-            event.preventDefault();
-            event.stopPropagation();
-            setEditing(true);
+          onDblClick={startEditing}
+          onClick={(event) => {
+            if (isTouchDevice()) startEditing(event);
           }}
         >
           {props.label}

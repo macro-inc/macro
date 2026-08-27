@@ -4,28 +4,35 @@
 
 import { render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RenamableSplitTitle } from './RenamableSplitTitle';
 
+const mocks = vi.hoisted(() => ({ touch: false }));
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => mocks.touch,
+}));
+
 function renderTitle() {
-  const editing = createSignal(false);
   const onRename = vi.fn();
   render(() => (
     <RenamableSplitTitle
       label="Agent Session"
       ariaLabel="Agent session name"
       onRename={onRename}
-      editing={editing}
     />
   ));
-  return { editing, onRename };
+  return { onRename };
 }
 
 const editor = () =>
   screen.queryByLabelText('Agent session name') as HTMLInputElement | null;
 
 describe('RenamableSplitTitle', () => {
+  beforeEach(() => {
+    mocks.touch = false;
+  });
+
   it('shows a static title until the user double-clicks it', async () => {
     renderTitle();
 
@@ -35,6 +42,7 @@ describe('RenamableSplitTitle', () => {
     await userEvent.dblClick(screen.getByText('Agent Session'));
 
     expect(editor()?.value).toBe('Agent Session');
+    expect(document.activeElement).toBe(editor());
   });
 
   it('renames on Enter and returns to the static title', async () => {
@@ -49,19 +57,20 @@ describe('RenamableSplitTitle', () => {
     expect(editor()).toBeNull();
   });
 
-  it('opens the editor when the caller sets its edit state', async () => {
-    const { editing } = renderTitle();
-
-    editing[1](true);
-
-    expect(await screen.findByLabelText('Agent session name')).toBeDefined();
-  });
-
   it('leaves single clicks to the split chrome', async () => {
     renderTitle();
 
     await userEvent.click(screen.getByText('Agent Session'));
 
     expect(editor()).toBeNull();
+  });
+
+  it('edits on a single tap where there is no double-click', async () => {
+    mocks.touch = true;
+    renderTitle();
+
+    await userEvent.click(screen.getByText('Agent Session'));
+
+    expect(editor()?.value).toBe('Agent Session');
   });
 });

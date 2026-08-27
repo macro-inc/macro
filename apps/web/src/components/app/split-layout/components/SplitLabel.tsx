@@ -28,12 +28,10 @@ import {
   type Component,
   createEffect,
   createMemo,
-  createSignal,
   For,
   type JSX,
   type ParentProps,
   Show,
-  type Signal,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import {
@@ -55,12 +53,8 @@ export function StaticSplitLabel(props: {
    * chrome. */
   onRename?: (name: string) => void;
   renameAriaLabel?: string;
-  /** Edit state owned by the caller, so its own chrome (e.g. a Rename menu
-   * item) can open the same editor the title's double-click opens. */
-  renaming?: Signal<boolean>;
 }) {
   const panel = useSplitPanelOrThrow();
-  const renaming = props.renaming ?? createSignal(false);
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
@@ -110,7 +104,6 @@ export function StaticSplitLabel(props: {
                   label={props.label}
                   ariaLabel={props.renameAriaLabel ?? 'Rename'}
                   onRename={onRename()}
-                  editing={renaming}
                 />
               )}
             </Show>

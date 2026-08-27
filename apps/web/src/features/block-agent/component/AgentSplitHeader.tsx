@@ -17,12 +17,11 @@ import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import LinkIcon from '@phosphor/link.svg';
-import RenameIcon from '@phosphor/pencil-line.svg';
 import TreeStructure from '@phosphor/tree-structure.svg';
 import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
-import { createSignal, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
   ORIGIN_THREAD_DRAWER_ID,
@@ -55,8 +54,6 @@ export function AgentSplitHeader(props: {
   // block id is the one thing here that is not a shareable session id.
   const { sessionId } = useAgentSession();
   const userId = useUserId();
-  const canRename = () => props.session?.ownerId === userId();
-  const [renaming, setRenaming] = createSignal(false);
   const title = () => {
     const persistedName = props.session?.name;
     if (persistedName && persistedName !== 'Agent Session')
@@ -115,19 +112,7 @@ export function AgentSplitHeader(props: {
     },
   ];
 
-  const ops = (): FileOperation[] => [
-    // Double-clicking the title renames it too; the menu item keeps rename
-    // reachable where double-click isn't (touch).
-    ...(canRename()
-      ? [
-          {
-            label: 'Rename',
-            icon: RenameIcon,
-            action: () => setRenaming(true),
-            group: 'file' as const,
-          },
-        ]
-      : []),
+  const ops: FileOperation[] = [
     {
       label: 'Open repository',
       icon: GitBranch,
@@ -144,9 +129,8 @@ export function AgentSplitHeader(props: {
         <StaticSplitLabel
           iconType="agent"
           label={title()}
-          onRename={canRename() ? rename : undefined}
+          onRename={props.session?.ownerId === userId() ? rename : undefined}
           renameAriaLabel="Agent session name"
-          renaming={[renaming, setRenaming]}
         />
       </SplitHeaderLeft>
 
@@ -171,7 +155,7 @@ export function AgentSplitHeader(props: {
       <ResponsiveBlockToolbar
         tools={[]}
         menuTools={tools}
-        ops={ops()}
+        ops={ops}
         id={sessionId() ?? ''}
         itemType="foreign"
         name={title()}
