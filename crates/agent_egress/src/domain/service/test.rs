@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use url::Url;
 
 fn owner() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")
+    MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id")
 }
 
 fn empty_body() -> ProxyBody {
@@ -380,6 +380,38 @@ async fn strips_hop_by_hop_headers_from_the_response() {
         .expect("proxied");
 
     assert_eq!(names(response.headers()), ["mcp-session-id"]);
+}
+
+/// The proxy is staff-only for now: a session owned outside macro.com gets
+/// nothing, whatever its token says - and learns nothing about why.
+#[tokio::test]
+async fn a_session_owned_outside_macro_gets_nothing() {
+    let service = EgressServiceImpl::new(
+        StubSessions(Ok(SessionGrant {
+            session: AgentSessionId::new(),
+            owner: MacroUserIdStr::try_from_email("visitor@example.com").expect("a valid user id"),
+            repo: session_repo(),
+        })),
+        SpyCredentials::knowing(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+
+    let refusal = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            request(Method::POST, &[]),
+        )
+        .await
+        .expect_err("refused");
+
+    assert!(matches!(refusal, EgressError::Unauthenticated), "{refusal}");
+    assert!(
+        service.credentials.asked.lock().expect("lock").is_empty(),
+        "an outside owner must never reach credential resolution"
+    );
+    assert!(!service.forward.was_called());
 }
 
 /// Resolution reads the owner's connected servers, so an unverified token

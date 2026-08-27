@@ -5,7 +5,7 @@ use http::header::AUTHORIZATION;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    EgressTarget, ProxyRequest, ProxyResponse, SessionToken, ensure_method_allowed,
+    EgressTarget, ProxyRequest, ProxyResponse, SessionToken, ensure_method_allowed, is_macro_staff,
     sanitize_request_headers, sanitize_response_headers,
 };
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
@@ -79,6 +79,15 @@ where
         // servers, and an unverified token must not be able to probe which
         // of those exist.
         let grant = self.sessions.authorize(token).await?;
+
+        // Staff-only for now, checked here so every target - git, connected
+        // MCP servers, Macro's own - passes one gate. Refused as
+        // unauthenticated on purpose: the sandbox cannot act on the
+        // distinction, and the detail is in the trace for the person who can.
+        if !is_macro_staff(&grant.owner) {
+            tracing::warn!(owner = %grant.owner, "refusing egress for a session owned outside macro.com");
+            return Err(EgressError::Unauthenticated);
+        }
 
         let call = match &target {
             EgressTarget::McpServer(destination) => {
