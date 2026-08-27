@@ -193,3 +193,27 @@ fn suppresses_existing_immutable_non_drafts() {
     assert_eq!(select_message_sync_event(Some(false), false, false), None);
     assert_eq!(select_message_sync_event(Some(false), false, true), None);
 }
+
+#[test]
+fn macro_staff_gets_all_inbox_new_email_policy() {
+    assert_eq!(
+        new_email_notify_policy(&id("macro|teo@macro.com")),
+        NewEmailNotifyPolicy::AllInbox
+    );
+}
+
+#[test]
+fn macro_staff_plus_alias_gets_all_inbox_new_email_policy() {
+    assert_eq!(
+        new_email_notify_policy(&id("macro|teo+notify@macro.com")),
+        NewEmailNotifyPolicy::AllInbox
+    );
+}
+
+#[test]
+fn customer_gets_signal_only_new_email_policy() {
+    assert_eq!(
+        new_email_notify_policy(&id("macro|user@example.com")),
+        NewEmailNotifyPolicy::SignalOnly
+    );
+}
