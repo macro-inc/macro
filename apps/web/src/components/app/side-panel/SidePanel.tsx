@@ -381,7 +381,7 @@ function Section(
       component: () => (
         <Accordion.Item value={props.id}>
           <Panel
-            depth={2}
+            depth={1}
             style={{ height: 'auto' }}
             class="rounded-xl bg-surface"
           >

@@ -5,6 +5,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
+import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar-open-in-split-menu';
 import {
   buildBrainWorkspacePath,
   getLastBrainWorkspaceSelection,
@@ -266,38 +267,51 @@ export function ExperimentalAppSidebar(props: ExperimentalAppSidebarProps) {
           <For each={visibleItems()}>
             {(item) => (
               <li>
-                <Tooltip
-                  label={item.label}
-                  placement="right"
-                  class="w-full"
-                  disabled={isExpanded()}
+                <SidebarOpenInSplitMenu
+                  content={() =>
+                    item.id === 'calendar'
+                      ? { type: 'calendar', id: CALENDAR_BLOCK_ID }
+                      : {
+                          type: 'component',
+                          id: item.contentId,
+                          params: item.params,
+                        }
+                  }
+                  triggerClass="w-full"
                 >
-                  <button
-                    type="button"
-                    class={cn(
-                      'group/nav-item flex items-center rounded-lg font-medium outline-none transition-colors',
-                      isExpanded()
-                        ? 'h-10 w-full gap-3 px-3 text-left'
-                        : 'mx-auto size-9 justify-center',
-                      isActive(item)
-                        ? 'bg-active text-ink'
-                        : 'text-ink-muted hover:bg-ink/5 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40'
-                    )}
-                    aria-current={isActive(item) ? 'page' : undefined}
-                    aria-label={isSlim() ? item.label : undefined}
-                    onMouseDown={(event) => {
-                      if (event.button === 0) event.preventDefault();
-                    }}
-                    onClick={(event) => openItem(item, event)}
+                  <Tooltip
+                    label={item.label}
+                    placement="right"
+                    class="w-full"
+                    disabled={isExpanded()}
                   >
-                    <span class="flex size-5 shrink-0 items-center justify-center">
-                      <Dynamic component={item.icon} class="size-[18px]" />
-                    </span>
-                    <Show when={isExpanded()}>
-                      <span class="truncate">{item.label}</span>
-                    </Show>
-                  </button>
-                </Tooltip>
+                    <button
+                      type="button"
+                      class={cn(
+                        'group/nav-item flex items-center rounded-lg font-medium outline-none transition-colors',
+                        isExpanded()
+                          ? 'h-10 w-full gap-3 px-3 text-left'
+                          : 'mx-auto size-9 justify-center',
+                        isActive(item)
+                          ? 'bg-active text-ink'
+                          : 'text-ink-muted hover:bg-ink/5 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40'
+                      )}
+                      aria-current={isActive(item) ? 'page' : undefined}
+                      aria-label={isSlim() ? item.label : undefined}
+                      onMouseDown={(event) => {
+                        if (event.button === 0) event.preventDefault();
+                      }}
+                      onClick={(event) => openItem(item, event)}
+                    >
+                      <span class="flex size-5 shrink-0 items-center justify-center">
+                        <Dynamic component={item.icon} class="size-[18px]" />
+                      </span>
+                      <Show when={isExpanded()}>
+                        <span class="truncate">{item.label}</span>
+                      </Show>
+                    </button>
+                  </Tooltip>
+                </SidebarOpenInSplitMenu>
               </li>
             )}
           </For>

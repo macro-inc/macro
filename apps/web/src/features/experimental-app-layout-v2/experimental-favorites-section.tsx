@@ -4,6 +4,7 @@ import {
   favoriteSplitContent,
   useFavoriteDisplayName,
 } from '@app/util/favorites';
+import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar-open-in-split-menu';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import StarIcon from '@phosphor/star.svg';
@@ -36,7 +37,8 @@ function ExperimentalFavoriteRow(props: { favorite: Favorite }) {
   };
 
   return (
-    <button
+    <SidebarOpenInSplitMenu content={content} triggerClass="w-full">
+      <button
       type="button"
       class={cn(
         'flex h-9 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium outline-none transition-colors',
@@ -55,6 +57,7 @@ function ExperimentalFavoriteRow(props: { favorite: Favorite }) {
       </span>
       <span class="min-w-0 flex-1 truncate">{displayName()}</span>
     </button>
+    </SidebarOpenInSplitMenu>
   );
 }
 

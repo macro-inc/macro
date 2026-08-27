@@ -554,7 +554,10 @@ function ActivityWorkspaceHeader(props: {
   };
   return (
     <ComposedSplitHeader
-      class="absolute! left-0 top-0 z-1 flex flex-col items-stretch px-4 pb-3 pt-2 @max-[760px]/experimental-activity:px-3 @max-[480px]/experimental-activity:px-2"
+      class={cn(
+        'absolute! left-0 top-0 z-1 flex flex-col items-stretch px-4 pb-3 pt-2 @max-[760px]/experimental-activity:px-3 @max-[480px]/experimental-activity:px-2',
+        props.title === 'Inbox' && 'border-r border-edge-muted'
+      )}
       style={{
         width:
           props.title === 'Inbox'

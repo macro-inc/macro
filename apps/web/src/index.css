@@ -661,13 +661,22 @@ body.tauri-ios {
 
 /* The channel/compose input: full-strength glass, but the tight menu shadow
    swaps for a wide, faint ambient one (a la the ChatGPT composer) so the
-   input reads as floating over the conversation rather than popped out of it. */
+   input reads as floating over the conversation rather than popped out of it.
+   Light themes keep the same geometry at a much lower scale so the halo
+   doesn't dominate pale surfaces. */
 @utility glass-input {
   @apply glass-lg;
   --glass-shadow-y: 10px;
   --glass-shadow-blur: 40px;
   --glass-shadow-spread: -8px;
   --glass-shadow-scale: 0.5;
+}
+
+html[data-theme-light='true'] .glass-input {
+  --glass-shadow-y: 4px;
+  --glass-shadow-blur: 16px;
+  --glass-shadow-spread: -10px;
+  --glass-shadow-scale: 0.18;
 }
 
 [data-press-pulse] {

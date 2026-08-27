@@ -25,6 +25,7 @@ import { createEffect, onMount } from 'solid-js';
 function SoupChatInputInner(props: {
   onChatCreated?: (chatId: string) => void;
   placement?: 'docked' | 'centered';
+  variant?: 'default' | 'tall';
 }) {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
@@ -146,6 +147,7 @@ function SoupChatInputInner(props: {
         <div class="pointer-events-auto">
           <ChatInput
             editor={editor}
+            variant={props.variant}
             onSend={handleSend}
             onEscape={() => {
               splitPanelContext.panelRef()?.focus();
@@ -164,6 +166,7 @@ export function SoupChatInput(
   props: {
     onChatCreated?: (chatId: string) => void;
     placement?: 'docked' | 'centered';
+    variant?: 'default' | 'tall';
   } = {}
 ) {
   // Seed the selector from the persisted soup draft model so the user's last
@@ -175,6 +178,7 @@ export function SoupChatInput(
       <SoupChatInputInner
         onChatCreated={props.onChatCreated}
         placement={props.placement}
+        variant={props.variant}
       />
     </ChatInputProvider>
   );

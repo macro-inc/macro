@@ -22,6 +22,8 @@ export const SidebarCreateMenu = (props: {
   placement?: 'right-start' | 'bottom-start' | 'bottom-end';
   filled?: boolean;
   large?: boolean;
+  /** Extra classes on the icon trigger, e.g. the v4 rail's glass chrome. */
+  triggerClass?: string;
   onMenuOpenChange?: (open: boolean) => void;
   onAgentSelect?: () => void;
 }) => {
@@ -129,11 +131,13 @@ export const SidebarCreateMenu = (props: {
           class={cn(
             'rounded-full',
             props.large
-              ? 'size-9 [&_svg]:size-[18px]!'
+              ? 'size-9 [&_svg]:size-5!'
               : 'size-[26px] [&_svg]:size-4!',
-            props.filled
-              ? 'border-transparent bg-ink/8 text-ink shadow-none hover:bg-ink/12 hover:text-ink!'
-              : 'bg-surface shadow-md shadow-drop-shadow'
+            !props.triggerClass &&
+              (props.filled
+                ? 'border-transparent bg-ink/8 text-ink shadow-none hover:bg-ink/12 hover:text-ink!'
+                : 'bg-surface shadow-md shadow-drop-shadow'),
+            props.triggerClass
           )}
           label="Create"
           hotkey={TOKENS.global.createCommand}

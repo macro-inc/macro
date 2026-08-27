@@ -87,6 +87,7 @@ export type SplitPanelContextType = {
   bottomPanel: Accessor<SplitBottomPanelRegistration | undefined>;
   registerBottomPanel: (panel: SplitBottomPanelRegistration) => () => void;
   layoutRefs: {
+    headerStart?: HTMLDivElement;
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;
     toolbarLeft?: HTMLDivElement;

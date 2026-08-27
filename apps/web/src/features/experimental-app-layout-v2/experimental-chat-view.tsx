@@ -1,6 +1,10 @@
 import { activeAppLayout } from '@app/features/app-layout/layout-state';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
+import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
+import { SoupContextProvider } from '@app/features/next-soup/soup-context';
+import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
+import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -47,17 +51,18 @@ export function ExperimentalChatHistoryItem(props: {
     unreadFilterFn(props.chat as WithNotification<EntityData>);
 
   return (
-    <button
-      type="button"
-      class={cn(
-        'group/chat flex w-full shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left outline-none transition-colors',
-        props.active
-          ? 'bg-active text-ink'
-          : 'text-ink-muted hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40'
-      )}
-      aria-current={props.active ? 'page' : undefined}
-      onClick={props.onOpen}
-    >
+    <SoupEntityContextMenu entity={props.chat}>
+      <button
+        type="button"
+        class={cn(
+          'group/chat flex w-full shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-left outline-none transition-colors',
+          props.active
+            ? 'bg-active text-ink'
+            : 'text-ink-muted hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40'
+        )}
+        aria-current={props.active ? 'page' : undefined}
+        onClick={props.onOpen}
+      >
       <span class="min-w-0 flex-1 truncate text-sm font-medium">
         {props.chat.name || 'Untitled chat'}
       </span>
@@ -73,6 +78,7 @@ export function ExperimentalChatHistoryItem(props: {
         </Show>
       </span>
     </button>
+    </SoupEntityContextMenu>
   );
 }
 
@@ -182,6 +188,7 @@ export function ChatWorkspaceMain(props: {
 
 /** Standalone chat workspace that keeps chat history beside the active block. */
 export function ExperimentalChatView() {
+  const soup = createSoupState();
   const panel = useSplitPanelOrThrow();
   const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
@@ -207,17 +214,21 @@ export function ExperimentalChatView() {
   };
 
   return (
-    <SidePanel.Layout defaultOpen narrowThreshold={640}>
-      <ChatHistorySection
-        chats={chats()}
-        selectedChatId={selectedChatId()}
-        onSelectChat={(chatId) => selectChat(chatId)}
-        onNewChat={() => selectChat(undefined)}
-      />
-      <ChatWorkspaceMain
-        activeChatBlock={activeChatBlock()}
-        onChatCreated={(chatId) => selectChat(chatId)}
-      />
-    </SidePanel.Layout>
+    <SoupContextProvider soup={soup}>
+      <SoupViewContextProvider soup={soup} initialEnabled>
+        <SidePanel.Layout defaultOpen narrowThreshold={640}>
+          <ChatHistorySection
+            chats={chats()}
+            selectedChatId={selectedChatId()}
+            onSelectChat={(chatId) => selectChat(chatId)}
+            onNewChat={() => selectChat(undefined)}
+          />
+          <ChatWorkspaceMain
+            activeChatBlock={activeChatBlock()}
+            onChatCreated={(chatId) => selectChat(chatId)}
+          />
+        </SidePanel.Layout>
+      </SoupViewContextProvider>
+    </SoupContextProvider>
   );
 }

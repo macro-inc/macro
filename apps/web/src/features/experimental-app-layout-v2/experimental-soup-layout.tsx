@@ -20,7 +20,6 @@ import {
   NIL_UUID,
 } from '@app/features/next-soup/filters/filter-store';
 import { registerViewSearch } from '@app/features/next-soup/soup-view/active-view-search';
-import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
@@ -29,7 +28,6 @@ import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/features/next-soup/soup-view/soup-view-create-button';
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
-import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
 import {
   CompanyDisplayMenu,
   CompanyViewsMenu,
@@ -73,24 +71,15 @@ import VideoAppIcon from '@icon/wide-video.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import BrainIcon from '@phosphor/brain.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import ClockIcon from '@phosphor/clock-counter-clockwise.svg';
-import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import MenuIcon from '@phosphor/list.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
-import PaperPlaneIcon from '@phosphor/paper-plane-tilt.svg';
 import PlugIcon from '@phosphor/plug.svg';
-import RecordIcon from '@phosphor/record.svg';
-import ShareIcon from '@phosphor/share-network.svg';
 import SquaresIcon from '@phosphor/squares-four.svg';
-import UsersIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
 import { useSoupItemsQuery } from '@queries/soup/items';
-import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { useNavigate, useParams } from '@solidjs/router';
 import {
@@ -123,8 +112,13 @@ import {
   ExperimentalChatHistoryItem,
   isChatEntity,
 } from './experimental-chat-view';
-import { ExperimentalDriveFavoritesSection } from './experimental-drive-favorites-section';
-import { ExperimentalDriveTreeSection } from './experimental-drive-tree-section';
+import { takeExperimentalViewNavIntent } from './experimental-view-nav-intent';
+import {
+  ExperimentalEmailNavigation,
+  ExperimentalLibraryNavigation,
+  ExperimentalTaskNavigation,
+  type LibrarySection,
+} from './experimental-view-navigation';
 import {
   ExperimentalIntegrationDetails,
   ExperimentalIntegrationIcon,
@@ -174,16 +168,6 @@ const INBOX_ITEMS: readonly ViewNavigationItem[] = [
   { value: 'signal', label: 'Signal', icon: SignalIcon },
   { value: 'noise', label: 'Noise', icon: NoiseIcon },
   { value: 'all', label: 'All', icon: SquaresIcon },
-];
-
-const TASK_PERSONAL_ITEMS: readonly ViewNavigationItem[] = [
-  { value: 'my-tasks', label: 'My tasks', icon: RecordIcon },
-  { value: 'created-by-me', label: 'Created by me', icon: NoteIcon },
-  { value: 'projects', label: 'Projects', icon: FolderIcon },
-];
-
-const TASK_TEAM_ITEMS: readonly ViewNavigationItem[] = [
-  { value: 'team-tasks', label: 'Team tasks', icon: RecordIcon },
 ];
 
 type PowersTab =
@@ -272,34 +256,6 @@ const POWERS_TAB_DOCS_URLS: Record<PowersTab, string> = {
   integrations: DOCS_BASE,
   memories: DOCS_BASE,
 };
-
-const EMAIL_TAB_ICONS: Record<
-  string,
-  Component<JSX.SvgSVGAttributes<SVGSVGElement>>
-> = {
-  important: SignalIcon,
-  noise: NoiseIcon,
-  sent: PaperPlaneIcon,
-  drafts: NoteIcon,
-  shared: ShareIcon,
-  all: EnvelopeOpenIcon,
-};
-
-type LibrarySection =
-  | 'recents'
-  | 'my-drive'
-  | 'favorites'
-  | 'shared'
-  | 'images'
-  | 'all';
-
-const LIBRARY_ITEMS: readonly (ViewNavigationItem & {
-  value: LibrarySection;
-})[] = [
-  { value: 'recents', label: 'Recents', icon: ClockIcon },
-  { value: 'shared', label: 'Shared with me', icon: ShareIcon },
-  { value: 'all', label: 'Everything', icon: SquaresIcon },
-];
 
 const LIBRARY_TYPE_FILTERS = [
   { id: 'doc-markdown', label: 'Documents', icon: DocumentAppIcon },
@@ -399,9 +355,6 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   });
   const [viewMenuOpen, setViewMenuOpen] = createSignal(false);
   const [viewSidebarCollapsed, setViewSidebarCollapsed] = createSignal(false);
-  const [taskTeamExpanded, setTaskTeamExpanded] = createSignal(true);
-  const currentTeamQuery = useCurrentTeamQuery();
-  const taskTeamName = () => currentTeamQuery.data?.team.name ?? 'Team';
   const { consolidatedFiltersList, resetToTabDefaults } =
     useFilterRefinements();
   const activeFilterCount = createMemo(() =>
@@ -426,8 +379,6 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   });
 
   const tabView = () => TAB_VIEW_BY_EXPERIMENTAL_VIEW[props.view];
-  const emailTabs = () =>
-    VIEW_TAB_LISTS.mail.filter((tab) => tab.value !== 'calendar');
 
   const selectTab = (value: string) => {
     const view = tabView();
@@ -692,7 +643,28 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
       onCleanup(unregister);
     }
 
+    if (props.view === 'email') {
+      const intent = takeExperimentalViewNavIntent('mail');
+      if (intent) selectTab(intent.tab);
+    }
+
+    if (props.view === 'tasks') {
+      const intent = takeExperimentalViewNavIntent('tasks');
+      if (intent) selectTab(intent.tab);
+    }
+
     if (props.view === 'library') {
+      const intent = takeExperimentalViewNavIntent('documents');
+      if (intent) {
+        if ('favorites' in intent) {
+          selectLibraryFavorites(intent.favorites);
+        } else if ('projectId' in intent) {
+          selectLibraryProject(intent.projectId);
+        } else {
+          selectLibrarySection(intent.section);
+        }
+        return;
+      }
       const active = soupView.activeTab();
       if (['owned', 'attachments', 'folders'].includes(active ?? '')) {
         selectLibrarySection('recents');
@@ -1605,85 +1577,28 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
   );
 
   const EmailNavigation = () => (
-    <>
-      <div>
-        <InboxSelector inline experimentalSidebar />
-      </div>
-      <ExperimentalViewSidebarItems class="mt-3">
-        <nav aria-label="Email views" class="flex flex-col gap-0.5">
-          <For each={emailTabs()}>
-            {(tab) => {
-              const active = () => soupView.activeTab() === tab.value;
-              return (
-                <button
-                  type="button"
-                  class={cn(
-                    'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
-                    active()
-                      ? 'bg-active text-ink'
-                      : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
-                  )}
-                  aria-pressed={active()}
-                  onClick={() => {
-                    selectTab(tab.value);
-                    setViewMenuOpen(false);
-                  }}
-                >
-                  <Dynamic
-                    component={EMAIL_TAB_ICONS[tab.value]}
-                    class="size-4 shrink-0"
-                  />
-                  {tab.label}
-                </button>
-              );
-            }}
-          </For>
-        </nav>
-      </ExperimentalViewSidebarItems>
-    </>
+    <ExperimentalEmailNavigation
+      activeTab={soupView.activeTab()}
+      onSelectTab={(tab) => {
+        selectTab(tab);
+        setViewMenuOpen(false);
+      }}
+    />
   );
 
   const LibraryNavigation = () => (
-    <ExperimentalViewSidebarItems class="mt-0">
-      <nav aria-label="Drive views" class="flex flex-col gap-0.5">
-        <For each={LIBRARY_ITEMS}>
-          {(item) => {
-            const active = () => librarySection() === item.value;
-            return (
-              <button
-                type="button"
-                class={cn(
-                  'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
-                  active()
-                    ? 'bg-active text-ink'
-                    : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
-                )}
-                aria-pressed={active()}
-                onClick={() => {
-                  selectLibrarySection(item.value);
-                  setViewMenuOpen(false);
-                }}
-              >
-                <Dynamic component={item.icon} class="size-4" />
-                {item.label}
-              </button>
-            );
-          }}
-        </For>
-
-        <ExperimentalDriveTreeSection
-          active={librarySection() === 'my-drive'}
-          activeProjectId={selectedLibraryProjectId()}
-          onSelectRoot={() => selectLibrarySection('my-drive')}
-          onSelect={(project) => selectLibraryProject(project.id)}
-        />
-
-        <ExperimentalDriveFavoritesSection
-          active={librarySection() === 'favorites'}
-          onSelectRoot={selectLibraryFavorites}
-          onOpen={() => setViewMenuOpen(false)}
-        />
-      </nav>
+    <>
+      <ExperimentalLibraryNavigation
+        section={librarySection()}
+        activeProjectId={selectedLibraryProjectId()}
+        onSelectSection={(section) => {
+          selectLibrarySection(section);
+          setViewMenuOpen(false);
+        }}
+        onSelectProject={(project) => selectLibraryProject(project.id)}
+        onSelectFavorites={selectLibraryFavorites}
+        onOpen={() => setViewMenuOpen(false)}
+      />
 
       <Show when={soupView.tagFilter.hasTags()}>
         <section class="mt-5">
@@ -1734,85 +1649,17 @@ export function ExperimentalSoupLayout(props: ExperimentalSoupLayoutProps) {
           </div>
         </section>
       </Show>
-    </ExperimentalViewSidebarItems>
+    </>
   );
 
   const TaskNavigation = () => (
-    <ExperimentalViewSidebarItems class="mt-0">
-      <nav aria-label="Task views" class="flex flex-col gap-0.5">
-        <For each={TASK_PERSONAL_ITEMS}>
-          {(item) => {
-            const active = () => soupView.activeTab() === item.value;
-            return (
-              <button
-                type="button"
-                class={cn(
-                  'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors',
-                  active()
-                    ? 'bg-active text-ink'
-                    : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
-                )}
-                aria-pressed={active()}
-                onClick={() => {
-                  selectTab(item.value);
-                  setViewMenuOpen(false);
-                }}
-              >
-                <Dynamic component={item.icon} class="size-4 shrink-0" />
-                {item.label}
-              </button>
-            );
-          }}
-        </For>
-
-        <button
-          type="button"
-          class={cn(
-            'mt-3 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-muted transition-colors hover:bg-ink/5 hover:text-ink',
-            TASK_TEAM_ITEMS.some(
-              (item) => item.value === soupView.activeTab()
-            ) && 'text-ink'
-          )}
-          aria-expanded={taskTeamExpanded()}
-          onClick={() => setTaskTeamExpanded((expanded) => !expanded)}
-        >
-          <UsersIcon class="size-4 shrink-0" />
-          <span class="min-w-0 flex-1 truncate">{taskTeamName()}</span>
-          <CaretRightIcon
-            class={cn(
-              'size-3 shrink-0 transition-transform',
-              taskTeamExpanded() && 'rotate-90'
-            )}
-          />
-        </button>
-        <Show when={taskTeamExpanded()}>
-          <For each={TASK_TEAM_ITEMS}>
-            {(item) => {
-              const active = () => soupView.activeTab() === item.value;
-              return (
-                <button
-                  type="button"
-                  class={cn(
-                    'flex w-full shrink-0 items-center gap-2.5 rounded-xl py-2 pl-8 pr-3 text-left text-sm font-medium transition-colors',
-                    active()
-                      ? 'bg-active text-ink'
-                      : 'text-ink-muted hover:bg-ink/5 hover:text-ink'
-                  )}
-                  aria-pressed={active()}
-                  onClick={() => {
-                    selectTab(item.value);
-                    setViewMenuOpen(false);
-                  }}
-                >
-                  <Dynamic component={item.icon} class="size-4 shrink-0" />
-                  {item.label}
-                </button>
-              );
-            }}
-          </For>
-        </Show>
-      </nav>
-    </ExperimentalViewSidebarItems>
+    <ExperimentalTaskNavigation
+      activeTab={soupView.activeTab()}
+      onSelectTab={(tab) => {
+        selectTab(tab);
+        setViewMenuOpen(false);
+      }}
+    />
   );
 
   const NarrowViewHeader = (headerProps: {

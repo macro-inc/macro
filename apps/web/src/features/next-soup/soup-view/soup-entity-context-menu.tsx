@@ -98,7 +98,8 @@ export const SoupEntityContextMenu: FlowComponent<
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenu.Trigger
-            class="size-full group/cm-trigger"
+            as="div"
+            class="block w-full group/cm-trigger"
             // Kobalte's trigger consumes the onContextMenu prop without
             // calling it, so capture the pointer position natively.
             on:contextmenu={(event: MouseEvent) =>

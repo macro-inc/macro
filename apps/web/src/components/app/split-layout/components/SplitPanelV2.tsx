@@ -1,5 +1,6 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { activeAppLayout } from '@app/features/app-layout/layout-state';
+import { ExperimentalEntityViewChrome, experimentalEntityViewHost } from '@app/features/experimental-app-layout-v2/experimental-entity-view-chrome';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
@@ -407,7 +408,22 @@ export function SplitPanelV2(props: SplitPanelProps) {
                               : 0
                           }
                         >
-                          <Dynamic component={props.split.mount.element} />
+                          <Show
+                            when={experimentalEntityViewHost(
+                              props.handle.content()
+                            )}
+                            fallback={
+                              <Dynamic component={props.split.mount.element} />
+                            }
+                          >
+                            {(host) => (
+                              <ExperimentalEntityViewChrome host={host()}>
+                                <Dynamic
+                                  component={props.split.mount.element}
+                                />
+                              </ExperimentalEntityViewChrome>
+                            )}
+                          </Show>
                         </BlockOpenTrackingDelayContext.Provider>
                       </SoupViewContextProvider>
                     </Suspense>

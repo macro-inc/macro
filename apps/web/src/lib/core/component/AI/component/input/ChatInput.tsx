@@ -26,6 +26,7 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
+import { SpeechBubbleWhisp } from '@core/component/AI/component/SpeechBubbleWhisp';
 import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
@@ -297,7 +298,15 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   return (
     <div class="relative">
-      <Surface class="rounded-xl bg-menu-glass glass-input" depth={2} solid>
+      <Surface
+        class={cn(
+          'rounded-2xl rounded-br-md bg-menu-glass glass-input',
+          isTallVariant() && 'rounded-br-2xl'
+        )}
+        depth={2}
+        solid
+        hideBorder
+      >
         <div
           onFocusOut={(e) => {
             const next = e.relatedTarget as Node | null;
@@ -337,7 +346,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           <div
             ref={setLineEl}
             class={cn('relative px-2 py-1.5', {
-              'flex flex-col px-3 py-2': isTallVariant(),
+              'flex flex-col gap-2 px-3 py-2': isTallVariant(),
             })}
           >
             {/* Invisible reference of the fully-expanded control row laid out
@@ -366,15 +375,20 @@ export function ChatInput(props: ChatInputComponentProps) {
             </Show>
             <div
               id={CHAT_INPUT_TEXT_AREA_ID}
-              class={cn('text-sm sm:text-sm text-ink')}
+              class={cn(
+                'text-sm sm:text-sm text-ink',
+                isTallVariant() && 'min-h-16'
+              )}
               classList={{
                 'pl-8': !isMultiline() && !isTallVariant(),
                 'px-0 pb-8': isMultiline() && !isTallVariant(),
                 // While empty, the only thing rendered is the placeholder.
                 // `white-space` inherits, so this keeps it on one line (clipped)
                 // instead of wrapping into the single-line height. Typing clears
-                // it, restoring normal wrapping / grow-to-multiline.
-                'overflow-hidden whitespace-nowrap': isEmptyInput(),
+                // it, restoring normal wrapping / grow-to-multiline. The tall
+                // composer is already a multi-line chunk, so leave wrapping on.
+                'overflow-hidden whitespace-nowrap':
+                  isEmptyInput() && !isTallVariant(),
               }}
               style={
                 !isMultiline() && !isTallVariant()
@@ -393,9 +407,6 @@ export function ChatInput(props: ChatInputComponentProps) {
                   props.autoFocusOnMount !== false
                 }
               />
-              <Show when={isTallVariant()}>
-                <div class="h-4" />
-              </Show>
               <Show when={isTallVariant()}>
                 <Attachments />
               </Show>
@@ -420,6 +431,9 @@ export function ChatInput(props: ChatInputComponentProps) {
         </div>
         <ConsentDialog />
       </Surface>
+      <Show when={!isTallVariant()}>
+        <SpeechBubbleWhisp />
+      </Show>
     </div>
   );
 }

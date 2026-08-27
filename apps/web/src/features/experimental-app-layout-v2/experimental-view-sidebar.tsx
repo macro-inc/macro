@@ -1,7 +1,7 @@
 import { cn } from '@ui';
 import { createSignal, type JSX, onCleanup, type ParentProps } from 'solid-js';
 
-const DEFAULT_VIEW_SIDEBAR_WIDTH = 288;
+const DEFAULT_VIEW_SIDEBAR_WIDTH = 268;
 const MIN_VIEW_SIDEBAR_WIDTH = 224;
 const MAX_VIEW_SIDEBAR_WIDTH = 360;
 

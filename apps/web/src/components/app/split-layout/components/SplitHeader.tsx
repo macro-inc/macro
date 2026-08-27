@@ -518,6 +518,12 @@ export function SplitHeader(props: {
               when={isTouchDevice()}
               fallback={
                 <div class="relative flex h-full items-center gap-2 pl-4 @max-[720px]/split-header:pl-2">
+                <div
+                  class="contents"
+                  ref={(element) => {
+                    panel.layoutRefs.headerStart = element;
+                  }}
+                />
                 <Show when={showLeadingControls()}>
                   <div class="flex items-center">
                     <SplitCloseButton />
@@ -574,6 +580,23 @@ export function SplitHeader(props: {
         </div>
       </div>
     </SplitHeaderContextMenu>
+  );
+}
+
+export function SplitHeaderStart(props: ParentProps) {
+  const ctx = useContext(SplitPanelContext);
+  if (!ctx)
+    throw new Error('<SplitHeaderStart> must be used within a <SplitLayout>');
+
+  return (
+    <Show when={ctx.layoutRefs.headerStart}>
+      <Portal
+        mount={ctx.layoutRefs.headerStart}
+        ref={(div) => (div.style.display = 'contents')}
+      >
+        {props.children}
+      </Portal>
+    </Show>
   );
 }
 

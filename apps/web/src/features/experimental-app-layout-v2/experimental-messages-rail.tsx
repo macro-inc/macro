@@ -4,6 +4,7 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
@@ -128,7 +129,8 @@ function ChannelOption(props: {
       placement="right"
       class="w-full"
     >
-      <button
+      <SoupEntityContextMenu entity={props.channel}>
+        <button
         type="button"
         class={cn(
           'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40 @max-[720px]/experimental-soup:mx-auto @max-[720px]/experimental-soup:size-10 @max-[720px]/experimental-soup:min-h-10 @max-[720px]/experimental-soup:justify-center @max-[720px]/experimental-soup:rounded-full @max-[720px]/experimental-soup:px-0 @max-[720px]/experimental-soup:py-0',
@@ -153,6 +155,7 @@ function ChannelOption(props: {
         />
         </Show>
       </button>
+      </SoupEntityContextMenu>
     </Tooltip>
   );
 }
@@ -173,7 +176,8 @@ function ConversationCard(props: {
       placement="right"
       class="w-full"
     >
-      <button
+      <SoupEntityContextMenu entity={props.channel}>
+        <button
         type="button"
         class={cn(
           'w-full min-w-0 px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40 @max-[720px]/experimental-soup:mx-auto @max-[720px]/experimental-soup:flex @max-[720px]/experimental-soup:size-10 @max-[720px]/experimental-soup:items-center @max-[720px]/experimental-soup:justify-center @max-[720px]/experimental-soup:rounded-full @max-[720px]/experimental-soup:px-0 @max-[720px]/experimental-soup:py-0',
@@ -251,6 +255,7 @@ function ConversationCard(props: {
           </div>
         </div>
       </button>
+      </SoupEntityContextMenu>
     </Tooltip>
   );
 }

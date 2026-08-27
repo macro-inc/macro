@@ -7,6 +7,7 @@ import type { ChatMessageWithAttachments } from '@service-cognition/generated/sc
 import { Button, Layer } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
+import { SpeechBubbleWhisp } from '../SpeechBubbleWhisp';
 import { ChatMessageMarkdown } from './ChatMessageMarkdown';
 import { CollapsibleMessage } from './CollapsibleMessage';
 import { EditableChatMessage } from './EditableChatMessage';
@@ -124,24 +125,29 @@ export function UserMessage(props: {
           <Switch>
             <Match when={!isEditing()}>
               <Layer depth={0}>
-                <div class="relative ml-auto max-w-[calc(100%-8rem)] whitespace-pre-line overflow-hidden rounded-lg border border-edge-muted bg-surface px-3 py-2 text-ink">
-                  <CollapsibleMessage>
-                    <ChatMessageMarkdown
-                      generating={() => false}
-                      text={content()!}
-                    />
-                  </CollapsibleMessage>
-                  <Show when={props.edit}>
-                    <div class="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="icon-md"
-                        onClick={() => setIsEditing(true)}
-                      >
-                        <PencilIcon />
-                      </Button>
+                <div class="ml-auto max-w-[calc(100%-8rem)]">
+                  <div class="relative ml-auto w-fit">
+                    <div class="relative whitespace-pre-line rounded-2xl rounded-br-[5px] bg-menu-glass glass px-3 py-2 text-ink">
+                      <CollapsibleMessage>
+                        <ChatMessageMarkdown
+                          generating={() => false}
+                          text={content()!}
+                        />
+                      </CollapsibleMessage>
+                      <Show when={props.edit}>
+                        <div class="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="icon-md"
+                            onClick={() => setIsEditing(true)}
+                          >
+                            <PencilIcon />
+                          </Button>
+                        </div>
+                      </Show>
                     </div>
-                  </Show>
+                    <SpeechBubbleWhisp />
+                  </div>
                 </div>
               </Layer>
             </Match>
