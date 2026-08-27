@@ -19,9 +19,10 @@
 //! same way a finished run ends. Cancellation is terminal on Cursor's side;
 //! that `result` is what closes the ACP prompt.
 //!
-//! The cancellation token is for waits that have no stream to drain: a prompt
-//! queued behind `agent_busy`, and the fallback poll once the stream has
-//! already gone quiet or died. It does not cut a live stream short.
+//! The cancellation token is for waits that have no run yet: a prompt queued
+//! behind `agent_busy`. It does not cut a live stream short, and it does not
+//! stand in for Cursor's terminal record once the stream is gone — that path
+//! still reads `GET …/runs/{run}` until the run is terminal.
 //!
 //! The remote cancel still needs a run id, and this process only remembers
 //! one for a turn it is itself streaming. A session restored after a restart,
@@ -515,10 +516,10 @@ where
         let (agent, active_run) = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.cancelled = true;
-            // Unblocks waits that have no stream (busy-agent queue, quiet-stream
-            // poll). The live stream is not abandoned — Cursor's `result`
-            // frame is what ends the turn. The POST below is the notification
-            // that asks for that frame.
+            // Unblocks a prompt still queued behind `agent_busy`. The live
+            // stream is not abandoned — Cursor's `result` frame is what ends
+            // the turn. The POST below is the notification that asks for that
+            // frame.
             state.cancel.cancel();
             (state.agent.clone(), state.active_run.clone())
         };
@@ -1021,15 +1022,10 @@ where
     ) -> Result<StopReason, SessionError> {
         let mut consecutive_errors = 0;
         for _ in 0..POLL_ATTEMPTS {
-            // A client cancel ends the wait, not just the run: the server
-            // often closes a cancelled run's stream without a result, and
-            // polling an outcome nobody wants any more would hold the turn
-            // open for minutes. Read from the token rather than the flag so
-            // the exit is immediate instead of up to one interval late.
-            if cancel.is_cancelled() {
-                self.close_open_tool_calls(session_id, session).await;
-                return Ok(StopReason::Cancelled);
-            }
+            // Get A Run is the result frame once the stream is gone. A client
+            // cancel is the notification that asked for that record; it does
+            // not replace it. Only give up on the token when the record
+            // itself cannot be read.
             let outcome = match self.cursor.run_result(agent, run).await {
                 Ok(outcome) => outcome,
                 // A blip mid-poll is survivable; the same failure over and
@@ -1037,20 +1033,25 @@ where
                 Err(error) if consecutive_errors < POLL_ERROR_TOLERANCE => {
                     consecutive_errors += 1;
                     tracing::warn!(%agent, %run, %error, consecutive_errors, "run poll failed");
+                    if cancel.is_cancelled() {
+                        self.close_open_tool_calls(session_id, session).await;
+                        return Ok(StopReason::Cancelled);
+                    }
                     if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
                         self.close_open_tool_calls(session_id, session).await;
                         return Ok(StopReason::Cancelled);
                     }
                     continue;
                 }
+                Err(_error) if cancel.is_cancelled() => {
+                    self.close_open_tool_calls(session_id, session).await;
+                    return Ok(StopReason::Cancelled);
+                }
                 Err(error) => return Err(SessionError::Cursor(error)),
             };
             consecutive_errors = 0;
             if !outcome.is_terminal() {
-                if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
-                    self.close_open_tool_calls(session_id, session).await;
-                    return Ok(StopReason::Cancelled);
-                }
+                tokio::time::sleep(POLL_INTERVAL).await;
                 continue;
             }
 

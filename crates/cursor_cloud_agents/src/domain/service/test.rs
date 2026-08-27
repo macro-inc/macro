@@ -130,6 +130,57 @@ async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
     );
 }
 
+/// Once the stream is gone, Get A Run is the result frame. Cancel does not
+/// skip that record — a still-running poll, then `CANCELLED` with text,
+/// must deliver that text rather than resolving on the token alone.
+#[tokio::test(start_paused = true)]
+async fn cancel_delivers_a_polled_cancelled_result_after_the_stream_ends() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    events
+        .send(CursorEvent::Thinking {
+            text: "hmm".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Running,
+        text: None,
+    });
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Cancelled,
+        text: Some("stopped here".to_owned()),
+    });
+    service.cancel(&session).await.expect("cancel works");
+    drop(events);
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    let texts: Vec<String> = notifier
+        .updates()
+        .iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
+                    Some(text.text.clone())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, vec!["stopped here".to_owned()]);
+}
+
 /// Cancel is a notification: POST it, keep reading until Cursor's `result`.
 ///
 /// Chunks that land after the POST are still the run — the Cloud Agents stream
