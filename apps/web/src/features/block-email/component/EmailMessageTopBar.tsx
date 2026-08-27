@@ -178,9 +178,7 @@ function HeaderTopRow(props: {
     <div class="flex flex-row w-full min-w-0 flex-1 items-center gap-2 text-sm">
       <div class="flex flex-row items-center gap-1.5 min-w-0 flex-1">
         <EmailUserTooltip recipient={props.message.from}>
-          <span class="text-ink font-medium">
-            {props.senderName}
-          </span>
+          <span class="text-ink font-medium">{props.senderName}</span>
         </EmailUserTooltip>
         <span class="text-ink-extra-muted/60 truncate">
           to{' '}
@@ -255,10 +253,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
     const id = props.message.db_id;
     if (id) props.setFocusedMessageId(id);
     const target = e.target;
-    if (
-      target instanceof Element &&
-      target.closest('[data-button], a[href]')
-    ) {
+    if (target instanceof Element && target.closest('[data-button], a[href]')) {
       return;
     }
     if (id) props.setExpandedBodyId(id, false);
@@ -272,11 +267,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
       onMouseLeave={() => setIsHovering(false)}
     >
       <Show when={props.isBodyExpanded()}>
-        <div
-          class="flex items-center gap-2 cursor-pointer"
-          onClick={handleHeaderClick}
-          onClickCapture={handleHeaderClick}
-        >
+        <div class="flex items-center gap-2" onClick={handleHeaderClick}>
           {props.avatar}
           <HeaderTopRow
             senderName={senderName()}

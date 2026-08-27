@@ -817,40 +817,19 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     HTMLDivElement | undefined
   >(undefined);
 
-  let containerFilled = false;
   const isContainerFilled = () => {
     const messageList = messagesListRef();
     const containerRef = messagesContainerRef();
 
-    // Skip if dependencies not ready
     if (
       !messageList ||
       !containerRef ||
-      !untrack(() => threadQuery.data)?.db_id
+      !untrack(() => threadQuery.data)?.db_id ||
+      threadQuery.isFetching
     ) {
-      containerFilled = false;
       return false;
     }
 
-    // Skip if still loading or already filled
-    if (threadQuery.isFetching || containerFilled) {
-      return containerFilled;
-    }
-
-    const messageListHeight = messageList.getBoundingClientRect().height;
-    const containerHeight = containerRef.getBoundingClientRect().height;
-
-    // Load more if container isn't filled
-    if (
-      messageListHeight < containerHeight &&
-      threadQuery.hasNextPage &&
-      !threadQuery.isFetching
-    ) {
-      threadQuery.fetchNextPage();
-      containerFilled = false;
-      return false;
-    }
-    containerFilled = true;
     return true;
   };
 

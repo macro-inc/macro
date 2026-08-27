@@ -27,6 +27,7 @@ import {
   createMemo,
   createSignal,
   Match,
+  on,
   onMount,
   Show,
   Switch,
@@ -37,10 +38,14 @@ import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import type { ReplyType } from '../util/replyType';
 import {
-  type ScrollAlign,
+  isTruncatedMiddleMessage,
+  isUnreadMessage,
   messageElement,
+  nextShownChronologicalIndex,
   pageThenAdvanceDelta,
+  prevShownChronologicalIndex,
   revealMessageAfterLayout,
+  type ScrollAlign,
   scrollToMessage,
   threadMessageIsExpanded,
 } from '../util/scrollToMessage';
@@ -166,10 +171,6 @@ function EmailContent(props: EmailViewProps) {
 
     if (!messages || !container) return false;
 
-    if (opts.focus) {
-      context.messages.setFocused(messageId);
-    }
-
     setIsScrollingToMessage(true);
 
     const success = scrollToMessage(messageId, messages, container, {
@@ -180,6 +181,10 @@ function EmailContent(props: EmailViewProps) {
     if (!success) {
       setIsScrollingToMessage(false);
       return false;
+    }
+
+    if (opts.focus) {
+      context.messages.setFocused(messageId);
     }
 
     if (context.messages.targetMessageID() === messageId) {
@@ -209,13 +214,46 @@ function EmailContent(props: EmailViewProps) {
     context.messages.setExpandedBodyId(messageId, true);
     const messages = untrack(context.messages.list);
     if (!messages) return;
-    if (messages.some((message) => message.db_id === messageId)) return;
-    try {
-      await loadMessagesUntilFound(messageId);
-    } catch (error) {
-      console.error('Error loading target message:', error);
+    if (!messages.some((message) => message.db_id === messageId)) {
+      try {
+        await loadMessagesUntilFound(messageId);
+      } catch (error) {
+        console.error('Error loading target message:', error);
+      }
     }
+
+    requestAnimationFrame(() => {
+      performScrollToMessage(messageId, {
+        behavior: 'instant',
+        focus: true,
+        align: 'nearest',
+      });
+    });
   }
+
+  const [userOpenedMiddle, setUserOpenedMiddle] = createSignal(false);
+  createEffect(
+    on(
+      () => context.thread()?.db_id,
+      () => setUserOpenedMiddle(false)
+    )
+  );
+
+  const showMiddleMessages = createMemo(() => {
+    if (userOpenedMiddle()) return true;
+    const messages = context.messages.list();
+    const focus = context.messages.focusedID();
+    const target = context.messages.targetMessageID();
+    for (let i = 0; i < messages.length; i++) {
+      if (!isTruncatedMiddleMessage(i, messages.length)) continue;
+      const id = messages[i]?.db_id;
+      if (id && (id === focus || id === target)) return true;
+      if (isUnreadMessage(messages[i])) return true;
+      if (!isTouchDevice() && id && context.drafts.getDraftForMessage(id))
+        return true;
+    }
+    return false;
+  });
 
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {
     const messages = context.messages.list();
@@ -241,11 +279,10 @@ function EmailContent(props: EmailViewProps) {
       const target =
         dir === 'prev' ? messages[messages.length - 1] : messages[0];
       if (!target?.db_id) return false;
-      performScrollToMessage(target.db_id, {
+      return performScrollToMessage(target.db_id, {
         behavior: 'smooth',
         focus: true,
       });
-      return true;
     }
 
     const currentIndex = messages.findIndex(
@@ -253,27 +290,36 @@ function EmailContent(props: EmailViewProps) {
     );
     if (currentIndex < 0) return false;
 
-    const delta = dir === 'prev' ? -1 : 1;
-    const targetIndex = currentIndex + delta;
+    const showMiddle = showMiddleMessages();
+    const targetIndex =
+      dir === 'next'
+        ? nextShownChronologicalIndex(currentIndex, messages.length, showMiddle)
+        : prevShownChronologicalIndex(
+            currentIndex,
+            messages.length,
+            showMiddle
+          );
 
-    if (targetIndex < 0 || targetIndex >= messages.length) {
-      if (dir === 'next' && markdownDomRef) {
+    if (targetIndex === null) {
+      if (
+        dir === 'next' &&
+        currentIndex === messages.length - 1 &&
+        markdownDomRef
+      ) {
         context.messages.setFocused(undefined);
         markdownDomRef.focus();
         return true;
       }
-      return false;
+      return true;
     }
 
     const targetMsg = messages[targetIndex];
     if (!targetMsg?.db_id) return false;
 
-    performScrollToMessage(targetMsg.db_id, {
+    return performScrollToMessage(targetMsg.db_id, {
       behavior: 'smooth',
       focus: true,
     });
-
-    return true;
   });
 
   const navigateToPreviousMessage = () => navigateMessage('prev');
@@ -468,6 +514,22 @@ function EmailContent(props: EmailViewProps) {
     }
   });
 
+  createEffect((prev: boolean | undefined) => {
+    const currentFocusedId = context.messages.focusedID();
+    const messages = context.messages.list();
+    if (!currentFocusedId || !messages.length) return true;
+    const exists = messages.some((m) => m.db_id === currentFocusedId);
+    if (!exists) return false;
+    if (prev === false) {
+      revealMessageAfterLayout(
+        currentFocusedId,
+        messages,
+        untrack(context.messagesListRef)
+      );
+    }
+    return true;
+  });
+
   const emailReplyInfo = createMemo(() => {
     const filtered = context.messages.list();
 
@@ -598,6 +660,8 @@ function EmailContent(props: EmailViewProps) {
                     }}
                     title={props.title}
                     underScrollsBottom={!replyInputInFlow()}
+                    showMiddleMessages={showMiddleMessages()}
+                    onOpenMiddle={() => setUserOpenedMiddle(true)}
                   />
                   <CustomScrollbar scrollContainer={context.messagesListRef} />
                 </div>

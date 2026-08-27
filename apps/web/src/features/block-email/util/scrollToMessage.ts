@@ -10,30 +10,14 @@ export function isUnreadMessage(message: OpenTargetMessage): boolean {
   return message.labels.some((label) => label.provider_label_id === 'UNREAD');
 }
 
-/** `messages` is oldest-first, matching `EmailContext`. */
-export function openTargetMessageId(
-  messages: OpenTargetMessage[]
-): string | undefined {
-  if (messages.length === 0) return undefined;
-  const newestId = messages.at(-1)?.db_id ?? undefined;
-  if (messages.every(isUnreadMessage)) return newestId;
-  return messages.find(isUnreadMessage)?.db_id ?? newestId;
-}
-
-export function shouldPageForOldestUnread(
-  messages: OpenTargetMessage[],
-  hasMore: boolean
-): boolean {
-  const oldest = messages[0];
-  return hasMore && oldest != null && isUnreadMessage(oldest);
-}
-
 /** Oldest, penultimate, and newest stay visible. Hide the rest when length > 3. */
 export function isTruncatedMiddleMessage(
   chronologicalIndex: number,
   length: number
 ): boolean {
-  return length > 3 && chronologicalIndex > 0 && chronologicalIndex < length - 2;
+  return (
+    length > 3 && chronologicalIndex > 0 && chronologicalIndex < length - 2
+  );
 }
 
 export function truncatedMiddleCount(length: number): number {
@@ -111,7 +95,8 @@ export function messageElement(
   messages: Array<{ db_id?: string | null }>,
   messageId: string
 ): HTMLElement | undefined {
-  if (!messages.some((message) => message.db_id === messageId)) return undefined;
+  if (!messages.some((message) => message.db_id === messageId))
+    return undefined;
   const el = container.querySelector(
     `[data-message-body-id="${CSS.escape(messageId)}"]`
   );
@@ -143,7 +128,7 @@ export function nearestDelta(
     return alignmentDelta(container, element, 'start');
   }
   if (elementBox.top >= containerBox.bottom - 1) {
-    return alignmentDelta(container, element, 'start');
+    return alignmentDelta(container, element, 'end');
   }
   return 0;
 }

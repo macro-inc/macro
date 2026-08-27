@@ -156,6 +156,7 @@ body.tauri-ios {
   --color-surface: var(--theme-surface, var(--layer-surface));
   --color-inset: var(--theme-inset, var(--layer-inset));
   --color-lift: var(--theme-lift, var(--layer-lift));
+  --color-message: var(--color-lift);
 }
 
 [data-layer][data-depth='0'] {

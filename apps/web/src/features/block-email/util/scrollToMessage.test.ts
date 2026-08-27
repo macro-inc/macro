@@ -2,31 +2,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   alignmentDelta,
-  type OpenTargetMessage,
-  openTargetMessageId,
-  shouldPageForOldestUnread,
   isTruncatedMiddleMessage,
-  nextShownChronologicalIndex,
-  prevShownChronologicalIndex,
   nearestDelta,
+  nextShownChronologicalIndex,
   pageThenAdvanceDelta,
+  prevShownChronologicalIndex,
   revealDelta,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from './scrollToMessage';
 
-function msg(id: string, unread = false): OpenTargetMessage {
-  return {
-    db_id: id,
-    labels: unread ? [{ provider_label_id: 'UNREAD' }] : [],
-  };
-}
-
-function box(
-  element: HTMLElement,
-  top: number,
-  bottom: number
-): void {
+function box(element: HTMLElement, top: number, bottom: number): void {
   vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
     top,
     bottom,
@@ -41,46 +27,6 @@ function box(
     },
   });
 }
-
-describe('openTargetMessageId', () => {
-  it('returns newest when every message is unread', () => {
-    expect(openTargetMessageId([msg('a', true), msg('b', true), msg('c', true)])).toBe(
-      'c'
-    );
-  });
-
-  it('skips older read messages to the first unread', () => {
-    expect(openTargetMessageId([msg('a'), msg('b', true), msg('c', true)])).toBe(
-      'b'
-    );
-  });
-
-  it('falls back to newest when nothing is unread', () => {
-    expect(openTargetMessageId([msg('a'), msg('b'), msg('c')])).toBe('c');
-  });
-
-  it('returns undefined for an empty list', () => {
-    expect(openTargetMessageId([])).toBeUndefined();
-  });
-});
-
-describe('shouldPageForOldestUnread', () => {
-  it('pages while the oldest loaded message is unread and more exist', () => {
-    expect(shouldPageForOldestUnread([msg('b', true), msg('c', true)], true)).toBe(
-      true
-    );
-  });
-
-  it('stops when a read message is older than every unread', () => {
-    expect(shouldPageForOldestUnread([msg('a'), msg('b', true)], true)).toBe(
-      false
-    );
-  });
-
-  it('stops at the start of the thread', () => {
-    expect(shouldPageForOldestUnread([msg('a', true)], false)).toBe(false);
-  });
-});
 
 describe('isTruncatedMiddleMessage', () => {
   it('hides only the middle when there are more than three messages', () => {
@@ -221,12 +167,12 @@ describe('nearestDelta', () => {
     expect(nearestDelta(container, element)).toBe(0);
   });
 
-  it('start-aligns a card that sits entirely below the list', () => {
+  it('end-aligns a card that sits entirely below the list', () => {
     const container = document.createElement('div');
     const element = document.createElement('div');
     box(container, 0, 800);
     box(element, 900, 1100);
-    expect(nearestDelta(container, element)).toBe(900);
+    expect(nearestDelta(container, element)).toBe(300);
   });
 });
 

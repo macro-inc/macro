@@ -53,10 +53,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
 
   const handleRowClick = (e: MouseEvent) => {
     const target = e.target;
-    if (
-      target instanceof Element &&
-      target.closest('[data-button], a[href]')
-    ) {
+    if (target instanceof Element && target.closest('[data-button], a[href]')) {
       return;
     }
     props.onClick();
@@ -67,7 +64,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'relative macro-thread-collapsed-row p-4 min-w-0 border bg-surface cursor-pointer macro-thread-card-outdent',
+            'relative macro-thread-collapsed-row p-4 min-w-0 border bg-message macro-thread-card-outdent',
             props.isFocused
               ? 'z-1 border-rail shadow-md shadow-drop-shadow'
               : 'border-edge-muted'
@@ -78,7 +75,6 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           data-message-body-id={props.message.db_id}
           tabIndex={0}
           onClick={handleRowClick}
-          onClickCapture={handleRowClick}
           onFocus={props.onFocus}
           onKeyDown={handleKeyDown}
         >

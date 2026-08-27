@@ -2,19 +2,18 @@ import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Key } from '@solid-primitives/keyed';
 import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSelector,
-  createSignal,
-  Index,
-  on,
   onCleanup,
   Show,
 } from 'solid-js';
 import {
   isTruncatedMiddleMessage,
+  isUnreadMessage,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from '../util/scrollToMessage';
@@ -25,7 +24,6 @@ import { MessageContainer } from './MessageContainer';
 interface MessageListProps {
   initialLoadComplete: boolean;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
-  onScrollPositionChange?: (scrollFromTop: number) => void;
   title?: string;
   /**
    * Full-frame mobile: when nothing is in flow below the list (the collapsed
@@ -33,6 +31,8 @@ interface MessageListProps {
    * inset in-scroll so the last message rests above the floating chrome.
    */
   underScrollsBottom?: boolean;
+  showMiddleMessages: boolean;
+  onOpenMiddle: () => void;
 }
 
 export function MessageList(props: MessageListProps) {
@@ -42,37 +42,6 @@ export function MessageList(props: MessageListProps) {
     context.messages.focusedID,
     (a, b) => !!a && !!b && a === b
   );
-  const isTargetSelector = createSelector(
-    context.messages.targetMessageID,
-    (a, b) => a === b
-  );
-  const [showMiddleMessages, setShowMiddleMessages] = createSignal(false);
-
-  createEffect(
-    on(
-      () => context.thread()?.db_id,
-      () => setShowMiddleMessages(false)
-    )
-  );
-
-  createEffect(() => {
-    const messages = context.messages.list();
-    const ids = [
-      context.messages.targetMessageID(),
-      context.messages.focusedID(),
-    ];
-    for (const id of ids) {
-      if (typeof id !== 'string') continue;
-      const chronologicalIndex = messages.findIndex(
-        (message) => message.db_id === id
-      );
-      if (isTruncatedMiddleMessage(chronologicalIndex, messages.length)) {
-        setShowMiddleMessages(true);
-        return;
-      }
-    }
-  });
-
   createEffect(() => {
     const list = context.messagesListRef();
     if (!list) return;
@@ -98,7 +67,6 @@ export function MessageList(props: MessageListProps) {
       ref={context.registerMessagesList}
       onscroll={(e) => {
         const scrollFromTop = e.currentTarget.scrollTop;
-        props.onScrollPositionChange?.(scrollFromTop);
 
         if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
 
@@ -133,41 +101,39 @@ export function MessageList(props: MessageListProps) {
         </div>
       </Show>
       <StaticMarkdownContext>
-        {/* We use Index because the index of the messages should always be stable and
-          only the value changes. This also helps prevent nested inputs from rerendering
-        */}
-        <Index each={context.messages.list()}>
-          {(message, index) => {
+        {/* Key by db_id so prepends and refetches keep per-row state. */}
+        <Key each={context.messages.list()} by="db_id">
+          {(message) => {
+            const chronologicalIndex = createMemo(() =>
+              context.messages
+                .list()
+                .findIndex((item) => item.db_id === message().db_id)
+            );
             const normalizedIndex = createMemo(() => {
               // The element at the 0th index isn't actually the first message
               // if there is more data to load so we return -1 so that `isFirstMessage`
               // evaluates to false. This fixes an issue with the "first" message' full
               // html to show in `EmailMessageBody`
-              if (index === 0 && context.query.hasMore()) {
+              if (chronologicalIndex() === 0 && context.query.hasMore()) {
                 return -1;
               }
 
-              return index;
+              return chronologicalIndex();
             });
 
             const isLastMessage = createMemo(() => {
-              return index === (context.messages.list().length ?? 0) - 1;
+              return (
+                chronologicalIndex() ===
+                (context.messages.list().length ?? 0) - 1
+              );
             });
             const hideMiddle = createMemo(() => {
               return (
-                !showMiddleMessages() &&
+                !props.showMiddleMessages &&
                 isTruncatedMiddleMessage(
-                  index,
+                  chronologicalIndex(),
                   context.messages.list().length
                 )
-              );
-            });
-
-            const isNewMessage = createMemo(() => {
-              return (
-                message().labels.find(
-                  (l) => l.provider_label_id === 'UNREAD'
-                ) !== undefined
               );
             });
 
@@ -184,10 +150,10 @@ export function MessageList(props: MessageListProps) {
               const messageID = message().db_id;
               if (!messageID) return false;
               return threadMessageIsExpanded({
-                chronologicalIndex: index,
+                chronologicalIndex: chronologicalIndex(),
                 listLength: context.messages.list().length,
                 expansionOverride: context.messages.expandedBodyIds[messageID],
-                isUnread: isNewMessage(),
+                isUnread: isUnreadMessage(message()),
                 hasDraft: hasDraft(),
               });
             });
@@ -199,7 +165,6 @@ export function MessageList(props: MessageListProps) {
                     isFirstMessage={normalizedIndex() === 0}
                     isLastMessage={isLastMessage()}
                     isFocused={isFocusedSelector(message().db_id ?? undefined)}
-                    isTarget={isTargetSelector(message().db_id ?? undefined)}
                     message={message()}
                     isExpanded={isExpanded()}
                     markdownDomRef={
@@ -209,8 +174,8 @@ export function MessageList(props: MessageListProps) {
                 </Show>
                 <Show
                   when={
-                    index === 0 &&
-                    !showMiddleMessages() &&
+                    chronologicalIndex() === 0 &&
+                    !props.showMiddleMessages &&
                     truncatedMiddleCount(context.messages.list().length) > 0
                   }
                 >
@@ -225,12 +190,10 @@ export function MessageList(props: MessageListProps) {
                           variant="ghost"
                           size="sm"
                           class="relative bg-panel px-2 text-xs font-medium text-ink-muted"
-                          onClick={() => setShowMiddleMessages(true)}
+                          onClick={() => props.onOpenMiddle()}
                         >
                           Show{' '}
-                          {truncatedMiddleCount(
-                            context.messages.list().length
-                          )}{' '}
+                          {truncatedMiddleCount(context.messages.list().length)}{' '}
                           hidden messages
                         </Button>
                       </div>
@@ -240,7 +203,7 @@ export function MessageList(props: MessageListProps) {
               </>
             );
           }}
-        </Index>
+        </Key>
       </StaticMarkdownContext>
     </div>
   );
