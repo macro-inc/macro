@@ -40,7 +40,7 @@ function LinkPreviewCard(props: {
 
   return (
     <div
-      class="mb-2 flex min-w-0 flex-col gap-0.5 border-l-2 border-edge py-0.5 pl-3"
+      class="group/preview mb-2 flex min-w-0 flex-col gap-0.5 border-l-2 border-edge py-0.5 pl-3"
       data-link-preview={props.unfurled.url}
     >
       <div class="flex min-w-0 items-center gap-1.5">
@@ -66,10 +66,10 @@ function LinkPreviewCard(props: {
           <button
             type="button"
             aria-label="Remove link preview"
-            class="flex size-6 shrink-0 items-center justify-center rounded-md border border-edge-muted bg-surface text-ink hover:bg-hover"
+            class="shrink-0 rounded p-0.5 text-ink opacity-0 group-hover/preview:opacity-100 group-focus-within/preview:opacity-100 focus-visible:opacity-100 touch:opacity-100"
             onClick={props.onHide}
           >
-            <XIcon class="size-3.5" />
+            <XIcon class="size-3.5 fill-ink" />
           </button>
         </Show>
       </div>

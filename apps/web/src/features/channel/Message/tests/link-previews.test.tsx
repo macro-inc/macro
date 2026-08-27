@@ -270,21 +270,24 @@ describe('LinkPreviews', () => {
     expect(container.querySelector('[data-message-link-previews]')).toBeNull();
   });
 
-  it('shows the remove control without hovering the card', () => {
-    const url = 'https://example.com/visible-x';
+  it('hides the remove control until the preview is hovered', () => {
+    const url = 'https://example.com/hover-x';
     unfurlResults.set(url, {
       type: 'success',
-      data: { url, title: 'Visible X' },
+      data: { url, title: 'Hover X' },
       _createdAt: new Date(),
     });
 
     const { getByRole } = renderPreviews(url, {
-      id: 'message-visible-x',
+      id: 'message-hover-x',
       sender_id: 'user-1',
     });
 
     const button = getByRole('button', { name: 'Remove link preview' });
-    expect(button.className.split(/\s+/)).not.toContain('opacity-0');
+    const classes = button.className.split(/\s+/);
+    expect(classes).toContain('opacity-0');
+    expect(classes).toContain('group-hover/preview:opacity-100');
+    expect(classes.some((c) => c.startsWith('bg-'))).toBe(false);
   });
 
   it('lets the sender remove a preview for everyone', async () => {
