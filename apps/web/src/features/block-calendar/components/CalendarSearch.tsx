@@ -99,18 +99,28 @@ export function CalendarSearch() {
     () => ({ enabled: open() })
   );
 
-  const results = createMemo<CalendarSearchResult[]>(() =>
-    (searchQuery.data ?? []).filter(
-      (entity): entity is CalendarSearchResult =>
-        entity.type === 'calendar_event'
-    )
-  );
-
-  const isLoading = createMemo(
+  // Trust the results only once the debounce has caught up to what the user
+  // typed AND the fetch for it has settled. Otherwise, for up to the debounce
+  // interval after a keystroke, `searchQuery.data` still holds the previous
+  // query's rows — which would show stale hits and let Enter open the old
+  // first event. Mirrors the soup search's `isSearchServiceDebounceSettled`.
+  const isCurrent = createMemo(
     () =>
       query().length >= MIN_QUERY_LENGTH &&
-      searchQuery.isFetching &&
-      !searchQuery.isFetchingNextPage
+      query() === debouncedQuery() &&
+      !(searchQuery.isFetching && !searchQuery.isFetchingNextPage)
+  );
+
+  const results = createMemo<CalendarSearchResult[]>(() => {
+    if (!isCurrent()) return [];
+    return (searchQuery.data ?? []).filter(
+      (entity): entity is CalendarSearchResult =>
+        entity.type === 'calendar_event'
+    );
+  });
+
+  const isLoading = createMemo(
+    () => query().length >= MIN_QUERY_LENGTH && !isCurrent()
   );
 
   const openResult = (event: CalendarSearchResult) => {
