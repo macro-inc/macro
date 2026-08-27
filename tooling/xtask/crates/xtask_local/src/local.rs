@@ -20,6 +20,7 @@ pub mod db;
 pub mod docker;
 pub mod doctor;
 pub mod e2e;
+pub mod egress_tunnel;
 pub mod env_layer;
 pub mod frontend;
 pub mod fusionauth;
@@ -227,10 +228,40 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         std::thread::spawn(move || teardown_commands(&instance))
     });
 
+    // The Cursor egress tunnel, before env resolution because the minted
+    // hostname is written into `EGRESS_BASE_URL`. Best-effort with a loud
+    // downgrade: a laptop with no route to Cloudflare should still get a
+    // working stack, minus the one thing that needs public ingress -
+    // `@cursor` sessions reaching local MCP servers.
+    let egress_tunnel = (mode == Mode::Local && !stage.is_dry_run())
+        .then(|| match egress_tunnel::start(&instance) {
+            Ok(tunnel) => {
+                stage.note(&format!("cursor egress tunnel: {}", tunnel.url));
+                Some(tunnel)
+            }
+            Err(error) => {
+                stage.note(&format!(
+                    "WARNING: no cursor egress tunnel ({error:#}); EGRESS_BASE_URL stays \
+                     in-network, so @cursor sessions cannot reach this stack's MCP servers"
+                ));
+                None
+            }
+        })
+        .flatten();
+
     // Foreground: resolve env, build binaries + runtime image, generate the
     // compose override / Caddyfile / kickstart. None of this touches the volumes
     // or containers the teardown is removing, so it's safe to overlap.
-    let (env, target) = prepare(&stage, mode, &instance, args, false, false, false)?;
+    let (env, target) = prepare(
+        &stage,
+        mode,
+        &instance,
+        args,
+        false,
+        false,
+        false,
+        egress_tunnel.as_ref().map(|tunnel| tunnel.url.as_str()),
+    )?;
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
@@ -496,6 +527,10 @@ fn interact(
 /// app bundle (headless `stack up`). `infra_only` skips zigbuild: bake never
 /// starts Rust services and runs in parallel with the cargo lane. Returns the
 /// resolved env + build target.
+///
+/// One argument per independent knob; bundling some into a struct would only
+/// move the same list one level down.
+#[allow(clippy::too_many_arguments)]
 fn prepare(
     stage: &Stage,
     mode: Mode,
@@ -504,6 +539,7 @@ fn prepare(
     static_frontend: bool,
     pull_app_images: bool,
     infra_only: bool,
+    egress_public_url: Option<&str>,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
@@ -511,6 +547,7 @@ fn prepare(
         args.env.no_doppler,
         args.env.env_file.as_deref(),
         static_frontend,
+        egress_public_url,
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
     sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;

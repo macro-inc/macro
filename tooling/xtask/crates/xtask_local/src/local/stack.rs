@@ -165,6 +165,10 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         static_frontend,
         infra_only,
         infra_only,
+        // Headless stacks serve agents on Cursor Cloud dev boxes, which have
+        // no cloudflared and no @cursor sessions to feed; the egress stays
+        // in-network.
+        None,
     )?;
 
     // Build + stage the frontend bundle in the background: it's pure host-side
@@ -341,6 +345,7 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         args.env.no_doppler,
         args.env.env_file.as_deref(),
         state.frontend == "static",
+        None,
     )?;
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;

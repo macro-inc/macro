@@ -147,6 +147,14 @@ pub fn print(
         );
         row("Receive webhooks at", sdk_webhook::relay_url().to_string());
     }
+    // The Cursor egress tunnel, when one opened this run: a public
+    // `EGRESS_BASE_URL` is always a tunnel, and the in-network default is not
+    // worth a row.
+    if let Some(url) = env.merged.get("EGRESS_BASE_URL")
+        && url.starts_with("https://")
+    {
+        row("cursor egress", url.clone());
+    }
     // The frontend and mailpit rows come from the caller (they differ by
     // flow); the rest of the endpoint list is shared with `status-local`.
     for (label, url, _port) in endpoint_rows(instance) {
