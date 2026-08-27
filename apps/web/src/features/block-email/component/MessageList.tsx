@@ -2,7 +2,6 @@ import { useEmailContext } from '@block-email/component/EmailContext';
 import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretUpDownIcon from '@phosphor-icons/core/regular/caret-up-down.svg?component-solid';
 import { Button, cn } from '@ui';
 import {
   createEffect,
@@ -15,11 +14,7 @@ import {
   Show,
 } from 'solid-js';
 import {
-  collapsedRowShowsDivider,
   isTruncatedMiddleMessage,
-  isUnreadMessage,
-  nextShownChronologicalIndex,
-  shownOpenCardFlush,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from '../util/scrollToMessage';
@@ -95,7 +90,7 @@ export function MessageList(props: MessageListProps) {
   return (
     <div
       class={cn(
-        'pt-1 pb-6 w-full flex flex-col items-center overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm',
+        'pt-1 pb-6 w-full flex flex-col items-center gap-2 overflow-y-scroll overflow-x-hidden scrollbar-hidden text-sm',
         'touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
         props.underScrollsBottom &&
           'touch:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'
@@ -197,61 +192,6 @@ export function MessageList(props: MessageListProps) {
               });
             });
 
-            const cardFlush = createMemo(() => {
-              const list = context.messages.list();
-              return shownOpenCardFlush(
-                index,
-                list.length,
-                showMiddleMessages(),
-                (neighborIndex) => {
-                  const neighbor = list[neighborIndex];
-                  const neighborId = neighbor?.db_id;
-                  if (!neighbor || !neighborId) return false;
-                  return threadMessageIsExpanded({
-                    chronologicalIndex: neighborIndex,
-                    listLength: list.length,
-                    expansionOverride:
-                      context.messages.expandedBodyIds[neighborId],
-                    isUnread: isUnreadMessage(neighbor),
-                    hasDraft:
-                      !isTouchDevice() &&
-                      !!context.drafts.getDraftForMessage(neighborId),
-                  });
-                }
-              );
-            });
-
-            const showBottomBorder = createMemo(() => {
-              if (isExpanded()) return false;
-              const list = context.messages.list();
-              const nextIndex = nextShownChronologicalIndex(
-                index,
-                list.length,
-                showMiddleMessages()
-              );
-              const next = nextIndex != null ? list[nextIndex] : undefined;
-              const nextId = next?.db_id;
-              const nextIsCollapsed =
-                nextIndex != null &&
-                !!next &&
-                !!nextId &&
-                !threadMessageIsExpanded({
-                  chronologicalIndex: nextIndex,
-                  listLength: list.length,
-                  expansionOverride: context.messages.expandedBodyIds[nextId],
-                  isUnread: isUnreadMessage(next),
-                  hasDraft:
-                    !isTouchDevice() &&
-                    !!context.drafts.getDraftForMessage(nextId),
-                });
-              return collapsedRowShowsDivider(
-                index,
-                list.length,
-                showMiddleMessages(),
-                nextIsCollapsed
-              );
-            });
-
             return (
               <>
                 <Show when={!hideMiddle()}>
@@ -262,9 +202,6 @@ export function MessageList(props: MessageListProps) {
                     isTarget={isTargetSelector(message().db_id ?? undefined)}
                     message={message()}
                     isExpanded={isExpanded()}
-                    flushTop={cardFlush().top}
-                    flushBottom={cardFlush().bottom}
-                    showBottomBorder={showBottomBorder()}
                     markdownDomRef={
                       isLastMessage() ? props.markdownDomRef : undefined
                     }
@@ -283,22 +220,21 @@ export function MessageList(props: MessageListProps) {
                         variant="ghost"
                         size="sm"
                         fullWidth
-                        class="group justify-start gap-0 px-0 font-semibold macro-thread-avatar-axis"
+                        class="relative h-6 justify-center px-0 text-xs font-medium text-ink-muted"
                         label={`Show ${truncatedMiddleCount(context.messages.list().length)} hidden messages`}
                         onClick={() => setShowMiddleMessages(true)}
                       >
-                        <span class="relative shrink-0 size-6 flex items-center justify-center border border-edge-muted bg-panel text-xs font-semibold text-ink rounded-sm">
-                          <span class="group-hover:invisible">
-                            {truncatedMiddleCount(
-                              context.messages.list().length
-                            )}
-                          </span>
-                          <CaretUpDownIcon class="absolute inset-0 m-auto size-3 opacity-0 group-hover:opacity-100" />
-                        </span>
-                        <div
+                        <span
                           aria-hidden="true"
-                          class="h-1.5 min-w-0 flex-1 border-y border-edge-muted bg-ink-muted/4"
+                          class="absolute inset-x-0 top-1/2 border-t border-edge-muted"
                         />
+                        <span class="relative bg-panel px-2">
+                          Show{' '}
+                          {truncatedMiddleCount(
+                            context.messages.list().length
+                          )}{' '}
+                          hidden messages
+                        </span>
                       </Button>
                     </div>
                   </div>

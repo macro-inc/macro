@@ -5,11 +5,9 @@ import {
   type OpenTargetMessage,
   openTargetMessageId,
   shouldPageForOldestUnread,
-  collapsedRowShowsDivider,
   isTruncatedMiddleMessage,
   nextShownChronologicalIndex,
   prevShownChronologicalIndex,
-  shownOpenCardFlush,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from './scrollToMessage';
@@ -93,20 +91,10 @@ describe('isTruncatedMiddleMessage', () => {
   });
 });
 
-describe('collapsedRowShowsDivider', () => {
-  it('hides the divider when the expand control is next', () => {
+describe('nextShownChronologicalIndex', () => {
+  it('treats the expand control as a break', () => {
     expect(nextShownChronologicalIndex(0, 6, false)).toBeNull();
-    expect(collapsedRowShowsDivider(0, 6, false, true)).toBe(false);
-  });
-
-  it('hides the divider when the next shown message is an opened card', () => {
     expect(nextShownChronologicalIndex(4, 6, false)).toBe(5);
-    expect(collapsedRowShowsDivider(4, 6, false, false)).toBe(false);
-  });
-
-  it('keeps the divider between two shown collapsed rows', () => {
-    expect(collapsedRowShowsDivider(0, 6, true, true)).toBe(true);
-    expect(collapsedRowShowsDivider(1, 6, true, true)).toBe(true);
   });
 });
 
@@ -170,39 +158,6 @@ describe('threadMessageIsExpanded', () => {
         hasDraft: false,
       })
     ).toBe(false);
-  });
-});
-
-describe('shownOpenCardFlush', () => {
-  it('squares only the edges that touch another open card', () => {
-    const expandedAt = (index: number) => index === 1 || index === 2;
-    expect(shownOpenCardFlush(1, 3, true, expandedAt)).toEqual({
-      top: false,
-      bottom: true,
-    });
-    expect(shownOpenCardFlush(2, 3, true, expandedAt)).toEqual({
-      top: true,
-      bottom: false,
-    });
-  });
-
-  it('does not flush across the expand control', () => {
-    const expandedAt = () => true;
-    expect(shownOpenCardFlush(0, 6, false, expandedAt)).toEqual({
-      top: false,
-      bottom: false,
-    });
-    expect(shownOpenCardFlush(4, 6, false, expandedAt)).toEqual({
-      top: false,
-      bottom: true,
-    });
-  });
-
-  it('keeps full radius next to a collapsed row', () => {
-    expect(shownOpenCardFlush(2, 3, true, (index) => index === 2)).toEqual({
-      top: false,
-      bottom: false,
-    });
   });
 });
 

@@ -84,44 +84,6 @@ export function threadMessageIsExpanded(args: {
   );
 }
 
-/** Square the corners that sit against another open card. */
-export function shownOpenCardFlush(
-  chronologicalIndex: number,
-  length: number,
-  showMiddle: boolean,
-  expandedAt: (index: number) => boolean
-): { top: boolean; bottom: boolean } {
-  if (!expandedAt(chronologicalIndex)) return { top: false, bottom: false };
-  const prev = prevShownChronologicalIndex(
-    chronologicalIndex,
-    length,
-    showMiddle
-  );
-  const next = nextShownChronologicalIndex(
-    chronologicalIndex,
-    length,
-    showMiddle
-  );
-  return {
-    top: prev != null && expandedAt(prev),
-    bottom: next != null && expandedAt(next),
-  };
-}
-
-export function collapsedRowShowsDivider(
-  chronologicalIndex: number,
-  length: number,
-  showMiddle: boolean,
-  nextIsCollapsed: boolean
-): boolean {
-  const next = nextShownChronologicalIndex(
-    chronologicalIndex,
-    length,
-    showMiddle
-  );
-  return next != null && nextIsCollapsed;
-}
-
 export function alignmentDelta(
   container: HTMLElement,
   element: HTMLElement,

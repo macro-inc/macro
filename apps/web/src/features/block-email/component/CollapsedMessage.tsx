@@ -1,6 +1,5 @@
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { cn, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
@@ -11,7 +10,6 @@ import { EmailUserTooltip } from './EmailUserTooltip';
 interface CollapsedMessageProps {
   message: ApiMessage;
   isFocused: boolean;
-  showBottomBorder?: boolean;
   onClick: () => void;
   onFocus?: () => void;
 }
@@ -69,10 +67,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'relative macro-thread-collapsed-row p-4 min-w-0 border border-transparent cursor-pointer macro-thread-card-outdent',
-            props.showBottomBorder && 'border-b-edge-muted',
-            props.isFocused && !isTouchDevice() && 'bg-list-highlighted',
-            !props.isFocused && !isTouchDevice() && 'hover:bg-list-hover'
+            'relative macro-thread-collapsed-row p-4 min-w-0 border bg-surface cursor-pointer macro-thread-card-outdent',
+            props.isFocused
+              ? 'z-1 border-edge shadow-md shadow-drop-shadow'
+              : 'border-edge-muted'
           )}
           style={{
             '--user-icon-width': '1rem',

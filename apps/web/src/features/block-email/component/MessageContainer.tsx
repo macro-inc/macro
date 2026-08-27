@@ -29,9 +29,6 @@ interface MessageContainerProps {
   isFocused: boolean;
   isTarget: boolean;
   isExpanded: boolean;
-  flushTop?: boolean;
-  flushBottom?: boolean;
-  showBottomBorder?: boolean;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }
 
@@ -215,7 +212,6 @@ export function MessageContainer(props: MessageContainerProps) {
         <CollapsedMessage
           message={props.message}
           isFocused={props.isFocused}
-          showBottomBorder={props.showBottomBorder}
           onClick={handleExpand}
           onFocus={() => {
             if (props.message.db_id) {
@@ -229,20 +225,19 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative overflow-hidden p-4 border macro-thread-card-outdent"
+            class="relative p-4 border bg-surface macro-thread-card-outdent"
             style={{ '--user-icon-width': '1rem' }}
             classList={{
-              'border-edge': props.isTarget || props.isFocused,
-              'border-edge-muted': !props.isTarget && !props.isFocused,
-              'bg-list-highlighted': props.isFocused && !isTouchDevice(),
-              'hover:bg-list-hover': !props.isFocused && !isTouchDevice(),
-              'macro-thread-card-flush-top': props.flushTop,
-              'macro-thread-card-flush-bottom': props.flushBottom,
+              'border-edge': props.isFocused,
+              'border-edge-muted': !props.isFocused,
+              'z-1': props.isFocused,
+              'shadow-md': props.isFocused,
+              'shadow-drop-shadow': props.isFocused,
             }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
           >
-            <div class="flex flex-col min-w-0 gap-2">
+            <div class="flex flex-col min-w-0 gap-2 overflow-hidden">
               <EmailMessageTopBar
                 message={props.message}
                 focused={props.isFocused}

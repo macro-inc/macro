@@ -965,24 +965,6 @@ a {
     border-bottom-right-radius 150ms ease-out;
 }
 
-@utility macro-thread-card-flush-top {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  @starting-style {
-    border-top-left-radius: var(--thread-card-radius-used);
-    border-top-right-radius: var(--thread-card-radius-used);
-  }
-}
-
-@utility macro-thread-card-flush-bottom {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  @starting-style {
-    border-bottom-left-radius: var(--thread-card-radius-used);
-    border-bottom-right-radius: var(--thread-card-radius-used);
-  }
-}
-
 @utility macro-thread-collapsed-row {
   display: grid;
   grid-template-columns: 7rem minmax(0, 1fr) 4.5rem;
