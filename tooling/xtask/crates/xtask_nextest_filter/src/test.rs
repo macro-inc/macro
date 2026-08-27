@@ -1,11 +1,20 @@
 use super::*;
 
+fn changed_files(paths: &[&str]) -> Vec<PathBuf> {
+    paths.iter().map(PathBuf::from).collect()
+}
+
 /// A change in a single crate selects that crate and its reverse dependencies,
 /// never the whole workspace.
 #[test]
 fn crate_change_maps_to_rdeps_of_that_crate() {
     let graph = build_graph(false).expect("cargo metadata");
-    let packages = compute_packages(&graph, &graph, "crates/email_validator/src/lib.rs\n").unwrap();
+    let packages = compute_packages(
+        &graph,
+        &graph,
+        &changed_files(&["crates/email_validator/src/lib.rs"]),
+    )
+    .unwrap();
     assert_ne!(packages, "none");
     assert_ne!(packages, "all");
     let set: BTreeSet<&str> = packages.split_whitespace().collect();
@@ -23,7 +32,7 @@ fn unmapped_files_alone_yield_none() {
     let packages = compute_packages(
         &graph,
         &graph,
-        "random.json\npackage.json\ndocs/README.md\njustfile\n",
+        &changed_files(&["random.json", "package.json", "docs/README.md", "justfile"]),
     )
     .unwrap();
     assert_eq!(packages, "none");
@@ -34,7 +43,12 @@ fn unmapped_files_alone_yield_none() {
 #[test]
 fn package_readme_selects_its_package() {
     let graph = build_graph(false).expect("cargo metadata");
-    let packages = compute_packages(&graph, &graph, "crates/webhook/README.md\n").unwrap();
+    let packages = compute_packages(
+        &graph,
+        &graph,
+        &changed_files(&["crates/webhook/README.md"]),
+    )
+    .unwrap();
     assert!(
         packages.split_whitespace().any(|name| name == "webhook"),
         "package README must select its owner: {packages}"
@@ -47,7 +61,12 @@ fn package_readme_selects_its_package() {
 fn embedded_assets_select_their_consumers() {
     let graph = build_graph(false).expect("cargo metadata");
 
-    let packages = compute_packages(&graph, &graph, "static_assets/schema.graphql\n").unwrap();
+    let packages = compute_packages(
+        &graph,
+        &graph,
+        &changed_files(&["static_assets/schema.graphql"]),
+    )
+    .unwrap();
     let set: BTreeSet<&str> = packages.split_whitespace().collect();
     for expected in [
         "cache-core",
@@ -66,7 +85,10 @@ fn embedded_assets_select_their_consumers() {
     let mixed = compute_packages(
         &graph,
         &graph,
-        "crates/email_validator/src/lib.rs\nstatic_assets/markdown-golden.1.bin\n",
+        &changed_files(&[
+            "crates/email_validator/src/lib.rs",
+            "static_assets/markdown-golden.1.bin",
+        ]),
     )
     .unwrap();
     let mixed_set: BTreeSet<&str> = mixed.split_whitespace().collect();

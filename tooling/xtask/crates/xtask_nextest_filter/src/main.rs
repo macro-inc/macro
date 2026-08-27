@@ -35,9 +35,14 @@ mod test;
 const DETERMINATOR_RULES: &str = include_str!("../determinator.toml");
 
 fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
-        [changed_files_path, base_revision] => run(Path::new(changed_files_path), base_revision),
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    match args.as_slice() {
+        [changed_files_path, base_revision] => {
+            let base_revision = base_revision
+                .to_str()
+                .context("base revision is not valid UTF-8")?;
+            run(Path::new(changed_files_path), base_revision)
+        }
         _ => bail!("usage: cargo x nextest-filter <changed-files-path> <base-revision>"),
     }
 }
@@ -49,6 +54,11 @@ fn run(changed_files_path: &Path, base_revision: &str) -> Result<()> {
             changed_files_path.display()
         )
     })?;
+    let changed_files: Vec<PathBuf> = changed_files
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(PathBuf::from)
+        .collect();
 
     let workspace_dir = xtask_paths::workspace_root();
     let base_worktree = BaseWorktree::new(&workspace_dir, base_revision)?;
@@ -71,7 +81,7 @@ fn build_graphs(base_dir: &Path, current_dir: &Path) -> Result<(PackageGraph, Pa
 fn compute_packages(
     old_graph: &PackageGraph,
     new_graph: &PackageGraph,
-    changed_files: &str,
+    changed_files: &[PathBuf],
 ) -> Result<String> {
     let rules = DeterminatorRules::parse(DETERMINATOR_RULES)
         .context("parsing nextest determinator rules")?;
@@ -80,7 +90,10 @@ fn compute_packages(
         .set_rules(&rules)
         .context("applying nextest determinator rules")?;
 
-    for changed_file in changed_files.lines().filter(|line| !line.is_empty()) {
+    for changed_file in changed_files {
+        let changed_file = changed_file
+            .to_str()
+            .context("changed file path is not valid UTF-8")?;
         if !matches!(
             determinator.match_path(changed_file, |_| {}),
             PathMatch::NoMatches
