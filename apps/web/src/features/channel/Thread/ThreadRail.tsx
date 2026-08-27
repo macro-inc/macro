@@ -8,11 +8,11 @@ export function ThreadRail(props: ThreadRailProps) {
   return (
     <div
       class={cn(
-        'pointer-events-none absolute top-0 bottom-0 border-l-1 border-rail -z-1',
+        'pointer-events-none absolute top-0 bottom-0 channel-rail-left border-rail -z-1',
         props.newMessage && 'border-accent'
       )}
       style={{
-        left: 'var(--left-of-connector)',
+        left: 'var(--left-of-channel-rail)',
       }}
     />
   );

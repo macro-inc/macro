@@ -386,8 +386,9 @@ in a cell — move the indent inside the box so markers stay visible.
   padding-left: 1.5em;
 }
 
-/* Keep images from stretching the cell wider than the column. */
-.md-table-cell img {
+/* Keep images and videos from stretching the cell wider than the column. */
+.md-table-cell img,
+.md-table-cell video {
   max-width: 100%;
 }
 

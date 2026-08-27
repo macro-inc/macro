@@ -11,7 +11,7 @@ import {
 } from '../Message';
 import { createTargetReplyScroller } from './create-target-reply-scroller';
 import { buildThreadReplyListMeta } from './reply-list-meta';
-import { ThreadRail } from './ThreadRail';
+import { ThreadReplyRail } from './ThreadReplyRail';
 
 export type ThreadReplyListHandle = {
   scrollToIndex: (index: number, onSettled: () => void) => boolean;
@@ -26,6 +26,8 @@ export function ThreadReplyList(props: {
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
   isNewMessage?: (message: NewMessageCheckable) => boolean;
+  /** The thread rail is one path, so all of its pieces share this state. */
+  hasNewMessages?: boolean;
   onReady?: (handle: ThreadReplyListHandle) => void;
   positionTarget?: (
     threadRow: HTMLElement,
@@ -75,8 +77,9 @@ export function ThreadReplyList(props: {
             }}
             class="relative"
           >
-            <ThreadRail
-              newMessage={listMetaByReplyId()[reply.id].isNewMessage}
+            <ThreadReplyRail
+              grouped={listMetaByReplyId()[reply.id].isGroupedWithPrevious}
+              newMessage={props.hasNewMessages}
             />
             <MarkMessageNotifications
               messageId={reply.id}

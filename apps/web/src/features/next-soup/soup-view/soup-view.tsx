@@ -1072,16 +1072,27 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    const newEntitiesForSelection = [];
     const sign = Math.sign(params.entityIndex - anchorIndex);
+
+    // Shift-clicking the anchor itself has zero range. Stepping the loop by
+    // `sign` (0) would spin forever, so just toggle the single entity.
+    if (sign === 0) {
+      soup.selection.toggle(params.entity);
+      lastClickedEntityId = params.entityIndex;
+      return;
+    }
+
+    const newEntitiesForSelection = [];
 
     for (
       let i = anchorIndex;
       sign > 0 ? i <= params.entityIndex : i >= params.entityIndex;
       i += sign
     ) {
+      // The anchor can be stale (rows changed since the last click), so guard
+      // against indexing past the current list.
       const entity = entityList[i];
-      if (!entity.isSelected()) {
+      if (entity && !entity.isSelected()) {
         newEntitiesForSelection.push(entity.original);
       }
     }

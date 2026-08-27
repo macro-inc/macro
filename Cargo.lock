@@ -213,6 +213,7 @@ dependencies = [
  "cursor_api_key",
  "cursor_cloud_agents",
  "dashmap",
+ "entity_access",
  "futures",
  "kafka_util",
  "lexical_client",

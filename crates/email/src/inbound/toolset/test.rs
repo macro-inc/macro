@@ -140,6 +140,39 @@ fn resolve_inbox_selector_matches_address_case_insensitively() {
 }
 
 #[test]
+fn test_set_sender_policy_schema_validation() {
+    let result = generate_validated_input_schema::<SetSenderPolicy>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(
+        validated.name, "SetSenderPolicy",
+        "Tool name should match the schemars title"
+    );
+    assert!(
+        validated.description.contains("block"),
+        "Description should contain expected text"
+    );
+}
+
+#[test]
+fn tool_sender_policy_deserializes_snake_case_values() {
+    assert_eq!(
+        serde_json::from_str::<ToolSenderPolicy>("\"signal\"").unwrap(),
+        ToolSenderPolicy::Signal
+    );
+    assert_eq!(
+        serde_json::from_str::<ToolSenderPolicy>("\"noise\"").unwrap(),
+        ToolSenderPolicy::Noise
+    );
+    assert_eq!(
+        serde_json::from_str::<ToolSenderPolicy>("\"block\"").unwrap(),
+        ToolSenderPolicy::Block
+    );
+    assert!(serde_json::from_str::<ToolSenderPolicy>("\"unknown\"").is_err());
+}
+
+#[test]
 fn resolve_inbox_selector_rejects_unknown_address() {
     let inboxes = vec![make_link("macro|gab@macro.com", "gab@macro.com", true)];
     // Avoid `unwrap_err` so the test does not require `Link: Debug`.

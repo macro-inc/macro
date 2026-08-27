@@ -270,6 +270,11 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         deploymentMinimumHealthyPercent: 0,
         deploymentMaximumPercent: 100,
         desiredCount: 1,
+        // ALB checks /health every 10s and fails the target after two
+        // misses (~20s). HTTP does not listen until after DB, AWS config,
+        // and JWT secrets, so a 0s grace period trips the circuit breaker
+        // on this stop-then-start replace. Ignore those checks until bind.
+        healthCheckGracePeriodSeconds: 120,
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
