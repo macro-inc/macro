@@ -117,9 +117,6 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         DocumentTopicEvent::Copied(metadata) => {
             push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
         }
-        DocumentTopicEvent::EmailAttachmentChanged(metadata) => {
-            push_unique_update(&mut updates, EntityType::Document, &metadata.document_id);
-        }
         DocumentTopicEvent::Interaction(metadata)
             if metadata.reason == InteractionReason::Edited =>
         {

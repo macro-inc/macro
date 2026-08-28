@@ -17029,17 +17029,6 @@
           }
         }
       },
-      "DocumentEmailAttachmentChangedMetadata": {
-        "type": "object",
-        "description": "Metadata for [`DocumentTopicEvent::EmailAttachmentChanged`].\n\nThe email service emits this after a committed `document_email` relation\nremoval so recipient-scoped consumers can rehydrate derived document state.",
-        "required": ["document_id"],
-        "properties": {
-          "document_id": {
-            "type": "string",
-            "description": "The document whose email-attachment relation changed."
-          }
-        }
-      },
       "DocumentFilters": {
         "type": "object",
         "description": "The document filters used to filter down what documents you search over.",
@@ -17648,21 +17637,6 @@
               "metadata": {
                 "$ref": "#/components/schemas/DocumentDeletedMetadata",
                 "description": "A document was soft-deleted."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "The document's email-attachment relation changed.",
-            "required": ["metadata", "event_type"],
-            "properties": {
-              "event_type": {
-                "type": "string",
-                "enum": ["document.email_attachment_changed"]
-              },
-              "metadata": {
-                "$ref": "#/components/schemas/DocumentEmailAttachmentChangedMetadata",
-                "description": "The document's email-attachment relation changed."
               }
             }
           },

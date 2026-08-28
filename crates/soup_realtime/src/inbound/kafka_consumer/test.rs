@@ -11,8 +11,8 @@ use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdat
 use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
-    DocumentEmailAttachmentChangedMetadata, DocumentInteractionMetadata, DocumentPurgedMetadata,
-    DocumentSyncContentUpdatedMetadata, DocumentUpdatedMetadata, InteractionReason,
+    DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
+    DocumentUpdatedMetadata, InteractionReason,
 };
 use email::domain::events::{
     EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
@@ -142,21 +142,6 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let deleted = patches_from_document_event(&deleted);
     assert!(matches!(deleted[0].patch, Patch::Deleted(_)));
     assert_eq!(patch_entity(&deleted[0]).entity_id, DOCUMENT_ID);
-}
-
-#[test]
-fn email_attachment_relation_changes_rehydrate_the_document_for_current_recipients() {
-    let event =
-        DocumentTopicEvent::EmailAttachmentChanged(DocumentEmailAttachmentChangedMetadata {
-            document_id: DOCUMENT_ID.to_string(),
-        });
-
-    let patches = patches_from_document_event(&event);
-    assert_eq!(patches.len(), 1);
-    assert!(matches!(patches[0].patch, Patch::Updated(_)));
-    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Document);
-    assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
-    assert_eq!(&patches[0].access_source, patch_entity(&patches[0]));
 }
 
 #[test]

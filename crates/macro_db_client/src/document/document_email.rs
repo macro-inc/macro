@@ -2,11 +2,7 @@ use uuid::Uuid;
 
 /// create record in document_email table, linking the document (an email attachment) and email message
 #[tracing::instrument(skip(transaction), err)]
-#[allow(
-    dead_code,
-    reason = "retained temporarily for an internal legacy API; external relation creation is forbidden"
-)]
-pub(crate) async fn create_document_email_record(
+pub async fn create_document_email_record(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &str,
     email_attachment_id: Uuid,

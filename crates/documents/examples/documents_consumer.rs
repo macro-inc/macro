@@ -69,7 +69,6 @@ fn event_type(event: &DocumentTopicEvent) -> &'static str {
         DocumentTopicEvent::Created(_) => "document.created",
         DocumentTopicEvent::Updated(_) => "document.updated",
         DocumentTopicEvent::Deleted(_) => "document.deleted",
-        DocumentTopicEvent::EmailAttachmentChanged(_) => "document.email_attachment_changed",
         DocumentTopicEvent::ContentUploaded(_) => "document.content_uploaded",
         DocumentTopicEvent::SyncContentUpdated(_) => "document.sync_content_updated",
         DocumentTopicEvent::Purged(_) => "document.purged",

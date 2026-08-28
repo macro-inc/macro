@@ -1,8 +1,5 @@
 use crate::pubsub::link_manager::context::LinkManagerContext;
-use crate::pubsub::util::{
-    build_notification_recipients, cg_refresh_email, publish_document_email_attachment_updates,
-    publish_email_event,
-};
+use crate::pubsub::util::{build_notification_recipients, cg_refresh_email, publish_email_event};
 use crate::util::sync_contacts::sync_contacts;
 use anyhow::{Context, anyhow};
 use crm::domain::service::CrmService;
@@ -364,13 +361,9 @@ async fn handle_delete(
     }
 
     // finally, delete all the user's link as well as all of their email data in a big cascading delete
-    let delete_outcome = email_db_client::links::delete::delete_link_by_id(&ctx.db, link.id)
+    email_db_client::links::delete::delete_link_by_id(&ctx.db, link.id)
         .await
         .context("Failed to delete link in background task")?;
-    publish_document_email_attachment_updates(
-        &ctx.macro_event_broker,
-        delete_outcome.detached_document_ids,
-    );
 
     // The teardown is async relative to the delete request, so signal completion
     // now that the rows are gone — a client showing this inbox can drop its data.

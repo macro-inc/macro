@@ -3874,19 +3874,6 @@ export type DocumentDeletedMetadata = {
 };
 
 /**
- * Metadata for [`DocumentTopicEvent::EmailAttachmentChanged`].
- *
- * The email service emits this after a committed `document_email` relation
- * removal so recipient-scoped consumers can rehydrate derived document state.
- */
-export type DocumentEmailAttachmentChangedMetadata = {
-    /**
-     * The document whose email-attachment relation changed.
-     */
-    document_id: string;
-};
-
-/**
  * The document filters used to filter down what documents you search over.
  */
 export type DocumentFilters = {
@@ -4285,12 +4272,6 @@ export type DocumentTopicEvent = {
      * A document was soft-deleted.
      */
     metadata: DocumentDeletedMetadata;
-} | {
-    event_type: 'document.email_attachment_changed';
-    /**
-     * The document's email-attachment relation changed.
-     */
-    metadata: DocumentEmailAttachmentChangedMetadata;
 } | {
     event_type: 'document.content_uploaded';
     /**

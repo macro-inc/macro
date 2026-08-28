@@ -80,8 +80,6 @@ impl ActivitySource for DocumentTopicEvent {
             DocumentTopicEvent::Purged(metadata) => {
                 Ingest::Purge(vec![(EntityType::Document, metadata.document_id.clone())])
             }
-            // Relation maintenance changes cache membership, not user activity.
-            DocumentTopicEvent::EmailAttachmentChanged(_) => Ingest::Ignore,
             // Extraction-pipeline noise, not user activity.
             DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
             // Carries no actor today; becomes an Edited activity once collab

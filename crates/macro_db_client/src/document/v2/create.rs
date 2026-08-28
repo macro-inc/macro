@@ -28,9 +28,7 @@ pub struct CreateDocumentArgs<'a> {
     pub project_name: Option<&'a str>,
     pub share_permission: &'a SharePermissionV2,
     pub skip_history: bool,
-    /// Legacy compatibility field. `Some` is rejected: attachment documents
-    /// must use the document domain service so relation creation and lifecycle
-    /// events cannot diverge.
+    /// Optional value. If set, creates entry in document_email
     pub email_attachment_id: Option<Uuid>,
     /// Optional value. defaults to now if not included
     pub created_at: Option<&'a chrono::DateTime<chrono::Utc>>,
@@ -66,11 +64,6 @@ pub async fn create_document_txn(
     args: CreateDocumentArgs<'_>,
 ) -> anyhow::Result<DocumentMetadata> {
     tracing::trace!("creating document");
-    if args.email_attachment_id.is_some() {
-        anyhow::bail!(
-            "legacy document creation cannot create document_email relations; use the document service"
-        );
-    }
     let CreateDocumentArgs {
         id,
         sha,
@@ -82,7 +75,7 @@ pub async fn create_document_txn(
         share_permission,
         skip_history,
         created_at: _, // overwritten below
-        email_attachment_id: _,
+        email_attachment_id,
         is_task,
     } = args;
 
@@ -226,6 +219,15 @@ pub async fn create_document_txn(
         AccessLevel::Owner,
     )
     .await?;
+
+    if let Some(attachment) = email_attachment_id {
+        crate::document::document_email::create_document_email_record(
+            transaction,
+            &document_id,
+            attachment,
+        )
+        .await?;
+    }
 
     Ok(DocumentMetadata::new_document(
         &document_id,
@@ -505,36 +507,6 @@ mod tests {
         assert_eq!(
             document_metadata.err().unwrap().to_string(),
             "unable to create document: error returned from database: insert or update on table \"Document\" violates foreign key constraint \"Document_owner_fkey\"".to_string()
-        );
-    }
-
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
-    async fn legacy_create_rejects_email_attachment_relations(pool: Pool<Postgres>) {
-        let result = create_document(
-            &pool,
-            CreateDocumentArgs {
-                id: None,
-                sha: "sha",
-                document_name: "attachment.pdf",
-                user_id: MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap(),
-                file_type: Some(FileType::Pdf),
-                project_id: None,
-                project_name: None,
-                share_permission: &SharePermissionV2::new_document_share_permission(
-                    Some(FileType::Pdf),
-                    None,
-                ),
-                skip_history: false,
-                email_attachment_id: Some(Uuid::new_v4()),
-                created_at: None,
-                is_task: false,
-            },
-        )
-        .await;
-
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "legacy document creation cannot create document_email relations; use the document service"
         );
     }
 

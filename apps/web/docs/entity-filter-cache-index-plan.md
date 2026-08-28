@@ -162,10 +162,8 @@ Rollout safety is part of the profile contract:
   advance its checkpoint;
 - new-client/old-server validation failures retry the network operation without
   `cacheProjection` and suppress v2 local evaluation for that session;
-- provider reconciliation preserves document-linked source attachments, while
-  committed message/link cascades publish a document relation-change event that
-  the existing Soup realtime domain service expands to current authorized
-  recipients;
+- email-attachment relation removals converge when a subsequent authoritative
+  Soup fetch recomputes the document's server-owned attachment fact;
 - anonymous bounded telemetry and the provider-neutral dashboard contract live
   in `apps/web/ops/soup-flat-v2-rollout-dashboard.json`.
 

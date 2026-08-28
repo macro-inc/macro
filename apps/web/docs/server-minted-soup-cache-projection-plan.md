@@ -10,7 +10,7 @@ Status: **All implementation phases (0-6) complete**
 - [x] Phase 3: emit supplements from `GraphqlSoupEntity`. The nullable argument-free opaque scalar is implemented by every concrete Soup entity, but only documents with authoritative relation hydration return a capsule. Projects, chats, unsupported variants, and unenriched constructors return `null`. `SoupItemFields` selects the scalar with `@cacheOnly`; the composed SDL, generated client document, shared-interface contract, flat-page emission, unsupported-variant, and realtime loader tests are updated.
 - [x] Phase 4: atomically compose server supplements with direct response facts. The Soup WASM composition edge follows the selected GraphQL response shape, derives direct facts including subtype, decodes and binds each Document attachment supplement, validates one complete `soup-flat-v2` projection, and emits its replacement alongside normalized writes. A bounded generic authoritative patch lifecycle preserves unmentioned server-owned facts across partial mutation responses; missing bases remain explicitly incomplete. Cache-core optimistic settlement, in-memory storage, and Turso use the same patch semantics, with transaction rollback and mutation/subscription ordering coverage in native and real browser WASM tests.
 - [x] Phase 5: compile Documents predicates and switch local authority. The browser compiler now targets `soup-flat-v2`, maps canonical subtype and explicit attachment literals through direct/And/Or/Not trees, and retains all-or-network fallback for any unsupported sibling. Every captured Owned, Shared, Attachments, and All shape is eligible for Created/Updated ascending or descending sorts with exact snippets-on/off behavior. Optimistic and dirty Soup mutations now compose in the v2 scope without fabricating attachment state, and compatibility epoch 2 explicitly clears stale v1 authority. A real Chrome WASM/Turso test establishes a network page at revision R, applies ordinary, shared, attachment, task, and snippet `SoupUpdated` supplements at R+1, and proves exact local preset membership without another Soup query response.
-- [x] Phase 6: backfill, rollout, and observability. Backfill now rejects missing or invalid required Document supplements before storage/checkpoint advancement. Mixed deployments are covered in both directions, with a legacy-document network retry and session-local v2 suppression for a new client against an old server. Anonymous bounded client telemetry, server compilation spans, and a provider-neutral rollout dashboard cover supplement health/cost, storage errors, filter fallback reasons, authority, and stale fallback without IDs, raw capsules, or fact values. The production Documents shapes now have a PostgreSQL fixture/reference/real-Turso differential, and real Chrome runs 16/16 WASM/Turso tests. Provider reconciliation preserves document-linked attachments; committed message/link cascades return affected document IDs and publish a relation-change event after commit for recipient-scoped Soup rehydration. The legacy MacroDB create path rejects attachment relations. SQLx metadata, support plans, and the v2 impact audit are updated.
+- [x] Phase 6: backfill, rollout, and observability. Backfill now rejects missing or invalid required Document supplements before storage/checkpoint advancement. Mixed deployments are covered in both directions, with a legacy-document network retry and session-local v2 suppression for a new client against an old server. Anonymous bounded client telemetry, server compilation spans, and a provider-neutral rollout dashboard cover supplement health/cost, storage errors, filter fallback reasons, authority, and stale fallback without IDs, raw capsules, or fact values. The production Documents shapes now have a PostgreSQL fixture/reference/real-Turso differential, and real Chrome runs 16/16 WASM/Turso tests. SQLx metadata, support plans, and the v2 impact audit are updated.
 
 ## Objective
 
@@ -434,25 +434,10 @@ The audit found an invalidation gap; the stronger confirmation is **not** curren
 - No corresponding `DocumentMacroEvent` publication exists in `email_db_client`, `email_service`, or the email domain after those attachment/link deletions. A previously cached Document projection can therefore retain `isEmailAttachment: true` after the authoritative relation becomes false.
 - Cascading relation removal caused by deleting the Document itself is not a separate projection-update problem because the document deletion path emits/removes the entity.
 
-Phase 6 resolved this rollout blocker at the relation-owning server paths:
-
-- provider reconciliation excludes any `email_attachments` row still referenced
-  by `document_email` from orphan deletion;
-- message and link deletion snapshot affected document IDs inside the same
-  transaction as the cascade, and their callers retain them through commit;
-- only after a successful commit does the email service publish
-  `document.email_attachment_changed`, and the existing Soup realtime domain
-  service expands the Document access source to current authorized recipients;
-- the legacy `macro_db_client::document::v2::create` path rejects
-  `email_attachment_id: Some`, and its lower-level helper is crate-private, so
-  relation creation stays on the document domain/service path that emits
-  lifecycle events;
-- database-backed provider-reconciliation, message-deletion, and link-deletion
-  tests cover preservation/collection, while the Soup realtime test covers the
-  recipient-scoped Document update mapping.
-
-No attachment relation-removal path found by the Phase 0 audit remains capable
-of silently changing a live Document projection.
+This gap is accepted as eventual consistency: relation-removal paths do not
+publish a dedicated Document event solely to invalidate this derived fact. A
+subsequent authoritative Soup fetch recomputes `isEmailAttachment` from
+`document_email` and replaces the stale projection.
 
 Likely files:
 
