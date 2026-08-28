@@ -3,7 +3,7 @@ resolver = "2"
 
 members = [
   "crates/activity",
-  "crates/agent", "crates/agent_fold",
+  "crates/agent", "crates/agent_egress", "crates/agent_fold",
   "crates/agent_harness",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session",

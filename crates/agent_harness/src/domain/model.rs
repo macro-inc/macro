@@ -1,10 +1,11 @@
 //! Commands and values used by the harness domain.
 
+use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
+use agent_egress::domain::model::McpServerSlug;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
-use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 /// Where a mention happened.
@@ -87,10 +88,10 @@ impl AgentKind {
     }
 }
 
-/// Whether a user belongs to the Macro staff domain.
-pub(crate) fn is_macro_staff(user: &MacroUserIdStr<'_>) -> bool {
-    user.email_part().domain_part() == "macro.com"
-}
+/// Whether a user belongs to the Macro staff domain - the egress crate's
+/// predicate, reused so the harness's staff gates and the proxy's can never
+/// disagree about who staff is.
+pub(crate) use agent_egress::domain::model::is_macro_staff;
 
 /// Where a prompt came from, when it came from somewhere the session should
 /// answer back into.
@@ -230,10 +231,149 @@ pub struct SpawnContainer {
     /// thing spawn ever consumed the bot for; resume and teardown re-derive
     /// the same kind from the session row's bot.
     pub kind: AgentKind,
-    /// Repository cloned into the container workspace.
-    pub repo_url: String,
     /// Compute tier to request from the provider.
     pub size: SandboxSize,
+    /// How the sandbox reaches anything outside itself.
+    ///
+    /// Carries the repository implicitly: the sandbox clones from the proxy,
+    /// which reads the repository off the session's own grant, so no provider
+    /// needs to be told what it is.
+    pub egress: SandboxEgress,
+}
+
+/// Everything a sandbox needs to make an authenticated outbound call, and
+/// nothing more.
+///
+/// The sandbox runs model-authored code with every permission allowed, so
+/// whatever is in here has been handed to the model. That is why it is one
+/// short-lived session token and a URL rather than any upstream credential:
+/// the credentials stay in the egress proxy, which stamps them on as requests
+/// pass through.
+///
+/// The MCP servers are carried as data rather than any provider's rendered
+/// config, because two consumers speak two dialects of it: an ACP agent gets
+/// them in `session/new` through [`SandboxEgress::acp_servers`], and a Cursor
+/// cloud agent gets the same servers through Cursor's own API. One source,
+/// two renderings, nothing to drift.
+#[derive(Clone)]
+pub struct SandboxEgress {
+    /// Base URL of the egress proxy, as the sandbox should dial it.
+    pub base_url: String,
+    /// The session token, presented on every proxied call.
+    pub session_token: String,
+    /// The owner's connected MCP servers, by the slug the proxy resolves.
+    /// Macro's own server is not listed: every session has it, on its own
+    /// route.
+    pub mcp_servers: Vec<McpServerSlug>,
+}
+
+/// Where the sandbox finds the egress proxy.
+///
+/// Named here rather than written inline because the name is shared knowledge
+/// with the container: `container/ensure_ready.sh` reads it to build the git
+/// remote it clones from. Like `provision::SIDECAR_PORT`, the agreement between
+/// the two is held by a test rather than by comment.
+pub const EGRESS_URL_VARIABLE: &str = "MACRO_EGRESS_URL";
+
+/// The session token the sandbox presents on every proxied call. Shared with
+/// `container/ensure_ready.sh` on the same terms as [`EGRESS_URL_VARIABLE`].
+pub const SESSION_TOKEN_VARIABLE: &str = "MACRO_SESSION_TOKEN";
+
+/// The name every session's server list gives Macro's own MCP server.
+///
+/// Purely a display name now - resolution happens by route, not by name - but
+/// kept short and stable because agents namespace tool names under it.
+pub const MACRO_MCP_NAME: &str = "macro";
+
+impl SandboxEgress {
+    /// Where the proxy serves `slug` - the URL a client dials to reach that
+    /// server, whichever client it is.
+    pub fn mcp_url(&self, slug: &McpServerSlug) -> String {
+        format!("{}/mcp/{slug}", self.base_url)
+    }
+
+    /// Where the proxy serves Macro's own MCP server: its own route, so no
+    /// connected app's slug can ever name it.
+    pub fn macro_mcp_url(&self) -> String {
+        format!("{}/mcp-macro", self.base_url)
+    }
+
+    /// The `Authorization` value presented on every proxied call.
+    pub fn authorization_header(&self) -> String {
+        format!("Bearer {}", self.session_token)
+    }
+
+    /// The sandbox environment this becomes.
+    ///
+    /// Unsized on purpose: a third variable should be one more line here and
+    /// nothing at any call site.
+    pub fn environment(&self) -> impl IntoIterator<Item = (String, String)> {
+        [
+            (EGRESS_URL_VARIABLE.to_owned(), self.base_url.clone()),
+            (
+                SESSION_TOKEN_VARIABLE.to_owned(),
+                self.session_token.clone(),
+            ),
+        ]
+    }
+
+    /// Every server the session may dial, as `(name, url)` pairs: Macro's own
+    /// server first, then the owner's connected apps under their Pipedream
+    /// slugs.
+    ///
+    /// The one enumeration behind both renderings - [`Self::acp_servers`] and
+    /// the Cursor API's - so the two can never advertise different sets.
+    pub fn server_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
+        std::iter::once((MACRO_MCP_NAME.to_owned(), self.macro_mcp_url())).chain(
+            self.mcp_servers
+                .iter()
+                .map(|slug| (slug.as_str().to_owned(), self.mcp_url(slug))),
+        )
+    }
+
+    /// The MCP servers an ACP agent is handed in `session/new`, `session/load`
+    /// and `session/resume`.
+    ///
+    /// Every server is HTTP transport pointed at the egress proxy, never at
+    /// the server itself, and carries the session token - the sandbox holds
+    /// no upstream credential to point anywhere with.
+    pub fn acp_servers(&self) -> Vec<AcpMcpServer> {
+        self.server_entries()
+            .map(|(name, url)| {
+                AcpMcpServer::Http(McpServerHttp::new(name, url).headers(vec![HttpHeader::new(
+                    "Authorization",
+                    self.authorization_header(),
+                )]))
+            })
+            .collect()
+    }
+}
+
+/// A minted egress environment and the hash that has to be stored for it to
+/// work.
+///
+/// The two halves go to different places and must not be confused: the raw
+/// token in [`ProvisionedEgress::sandbox`] is handed to the container, and
+/// [`ProvisionedEgress::session_token_hash`] is what the session row keeps so
+/// the proxy can recognize it. Returned together because the row has to be
+/// written before the container that holds the token exists.
+#[derive(Debug, Clone)]
+pub struct ProvisionedEgress {
+    /// SHA-256 hex of the session token, for the session row.
+    pub session_token_hash: String,
+    /// The environment the sandbox is spawned with, carrying the raw token.
+    pub sandbox: SandboxEgress,
+}
+
+impl std::fmt::Debug for SandboxEgress {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SandboxEgress")
+            .field("base_url", &self.base_url)
+            .field("session_token", &"[REDACTED]")
+            .field("mcp_servers", &self.mcp_servers)
+            .finish()
+    }
 }
 
 /// Session-row values that remain deployment configuration for now.

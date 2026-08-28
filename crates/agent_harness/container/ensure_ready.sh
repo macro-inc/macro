@@ -11,28 +11,30 @@
 # has to dial the sidecar afterwards - `provision::SIDECAR_PORT` mirrors it and
 # a test asserts the two agree.
 #
-# REPO_URL and GITHUB_TOKEN come from the sandbox environment, set at creation.
-# They are never interpolated into this script.
+# MACRO_EGRESS_URL and MACRO_SESSION_TOKEN come from the sandbox environment.
+# Git presents the latter only to the Macro egress origin; the proxy selects the
+# repository from the session and exchanges it for a scoped GitHub App token.
 set -e
 
 workspace_dir=/workspace
 sidecar_port=8700
-# Macro dev shell baked into the image at build time; absent on images built
-# without the github_token secret.
+# Macro dev shell baked into the image at build time, so a sandbox skips
+# realizing it. Sourced only if present, so an image built without that layer
+# still starts.
 repo_env_file=/env/repo-dev-env.sh
 sidecar_log=/tmp/acp-sidecar.log
 
-# 1. Credentials, so the clone below can read a private repo.
-gh auth setup-git --hostname github.com --force
-
-# 2. The repo, unless it is already cloned.
+# 1. The repo, unless it is already cloned. Scope the helper to Macro egress so
+#    an agent cannot redirect the session token to another host.
 if [ ! -d "$workspace_dir/.git" ]; then
-  git clone --depth 1 "$REPO_URL" "$workspace_dir"
+  egress_git_url="${MACRO_EGRESS_URL%/}/git"
+  git config --global "credential.${MACRO_EGRESS_URL}.helper" \
+    '!f() { echo username=x-access-token; echo "password=$MACRO_SESSION_TOKEN"; }; f'
+  git clone --depth 1 "$egress_git_url" "$workspace_dir"
 fi
 
-# 3. The sidecar, unless it is already answering. The baked dev shell goes
-#    first on PATH, with the image's own tools (opencode, gh) still reachable
-#    behind it.
+# 2. The sidecar, unless it is already answering. The baked dev shell goes
+#    first on PATH, with the image's own tools still reachable behind it.
 #
 #    Checked explicitly because `nohup ... &` backgrounds the process, so its
 #    failure is invisible to `set -e` - a missing binary would otherwise show up

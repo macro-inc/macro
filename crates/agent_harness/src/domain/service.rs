@@ -26,7 +26,7 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, ContainerManager, RuntimeConnections,
-    SessionAnnouncer,
+    SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::sandbox::SandboxResizeEffect;
 
@@ -40,13 +40,22 @@ struct QueuedCommand {
     span: tracing::Span,
 }
 
-struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer> {
+struct AgentHarnessInner<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+> {
     sessions: Sessions,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
     prompt_context: PromptContext,
     prompt_composer: PromptComposer,
+    egress: Egress,
     defaults: HarnessDefaults,
 }
 
@@ -58,15 +67,32 @@ pub struct AgentHarnessService<
     Runtimes,
     PromptContext,
     PromptComposer,
+    Egress,
 > {
     inner: Arc<
-        AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>,
+        AgentHarnessInner<
+            Sessions,
+            Containers,
+            Announcer,
+            Runtimes,
+            PromptContext,
+            PromptComposer,
+            Egress,
+        >,
     >,
     workers: Arc<SessionWorkers>,
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
-    AgentHarnessService<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+    AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+    >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
@@ -74,8 +100,13 @@ where
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     /// Build the orchestrator from its ports.
+    ///
+    /// One argument per port, however many ports there are: bundling some of
+    /// them into a struct would only move the same list one level down.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         sessions: Sessions,
         containers: Containers,
@@ -83,6 +114,7 @@ where
         runtimes: Runtimes,
         prompt_context: PromptContext,
         prompt_composer: PromptComposer,
+        egress: Egress,
         defaults: impl Into<HarnessDefaults>,
     ) -> Self {
         Self {
@@ -93,6 +125,7 @@ where
                 runtimes,
                 prompt_context,
                 prompt_composer,
+                egress,
                 defaults: defaults.into(),
             }),
             workers: Arc::new(DashMap::new()),
@@ -209,7 +242,7 @@ where
 /// control routes notify. Both operations go through the per-session queue, so
 /// a teardown cannot land in the middle of an open and a model change cannot
 /// overtake the prompt it was meant to follow.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
     AgentSessionNotificationRecipient
     for AgentHarnessService<
         Sessions,
@@ -218,6 +251,7 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
         Runtimes,
         PromptContext,
         PromptComposer,
+        Egress,
     >
 where
     Sessions: AgentSessionService,
@@ -226,6 +260,7 @@ where
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     async fn session_deleted(
         &self,
@@ -269,7 +304,7 @@ where
 /// The announcement is best-effort: a session a runtime is about to serve
 /// must not die because the courtesy post failed, most plainly when the bot
 /// cannot post in the claimed channel.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
     agent_session::domain::ports::SessionOpener
     for AgentHarnessService<
         Sessions,
@@ -278,6 +313,7 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
         Runtimes,
         PromptContext,
         PromptComposer,
+        Egress,
     >
 where
     Sessions: AgentSessionService,
@@ -286,6 +322,7 @@ where
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     async fn open_external_session(
         &self,
@@ -306,6 +343,9 @@ where
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
+                // No sandbox: the runtime dials in and reaches the network on
+                // its operator's own terms, so there is no egress token.
+                egress_token_hash: None,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.
             })
@@ -366,11 +406,21 @@ where
             .sessions
             .user_sandbox_size(&request.owner)
             .await?;
+        let session_id = AgentSessionId::new();
+        // Same ordering as the trigger path's open: the token has to be minted
+        // before the row, because the row is what carries the hash that makes
+        // it mean anything.
+        let egress = self
+            .inner
+            .egress
+            .provision(session_id, &request.owner, &defaults.repo_url)
+            .await
+            .map_err(into_session_error)?;
         let session = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
-                id: AgentSessionId::new(),
+                id: session_id,
                 owner_id: request.owner.clone(),
                 bot_id: defaults.bot_id,
                 thread_id: None,
@@ -381,17 +431,19 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
+                egress_token_hash: Some(egress.session_token_hash),
             })
             .await?;
 
+        let mcp_servers = egress.sandbox.acp_servers();
         let container = match self
             .inner
             .containers
             .spawn(SpawnContainer {
                 session_id: session.id,
                 kind: AgentKind::of(session.bot_id),
-                repo_url: defaults.repo_url.clone(),
                 size: sandbox_size,
+                egress: egress.sandbox,
             })
             .await
         {
@@ -417,7 +469,10 @@ where
         };
         self.inner
             .sessions
-            .attach_session(session.id, RuntimeAttachment::solo(container))
+            .attach_session(
+                session.id,
+                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+            )
             .await?;
 
         if let Some(prompt) = initial_prompt {
@@ -465,8 +520,16 @@ fn into_session_error(error: HarnessError) -> AgentSessionError {
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
-    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+    AgentHarnessInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+    >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
@@ -474,6 +537,7 @@ where
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match &command {
@@ -502,6 +566,31 @@ where
             HarnessCommand::SetSandboxSize(size) => self.apply_sandbox_size(session_id, size).await,
             HarnessCommand::Delete => self.delete(session_id).await,
         }
+    }
+
+    /// The MCP servers to advertise when reattaching to an existing container.
+    ///
+    /// The raw session token exists in exactly one place after spawn - the
+    /// container's own environment - so it is read back from there and wrapped
+    /// in a fresh listing of the owner's connected servers. A container that
+    /// holds no token (a provider whose sessions carry no egress environment,
+    /// or a sandbox from before tokens existed) gets no servers, which is
+    /// also everything it could do with them.
+    #[tracing::instrument(err, skip(self, owner), fields(%session_id, %owner))]
+    async fn resumed_mcp_servers(
+        &self,
+        session_id: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
+        let Some(session_token) = self.containers.session_token(session_id).await? else {
+            tracing::debug!("container holds no egress token; restoring no MCP servers");
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .egress
+            .restore(owner, session_token)
+            .await?
+            .acp_servers())
     }
 
     /// Release everything the session holds, then delete it.
@@ -543,8 +632,14 @@ where
             self.containers.resize(session_id, size).await?;
             if effect == SandboxResizeEffect::Restart {
                 let container = self.containers.resume(session_id).await?;
+                let mcp_servers = self
+                    .resumed_mcp_servers(session_id, &session.owner_id)
+                    .await?;
                 self.sessions
-                    .attach_session(session_id, RuntimeAttachment::solo(container))
+                    .attach_session(
+                        session_id,
+                        RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                    )
                     .await?;
             }
         }
@@ -578,6 +673,16 @@ where
             .compose(&origin.content, Some(&prior_messages))
             .await?;
 
+        // Provisioned before the session exists, because the row is what makes
+        // the token mean anything: it carries the hash the proxy recognises.
+        // Minted here, where the session's owner is in hand, and only here -
+        // the token is scoped to this session and spends this person's
+        // credentials, so there is nowhere else it could correctly come from.
+        let egress = self
+            .egress
+            .provision(session_id, &origin.sender, &repo_url)
+            .await?;
+
         self.sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
@@ -591,6 +696,7 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
+                egress_token_hash: Some(egress.session_token_hash),
                 // This open came from the trigger pipeline seeing the mention.
             })
             .await?;
@@ -607,13 +713,14 @@ where
             })
             .await?;
 
+        let mcp_servers = egress.sandbox.acp_servers();
         let container = match self
             .containers
             .spawn(SpawnContainer {
                 session_id,
                 kind: AgentKind::of(bot_id),
-                repo_url,
                 size: sandbox_size,
+                egress: egress.sandbox,
             })
             .await
         {
@@ -634,7 +741,10 @@ where
             }
         };
         self.sessions
-            .attach_session(session_id, RuntimeAttachment::solo(container))
+            .attach_session(
+                session_id,
+                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+            )
             .await?;
         let mut action = AgentAction::prompt(composed_prompt);
         let AgentAction::Prompt(prompt) = &mut action else {
@@ -709,8 +819,14 @@ where
                 let session = self.sessions.get_session(session_id).await?;
                 if AgentKind::of(session.bot_id).is_managed() {
                     let container = self.containers.resume(session_id).await?;
+                    let mcp_servers = self
+                        .resumed_mcp_servers(session_id, &session.owner_id)
+                        .await?;
                     self.sessions
-                        .attach_session(session_id, RuntimeAttachment::solo(container))
+                        .attach_session(
+                            session_id,
+                            RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                        )
                         .await?;
                 } else {
                     // An external runtime is not ours to start - only its
@@ -809,10 +925,19 @@ async fn run_session_worker<
     Runtimes,
     PromptContext,
     PromptComposer,
+    Egress,
 >(
     session_id: AgentSessionId,
     inner: Arc<
-        AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>,
+        AgentHarnessInner<
+            Sessions,
+            Containers,
+            Announcer,
+            Runtimes,
+            PromptContext,
+            PromptComposer,
+            Egress,
+        >,
     >,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
@@ -822,6 +947,7 @@ async fn run_session_worker<
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand {

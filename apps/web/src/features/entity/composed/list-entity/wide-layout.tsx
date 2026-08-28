@@ -30,6 +30,7 @@ import {
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
 import { AutomationWideContent } from './automation';
+import { CalendarStamp, CalendarWideContent } from './calendar';
 import { CallParticipants, CallWideContent } from './call';
 import {
   ChannelActiveCallBadge,
@@ -148,6 +149,9 @@ export function WideLayout(props: LayoutProps) {
           </Match>
           <Match when={isReminderEntity(props.entity) && props.entity}>
             {(entity) => <ReminderWideContent entity={entity()} />}
+          </Match>
+          <Match when={props.entity.type === 'calendar_event' && props.entity}>
+            {(entity) => <CalendarWideContent entity={entity()} />}
           </Match>
           <Match when={isGithubPrEntity(props.entity) && props.entity}>
             {(entity) => (
@@ -295,7 +299,14 @@ export function WideLayout(props: LayoutProps) {
             !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
           }
         >
-          <Entity.Timestamp entity={props.entity} />
+          <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
+            {/* The event's own date, not its sync time. */}
+            <Match
+              when={props.entity.type === 'calendar_event' && props.entity}
+            >
+              {(entity) => <CalendarStamp entity={entity()} />}
+            </Match>
+          </Switch>
         </Show>
       </Entity.Slot>
     </Entity.Layout>

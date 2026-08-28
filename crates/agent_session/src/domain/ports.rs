@@ -142,6 +142,23 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// The session a sandbox's egress token stands for, if any still does.
+    ///
+    /// `egress_token_hash` is the SHA-256 hex of the token as presented, never
+    /// the token: implementations match on the stored hash, so the comparison
+    /// happens in an index rather than over secret-derived bytes in memory.
+    ///
+    /// `None` rather than an error when nothing matches - a token we never
+    /// minted and a token whose session has since been deleted are the same
+    /// fact, and the caller refuses both the same way. The whole session comes
+    /// back because everything the token entitles its holder to is on the row:
+    /// the owner whose credentials it spends, the repository its git traffic is
+    /// pinned to, and whether the session is still open.
+    fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// Find the session associated with an incoming channel context.
     ///
     /// Matches only when `thread_id` and `bot_id` are both given and a session

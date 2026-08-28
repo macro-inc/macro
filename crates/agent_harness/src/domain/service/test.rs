@@ -40,6 +40,7 @@ use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
+use crate::testing::helpers::egress::{EgressProvisionerMock, test_egress};
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::ports::{
     OpenExternalAgentSession, OpenManagedSession, SessionOpener as _,
@@ -180,6 +181,7 @@ type TestHarness = AgentHarnessService<
     Arc<RuntimeRegistry<ContainerSender>>,
     PromptContextMock,
     PromptComposerMock,
+    EgressProvisionerMock,
 >;
 
 fn harness_with_edges(
@@ -207,6 +209,7 @@ fn harness_with_edges(
         Arc::clone(&runtimes),
         prompt_context,
         prompt_composer,
+        EgressProvisionerMock::new(),
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -312,6 +315,7 @@ async fn disconnected_session(
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            egress_token_hash: None,
         },
     )
     .await
@@ -323,8 +327,8 @@ async fn disconnected_session(
         .spawn(SpawnContainer {
             session_id: id,
             kind: AgentKind::SandboxedCoder,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: agent_session::domain::model::SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         .expect("the original sandbox should exist");
@@ -1409,6 +1413,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         RuntimeRegistry::<ContainerSender>::new(),
         PromptContextMock::default(),
         PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),

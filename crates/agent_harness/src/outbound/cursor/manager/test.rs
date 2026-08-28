@@ -1,6 +1,7 @@
 use super::super::keys::ResolvedCursorConfig;
 use super::*;
 use crate::domain::model::AgentKind;
+use crate::testing::helpers::egress::test_egress;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _};
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
@@ -51,6 +52,13 @@ impl ExternalSessionRepo for StubSessions {
 impl AgentSessionRepo for StubSessions {
     async fn create(&self, _params: CreateAgentSessionParams) -> SessionResult<AgentSession> {
         unimplemented!("the manager never creates sessions")
+    }
+
+    async fn find_by_egress_token_hash(
+        &self,
+        _egress_token_hash: &str,
+    ) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the manager never looks sessions up by egress token")
     }
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
@@ -369,8 +377,8 @@ async fn spawning_and_prompting_records_the_minted_agent() {
         .spawn(SpawnContainer {
             session_id,
             kind: AgentKind::Cursor,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         .expect("spawn");
@@ -447,8 +455,8 @@ async fn spawn_uses_the_owners_default_model() {
         .spawn(SpawnContainer {
             session_id,
             kind: AgentKind::Cursor,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
+            egress: crate::testing::helpers::egress::test_egress(),
         })
         .await
         .expect("spawn");
@@ -490,6 +498,92 @@ async fn spawn_uses_the_owners_default_model() {
     assert_eq!(
         body["model"]["params"],
         serde_json::json!([{"id":"effort","value":"high"},{"id":"fast","value":"true"}])
+    );
+}
+
+/// MCP servers ride the ACP protocol itself: whatever the client names in
+/// `session/new` reaches the agent Cursor mints - which is how the harness's
+/// egress-proxied servers arrive, on the same rail as every other transport.
+#[tokio::test]
+async fn session_new_mcp_servers_reach_the_created_agent() {
+    let (base_url, _, created) = fake_cursor_api().await;
+    let sessions = StubSessions::default();
+    let session_id = AgentSessionId::new();
+    let manager = manager(base_url, sessions);
+
+    let transport = manager
+        .spawn(SpawnContainer {
+            session_id,
+            kind: AgentKind::Cursor,
+            size: SandboxSize::Default,
+            egress: test_egress(),
+        })
+        .await
+        .expect("spawn");
+    let (sender, mut receiver) = transport.split();
+
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}),
+    )
+    .await;
+    next_acp(&mut receiver).await;
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{
+            "cwd":"/workspace",
+            "mcpServers":[
+                {
+                    "type": "http",
+                    "name": "macro",
+                    "url": "https://egress.test/mcp-macro",
+                    "headers": [{"name": "Authorization", "value": "Bearer test-session-token"}],
+                },
+                {
+                    "type": "http",
+                    "name": "google_sheets",
+                    "url": "https://egress.test/mcp/google_sheets",
+                    "headers": [{"name": "Authorization", "value": "Bearer test-session-token"}],
+                },
+            ],
+        }}),
+    )
+    .await;
+    let acp_session = next_acp(&mut receiver).await["result"]["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{
+            "sessionId": acp_session,
+            "prompt": [{"type":"text","text":"go"}],
+        }}),
+    )
+    .await;
+    loop {
+        if next_acp(&mut receiver).await["id"] == 3 {
+            break;
+        }
+    }
+
+    let body = created.lock().expect("create log poisoned")[0].clone();
+    assert_eq!(
+        body["mcpServers"],
+        serde_json::json!([
+            {
+                "name": "macro",
+                "type": "http",
+                "url": "https://egress.test/mcp-macro",
+                "headers": { "Authorization": "Bearer test-session-token" },
+            },
+            {
+                "name": "google_sheets",
+                "type": "http",
+                "url": "https://egress.test/mcp/google_sheets",
+                "headers": { "Authorization": "Bearer test-session-token" },
+            },
+        ])
     );
 }
 
@@ -604,8 +698,8 @@ async fn an_idle_pipe_is_shut_down() {
         .spawn(SpawnContainer {
             session_id: AgentSessionId::new(),
             kind: AgentKind::Cursor,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         .expect("spawn");
@@ -672,8 +766,8 @@ async fn spawning_without_a_registered_key_says_so() {
         .spawn(SpawnContainer {
             session_id: AgentSessionId::new(),
             kind: AgentKind::Cursor,
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
             size: SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         // `err()` rather than `expect_err`: the success type is a live

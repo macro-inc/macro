@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::sandbox::SandboxResizeEffect;
+use crate::testing::helpers::egress::test_egress;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
@@ -65,6 +66,11 @@ impl ContainerManager for TaggedManager {
         Ok(TaggedTransport)
     }
 
+    async fn session_token(&self, _session: AgentSessionId) -> Result<Option<String>> {
+        self.record("session_token");
+        Ok(None)
+    }
+
     async fn teardown(&self, _session: AgentSessionId) -> Result<()> {
         self.record("teardown");
         Ok(())
@@ -86,6 +92,13 @@ struct FixedBotSessions(BotId);
 impl AgentSessionRepo for FixedBotSessions {
     async fn create(&self, _params: CreateAgentSessionParams) -> SessionResult<AgentSession> {
         unimplemented!("the router never creates sessions")
+    }
+
+    async fn find_by_egress_token_hash(
+        &self,
+        _egress_token_hash: &str,
+    ) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the router never looks sessions up by egress token")
     }
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
@@ -178,8 +191,8 @@ fn spawn_for(kind: AgentKind) -> SpawnContainer {
     SpawnContainer {
         session_id: AgentSessionId::new(),
         kind,
-        repo_url: "https://github.com/macro-inc/macro".to_owned(),
         size: SandboxSize::Default,
+        egress: test_egress(),
     }
 }
 

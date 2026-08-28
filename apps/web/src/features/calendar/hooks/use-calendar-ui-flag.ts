@@ -4,6 +4,8 @@ import {
   ENABLE_CALENDAR_PROMPT_MOBILE_OVERRIDE,
   ENABLE_CALENDAR_PROMPT_WEB_FLAG,
   ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE,
+  ENABLE_CALENDAR_SEARCH_UI_FLAG,
+  ENABLE_CALENDAR_SEARCH_UI_OVERRIDE,
   ENABLE_CALENDAR_UI_FLAG,
   ENABLE_CALENDAR_UI_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -15,6 +17,19 @@ export function useCalendarUiFlag(): Accessor<boolean> {
     enabledOverride: ENABLE_CALENDAR_UI_OVERRIDE,
   });
   return () => flag().enabled;
+}
+
+/**
+ * Whether the calendar search UI (Search-view calendar type/rows and the
+ * in-calendar keyword search) is enabled. A sub-feature of the calendar UI, so
+ * it requires `enable-calendar-ui` on top of its own flag.
+ */
+export function useCalendarSearchUiFlag(): Accessor<boolean> {
+  const calendarUi = useCalendarUiFlag();
+  const searchFlag = useFeatureFlag(ENABLE_CALENDAR_SEARCH_UI_FLAG, {
+    enabledOverride: ENABLE_CALENDAR_SEARCH_UI_OVERRIDE,
+  });
+  return () => calendarUi() && searchFlag().enabled;
 }
 
 /**

@@ -16,8 +16,11 @@ type ServiceTargetGroupArgs = {
   containerPort: number;
   // Health check
   healthCheckPath: string;
-  // Path patterns
-  pathPatterns: string[];
+  // Path patterns. Exactly one of pathPatterns and hostHeaders must be set.
+  pathPatterns?: string[];
+  // Host headers to match instead of paths, for a target group that owns a
+  // whole hostname on a shared listener.
+  hostHeaders?: string[];
   // Priority **MUST BE UNIQUE**
   priority: number;
   // Health check
@@ -45,6 +48,12 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
     super('my:components:ServiceTargetGroup', name, {}, opts);
 
     this.tags = args.tags;
+
+    if (!args.pathPatterns === !args.hostHeaders) {
+      throw new Error(
+        `${name}: exactly one of pathPatterns and hostHeaders must be set`
+      );
+    }
 
     this.target_group = new aws.lb.TargetGroup(
       `${name}-target-group`,
@@ -79,11 +88,9 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
         priority: args.priority,
 
         conditions: [
-          {
-            pathPattern: {
-              values: args.pathPatterns,
-            },
-          },
+          args.pathPatterns
+            ? { pathPattern: { values: args.pathPatterns } }
+            : { hostHeader: { values: args.hostHeaders ?? [] } },
         ],
 
         actions: [

@@ -340,6 +340,13 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.session_bot(id).await
     }
 
+    async fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> Result<Option<AgentSession>> {
+        self.repo.find_by_egress_token_hash(egress_token_hash).await
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,
@@ -633,6 +640,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         session,
         None,
         "/workspace".to_owned(),
+        Vec::new(),
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,
@@ -706,6 +714,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         session,
         None,
         "/workspace".to_owned(),
+        Vec::new(),
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,

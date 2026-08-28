@@ -56,6 +56,14 @@ pub struct CreateAgentSessionParams {
     pub workspace: String,
     /// Compute tier the managed sandbox was spawned with.
     pub sandbox_size: SandboxSize,
+    /// SHA-256 hex of the opaque token the session's sandbox presents to the
+    /// egress proxy, or `None` for a session that never gets one.
+    ///
+    /// The hash and never the token: this row is the only durable record of
+    /// the credential, and a database dump must not yield a live one. A session
+    /// replayed from a recording, or created without a sandbox, has nothing to
+    /// store here.
+    pub egress_token_hash: Option<String>,
 }
 
 /// A running or historical agent coding session.

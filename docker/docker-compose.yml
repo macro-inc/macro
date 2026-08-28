@@ -328,8 +328,50 @@ services:
       - connection_gateway
       - lexical_service
     networks:
-      - databases
-      - services
+      databases:
+      services:
+        aliases:
+          # Hyphens, because a sandbox's git reaches the egress proxy by this
+          # name and git percent-encodes `_` in a host before matching
+          # `credential.<url>.helper`. Under the compose service name the
+          # scoped helper silently never fires and the clone prompts for a
+          # password it has no terminal to read.
+          - agent-harness-service
+
+  # ============================================================================
+  # mcp_service
+  # Macro's own MCP server: the DCS AI toolset over streamable HTTP, OAuth
+  # 2.1-fronted. Its one local client is the agent egress proxy, which serves
+  # it to sandboxes and Cursor agents under the reserved `macro` slug and
+  # dials it in-network - no host port, no proxy route.
+  # ============================================================================
+  mcp_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/mcp_service"]
+    restart: on-failure
+    environment:
+      # Its own public identity, not the env-wide value (which is document
+      # cognition's MCP OAuth callback route): rmcp only answers requests
+      # whose Host is on this URL's allowed-hosts list, and the egress proxy
+      # dials it as `mcp-service`.
+      - MCP_PUBLIC_URL=http://mcp-service:8080
+      # Links in tool responses open the local app.
+      - APP_BASE_URL=http://localhost:${FRONTEND_PORT:-3000}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+      - fusionauth
+    networks:
+      # `auth` too: boot resolves the Google identity provider in FusionAuth,
+      # which lives on that network only.
+      auth:
+      databases:
+      services:
+        aliases:
+          # Hyphenated for the same reason as the harness alias above, and
+          # because it is the host the egress proxy's MACRO_MCP_URL names.
+          - mcp-service
 
   # ============================================================================
   # static_file_service (Port 8094)

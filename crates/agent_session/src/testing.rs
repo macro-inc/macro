@@ -29,6 +29,9 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryAgentSessionRepo {
     sessions: Arc<Mutex<HashMap<AgentSessionId, AgentSession>>>,
+    /// Egress token hash -> the session it was stored against, mirroring the
+    /// unique partial index the real table carries.
+    egress_token_hashes: Arc<Mutex<HashMap<String, AgentSessionId>>>,
     logs: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredAgentSessionLog>>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     log_reads: Arc<AtomicUsize>,
@@ -121,8 +124,33 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             created_at: now,
             modified_at: now,
         };
+        if let Some(hash) = params.egress_token_hash {
+            self.egress_token_hashes
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .insert(hash, session.id);
+        }
         self.insert_session(session.clone());
         Ok(session)
+    }
+
+    async fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> Result<Option<AgentSession>> {
+        let id = self
+            .egress_token_hashes
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(egress_token_hash)
+            .copied();
+        Ok(id.and_then(|id| {
+            self.sessions
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .get(&id)
+                .cloned()
+        }))
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {

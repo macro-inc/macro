@@ -13,6 +13,7 @@ name = "agent_harness_service_openapi"
 path = "src/openapi.rs"
 
 [dependencies]
+agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
@@ -30,6 +31,13 @@ cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
+github = { path = "../../crates/github", default-features = false, features = [
+  "outbound",
+  "ports",
+  "sync",
+] }
+pipedream_mcp = { path = "../../crates/pipedream_mcp" }
+url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }

@@ -85,6 +85,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
             repo_url: None,
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            egress_token_hash: None,
         })
         .await
         .expect("the session row should create");
@@ -217,6 +218,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
             repo_url: None,
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            egress_token_hash: None,
         })
         .await
         .expect("the session row should create");

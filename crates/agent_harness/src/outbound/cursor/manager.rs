@@ -279,6 +279,10 @@ where
         // ignored me" into a sentence they can act on.
         let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
         let (client, default_model_id) = self.client_for(&session).await?;
+        // No MCP servers pass through here: they ride the ACP protocol
+        // itself. The harness's session actor names them in `session/new`,
+        // and the in-process adapter forwards them to Cursor's API - the same
+        // rail every other transport uses.
         Ok(self.serve_session(client, default_model_id, command.session_id, None))
     }
 
@@ -311,7 +315,21 @@ where
             }
             None => None,
         };
+        // No MCP servers on resume, deliberately. Cursor fixes an agent's MCP
+        // config when the agent is created, so a session that prompted before
+        // the restart keeps its servers on cursor.com regardless of what is
+        // passed here - and the session token needed to mint fresh entries
+        // died with the process (only its hash is persisted). The one session
+        // this loses servers for is one restored before its first prompt ever
+        // landed, which then creates its agent bare rather than not at all.
         Ok(self.serve_session(client, default_model_id, session, restore))
+    }
+
+    /// A Cursor session has no container of ours to hold a token: the raw
+    /// token went to Cursor's cloud at agent creation and is not readable
+    /// back.
+    async fn session_token(&self, _session: AgentSessionId) -> Result<Option<String>> {
+        Ok(None)
     }
 
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
@@ -379,6 +397,10 @@ impl<Sessions> CursorAgents for RecordingCursor<Sessions>
 where
     Sessions: ExternalSessionRepo + Clone,
 {
+    #[tracing::instrument(skip_all, err, fields(
+        session = %self.session_id,
+        mcp_servers = mcp_servers.len(),
+    ))]
     async fn create_agent(
         &self,
         prompt: &str,

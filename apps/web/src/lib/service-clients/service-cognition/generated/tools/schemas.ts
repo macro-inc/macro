@@ -756,6 +756,16 @@ export const SearchToolResponse = z.object({
                         .optional(),
                       conferenceUrl: z.union([z.string(), z.null()]).optional(),
                       isReadOnly: z.boolean(),
+                      organizer: z
+                        .union([
+                          z.object({
+                            name: z.union([z.string(), z.null()]).optional(),
+                            email: z.union([z.string(), z.null()]).optional(),
+                          }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      description: z.union([z.string(), z.null()]).optional(),
                     }),
                     z.null(),
                   ])
