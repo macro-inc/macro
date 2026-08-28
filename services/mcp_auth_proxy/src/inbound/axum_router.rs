@@ -261,24 +261,13 @@ async fn token<I: InflightAuthStore + 'static>(
     }
 }
 
-/// Builds the complete MCP router: unauthenticated OAuth broker routes plus
-/// the Bearer-protected `/mcp` service route.
-pub fn mcp_router<I, S>(
-    auth_proxy: McpAuthProxyServiceImpl<I>,
-    jwt_args: JwtValidationArgs,
-    mcp_service: S,
-) -> Router
+/// Builds the unauthenticated OAuth broker routes: discovery metadata,
+/// dynamic client registration, authorize, upstream callback, and token.
+pub fn oauth_router<I>(auth_proxy: McpAuthProxyServiceImpl<I>) -> Router
 where
-    I: InflightAuthStore + Clone + Send + Sync + 'static,
-    S: tower::Service<axum::http::Request<axum::body::Body>, Error = std::convert::Infallible>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    S::Response: axum::response::IntoResponse,
-    S::Future: Send + 'static,
+    I: InflightAuthStore + 'static,
 {
-    let oauth_routes = Router::new()
+    Router::new()
         .route("/health", routing::get(health))
         .route(
             "/.well-known/oauth-protected-resource",
@@ -300,8 +289,26 @@ where
         .route("/register", routing::post(register))
         .route("/oauth/callback", routing::get(oauth_callback))
         .route("/token", routing::post(token))
-        .with_state(auth_proxy);
+        .with_state(auth_proxy)
+}
 
+/// Builds the complete MCP router: unauthenticated OAuth broker routes plus
+/// the Bearer-protected `/mcp` service route.
+pub fn mcp_router<I, S>(
+    auth_proxy: McpAuthProxyServiceImpl<I>,
+    jwt_args: JwtValidationArgs,
+    mcp_service: S,
+) -> Router
+where
+    I: InflightAuthStore + 'static,
+    S: tower::Service<axum::http::Request<axum::body::Body>, Error = std::convert::Infallible>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    S::Response: axum::response::IntoResponse,
+    S::Future: Send + 'static,
+{
     let mcp_route =
         Router::new()
             .nest_service("/mcp", mcp_service)
@@ -310,7 +317,7 @@ where
                 super::middleware::validate_bearer,
             ));
 
-    mount_at_root_and_prefix(oauth_routes.merge(mcp_route)).layer(mcp_cors_layer())
+    mount_at_root_and_prefix(oauth_router(auth_proxy).merge(mcp_route)).layer(mcp_cors_layer())
 }
 
 fn mount_at_root_and_prefix(inner: Router) -> Router {
