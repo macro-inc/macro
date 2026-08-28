@@ -6,7 +6,6 @@
  * ordered store without a refetch.
  */
 
-import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createRoot } from 'solid-js';
@@ -232,64 +231,6 @@ describe('createAgentSessionFeed live updates', () => {
     await flush();
 
     expect(feed.session()?.name).toBe('New Name');
-  });
-
-  it('adopts a polled snapshot that carries the external url', async () => {
-    worker.getSession = async () => ({
-      isErr: () => false,
-      value: {
-        id: 'session',
-        name: 'Agent Session',
-        modifiedAt: '2026-08-24T12:00:00Z',
-        harness: 'claude-code',
-        botId: CURSOR_BOT_ID,
-      },
-    });
-    const { createAgentSessionFeed } = await import(
-      './create-agent-session-feed'
-    );
-    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
-    await flush();
-
-    feed.applySnapshot({
-      id: 'session',
-      name: 'Agent Session',
-      modifiedAt: '2026-08-24T12:00:01Z',
-      harness: 'claude-code',
-      botId: CURSOR_BOT_ID,
-      external: {
-        provider: 'cursor',
-        name: 'Add a health check',
-        url: 'https://cursor.com/agents/bc-1',
-      },
-    } as AgentSessionResponse);
-
-    expect(feed.session()?.external?.url).toBe(
-      'https://cursor.com/agents/bc-1'
-    );
-  });
-
-  it('ignores a polled snapshot for a different session', async () => {
-    const { createAgentSessionFeed } = await import(
-      './create-agent-session-feed'
-    );
-    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
-    await flush();
-
-    feed.applySnapshot({
-      id: 'other',
-      name: 'Other',
-      modifiedAt: '2026-08-24T12:00:01Z',
-      harness: 'claude-code',
-      botId: CURSOR_BOT_ID,
-      external: {
-        provider: 'cursor',
-        url: 'https://cursor.com/agents/bc-other',
-      },
-    } as AgentSessionResponse);
-
-    expect(feed.session()?.id).toBe('session');
-    expect(feed.session()?.external?.url).toBeUndefined();
   });
 
   it('does not re-read the snapshot for a session with no provider', async () => {

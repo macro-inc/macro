@@ -9,10 +9,8 @@
  * so each stateful concern stays a composable unit as wiring grows.
  */
 
-import {
-  cursorSessionIdAwaitingExternalUrl,
-  useAgentSessionExternalUrlQuery,
-} from '@queries/agent-session/session';
+import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
   FoldedMessage,
   SessionMetadata,
@@ -197,9 +195,14 @@ function CursorExternalUrlPoll(props: {
   session: Accessor<AgentSessionResponse | undefined>;
   applySnapshot: (session: AgentSessionResponse) => void;
 }) {
-  const query = useAgentSessionExternalUrlQuery(() =>
-    cursorSessionIdAwaitingExternalUrl(props.sessionId(), props.session())
-  );
+  // Only a loaded Cursor session whose provider url is still missing polls;
+  // everything else passes `undefined`, which disables the query.
+  const query = useAgentSessionExternalUrlQuery(() => {
+    const id = props.sessionId();
+    const session = props.session();
+    if (!id || !session || session.external?.url) return undefined;
+    return isCursorBotId(session.botId) ? id : undefined;
+  });
   createEffect(() => {
     // `query.data` suspends while pending and throws once it errors
     // (`useFavoritesData`). Gate on success so neither reaches the
