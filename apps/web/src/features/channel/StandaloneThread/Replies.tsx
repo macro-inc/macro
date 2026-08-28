@@ -53,13 +53,28 @@ export function Replies(props: RepliesProps) {
     !ctx.isReplying() &&
     !shouldShowCollapsedIndicator();
 
+  const hasTrailingRailTarget = () =>
+    props.children !== undefined ||
+    shouldShowCollapsedIndicator() ||
+    shouldShowReplyButton();
+
+  const finalReplyBranchIndex = createMemo(() => {
+    const replies = ctx.displayReplies();
+    for (let index = replies.length - 1; index >= 0; index -= 1) {
+      if (!listMetaByReplyId()[replies[index].id]?.isGroupedWithPrevious) {
+        return index;
+      }
+    }
+    return -1;
+  });
+
   return (
     <Show when={ctx.hasReplies() || ctx.isReplying()}>
       <div class="relative w-full">
         <Thread.RepliesBridgeRail />
         <Thread.RepliesContainer>
           <For each={ctx.displayReplies()}>
-            {(reply) => {
+            {(reply, index) => {
               const replyMessage = () =>
                 ({ ...reply, thread_id: ctx.messageId() }) as MessageData;
               const meta = () => listMetaByReplyId()[reply.id];
@@ -67,7 +82,13 @@ export function Replies(props: RepliesProps) {
                 props.getMessageActions?.(replyMessage());
               return (
                 <div class="relative">
-                  <ThreadReplyRail grouped={meta()?.isGroupedWithPrevious} />
+                  <ThreadReplyRail
+                    grouped={meta()?.isGroupedWithPrevious}
+                    terminal={
+                      !hasTrailingRailTarget() &&
+                      index() >= finalReplyBranchIndex()
+                    }
+                  />
                   <Message.Root
                     message={replyMessage()}
                     actions={replyActions()}

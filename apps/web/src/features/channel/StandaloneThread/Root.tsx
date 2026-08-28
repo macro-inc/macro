@@ -68,7 +68,7 @@ function RootInner(props: RootProps) {
         replyInputFocusRequest,
       }}
     >
-      <div class="relative">{props.children}</div>
+      <div class="relative isolate z-0">{props.children}</div>
     </StandaloneThreadContext.Provider>
   );
 }
