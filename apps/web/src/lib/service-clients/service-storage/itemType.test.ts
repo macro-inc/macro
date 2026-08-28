@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { itemTypeToReferenceEntityType, type ItemType } from './itemType';
+import { type ItemType, itemTypeToReferenceEntityType } from './itemType';
 
 describe('itemTypeToReferenceEntityType', () => {
   test('maps email to the thread type used by referencium', () => {
