@@ -266,6 +266,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
         self
     }
 
+    /// Attach authoritative cache projection data to supported entity variants.
     fn with_cache_projection(mut self, projection: Option<SoupCacheProjection>) -> Self {
         match &mut self {
             Self::Document(entity) => entity.3 = projection,
