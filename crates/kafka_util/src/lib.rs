@@ -277,10 +277,20 @@ fn create_producer_from_env(
     })
 }
 
+/// Polls the consumer once with a no-op waker so OAUTHBEARER installs its
+/// initial token before a synchronous broker request (metadata, list offsets)
+/// needs a connection.
+fn prime_oauth_token<C: ConsumerContext + 'static>(consumer: &StreamConsumer<C>) {
+    let mut recv = std::pin::pin!(consumer.recv());
+    let waker = std::task::Waker::noop();
+    let mut context = std::task::Context::from_waker(waker);
+    let _ = std::future::Future::poll(recv.as_mut(), &mut context);
+}
+
 fn build_assignment<C, T>(
     consumer: &T,
     topics: &[&str],
-    initial_offset: InitialOffset,
+    offset: Offset,
     metadata_timeout: Duration,
 ) -> KafkaResult<TopicPartitionList>
 where
@@ -319,11 +329,7 @@ where
             if let Some(error) = partition.error() {
                 return Err(KafkaError::MetadataFetch(error.into()));
             }
-            assignment.add_partition_offset(
-                topic,
-                partition.id(),
-                initial_offset.as_kafka_offset(),
-            )?;
+            assignment.add_partition_offset(topic, partition.id(), offset)?;
         }
     }
 
@@ -426,19 +432,49 @@ impl KafkaEventConsumer<Ungrouped> {
         metadata_timeout: Duration,
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => {
-            // OAUTHBEARER requires polling once to install the initial token
-            // before a synchronous metadata request can connect to a broker.
-            let mut recv = std::pin::pin!(consumer.recv());
-            let waker = std::task::Waker::noop();
-            let mut context = std::task::Context::from_waker(waker);
-            let _ = std::future::Future::poll(recv.as_mut(), &mut context);
-
+            prime_oauth_token(consumer);
             let assignment = build_assignment(
                 consumer,
                 topics,
-                initial_offset,
+                initial_offset.as_kafka_offset(),
                 metadata_timeout,
             )?;
+            consumer.assign(&assignment)
+        })
+    }
+
+    /// Manually assigns every current partition of `topics`, starting each at
+    /// the earliest offset whose record timestamp is at or after
+    /// `timestamp_ms` (milliseconds since the Unix epoch).
+    ///
+    /// Partitions with no record at or after the timestamp start at the end,
+    /// matching [`InitialOffset::Latest`] for caught-up partitions. The same
+    /// manual-assignment caveats as [`Self::assign_topics`] apply.
+    pub fn assign_topics_at_timestamp(
+        &self,
+        topics: &[&str],
+        timestamp_ms: i64,
+        metadata_timeout: Duration,
+    ) -> KafkaResult<()> {
+        either::for_both!(&self.consumer.0, consumer => {
+            prime_oauth_token(consumer);
+            let requested = build_assignment(
+                consumer,
+                topics,
+                Offset::Offset(timestamp_ms),
+                metadata_timeout,
+            )?;
+            let resolved = consumer.offsets_for_times(requested, metadata_timeout)?;
+
+            let mut assignment = TopicPartitionList::new();
+            for element in resolved.elements() {
+                element.error()?;
+                let offset = match element.offset() {
+                    offset @ Offset::Offset(_) => offset,
+                    _ => Offset::End,
+                };
+                assignment.add_partition_offset(element.topic(), element.partition(), offset)?;
+            }
             consumer.assign(&assignment)
         })
     }
