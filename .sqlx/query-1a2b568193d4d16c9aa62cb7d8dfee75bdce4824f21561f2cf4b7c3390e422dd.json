@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH replica AS (\n                INSERT INTO harness_replica (id, last_heartbeat_at)\n                VALUES ($2, now())\n                ON CONFLICT (id) DO UPDATE SET last_heartbeat_at = now()\n            )\n            UPDATE agent_session\n            SET manager_replica_id = $2,\n                manager_fence = manager_fence + 1,\n                modified_at = now()\n            WHERE id = $1\n              AND (\n                manager_replica_id IS NULL\n                OR manager_replica_id = $2\n                OR NOT EXISTS (\n                    SELECT 1 FROM harness_replica live\n                    WHERE live.id = agent_session.manager_replica_id\n                      AND live.last_heartbeat_at > now() - make_interval(secs => $3)\n                )\n              )\n            RETURNING manager_fence\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "manager_fence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1a2b568193d4d16c9aa62cb7d8dfee75bdce4824f21561f2cf4b7c3390e422dd"
+}

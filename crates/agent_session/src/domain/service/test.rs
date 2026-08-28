@@ -162,6 +162,21 @@ impl AgentSessionLogWriter for BlockingPromptLogs {
     }
 }
 
+/// Claim a session's management for a freshly minted replica, as
+/// `attach_session` does before activating.
+async fn claim_for_test(repo: &InMemoryAgentSessionRepo, session: AgentSessionId) -> SessionClaim {
+    match repo
+        .claim(session, ReplicaId::mint())
+        .await
+        .expect("claim for test")
+    {
+        ClaimOutcome::Claimed(claim) => claim,
+        ClaimOutcome::ManagedElsewhere(holder) => {
+            panic!("test session is unexpectedly managed by {holder}")
+        }
+    }
+}
+
 fn owner_access(session: AgentSessionId) -> EntityAccessReceipt<OwnerAccessLevel> {
     EntityAccessReceipt::dangerously_assert_internal_user(
         &session.as_uuid().to_string(),
@@ -400,7 +415,31 @@ impl AgentSessionRepo for BlockingPromptLogs {
     }
 }
 
+/// Pure delegation: the lease semantics under test live in the shared
+/// in-memory store, and this wrapper only intercepts log writes.
+impl SessionOwnership for BlockingPromptLogs {
+    async fn claim(&self, session: AgentSessionId, replica: ReplicaId) -> Result<ClaimOutcome> {
+        self.repo.claim(session, replica).await
+    }
+
+    async fn release(&self, claim: &SessionClaim) -> Result<()> {
+        self.repo.release(claim).await
+    }
+
+    async fn heartbeat(&self, replica: ReplicaId) -> Result<()> {
+        self.repo.heartbeat(replica).await
+    }
+}
+
 impl AgentSessionLogRepo for BlockingPromptLogs {
+    async fn create_fenced(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+    ) -> Result<StoredAgentSessionLog> {
+        self.repo.create_fenced(log, claim).await
+    }
+
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
         if self.hang_disconnect
             && matches!(
@@ -512,6 +551,7 @@ async fn close_claiming_an_attach_reservation_prevents_actor_start() {
         .await
         .expect("attach reserves before reading");
     let session = fx.repo.get(fx.session).await.expect("session exists");
+    let claim = claim_for_test(&fx.repo, fx.session).await;
     let (stopped, marker) = fx.service.begin_stop(fx.session, false);
 
     let result = fx
@@ -520,6 +560,7 @@ async fn close_claiming_an_attach_reservation_prevents_actor_start() {
             session,
             RuntimeAttachment::solo(PendingTransport),
             reservation,
+            claim,
         )
         .await;
     AgentSessionServiceImpl::<
@@ -552,6 +593,7 @@ async fn shutdown_prevents_a_reserved_attach_from_spawning() {
         .await
         .expect("attach reserves before reading");
     let session = fx.repo.get(fx.session).await.expect("session exists");
+    let claim = claim_for_test(&fx.repo, fx.session).await;
 
     fx.service.shutdown().await;
     let result = fx
@@ -560,6 +602,7 @@ async fn shutdown_prevents_a_reserved_attach_from_spawning() {
             session,
             RuntimeAttachment::solo(PendingTransport),
             reservation,
+            claim,
         )
         .await;
 
@@ -581,6 +624,30 @@ async fn close_does_not_remove_a_concurrent_delete_guard() {
     fx.service.active.remove_if(&fx.session, |_, active| {
         Arc::ptr_eq(&active.marker, &marker)
     });
+}
+
+/// The cross-replica half of what `AlreadyConnected` guards in-process: a
+/// second service instance over the same store - two replicas, in production
+/// - cannot attach a session whose managing replica is live. Its claim comes
+/// back `ManagedElsewhere` and the attach refuses before touching the actor.
+#[tokio::test]
+async fn a_second_replica_cannot_attach_a_session_with_a_live_manager() {
+    let fx = fixture();
+    fx.service
+        .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("first replica attaches");
+
+    let second_replica = AgentSessionServiceImpl::new(
+        fx.repo.clone(),
+        FoldedMessageService::new(fx.repo.clone()),
+        NoOpRealtime,
+    );
+    let result = second_replica
+        .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await;
+
+    assert!(matches!(result, Err(AgentSessionError::ManagedElsewhere(id)) if id == fx.session));
 }
 
 /// A command sent while the handshake never completes cannot hang its caller
@@ -653,12 +720,15 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
     let cancellation = CancellationToken::new();
     let marker = Arc::new(());
     let (stopped_tx, _) = watch::channel(false);
+    let claim = claim_for_test(&repo, session).await;
     let task = tokio::spawn(run_session(
         actor,
         Arc::downgrade(&active),
         marker,
         stopped_tx,
         cancellation.clone(),
+        repo.clone(),
+        claim,
     ));
 
     open_test_session(&inbound_tx, &mut outbound_rx, session).await;
@@ -726,6 +796,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
     let (stopped_tx, _) = watch::channel(false);
+    let claim = claim_for_test(&repo, session).await;
     let task = tokio::spawn(
         run_session(
             actor,
@@ -733,6 +804,8 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
             Arc::new(()),
             stopped_tx,
             cancellation.clone(),
+            repo.clone(),
+            claim,
         )
         .with_current_subscriber(),
     );

@@ -8,6 +8,10 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 pub enum AgentSessionError {
     #[error("agent session {0} already has an active transport")]
     AlreadyConnected(AgentSessionId),
+    #[error("agent session {0} is managed by another live replica")]
+    ManagedElsewhere(AgentSessionId),
+    #[error("agent session {0} write was fenced out: another replica claimed the session")]
+    FencedOut(AgentSessionId),
     #[error("acp handshake failed: {0}")]
     Handshake(String),
     #[error("agent session {0} is no longer connected")]

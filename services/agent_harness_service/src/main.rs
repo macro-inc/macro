@@ -42,7 +42,7 @@ use agent_harness::outbound::runtime_registry::RuntimeRegistry;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::rig_engine::RigTurnEngine;
-use agent_session::domain::ports::NoOpRealtime;
+use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
@@ -257,15 +257,17 @@ async fn run() -> anyhow::Result<()> {
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
-    let sandbox_and_inmem = RoutedContainers::new(
-        sandbox,
-        inmem,
-        AgentSessionServiceImpl::new(
-            session_repo.clone(),
-            FoldedMessageService::new(session_repo.clone()),
-            NoOpRealtime,
-        ),
+    let inmem_sessions = AgentSessionServiceImpl::new(
+        session_repo.clone(),
+        FoldedMessageService::new(session_repo.clone()),
+        NoOpRealtime,
     );
+    // Both attach-capable service instances participate in the session
+    // lease; heartbeat their replica identities while this process lives so
+    // their claims read as held. Read here because both instances are moved
+    // into their owners below.
+    let lease_replicas = [sessions.replica_id(), inmem_sessions.replica_id()];
+    let sandbox_and_inmem = RoutedContainers::new(sandbox, inmem, inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
     // deployment-wide key to arm this with: the manager reads each session
@@ -456,6 +458,25 @@ async fn run() -> anyhow::Result<()> {
         .await
         {
             tracing::error!(error = ?error, "agent harness service http stopped");
+        }
+    });
+
+    // The session lease's liveness signal: while this beats, this process's
+    // claims are held; when it stops - crash or shutdown - they go stale
+    // within REPLICA_STALE_AFTER and any successor can claim. Graceful stops
+    // release each claim eagerly in the actor teardown path; this loop is
+    // what covers the ungraceful ones.
+    let heartbeat_repo = session_repo.clone();
+    let heartbeat = tokio::spawn(async move {
+        let mut ticker =
+            tokio::time::interval(agent_session::domain::ports::REPLICA_HEARTBEAT_INTERVAL);
+        loop {
+            ticker.tick().await;
+            for replica in lease_replicas {
+                if let Err(error) = heartbeat_repo.heartbeat(replica).await {
+                    tracing::warn!(error = ?error, %replica, "failed to heartbeat harness replica");
+                }
+            }
         }
     });
 
@@ -674,6 +695,7 @@ async fn run() -> anyhow::Result<()> {
     http.abort();
     trigger.abort();
     egress_http.abort();
+    heartbeat.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");
