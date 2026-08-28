@@ -174,15 +174,10 @@ pub enum InitialOffset {
     Earliest,
     /// Consume only records published after the partition assignment begins.
     Latest,
-}
-
-impl InitialOffset {
-    fn as_kafka_offset(self) -> Offset {
-        match self {
-            Self::Earliest => Offset::Beginning,
-            Self::Latest => Offset::End,
-        }
-    }
+    /// Consume from the earliest record whose timestamp is at or after this
+    /// Unix-epoch millisecond timestamp. Partitions with no such record start
+    /// at the end, matching [`InitialOffset::Latest`] for caught-up partitions.
+    AtTimestampMs(i64),
 }
 
 /// Shared Kafka consumer with environment-aware transport and type-safe group behavior.
@@ -422,6 +417,9 @@ impl KafkaEventConsumer<Ungrouped> {
 
     /// Manually assigns every current partition of `topics` at `initial_offset`.
     ///
+    /// [`InitialOffset::AtTimestampMs`] costs an extra broker round trip to
+    /// resolve the timestamp to per-partition offsets.
+    ///
     /// Manual assignment does not join a consumer group, persist offsets, or
     /// automatically discover partitions added after this call. Callers that
     /// support partition-count changes must refresh the assignment themselves.
@@ -433,48 +431,41 @@ impl KafkaEventConsumer<Ungrouped> {
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => {
             prime_oauth_token(consumer);
-            let assignment = build_assignment(
-                consumer,
-                topics,
-                initial_offset.as_kafka_offset(),
-                metadata_timeout,
-            )?;
-            consumer.assign(&assignment)
-        })
-    }
-
-    /// Manually assigns every current partition of `topics`, starting each at
-    /// the earliest offset whose record timestamp is at or after
-    /// `timestamp_ms` (milliseconds since the Unix epoch).
-    ///
-    /// Partitions with no record at or after the timestamp start at the end,
-    /// matching [`InitialOffset::Latest`] for caught-up partitions. The same
-    /// manual-assignment caveats as [`Self::assign_topics`] apply.
-    pub fn assign_topics_at_timestamp(
-        &self,
-        topics: &[&str],
-        timestamp_ms: i64,
-        metadata_timeout: Duration,
-    ) -> KafkaResult<()> {
-        either::for_both!(&self.consumer.0, consumer => {
-            prime_oauth_token(consumer);
-            let requested = build_assignment(
-                consumer,
-                topics,
-                Offset::Offset(timestamp_ms),
-                metadata_timeout,
-            )?;
-            let resolved = consumer.offsets_for_times(requested, metadata_timeout)?;
-
-            let mut assignment = TopicPartitionList::new();
-            for element in resolved.elements() {
-                element.error()?;
-                let offset = match element.offset() {
-                    offset @ Offset::Offset(_) => offset,
-                    _ => Offset::End,
-                };
-                assignment.add_partition_offset(element.topic(), element.partition(), offset)?;
-            }
+            let assignment = match initial_offset {
+                InitialOffset::Earliest => {
+                    build_assignment(consumer, topics, Offset::Beginning, metadata_timeout)?
+                }
+                InitialOffset::Latest => {
+                    build_assignment(consumer, topics, Offset::End, metadata_timeout)?
+                }
+                InitialOffset::AtTimestampMs(timestamp_ms) => {
+                    // offsets_for_times takes a partition list whose "offsets"
+                    // are timestamps and resolves them to real offsets; a
+                    // non-concrete resolution means no record is at or after
+                    // the timestamp, so that partition starts at the end.
+                    let requested = build_assignment(
+                        consumer,
+                        topics,
+                        Offset::Offset(timestamp_ms),
+                        metadata_timeout,
+                    )?;
+                    let resolved = consumer.offsets_for_times(requested, metadata_timeout)?;
+                    let mut assignment = TopicPartitionList::new();
+                    for element in resolved.elements() {
+                        element.error()?;
+                        let offset = match element.offset() {
+                            offset @ Offset::Offset(_) => offset,
+                            _ => Offset::End,
+                        };
+                        assignment.add_partition_offset(
+                            element.topic(),
+                            element.partition(),
+                            offset,
+                        )?;
+                    }
+                    assignment
+                }
+            };
             consumer.assign(&assignment)
         })
     }

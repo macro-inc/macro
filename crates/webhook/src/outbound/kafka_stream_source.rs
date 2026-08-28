@@ -57,21 +57,18 @@ impl WebhookStreamSourceFactory for KafkaWebhookStreamSourceFactory {
         let brokers = self.brokers.clone();
         // Consumer positioning does synchronous broker metadata and offset
         // lookups; keep them off the async runtime.
+        let initial_offset = match start {
+            StreamStart::Latest => InitialOffset::Latest,
+            StreamStart::AtTimestampMs(timestamp_ms) => InitialOffset::AtTimestampMs(timestamp_ms),
+        };
         let adapter = tokio::task::spawn_blocking(move || {
             let consumer = KafkaEventConsumer::<Ungrouped>::from_env(&brokers)
                 .map_err(|error| rootcause::report!(error))?;
-            match start {
-                StreamStart::Latest => {
-                    KafkaConsumerAdapter::<Ungrouped, StreamDeclaredMacroEvent>::new(
-                        consumer,
-                        InitialOffset::Latest,
-                        METADATA_TIMEOUT,
-                    )
-                }
-                StreamStart::AtTimestampMs(timestamp_ms) => {
-                    KafkaConsumerAdapter::new_at_timestamp(consumer, timestamp_ms, METADATA_TIMEOUT)
-                }
-            }
+            KafkaConsumerAdapter::<Ungrouped, StreamDeclaredMacroEvent>::new(
+                consumer,
+                initial_offset,
+                METADATA_TIMEOUT,
+            )
         })
         .await
         .map_err(|error| rootcause::report!("stream source open task failed: {error}"))??;
