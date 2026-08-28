@@ -12,9 +12,9 @@ pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
         GroupByField::Property { .. } => Cow::Borrowed(
             "COALESCE(
                 CASE ep_group.values->>'type'
-                    WHEN 'EntityReference' THEN ep_group.val->>'entity_id'
-                    WHEN 'SelectOption'    THEN ep_group.val#>>'{}'
-                    WHEN 'Link'            THEN ep_group.val#>>'{}'
+                    WHEN 'EntityReference' THEN ep_group_elem.val->>'entity_id'
+                    WHEN 'SelectOption'    THEN ep_group_elem.val#>>'{}'
+                    WHEN 'Link'            THEN ep_group_elem.val#>>'{}'
                     ELSE NULL
                 END,
                 ''
@@ -34,7 +34,7 @@ pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
                 (SELECT po.display_order FROM property_options po
                  WHERE po.id::text =
                    CASE ep_group.values->>'type'
-                        WHEN 'SelectOption' THEN ep_group.val#>>'{}'
+                        WHEN 'SelectOption' THEN ep_group_elem.val#>>'{}'
                         ELSE NULL
                    END),
                 999999
@@ -69,27 +69,28 @@ pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
             entity_type,
         } => {
             let (entity_type_filter, entity_type_bind) = match entity_type {
-                Some(et) => ("AND ep.entity_type = $10".to_string(), Some(et.clone())),
+                Some(et) => (
+                    "AND ep_group.entity_type = $10".to_string(),
+                    Some(et.clone()),
+                ),
                 None => (String::new(), None),
             };
 
             Some(GroupJoinClause {
                 sql: format!(
-                    "LEFT JOIN LATERAL (
-                        SELECT ep.values, elem.val
-                        FROM entity_properties ep
-                        LEFT JOIN LATERAL jsonb_array_elements(
-                            CASE WHEN jsonb_typeof(ep.values->'value') = 'array'
-                                 THEN ep.values->'value'
-                                 ELSE '[]'::jsonb
-                            END
-                        ) elem(val) ON TRUE
-                        WHERE ep.entity_id = t.id::text
-                          AND ep.entity_type = t.property_entity_type
-                          AND ep.property_definition_id = '{}'
-                          {}
-                    ) ep_group ON TRUE",
-                    property_definition_id, entity_type_filter
+                    "LEFT JOIN entity_properties ep_group
+                        ON ep_group.entity_id = t.id::text
+                        AND ep_group.entity_type = t.property_entity_type
+                        AND ep_group.property_definition_id = '{property_definition_id}'
+                        {entity_type_filter}
+                    LEFT JOIN LATERAL jsonb_array_elements(
+                        CASE WHEN jsonb_typeof(ep_group.values->'value') = 'array'
+                             THEN ep_group.values->'value'
+                             ELSE '[]'::jsonb
+                        END
+                    ) ep_group_elem(val) ON TRUE ",
+                    property_definition_id = property_definition_id,
+                    entity_type_filter = entity_type_filter,
                 ),
                 entity_type_bind,
             })

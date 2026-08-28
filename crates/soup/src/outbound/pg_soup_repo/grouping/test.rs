@@ -1,7 +1,9 @@
 use super::*;
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup_grouped,
+    GroupedDynamicCursorArgs, document_filter_guarantees_task_subtype,
+    expanded_dynamic_cursor_soup_grouped, explain_analyze_grouped_soup,
 };
+use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst, calendar_event::CalendarEventLiteral, chat::ChatLiteral,
@@ -14,6 +16,8 @@ use models_grouping::{GroupingConfig, date_bucket_order};
 use models_pagination::{Identify, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
+use std::time::Instant;
+use system_properties::SystemPropertyKey;
 
 #[test]
 fn date_bucket_select_contains_all_keys() {
@@ -57,7 +61,35 @@ fn property_join_includes_definition_id() {
     };
     let join = group_join_clause(&field).unwrap();
     assert!(join.sql.contains("ep_group"));
+    assert!(join.sql.contains("ep_group_elem"));
     assert!(join.sql.contains(&uuid::Uuid::nil().to_string()));
+}
+
+#[test]
+fn document_filter_guarantees_task_subtype_positive() {
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::SubType(
+            DocumentSubType::Task,
+        )))),
+        ..EntityFilterAst::mock_empty()
+    };
+    assert!(document_filter_guarantees_task_subtype(
+        filter.document_filter.as_deref()
+    ));
+}
+
+#[test]
+fn document_filter_guarantees_task_subtype_rejects_or() {
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::or(
+            Expr::val(DocumentLiteral::SubType(DocumentSubType::Task)),
+            Expr::val(DocumentLiteral::SubType(DocumentSubType::Snippet)),
+        ))),
+        ..EntityFilterAst::mock_empty()
+    };
+    assert!(!document_filter_guarantees_task_subtype(
+        filter.document_filter.as_deref()
+    ));
 }
 
 #[sqlx::test(
@@ -771,6 +803,187 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
         "only the event with a not-done notification appears"
     );
     assert_eq!(calendar_items[0].item.id(), ALERTED_EVENT_ID);
+
+    Ok(())
+}
+
+const STATUS_PROPERTY_ID: uuid::Uuid = uuid::uuid!("00000001-0000-0000-0000-000000000002");
+const IN_PROGRESS_OPTION_ID: &str = "00000001-0000-0000-0002-000000000002";
+const TASK_BULK_COUNT: i32 = 500;
+
+async fn seed_bulk_tasks(pool: &Pool<Postgres>, owner_id: &str) -> anyhow::Result<()> {
+    for i in 0..TASK_BULK_COUNT {
+        let doc_id = uuid::Uuid::new_v4();
+        let family_id = 10_000 + i64::from(i);
+        sqlx::query!(
+            r#"
+            INSERT INTO "DocumentFamily" ("id", "rootDocumentId")
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            "#,
+            family_id,
+            doc_id.to_string(),
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO "Document"
+                ("id", "name", "owner", "documentFamilyId", "fileType", "createdAt", "updatedAt")
+            VALUES ($1, $2, $3, $4, 'md', NOW(), NOW())
+            "#,
+            doc_id.to_string(),
+            format!("Bulk task {i}"),
+            owner_id,
+            family_id,
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO "DocumentInstance"
+                ("id", "documentId", "sha", "createdAt", "updatedAt")
+            VALUES ($1, $2, $3, NOW(), NOW())
+            "#,
+            20_000 + i64::from(i),
+            doc_id.to_string(),
+            format!("bulk-task-sha-{i}"),
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query!(
+            r#"INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task')"#,
+            doc_id.to_string(),
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access
+                (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'document', $2, 'user', 'owner')
+            "#,
+            doc_id,
+            owner_id,
+        )
+        .execute(pool)
+        .await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_properties
+                (id, entity_id, entity_type, property_definition_id, values)
+            VALUES ($1, $2, 'TASK', $3, $4::jsonb)
+            "#,
+            uuid::Uuid::new_v4(),
+            doc_id.to_string(),
+            STATUS_PROPERTY_ID,
+            serde_json::json!({
+                "type": "SelectOption",
+                "value": [IN_PROGRESS_OPTION_ID],
+            }),
+        )
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
+fn task_only_filter() -> EntityFilterAst {
+    EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::SubType(
+            DocumentSubType::Task,
+        )))),
+        chat_filter: Some(Arc::new(Expr::val(ChatLiteral::ChatId(uuid::Uuid::nil())))),
+        project_filter: Some(Arc::new(Expr::val(
+            item_filters::ast::project::ProjectLiteral::Importance(false),
+        ))),
+        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(
+            uuid::Uuid::nil(),
+        )))),
+        ..EntityFilterAst::mock_empty()
+    }
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn grouped_task_query_uses_task_fast_path_and_analyze(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const OWNER_ID: &str = "macro|user-1@test.com";
+
+    seed_bulk_tasks(&pool, OWNER_ID).await?;
+
+    let user_id = MacroUserIdStr::parse_from_str(OWNER_ID).unwrap();
+    let filter = task_only_filter();
+    let grouping = GroupingConfig {
+        field: GroupByField::Property {
+            property_definition_id: SystemPropertyKey::STATUS_UUID,
+            entity_type: None,
+        },
+        group_key: None,
+        per_group_limit: None,
+    };
+
+    let args = GroupedDynamicCursorArgs {
+        user_id: user_id.copied(),
+        limit: 100,
+        cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter.clone()),
+        exclude_frecency: false,
+        grouping: grouping.clone(),
+    };
+
+    let start = Instant::now();
+    let items = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 100,
+            cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter),
+            exclude_frecency: false,
+            grouping,
+        },
+    )
+    .await?
+    .collect::<Vec<_>>();
+    let elapsed = start.elapsed();
+
+    assert!(
+        !items.is_empty(),
+        "bulk tasks should appear in grouped status bucket"
+    );
+    assert!(
+        items[0].total_group_count >= TASK_BULK_COUNT as usize,
+        "group total count should include seeded bulk tasks"
+    );
+
+    let plan = explain_analyze_grouped_soup(&pool, args).await?;
+    let plan_text = plan.join("\n");
+    eprintln!("grouped task EXPLAIN ANALYZE ({elapsed:?}):\n{plan_text}");
+
+    assert!(
+        plan_text.contains("document_sub_type"),
+        "plan should touch task subtype join"
+    );
+    assert!(
+        plan_text.contains("idx_document_sub_type_task_document_id")
+            || plan_text.contains("document_sub_type_pkey"),
+        "task subtype lookup should use an index"
+    );
+    assert!(
+        plan_text.contains("idx_entity_properties_def_type_entity")
+            || plan_text.contains("unique_entity_properties_assignment")
+            || plan_text.contains("idx_entity_properties_entity_id"),
+        "property grouping join should use an entity_properties index"
+    );
+    assert!(
+        elapsed.as_millis() < 5_000,
+        "grouped task query took too long: {elapsed:?}"
+    );
 
     Ok(())
 }

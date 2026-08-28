@@ -90,6 +90,23 @@ static GROUPED_DOCUMENT_TOP_CLAUSE: &str = r#"
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
 "#;
 
+static GROUPED_DOCUMENT_TASK_TOP_CLAUSE: &str = r#"
+                SELECT
+                    'document'::text as item_type,
+                    d.id,
+                    CASE $2
+                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
+                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
+                        WHEN 'created_at' THEN d."createdAt"
+                        ELSE d."updatedAt"
+                    END::timestamptz as sort_ts,
+                    d."projectId"::text as project_id,
+                    'TASK'::property_entity_type as property_entity_type
+                FROM AccessibleItems ai
+                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
+                INNER JOIN document_sub_type dt ON dt.document_id = d.id AND dt.sub_type = 'task'
+"#;
+
 static GROUPED_CHAT_TOP_CLAUSE: &str = r#"
                 SELECT
                     'chat'::text as item_type,
@@ -743,6 +760,13 @@ fn date_predicate(col: &str, lit: &DateLiteral) -> String {
 pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     ast: Option<&Expr<DocumentLiteral>>,
 ) -> String {
+    build_document_filter_inner(ast, false)
+}
+
+fn build_document_filter_inner(
+    ast: Option<&Expr<DocumentLiteral>>,
+    omit_task_subtype: bool,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -801,6 +825,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
         // are present, and `NOT (EXISTS ...)` becomes a plannable anti-join
         // (the old `(dt.sub_type IS NOT NULL AND ...)` OR-shape collapsed row
         // estimates to ~1 on broad arms, picking pathological nested loops).
+        filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) if omit_task_subtype && st == DocumentSubType::Task => {
+            "TRUE".to_string()
+        }
         filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) => {
             format!(
                 "EXISTS (SELECT 1 FROM document_sub_type dst_f WHERE dst_f.document_id = d.id AND dst_f.sub_type = '{st}')"
@@ -1046,6 +1073,34 @@ pub(in crate::outbound::pg_soup_repo) fn document_filter_needs_task_property_joi
             filter_ast::ExprFrame::Literal(_) => false,
         })
     })
+}
+
+/// True when every document matching the filter must be a task (no OR/NOT on
+/// subtype literals). Task views compile to this shape and can use an INNER JOIN
+/// on `document_sub_type` instead of probing subtype per row.
+pub(in crate::outbound::pg_soup_repo) fn document_filter_guarantees_task_subtype(
+    ast: Option<&Expr<DocumentLiteral>>,
+) -> bool {
+    let Some(expr) = ast else {
+        return false;
+    };
+
+    let has_positive_task = expr.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => a || b,
+        filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(_) => false,
+        filter_ast::ExprFrame::Literal(DocumentLiteral::SubType(st)) => st == DocumentSubType::Task,
+        filter_ast::ExprFrame::Literal(_) => false,
+    });
+
+    let shape_allows_task_join = expr.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => a && b,
+        filter_ast::ExprFrame::Or(_, _) => false,
+        filter_ast::ExprFrame::Not(_) => false,
+        filter_ast::ExprFrame::Literal(_) => true,
+    });
+
+    has_positive_task && shape_allows_task_join
 }
 
 pub(in crate::outbound::pg_soup_repo) fn properties_filter_can_apply_to(
@@ -1955,12 +2010,20 @@ fn build_grouped_query<'a>(
 
     if include_documents {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_DOCUMENT_TOP_CLAUSE);
-        if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
+        let document_filter = filter_ast.document_filter.as_deref();
+        if document_filter_guarantees_task_subtype(document_filter) {
+            builder.push(GROUPED_DOCUMENT_TASK_TOP_CLAUSE);
+        } else {
+            builder.push(GROUPED_DOCUMENT_TOP_CLAUSE);
+        }
+        if document_filter_needs_task_property_joins(document_filter) {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
         builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
-        builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
+        builder.push(build_document_filter_inner(
+            document_filter,
+            document_filter_guarantees_task_subtype(document_filter),
+        ));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
             "d.id",
@@ -2172,4 +2235,52 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         .collect::<Result<Vec<_>, sqlx::Error>>()?;
 
     Ok(items.into_iter())
+}
+
+#[cfg(test)]
+pub(in crate::outbound::pg_soup_repo) async fn explain_analyze_grouped_soup(
+    db: &PgPool,
+    args: GroupedDynamicCursorArgs<'_>,
+) -> Result<Vec<String>, sqlx::Error> {
+    let GroupedDynamicCursorArgs {
+        user_id,
+        limit,
+        cursor,
+        exclude_frecency,
+        grouping,
+    } = args;
+
+    let query_limit = limit as i64;
+    let sort_method_str = cursor.sort_method().to_string();
+    let (cursor_id, cursor_timestamp) = cursor.vals();
+    let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
+    let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
+    let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
+
+    let (query_builder, entity_type_bind) =
+        build_grouped_query(cursor.filter(), exclude_frecency, &grouping);
+    let sql = query_builder.sql().to_string();
+
+    let explain_sql = format!("EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) {sql}");
+    let mut explain_query = sqlx::query(&explain_sql)
+        .bind(user_id.as_ref())
+        .bind(sort_method_str)
+        .bind(query_limit)
+        .bind(cursor_timestamp)
+        .bind(cursor_id_str)
+        .bind(completed_option_id)
+        .bind(status_property_id)
+        .bind(assignees_property_id)
+        .bind(grouping.group_key.clone());
+
+    if let Some(ref et) = entity_type_bind {
+        explain_query = explain_query.bind(et.clone());
+    }
+
+    let rows = explain_query.fetch_all(db).await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| row.try_get::<String, _>(0).ok())
+        .collect())
 }
