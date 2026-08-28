@@ -49,7 +49,8 @@ export function StaticSplitLabel(props: {
   badges?: JSX.Element;
   class?: string;
   colorIcon?: boolean;
-  /** Enables in-place editing while retaining the split title/menu chrome. */
+  /** Enables double-click renaming while retaining the split title/menu
+   * chrome. */
   onRename?: (name: string) => void;
   renameAriaLabel?: string;
 }) {
@@ -99,15 +100,14 @@ export function StaticSplitLabel(props: {
               }
             >
               {(onRename) => (
-                <span onClick={(event) => event.stopPropagation()}>
-                  <InlineTitleEditor
-                    value={props.label}
-                    placeholder="Untitled"
-                    ariaLabel={props.renameAriaLabel ?? 'Rename'}
-                    onRename={onRename()}
-                    class="text-sm"
-                  />
-                </span>
+                <InlineTitleEditor
+                  value={props.label}
+                  placeholder="Untitled"
+                  ariaLabel={props.renameAriaLabel ?? 'Rename'}
+                  onRename={onRename()}
+                  class="text-sm"
+                  doubleClickToEdit
+                />
               )}
             </Show>
             <Show when={panel.titleFileMenuTrigger()}>
