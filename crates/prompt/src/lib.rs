@@ -23,8 +23,8 @@ mod types;
 
 pub use types::{ComposedPrompt, Section, StaticPrompt};
 
-/// The base prompt: tone, math, citations, mentions, do-not rules, and Macro
-/// terms. Contains no tool use instructions.
+/// The base prompt: tone, internal markdown (math/tables/mentions XML), citations,
+/// mentions, do-not rules, and Macro terms. Contains no tool use instructions.
 pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
     .compose(&math::PROMPT)
     .compose(&citations::PROMPT)
@@ -158,6 +158,26 @@ mod tests {
         const TAG: &str = r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#;
         assert!(mentions::PROMPT.instructions.contains(TAG));
         assert!(document_content_links::PROMPT.instructions.contains(TAG));
+    }
+
+    #[test]
+    fn in_app_prompt_requires_internal_xml_math_not_gfm_delimiters() {
+        let in_app = BASE_PROMPT.to_string();
+        assert!(in_app.contains("<m-katex-equation>"));
+        assert!(in_app.contains(r#""inline":true"#));
+        assert!(in_app.contains(r#""inline":false"#));
+        assert!(in_app.contains("<m-table>"));
+        // Standing prompt used to tell the model to wrap math in `$$`; that is
+        // GFM, which the in-app renderer does not treat as an equation node.
+        assert!(in_app.contains("Never wrap math in"));
+        assert!(in_app.contains("pipe tables"));
+    }
+
+    #[test]
+    fn global_instructions_are_a_compact_xml_syntax_reminder() {
+        assert!(math::GLOBAL_INSTRUCTIONS.contains("<m-katex-equation>"));
+        assert!(math::GLOBAL_INSTRUCTIONS.contains("<m-table>"));
+        assert!(math::GLOBAL_INSTRUCTIONS.contains("Never use GFM math"));
     }
 
     #[test]

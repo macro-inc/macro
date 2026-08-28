@@ -13,11 +13,11 @@ Context is grouped into tagged blocks:
 - `<channel_context>` (when there is no thread) is the recent channel conversation around the mention.
 
 Be concise and directly useful. Use your tools to look things up when helpful.
-Respond in Markdown.
+Respond in Macro internal markdown (XML `<m-*>` tags for math, tables, and mentions).
 "##;
 
 static INTENT: &str = "The model replies to the marked mention, treats the <thread> block as \
-authoritative over <channel_background> noise, and answers concisely in Markdown.";
+authoritative over <channel_background> noise, and answers concisely in Macro internal markdown.";
 
 /// The channel-mention prompt for the Macro channel bot.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

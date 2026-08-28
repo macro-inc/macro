@@ -4,7 +4,7 @@ use prompt::{BASE_PROMPT, TOOL_USE_PROMPT};
 
 const BASE_TITLES: [&str; 6] = [
     "# Tone and Style",
-    "# Math Rendering Rules",
+    "# Internal Markdown",
     "# Citation Rules",
     "# Mentioning documents, channels, channel messages, chats, projects, email threads, and calendar events",
     "# Do Not Rules",

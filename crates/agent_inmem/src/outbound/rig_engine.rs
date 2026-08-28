@@ -7,10 +7,12 @@
 //! preamble and the owner's memory, and usage recorded per turn against the
 //! session owner.
 //!
-//! This is also where a session's own instructions become a system prompt.
-//! Nothing has to be transported for it - the loop runs in this process - which
-//! is why the in-memory runtime is the one provider that needs no wire format
-//! for them. See [`system_prompt`] for how the sections are ordered.
+//! This is also where a session's own instructions become a system prompt,
+//! and where the always-on global instructions (internal XML markdown) are
+//! injected. Nothing has to be transported for either - the loop runs in this
+//! process - which is why the in-memory runtime is the one provider that needs
+//! no wire format for them. See [`system_prompt`] for how the sections are
+//! ordered.
 
 use std::sync::Arc;
 
@@ -127,12 +129,15 @@ async fn drive_turn(
 }
 
 /// The turn's system prompt: the toolset's, the agent-session preamble, then
-/// the session's own instructions and the owner's memory when there are any.
+/// the always-on global instructions, the session's own instructions when
+/// present, and the owner's memory when there are any.
 ///
-/// Instructions land after the preamble and before the memory block for the
-/// same reason DCS puts `additional_instructions` there - they are the
-/// caller's word on how this session works, so they qualify the standing
-/// prompt rather than being qualified by it, and memory stays last so a
+/// Global instructions (internal XML markdown) are always injected, in a
+/// delimited block after the standing prompt, so the syntax rule is not
+/// buried in the long tool-use text. Per-session instructions land after
+/// that for the same reason DCS puts `additional_instructions` there - they
+/// are the caller's word on how this session works, so they qualify the
+/// standing prompt rather than being qualified by it. Memory stays last so a
 /// remembered fact is never read as an instruction.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
@@ -140,6 +145,9 @@ fn system_prompt(
     user_memory: Option<&str>,
 ) -> String {
     let mut prompt = format!("{}\n{}", tools_prompt, prompt::agent_session::PROMPT);
+    prompt.push_str("\n<global_instructions>\n");
+    prompt.push_str(prompt::math::GLOBAL_INSTRUCTIONS);
+    prompt.push_str("\n</global_instructions>");
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
