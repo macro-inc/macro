@@ -49,6 +49,10 @@ describe('nextShownChronologicalIndex', () => {
     expect(nextShownChronologicalIndex(0, 6, false)).toBeNull();
     expect(nextShownChronologicalIndex(4, 6, false)).toBe(5);
   });
+
+  it('steps into the first revealed middle card once open', () => {
+    expect(nextShownChronologicalIndex(0, 6, true)).toBe(1);
+  });
 });
 
 describe('prevShownChronologicalIndex', () => {
