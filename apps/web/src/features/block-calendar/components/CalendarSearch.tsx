@@ -104,12 +104,10 @@ export function CalendarSearch() {
   // interval after a keystroke, `searchQuery.data` still holds the previous
   // query's rows — which would show stale hits and let Enter open the old
   // first event. Mirrors the soup search's `isSearchServiceDebounceSettled`.
-  const isCurrent = createMemo(
-    () =>
-      query().length >= MIN_QUERY_LENGTH &&
-      query() === debouncedQuery() &&
-      !(searchQuery.isFetching && !searchQuery.isFetchingNextPage)
-  );
+  const isCurrent = () =>
+    query().length >= MIN_QUERY_LENGTH &&
+    query() === debouncedQuery() &&
+    !(searchQuery.isFetching && !searchQuery.isFetchingNextPage);
 
   const results = createMemo<CalendarSearchResult[]>(() => {
     if (!isCurrent()) return [];
@@ -119,9 +117,7 @@ export function CalendarSearch() {
     );
   });
 
-  const isLoading = createMemo(
-    () => query().length >= MIN_QUERY_LENGTH && !isCurrent()
-  );
+  const isLoading = () => query().length >= MIN_QUERY_LENGTH && !isCurrent();
 
   const openResult = (event: CalendarSearchResult) => {
     setOpen(false);
@@ -180,7 +176,7 @@ export function CalendarSearch() {
                     }
                   }}
                   placeholder="Search events"
-                  class="min-w-0 flex-1 bg-transparent text-sm outline-none caret-accent placeholder:text-ink-placeholder"
+                  class="min-w-0 flex-1 rounded-sm bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder focus-visible:ring-1 focus-visible:ring-accent"
                 />
               </div>
 
@@ -213,7 +209,7 @@ export function CalendarSearch() {
                         {(event) => (
                           <button
                             type="button"
-                            class="flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left hover:bg-ink/5"
+                            class="flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left outline-none hover:bg-ink/5 focus-visible:bg-ink/5 focus-visible:ring-1 focus-visible:ring-accent"
                             onClick={() => openResult(event)}
                           >
                             <span class="flex size-4 shrink-0 items-center justify-center">

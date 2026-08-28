@@ -11,7 +11,7 @@ import { useUserId } from '@core/context/user';
 import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { type Accessor, createEffect, createMemo, type JSX } from 'solid-js';
 import { useInboxPicker } from '../inbox-picker';
 import type { SearchableOption } from '../searchable-multi-select';
 import { useTagOptions } from '../tag-filter';
@@ -312,6 +312,17 @@ export function useSearchFacets(
 
   const tagSource = useTagOptions();
   const calendarUiEnabled = useCalendarUiFlag();
+
+  // The calendar type exists only while the calendar UI is enabled. If the flag
+  // turns off (or a persisted search restores a calendar scope while it is off),
+  // its Type option disappears and the chip falls back to "All", but the
+  // compiled query would still carry the calendar seed — reset the type so the
+  // displayed chip and the query agree.
+  createEffect(() => {
+    if (!calendarUiEnabled() && controller.type() === 'calendar') {
+      controller.setType('all');
+    }
+  });
 
   const typeOptions = createMemo<FacetOption[]>(() => [
     { id: 'all', label: 'All' },
