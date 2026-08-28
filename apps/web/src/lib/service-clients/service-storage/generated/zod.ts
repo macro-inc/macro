@@ -71,6 +71,7 @@ export const listAgentsResponseItem = zod
       .string()
       .describe('Model selected specifically for this agent.'),
     harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
     instructions: zod
       .string()
       .describe(
@@ -106,6 +107,7 @@ export const createAgentBody = zod
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable `@` handle.'),
     harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
     instructions: zod
       .string()
       .describe(
@@ -149,6 +151,7 @@ export const updateAgentBody = zod
     description: zod.string().nullish().describe('Optional description.'),
     handle: zod.string().describe('Stable `@` handle.'),
     harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
     instructions: zod
       .string()
       .describe(
@@ -226,6 +229,7 @@ export const updateAgentResponse = zod
       .string()
       .describe('Model selected specifically for this agent.'),
     harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
     instructions: zod
       .string()
       .describe(
@@ -8173,6 +8177,262 @@ export const getForeignEntityResponse = zod
       .describe('Timestamp when the record was last updated.'),
   })
   .describe('A persisted mapping to an entity owned by an external system.');
+
+/**
+ * Unauthenticated by design: the daemon has no credential yet - obtaining one
+is the point. The pairing releases nothing until a signed-in user approves
+it, and creation is throttled in the domain service.
+ * @summary Handler for `POST /harness-pairings`.
+ */
+export const createHarnessPairingBody = zod
+  .object({
+    host: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display-only description of the machine, e.g. `eric@macbook \/ darwin`.'
+      ),
+    name: zod
+      .string()
+      .describe(
+        "Requested harness display name (typically the machine's hostname)."
+      ),
+    scope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['private', 'team'])
+          .describe(
+            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.'
+  );
+
+/**
+ * @summary Handler for `GET /harness-pairings/{code}`.
+ */
+export const getHarnessPairingParams = zod.object({
+  code: zod.string().describe('Pairing code'),
+});
+
+export const getHarnessPairingResponse = zod
+  .object({
+    code: zod.string().describe('The pairing code, normalized to `XXXX-XXXX`.'),
+    created_at: zod.iso.datetime({}).describe('When the pairing was created.'),
+    expires_at: zod.iso.datetime({}).describe('When the pairing expires.'),
+    host: zod
+      .string()
+      .nullish()
+      .describe('Display-only description of the machine.'),
+    requested_name: zod
+      .string()
+      .describe('Harness display name the daemon asked for.'),
+    requested_scope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['private', 'team'])
+          .describe(
+            "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership."
+          ),
+      ])
+      .optional(),
+  })
+  .describe('A pending pairing, as shown to the approving user.');
+
+/**
+ * @summary Handler for `POST /harness-pairings/{code}/approve`.
+ */
+export const approveHarnessPairingParams = zod.object({
+  code: zod.string().describe('Pairing code'),
+});
+
+export const approveHarnessPairingBody = zod
+  .object({
+    name: zod
+      .string()
+      .nullish()
+      .describe(
+        "Display name override. Defaults to the daemon's requested name."
+      ),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team. Omit for a private, user-owned harness.'),
+  })
+  .describe('Request to approve a pairing and register the harness.');
+
+export const approveHarnessPairingResponse = zod
+  .object({
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+
+/**
+ * Unauthenticated like pairing creation; the device secret minted alongside
+the pairing is the credential, and the pairing id (not the short user
+code) addresses it.
+ * @summary Handler for `POST /harness-pairings/{pairing_id}/claim`.
+ */
+export const claimHarnessPairingParams = zod.object({
+  pairing_id: zod.uuid().describe('Pairing ID'),
+});
+
+export const claimHarnessPairingBody = zod
+  .object({
+    device_secret: zod
+      .string()
+      .describe('The claim credential returned when the pairing was created.'),
+  })
+  .describe(
+    "Request to claim an approved pairing's credential.\n\nThe daemon serializes this, so both derives are used."
+  );
+
+export const claimHarnessPairingResponse = zod
+  .object({
+    harness: zod
+      .object({
+        connected: zod
+          .boolean()
+          .describe('Whether the daemon currently holds a runtime connection.'),
+        created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+        created_by: zod.string().describe('User that registered this harness.'),
+        id: zod.string(),
+        kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+        last_connected_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('When the daemon last attached a runtime connection.'),
+        name: zod.string().describe('Display name.'),
+        owner: zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['user']),
+                user_id: zod.string().describe('Owner user id.'),
+              })
+              .describe('User-owned (private) harness.'),
+            zod
+              .object({
+                team_id: zod.uuid().describe('Owner team id.'),
+                type: zod.enum(['team']),
+              })
+              .describe('Team-owned harness, usable by every team member.'),
+          ])
+          .describe(
+            'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+          ),
+        updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+      })
+      .describe(
+        'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+      ),
+    token: zod
+      .string()
+      .describe(
+        'The raw harness bearer token. Shown only here; only its hash is stored.'
+      ),
+  })
+  .describe('The credential released to the daemon when a pairing is claimed.');
+
+/**
+ * @summary Handler for `GET /harnesses`.
+ */
+export const listHarnessesResponseItem = zod
+  .object({
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
+
+/**
+ * @summary Handler for `GET /harnesses/me/agents`.
+ */
+export const listHarnessAgentsResponseItem = zod
+  .object({
+    bot_id: zod.string(),
+    handle: zod.string().describe('Stable `@` handle.'),
+    name: zod.string().describe('Display name.'),
+  })
+  .describe('An agent bound to a harness, as listed for the daemon.');
+export const listHarnessAgentsResponse = zod.array(
+  listHarnessAgentsResponseItem
+);
+
+/**
+ * @summary Handler for `DELETE /harnesses/{harness_id}`.
+ */
+export const deleteHarnessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
 
 /**
  * @summary Gets the users history

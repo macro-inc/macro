@@ -38,6 +38,7 @@ async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id", features = ["schema"] }
 bot_token = { path = "../bot_token" }
+harness_id = { path = "../harness_id", features = ["schema", "sqlx"] }
 channels = { path = "../channels", optional = true, default-features = false, features = ["ports"] }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }

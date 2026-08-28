@@ -7,7 +7,8 @@ use crate::domain::{
     models::{
         Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId,
         BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
-        CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchBotRequest, UpdateAgentRequest,
+        CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessId, HarnessOwner,
+        PatchBotRequest, UpdateAgentRequest,
     },
     ports::BotRepo,
 };
@@ -107,6 +108,7 @@ struct AgentRow {
     has_agent: bool,
     instructions: String,
     harness: String,
+    harness_id: Option<Uuid>,
     default_model: String,
     channel_scope: String,
     channel_ids: Vec<Uuid>,
@@ -141,6 +143,7 @@ impl TryFrom<AgentRow> for Agent {
             bot,
             instructions: row.instructions,
             harness: row.harness,
+            harness_id: row.harness_id.map(HarnessId::new_from_uuid),
             default_model: row.default_model,
             channel_scope,
             channel_ids: row.channel_ids,
@@ -307,13 +310,14 @@ impl BotRepo for PgBotsRepo {
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
-                bot_id, instructions, harness, default_model, channel_scope
+                bot_id, instructions, harness, harness_id, default_model, channel_scope
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
             "#,
             bot_id.as_uuid(),
             &req.instructions,
             &req.harness,
+            req.harness_id.map(HarnessId::as_uuid),
             &req.default_model,
             req.channel_scope.as_str(),
         )
@@ -345,6 +349,7 @@ impl BotRepo for PgBotsRepo {
             bot: map_bot_row(bot_row)?,
             instructions: req.instructions,
             harness: req.harness,
+            harness_id: req.harness_id,
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
@@ -414,14 +419,16 @@ impl BotRepo for PgBotsRepo {
             UPDATE agent_configs
             SET instructions = $2,
                 harness = $3,
-                default_model = $4,
-                channel_scope = $5,
+                harness_id = $4,
+                default_model = $5,
+                channel_scope = $6,
                 updated_at = now()
             WHERE bot_id = $1
             "#,
             bot_id.as_uuid(),
             &req.instructions,
             &req.harness,
+            req.harness_id.map(HarnessId::as_uuid),
             &req.default_model,
             req.channel_scope.as_str(),
         )
@@ -470,6 +477,7 @@ impl BotRepo for PgBotsRepo {
             bot: map_bot_row(bot_row)?,
             instructions: req.instructions,
             harness: req.harness,
+            harness_id: req.harness_id,
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
@@ -499,6 +507,7 @@ impl BotRepo for PgBotsRepo {
                 b.has_agent,
                 a.instructions,
                 a.harness,
+                a.harness_id,
                 a.default_model,
                 a.channel_scope,
                 ARRAY(
@@ -788,6 +797,7 @@ impl BotRepo for PgBotsRepo {
                 b.has_agent,
                 a.instructions,
                 a.harness,
+                a.harness_id,
                 a.default_model,
                 a.channel_scope,
                 ARRAY(
@@ -810,6 +820,31 @@ impl BotRepo for PgBotsRepo {
         .context("failed to get agent")?;
 
         row.map(Agent::try_from).transpose()
+    }
+
+    async fn get_harness_owner(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<HarnessOwner>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT owner_user_id, team_id
+            FROM harnesses
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            harness_id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to fetch harness owner")?;
+
+        row.map(|row| match (row.owner_user_id, row.team_id) {
+            (Some(user_id), None) => Ok(HarnessOwner::User { user_id }),
+            (None, Some(team_id)) => Ok(HarnessOwner::Team { team_id }),
+            // Unreachable: harnesses_owner_check enforces exactly one owner.
+            _ => Err(anyhow::anyhow!("harness {harness_id} violates owner xor")),
+        })
+        .transpose()
     }
 
     async fn user_has_team(

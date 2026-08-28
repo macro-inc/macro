@@ -11,6 +11,7 @@ import TrashIcon from '@phosphor/trash.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import XIcon from '@phosphor/x.svg';
 import {
+  type AgentWithHarnessId,
   type CreateAgentParams,
   useAgentsQuery,
   useCreateAgentMutation,
@@ -21,14 +22,19 @@ import {
   useCursorApiKeyStatusQuery,
   useCursorModelsQuery,
 } from '@queries/auth/cursor-api-key';
+import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
-import type { Agent } from '@service-storage/generated/schemas/agent';
 import { Avatar, Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
-import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
+import {
+  ChoiceRow,
+  SettingsCard,
+  SettingsPage,
+  SettingsSection,
+} from './primitives';
 
 type AgentShare = 'Private' | 'Team';
 type ChannelMode = 'all' | 'selected';
@@ -43,7 +49,7 @@ type AgentSummary = {
   defaultModel: string;
   channelSummary: string;
   share: AgentShare;
-  persistedAgent?: Agent;
+  persistedAgent?: AgentWithHarnessId;
   editable?: boolean;
 };
 
@@ -51,6 +57,8 @@ type ConnectedHarness = {
   id: string;
   name: string;
   models: readonly HarnessModel[];
+  kind: 'builtin' | 'macrod';
+  connected?: boolean;
 };
 
 type HarnessModel = {
@@ -66,6 +74,7 @@ const IN_MEMORY_HARNESS: ConnectedHarness = {
   models: [Model.sonnet5, Model.opus5, Model.haiku45, Model.gpt56].map(
     (model) => ({ id: model, name: MODEL_PRETTYNAME[model] })
   ),
+  kind: 'builtin',
 };
 
 const MACRO_AGENT: AgentSummary = {
@@ -82,8 +91,8 @@ const MACRO_AGENT: AgentSummary = {
 /** Settings page for viewing and creating persistent agents. */
 export function Agents() {
   const [creating, setCreating] = createSignal(false);
-  const [editingAgent, setEditingAgent] = createSignal<Agent>();
-  const [deletingAgent, setDeletingAgent] = createSignal<Agent>();
+  const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
+  const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
   const channelsContext = useChannelsContext();
   const currentUserId = useUserId();
   const agentsQuery = useAgentsQuery();
@@ -95,6 +104,7 @@ export function Agents() {
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () => cursorStatus.data?.registered ?? false;
   const cursorModels = useCursorModelsQuery(cursorConnected);
+  const harnessesQuery = useHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => [
     IN_MEMORY_HARNESS,
     ...(cursorConnected()
@@ -106,20 +116,29 @@ export function Agents() {
               id: model.id,
               name: model.displayName,
             })),
+            kind: 'builtin' as const,
           },
         ]
       : []),
+    ...(harnessesQuery.data ?? []).map((harness) => ({
+      id: harness.id,
+      name:
+        harness.owner.type === 'team' ? `${harness.name} · Team` : harness.name,
+      models: [],
+      kind: 'macrod' as const,
+      connected: harness.connected,
+    })),
   ];
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
   );
   const currentTeamId = () => currentTeamQuery.data?.team.id;
   const canShareWithTeam = () => currentTeamId() !== undefined;
-  const isAgentCreator = (agent: Agent) =>
+  const isAgentCreator = (agent: AgentWithHarnessId) =>
     agent.bot.created_by === currentUserId();
-  const canMakePrivate = (agent: Agent) =>
+  const canMakePrivate = (agent: AgentWithHarnessId) =>
     agent.bot.owner?.type !== 'team' || isAgentCreator(agent);
-  const canDeleteAgent = (agent: Agent) =>
+  const canDeleteAgent = (agent: AgentWithHarnessId) =>
     canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
   const agents = createMemo(() =>
     (agentsQuery.data ?? []).map((agent) =>
@@ -299,11 +318,12 @@ export function Agents() {
 }
 
 function summarizeAgent(
-  agent: Agent,
+  agent: AgentWithHarnessId,
   harnesses: readonly ConnectedHarness[],
   channels: readonly ChannelOption[]
 ): AgentSummary {
-  const harness = harnesses.find((option) => option.id === agent.harness);
+  const harnessKey = agent.harness_id ?? agent.harness;
+  const harness = harnesses.find((option) => option.id === harnessKey);
   const model = harness?.models.find(
     (option) => option.id === agent.default_model
   );
@@ -323,7 +343,7 @@ function summarizeAgent(
     tag: agent.bot.handle,
     avatarUrl: agent.bot.avatar_url ?? undefined,
     instructions: agent.instructions,
-    harness: harness?.name ?? harnessName(agent.harness),
+    harness: harness?.name ?? harnessName(harnessKey),
     defaultModel: model?.name ?? agent.default_model,
     channelSummary,
     share: agent.bot.owner?.type === 'team' ? 'Team' : 'Private',
@@ -335,7 +355,9 @@ function summarizeAgent(
 function harnessName(id: string): string {
   if (id === 'in-memory') return 'In-memory';
   if (id === 'cursor') return 'Cursor';
-  return id;
+  // Any other id is a registered macrod harness uuid; if it is not in the
+  // connected list any more, the harness has been removed.
+  return 'Disconnected harness';
 }
 
 function AgentRow(props: {
@@ -473,7 +495,7 @@ function AgentDeleteDialog(props: {
 }
 
 function AgentDialog(props: {
-  agent?: Agent;
+  agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
   canShareWithTeam: boolean;
@@ -492,7 +514,10 @@ function AgentDialog(props: {
     props.agent?.instructions ?? ''
   );
   const [harnessId, setHarnessId] = createSignal(
-    props.agent?.harness ?? props.connectedHarnesses[0]?.id ?? ''
+    props.agent?.harness_id ??
+      props.agent?.harness ??
+      props.connectedHarnesses[0]?.id ??
+      ''
   );
   const selectedHarness = () =>
     props.connectedHarnesses.find((harness) => harness.id === harnessId());
@@ -522,7 +547,10 @@ function AgentDialog(props: {
   const handleHarnessChange = (id: string) => {
     setHarnessId(id);
     const harness = props.connectedHarnesses.find((option) => option.id === id);
-    setDefaultModelId(harness?.models[0]?.id ?? '');
+    // macrod treats 'default' as "use the harness's own configured model".
+    setDefaultModelId(
+      harness?.kind === 'macrod' ? 'default' : (harness?.models[0]?.id ?? '')
+    );
   };
 
   const handleAvatarInput = (file: File | undefined) => {
@@ -554,13 +582,17 @@ function AgentDialog(props: {
   const submit = async () => {
     if (!canCreate()) return;
 
+    const harness = selectedHarness();
     const saved = await props.onSave({
       avatarUrl: avatarUrl(),
       channelIds: channelMode() === 'all' ? [] : selectedChannelIds(),
       channelScope: channelMode(),
       defaultModel: selectedDefaultModelId(),
       handle: slugAgentTag(tag()),
-      harness: selectedHarness()?.id ?? '',
+      // Registered macrod harnesses send the 'macrod' slug plus their uuid;
+      // built-ins keep sending their own slug with no harness id.
+      harness: harness?.kind === 'macrod' ? 'macrod' : (harness?.id ?? ''),
+      harnessId: harness?.kind === 'macrod' ? harness.id : undefined,
       name: name().trim(),
       instructions: instructions().trim(),
       teamId: selectedTeamId(),
@@ -722,24 +754,38 @@ function AgentDialog(props: {
                   <span class="text-xs font-medium text-ink">
                     Default model
                   </span>
-                  <select
-                    class="settings-input w-full"
-                    value={selectedDefaultModelId()}
-                    onChange={(event) =>
-                      setDefaultModelId(event.currentTarget.value)
+                  <Show
+                    when={selectedHarness()?.kind === 'macrod'}
+                    fallback={
+                      <select
+                        class="settings-input w-full"
+                        value={selectedDefaultModelId()}
+                        onChange={(event) =>
+                          setDefaultModelId(event.currentTarget.value)
+                        }
+                      >
+                        <For each={selectedHarness()?.models ?? []}>
+                          {(model) => (
+                            <option
+                              value={model.id}
+                              selected={model.id === selectedDefaultModelId()}
+                            >
+                              {model.name}
+                            </option>
+                          )}
+                        </For>
+                      </select>
                     }
                   >
-                    <For each={selectedHarness()?.models ?? []}>
-                      {(model) => (
-                        <option
-                          value={model.id}
-                          selected={model.id === selectedDefaultModelId()}
-                        >
-                          {model.name}
-                        </option>
-                      )}
-                    </For>
-                  </select>
+                    <input
+                      class="settings-input w-full"
+                      placeholder="default"
+                      value={defaultModelId()}
+                      onInput={(event) =>
+                        setDefaultModelId(event.currentTarget.value)
+                      }
+                    />
+                  </Show>
                 </label>
               </div>
             </AgentFormSection>
@@ -861,43 +907,6 @@ function AgentFormSection(props: {
         {props.children}
       </div>
     </section>
-  );
-}
-
-function ChoiceRow(props: {
-  name: string;
-  value: string;
-  checked: boolean;
-  title: string;
-  description: string;
-  disabled?: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <label
-      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
-      classList={{
-        'cursor-not-allowed opacity-50': props.disabled,
-        'cursor-pointer': !props.disabled,
-      }}
-    >
-      <input
-        type="radio"
-        name={props.name}
-        value={props.value}
-        checked={props.checked}
-        disabled={props.disabled}
-        onChange={props.onChange}
-        aria-label={props.title}
-        class="mt-0.5 accent-accent"
-      />
-      <span class="min-w-0">
-        <span class="block text-sm font-medium text-ink">{props.title}</span>
-        <span class="mt-0.5 block text-xs text-ink-muted">
-          {props.description}
-        </span>
-      </span>
-    </label>
   );
 }
 

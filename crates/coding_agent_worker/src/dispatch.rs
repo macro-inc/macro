@@ -41,6 +41,7 @@ impl WorkExecutor for Dispatcher {
     async fn execute(&self, work: TriggerWork) -> Result<(), DispatchError> {
         match work {
             TriggerWork::OpenAndPrompt {
+                bot,
                 sender,
                 channel_id,
                 thread_id,
@@ -48,9 +49,10 @@ impl WorkExecutor for Dispatcher {
                 content,
             } => {
                 let request = CreateAgentSessionRequest {
-                    // The bot is the one whose credentials this daemon holds,
-                    // and naming another one is refused anyway.
-                    bot_id: None,
+                    // A harness serves many agents, so the token implies no
+                    // bot: name the mentioned agent, and the service verifies
+                    // it is bound to this harness.
+                    bot_id: Some(bot.as_uuid()),
                     workspace: Some(self.workspace.path.to_string_lossy().into_owned()),
                     // External sessions carry no first prompt: this daemon is
                     // the runtime, and it delivers the mention itself through

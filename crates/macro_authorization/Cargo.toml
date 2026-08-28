@@ -21,6 +21,8 @@ axum = { workspace = true, optional = true }
 bot_id = { path = "../bot_id" }
 bot_token = { path = "../bot_token" }
 constant_time_eq = { workspace = true }
+harness_id = { path = "../harness_id" }
+harness_token = { path = "../harness_token" }
 macro_auth = { path = "../macro_auth", optional = true }
 macro_env_var = { path = "../macro_env_var", optional = true }
 macro_user_id = { path = "../macro_user_id" }
@@ -37,6 +39,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 cookie = { workspace = true }
+harness_id = { path = "../harness_id", features = ["test-utils"] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_auth = { path = "../macro_auth", features = ["testing"] }

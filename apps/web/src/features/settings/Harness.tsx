@@ -11,24 +11,29 @@ import {
   useSaveCursorApiKey,
   useSetCursorDefaultModel,
 } from '@queries/auth/cursor-api-key';
-import { Button } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  useDeleteHarnessMutation,
+  useHarnessesQuery,
+} from '@queries/harnesses/harnesses';
+import type { Harness as RegisteredHarness } from '@service-storage/client';
+import { useSearchParams } from '@solidjs/router';
+import { Button, Dialog, Panel } from '@ui';
+import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
+import { HarnessPairingDialog } from './HarnessPairingDialog';
+import { ConnectAction, StatusDot } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 
 const BYOA_DOCS_URL = 'https://docs.macro.com/AI/bring-your-own';
 const CURSOR_KEY_PREFIX = 'crsr_';
 
-type ConnectedAgent = {
-  id: string;
-  name: string;
-  description: string;
-};
-
-// Connected-agent data will replace this empty list when BYOA is wired up.
-const connectedAgents: ConnectedAgent[] = [];
-
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
+}
+
+function lastConnectedText(harness: RegisteredHarness): string {
+  return harness.last_connected_at
+    ? `Last connected ${new Date(harness.last_connected_at).toLocaleString()}`
+    : 'Never connected';
 }
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
@@ -38,6 +43,35 @@ export function Harness() {
   const saveCursorApiKey = useSaveCursorApiKey();
   const disconnectCursor = useDisconnectCursorApiKey();
   const cursorRegistered = () => cursorStatus.data?.registered ?? false;
+  const harnessesQuery = useHarnessesQuery();
+  const deleteHarnessMutation = useDeleteHarnessMutation();
+  const [pairingDialog, setPairingDialog] = createSignal<{
+    initialCode?: string;
+  }>();
+  const [removingHarness, setRemovingHarness] =
+    createSignal<RegisteredHarness>();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  onMount(() => {
+    const pair = searchParams.pair;
+    if (typeof pair === 'string' && pair.length > 0) {
+      setPairingDialog({ initialCode: pair });
+      setSearchParams({ pair: undefined }, { replace: true });
+    }
+  });
+
+  const removeHarness = async () => {
+    const current = removingHarness();
+    if (!current) return;
+
+    try {
+      await deleteHarnessMutation.mutateAsync({ harnessId: current.id });
+      setRemovingHarness(undefined);
+      toast.success('Harness removed');
+    } catch (error) {
+      toast.failure(failureMessage(error, 'Failed to remove harness'));
+    }
+  };
 
   // Only worth fetching once there is a key to ask Cursor through.
   const cursorModels = useCursorModelsQuery(cursorRegistered);
@@ -229,15 +263,26 @@ export function Harness() {
           <div class="min-w-0 flex-1">
             <div class="flex items-center justify-between gap-4">
               <h2 class="text-sm font-medium text-ink">Bring your own agent</h2>
-              <a
-                href={BYOA_DOCS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
-              >
-                Setup guide
-                <ArrowUpRightIcon class="size-3.5 opacity-70" />
-              </a>
+              <div class="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  depth={3}
+                  onClick={() => setPairingDialog({})}
+                >
+                  Enter pairing code
+                </Button>
+                <a
+                  href={BYOA_DOCS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+                >
+                  Setup guide
+                  <ArrowUpRightIcon class="size-3.5 opacity-70" />
+                </a>
+              </div>
             </div>
             <p class="mt-1 text-sm text-ink-muted">
               Install macrod on your computer to connect Claude or another
@@ -249,33 +294,135 @@ export function Harness() {
                 Connected agents
               </div>
               <For
-                each={connectedAgents}
+                each={harnessesQuery.data ?? []}
                 fallback={
                   <div class="flex flex-col items-center py-6 text-center">
                     <p class="text-sm text-ink">No agents connected</p>
                     <p class="mt-1 text-xs text-ink-extra-muted">
                       Agents connected through macrod will appear here.
                     </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      depth={3}
+                      class="mt-3"
+                      onClick={() => setPairingDialog({})}
+                    >
+                      Enter pairing code
+                    </Button>
                   </div>
                 }
               >
-                {(agent) => (
+                {(harness) => (
                   <div class="flex items-center justify-between gap-4 px-4 py-3">
                     <div class="min-w-0">
-                      <p class="truncate text-sm text-ink">{agent.name}</p>
-                      <p class="truncate text-xs text-ink-extra-muted">
-                        {agent.description}
+                      <div class="flex min-w-0 items-center gap-2">
+                        <p class="truncate text-sm text-ink">{harness.name}</p>
+                        <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
+                          {harness.owner.type === 'team' ? 'Team' : 'Private'}
+                        </span>
+                        <StatusDot
+                          state={
+                            harness.connected ? 'connected' : 'disconnected'
+                          }
+                          label={
+                            harness.connected ? 'Connected' : 'Disconnected'
+                          }
+                        />
+                      </div>
+                      <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
+                        {lastConnectedText(harness)}
                       </p>
                     </div>
-                    <span class="text-xs text-success">Connected</span>
+                    <ConnectAction
+                      label="Remove"
+                      variant="danger"
+                      onClick={() => setRemovingHarness(harness)}
+                    />
                   </div>
                 )}
               </For>
+              <Show when={harnessesQuery.isError}>
+                <p class="px-4 py-3 text-xs text-negative">
+                  Could not load your harnesses. Try refreshing this page.
+                </p>
+              </Show>
             </div>
           </div>
         </section>
       </SettingsCard>
+
+      <Show when={pairingDialog()} keyed>
+        {(dialog) => (
+          <HarnessPairingDialog
+            initialCode={dialog.initialCode}
+            onClose={() => setPairingDialog(undefined)}
+          />
+        )}
+      </Show>
+      <Show when={removingHarness()} keyed>
+        {(harness) => (
+          <HarnessRemoveDialog
+            harnessName={harness.name}
+            pending={deleteHarnessMutation.isPending}
+            onClose={() => setRemovingHarness(undefined)}
+            onConfirm={() => void removeHarness()}
+          />
+        )}
+      </Show>
     </SettingsPage>
+  );
+}
+
+function HarnessRemoveDialog(props: {
+  harnessName: string;
+  pending: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => !open && !props.pending && props.onClose()}
+      position="center"
+      visibleScrim
+      class="w-[min(480px,calc(100vw-16px))]"
+    >
+      <Panel depth={2} class="rounded-xl text-ink">
+        <Panel.Header class="px-5 py-3">
+          <Dialog.Title class="text-sm font-semibold">
+            Remove {props.harnessName}?
+          </Dialog.Title>
+        </Panel.Header>
+        <Panel.Body class="p-5">
+          <Dialog.Description class="text-sm leading-5 text-ink-muted">
+            Agents using this harness will stop running until it's reconnected.
+            macrod on that machine will need to pair again.
+          </Dialog.Description>
+        </Panel.Body>
+        <Panel.Footer class="justify-end gap-2 px-5 py-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={props.pending}
+            onClick={props.onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            disabled={props.pending}
+            onClick={props.onConfirm}
+          >
+            {props.pending ? 'Removing…' : 'Remove harness'}
+          </Button>
+        </Panel.Footer>
+      </Panel>
+    </Dialog>
   );
 }
 

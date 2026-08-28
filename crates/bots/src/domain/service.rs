@@ -6,7 +6,7 @@ use super::{
         Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId,
         BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
         CreateBotTokenRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-        PatchBotRequest, UpdateAgentRequest,
+        HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -52,6 +52,7 @@ struct AgentFields<'a> {
     name: &'a str,
     handle: &'a str,
     harness: &'a str,
+    harness_id: Option<HarnessId>,
     default_model: &'a str,
     channel_scope: AgentChannelScope,
     channel_ids: &'a [Uuid],
@@ -63,6 +64,7 @@ impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
             name: &req.name,
             handle: &req.handle,
             harness: &req.harness,
+            harness_id: req.harness_id,
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
@@ -76,6 +78,7 @@ impl<'a> From<&'a UpdateAgentRequest> for AgentFields<'a> {
             name: &req.name,
             handle: &req.handle,
             harness: &req.harness,
+            harness_id: req.harness_id,
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
@@ -88,6 +91,7 @@ fn validate_agent_fields(
         name,
         handle,
         harness,
+        harness_id,
         default_model,
         channel_scope,
         channel_ids,
@@ -103,6 +107,21 @@ fn validate_agent_fields(
         return Err(BotError::BadRequest(
             "agent harness must not be empty".to_string(),
         ));
+    }
+    // The `macrod` slug and a registered harness travel together: the slug
+    // selects the external runtime path, the id says whose daemon serves it.
+    match (harness == harness_id::MACROD_HARNESS_SLUG, harness_id) {
+        (true, None) => {
+            return Err(BotError::BadRequest(
+                "agents on the macrod harness must reference a registered harness".to_string(),
+            ));
+        }
+        (false, Some(_)) => {
+            return Err(BotError::BadRequest(
+                "harness_id applies only to the macrod harness".to_string(),
+            ));
+        }
+        _ => {}
     }
     if default_model.trim().is_empty() {
         return Err(BotError::BadRequest(
@@ -207,6 +226,59 @@ where
         Ok(BotOwner::User {
             user_id: caller.as_ref().to_string(),
         })
+    }
+
+    /// Ensure the resolved agent owner may run agents on a registered harness.
+    ///
+    /// A team agent must run on its own team's harness - never on a private
+    /// one, so a teammate's mention can never execute on a machine only one
+    /// person controls. A private agent may run on the caller's own harness
+    /// or on a team harness of a team the caller belongs to.
+    async fn ensure_harness_usable(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        owner: &BotOwner,
+        harness_id: Option<HarnessId>,
+    ) -> Result<(), BotError> {
+        let Some(harness_id) = harness_id else {
+            return Ok(());
+        };
+        let harness_owner = self
+            .repo
+            .get_harness_owner(harness_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::BadRequest("unknown harness".to_string()))?;
+
+        let usable = match (owner, harness_owner) {
+            (
+                BotOwner::Team { team_id },
+                HarnessOwner::Team {
+                    team_id: harness_team,
+                },
+            ) => *team_id == harness_team,
+            (BotOwner::Team { .. }, HarnessOwner::User { .. }) => false,
+            (
+                BotOwner::User { user_id },
+                HarnessOwner::User {
+                    user_id: harness_user,
+                },
+            ) => *user_id == harness_user,
+            (
+                BotOwner::User { .. },
+                HarnessOwner::Team {
+                    team_id: harness_team,
+                },
+            ) => self
+                .repo
+                .user_has_team(caller, harness_team)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?,
+        };
+        if !usable {
+            return Err(BotError::Unauthorized);
+        }
+        Ok(())
     }
 
     async fn owner_for_agent_update(
@@ -322,6 +394,8 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
+        self.ensure_harness_usable(caller.clone(), &owner, req.harness_id)
+            .await?;
         let created_by_user_id = caller.clone();
         let agent = self
             .repo
@@ -370,6 +444,8 @@ where
 
         let owner = self
             .owner_for_agent_update(caller.clone(), &current, req.team_id)
+            .await?;
+        self.ensure_harness_usable(caller.clone(), &owner, req.harness_id)
             .await?;
         let requested_name = req.name.clone();
         let requested_handle = req.handle.clone();

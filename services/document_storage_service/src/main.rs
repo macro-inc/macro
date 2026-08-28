@@ -85,12 +85,13 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
-    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer, PgHarnessAuthorizationRepo,
+    PgHarnessAuthorizer, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
@@ -329,8 +330,13 @@ async fn run() -> anyhow::Result<()> {
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(db.clone())),
         PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
-    );
+    )
+    .with_harness_authorizer(PgHarnessAuthorizer::new(PgHarnessAuthorizationRepo::new(
+        db.clone(),
+    )));
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+    let harnesses_service =
+        harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(db.clone()));
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -1356,6 +1362,10 @@ async fn run() -> anyhow::Result<()> {
         bots_state: bots::inbound::axum_router::BotsRouterState::new(
             bots_service.clone(),
             (*entity_access_service).clone(),
+            authorization_state.clone(),
+        ),
+        harnesses_state: harnesses::inbound::axum_router::HarnessesRouterState::new(
+            harnesses_service,
             authorization_state.clone(),
         ),
         channel_bot_webhook_state,

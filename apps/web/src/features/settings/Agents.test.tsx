@@ -50,6 +50,16 @@ vi.mock('@queries/auth/cursor-api-key', () => ({
   useCursorModelsQuery: () => cursorMocks.models,
 }));
 
+const harnessMocks = vi.hoisted(() => ({
+  query: {
+    data: [] as unknown[],
+  },
+}));
+
+vi.mock('@queries/harnesses/harnesses', () => ({
+  useHarnessesQuery: () => harnessMocks.query,
+}));
+
 vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => agentMocks.query,
   useCreateAgentMutation: () => ({
@@ -112,7 +122,20 @@ beforeEach(() => {
   agentMocks.currentUserId = 'macro|user@example.com';
   agentMocks.currentTeam = { team: { id: 'team-1' } };
   agentMocks.isTeamOwner = false;
+  harnessMocks.query.data = [];
 });
+
+const MACROD_HARNESS = {
+  id: '3f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e6f',
+  kind: 'macrod',
+  name: 'Dev box',
+  owner: { type: 'user', user_id: 'macro|user@example.com' },
+  created_by: 'macro|user@example.com',
+  created_at: '2026-08-27T12:00:00Z',
+  updated_at: '2026-08-27T12:00:00Z',
+  connected: true,
+  last_connected_at: '2026-08-27T12:34:00Z',
+};
 
 describe('Agents', () => {
   it('lists the built-in global Macro agent as a team agent', () => {
@@ -512,5 +535,104 @@ describe('Agents', () => {
     expect(
       within(defaultModel).getByRole('option', { name: 'Cursor Small' })
     ).toHaveProperty('selected', true);
+  });
+
+  it('offers registered macrod harnesses in the harness picker', () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    const harness = within(dialog).getByLabelText('Harness');
+    expect(within(harness).getAllByRole('option')).toHaveLength(2);
+    expect(
+      within(harness).getByRole('option', { name: 'Dev box' })
+    ).toBeTruthy();
+  });
+
+  it('swaps the model select for a free-text input seeded with default for macrod harnesses', () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    const harness = within(dialog).getByLabelText('Harness');
+    fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
+
+    const defaultModel = within(dialog).getByLabelText('Default model');
+    expect(defaultModel.tagName).toBe('INPUT');
+    expect(defaultModel).toHaveProperty('value', 'default');
+  });
+
+  it('submits macrod agents with the macrod slug and harness id', async () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Bug fixer' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+      target: { value: MACROD_HARNESS.id },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+
+    await waitFor(() => {
+      expect(agentMocks.create).toHaveBeenCalledWith({
+        avatarUrl: undefined,
+        channelIds: [],
+        channelScope: 'all',
+        defaultModel: 'default',
+        handle: 'bug-fixer',
+        harness: 'macrod',
+        harnessId: MACROD_HARNESS.id,
+        name: 'Bug fixer',
+        instructions: '',
+        teamId: undefined,
+      });
+    });
+  });
+
+  it('preselects the bound macrod harness when editing', () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          description: 'Finds and fixes bugs.',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'macrod',
+        harness_id: MACROD_HARNESS.id,
+        default_model: 'default',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Harness')).toHaveProperty(
+      'value',
+      MACROD_HARNESS.id
+    );
+    const defaultModel = within(dialog).getByLabelText('Default model');
+    expect(defaultModel.tagName).toBe('INPUT');
+    expect(defaultModel).toHaveProperty('value', 'default');
   });
 });

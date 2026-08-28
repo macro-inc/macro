@@ -1,22 +1,28 @@
-//! Boot-time webhook feed reconciliation: make sure this daemon's bot has a
-//! validated trigger feed pointing at this daemon, without any manual step.
+//! Webhook feed reconciliation: make sure this harness has a validated
+//! trigger feed pointing at this daemon and covering every agent bound to it.
 //!
-//! The flow is deliberately the plain webhook API driven as the bot acting
-//! for its owner: who am I (`/bots/me`), do I have a feed (list), is it
-//! mine and current (endpoint match), verify it if unverified, create it if
-//! missing. It leans on no server-side affordance beyond that API: the feed
-//! is an ordinary webhook, scoped to this bot by an `ids` filter and found
-//! again by the namespace this daemon mints for it.
+//! The flow is deliberately the plain webhook API driven as the harness: which
+//! agents am I serving (`/harnesses/me/agents`), do I have a feed (list), is
+//! it mine and current (endpoint and bound-agent match), verify it if
+//! unverified, create it if missing or stale. It leans on no server-side
+//! affordance beyond that API: the feed is an ordinary webhook, scoped to the
+//! bound bots by an `ids` filter and found again by the namespace this daemon
+//! mints for it.
+//!
+//! Run at boot and then periodically: a teammate binding a new agent to this
+//! harness changes the bound set, and the feed must grow to cover it without
+//! a daemon restart.
 //!
 //! Secrets are only ever returned at creation, so the daemon persists its
 //! feed's id and secret in a state file next to the config. Losing the file
 //! is recoverable: the stale feed is deleted and recreated.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use agent_trigger::domain::broker_events::AgentTriggerEventName;
-use bot_id::BotId;
-use bots::domain::models::Bot;
+use harness_id::HarnessId;
+use harnesses::domain::models::HarnessAgent;
 use rootcause::prelude::ResultExt as _;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator as _;
@@ -26,21 +32,17 @@ use webhook::domain::models::{
 };
 
 use crate::config::{MacroApi, Server};
+use crate::outbound::credentials::{HarnessCredentials, HarnessScope};
 
 #[cfg(test)]
 mod test;
 
-const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
-const BOT_SCOPE_HEADER: &str = "x-macro-bot-scope";
-const BOT_ACTING_USER_HEADER: &str = "x-macro-bot-for-macro-user-id";
+const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 
-/// The namespace a daemon's feed carries: derived from its bot, so the feed
-/// can be found again without the server marking it as that bot's.
-///
-/// Takes the `BotId` rather than its rendering, so no other identifier can be
-/// mistaken for the bot this feed belongs to.
-fn feed_namespace(bot: BotId) -> String {
-    format!("agent-feed-{bot}")
+/// The namespace a daemon's feed carries: derived from its harness, so the
+/// feed can be found again without the server marking it as this harness's.
+fn feed_namespace(harness: HarnessId) -> String {
+    format!("harness-feed-{harness}")
 }
 
 /// Every event a trigger feed carries, straight from the topic's own
@@ -124,24 +126,27 @@ pub fn state_path(config_path: &Path) -> PathBuf {
     config_path.with_extension("webhook-state.json")
 }
 
-/// The webhook-feed reconciler for one bot on one deployment.
+/// The webhook-feed reconciler for one harness on one deployment.
 pub(crate) struct FeedReconciler<S = FileFeedStateStore> {
     http: reqwest::Client,
     base: String,
-    macro_api: MacroApi,
-    owner_user_id: String,
+    credentials: HarnessCredentials,
     public_url: String,
     state_store: S,
 }
 
 impl FeedReconciler<FileFeedStateStore> {
-    /// Build a reconciler from the daemon's config.
-    pub fn new(macro_api: &MacroApi, server: &Server, config_path: &Path) -> Self {
+    /// Build a reconciler from the daemon's config and paired credentials.
+    pub fn new(
+        macro_api: &MacroApi,
+        server: &Server,
+        credentials: HarnessCredentials,
+        config_path: &Path,
+    ) -> Self {
         Self {
             http: reqwest::Client::new(),
             base: macro_api.storage_url.trim_end_matches('/').to_owned(),
-            macro_api: macro_api.clone(),
-            owner_user_id: macro_api.owner_user_id.clone(),
+            credentials,
             public_url: server.public_url.clone(),
             state_store: FileFeedStateStore {
                 path: state_path(config_path),
@@ -152,10 +157,7 @@ impl FeedReconciler<FileFeedStateStore> {
 
 impl<S: FeedStateStore> FeedReconciler<S> {
     fn credentialed(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        request
-            .header(BOT_TOKEN_HEADER, &self.macro_api.bot_token)
-            .header(BOT_SCOPE_HEADER, &self.macro_api.bot_scope)
-            .header(BOT_ACTING_USER_HEADER, &self.owner_user_id)
+        request.header(HARNESS_TOKEN_HEADER, &self.credentials.token)
     }
 
     async fn read<T: serde::de::DeserializeOwned>(
@@ -179,16 +181,44 @@ impl<S: FeedStateStore> FeedReconciler<S> {
             .context(format!("could not read the service's answer to {what}"))?)
     }
 
-    /// Reconcile: return a feed that exists, points at this daemon, and
-    /// whose secret this daemon holds.
-    pub async fn ensure_feed(&self) -> rootcause::Result<FeedRegistration> {
-        let me: Bot = self
+    /// The agents currently bound to this harness, as sorted bot-id strings -
+    /// the shape the feed filter carries.
+    pub async fn bound_bot_ids(&self) -> rootcause::Result<Vec<String>> {
+        let agents: Vec<HarnessAgent> = self
             .read(
-                "identify the bot",
-                self.http.get(format!("{}/bots/me", self.base)),
+                "list this harness's agents",
+                self.http.get(format!("{}/harnesses/me/agents", self.base)),
             )
             .await?;
-        let bot = me.id;
+        let ids: BTreeSet<String> = agents
+            .into_iter()
+            .map(|agent| agent.bot_id.to_string())
+            .collect();
+        Ok(ids.into_iter().collect())
+    }
+
+    /// Whether an existing feed row already covers exactly `bot_ids`.
+    fn covers(row: &Webhook, public_url: &str, bot_ids: &[String]) -> bool {
+        if row.endpoint_url != public_url {
+            return false;
+        }
+        let current: BTreeSet<&str> = row
+            .filters
+            .iter()
+            .flat_map(|filter| filter.ids.iter().flatten())
+            .map(String::as_str)
+            .collect();
+        let wanted: BTreeSet<&str> = bot_ids.iter().map(String::as_str).collect();
+        current == wanted
+    }
+
+    /// Reconcile: return a feed that exists, points at this daemon, and
+    /// covers every agent currently bound to this harness - or `None` while
+    /// nothing is bound, since a filter over no bots is nothing to subscribe
+    /// to (and the webhook API rightly refuses an empty ids list).
+    pub async fn ensure_feed(&self) -> rootcause::Result<Option<FeedRegistration>> {
+        let harness = self.credentials.harness_id;
+        let bot_ids = self.bound_bot_ids().await?;
 
         let list: ListWebhooksResponse = self
             .read(
@@ -199,26 +229,28 @@ impl<S: FeedStateStore> FeedReconciler<S> {
         let mine: Vec<&Webhook> = list
             .webhooks
             .iter()
-            .filter(|row| row.namespace == feed_namespace(bot))
+            .filter(|row| row.namespace == feed_namespace(harness))
             .collect();
 
-        // The remembered feed, when it still exists and points here.
-        if let Some(state) = self.state_store.load()?
+        // The remembered feed, when it still exists, points here, and covers
+        // the current bound set.
+        if !bot_ids.is_empty()
+            && let Some(state) = self.state_store.load()?
             && let Some(row) = mine.iter().find(|row| row.id == state.webhook_id)
-            && row.endpoint_url == self.public_url
+            && Self::covers(row, &self.public_url, &bot_ids)
         {
-            return Ok(FeedRegistration {
+            return Ok(Some(FeedRegistration {
                 webhook_id: state.webhook_id,
                 signing_secret: state.signing_secret,
                 is_valid: row.is_valid,
-            });
+            }));
         }
 
-        // Anything else of ours is a feed whose secret is lost or whose
-        // endpoint moved: delete before recreating, since one bot needs
-        // exactly one feed.
+        // Anything else of ours is a feed whose secret is lost, whose
+        // endpoint moved, or whose bound set changed: delete before
+        // recreating, since one harness needs exactly one feed.
         for row in mine {
-            tracing::info!(webhook_id = %row.id, "removing this bot's stale trigger feed");
+            tracing::info!(webhook_id = %row.id, "removing this harness's stale trigger feed");
             let response = self
                 .credentialed(
                     self.http
@@ -231,23 +263,39 @@ impl<S: FeedStateStore> FeedReconciler<S> {
             }
         }
 
+        if bot_ids.is_empty() {
+            tracing::warn!(
+                "no agents are bound to this harness yet; the trigger feed will be registered \
+                 once one is (Settings -> Agents)"
+            );
+            return Ok(None);
+        }
+
+        // A team harness's feed subscribes in the team workspace so triggers
+        // for teammates' agents - fanned out to every accessor's workspaces -
+        // reach it.
+        let scope = match self.credentials.scope {
+            HarnessScope::User => WebhookScope::User,
+            HarnessScope::Team => WebhookScope::Team,
+        };
         let created: CreateWebhookResponse = self
             .read(
                 "create the trigger feed",
                 self.http
                     .post(format!("{}/webhook/webhooks", self.base))
                     .json(&CreateWebhookRequest {
-                        scope: WebhookScope::User,
-                        namespace: feed_namespace(bot),
+                        scope,
+                        namespace: feed_namespace(harness),
                         name: "Agent trigger feed".to_owned(),
                         endpoint_url: self.public_url.clone(),
                         headers: None,
-                        // Scoped to this bot: trigger events name the bot they
-                        // are for, so without this the feed would receive
-                        // every bot's triggers in channels its owner can see.
+                        // Scoped to this harness's agents: trigger events name
+                        // the bot they are for, so without this the feed would
+                        // receive every bot's triggers in channels its
+                        // workspace can see.
                         filters: vec![WebhookFilter {
                             events: trigger_events(),
-                            ids: Some(vec![bot.to_string()]),
+                            ids: Some(bot_ids),
                         }],
                     }),
             )
@@ -257,13 +305,13 @@ impl<S: FeedStateStore> FeedReconciler<S> {
             webhook_id: created.id.clone(),
             signing_secret: created.signing_secret.clone(),
         })?;
-        tracing::info!(webhook_id = %created.id, %bot, "trigger feed registered");
+        tracing::info!(webhook_id = %created.id, %harness, "trigger feed registered");
 
-        Ok(FeedRegistration {
+        Ok(Some(FeedRegistration {
             webhook_id: created.id,
             signing_secret: created.signing_secret,
             is_valid: created.is_valid,
-        })
+        }))
     }
 
     /// Ask the service to validate the feed's endpoint; call once serving.

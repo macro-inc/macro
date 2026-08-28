@@ -254,6 +254,15 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_activity_handler,
         channels::inbound::axum_router::post_activity_handler,
 
+        // harnesses
+        harnesses::inbound::axum_router::create_pairing_handler,
+        harnesses::inbound::axum_router::get_pairing_handler,
+        harnesses::inbound::axum_router::approve_pairing_handler,
+        harnesses::inbound::axum_router::claim_pairing_handler,
+        harnesses::inbound::axum_router::list_harnesses_handler,
+        harnesses::inbound::axum_router::delete_harness_handler,
+        harnesses::inbound::axum_router::list_bound_agents_handler,
+
         // bots
         bots::inbound::axum_router::create_agent_handler,
         bots::inbound::axum_router::list_agents_handler,
@@ -563,6 +572,18 @@ use utoipa::OpenApi;
             channels::domain::models::ActivityType,
             ApiActivity,
             PostActivityRequest,
+
+            // Harnesses
+            harnesses::domain::models::Harness,
+            harnesses::domain::models::HarnessOwner,
+            harnesses::domain::models::HarnessAgent,
+            harnesses::domain::models::CreatePairingRequest,
+            harnesses::domain::models::CreatedPairing,
+            harnesses::domain::models::PairingDetails,
+            harnesses::domain::models::ApprovePairingRequest,
+            harnesses::domain::models::ClaimPairingRequest,
+            harnesses::domain::models::ClaimedPairing,
+            harnesses::inbound::axum_router::PendingClaimResponse,
 
             // Bots
             bots::domain::models::Agent,

@@ -21,7 +21,10 @@ bot_id = { path = "../bot_id" }
 # Only the domain models: the daemon reads `GET /bots/me` and the webhook
 # API's bodies, and wants none of either crate's server-side machinery.
 bots = { path = "../bots", default-features = false }
+chrono = { workspace = true }
 clap = { workspace = true }
+harness_id = { path = "../harness_id" }
+harnesses = { path = "../harnesses", default-features = false }
 dashmap = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_user_id = { path = "../macro_user_id" }
@@ -50,4 +53,5 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
 channels = { path = "../channels", default-features = false }
 chrono = { workspace = true }
+harness_id = { path = "../harness_id", features = ["test-utils"] }
 tower = { workspace = true, features = ["util"] }

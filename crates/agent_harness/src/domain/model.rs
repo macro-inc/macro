@@ -91,6 +91,9 @@ impl AgentKind {
         match harness {
             "cursor" => Self::Cursor,
             "in-memory" | "macro-inmem" => Self::InMemory,
+            // Registered macrod harnesses are the deliberate external case:
+            // the agent's `harness_id` names whose daemon serves it.
+            harness_id::MACROD_HARNESS_SLUG => Self::External,
             _ => Self::External,
         }
     }

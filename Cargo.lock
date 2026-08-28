@@ -252,6 +252,7 @@ dependencies = [
  "dashmap",
  "entity_access",
  "futures",
+ "harness_id",
  "kafka_util",
  "lexical_client",
  "macro_authorization",
@@ -261,6 +262,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mockall",
+ "model_user",
  "pipedream_mcp",
  "reqwest 0.13.4",
  "rootcause",
@@ -305,6 +307,7 @@ dependencies = [
  "database_env_vars",
  "entity_access",
  "github",
+ "harness_id",
  "kafka_util",
  "lexical_client",
  "macro_auth",
@@ -407,6 +410,7 @@ dependencies = [
  "dashmap",
  "entity_access",
  "entity_access_db_utils",
+ "harness_id",
  "macro_authorization",
  "macro_db_migrator",
  "macro_service_urls",
@@ -414,6 +418,7 @@ dependencies = [
  "macro_uuid",
  "mockall",
  "model-entity",
+ "model_user",
  "non_empty",
  "rootcause",
  "serde",
@@ -2765,6 +2770,7 @@ dependencies = [
  "channels",
  "chrono",
  "entity_access",
+ "harness_id",
  "hex",
  "macro_authorization",
  "macro_db_migrator",
@@ -3539,6 +3545,8 @@ dependencies = [
  "chrono",
  "clap",
  "dashmap",
+ "harness_id",
+ "harnesses",
  "macro_event_broker",
  "macro_user_id",
  "macro_uuid",
@@ -5096,6 +5104,7 @@ dependencies = [
  "futures",
  "github",
  "graphql_soup",
+ "harnesses",
  "hex",
  "http-body-util",
  "jsonwebtoken 10.3.0",
@@ -7327,6 +7336,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "harness_token"
+version = "0.1.0"
+dependencies = [
+ "sha2 0.10.9",
+ "workspace-hack",
+]
+
+[[package]]
+name = "harnesses"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bot_id",
+ "chrono",
+ "constant_time_eq",
+ "harness_id",
+ "harness_token",
+ "hex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "mockall",
+ "model-error-response",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "hash32"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9405,6 +9464,8 @@ dependencies = [
  "bot_token",
  "constant_time_eq",
  "cookie",
+ "harness_id",
+ "harness_token",
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "macro_auth",

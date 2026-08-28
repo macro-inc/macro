@@ -1,9 +1,14 @@
 //! Outbound capabilities required by the harness domain.
 
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentSessionId, ReplicaAddress, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
+use harness_id::HarnessId;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -53,6 +58,35 @@ impl CommandForwarder for NoPeers {
 
 #[cfg(test)]
 mod test;
+
+/// Resolves which registered harness currently serves a bot's sessions.
+///
+/// Resolved at bind time, not stamped at session creation, so rebinding an
+/// agent to another harness re-routes its existing sessions.
+pub trait HarnessBindings: Send + Sync + 'static {
+    /// The bot's current harness binding, or `None` for an unbound bot.
+    fn harness_for(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+}
+
+/// Durable attach/detach bookkeeping for harness runtime connections.
+///
+/// The registry itself is in-process liveness; this is what lets the rest of
+/// the product (the harness settings page) see whether a daemon is up.
+/// Methods take `Arc<Self>` and return owned futures so the registry can fire
+/// them from its own background tasks.
+pub trait HarnessPresence: Send + Sync + 'static {
+    /// A runtime attached for this harness.
+    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+
+    /// This harness's runtime connection closed.
+    fn disconnected(
+        self: Arc<Self>,
+        harness: HarnessId,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+}
 
 /// Resolves the runtime configuration for a bot that may receive agent
 /// session triggers.

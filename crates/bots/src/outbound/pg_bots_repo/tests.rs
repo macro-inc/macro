@@ -78,6 +78,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         avatar_url: Some("https://static.example/bug-fixer.png".to_string()),
         instructions: "Fix the root cause and add tests.".to_string(),
         harness: "cursor".to_string(),
+        harness_id: None,
         default_model: "cursor-small".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
@@ -93,6 +94,7 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
         avatar_url: None,
         instructions: "Diagnose first, then make the smallest tested fix.".to_string(),
         harness: "in-memory".to_string(),
+        harness_id: None,
         default_model: "claude-sonnet-4-5".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
@@ -1460,6 +1462,153 @@ async fn scheduling_failures_do_not_change_successful_mutations(
         .await?;
     assert_eq!(patched.name, "Still succeeds");
     service.delete_bot(user_id(USER_OWNER), bot.id).await?;
+
+    Ok(())
+}
+
+async fn insert_harness(
+    pool: &PgPool,
+    owner_user_id: Option<&str>,
+    team_id: Option<Uuid>,
+) -> anyhow::Result<HarnessId> {
+    let harness_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, team_id, created_by)
+        VALUES ($1, 'test harness', $2, $3, $4)
+        "#,
+        harness_id,
+        owner_user_id,
+        team_id,
+        owner_user_id.unwrap_or(USER_OWNER),
+    )
+    .execute(pool)
+    .await?;
+    Ok(HarnessId::new_from_uuid(harness_id))
+}
+
+fn macrod_agent_req(handle: &str, harness_id: Option<HarnessId>) -> CreateAgentRequest {
+    CreateAgentRequest {
+        harness: "macrod".to_string(),
+        harness_id,
+        ..create_agent_req(handle, AgentChannelScope::All)
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn macrod_agents_require_a_registered_usable_harness(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    insert_user(&pool, USER_OWNER).await?;
+    insert_user(&pool, USER_OTHER).await?;
+
+    // The slug and the binding travel together.
+    let missing_id = service
+        .create_agent(user_id(USER_OWNER), macrod_agent_req("macrod-agent", None))
+        .await;
+    assert!(matches!(missing_id, Err(BotError::BadRequest(_))));
+
+    let mut mismatched = create_agent_req("mismatched-agent", AgentChannelScope::All);
+    mismatched.harness_id = Some(HarnessId::new_from_uuid(Uuid::new_v4()));
+    let mismatched = service.create_agent(user_id(USER_OWNER), mismatched).await;
+    assert!(matches!(mismatched, Err(BotError::BadRequest(_))));
+
+    // An unknown harness id is rejected.
+    let unknown = service
+        .create_agent(
+            user_id(USER_OWNER),
+            macrod_agent_req(
+                "unknown-harness",
+                Some(HarnessId::new_from_uuid(Uuid::new_v4())),
+            ),
+        )
+        .await;
+    assert!(matches!(unknown, Err(BotError::BadRequest(_))));
+
+    // The owner binds their own private harness; a stranger cannot.
+    let private_harness = insert_harness(&pool, Some(USER_OWNER), None).await?;
+    let agent = service
+        .create_agent(
+            user_id(USER_OWNER),
+            macrod_agent_req("my-macrod-agent", Some(private_harness)),
+        )
+        .await?;
+    assert_eq!(agent.harness, "macrod");
+    assert_eq!(agent.harness_id, Some(private_harness));
+
+    let stranger = service
+        .create_agent(
+            user_id(USER_OTHER),
+            macrod_agent_req("stolen-harness", Some(private_harness)),
+        )
+        .await;
+    assert!(matches!(stranger, Err(BotError::Unauthorized)));
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_harnesses_back_member_agents_but_not_team_agents_on_private_harnesses(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    insert_user(&pool, USER_OWNER).await?;
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let team_harness = insert_harness(&pool, None, Some(team_id)).await?;
+
+    // A member's private agent may run on the team harness.
+    let member_agent = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("member-on-team-harness", Some(team_harness)),
+        )
+        .await?;
+    assert_eq!(member_agent.harness_id, Some(team_harness));
+
+    // A team agent may run on the team's own harness.
+    let mut team_agent = macrod_agent_req("team-on-team-harness", Some(team_harness));
+    team_agent.team_id = Some(team_id);
+    let team_agent = service
+        .create_agent(user_id(TEAM_MEMBER), team_agent)
+        .await?;
+    assert_eq!(team_agent.harness_id, Some(team_harness));
+
+    // A non-member cannot use the team harness.
+    insert_user(&pool, USER_OTHER).await?;
+    let outsider = service
+        .create_agent(
+            user_id(USER_OTHER),
+            macrod_agent_req("outsider-on-team-harness", Some(team_harness)),
+        )
+        .await;
+    assert!(matches!(outsider, Err(BotError::Unauthorized)));
+
+    // A team agent must never run on a private harness.
+    let private_harness = insert_harness(&pool, Some(TEAM_MEMBER), None).await?;
+    let mut team_on_private = macrod_agent_req("team-on-private-harness", Some(private_harness));
+    team_on_private.team_id = Some(team_id);
+    let team_on_private = service
+        .create_agent(user_id(TEAM_MEMBER), team_on_private)
+        .await;
+    assert!(matches!(team_on_private, Err(BotError::Unauthorized)));
+
+    // Updates re-check the binding: moving the member's agent onto their own
+    // private harness works, and clearing the slug clears the binding.
+    let mut update = update_agent_req("member-on-team-harness", AgentChannelScope::All);
+    update.harness = "macrod".to_string();
+    update.harness_id = Some(private_harness);
+    let updated = service
+        .update_agent(user_id(TEAM_MEMBER), member_agent.bot.id, update)
+        .await?;
+    assert_eq!(updated.harness_id, Some(private_harness));
+
+    let mut cleared = update_agent_req("member-on-team-harness", AgentChannelScope::All);
+    cleared.harness = "in-memory".to_string();
+    let cleared = service
+        .update_agent(user_id(TEAM_MEMBER), member_agent.bot.id, cleared)
+        .await?;
+    assert_eq!(cleared.harness_id, None);
 
     Ok(())
 }

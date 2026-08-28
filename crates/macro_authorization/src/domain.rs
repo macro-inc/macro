@@ -2,6 +2,8 @@
 
 /// Bot credential authorization policy.
 pub mod bot_authorizer;
+/// Harness credential authorization policy.
+pub mod harness_authorizer;
 /// Models produced and consumed by the authorization domain.
 pub mod models;
 /// Interfaces that connect the authorization domain to its adapters.

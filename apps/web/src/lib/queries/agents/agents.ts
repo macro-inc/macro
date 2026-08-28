@@ -8,6 +8,12 @@ import type { AgentChannelScope } from '@service-storage/generated/schemas/agent
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { agentKeys } from './keys';
 
+/**
+ * `Agent` plus the macrod harness binding the backend now returns; the field
+ * is not yet in the generated schema.
+ */
+export type AgentWithHarnessId = Agent & { harness_id?: string | null };
+
 export type CreateAgentParams = {
   avatarUrl?: string;
   channelIds: string[];
@@ -16,6 +22,8 @@ export type CreateAgentParams = {
   description?: string;
   handle: string;
   harness: string;
+  /** The registered macrod harness to run on; omit for built-in harnesses. */
+  harnessId?: string;
   name: string;
   instructions: string;
   teamId?: string;
@@ -33,7 +41,7 @@ export type DeleteAgentParams = {
 export function useAgentsQuery() {
   return useQuery(() => ({
     queryKey: agentKeys.list.queryKey,
-    queryFn: async (): Promise<Agent[]> =>
+    queryFn: async (): Promise<AgentWithHarnessId[]> =>
       await throwOnErr(() => storageServiceClient.getAgents()),
   }));
 }
@@ -65,6 +73,7 @@ export function useCreateAgentMutation() {
           description: vars.description,
           handle: vars.handle,
           harness: vars.harness,
+          harness_id: vars.harnessId,
           name: vars.name,
           instructions: vars.instructions,
           team_id: vars.teamId,
@@ -95,6 +104,7 @@ export function useUpdateAgentMutation() {
           description: vars.description,
           handle: vars.handle,
           harness: vars.harness,
+          harness_id: vars.harnessId,
           name: vars.name,
           instructions: vars.instructions,
           team_id: vars.teamId,

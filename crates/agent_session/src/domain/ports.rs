@@ -30,6 +30,8 @@ pub struct BotFacts {
     pub is_managed: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
+    /// The registered harness this bot's agent is bound to, when it is one.
+    pub harness_id: Option<harness_id::HarnessId>,
 }
 
 /// Read-only lookup of the bots sessions may be opened for.

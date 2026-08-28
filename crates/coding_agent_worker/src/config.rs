@@ -1,6 +1,10 @@
-//! The daemon's one input: a TOML file describing the bot it serves, the
-//! webhook server it listens on, and the harness it runs per session. See
-//! `config.example.toml` at the crate root.
+//! The daemon's one input: a TOML file describing the Macro deployment it
+//! serves, the webhook server it listens on, and the harness it runs per
+//! session. See `config.example.toml` at the crate root.
+//!
+//! Deliberately credential-free: identity comes from pairing (`macrod login`,
+//! or the first `macrod` run), which persists the harness credential in a
+//! state file next to this config.
 
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -12,9 +16,12 @@ mod test;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// The Macro deployment this bot's sessions live in.
+    /// The Macro deployment this harness's sessions live in.
     #[serde(rename = "macro")]
     pub macro_api: MacroApi,
+    /// How this daemon introduces itself when pairing.
+    #[serde(default)]
+    pub identity: Identity,
     /// The webhook server this daemon listens on.
     pub server: Server,
     /// The harness process spawned per session.
@@ -23,8 +30,7 @@ pub struct Config {
     pub workspace: Workspace,
 }
 
-/// The Macro deployment this bot's sessions live in, and how to act as the
-/// bot there.
+/// The Macro deployment this harness's sessions live in.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MacroApi {
@@ -32,17 +38,12 @@ pub struct MacroApi {
     /// `http://localhost:50009/agent-harness`. Sessions are created and
     /// prompted here, and its `ws(s)` twin hosts the runtime gateway.
     pub api_url: String,
-    /// Base URL of the storage service, e.g. `http://localhost:50009/storage`.
-    /// Hosts the bots and webhook APIs the daemon registers itself with.
+    /// Base URL of the storage service, e.g. `http://localhost:50009/dss`.
+    /// Hosts the harness pairing and webhook APIs.
     pub storage_url: String,
-    /// The user who owns the bot; webhook registration acts for them.
-    pub owner_user_id: String,
-    /// The bot's API token (`mbot_...`).
-    pub bot_token: String,
-    /// Bot scope requests authorize under; `user` unless the bot is
-    /// team-owned and should act in its team scope.
-    #[serde(default = "default_bot_scope")]
-    pub bot_scope: String,
+    /// Base URL of the Macro web app, used only to print the pairing link.
+    #[serde(default = "default_web_url")]
+    pub web_url: String,
 }
 
 impl MacroApi {
@@ -55,6 +56,38 @@ impl MacroApi {
             .replacen("http://", "ws://", 1);
         format!("{base}/runtime/ws")
     }
+
+    /// The settings-page URL where a pairing code is approved.
+    pub fn pairing_approval_url(&self, code: &str) -> String {
+        let base = self.web_url.trim_end_matches('/');
+        format!("{base}/settings/harness?pair={code}")
+    }
+}
+
+/// How this daemon introduces itself when pairing.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Identity {
+    /// Requested harness display name; the approving user may rename it.
+    /// Defaults to this machine's hostname.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Whether the harness should be private to the approving user or shared
+    /// with their team. Advisory: the approval dialog arrives preselected to
+    /// this, and the approving user has the final say.
+    #[serde(default)]
+    pub scope: IdentityScope,
+}
+
+/// The ownership scope this daemon's pairing asks for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IdentityScope {
+    /// Only the approving user can run agents on this harness.
+    #[default]
+    Private,
+    /// Any of the approving user's teammates can bind agents to it.
+    Team,
 }
 
 /// The webhook server this daemon listens on.
@@ -102,8 +135,8 @@ pub struct Workspace {
     pub repo_url: Option<String>,
 }
 
-fn default_bot_scope() -> String {
-    "user".to_owned()
+fn default_web_url() -> String {
+    "https://macro.com/app".to_owned()
 }
 
 /// Why a config failed to load.
