@@ -383,12 +383,12 @@ pub struct ListEntitiesResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListEntities",
-    description = "Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as \"list my tasks\", \"tasks assigned to me\", or \"tasks I completed yesterday\", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {\"l\":{\"dst\":\"task\"}} and includeTypes [\"document\"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For \"completed yesterday\", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. \"my items tagged bug-report\"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead."
+    description = "Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For listing or filtering Macro tasks (status, priority, assignee, due date, my tasks), use ListTasks — do not reconstruct task queries with df/propf here. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. \"my items tagged bug-report\"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead."
 )]
 pub struct ListEntities {
     /// Filter returned items to specific item types.
     #[schemars(
-        description = "Filter returned items to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=[\"document\"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering."
+        description = "Filter returned items to specific item types. If not provided, returns all types. Example: [\"document\", \"email\"] returns only documents and emails. For task lists, use ListTasks instead of includeTypes=[\"document\"] plus a task subtype filter."
     )]
     #[serde(default)]
     pub include_types: Option<Vec<ItemType>>,
@@ -402,7 +402,7 @@ pub struct ListEntities {
 
     /// Document entity AST filter.
     #[schemars(
-        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For Macro tasks, use {\"l\":{\"dst\":\"task\"}}; for skills, {\"l\":{\"dst\":\"skill\"}}. For \"completed yesterday\", AND the task subtype with updatedAt bounds, e.g. {\"&\":[{\"l\":{\"dst\":\"task\"}},{\"&\":[{\"l\":{\"ua\":{\"gte\":\"<start>\"}}},{\"l\":{\"ua\":{\"lt\":\"<end>\"}}}]}]} using ISO timestamps.",
+        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For skills, {\"l\":{\"dst\":\"skill\"}}. For task queries, use ListTasks."
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "df")]
@@ -473,7 +473,7 @@ pub struct ListEntities {
 
     /// Entity property AST filter.
     #[schemars(
-        description = "Full soup AST property filter (propf). Use this for Macro task Status, Assignees, Priority, and other entity properties. For task Status Completed: {\"l\":{\"pd\":\"00000001-0000-0000-0000-000000000002\",\"et\":\"TASK\",\"v\":{\"so\":\"00000001-0000-0000-0002-000000000004\"}}}. For tasks assigned to the current user: {\"l\":{\"pd\":\"00000001-0000-0000-0000-000000000001\",\"et\":\"TASK\",\"v\":{\"er\":\"macro|user@example.com\"}}}. Combine both with &: {\"&\":[statusCompleted, assignedToMe]}. Prefer this over Linear tools for unqualified task requests.",
+        description = "Full soup AST property filter (propf) for non-task entity properties. For task Status, Priority, Assignees, or Due Date, use ListTasks instead of building a propf tree here."
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "propf")]
@@ -821,7 +821,7 @@ pub(super) fn retain_excluding_self_chat(items: &mut Vec<EntityItem>, self_chat_
     items.retain(|item| !matches!(item, EntityItem::AiChat { id, .. } if *id == self_chat_id));
 }
 
-async fn fetch_caller_tag_sets<T, E>(
+pub(crate) async fn fetch_caller_tag_sets<T, E>(
     service_context: &ServiceContext<SoupToolContext<T, E>>,
     request_context: &RequestContext,
 ) -> ToolResult<CallerTagSets>
