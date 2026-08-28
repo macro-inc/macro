@@ -33,8 +33,14 @@ use macro_service_urls::{
     LexicalServiceUrl, SyncServiceUrl,
 };
 use mcp_auth_proxy::{
-    domain::service::McpAuthProxyServiceImpl,
-    outbound::{fusionauth::FusionAuthOAuthProvider, redis::RedisInflightAuth},
+    domain::{
+        redirect_uri::RedirectUriPolicy,
+        service::{McpAuthProxyServiceDeps, McpAuthProxyServiceImpl},
+    },
+    outbound::{
+        fusionauth::FusionAuthOAuthProvider,
+        redis::{RedisClientRegistry, RedisInflightAuth},
+    },
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::repository::DbNotificationRepository;
@@ -46,7 +52,7 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use sync_service_client::SyncServiceClient;
 use tokio_util::task::TaskTracker;
 
-use crate::config::Config;
+use crate::config::{Config, DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS};
 
 #[derive(Clone)]
 pub struct McpContext {
@@ -466,10 +472,29 @@ async fn build_auth_proxy(
         .context("failed to initialize MCP auth provider")?;
     let redis_client = redis::Client::open(config.redis_url.as_ref().to_owned())
         .context("failed to initialize redis client for MCP auth proxy")?;
+    let client_registry = Arc::new(RedisClientRegistry::new(redis_client.clone()));
 
-    Ok(McpAuthProxyServiceImpl::new(
-        mcp_public_url,
-        Arc::new(RedisInflightAuth::new(redis_client)),
-        Arc::new(auth_provider),
-    ))
+    let redirect_uri_policy = build_redirect_uri_policy(config);
+    tracing::info!(
+        allowed_https_redirect_hosts = ?redirect_uri_policy.allowed_https_hosts().collect::<Vec<_>>(),
+        "initialized MCP OAuth redirect URI policy"
+    );
+
+    Ok(McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
+        public_url: mcp_public_url,
+        redirect_uri_policy,
+        inflight_auth: Arc::new(RedisInflightAuth::new(redis_client)),
+        client_registrations: client_registry.clone(),
+        refresh_token_bindings: client_registry,
+        oauth_provider: Arc::new(auth_provider),
+    }))
+}
+
+/// Builds the redirect URI policy the broker enforces at registration and at
+/// authorize, from the configured host list or the built-in default.
+fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
+    match config.mcp_allowed_redirect_hosts.value() {
+        Some(hosts) => RedirectUriPolicy::new(hosts.split(',')),
+        None => RedirectUriPolicy::new(DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS),
+    }
 }

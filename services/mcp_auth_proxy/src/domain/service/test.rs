@@ -6,12 +6,16 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::domain::models::{AccessToken, RefreshToken, UpstreamTokens};
+use crate::domain::{
+    models::{AccessToken, RefreshToken, UpstreamTokens},
+    ports::{BoundClientIdFuture, RegisteredClientFuture, StoreWriteFuture},
+};
 
 /// Upstream access token lifetime FusionAuth reports for a one hour JWT.
 const UPSTREAM_EXPIRES_IN: u64 = 3600;
 const CODE_VERIFIER: &str = "test-code-verifier";
 const REDIRECT_URI: &str = "http://localhost:41234/callback";
+const CLIENT_ID: &str = "test-client-id";
 
 fn code_challenge_for(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
@@ -66,6 +70,88 @@ impl InflightAuthStore for FakeInflightAuth {
     }
 }
 
+#[derive(Default)]
+struct FakeClientRegistry {
+    clients: Mutex<HashMap<String, RegisteredClient>>,
+    refresh_bindings: Mutex<HashMap<String, String>>,
+}
+
+impl FakeClientRegistry {
+    /// A registry holding `CLIENT_ID`, registered against `REDIRECT_URI`.
+    fn with_test_client() -> Self {
+        let registry = Self::default();
+        registry.clients.lock().unwrap().insert(
+            CLIENT_ID.to_owned(),
+            RegisteredClient {
+                client_id: CLIENT_ID.to_owned(),
+                client_name: "test-client".to_owned(),
+                redirect_uris: vec![REDIRECT_URI.to_owned()],
+            },
+        );
+        registry
+    }
+
+    fn bind_now(&self, refresh_token: &RefreshToken, client_id: &str) {
+        self.refresh_bindings
+            .lock()
+            .unwrap()
+            .insert(refresh_token_digest(refresh_token), client_id.to_owned());
+    }
+}
+
+impl ClientRegistrationStore for FakeClientRegistry {
+    fn insert_client<'a>(&'a self, client: &'a RegisteredClient) -> StoreWriteFuture<'a> {
+        Box::pin(async move {
+            self.clients
+                .lock()
+                .unwrap()
+                .insert(client.client_id.clone(), client.clone());
+            Ok(())
+        })
+    }
+
+    fn find_client<'a>(&'a self, client_id: &'a str) -> RegisteredClientFuture<'a> {
+        Box::pin(async move { Ok(self.clients.lock().unwrap().get(client_id).cloned()) })
+    }
+}
+
+impl RefreshTokenBindingStore for FakeClientRegistry {
+    fn bind<'a>(
+        &'a self,
+        refresh_token_digest: &'a str,
+        client_id: &'a str,
+    ) -> StoreWriteFuture<'a> {
+        Box::pin(async move {
+            self.refresh_bindings
+                .lock()
+                .unwrap()
+                .insert(refresh_token_digest.to_owned(), client_id.to_owned());
+            Ok(())
+        })
+    }
+
+    fn bound_client<'a>(&'a self, refresh_token_digest: &'a str) -> BoundClientIdFuture<'a> {
+        Box::pin(async move {
+            Ok(self
+                .refresh_bindings
+                .lock()
+                .unwrap()
+                .get(refresh_token_digest)
+                .cloned())
+        })
+    }
+
+    fn unbind<'a>(&'a self, refresh_token_digest: &'a str) -> StoreWriteFuture<'a> {
+        Box::pin(async move {
+            self.refresh_bindings
+                .lock()
+                .unwrap()
+                .remove(refresh_token_digest);
+            Ok(())
+        })
+    }
+}
+
 struct FakeOAuthProvider {
     expires_in: u64,
 }
@@ -104,18 +190,32 @@ impl OAuthProvider for FakeOAuthProvider {
     }
 }
 
-fn service(store: FakeInflightAuth) -> McpAuthProxyServiceImpl<FakeInflightAuth> {
-    McpAuthProxyServiceImpl::new(
-        "https://mcp.example.com".to_owned(),
-        Arc::new(store),
-        Arc::new(FakeOAuthProvider {
+fn service_with(
+    store: Arc<FakeInflightAuth>,
+    registry: Arc<FakeClientRegistry>,
+) -> McpAuthProxyServiceImpl<FakeInflightAuth> {
+    McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
+        public_url: "https://mcp.example.com".to_owned(),
+        redirect_uri_policy: RedirectUriPolicy::new(["claude.ai"]),
+        inflight_auth: store,
+        client_registrations: registry.clone() as Arc<dyn ClientRegistrationStore>,
+        refresh_token_bindings: registry as Arc<dyn RefreshTokenBindingStore>,
+        oauth_provider: Arc::new(FakeOAuthProvider {
             expires_in: UPSTREAM_EXPIRES_IN,
         }),
+    })
+}
+
+fn service(store: FakeInflightAuth) -> McpAuthProxyServiceImpl<FakeInflightAuth> {
+    service_with(
+        Arc::new(store),
+        Arc::new(FakeClientRegistry::with_test_client()),
     )
 }
 
 fn issued_code(access_token_expires_at: Option<SystemTime>) -> IssuedAuthorizationCode {
     IssuedAuthorizationCode {
+        client_id: CLIENT_ID.to_owned(),
         access_token: AccessToken::from("upstream-access"),
         refresh_token: RefreshToken::from("upstream-refresh"),
         code_challenge: code_challenge_for(CODE_VERIFIER),
@@ -131,7 +231,7 @@ fn authorization_code_request(code: &str) -> TokenRequest {
         code_verifier: Some(CODE_VERIFIER.to_owned()),
         refresh_token: None,
         redirect_uri: Some(REDIRECT_URI.to_owned()),
-        client_id: None,
+        client_id: Some(CLIENT_ID.to_owned()),
     }
 }
 
@@ -219,16 +319,19 @@ async fn expired_access_token_reports_zero_rather_than_underflowing() {
 
 #[tokio::test]
 async fn refresh_grant_returns_upstream_lifetime() {
-    let service = service(FakeInflightAuth::default());
+    let registry = Arc::new(FakeClientRegistry::with_test_client());
+    let refresh_token = RefreshToken::from("upstream-refresh");
+    registry.bind_now(&refresh_token, CLIENT_ID);
+    let service = service_with(Arc::new(FakeInflightAuth::default()), registry);
 
     let response = service
         .exchange_token(TokenRequest {
             grant_type: "refresh_token".to_owned(),
             code: None,
             code_verifier: None,
-            refresh_token: Some(RefreshToken::from("upstream-refresh")),
+            refresh_token: Some(refresh_token),
             redirect_uri: None,
-            client_id: None,
+            client_id: Some(CLIENT_ID.to_owned()),
         })
         .await
         .expect("refresh exchange should succeed");
@@ -240,18 +343,16 @@ async fn refresh_grant_returns_upstream_lifetime() {
 #[tokio::test]
 async fn callback_records_upstream_expiry_on_the_issued_code() {
     let store = Arc::new(FakeInflightAuth::default());
-    let service = McpAuthProxyServiceImpl::new(
-        "https://mcp.example.com".to_owned(),
+    let service = service_with(
         Arc::clone(&store),
-        Arc::new(FakeOAuthProvider {
-            expires_in: UPSTREAM_EXPIRES_IN,
-        }),
+        Arc::new(FakeClientRegistry::with_test_client()),
     );
 
     store
         .insert_pending(
             "session-id",
             PendingAuthorization {
+                client_id: CLIENT_ID.to_owned(),
                 code_challenge: code_challenge_for(CODE_VERIFIER),
                 client_state: "client-state".to_owned(),
                 client_redirect_uri: REDIRECT_URI.to_owned(),

@@ -14,10 +14,10 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use crate::domain::{
-    models::{AuthorizeRequest, CallbackRequest, TokenRequest},
+    models::{AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, TokenRequest},
     service::{
         CompleteCallbackError, InflightAuthStore, McpAuthProxyService, McpAuthProxyServiceImpl,
-        StartAuthorizationError, TokenExchangeError,
+        RegisterClientError, StartAuthorizationError, TokenExchangeError,
     },
 };
 
@@ -40,9 +40,40 @@ async fn protected_resource_metadata<I: InflightAuthStore + 'static>(
 
 async fn register<I: InflightAuthStore + 'static>(
     State(auth_proxy): State<McpAuthProxyServiceImpl<I>>,
-    axum::Json(body): axum::Json<serde_json::Value>,
-) -> Json<serde_json::Value> {
-    Json(auth_proxy.register_client(body))
+    axum::Json(body): axum::Json<ClientRegistrationRequest>,
+) -> Response {
+    match auth_proxy.register_client(body).await {
+        Ok(registration) => (axum::http::StatusCode::CREATED, Json(registration)).into_response(),
+        Err(RegisterClientError::RedirectUrisRequired) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "at least one redirect_uri is required",
+        )
+            .into_response(),
+        Err(RegisterClientError::TooManyRedirectUris) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "too many redirect_uris",
+        )
+            .into_response(),
+        Err(RegisterClientError::UnsupportedRedirectUri { uri }) => {
+            tracing::warn!(
+                rejected_redirect_uri = %uri,
+                "client registration used a redirect_uri this deployment does not trust"
+            );
+            (
+                axum::http::StatusCode::BAD_REQUEST,
+                "redirect_uri must be a loopback address or a trusted MCP client host",
+            )
+                .into_response()
+        }
+        Err(RegisterClientError::ClientRegistrationStore(error)) => {
+            tracing::error!(error=?error, "failed to persist client registration");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to persist client registration",
+            )
+                .into_response()
+        }
+    }
 }
 
 async fn authorize<I: InflightAuthStore + 'static>(
@@ -63,9 +94,25 @@ async fn authorize<I: InflightAuthStore + 'static>(
             .into_response(),
         Err(StartAuthorizationError::InvalidRedirectUri) => (
             axum::http::StatusCode::BAD_REQUEST,
-            "redirect_uri must be https or a loopback address",
+            "redirect_uri must be a loopback address or a trusted MCP client host",
         )
             .into_response(),
+        Err(StartAuthorizationError::UnregisteredRedirectUri) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "redirect_uri was not registered for this client",
+        )
+            .into_response(),
+        Err(StartAuthorizationError::UnknownClient) => {
+            (axum::http::StatusCode::BAD_REQUEST, "unknown client_id").into_response()
+        }
+        Err(StartAuthorizationError::ClientRegistrationStore(error)) => {
+            tracing::error!(error=?error, "failed to read client registrations");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to read client registrations",
+            )
+                .into_response()
+        }
         Err(StartAuthorizationError::InflightStore(error)) => {
             tracing::error!(error=?error, "failed to persist inflight auth state");
             (
@@ -171,11 +218,32 @@ async fn token<I: InflightAuthStore + 'static>(
             "refresh_token required",
         )
             .into_response(),
+        Err(TokenExchangeError::ClientIdRequired) => {
+            (axum::http::StatusCode::BAD_REQUEST, "client_id required").into_response()
+        }
+        Err(TokenExchangeError::ClientMismatch) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "grant was not issued to this client",
+        )
+            .into_response(),
+        Err(TokenExchangeError::UnboundRefreshToken) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "refresh token is not bound to a client",
+        )
+            .into_response(),
         Err(TokenExchangeError::InflightStore(error)) => {
             tracing::error!(error=?error, "failed to access inflight auth state");
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to access inflight auth state",
+            )
+                .into_response()
+        }
+        Err(TokenExchangeError::RefreshTokenBindingStore(error)) => {
+            tracing::error!(error=?error, "failed to access refresh token bindings");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to access refresh token bindings",
             )
                 .into_response()
         }
