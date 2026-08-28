@@ -11,10 +11,15 @@ use crate::domain::model::{McpServerSlug, RepoSlug};
 /// guesses retries until its turn times out.
 #[derive(Debug, thiserror::Error)]
 pub enum EgressError {
-    /// The session token was missing, malformed, expired, or signed by
-    /// something other than us.
-    #[error("session token is not valid")]
-    Unauthenticated,
+    /// The request is not entitled to egress: no token, a token we do not
+    /// know, or an owner the proxy does not admit.
+    ///
+    /// The reason is a `&'static str` on purpose: it names which gate
+    /// refused, in our own fixed words, and can never quote anything the
+    /// request carried - the response body rule (nothing request-derived
+    /// reaches the model) holds by construction.
+    #[error("not authorized: {0}")]
+    Unauthenticated(&'static str),
 
     /// The token verified, but its session is closed or gone. Ending a
     /// session revokes its egress without waiting for the token to expire.

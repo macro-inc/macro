@@ -78,7 +78,7 @@ impl EgressService for SpyService {
             Some(EgressError::Upstream(_)) => {
                 Err(EgressError::Upstream(rootcause::report!("unreachable")))
             }
-            Some(_) => Err(EgressError::Unauthenticated),
+            Some(_) => Err(EgressError::Unauthenticated("refused by the spy")),
         }
     }
 }
@@ -194,7 +194,10 @@ async fn a_git_path_outside_the_allowlist_is_not_routed() {
 #[tokio::test]
 async fn maps_each_refusal_to_the_status_that_tells_the_agent_what_to_do() {
     for (error, expected) in [
-        (EgressError::Unauthenticated, StatusCode::UNAUTHORIZED),
+        (
+            EgressError::Unauthenticated("unknown session token"),
+            StatusCode::UNAUTHORIZED,
+        ),
         (EgressError::SessionClosed, StatusCode::UNAUTHORIZED),
         (
             EgressError::RepoUnavailable(RepoSlug::parse("other", "repo").expect("slug")),

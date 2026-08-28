@@ -64,7 +64,7 @@ where
             // No row is the ordinary refusal: a token we never minted, or one
             // whose session has since been deleted. Both are the same fact
             // from here, and neither is worth telling the sandbox apart.
-            .ok_or(EgressError::Unauthenticated)?;
+            .ok_or(EgressError::Unauthenticated("unknown session token"))?;
 
         // `SessionStatus` has no "closed" of its own; a disconnected transport
         // is what a closed session looks like from the row. Anything else -

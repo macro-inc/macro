@@ -86,7 +86,9 @@ where
         // distinction, and the detail is in the trace for the person who can.
         if !is_macro_staff(&grant.owner) {
             tracing::warn!(owner = %grant.owner, "refusing egress for a session owned outside macro.com");
-            return Err(EgressError::Unauthenticated);
+            return Err(EgressError::Unauthenticated(
+                "the session owner is not Macro staff",
+            ));
         }
 
         let call = match &target {

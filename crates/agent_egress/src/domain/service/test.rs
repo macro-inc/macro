@@ -56,7 +56,9 @@ impl StubSessions {
 
 impl SessionAuthority for StubSessions {
     async fn authorize(&self, _token: &SessionToken) -> Result<SessionGrant, EgressError> {
-        self.0.clone().map_err(|()| EgressError::Unauthenticated)
+        self.0
+            .clone()
+            .map_err(|()| EgressError::Unauthenticated("unknown session token"))
     }
 }
 
@@ -412,7 +414,10 @@ async fn a_session_owned_outside_macro_gets_nothing() {
         .await
         .expect_err("refused");
 
-    assert!(matches!(refusal, EgressError::Unauthenticated), "{refusal}");
+    assert!(
+        matches!(refusal, EgressError::Unauthenticated(_)),
+        "{refusal}"
+    );
     assert!(
         service.credentials.asked.lock().expect("lock").is_empty(),
         "an outside owner must never reach credential resolution"
@@ -441,7 +446,7 @@ async fn an_unverified_token_never_reaches_credential_resolution() {
         .await
         .expect_err("refused");
 
-    assert!(matches!(error, EgressError::Unauthenticated));
+    assert!(matches!(error, EgressError::Unauthenticated(_)));
     assert!(service.credentials.asked.lock().expect("lock").is_empty());
     assert!(!service.forward.was_called());
 }
@@ -614,7 +619,7 @@ async fn an_unverified_token_never_reaches_git_token_minting() {
         .await
         .expect_err("refused");
 
-    assert!(matches!(error, EgressError::Unauthenticated));
+    assert!(matches!(error, EgressError::Unauthenticated(_)));
     assert!(service.tokens.asked.lock().expect("lock").is_empty());
     assert!(!service.forward.was_called());
 }

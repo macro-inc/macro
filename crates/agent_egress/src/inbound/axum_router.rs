@@ -168,7 +168,7 @@ struct GitRefusal(EgressError);
 
 impl IntoResponse for GitRefusal {
     fn into_response(self) -> Response {
-        let unauthenticated = matches!(self.0, EgressError::Unauthenticated);
+        let unauthenticated = matches!(self.0, EgressError::Unauthenticated(_));
         let mut response = self.0.into_response();
         if unauthenticated {
             response.headers_mut().insert(
@@ -213,7 +213,7 @@ fn session_token(headers: &HeaderMap) -> Result<SessionToken, EgressError> {
     headers
         .typed_get::<Authorization<Basic>>()
         .map(|Authorization(basic)| SessionToken::new(basic.password()))
-        .ok_or(EgressError::Unauthenticated)
+        .ok_or(EgressError::Unauthenticated("no session token presented"))
 }
 
 /// axum's body is already an `http_body::Body`, so this is an error-type
@@ -237,7 +237,7 @@ fn from_proxy_response(response: ProxyResponse) -> Response {
 impl IntoResponse for EgressError {
     fn into_response(self) -> Response {
         let status = match &self {
-            Self::Unauthenticated | Self::SessionClosed => StatusCode::UNAUTHORIZED,
+            Self::Unauthenticated(_) | Self::SessionClosed => StatusCode::UNAUTHORIZED,
             Self::UnknownServer(_) | Self::Unroutable(_) => StatusCode::NOT_FOUND,
             Self::RepoUnavailable(_) => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
@@ -255,7 +255,9 @@ impl IntoResponse for EgressError {
         // to `tracing`, where the person debugging can see it and the model
         // cannot.
         let body = match &self {
-            Self::Unauthenticated => "Not authenticated.",
+            Self::Unauthenticated(reason) => {
+                return (status, format!("Not authorized: {reason}.")).into_response();
+            }
             Self::SessionClosed => "This session is no longer open.",
             Self::Unroutable(_) => "Nothing is served at that path.",
             Self::UnknownServer(_) => "No such connected MCP server.",
