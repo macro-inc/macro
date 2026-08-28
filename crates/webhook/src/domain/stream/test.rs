@@ -7,7 +7,7 @@ use entity_access::domain::models::{
 use futures::StreamExt as _;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use uuid::{NoContext, Timestamp};
 
 const SUBSCRIBER_ID: &str = "macro|reader@example.com";
@@ -15,10 +15,6 @@ const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
 const OTHER_DOCUMENT_ID: &str = "22222222-2222-2222-2222-222222222222";
 const TEAM_WORKSPACE_ID: &str = "33333333-3333-3333-3333-333333333333";
 const FOREIGN_WORKSPACE_ID: &str = "44444444-4444-4444-4444-444444444444";
-
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().expect("test mutex is not poisoned")
-}
 
 fn subscriber() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(SUBSCRIBER_ID.to_string()).expect("valid user id")
@@ -100,9 +96,9 @@ impl WebhookStreamSourceFactory for FakeSourceFactory {
     type Source = FakeSource;
 
     async fn open(&self, start: StreamStart) -> Result<Self::Source, rootcause::Report> {
-        lock(&self.opened_starts).push(start);
+        self.opened_starts.lock().unwrap().push(start);
         Ok(FakeSource {
-            candidates: std::mem::take(&mut *lock(&self.candidates)),
+            candidates: std::mem::take(&mut *self.candidates.lock().unwrap()),
         })
     }
 }
@@ -150,7 +146,7 @@ impl EntityAccessService for FakeAccessService {
         entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        *lock(&self.call_count) += 1;
+        *self.call_count.lock().unwrap() += 1;
         Ok(self
             .allowed_entity_ids
             .iter()
@@ -351,7 +347,7 @@ async fn open_stream_caches_access_decisions_per_entity() {
     let delivered: Vec<NormalizedWebhookEvent> = stream.collect().await;
 
     assert_eq!(delivered.len(), 3);
-    assert_eq!(*lock(&call_count), 1);
+    assert_eq!(*call_count.lock().unwrap(), 1);
 }
 
 #[tokio::test]
@@ -441,7 +437,7 @@ async fn open_stream_passes_the_start_through_and_rejects_stale_cursors() {
             .expect("stream opens"),
     );
 
-    let starts = lock(&opened_starts).clone();
+    let starts = opened_starts.lock().unwrap().clone();
     assert_eq!(starts[0], StreamStart::Latest);
     assert_eq!(starts[1], StreamStart::AtTimestampMs(recent_ms));
 
