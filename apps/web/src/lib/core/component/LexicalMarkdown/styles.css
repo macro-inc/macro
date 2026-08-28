@@ -159,7 +159,7 @@ ol.static-md.depth-1 > li:not(.list-none) {
 }
 
 ol.static-md.depth-1 > li:not(.list-none)::before {
-  content: counter(static-md-counter-1) ".";
+  content: counter(static-md-counter-1) ". ";
 }
 
 ol.static-md.depth-2 > li:not(.list-none) {
@@ -167,7 +167,7 @@ ol.static-md.depth-2 > li:not(.list-none) {
 }
 
 ol.static-md.depth-2 > li:not(.list-none)::before {
-  content: counter(static-md-counter-2) ".";
+  content: counter(static-md-counter-2) ". ";
 }
 
 ol.static-md.depth-3 > li:not(.list-none) {
@@ -175,7 +175,7 @@ ol.static-md.depth-3 > li:not(.list-none) {
 }
 
 ol.static-md.depth-3 > li:not(.list-none)::before {
-  content: counter(static-md-counter-3) ".";
+  content: counter(static-md-counter-3) ". ";
 }
 
 ol.static-md.depth-4 > li:not(.list-none) {
@@ -183,7 +183,7 @@ ol.static-md.depth-4 > li:not(.list-none) {
 }
 
 ol.static-md.depth-4 > li:not(.list-none)::before {
-  content: counter(static-md-counter-4) ".";
+  content: counter(static-md-counter-4) ". ";
 }
 
 ol.static-md.depth-5 > li:not(.list-none) {
@@ -191,7 +191,7 @@ ol.static-md.depth-5 > li:not(.list-none) {
 }
 
 ol.static-md.depth-5 > li:not(.list-none)::before {
-  content: counter(static-md-counter-5) ".";
+  content: counter(static-md-counter-5) ". ";
 }
 
 ol.static-md.depth-6 > li:not(.list-none) {
@@ -199,7 +199,7 @@ ol.static-md.depth-6 > li:not(.list-none) {
 }
 
 ol.static-md.depth-6 > li:not(.list-none)::before {
-  content: counter(static-md-counter-6) ".";
+  content: counter(static-md-counter-6) ". ";
 }
 
 .md-strike {
