@@ -39,21 +39,23 @@ import { isPersonalMessage } from '../util/isPersonalMessage';
 import type { ReplyType } from '../util/replyType';
 import {
   hiddenMessagesControl,
-  hiddenMessagesFollowsShownIndex,
-  hiddenMessagesPrecedesShownIndex,
   isTruncatedMiddleMessage,
   isUnreadMessage,
   messageElement,
   nearestDelta,
-  nextShownChronologicalIndex,
   pageThenAdvanceDelta,
-  prevShownChronologicalIndex,
-  scrollToListStartDelta,
   revealMessageAfterLayout,
   type ScrollAlign,
+  scrollToListStartDelta,
   scrollToMessage,
   threadMessageIsExpanded,
 } from '../util/scrollToMessage';
+import {
+  adjacentStop,
+  enterListStop,
+  shownStops,
+  type ThreadStop,
+} from '../util/threadStops';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
 import { openEmailReplyComposerForMessage } from './emailReplyActions';
@@ -282,6 +284,16 @@ function EmailContent(props: EmailViewProps) {
     return false;
   });
 
+  let markdownDomRef!: HTMLDivElement;
+
+  const animateListScroll = (list: HTMLElement, top: number) => {
+    if (top === 0) return false;
+    setIsScrollingToMessage(true);
+    list.scrollBy({ top, behavior: 'smooth' });
+    setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
+    return true;
+  };
+
   const focusHiddenMessages = () => {
     const list = untrack(context.messagesListRef);
     if (!list) return false;
@@ -289,13 +301,43 @@ function EmailContent(props: EmailViewProps) {
     if (!button) return false;
     context.messages.setFocused(undefined);
     setHiddenChipFocused(true);
-    const delta = nearestDelta(list, button);
-    if (delta !== 0) {
-      setIsScrollingToMessage(true);
-      list.scrollBy({ top: delta, behavior: 'smooth' });
-      setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
-    }
+    animateListScroll(list, nearestDelta(list, button));
     return true;
+  };
+
+  const applyStop = (
+    stop: ThreadStop | undefined,
+    messages: ApiMessage[],
+    list: HTMLElement
+  ) => {
+    if (!stop) return true;
+    switch (stop.kind) {
+      case 'title': {
+        const startDelta = scrollToListStartDelta(list);
+        if (startDelta !== 0) return animateListScroll(list, startDelta);
+        context.messages.setFocused(undefined);
+        return true;
+      }
+      case 'hidden-chip':
+        return focusHiddenMessages();
+      case 'message': {
+        const id = messages[stop.index]?.db_id;
+        if (!id) return false;
+        return performScrollToMessage(id, {
+          behavior: 'smooth',
+          focus: true,
+        });
+      }
+      case 'composer':
+        leaveHiddenChip();
+        context.messages.setFocused(undefined);
+        markdownDomRef.focus();
+        return true;
+      default: {
+        const _exhaustive: never = stop;
+        return _exhaustive;
+      }
+    }
   };
 
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {
@@ -303,108 +345,41 @@ function EmailContent(props: EmailViewProps) {
     const list = context.messagesListRef();
     if (!messages?.length || !list) return false;
 
-    const currentFocusedId = context.messages.focusedID();
-    const showMiddle = showMiddleMessages();
+    const stops = shownStops({
+      length: messages.length,
+      showMiddle: showMiddleMessages(),
+      hasComposer: Boolean(markdownDomRef),
+    });
 
     if (hiddenChipFocused()) {
-      const target =
-        dir === 'next' ? messages[messages.length - 2] : messages[0];
-      if (!target?.db_id) return false;
-      return performScrollToMessage(target.db_id, {
-        behavior: 'smooth',
-        focus: true,
-      });
+      return applyStop(
+        adjacentStop(stops, { kind: 'hidden-chip' }, dir),
+        messages,
+        list
+      );
     }
 
-    if (currentFocusedId) {
-      const focusedEl = messageElement(list, messages, currentFocusedId);
-      if (focusedEl) {
-        const pageDelta = pageThenAdvanceDelta(list, focusedEl, dir);
-        if (pageDelta !== 0) {
-          setIsScrollingToMessage(true);
-          list.scrollBy({ top: pageDelta, behavior: 'smooth' });
-          setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
-          return true;
-        }
-      }
-    }
-
+    const currentFocusedId = context.messages.focusedID();
     if (!currentFocusedId) {
-      const target =
-        dir === 'prev' ? messages[messages.length - 1] : messages[0];
-      if (!target?.db_id) return false;
-      return performScrollToMessage(target.db_id, {
-        behavior: 'smooth',
-        focus: true,
-      });
+      return applyStop(enterListStop(stops, dir), messages, list);
+    }
+
+    const focusedEl = messageElement(list, messages, currentFocusedId);
+    if (focusedEl) {
+      const pageDelta = pageThenAdvanceDelta(list, focusedEl, dir);
+      if (pageDelta !== 0) return animateListScroll(list, pageDelta);
     }
 
     const currentIndex = messages.findIndex(
-      (m) => m.db_id === currentFocusedId
+      (message) => message.db_id === currentFocusedId
     );
     if (currentIndex < 0) return false;
 
-    const targetIndex =
-      dir === 'next'
-        ? nextShownChronologicalIndex(currentIndex, messages.length, showMiddle)
-        : prevShownChronologicalIndex(
-            currentIndex,
-            messages.length,
-            showMiddle
-          );
-
-    if (targetIndex === null) {
-      if (
-        dir === 'next' &&
-        hiddenMessagesFollowsShownIndex(
-          currentIndex,
-          messages.length,
-          showMiddle
-        )
-      ) {
-        return focusHiddenMessages();
-      }
-      if (
-        dir === 'prev' &&
-        hiddenMessagesPrecedesShownIndex(
-          currentIndex,
-          messages.length,
-          showMiddle
-        )
-      ) {
-        return focusHiddenMessages();
-      }
-      if (
-        dir === 'next' &&
-        currentIndex === messages.length - 1 &&
-        markdownDomRef
-      ) {
-        leaveHiddenChip();
-        context.messages.setFocused(undefined);
-        markdownDomRef.focus();
-        return true;
-      }
-      if (dir === 'prev' && currentIndex === 0) {
-        const startDelta = scrollToListStartDelta(list);
-        if (startDelta !== 0) {
-          setIsScrollingToMessage(true);
-          list.scrollBy({ top: startDelta, behavior: 'smooth' });
-          setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
-          return true;
-        }
-        context.messages.setFocused(undefined);
-        return true;
-      }
-      return true;
-    }
-
-    const targetMsg = messages[targetIndex];
-    if (!targetMsg?.db_id) return false;
-
-    return performScrollToMessage(targetMsg.db_id, {
-      behavior: 'smooth',
-      focus: true,
-    });
+    return applyStop(
+      adjacentStop(stops, { kind: 'message', index: currentIndex }, dir),
+      messages,
+      list
+    );
   });
 
   const navigateToPreviousMessage = () => navigateMessage('prev');
@@ -421,8 +396,6 @@ function EmailContent(props: EmailViewProps) {
     blockElement()?.focus({ preventScroll: true });
     hasRun = true;
   });
-
-  let markdownDomRef!: HTMLDivElement;
 
   const getHotkeyTarget = () => {
     const messages = context.messages.list();
@@ -447,10 +420,6 @@ function EmailContent(props: EmailViewProps) {
     const messageId = target.message.db_id;
     if (!messageId) return false;
 
-    const isNewMessage = target.message.labels.some(
-      (label) => label.provider_label_id === 'UNREAD'
-    );
-
     const list = context.messages.list();
     const chronologicalIndex = list.findIndex(
       (message) => message.db_id === messageId
@@ -461,7 +430,7 @@ function EmailContent(props: EmailViewProps) {
       chronologicalIndex,
       listLength: list.length,
       expansionOverride: context.messages.expandedBodyIds[messageId],
-      isUnread: isNewMessage,
+      isUnread: isUnreadMessage(target.message),
       hasDraft:
         !isTouchDevice() && !!context.drafts.getDraftForMessage(messageId),
     });
@@ -504,13 +473,13 @@ function EmailContent(props: EmailViewProps) {
     keyDownHandler: () => {
       if (hiddenChipFocused()) {
         const messages = untrack(context.messages.list);
-        const nextIndex = nextShownChronologicalIndex(
-          0,
-          messages.length,
-          true
+        const next = adjacentStop(
+          shownStops({ length: messages.length, showMiddle: true }),
+          { kind: 'message', index: 0 },
+          'next'
         );
         const nextId =
-          nextIndex !== null ? messages[nextIndex]?.db_id : undefined;
+          next?.kind === 'message' ? messages[next.index]?.db_id : undefined;
         setUserOpenedMiddle(true);
         if (!nextId) {
           leaveHiddenChip();

@@ -78,7 +78,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           onFocus={props.onFocus}
           onKeyDown={handleKeyDown}
         >
-          <div class="flex items-center gap-2 min-w-0 text-sm">
+          <div data-slot="sender" class="flex items-center gap-2 min-w-0 text-sm">
             <div class="shrink-0 flex justify-center items-center size-6">
               <UserIcon
                 {...senderIconProps()}
@@ -93,19 +93,20 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               </EmailUserTooltip>
             </div>
           </div>
-          <div class="min-w-0 text-sm text-ink-extra-muted">
+          <div data-slot="snippet" class="min-w-0 text-sm text-ink-extra-muted">
             {snippet()}
           </div>
           <Show when={props.message.internal_date_ts}>
-            <Tooltip
-              as="span"
-              class="justify-self-end"
-              label={formatFullDate(props.message.internal_date_ts!)}
-            >
-              <span class="text-sm text-ink-extra-muted/60 tabular-nums">
-                {formatShortDate(props.message.internal_date_ts!)}
-              </span>
-            </Tooltip>
+            <span data-slot="date" class="justify-self-end">
+              <Tooltip
+                as="span"
+                label={formatFullDate(props.message.internal_date_ts!)}
+              >
+                <span class="text-sm text-ink-extra-muted/60 tabular-nums">
+                  {formatShortDate(props.message.internal_date_ts!)}
+                </span>
+              </Tooltip>
+            </span>
           </Show>
         </div>
       </div>

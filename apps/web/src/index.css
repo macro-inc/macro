@@ -936,7 +936,7 @@ a {
   align-items: center;
   column-gap: calc(var(--spacing) * 2);
 
-  & > :nth-child(2) {
+  & > [data-slot='snippet'] {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -946,13 +946,13 @@ a {
     grid-template-columns: minmax(0, 1fr) auto;
     row-gap: calc(var(--spacing) * 2);
 
-    & > :nth-child(1) {
+    & > [data-slot='sender'] {
       grid-column: 1;
       grid-row: 1;
       min-width: 0;
     }
 
-    & > :nth-child(2) {
+    & > [data-slot='snippet'] {
       grid-column: 1 / -1;
       grid-row: 2;
       display: -webkit-box;
@@ -963,7 +963,7 @@ a {
       -webkit-line-clamp: 2;
     }
 
-    & > :nth-child(3) {
+    & > [data-slot='date'] {
       grid-column: 2;
       grid-row: 1;
     }

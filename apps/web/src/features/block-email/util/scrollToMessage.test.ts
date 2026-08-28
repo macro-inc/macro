@@ -4,13 +4,9 @@ import {
   adjustScrollAfterPrepend,
   alignmentDelta,
   hiddenMessagesControl,
-  hiddenMessagesFollowsShownIndex,
-  hiddenMessagesPrecedesShownIndex,
   isTruncatedMiddleMessage,
   nearestDelta,
-  nextShownChronologicalIndex,
   pageThenAdvanceDelta,
-  prevShownChronologicalIndex,
   revealDelta,
   scrollToListStartDelta,
   threadMessageIsExpanded,
@@ -45,43 +41,7 @@ describe('isTruncatedMiddleMessage', () => {
   });
 });
 
-describe('nextShownChronologicalIndex', () => {
-  it('treats the expand control as a break', () => {
-    expect(nextShownChronologicalIndex(0, 6, false)).toBeNull();
-    expect(nextShownChronologicalIndex(4, 6, false)).toBe(5);
-  });
-
-  it('steps into the first revealed middle card once open', () => {
-    expect(nextShownChronologicalIndex(0, 6, true)).toBe(1);
-  });
-});
-
-describe('prevShownChronologicalIndex', () => {
-  it('treats the expand control as a break', () => {
-    expect(prevShownChronologicalIndex(0, 6, false)).toBeNull();
-    expect(prevShownChronologicalIndex(4, 6, false)).toBeNull();
-    expect(prevShownChronologicalIndex(5, 6, false)).toBe(4);
-  });
-
-  it('walks consecutive shown messages when the middle is open', () => {
-    expect(prevShownChronologicalIndex(1, 6, true)).toBe(0);
-    expect(prevShownChronologicalIndex(5, 6, true)).toBe(4);
-  });
-});
-
-describe('hiddenMessages chip stops', () => {
-  it('sits after the first shown card when the middle is collapsed', () => {
-    expect(hiddenMessagesFollowsShownIndex(0, 6, false)).toBe(true);
-    expect(hiddenMessagesFollowsShownIndex(0, 6, true)).toBe(false);
-    expect(hiddenMessagesFollowsShownIndex(4, 6, false)).toBe(false);
-  });
-
-  it('sits before the penultimate shown card when the middle is collapsed', () => {
-    expect(hiddenMessagesPrecedesShownIndex(4, 6, false)).toBe(true);
-    expect(hiddenMessagesPrecedesShownIndex(5, 6, false)).toBe(false);
-    expect(hiddenMessagesPrecedesShownIndex(4, 6, true)).toBe(false);
-  });
-
+describe('hiddenMessagesControl', () => {
   it('finds the expand control in the list', () => {
     const list = document.createElement('div');
     const button = document.createElement('button');

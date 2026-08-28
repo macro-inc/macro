@@ -24,64 +24,11 @@ export function truncatedMiddleCount(length: number): number {
   return length > 3 ? length - 3 : 0;
 }
 
-/** Next older-to-newer shown index, or null when the expand control or list end follows. */
-export function nextShownChronologicalIndex(
-  chronologicalIndex: number,
-  length: number,
-  showMiddle: boolean
-): number | null {
-  if (chronologicalIndex < 0 || chronologicalIndex >= length - 1) return null;
-  if (!showMiddle && truncatedMiddleCount(length) > 0) {
-    if (chronologicalIndex === 0) return null;
-    if (chronologicalIndex === length - 2) return length - 1;
-    return null;
-  }
-  return chronologicalIndex + 1;
-}
-
-export function hiddenMessagesFollowsShownIndex(
-  chronologicalIndex: number,
-  length: number,
-  showMiddle: boolean
-): boolean {
-  return (
-    !showMiddle &&
-    truncatedMiddleCount(length) > 0 &&
-    chronologicalIndex === 0
-  );
-}
-
-export function hiddenMessagesPrecedesShownIndex(
-  chronologicalIndex: number,
-  length: number,
-  showMiddle: boolean
-): boolean {
-  return (
-    !showMiddle &&
-    truncatedMiddleCount(length) > 0 &&
-    chronologicalIndex === length - 2
-  );
-}
-
 export function hiddenMessagesControl(
   container: HTMLElement
 ): HTMLButtonElement | undefined {
   const el = container.querySelector('[data-hidden-messages]');
   return el instanceof HTMLButtonElement ? el : undefined;
-}
-
-/** Previous newer-to-older shown index, or null when the expand control or list start precedes. */
-export function prevShownChronologicalIndex(
-  chronologicalIndex: number,
-  length: number,
-  showMiddle: boolean
-): number | null {
-  if (chronologicalIndex <= 0 || chronologicalIndex >= length) return null;
-  if (!showMiddle && truncatedMiddleCount(length) > 0) {
-    if (chronologicalIndex === length - 1) return length - 2;
-    return null;
-  }
-  return chronologicalIndex - 1;
 }
 
 export function threadMessageIsExpanded(args: {
