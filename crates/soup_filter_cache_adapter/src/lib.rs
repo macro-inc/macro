@@ -10,8 +10,7 @@ use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
 use indexmap::IndexMap;
 use item_filter_index::{
-    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, UnsupportedReason, compile_soup_flat_v2,
-    vocabulary,
+    LocalCompileOutcome, SoupFlatRequest, SoupIndexSort, compile_soup_flat_v2, vocabulary,
 };
 use predicate_index::{
     ExactAttributePatch, ExactValue, IndexDocument, OptimisticProjectionMutation, RecordKey,
@@ -19,12 +18,10 @@ use predicate_index::{
 };
 use soup_filter_projection::{
     DirectProjectionInput, DirectProjectionPatchInput, DocumentSubType,
-    SoupCacheProjectionSupplement, SoupCacheProjectionWireError, SoupFlatEntityKind,
-    compose_soup_flat_v2, decode_cache_projection_supplement, patch_direct_fields,
-    project_direct_fields,
+    SoupCacheProjectionSupplement, SoupFlatEntityKind, compose_soup_flat_v2,
+    decode_cache_projection_supplement, patch_direct_fields, project_direct_fields,
 };
 use std::collections::HashSet;
-use web_time::Instant;
 
 /// Failure to materialize or compile a Soup filter request.
 #[derive(Debug, thiserror::Error)]
@@ -35,52 +32,9 @@ pub struct SoupFilterCacheAdapterError(String);
 #[derive(Debug)]
 pub enum SoupFilterCompileOutcome {
     /// The request is outside the exact local support profile.
-    Unsupported(UnsupportedReason),
+    Unsupported,
     /// A validated generic query that the cache can evaluate exactly.
     Supported(ValidatedIndexQuery),
-}
-
-/// Bounded, payload-free supplement diagnostics for one GraphQL emission.
-#[derive(Debug, Clone, Default, serde::Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct SoupProjectionTelemetry {
-    /// Coarse operation family: `soup`, `backfill`, `updates`, or `other`.
-    pub operation: &'static str,
-    /// Documents for which the server-fact supplement was selected.
-    pub requested_count: u32,
-    /// Selected non-null Document supplement values, including malformed values.
-    pub present_count: u32,
-    /// Selected explicit null Document supplement values.
-    pub null_count: u32,
-    /// Selected Document supplement fields absent from the response object.
-    pub absent_count: u32,
-    /// Requested Documents composed into complete validated v2 projections.
-    pub complete_count: u32,
-    /// Requested Document supplements that were null or absent.
-    pub missing_count: u32,
-    /// Malformed supplements or invalid final Document compositions.
-    pub incompatible_count: u32,
-    /// Document supplements bound to another normalized key or partition.
-    pub mismatched_key_count: u32,
-    /// Document supplements declaring a projection profile the client does not support.
-    pub unsupported_profile_count: u32,
-    /// Non-null Document supplement scalar count.
-    pub supplement_count: u32,
-    /// Aggregate encoded Document supplement bytes.
-    pub supplement_bytes: u64,
-    /// Aggregate exact, integer, and sort facts in complete composed projections.
-    pub fact_count: u32,
-    /// Aggregate supplement decode, composition, and validation latency.
-    pub composition_duration_micros: u64,
-}
-
-/// Atomic projection mutations plus their anonymous ingestion diagnostics.
-#[derive(Debug)]
-pub struct AuthoritativeProjectionBatch {
-    /// Generic projection mutations committed with normalized records.
-    pub mutations: Vec<ProjectionMutation>,
-    /// Diagnostics, present only when a supported projection field was selected.
-    pub telemetry: Option<SoupProjectionTelemetry>,
 }
 
 /// Compile one GraphQL Soup request into generic predicate-index IR.
@@ -117,7 +71,7 @@ pub fn compile_filter_request(
     )
     .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))
     .map(|outcome| match outcome {
-        LocalCompileOutcome::Unsupported(reason) => SoupFilterCompileOutcome::Unsupported(reason),
+        LocalCompileOutcome::Unsupported(_) => SoupFilterCompileOutcome::Unsupported,
         LocalCompileOutcome::Supported(query) => SoupFilterCompileOutcome::Supported(query),
     })
 }
@@ -137,20 +91,6 @@ pub fn authoritative_projection_mutations(
     operation_name: Option<&str>,
     data: &serde_json::Value,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
-    authoritative_projection_batch(query, operation_name, data).map(|batch| batch.mutations)
-}
-
-/// Plan authoritative projection ingestion and enforce strict backfill pages.
-///
-/// A backfill page with any missing or invalid required Document supplement or
-/// incomplete supported direct projection is rejected before normalized records
-/// or projections reach cache storage. Consequently the caller cannot advance
-/// its checkpoint past an approximate page.
-pub fn authoritative_projection_batch(
-    query: &str,
-    operation_name: Option<&str>,
-    data: &serde_json::Value,
-) -> Result<AuthoritativeProjectionBatch, SoupFilterCacheAdapterError> {
     let document =
         Document::parse(query).map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
     let operation = document
@@ -172,10 +112,6 @@ pub fn authoritative_projection_batch(
     };
 
     let mut mutations = IndexMap::new();
-    let mut telemetry = SoupProjectionTelemetry {
-        operation: projection_operation(operation_name),
-        ..SoupProjectionTelemetry::default()
-    };
     let mut has_unbound_incomplete_entity = false;
     walk_authoritative_object(
         &operation.selection_set,
@@ -183,31 +119,20 @@ pub fn authoritative_projection_batch(
         root,
         operation.kind,
         &mut mutations,
-        &mut telemetry,
         &mut has_unbound_incomplete_entity,
     );
     let has_incomplete_projection = has_unbound_incomplete_entity
         || mutations
             .values()
             .any(|mutation| matches!(mutation, ProjectionMutation::MarkIncomplete { profile, .. } if profile == &vocabulary::profile_v2()));
-    if telemetry.operation == "backfill" && has_incomplete_projection {
+    if operation_name.is_some_and(|name| name.starts_with("SoupBackfill"))
+        && has_incomplete_projection
+    {
         return Err(SoupFilterCacheAdapterError(
             "SoupBackfill page contains an incomplete required cache projection".to_owned(),
         ));
     }
-    Ok(AuthoritativeProjectionBatch {
-        mutations: mutations.into_values().collect(),
-        telemetry: (telemetry.requested_count != 0).then_some(telemetry),
-    })
-}
-
-fn projection_operation(operation_name: Option<&str>) -> &'static str {
-    match operation_name {
-        Some(name) if name.starts_with("SoupBackfill") => "backfill",
-        Some(name) if name.starts_with("SoupUpdates") => "updates",
-        Some(name) if name.starts_with("Soup") => "soup",
-        _ => "other",
-    }
+    Ok(mutations.into_values().collect())
 }
 
 fn walk_authoritative_object(
@@ -216,7 +141,6 @@ fn walk_authoritative_object(
     object: &serde_json::Map<String, serde_json::Value>,
     operation_kind: OperationKind,
     mutations: &mut IndexMap<String, ProjectionMutation>,
-    telemetry: &mut SoupProjectionTelemetry,
     has_unbound_incomplete_entity: &mut bool,
 ) {
     let concrete_type = object
@@ -279,13 +203,11 @@ fn walk_authoritative_object(
                     )
                 }
             } else if kind == SoupFlatEntityKind::Document {
-                telemetry.requested_count = telemetry.requested_count.saturating_add(1);
                 Some(selected_document_projection_for_object(
                     record_key,
                     partition,
                     object,
                     &projection_fields,
-                    telemetry,
                 ))
             } else {
                 Some(
@@ -310,10 +232,6 @@ fn walk_authoritative_object(
             }
         } else if !projection_fields.is_empty() {
             *has_unbound_incomplete_entity = true;
-            if partition == vocabulary::document_partition() {
-                telemetry.requested_count = telemetry.requested_count.saturating_add(1);
-                telemetry.incompatible_count = telemetry.incompatible_count.saturating_add(1);
-            }
         }
     }
 
@@ -338,7 +256,6 @@ fn walk_authoritative_object(
                 child,
                 operation_kind,
                 mutations,
-                telemetry,
                 has_unbound_incomplete_entity,
             ),
             serde_json::Value::Array(children) => {
@@ -350,7 +267,6 @@ fn walk_authoritative_object(
                             child,
                             operation_kind,
                             mutations,
-                            telemetry,
                             has_unbound_incomplete_entity,
                         );
                     }
@@ -388,7 +304,6 @@ fn selected_document_projection_for_object(
     partition: Token,
     object: &serde_json::Map<String, serde_json::Value>,
     fields: &[&FieldNode],
-    telemetry: &mut SoupProjectionTelemetry,
 ) -> ProjectionMutation {
     let incomplete = |kind| ProjectionMutation::MarkIncomplete {
         record_key: record_key.clone(),
@@ -399,98 +314,40 @@ fn selected_document_projection_for_object(
     let mut selected = None;
     for field in fields {
         let Some(value) = object.get(&field.response_key) else {
-            telemetry.absent_count = telemetry.absent_count.saturating_add(1);
-            telemetry.missing_count = telemetry.missing_count.saturating_add(1);
             return incomplete(ProjectionIncompleteKind::Missing);
         };
         if selected.is_some_and(|existing| existing != value) {
-            telemetry.incompatible_count = telemetry.incompatible_count.saturating_add(1);
             return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
         }
         selected = Some(value);
     }
     let Some(value) = selected else {
-        telemetry.absent_count = telemetry.absent_count.saturating_add(1);
-        telemetry.missing_count = telemetry.missing_count.saturating_add(1);
         return incomplete(ProjectionIncompleteKind::Missing);
     };
     let serde_json::Value::String(encoded) = value else {
-        if value.is_null() {
-            telemetry.null_count = telemetry.null_count.saturating_add(1);
-            telemetry.missing_count = telemetry.missing_count.saturating_add(1);
-            return incomplete(ProjectionIncompleteKind::Missing);
-        }
-        telemetry.present_count = telemetry.present_count.saturating_add(1);
-        telemetry.incompatible_count = telemetry.incompatible_count.saturating_add(1);
+        return incomplete(if value.is_null() {
+            ProjectionIncompleteKind::Missing
+        } else {
+            ProjectionIncompleteKind::IncompatibleVersion
+        });
+    };
+    let Ok(supplement) = decode_cache_projection_supplement(encoded) else {
         return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
     };
-    telemetry.present_count = telemetry.present_count.saturating_add(1);
-    telemetry.supplement_count = telemetry.supplement_count.saturating_add(1);
-    telemetry.supplement_bytes = telemetry
-        .supplement_bytes
-        .saturating_add(u64::try_from(encoded.len()).unwrap_or(u64::MAX));
-
-    let started = Instant::now();
-    let supplement = match decode_cache_projection_supplement(encoded) {
-        Ok(supplement) => supplement,
-        Err(SoupCacheProjectionWireError::UnsupportedTargetProfile(_)) => {
-            record_composition_duration(telemetry, &started);
-            telemetry.unsupported_profile_count =
-                telemetry.unsupported_profile_count.saturating_add(1);
-            return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
-        }
-        Err(
-            SoupCacheProjectionWireError::UnsupportedPartition(_)
-            | SoupCacheProjectionWireError::RecordKeyPartitionMismatch,
-        ) => {
-            record_composition_duration(telemetry, &started);
-            telemetry.mismatched_key_count = telemetry.mismatched_key_count.saturating_add(1);
-            return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
-        }
-        Err(_) => {
-            record_composition_duration(telemetry, &started);
-            telemetry.incompatible_count = telemetry.incompatible_count.saturating_add(1);
-            return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
-        }
-    };
-    if supplement.target_profile() != &vocabulary::profile_v2() {
-        record_composition_duration(telemetry, &started);
-        telemetry.unsupported_profile_count = telemetry.unsupported_profile_count.saturating_add(1);
+    if supplement.target_profile() != &vocabulary::profile_v2()
+        || supplement.record_key() != &record_key
+        || supplement.partition() != &partition
+    {
         return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
     }
-    if supplement.record_key() != &record_key || supplement.partition() != &partition {
-        record_composition_duration(telemetry, &started);
-        telemetry.mismatched_key_count = telemetry.mismatched_key_count.saturating_add(1);
-        return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
-    }
-    let document = match complete_v2_projection_for_object(
+    complete_v2_projection_for_object(
         record_key.clone(),
         partition.clone(),
         object,
         Some(&supplement),
-    ) {
-        Ok(document) => document,
-        Err(()) => {
-            record_composition_duration(telemetry, &started);
-            telemetry.incompatible_count = telemetry.incompatible_count.saturating_add(1);
-            return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
-        }
-    };
-    record_composition_duration(telemetry, &started);
-    telemetry.complete_count = telemetry.complete_count.saturating_add(1);
-    telemetry.fact_count = telemetry.fact_count.saturating_add(
-        u32::try_from(
-            document.exact_facts.len() + document.integer_facts.len() + document.sort_facts.len(),
-        )
-        .unwrap_or(u32::MAX),
-    );
-    ProjectionMutation::Replace(document)
-}
-
-fn record_composition_duration(telemetry: &mut SoupProjectionTelemetry, started: &Instant) {
-    telemetry.composition_duration_micros = telemetry
-        .composition_duration_micros
-        .saturating_add(u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX));
+    )
+    .map(ProjectionMutation::Replace)
+    .unwrap_or_else(|()| incomplete(ProjectionIncompleteKind::IncompatibleVersion))
 }
 
 fn insert_authoritative_mutation(

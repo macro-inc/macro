@@ -203,7 +203,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
 
     async entityFilter() {
       // The first profile is browser Turso/OPFS-only.
-      return { kind: 'unsupported', reason: 'cache-disabled' };
+      return { kind: 'unsupported' };
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

@@ -34,7 +34,7 @@ const makeGraphqlSoupInputMock = vi.hoisted(() => vi.fn());
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     error: vi.fn(),
-    anonymousSpan: vi.fn(() => ({ setAttr: vi.fn(), end: vi.fn() })),
+    span: vi.fn(() => ({ setAttr: vi.fn(), end: vi.fn() })),
   },
 }));
 

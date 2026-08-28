@@ -10,8 +10,6 @@ When a flat GraphQL Soup query is locally supported and complete, the UI must be
 
 This plan builds on:
 
-- `apps/web/docs/entity-filter-cache-index-plan.md`;
-- `apps/web/docs/soup-flat-v1-support-manifest.md`;
 - the completed prerequisite [`optimistic-predicate-fact-index-plan.md`](./optimistic-predicate-fact-index-plan.md), which provides an exact effective authoritative-plus-optimistic SQL universe;
 - the existing cache revision propagated through `cache-core`, WASM, worker hosts, urql result metadata, `entityFilter`, and `readRecordsByKeys`;
 - the current revision-authority state machine in `apps/web/src/lib/queries/soup/graphql/items.ts`.
@@ -226,15 +224,6 @@ Behavior:
 `fetchNextPage` must never pass a local cursor into `makeGraphqlSoupInput`, and it must never use a stale server cursor after local authority has invalidated the network chain.
 
 ## Implementation phases
-
-### Phase 0: Update the support contract
-
-Update the earlier plan and support manifest to replace "initial requests only" and "no local continuation cursor" with the revision-safe pagination contract. Do not expand supported literals or partitions in this work.
-
-Files:
-
-- `apps/web/docs/entity-filter-cache-index-plan.md`;
-- `apps/web/docs/soup-flat-v1-support-manifest.md`.
 
 ### Phase 1: Add generic cursor and page types
 

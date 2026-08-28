@@ -24,8 +24,6 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',
   'graphql_cache.queue_diagnostics',
-  'graphql_cache.soup_projection',
-  'graphql_cache.soup_filter',
   'graphql_cache.navigation',
   'graphql_cache.aggregate',
 ] as const;
@@ -88,33 +86,6 @@ export const CACHE_REVISION_CATEGORIES = [
   'clear',
 ] as const;
 export type CacheRevisionCategory = (typeof CACHE_REVISION_CATEGORIES)[number];
-
-export const CACHE_SOUP_OPERATIONS = [
-  'soup',
-  'backfill',
-  'updates',
-  'other',
-] as const;
-export type CacheSoupOperation = (typeof CACHE_SOUP_OPERATIONS)[number];
-
-export const CACHE_SOUP_FILTER_OUTCOMES = [
-  'complete',
-  'incomplete',
-  'unsupported',
-] as const;
-export type CacheSoupFilterOutcome =
-  (typeof CACHE_SOUP_FILTER_OUTCOMES)[number];
-
-export const CACHE_SOUP_UNSUPPORTED_REASONS = [
-  'partition',
-  'literal',
-  'global-properties',
-  'sort',
-  'cursor',
-  'cache-disabled',
-] as const;
-export type CacheSoupUnsupportedReason =
-  (typeof CACHE_SOUP_UNSUPPORTED_REASONS)[number];
 
 /** Payload-free, bounded error classes shared by all cache layers. */
 export const CACHE_ERROR_CODES = [
@@ -185,9 +156,6 @@ export type CacheTelemetryObservation = {
   openOutcome?: CacheOpenOutcome;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
   revisionCategory?: CacheRevisionCategory;
-  soupOperation?: CacheSoupOperation;
-  soupFilterOutcome?: CacheSoupFilterOutcome;
-  soupUnsupportedReason?: CacheSoupUnsupportedReason;
   resetAttempt?: 'wipe-before-open';
   durationMs?: number;
   bytes?: number;
@@ -196,16 +164,6 @@ export type CacheTelemetryObservation = {
   quotaBytes?: number;
   ratio?: number;
   count?: number;
-  factCount?: number;
-  requestedCount?: number;
-  presentCount?: number;
-  nullCount?: number;
-  absentCount?: number;
-  completeCount?: number;
-  missingCount?: number;
-  incompatibleCount?: number;
-  mismatchedKeyCount?: number;
-  unsupportedProfileCount?: number;
   sampleRate?: number;
   queueDepth?: number;
   oldestAgeMs?: number;
@@ -304,18 +262,6 @@ function sanitizeObservation(
     CACHE_REVISION_CATEGORIES.includes(input.revisionCategory)
       ? { revisionCategory: input.revisionCategory }
       : {}),
-    ...(input.soupOperation !== undefined &&
-    CACHE_SOUP_OPERATIONS.includes(input.soupOperation)
-      ? { soupOperation: input.soupOperation }
-      : {}),
-    ...(input.soupFilterOutcome !== undefined &&
-    CACHE_SOUP_FILTER_OUTCOMES.includes(input.soupFilterOutcome)
-      ? { soupFilterOutcome: input.soupFilterOutcome }
-      : {}),
-    ...(input.soupUnsupportedReason !== undefined &&
-    CACHE_SOUP_UNSUPPORTED_REASONS.includes(input.soupUnsupportedReason)
-      ? { soupUnsupportedReason: input.soupUnsupportedReason }
-      : {}),
     ...(input.resetAttempt === 'wipe-before-open'
       ? { resetAttempt: input.resetAttempt }
       : {}),
@@ -339,38 +285,6 @@ function sanitizeObservation(
       : {}),
     ...(boundedNumber(input.count) !== undefined
       ? { count: boundedNumber(input.count) }
-      : {}),
-    ...(boundedNumber(input.factCount) !== undefined
-      ? { factCount: boundedNumber(input.factCount) }
-      : {}),
-    ...(boundedNumber(input.requestedCount) !== undefined
-      ? { requestedCount: boundedNumber(input.requestedCount) }
-      : {}),
-    ...(boundedNumber(input.presentCount) !== undefined
-      ? { presentCount: boundedNumber(input.presentCount) }
-      : {}),
-    ...(boundedNumber(input.nullCount) !== undefined
-      ? { nullCount: boundedNumber(input.nullCount) }
-      : {}),
-    ...(boundedNumber(input.absentCount) !== undefined
-      ? { absentCount: boundedNumber(input.absentCount) }
-      : {}),
-    ...(boundedNumber(input.completeCount) !== undefined
-      ? { completeCount: boundedNumber(input.completeCount) }
-      : {}),
-    ...(boundedNumber(input.missingCount) !== undefined
-      ? { missingCount: boundedNumber(input.missingCount) }
-      : {}),
-    ...(boundedNumber(input.incompatibleCount) !== undefined
-      ? { incompatibleCount: boundedNumber(input.incompatibleCount) }
-      : {}),
-    ...(boundedNumber(input.mismatchedKeyCount) !== undefined
-      ? { mismatchedKeyCount: boundedNumber(input.mismatchedKeyCount) }
-      : {}),
-    ...(boundedNumber(input.unsupportedProfileCount) !== undefined
-      ? {
-          unsupportedProfileCount: boundedNumber(input.unsupportedProfileCount),
-        }
       : {}),
     ...(boundedNumber(input.sampleRate) !== undefined
       ? { sampleRate: boundedNumber(input.sampleRate) }
@@ -717,9 +631,6 @@ export function isCacheTelemetryObservation(
       'openOutcome',
       'queueDiagnosticsAvailability',
       'revisionCategory',
-      'soupOperation',
-      'soupFilterOutcome',
-      'soupUnsupportedReason',
       'resetAttempt',
       'durationMs',
       'bytes',
@@ -728,16 +639,6 @@ export function isCacheTelemetryObservation(
       'quotaBytes',
       'ratio',
       'count',
-      'factCount',
-      'requestedCount',
-      'presentCount',
-      'nullCount',
-      'absentCount',
-      'completeCount',
-      'missingCount',
-      'incompatibleCount',
-      'mismatchedKeyCount',
-      'unsupportedProfileCount',
       'sampleRate',
       'queueDepth',
       'oldestAgeMs',

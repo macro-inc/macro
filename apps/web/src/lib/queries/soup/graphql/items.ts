@@ -111,10 +111,10 @@ export function createGraphqlSoupAstItemsQuery(
   let cacheGeneration = 0;
   let resetContinuationPages: (() => void) | undefined;
   let previousInitialInput: GraphqlSoupInput | undefined;
-  let staleFallbackSpan: ReturnType<typeof Telemetry.anonymousSpan> | undefined;
+  let staleFallbackSpan: ReturnType<typeof Telemetry.span> | undefined;
 
   const recordAuthority = (source: 'network' | 'local' | 'stale-fallback') => {
-    const span = Telemetry.anonymousSpan('graphql_cache.soup_authority');
+    const span = Telemetry.span('graphql_cache.soup_authority');
     span.setAttr('authority.source', source);
     span.end();
   };
@@ -154,17 +154,13 @@ export function createGraphqlSoupAstItemsQuery(
         networkAuthorityRevision() !== revision &&
         staleFallbackSpan === undefined
       ) {
-        staleFallbackSpan = Telemetry.anonymousSpan(
-          'graphql_cache.soup_stale_fallback'
-        );
+        staleFallbackSpan = Telemetry.span('graphql_cache.soup_stale_fallback');
         recordAuthority('stale-fallback');
       }
       setCurrentCacheRevision(revision);
     });
     const unsubscribeGeneration = host.onCacheGenerationChanged(() => {
-      const span = Telemetry.anonymousSpan(
-        'graphql_cache.engine_generation_changed'
-      );
+      const span = Telemetry.span('graphql_cache.engine_generation_changed');
       span.end();
       cacheGeneration += 1;
       invalidateGeneration();
@@ -210,15 +206,11 @@ export function createGraphqlSoupAstItemsQuery(
     const limit = initial.limit ?? 20;
 
     void (async () => {
-      const span = Telemetry.anonymousSpan(
-        'graphql_cache.soup_local_evaluation'
-      );
+      const span = Telemetry.span('graphql_cache.soup_local_evaluation');
       let expectedRevision = revision;
       let retryCount = 0;
       let discarded = false;
-      let unsupportedReason: string | undefined;
-      let outcome: 'success' | 'incomplete' | 'unsupported' | 'error' =
-        'incomplete';
+      let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           const result = await host.entityFilter({
@@ -227,12 +219,7 @@ export function createGraphqlSoupAstItemsQuery(
             sortDirection,
             limit,
           });
-          if (result.kind === 'unsupported') {
-            outcome = 'unsupported';
-            unsupportedReason = result.reason;
-            return;
-          }
-          if (result.kind === 'incomplete') return;
+          if (result.kind !== 'complete') return;
           if (requestId !== localRequest) {
             discarded = true;
             return;
@@ -291,9 +278,6 @@ export function createGraphqlSoupAstItemsQuery(
         // the stale network/normalized-cache fallback already on screen.
       } finally {
         span.setAttr('evaluation.outcome', outcome);
-        if (unsupportedReason !== undefined) {
-          span.setAttr('evaluation.unsupported_reason', unsupportedReason);
-        }
         span.setAttr('evaluation.retry_count', retryCount);
         span.setAttr('evaluation.discarded', discarded);
         span.end();

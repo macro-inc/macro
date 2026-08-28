@@ -1,5 +1,4 @@
 use std::marker::PhantomData;
-use std::time::Instant;
 
 use async_graphql::{
     Context, ID, InputValueError, InputValueResult, Interface, Json, Object, ObjectType,
@@ -428,63 +427,32 @@ where
 
     /// Construct a GraphQL entity and opaque server-fact supplement from one
     /// authoritative hydration value.
-    #[tracing::instrument(
-        name = "soup.cache_projection.compile",
-        skip_all,
-        fields(
-            projection.outcome = tracing::field::Empty,
-            projection.duration_micros = tracing::field::Empty,
-            projection.bytes = tracing::field::Empty,
-            projection.fact_count = tracing::field::Empty
-        )
-    )]
     pub fn new_with_projection(hydration: SoupProjectionHydration) -> Self {
-        let started = Instant::now();
         let entity = hydration.item.entity();
-        let mut fact_count = 0usize;
-        let supplement: Result<Option<SoupCacheProjection>, String> =
-            Self::graphql_type_name_for(entity.entity_type)
-                .ok_or_else(|| "Soup item has no GraphQL entity type".to_owned())
-                .and_then(|type_name| {
-                    RecordKey::new(format!("{type_name}:{}", entity.entity_id))
-                        .map_err(|error| error.to_string())
-                })
-                .and_then(|record_key| {
-                    project_soup_cache_supplement(record_key, &hydration)
-                        .map_err(|error| error.to_string())
-                })
-                .and_then(|supplement| {
-                    supplement
-                        .map(|supplement| {
-                            fact_count = 1;
-                            encode_cache_projection_supplement(&supplement)
-                                .map(SoupCacheProjection)
-                                .map_err(|error| error.to_string())
-                        })
-                        .transpose()
-                });
-        let span = tracing::Span::current();
-        span.record(
-            "projection.duration_micros",
-            u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX),
-        );
-        span.record("projection.fact_count", fact_count);
-        match &supplement {
-            Ok(Some(supplement)) => {
-                span.record("projection.outcome", "complete");
-                span.record("projection.bytes", supplement.0.len());
-            }
-            Ok(None) => {
-                span.record("projection.outcome", "not-required");
-                span.record("projection.bytes", 0);
-            }
-            Err(error) => {
-                span.record("projection.outcome", "error");
-                span.record("projection.bytes", 0);
+        let supplement = Self::graphql_type_name_for(entity.entity_type)
+            .ok_or_else(|| "Soup item has no GraphQL entity type".to_owned())
+            .and_then(|type_name| {
+                RecordKey::new(format!("{type_name}:{}", entity.entity_id))
+                    .map_err(|error| error.to_string())
+            })
+            .and_then(|record_key| {
+                project_soup_cache_supplement(record_key, &hydration)
+                    .map_err(|error| error.to_string())
+            })
+            .and_then(|supplement| {
+                supplement
+                    .map(|supplement| {
+                        encode_cache_projection_supplement(&supplement)
+                            .map(SoupCacheProjection)
+                            .map_err(|error| error.to_string())
+                    })
+                    .transpose()
+            })
+            .inspect_err(|error| {
                 tracing::error!(error = ?error, "failed to compile Soup cache projection supplement");
-            }
-        }
-        let supplement = supplement.ok().flatten();
+            })
+            .ok()
+            .flatten();
         Self::new(hydration.item).with_cache_supplement(supplement)
     }
 

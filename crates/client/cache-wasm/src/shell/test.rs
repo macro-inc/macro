@@ -791,8 +791,6 @@ async fn backfill_supplement_failure_does_not_commit_or_advance_revision() {
         .await,
     );
     assert_eq!(hydrated["revision"], "1");
-    assert_eq!(hydrated["soupProjectionTelemetry"]["operation"], "backfill");
-    assert_eq!(hydrated["soupProjectionTelemetry"]["completeCount"], 1);
 
     let error = JsFuture::from(engine.hydrate_query(
         SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),

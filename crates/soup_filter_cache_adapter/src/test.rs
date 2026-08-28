@@ -285,17 +285,17 @@ fn supplement_subscription_data(item: serde_json::Value) -> serde_json::Value {
 fn selected_document_supplement_composes_direct_fields_and_only_adds_attachment_state() {
     let id = "00000000-0000-0000-0000-000000000001";
     let encoded = document_supplement(id, false);
-    let batch = authoritative_projection_batch(
+    let mutations = authoritative_projection_mutations(
         SUPPLEMENT_SUBSCRIPTION,
         Some("Supplement"),
         &supplement_subscription_data(selected_document(
             id,
-            serde_json::Value::String(encoded.clone()),
+            serde_json::Value::String(encoded),
             serde_json::Value::Null,
         )),
     )
     .unwrap();
-    let [ProjectionMutation::Replace(document)] = batch.mutations.as_slice() else {
+    let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
         panic!("a valid selected supplement and direct fields must replace authority");
     };
     assert_eq!(document.profile, vocabulary::profile_v2());
@@ -308,15 +308,6 @@ fn selected_document_supplement_composes_direct_fields_and_only_adds_attachment_
         fact.attribute == vocabulary::email_attachment()
             && fact.value == ExactValue::new([0]).unwrap()
     }));
-
-    let telemetry = batch.telemetry.expect("selected supplement is observable");
-    assert_eq!(telemetry.operation, "other");
-    assert_eq!(telemetry.requested_count, 1);
-    assert_eq!(telemetry.present_count, 1);
-    assert_eq!(telemetry.complete_count, 1);
-    assert_eq!(telemetry.supplement_count, 1);
-    assert_eq!(telemetry.supplement_bytes, encoded.len() as u64);
-    assert_eq!(telemetry.fact_count, 8);
 
     let attached = authoritative_projection_mutations(
         SUPPLEMENT_SUBSCRIPTION,
@@ -388,7 +379,7 @@ fn selected_project_and_chat_null_supplements_are_valid_direct_only_v2_hydration
             ... on GraphqlSoupChat { ownerId projectId createdAt updatedAt }
         } } }
     }"#;
-    let batch = authoritative_projection_batch(
+    let mutations = authoritative_projection_mutations(
         query,
         Some("SoupBackfill"),
         &serde_json::json!({
@@ -415,15 +406,14 @@ fn selected_project_and_chat_null_supplements_are_valid_direct_only_v2_hydration
         }),
     )
     .expect("direct-only entities must not fail strict backfill");
-    assert_eq!(batch.mutations.len(), 2);
-    for mutation in &batch.mutations {
+    assert_eq!(mutations.len(), 2);
+    for mutation in &mutations {
         let ProjectionMutation::Replace(document) = mutation else {
             panic!("direct-only entity must produce a complete replacement");
         };
         validate_soup_flat_v2(document).unwrap();
         assert_ne!(document.partition, vocabulary::document_partition());
     }
-    assert!(batch.telemetry.is_none());
 }
 
 #[test]
@@ -493,7 +483,7 @@ fn backfill_rejects_invalid_supplements_and_missing_direct_document_fields() {
         ),
         missing_owner,
     ] {
-        let error = authoritative_projection_batch(
+        let error = authoritative_projection_mutations(
             SUPPLEMENT_BACKFILL,
             Some("SoupBackfill"),
             &serde_json::json!({ "user": { "soup": { "items": [item] } } }),
@@ -505,7 +495,7 @@ fn backfill_rejects_invalid_supplements_and_missing_direct_document_fields() {
         );
     }
 
-    let batch = authoritative_projection_batch(
+    let mutations = authoritative_projection_mutations(
         SUPPLEMENT_BACKFILL,
         Some("SoupBackfill"),
         &serde_json::json!({
@@ -518,10 +508,9 @@ fn backfill_rejects_invalid_supplements_and_missing_direct_document_fields() {
     )
     .expect("a complete backfill page is ingestible");
     assert!(matches!(
-        batch.mutations.as_slice(),
+        mutations.as_slice(),
         [ProjectionMutation::Replace(_)]
     ));
-    assert_eq!(batch.telemetry.unwrap().operation, "backfill");
 }
 
 #[test]
@@ -968,7 +957,7 @@ fn production_documents_presets_keep_unsupported_siblings_all_or_network() {
             100,
         )
         .unwrap(),
-        SoupFilterCompileOutcome::Unsupported(_)
+        SoupFilterCompileOutcome::Unsupported
     ));
 }
 

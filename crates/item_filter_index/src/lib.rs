@@ -145,19 +145,6 @@ pub enum UnsupportedReason {
     Cursor,
 }
 
-impl UnsupportedReason {
-    /// Stable bounded diagnostic code safe for anonymous rollout telemetry.
-    pub const fn telemetry_code(self) -> &'static str {
-        match self {
-            Self::Partition(_) => "partition",
-            Self::Literal(_) => "literal",
-            Self::GlobalProperties => "global-properties",
-            Self::Sort => "sort",
-            Self::Cursor => "cursor",
-        }
-    }
-}
-
 /// Eligibility outcome before compilation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Eligibility {

@@ -37,7 +37,7 @@ export function createNoopCacheHost(reason: string): CacheHost {
       return { documents: [], nextCursor: null };
     },
     async entityFilter() {
-      return { kind: 'unsupported', reason: 'cache-disabled' };
+      return { kind: 'unsupported' };
     },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
