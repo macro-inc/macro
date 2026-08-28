@@ -402,7 +402,7 @@ pub struct ListEntities {
 
     /// Document entity AST filter.
     #[schemars(
-        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For skills, {\"l\":{\"dst\":\"skill\"}}. For task queries, use ListTasks."
+        description = "Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {\"l\":{\"id\":\"...\"}}. For skills, {\"l\":{\"dst\":\"skill\"}}. For task queries, use ListTasks.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "df")]
@@ -473,7 +473,7 @@ pub struct ListEntities {
 
     /// Entity property AST filter.
     #[schemars(
-        description = "Full soup AST property filter (propf) for non-task entity properties. For task Status, Priority, Assignees, or Due Date, use ListTasks instead of building a propf tree here."
+        description = "Full soup AST property filter (propf) for non-task entity properties. For task Status, Priority, Assignees, or Due Date, use ListTasks instead of building a propf tree here.",
         with = "Option<serde_json::Value>"
     )]
     #[serde(default, rename = "propf")]

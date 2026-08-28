@@ -232,10 +232,9 @@ impl TaskListQuery {
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
+            && !task.name.to_lowercase().contains(&needle.to_lowercase())
         {
-            if !task.name.to_lowercase().contains(&needle.to_lowercase()) {
-                return false;
-            }
+            return false;
         }
         true
     }
