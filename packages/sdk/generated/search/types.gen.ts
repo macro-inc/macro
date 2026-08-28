@@ -48,6 +48,11 @@ export type CalendarEventMetadata = {
     conferenceUrl?: string | null;
     createdAt: string;
     /**
+     * Free-text description, when the event carries one. May contain HTML from
+     * the source; clients render a plain-text preview.
+     */
+    description?: string | null;
+    /**
      * Whether the canonical source prohibits mutation.
      */
     isReadOnly: boolean;
@@ -57,6 +62,7 @@ export type CalendarEventMetadata = {
      */
     isRecurring: boolean;
     occurrence?: null | CalendarEventSearchOccurrence;
+    organizer?: null | CalendarEventOrganizer;
     /**
      * Canonical status (`confirmed`, `tentative`, `cancelled`).
      */
@@ -66,6 +72,21 @@ export type CalendarEventMetadata = {
      */
     time: CalendarEventSearchTime;
     updatedAt: string;
+};
+
+/**
+ * The event's organizer — its creator, in Google's model. Either field can be
+ * absent when the source does not name it.
+ */
+export type CalendarEventOrganizer = {
+    /**
+     * Organizer email address, when known.
+     */
+    email?: string | null;
+    /**
+     * Display name, when the source provided one.
+     */
+    name?: string | null;
 };
 
 /**
