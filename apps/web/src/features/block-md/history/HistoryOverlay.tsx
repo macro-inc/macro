@@ -3,6 +3,7 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import type { DiffStatus } from '@macro-inc/lexical-core';
 import type { SerializedEditorState } from 'lexical';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { diffAuthorColorPlugin } from './diffAuthorColorPlugin';
 import { useHistory } from './HistoryContext';
 import { UserHoverTag } from './UserHoverTag';
 import { userColor } from './utils';
@@ -93,7 +94,7 @@ export function HistoryOverlay(props: {
       class="absolute inset-0 z-20"
       style={{
         display: props.visible ? undefined : 'none',
-        '--diff-author': diffAuthorColor(),
+        '--diff-author-color': diffAuthorColor(),
       }}
       onPointerMove={onDiffPointerMove}
       onPointerLeave={() => setHoverAuthor(null)}
@@ -105,7 +106,8 @@ export function HistoryOverlay(props: {
             .withMentions()
             .withMedia()
             .withLinks()
-            .withCode();
+            .withCode()
+            .use(diffAuthorColorPlugin);
           return (
             <MarkdownShell
               config={config}
