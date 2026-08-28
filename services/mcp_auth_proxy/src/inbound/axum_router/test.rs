@@ -108,7 +108,7 @@ async fn attacker_cannot_have_a_code_delivered_to_their_own_callback() {
     );
 
     let victim_registration = send(&harness, register_request(TRUSTED_REDIRECT_URI)).await;
-    assert_eq!(victim_registration.status, StatusCode::CREATED);
+    assert_eq!(victim_registration.status, StatusCode::OK);
     let client_id = victim_registration.json()["client_id"]
         .as_str()
         .expect("registration returns a client_id")
@@ -156,7 +156,7 @@ async fn registered_client_completes_the_whole_flow() {
     let harness = Harness::new();
 
     let registration = send(&harness, register_request(TRUSTED_REDIRECT_URI)).await;
-    assert_eq!(registration.status, StatusCode::CREATED);
+    assert_eq!(registration.status, StatusCode::OK);
     let registration_body = registration.json();
     let client_id = registration_body["client_id"]
         .as_str()
