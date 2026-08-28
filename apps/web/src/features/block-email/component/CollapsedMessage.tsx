@@ -78,7 +78,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           onFocus={props.onFocus}
           onKeyDown={handleKeyDown}
         >
-          <div data-slot="sender" class="flex items-center gap-2 min-w-0 text-sm">
+          <div
+            data-slot="sender"
+            class="flex items-center gap-2 min-w-0 text-sm"
+          >
             <div class="shrink-0 flex justify-center items-center size-6">
               <UserIcon
                 {...senderIconProps()}

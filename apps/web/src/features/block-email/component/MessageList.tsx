@@ -101,9 +101,7 @@ export function MessageList(props: MessageListProps) {
           <div
             class={cn(
               'macro-message-width macro-message-padding w-full',
-              isTouchDevice()
-                ? 'pt-6 pb-3'
-                : 'pt-12 pb-2.5'
+              isTouchDevice() ? 'pt-6 pb-3' : 'pt-12 pb-2.5'
             )}
           >
             <EmailThreadTitle

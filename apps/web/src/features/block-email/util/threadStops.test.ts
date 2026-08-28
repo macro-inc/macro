@@ -11,7 +11,9 @@ const message = (index: number): ThreadStop => ({ kind: 'message', index });
 
 describe('shownStops', () => {
   it('inserts the chip after the first card when the middle is collapsed', () => {
-    expect(shownStops({ length: 6, showMiddle: false, hasComposer: true })).toEqual([
+    expect(
+      shownStops({ length: 6, showMiddle: false, hasComposer: true })
+    ).toEqual([
       { kind: 'title' },
       message(0),
       { kind: 'hidden-chip' },

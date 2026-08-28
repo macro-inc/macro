@@ -245,9 +245,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   const [isHovering, setIsHovering] = createSignal(false);
   const userEmail = useEmail();
 
-  const senderName = createMemo(() =>
-    getSenderDisplayName(props.message, userEmail())
-  );
+  const senderName = () => getSenderDisplayName(props.message, userEmail());
 
   const handleHeaderClick = (e: MouseEvent) => {
     const id = props.message.db_id;
