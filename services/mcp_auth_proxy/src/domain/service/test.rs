@@ -1,237 +1,503 @@
+use std::time::{Duration, SystemTime};
+
 use super::*;
-
-use std::{
-    collections::HashMap,
-    sync::Mutex,
-    time::{Duration, SystemTime},
+use crate::{
+    domain::models::{AccessToken, ClientRegistrationRequest},
+    test_support::{
+        ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, FakeOAuthProvider, Harness,
+        LOOPBACK_REDIRECT_URI, REFRESHED_ACCESS_TOKEN, TRUSTED_REDIRECT_URI, UPSTREAM_ACCESS_TOKEN,
+        UPSTREAM_EXPIRES_IN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for,
+    },
 };
 
-use crate::domain::{
-    models::{AccessToken, RefreshToken, UpstreamTokens},
-    ports::{BoundClientIdFuture, RegisteredClientFuture, StoreWriteFuture},
-};
+// --- Registration -------------------------------------------------------
 
-/// Upstream access token lifetime FusionAuth reports for a one hour JWT.
-const UPSTREAM_EXPIRES_IN: u64 = 3600;
-const CODE_VERIFIER: &str = "test-code-verifier";
-const REDIRECT_URI: &str = "http://localhost:41234/callback";
-const CLIENT_ID: &str = "test-client-id";
+#[tokio::test]
+async fn registration_persists_the_submitted_redirect_uris() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[LOOPBACK_REDIRECT_URI]).await;
 
-fn code_challenge_for(verifier: &str) -> String {
-    URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
+    let stored = harness
+        .registry
+        .find_client(&client_id)
+        .await
+        .expect("lookup should succeed")
+        .expect("client should be persisted");
+
+    assert_eq!(stored.redirect_uris, vec![LOOPBACK_REDIRECT_URI]);
 }
 
-#[derive(Default)]
-struct FakeInflightAuth {
-    pending: Mutex<HashMap<String, PendingAuthorization>>,
-    issued: Mutex<HashMap<String, IssuedAuthorizationCode>>,
-}
+#[tokio::test]
+async fn registration_rejects_an_untrusted_https_redirect_uri() {
+    let harness = Harness::new();
 
-impl FakeInflightAuth {
-    fn with_issued(code: &str, issued: IssuedAuthorizationCode) -> Self {
-        let store = Self::default();
-        store.issued.lock().unwrap().insert(code.to_owned(), issued);
-        store
-    }
-}
-
-impl InflightAuthStore for FakeInflightAuth {
-    async fn insert_pending(
-        &self,
-        session_id: &str,
-        pending: PendingAuthorization,
-    ) -> anyhow::Result<()> {
-        self.pending
-            .lock()
-            .unwrap()
-            .insert(session_id.to_owned(), pending);
-        Ok(())
-    }
-
-    async fn take_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
-        Ok(self.pending.lock().unwrap().remove(session_id))
-    }
-
-    async fn insert_issued(
-        &self,
-        code: &str,
-        issued: IssuedAuthorizationCode,
-    ) -> anyhow::Result<()> {
-        self.issued.lock().unwrap().insert(code.to_owned(), issued);
-        Ok(())
-    }
-
-    async fn take_issued(&self, code: &str) -> anyhow::Result<Option<IssuedAuthorizationCode>> {
-        Ok(self.issued.lock().unwrap().remove(code))
-    }
-
-    async fn cleanup_expired(&self) -> anyhow::Result<()> {
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-struct FakeClientRegistry {
-    clients: Mutex<HashMap<String, RegisteredClient>>,
-    refresh_bindings: Mutex<HashMap<String, String>>,
-}
-
-impl FakeClientRegistry {
-    /// A registry holding `CLIENT_ID`, registered against `REDIRECT_URI`.
-    fn with_test_client() -> Self {
-        let registry = Self::default();
-        registry.clients.lock().unwrap().insert(
-            CLIENT_ID.to_owned(),
-            RegisteredClient {
-                client_id: CLIENT_ID.to_owned(),
-                client_name: "test-client".to_owned(),
-                redirect_uris: vec![REDIRECT_URI.to_owned()],
-            },
-        );
-        registry
-    }
-
-    fn bind_now(&self, refresh_token: &RefreshToken, client_id: &str) {
-        self.refresh_bindings
-            .lock()
-            .unwrap()
-            .insert(refresh_token_digest(refresh_token), client_id.to_owned());
-    }
-}
-
-impl ClientRegistrationStore for FakeClientRegistry {
-    fn insert_client<'a>(&'a self, client: &'a RegisteredClient) -> StoreWriteFuture<'a> {
-        Box::pin(async move {
-            self.clients
-                .lock()
-                .unwrap()
-                .insert(client.client_id.clone(), client.clone());
-            Ok(())
+    let error = harness
+        .service
+        .register_client(ClientRegistrationRequest {
+            client_name: None,
+            redirect_uris: vec![ATTACKER_REDIRECT_URI.to_owned()],
         })
-    }
+        .await
+        .expect_err("an untrusted host must not be registrable");
 
-    fn find_client<'a>(&'a self, client_id: &'a str) -> RegisteredClientFuture<'a> {
-        Box::pin(async move { Ok(self.clients.lock().unwrap().get(client_id).cloned()) })
-    }
+    assert!(matches!(
+        error,
+        RegisterClientError::UnsupportedRedirectUri { .. }
+    ));
 }
 
-impl RefreshTokenBindingStore for FakeClientRegistry {
-    fn bind<'a>(
-        &'a self,
-        refresh_token_digest: &'a str,
-        client_id: &'a str,
-    ) -> StoreWriteFuture<'a> {
-        Box::pin(async move {
-            self.refresh_bindings
-                .lock()
-                .unwrap()
-                .insert(refresh_token_digest.to_owned(), client_id.to_owned());
-            Ok(())
-        })
-    }
+#[tokio::test]
+async fn registration_rejects_an_empty_redirect_uri_list() {
+    let harness = Harness::new();
 
-    fn bound_client<'a>(&'a self, refresh_token_digest: &'a str) -> BoundClientIdFuture<'a> {
-        Box::pin(async move {
-            Ok(self
-                .refresh_bindings
-                .lock()
-                .unwrap()
-                .get(refresh_token_digest)
-                .cloned())
+    let error = harness
+        .service
+        .register_client(ClientRegistrationRequest {
+            client_name: None,
+            redirect_uris: Vec::new(),
         })
-    }
+        .await
+        .expect_err("a client with no redirect_uri must be rejected");
 
-    fn unbind<'a>(&'a self, refresh_token_digest: &'a str) -> StoreWriteFuture<'a> {
-        Box::pin(async move {
-            self.refresh_bindings
-                .lock()
-                .unwrap()
-                .remove(refresh_token_digest);
-            Ok(())
-        })
-    }
+    assert!(matches!(error, RegisterClientError::RedirectUrisRequired));
 }
 
-struct FakeOAuthProvider {
-    expires_in: u64,
-}
+// --- Authorization ------------------------------------------------------
 
-impl OAuthProvider for FakeOAuthProvider {
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String> {
-        Ok(format!(
-            "https://upstream.example.com/authorize?state={state}"
+#[tokio::test]
+async fn authorize_rejects_an_unknown_client_id() {
+    let harness = Harness::new();
+
+    let error = harness
+        .service
+        .start_authorization(harness.authorize_request(
+            "never-registered",
+            LOOPBACK_REDIRECT_URI,
+            &code_challenge_for(VICTIM_CODE_VERIFIER),
         ))
-    }
+        .await
+        .expect_err("an unregistered client_id must be rejected");
 
-    fn exchange_authorization_code<'a>(
-        &'a self,
-        _code: &'a str,
-    ) -> crate::domain::ports::UpstreamTokensFuture<'a> {
-        Box::pin(async move {
-            Ok(UpstreamTokens {
-                access_token: AccessToken::from("upstream-access"),
-                refresh_token: RefreshToken::from("upstream-refresh"),
-                expires_in: self.expires_in,
-            })
+    assert!(matches!(error, StartAuthorizationError::UnknownClient));
+}
+
+#[tokio::test]
+async fn authorize_rejects_a_redirect_uri_the_client_did_not_register() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    let error = harness
+        .service
+        .start_authorization(harness.authorize_request(
+            &client_id,
+            "https://claude.ai/some/other/path",
+            &code_challenge_for(VICTIM_CODE_VERIFIER),
+        ))
+        .await
+        .expect_err("a redirect_uri outside the registration must be rejected");
+
+    assert!(matches!(
+        error,
+        StartAuthorizationError::UnregisteredRedirectUri
+    ));
+}
+
+#[tokio::test]
+async fn authorize_rejects_an_attacker_controlled_redirect_uri() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    let error = harness
+        .service
+        .start_authorization(harness.authorize_request(
+            &client_id,
+            ATTACKER_REDIRECT_URI,
+            &code_challenge_for(ATTACKER_CODE_VERIFIER),
+        ))
+        .await
+        .expect_err("an untrusted host must be rejected at authorize");
+
+    assert!(matches!(error, StartAuthorizationError::InvalidRedirectUri));
+}
+
+/// The reported attack: an attacker registers a client, crafts an authorize
+/// link carrying a redirect URI and PKCE challenge of their own, and gets a
+/// victim to follow it. Every check the broker makes at token exchange
+/// compares the attacker's values against the attacker's values, so the flow
+/// has to fail before a code is ever issued.
+#[tokio::test]
+async fn authorization_code_interception_fails_at_authorize() {
+    let harness = Harness::new();
+
+    let attacker_registration = harness
+        .service
+        .register_client(ClientRegistrationRequest {
+            client_name: Some("totally-legitimate-client".to_owned()),
+            redirect_uris: vec![ATTACKER_REDIRECT_URI.to_owned()],
         })
-    }
+        .await;
+    assert!(
+        attacker_registration.is_err(),
+        "the attacker must not be able to register their callback"
+    );
 
-    fn refresh_access_token<'a>(
-        &'a self,
-        _refresh_token: &'a RefreshToken,
-    ) -> crate::domain::ports::UpstreamTokensFuture<'a> {
-        Box::pin(async move {
-            Ok(UpstreamTokens {
-                access_token: AccessToken::from("refreshed-access"),
-                refresh_token: RefreshToken::from("refreshed-refresh"),
-                expires_in: self.expires_in,
-            })
+    // Registration refused, so the attacker reuses a real client's id and
+    // supplies their own callback on the authorize request instead.
+    let victim_client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let error = harness
+        .service
+        .start_authorization(harness.authorize_request(
+            &victim_client_id,
+            ATTACKER_REDIRECT_URI,
+            &code_challenge_for(ATTACKER_CODE_VERIFIER),
+        ))
+        .await
+        .expect_err("the crafted authorize request must fail");
+
+    assert!(matches!(error, StartAuthorizationError::InvalidRedirectUri));
+    assert!(
+        !harness.inflight.has_pending(),
+        "no handshake state may be created for a rejected authorize request"
+    );
+}
+
+// --- Token exchange ----------------------------------------------------
+
+#[tokio::test]
+async fn authorization_code_grant_returns_upstream_tokens() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+
+    let response = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "authorization_code".to_owned(),
+            code: Some(code),
+            code_verifier: Some(VICTIM_CODE_VERIFIER.to_owned()),
+            refresh_token: None,
+            redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
+            client_id: Some(client_id),
         })
-    }
+        .await
+        .expect("the legitimate client should get its tokens");
+
+    assert_eq!(response.access_token.as_str(), UPSTREAM_ACCESS_TOKEN);
+    assert_eq!(response.refresh_token.as_str(), UPSTREAM_REFRESH_TOKEN);
 }
 
-fn service_with(
-    store: Arc<FakeInflightAuth>,
-    registry: Arc<FakeClientRegistry>,
-) -> McpAuthProxyServiceImpl<FakeInflightAuth> {
-    McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
-        public_url: "https://mcp.example.com".to_owned(),
-        redirect_uri_policy: RedirectUriPolicy::new(["claude.ai"]),
-        inflight_auth: store,
-        client_registrations: registry.clone() as Arc<dyn ClientRegistrationStore>,
-        refresh_token_bindings: registry as Arc<dyn RefreshTokenBindingStore>,
-        oauth_provider: Arc::new(FakeOAuthProvider {
-            expires_in: UPSTREAM_EXPIRES_IN,
-        }),
-    })
+#[tokio::test]
+async fn authorization_code_grant_requires_a_client_id() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+
+    let error = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "authorization_code".to_owned(),
+            code: Some(code.clone()),
+            code_verifier: Some(VICTIM_CODE_VERIFIER.to_owned()),
+            refresh_token: None,
+            redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
+            client_id: None,
+        })
+        .await
+        .expect_err("a token request without client_id must be rejected");
+
+    assert!(matches!(error, TokenExchangeError::ClientIdRequired));
+    assert!(
+        harness.inflight.holds_issued_code(&code),
+        "a request rejected before validation must not spend the code"
+    );
 }
 
-fn service(store: FakeInflightAuth) -> McpAuthProxyServiceImpl<FakeInflightAuth> {
-    service_with(
-        Arc::new(store),
-        Arc::new(FakeClientRegistry::with_test_client()),
-    )
+#[tokio::test]
+async fn authorization_code_grant_rejects_a_different_client() {
+    let harness = Harness::new();
+    let victim_client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let other_client_id = harness.register(&[LOOPBACK_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(
+            &victim_client_id,
+            TRUSTED_REDIRECT_URI,
+            VICTIM_CODE_VERIFIER,
+        )
+        .await;
+
+    let error = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "authorization_code".to_owned(),
+            code: Some(code),
+            code_verifier: Some(VICTIM_CODE_VERIFIER.to_owned()),
+            refresh_token: None,
+            redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
+            client_id: Some(other_client_id),
+        })
+        .await
+        .expect_err("a code must only be redeemable by the client it was issued to");
+
+    assert!(matches!(error, TokenExchangeError::ClientMismatch));
 }
 
-fn issued_code(access_token_expires_at: Option<SystemTime>) -> IssuedAuthorizationCode {
-    IssuedAuthorizationCode {
-        client_id: CLIENT_ID.to_owned(),
-        access_token: AccessToken::from("upstream-access"),
-        refresh_token: RefreshToken::from("upstream-refresh"),
-        code_challenge: code_challenge_for(CODE_VERIFIER),
-        redirect_uri: REDIRECT_URI.to_owned(),
-        access_token_expires_at,
-    }
+// --- Refresh grant ----------------------------------------------------
+
+#[tokio::test]
+async fn refresh_grant_succeeds_for_the_client_the_token_was_issued_to() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+
+    let issued = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "authorization_code".to_owned(),
+            code: Some(code),
+            code_verifier: Some(VICTIM_CODE_VERIFIER.to_owned()),
+            refresh_token: None,
+            redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
+            client_id: Some(client_id.clone()),
+        })
+        .await
+        .expect("code exchange should succeed");
+
+    let refreshed = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "refresh_token".to_owned(),
+            code: None,
+            code_verifier: None,
+            refresh_token: Some(issued.refresh_token),
+            redirect_uri: None,
+            client_id: Some(client_id),
+        })
+        .await
+        .expect("the bound client should be able to refresh");
+
+    assert_eq!(refreshed.access_token.as_str(), REFRESHED_ACCESS_TOKEN);
 }
 
-fn authorization_code_request(code: &str) -> TokenRequest {
+#[tokio::test]
+async fn refresh_grant_rejects_an_unbound_refresh_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    let error = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "refresh_token".to_owned(),
+            code: None,
+            code_verifier: None,
+            refresh_token: Some(RefreshToken::from(UPSTREAM_REFRESH_TOKEN)),
+            redirect_uri: None,
+            client_id: Some(client_id),
+        })
+        .await
+        .expect_err("a refresh token the broker never issued must be rejected");
+
+    assert!(matches!(error, TokenExchangeError::UnboundRefreshToken));
+}
+
+#[tokio::test]
+async fn refresh_grant_rejects_a_client_the_token_was_not_issued_to() {
+    let harness = Harness::new();
+    let owner_client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let other_client_id = harness.register(&[LOOPBACK_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&owner_client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+
+    let issued = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "authorization_code".to_owned(),
+            code: Some(code),
+            code_verifier: Some(VICTIM_CODE_VERIFIER.to_owned()),
+            refresh_token: None,
+            redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
+            client_id: Some(owner_client_id),
+        })
+        .await
+        .expect("code exchange should succeed");
+
+    let error = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "refresh_token".to_owned(),
+            code: None,
+            code_verifier: None,
+            refresh_token: Some(issued.refresh_token),
+            redirect_uri: None,
+            client_id: Some(other_client_id),
+        })
+        .await
+        .expect_err("another client must not be able to use this refresh token");
+
+    assert!(matches!(error, TokenExchangeError::ClientMismatch));
+}
+
+#[tokio::test]
+async fn refresh_grant_requires_a_client_id() {
+    let harness = Harness::new();
+
+    let error = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "refresh_token".to_owned(),
+            code: None,
+            code_verifier: None,
+            refresh_token: Some(RefreshToken::from(UPSTREAM_REFRESH_TOKEN)),
+            redirect_uri: None,
+            client_id: None,
+        })
+        .await
+        .expect_err("a refresh without client_id must be rejected");
+
+    assert!(matches!(error, TokenExchangeError::ClientIdRequired));
+}
+
+#[tokio::test]
+async fn rotated_refresh_token_is_rebound_and_the_old_one_is_refused() {
+    let harness = Harness::with_provider(FakeOAuthProvider::rotating("rotated-refresh-token"));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+
+    let issued = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "authorization_code".to_owned(),
+            code: Some(code),
+            code_verifier: Some(VICTIM_CODE_VERIFIER.to_owned()),
+            refresh_token: None,
+            redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
+            client_id: Some(client_id.clone()),
+        })
+        .await
+        .expect("code exchange should succeed");
+    let original_refresh_token = issued.refresh_token.clone();
+
+    let refreshed = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "refresh_token".to_owned(),
+            code: None,
+            code_verifier: None,
+            refresh_token: Some(original_refresh_token.clone()),
+            redirect_uri: None,
+            client_id: Some(client_id.clone()),
+        })
+        .await
+        .expect("the bound client should be able to refresh");
+    assert_eq!(refreshed.refresh_token.as_str(), "rotated-refresh-token");
+
+    let replay = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "refresh_token".to_owned(),
+            code: None,
+            code_verifier: None,
+            refresh_token: Some(original_refresh_token),
+            redirect_uri: None,
+            client_id: Some(client_id.clone()),
+        })
+        .await
+        .expect_err("the superseded refresh token must not work again");
+    assert!(matches!(replay, TokenExchangeError::UnboundRefreshToken));
+
+    let rotated = harness
+        .service
+        .exchange_token(TokenRequest {
+            grant_type: "refresh_token".to_owned(),
+            code: None,
+            code_verifier: None,
+            refresh_token: Some(refreshed.refresh_token),
+            redirect_uri: None,
+            client_id: Some(client_id),
+        })
+        .await;
+    assert!(rotated.is_ok(), "the rotated token must be usable");
+}
+
+// --- Redirect construction -------------------------------------------
+
+#[tokio::test]
+async fn callback_redirect_preserves_a_query_on_the_registered_redirect_uri() {
+    let harness = Harness::new();
+    let redirect_uri = "https://claude.ai/api/mcp/auth_callback?tenant=macro";
+    let client_id = harness.register(&[redirect_uri]).await;
+
+    harness
+        .service
+        .start_authorization(harness.authorize_request(
+            &client_id,
+            redirect_uri,
+            &code_challenge_for(VICTIM_CODE_VERIFIER),
+        ))
+        .await
+        .expect("authorize should succeed");
+
+    let redirect = harness
+        .service
+        .complete_callback(CallbackRequest {
+            code: Some("upstream-code".to_owned()),
+            state: Some(harness.inflight.only_pending_session_id()),
+            error: None,
+            error_description: None,
+        })
+        .await
+        .expect("callback should succeed");
+
+    assert!(
+        redirect.starts_with("https://claude.ai/api/mcp/auth_callback?tenant=macro&code="),
+        "unexpected redirect: {redirect}"
+    );
+    assert!(redirect.contains("&state=client-state"));
+}
+
+// --- Upstream token lifetime ------------------------------------------
+
+/// Seeds a broker code for `client_id` expiring at `access_token_expires_at`,
+/// bypassing the handshake so the expiry under test is exact.
+async fn seed_issued_code(
+    harness: &Harness,
+    code: &str,
+    client_id: &str,
+    access_token_expires_at: Option<SystemTime>,
+) {
+    harness
+        .inflight
+        .insert_issued(
+            code,
+            IssuedAuthorizationCode {
+                client_id: client_id.to_owned(),
+                access_token: AccessToken::from(UPSTREAM_ACCESS_TOKEN),
+                refresh_token: RefreshToken::from(UPSTREAM_REFRESH_TOKEN),
+                code_challenge: code_challenge_for(VICTIM_CODE_VERIFIER),
+                redirect_uri: TRUSTED_REDIRECT_URI.to_owned(),
+                access_token_expires_at,
+            },
+        )
+        .await
+        .expect("seeding an issued code should succeed");
+}
+
+fn authorization_code_request(code: &str, client_id: &str) -> TokenRequest {
     TokenRequest {
         grant_type: "authorization_code".to_owned(),
         code: Some(code.to_owned()),
-        code_verifier: Some(CODE_VERIFIER.to_owned()),
+        code_verifier: Some(VICTIM_CODE_VERIFIER.to_owned()),
         refresh_token: None,
-        redirect_uri: Some(REDIRECT_URI.to_owned()),
-        client_id: Some(CLIENT_ID.to_owned()),
+        redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
+        client_id: Some(client_id.to_owned()),
     }
 }
 
@@ -239,14 +505,14 @@ fn authorization_code_request(code: &str) -> TokenRequest {
 async fn authorization_code_exchange_returns_remaining_lifetime() {
     // Issued five minutes ago, so the client should be told what is left rather
     // than the full upstream lifetime.
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
     let expires_at = SystemTime::now() + Duration::from_secs(UPSTREAM_EXPIRES_IN - 300);
-    let service = service(FakeInflightAuth::with_issued(
-        "broker-code",
-        issued_code(Some(expires_at)),
-    ));
+    seed_issued_code(&harness, "broker-code", &client_id, Some(expires_at)).await;
 
-    let response = service
-        .exchange_token(authorization_code_request("broker-code"))
+    let response = harness
+        .service
+        .exchange_token(authorization_code_request("broker-code", &client_id))
         .await
         .expect("token exchange should succeed");
 
@@ -260,15 +526,19 @@ async fn authorization_code_exchange_returns_remaining_lifetime() {
 
 #[tokio::test]
 async fn authorization_code_exchange_serializes_expires_in() {
-    let service = service(FakeInflightAuth::with_issued(
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    seed_issued_code(
+        &harness,
         "broker-code",
-        issued_code(Some(
-            SystemTime::now() + Duration::from_secs(UPSTREAM_EXPIRES_IN),
-        )),
-    ));
+        &client_id,
+        Some(SystemTime::now() + Duration::from_secs(UPSTREAM_EXPIRES_IN)),
+    )
+    .await;
 
-    let response = service
-        .exchange_token(authorization_code_request("broker-code"))
+    let response = harness
+        .service
+        .exchange_token(authorization_code_request("broker-code", &client_id))
         .await
         .expect("token exchange should succeed");
 
@@ -284,13 +554,13 @@ async fn authorization_code_exchange_serializes_expires_in() {
 async fn authorization_code_exchange_omits_unknown_expiry() {
     // Codes issued before the broker tracked upstream lifetimes have no expiry,
     // and must not report a fabricated one.
-    let service = service(FakeInflightAuth::with_issued(
-        "broker-code",
-        issued_code(None),
-    ));
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    seed_issued_code(&harness, "broker-code", &client_id, None).await;
 
-    let response = service
-        .exchange_token(authorization_code_request("broker-code"))
+    let response = harness
+        .service
+        .exchange_token(authorization_code_request("broker-code", &client_id))
         .await
         .expect("token exchange should succeed");
 
@@ -304,13 +574,19 @@ async fn authorization_code_exchange_omits_unknown_expiry() {
 
 #[tokio::test]
 async fn expired_access_token_reports_zero_rather_than_underflowing() {
-    let service = service(FakeInflightAuth::with_issued(
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    seed_issued_code(
+        &harness,
         "broker-code",
-        issued_code(Some(SystemTime::now() - Duration::from_secs(60))),
-    ));
+        &client_id,
+        Some(SystemTime::now() - Duration::from_secs(60)),
+    )
+    .await;
 
-    let response = service
-        .exchange_token(authorization_code_request("broker-code"))
+    let response = harness
+        .service
+        .exchange_token(authorization_code_request("broker-code", &client_id))
         .await
         .expect("token exchange should succeed");
 
@@ -319,64 +595,65 @@ async fn expired_access_token_reports_zero_rather_than_underflowing() {
 
 #[tokio::test]
 async fn refresh_grant_returns_upstream_lifetime() {
-    let registry = Arc::new(FakeClientRegistry::with_test_client());
-    let refresh_token = RefreshToken::from("upstream-refresh");
-    registry.bind_now(&refresh_token, CLIENT_ID);
-    let service = service_with(Arc::new(FakeInflightAuth::default()), registry);
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
 
-    let response = service
+    let issued = harness
+        .service
+        .exchange_token(authorization_code_request(&code, &client_id))
+        .await
+        .expect("code exchange should succeed");
+
+    let refreshed = harness
+        .service
         .exchange_token(TokenRequest {
             grant_type: "refresh_token".to_owned(),
             code: None,
             code_verifier: None,
-            refresh_token: Some(refresh_token),
+            refresh_token: Some(issued.refresh_token),
             redirect_uri: None,
-            client_id: Some(CLIENT_ID.to_owned()),
+            client_id: Some(client_id),
         })
         .await
         .expect("refresh exchange should succeed");
 
-    assert_eq!(response.expires_in, Some(UPSTREAM_EXPIRES_IN));
-    assert_eq!(response.access_token.as_str(), "refreshed-access");
+    assert_eq!(refreshed.expires_in, Some(UPSTREAM_EXPIRES_IN));
+    assert_eq!(refreshed.access_token.as_str(), REFRESHED_ACCESS_TOKEN);
 }
 
 #[tokio::test]
 async fn callback_records_upstream_expiry_on_the_issued_code() {
-    let store = Arc::new(FakeInflightAuth::default());
-    let service = service_with(
-        Arc::clone(&store),
-        Arc::new(FakeClientRegistry::with_test_client()),
-    );
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
 
-    store
-        .insert_pending(
-            "session-id",
-            PendingAuthorization {
-                client_id: CLIENT_ID.to_owned(),
-                code_challenge: code_challenge_for(CODE_VERIFIER),
-                client_state: "client-state".to_owned(),
-                client_redirect_uri: REDIRECT_URI.to_owned(),
-            },
-        )
+    harness
+        .service
+        .start_authorization(harness.authorize_request(
+            &client_id,
+            TRUSTED_REDIRECT_URI,
+            &code_challenge_for(VICTIM_CODE_VERIFIER),
+        ))
         .await
-        .expect("pending insert should succeed");
+        .expect("authorize should succeed");
 
-    service
+    harness
+        .service
         .complete_callback(CallbackRequest {
             code: Some("upstream-code".to_owned()),
-            state: Some("session-id".to_owned()),
+            state: Some(harness.inflight.only_pending_session_id()),
             error: None,
             error_description: None,
         })
         .await
         .expect("callback should succeed");
 
-    let issued = store.issued.lock().unwrap();
-    let (_, stored) = issued.iter().next().expect("a code should be issued");
-    let expires_at = stored
-        .access_token_expires_at
-        .expect("issued code should record the upstream expiry");
-    let remaining = expires_at
+    let remaining = harness
+        .inflight
+        .only_issued_expiry()
+        .expect("issued code should record the upstream expiry")
         .duration_since(SystemTime::now())
         .expect("expiry should be in the future")
         .as_secs();
