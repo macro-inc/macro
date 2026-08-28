@@ -7,8 +7,13 @@ import {
 } from '@core/component/SlidableNumberInput';
 import { themeColors, themeStyles } from '@core/component/Themes';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import AlignCenterHorizontal from '@lucide/align-center-horizontal.svg?component-solid';
-import AlignCenterVertical from '@lucide/align-center-vertical.svg?component-solid';
+// Phosphor and Lucide name these axes oppositely: Phosphor names the
+// direction objects move, Lucide the guide line they align to. Centring
+// horizontally (the button between Left and Right) is Lucide's
+// `align-center-vertical` — a vertical guide — and vice versa. Matching the
+// filenames would swap the two glyphs.
+import AlignCenterVertical from '@lucide/align-center-horizontal.svg?component-solid';
+import AlignCenterHorizontal from '@lucide/align-center-vertical.svg?component-solid';
 import AlignBottom from '@lucide/align-end-horizontal.svg?component-solid';
 import AlignRight from '@lucide/align-end-vertical.svg?component-solid';
 import AlignTop from '@lucide/align-start-horizontal.svg?component-solid';
