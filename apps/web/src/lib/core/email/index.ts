@@ -1,6 +1,9 @@
 // Email body parsing utilities
 export {
+  type EmailHtmlStructure,
+  extractEmailTextSnippet,
   parseEmailContent,
+  parseEmailHtmlStructure,
   sanitizeEmailHtml,
   scrubActiveContent,
   stripColorSchemeMediaQueries,

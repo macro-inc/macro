@@ -212,6 +212,54 @@ interface ParsedEmailContent {
   hasTable: boolean;
 }
 
+/** Lightweight derivatives from one inert parse (quote/replyless/snippet). */
+export interface EmailHtmlStructure {
+  hasQuote: boolean;
+  replylessHtml: string | null;
+  snippet: string;
+}
+
+function extractHeadStyleTags(doc: Document): string {
+  return Array.from(doc.head?.querySelectorAll('style') ?? [])
+    .map((style) => {
+      const filtered = stripColorSchemeMediaQueries(style.textContent ?? '');
+      return filtered ? `<style>${filtered}</style>` : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * Single-pass structure extraction for replyless bodies, quote detection, and
+ * collapsed-thread snippets. Cheaper than {@link parseEmailContent} when full
+ * signature/br trimming is not needed yet.
+ */
+export function parseEmailHtmlStructure(
+  htmlContent: string
+): EmailHtmlStructure {
+  const doc = new DOMParser().parseFromString(htmlContent, 'text/html');
+  scrubActiveContent(doc);
+
+  const hasQuote = doc.body.querySelector('.macro_quote') !== null;
+  const snippet = doc.body.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+
+  let replylessHtml: string | null = null;
+  if (hasQuote) {
+    doc.body.querySelector('.macro_quote')?.remove();
+    const styleTags = extractHeadStyleTags(doc);
+    replylessHtml = styleTags
+      ? `${styleTags}\n${doc.body.innerHTML}`
+      : doc.body.innerHTML;
+  }
+
+  return { hasQuote, replylessHtml, snippet };
+}
+
+/** Plain-text snippet for collapsed message rows. */
+export function extractEmailTextSnippet(htmlContent: string): string {
+  return parseEmailHtmlStructure(htmlContent).snippet;
+}
+
 export function parseEmailContent(
   htmlContent: string,
   removeSignature: boolean = true,
@@ -226,15 +274,7 @@ export function parseEmailContent(
 
   const hasTable = Boolean(doc.querySelector('table'));
 
-  // Extract style tags from head, stripping prefers-color-scheme media queries
-  // to prevent email dark mode styles from conflicting with our forced backgrounds
-  const styleTags = Array.from(doc.head?.querySelectorAll('style') ?? [])
-    .map((style) => {
-      const filtered = stripColorSchemeMediaQueries(style.textContent ?? '');
-      return filtered ? `<style>${filtered}</style>` : '';
-    })
-    .filter(Boolean)
-    .join('\n');
+  const styleTags = extractHeadStyleTags(doc);
 
   let mainContent = doc.body?.innerHTML ?? doc.documentElement?.innerHTML;
   let signature: string | null = null;

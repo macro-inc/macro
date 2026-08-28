@@ -1,5 +1,6 @@
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { useEmail } from '@core/context/user';
+import { extractEmailTextSnippet } from '@core/email';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { cn } from '@ui/utils/classname';
 import { createMemo, Show } from 'solid-js';
@@ -37,12 +38,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       return props.message.body_text.replace(/\s+/g, ' ').trim();
     }
     if (props.message.body_html_sanitized) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(
-        props.message.body_html_sanitized,
-        'text/html'
-      );
-      return doc.body.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      return extractEmailTextSnippet(props.message.body_html_sanitized);
     }
     return '';
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseEmailContent,
+  parseEmailHtmlStructure,
   sanitizeEmailHtml,
   trimTrailingBrs,
 } from '../parse-email-html';
@@ -143,6 +144,26 @@ describe('parseEmailContent', () => {
     const html = '   \n\t  ';
     const result = parseEmailContent(html);
     expect(result.hasTable).toBe(false);
+  });
+});
+
+describe('parseEmailHtmlStructure', () => {
+  it('detects macro quotes and derives replyless html', () => {
+    const html =
+      '<head><style>.q{color:red}</style></head><body><p>Hi</p><div class="macro_quote">quoted</div></body>';
+    const result = parseEmailHtmlStructure(html);
+    expect(result.hasQuote).toBe(true);
+    expect(result.replylessHtml).toContain('<p>Hi</p>');
+    expect(result.replylessHtml).not.toContain('macro_quote');
+    expect(result.snippet).toBe('Hi quoted');
+  });
+
+  it('returns null replyless html when there is no quote', () => {
+    const html = '<p>Hello</p>';
+    const result = parseEmailHtmlStructure(html);
+    expect(result.hasQuote).toBe(false);
+    expect(result.replylessHtml).toBeNull();
+    expect(result.snippet).toBe('Hello');
   });
 });
 

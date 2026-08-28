@@ -4,6 +4,7 @@ import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import {
   parseEmailContent,
+  parseEmailHtmlStructure,
   processEmailColors,
   type ThemeColorParams,
 } from '@core/email';
@@ -18,6 +19,7 @@ import {
   createSignal,
   Match,
   onCleanup,
+  onMount,
   Show,
   Switch,
   untrack,
@@ -43,9 +45,52 @@ interface EmailMessageBodyProps {
   isFocused: boolean;
 }
 
+function personalFontOverrideCss(isPersonal: boolean, isMacroSender: boolean) {
+  return isPersonal && !isMacroSender
+    ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
+    : '';
+}
+
+function populateMessageDiv(
+  messageDiv: HTMLDivElement,
+  html: string,
+  isPersonal: boolean,
+  isMacroSender: boolean
+) {
+  messageDiv.innerHTML = html;
+  for (const a of messageDiv.querySelectorAll<HTMLAnchorElement>('a[style]')) {
+    if (a.style.backgroundColor) {
+      a.dataset.macroBtn = '';
+      for (const child of a.querySelectorAll('*')) {
+        (child as HTMLElement).dataset.macroBtn = '';
+      }
+    }
+  }
+  for (const a of messageDiv.querySelectorAll('a[href]')) {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  }
+  interceptMailtoLinks(messageDiv);
+  messageDiv.style.userSelect = 'text';
+  messageDiv.style.setProperty('-webkit-user-select', 'text');
+  messageDiv.style.cursor = 'auto';
+
+  const root = messageDiv.getRootNode();
+  if (root instanceof ShadowRoot) {
+    const styleEl = root.querySelector<HTMLStyleElement>(
+      'style[data-macro-email-body]'
+    );
+    if (styleEl) {
+      styleEl.textContent = `${EMAIL_BODY_CONTAINMENT_CSS}${personalFontOverrideCss(isPersonal, isMacroSender)}`;
+    }
+  }
+}
+
 export function EmailMessageBody(props: EmailMessageBodyProps) {
   const [showFullHTML, setShowFullHTML] = createSignal<boolean>(false);
   const userEmail = useEmail();
+  const [hostContainer, setHostContainer] = createSignal<HTMLDivElement>();
+  const [messageDiv, setMessageDiv] = createSignal<HTMLDivElement>();
 
   if (DEV_MODE_ENV) {
     console.log(
@@ -54,29 +99,16 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     );
   }
 
-  // If we don't have body replyless, it may be because it hasn't been generated yet. For instance, this is the case immediately after a message is sent. We can use the HTML to parse the message correctly.
+  const htmlStructure = createMemo(() => {
+    const html = props.message.body_html_sanitized?.toString();
+    if (!html) return undefined;
+    return parseEmailHtmlStructure(html);
+  });
+
   const bodyReplyless = createMemo(() => {
-    let replyless = props.message.body_replyless ?? '';
-    if (!replyless) {
-      if (props.message.body_html_sanitized) {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(
-          props.message.body_html_sanitized.toString(),
-          'text/html'
-        );
-        const styleTags = Array.from(doc.head?.querySelectorAll('style') ?? [])
-          .map((style) => style.outerHTML)
-          .join('\n');
-        const quoted = doc.body.querySelector('.macro_quote');
-        if (quoted) {
-          quoted?.remove();
-          return styleTags
-            ? `${styleTags}\n${doc.body.innerHTML}`
-            : doc.body.innerHTML;
-        }
-      }
-    }
-    return replyless;
+    const fromBackend = props.message.body_replyless ?? '';
+    if (fromBackend) return fromBackend;
+    return htmlStructure()?.replylessHtml ?? '';
   });
 
   const isPlaintext = () => !props.message.body_html_sanitized;
@@ -102,15 +134,11 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       : parsedBodyReplyless();
   };
 
-  // Sent-from-Macro messages strip the quoted thread from body_macro at send
-  // time, and the backend skips replyless trimming for "Fwd:" subjects — so a
-  // quote in the full html means there is hidden content regardless of
-  // body_replyless.
   const bodyHtmlHasQuote = createMemo(() => {
-    const html = props.message.body_html_sanitized;
-    if (!html || !props.message.body_macro) return false;
-    const doc = new DOMParser().parseFromString(html.toString(), 'text/html');
-    return doc.body.querySelector('.macro_quote') !== null;
+    if (!props.message.body_html_sanitized || !props.message.body_macro) {
+      return false;
+    }
+    return htmlStructure()?.hasQuote ?? false;
   });
 
   const hasHiddenReplyStructure = () => {
@@ -125,7 +153,6 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     );
   };
 
-  // TODO it might be nice to do some additional checks here, e.g. check if this message was sent from a user that the user has sent a message to before.
   const isPersonal = createMemo(() =>
     isPersonalMessage(props.message, userEmail(), props.personalSenders())
   );
@@ -135,55 +162,40 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     return senderEmail?.endsWith('@macro.com') ?? false;
   });
 
-  const host = createMemo(() => {
-    themeUpdate();
-    const hostContainer = document.createElement('div');
-    const shadow = hostContainer.attachShadow({ mode: 'open' });
-    // Style that uses a CSS variable to control image visibility
+  onMount(() => {
+    const host = hostContainer();
+    if (!host || host.shadowRoot) return;
+
+    const shadow = host.attachShadow({ mode: 'open' });
     const styleEl = document.createElement('style');
-    // Normalize font in email
-    const fontOverride =
-      isPersonal() && !isMacroSender()
-        ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
-        : '';
-    // Containment (images, signatures, quotes, pre/code) lives in
-    // EMAIL_BODY_CONTAINMENT_CSS so the snapshot harness stays in lockstep.
-    styleEl.textContent = `${EMAIL_BODY_CONTAINMENT_CSS}${fontOverride}`;
+    styleEl.dataset.macroEmailBody = '';
+    styleEl.textContent = `${EMAIL_BODY_CONTAINMENT_CSS}${personalFontOverrideCss(isPersonal(), isMacroSender())}`;
     shadow.appendChild(styleEl);
-    const messageDiv = document.createElement('div');
-    messageDiv.innerHTML = source()?.mainContent ?? '';
-    // Mark button-like anchors so the font override doesn't break their sizing
-    for (const a of messageDiv.querySelectorAll<HTMLAnchorElement>(
-      'a[style]'
-    )) {
-      if (a.style.backgroundColor) {
-        a.dataset.macroBtn = '';
-        for (const child of a.querySelectorAll('*')) {
-          (child as HTMLElement).dataset.macroBtn = '';
-        }
-      }
-    }
-    // Open links in a new tab instead of navigating the current one
-    for (const a of messageDiv.querySelectorAll('a[href]')) {
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener noreferrer');
-    }
-    // Raw mailto: anchors open the in-app composer instead of the OS mail client
-    interceptMailtoLinks(messageDiv);
-    messageDiv.style.userSelect = 'text';
-    // Safari resolves only the -webkit- prefixed form of user-select
-    // (unprefixed shipped in Safari 26.4), and WebKit inherits the app-wide
-    // `user-select: none` through the shadow boundary — without the prefix,
-    // email text isn't selectable in Safari.
-    messageDiv.style.setProperty('-webkit-user-select', 'text');
-    messageDiv.style.cursor = 'auto';
-    shadow.appendChild(messageDiv);
-    return hostContainer;
+
+    const contentDiv = document.createElement('div');
+    shadow.appendChild(contentDiv);
+    setMessageDiv(contentDiv);
   });
 
-  // Resolve images in two sequential steps, resolving cid urls and then fetching images on tauri via plaformFetch
   createEffect(() => {
-    const root = host().shadowRoot;
+    const contentDiv = messageDiv();
+    if (!contentDiv) return;
+
+    source();
+    isPersonal();
+    isMacroSender();
+
+    populateMessageDiv(
+      contentDiv,
+      source()?.mainContent ?? '',
+      isPersonal(),
+      isMacroSender()
+    );
+  });
+
+  createEffect(() => {
+    source();
+    const root = hostContainer()?.shadowRoot;
     if (!root) return;
     const attachments = props.message.attachments;
 
@@ -202,11 +214,10 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     });
   });
 
-  // Process the email colors when: the theme changes, or the source HTML changes.
   createEffect(() => {
     themeUpdate();
     showFullHTML();
-    const root = host().shadowRoot;
+    const root = hostContainer()?.shadowRoot;
     if (root) {
       if (isPersonal() || !source()?.hasTable) {
         queueMicrotask(() => {
@@ -231,16 +242,15 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
             'white',
             'important'
           );
-          // Some emails don't have a color set, so we need to set it to black to ensure text is readable againnst white background
           contentWrapper.style.setProperty('color', 'black');
         }
       }
     }
   });
 
-  // Hide images when the message body is not expanded (via CSS variable)
   createEffect(() => {
-    const container = host();
+    const container = hostContainer();
+    if (!container) return;
     const shouldHide = !props.isBodyExpanded();
     container.style.setProperty(
       '--macro-email-img-display',
@@ -248,21 +258,19 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     );
   });
 
-  // After containment, shrink leftover wide canvases (newsletter tables)
-  // to the pane. Pathological width is floored so type stays readable.
   createEffect(() => {
-    const container = host();
-    // Re-run when source changes
+    const container = hostContainer();
+    if (!container) return;
     source();
 
     const clearScale = () => {
       const root = container.shadowRoot;
       if (!root) return;
-      const messageDiv = root.querySelector('div');
-      if (messageDiv instanceof HTMLElement) {
-        messageDiv.style.zoom = '';
-        messageDiv.style.overflow = '';
-        messageDiv.style.overflowX = '';
+      const contentDiv = root.querySelector('div');
+      if (contentDiv instanceof HTMLElement) {
+        contentDiv.style.zoom = '';
+        contentDiv.style.overflow = '';
+        contentDiv.style.overflowX = '';
       }
     };
 
@@ -274,38 +282,29 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const applyScale = () => {
       const root = container.shadowRoot;
       if (!root) return;
-      const messageDiv = root.querySelector('div');
-      if (!messageDiv || !(messageDiv instanceof HTMLElement)) return;
+      const contentDiv = root.querySelector('div');
+      if (!contentDiv || !(contentDiv instanceof HTMLElement)) return;
 
-      // Reset any previous scaling before measuring. overflowX is a longhand
-      // and survives clearing the overflow shorthand.
-      messageDiv.style.zoom = '';
-      messageDiv.style.overflow = '';
-      messageDiv.style.overflowX = '';
+      contentDiv.style.zoom = '';
+      contentDiv.style.overflow = '';
+      contentDiv.style.overflowX = '';
 
       const fit = fitToWidthZoom({
         containerWidth: container.clientWidth,
-        contentWidth: messageDiv.scrollWidth,
+        contentWidth: contentDiv.scrollWidth,
       });
       if (!fit) {
-        // When content fits, leave overflow alone. overflow:auto on a fitting
-        // body turns hidden tracking-pixel divs into a message-height scrollbar.
         return;
       }
-      // Use zoom instead of transform: scale() so backgrounds, borders, and
-      // layout shrink together without clipping. The floor keeps leftover
-      // canvas overflow (a 600px newsletter on a skinny pane) readable.
-      messageDiv.style.zoom = `${fit.zoom}`;
+      contentDiv.style.zoom = `${fit.zoom}`;
       if (fit.overflowsAfterZoom) {
-        messageDiv.style.overflowX = 'auto';
+        contentDiv.style.overflowX = 'auto';
       }
     };
 
-    // Re-run on container resize (e.g. orientation change, split resize)
     const resizeObserver = new ResizeObserver(() => applyScale());
     resizeObserver.observe(container);
 
-    // Re-run when images inside the shadow DOM finish loading
     const root = container.shadowRoot;
     const images = root ? Array.from(root.querySelectorAll('img')) : [];
     const onImageLoad = () => applyScale();
@@ -315,7 +314,6 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       }
     }
 
-    // Initial measurement after layout
     requestAnimationFrame(() => applyScale());
 
     onCleanup(() => {
@@ -346,7 +344,6 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         }}
       >
         <Switch>
-          {/* If available, we use body_macro to render "Macro-fied" email content in static markdown with, e.g. correctly styled document mentions. */}
           <Match when={!showFullHTML() && props.message.body_macro}>
             {(bodyMacro) => {
               return (
@@ -365,7 +362,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               target="internal"
             />
           </Match>
-          <Match when={true}>{host()}</Match>
+          <Match when={true}>
+            <div ref={setHostContainer} />
+          </Match>
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>
           <div class="flex items-center mt-1.5 mb-2">
