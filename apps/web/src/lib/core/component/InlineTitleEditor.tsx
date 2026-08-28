@@ -82,8 +82,12 @@ export function InlineTitleEditor(props: {
         <input
           ref={(el) => {
             if (!props.doubleClickToEdit) return;
-            el.focus();
-            el.select();
+            // Focus after the input is connected — a ref callback is too
+            // early and leaves document.activeElement on the body.
+            queueMicrotask(() => {
+              el.focus();
+              el.select();
+            });
           }}
           type="text"
           aria-label={props.ariaLabel}

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -91,7 +91,7 @@ describe('InlineTitleEditor', () => {
       );
 
       expect(editor()?.value).toBe('Session');
-      expect(document.activeElement).toBe(editor());
+      await waitFor(() => expect(document.activeElement).toBe(editor()));
     });
 
     it('leaves single clicks to surrounding chrome', async () => {
@@ -121,7 +121,7 @@ describe('InlineTitleEditor', () => {
       screen.getByRole('button', { name: 'Agent session name' }).focus();
       await userEvent.keyboard('{Enter}');
 
-      expect(document.activeElement).toBe(editor());
+      await waitFor(() => expect(document.activeElement).toBe(editor()));
     });
 
     it('renames on Enter and returns to the static title', async () => {
