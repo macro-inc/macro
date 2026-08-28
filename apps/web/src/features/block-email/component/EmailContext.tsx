@@ -840,15 +840,13 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     const messageListHeight = messageList.getBoundingClientRect().height;
     const containerHeight = containerRef.getBoundingClientRect().height;
 
-    // Load more if container isn't filled
+    // Prefetch older pages in the background; first paint should not wait.
     if (
       messageListHeight < containerHeight &&
       threadQuery.hasNextPage &&
       !threadQuery.isFetching
     ) {
-      threadQuery.fetchNextPage();
-      containerFilled = false;
-      return false;
+      void threadQuery.fetchNextPage();
     }
     containerFilled = true;
     return true;

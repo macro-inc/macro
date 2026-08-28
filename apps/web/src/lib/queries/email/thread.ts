@@ -37,6 +37,18 @@ import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
 
+/** Warm thread data before open (inbox focus / hover). Idempotent. */
+export function prefetchEmailThread(threadId: string): void {
+  if (!threadId) return;
+
+  const queryKey = emailKeys.threadMessages(threadId).queryKey;
+  const state = queryClient.getQueryState(queryKey);
+  if (state?.dataUpdatedAt) return;
+  if (state?.fetchStatus === 'fetching') return;
+
+  void fetchAndCacheThread(threadId);
+}
+
 /** Shared REST infinite-query options for thread fetching. */
 export function threadQueryOptions(threadId: string) {
   return {

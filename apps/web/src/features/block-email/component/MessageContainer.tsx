@@ -4,7 +4,9 @@ import { useEmailContext } from '@block-email/component/EmailContext';
 import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
+import { ViewportGate } from '@block-email/component/ViewportGate';
 import { getSenderMacroId } from '@block-email/util/emailUser';
+import { getMessageSnippet } from '@block-email/util/messageSnippet';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
@@ -264,17 +266,26 @@ export function MessageContainer(props: MessageContainerProps) {
                 }
               />
               <div class="ph-no-capture text-sm text-ink pr-4">
-                <EmailMessageBody
-                  message={props.message}
-                  personalSenders={context.messages.personalSenders}
-                  isBodyExpanded={isBodyExpanded}
-                  setExpandedMessageBody={(id) =>
-                    context.messages.setExpandedBodyId(id, true)
+                <ViewportGate
+                  eager={props.isLastMessage}
+                  placeholder={
+                    <div class="text-sm text-ink-muted line-clamp-6 whitespace-pre-wrap">
+                      {getMessageSnippet(props.message)}
+                    </div>
                   }
-                  setFocusedMessageId={context.messages.setFocused}
-                  isFirstMessageInThread={props.isFirstMessage}
-                  isFocused={props.isFocused}
-                />
+                >
+                  <EmailMessageBody
+                    message={props.message}
+                    personalSenders={context.messages.personalSenders}
+                    isBodyExpanded={isBodyExpanded}
+                    setExpandedMessageBody={(id) =>
+                      context.messages.setExpandedBodyId(id, true)
+                    }
+                    setFocusedMessageId={context.messages.setFocused}
+                    isFirstMessageInThread={props.isFirstMessage}
+                    isFocused={props.isFocused}
+                  />
+                </ViewportGate>
               </div>
               {/* Image attachments */}
               <Show when={imageAttachmentsWithSfs().length > 0}>

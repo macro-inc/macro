@@ -66,6 +66,7 @@ import {
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { prefetchEmailThread } from '@queries/email/thread';
 import {
   type NotificationEntityRef,
   updateNotificationsForEntities,
@@ -615,6 +616,10 @@ export const openEntityInSplitFromUnifiedList = async (
     return;
   }
   if (entity.type === 'foreign') return;
+
+  if (entity.type === 'email') {
+    prefetchEmailThread(entity.id);
+  }
 
   const blockOrchestrator = splitManager.getOrchestrator();
 

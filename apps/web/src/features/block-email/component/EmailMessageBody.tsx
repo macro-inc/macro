@@ -45,6 +45,14 @@ interface EmailMessageBodyProps {
   isFocused: boolean;
 }
 
+function scheduleAfterFirstPaint(fn: () => void) {
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(fn, { timeout: 120 });
+    return;
+  }
+  requestAnimationFrame(() => requestAnimationFrame(fn));
+}
+
 function personalFontOverrideCss(isPersonal: boolean, isMacroSender: boolean) {
   return isPersonal && !isMacroSender
     ? `*:not(code):not(pre):not(code *):not(pre *):not([data-macro-btn]){font-family: system-ui, sans-serif !important; font-size: inherit !important; line-height: 1.5 !important;}`
@@ -102,6 +110,9 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
   const htmlStructure = createMemo(() => {
     const html = props.message.body_html_sanitized?.toString();
     if (!html) return undefined;
+    if (props.message.body_replyless && !props.message.body_macro) {
+      return undefined;
+    }
     return parseEmailHtmlStructure(html);
   });
 
@@ -113,26 +124,30 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
   const isPlaintext = () => !props.message.body_html_sanitized;
 
-  const parsedBodyHtml = createMemo(() => {
-    return props.message.body_html_sanitized
-      ? parseEmailContent(
-          props.message.body_html_sanitized,
-          !showFullHTML(),
-          !showFullHTML()
-        )
-      : undefined;
+  const parsedSource = createMemo(() => {
+    const useFullHtml = showFullHTML() || props.isFirstMessageInThread;
+    if (useFullHtml && props.message.body_html_sanitized) {
+      return parseEmailContent(
+        props.message.body_html_sanitized,
+        !showFullHTML(),
+        !showFullHTML()
+      );
+    }
+    const replyless = bodyReplyless();
+    if (replyless) {
+      return parseEmailContent(replyless);
+    }
+    if (props.message.body_html_sanitized) {
+      return parseEmailContent(
+        props.message.body_html_sanitized,
+        !showFullHTML(),
+        !showFullHTML()
+      );
+    }
+    return undefined;
   });
 
-  const parsedBodyReplyless = createMemo(() => {
-    const processed = bodyReplyless();
-    return processed ? parseEmailContent(processed) : undefined;
-  });
-
-  const source = () => {
-    return showFullHTML() || props.isFirstMessageInThread
-      ? parsedBodyHtml()
-      : parsedBodyReplyless();
-  };
+  const source = () => parsedSource();
 
   const bodyHtmlHasQuote = createMemo(() => {
     if (!props.message.body_html_sanitized || !props.message.body_macro) {
@@ -220,7 +235,12 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const root = hostContainer()?.shadowRoot;
     if (root) {
       if (isPersonal() || !source()?.hasTable) {
-        queueMicrotask(() => {
+        let disposed = false;
+        onCleanup(() => {
+          disposed = true;
+        });
+        scheduleAfterFirstPaint(() => {
+          if (disposed) return;
           untrack(() => {
             const theme: ThemeColorParams = {
               inkL: themeReactive.c0.l[0](),

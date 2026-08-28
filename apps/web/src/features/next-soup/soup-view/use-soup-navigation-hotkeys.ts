@@ -15,6 +15,7 @@ import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
+import { prefetchEmailThread } from '@queries/email/thread';
 import { debounce } from '@solid-primitives/scheduled';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -154,6 +155,9 @@ export const useSoupNavigationHotkeys = (
   const navigateAndSelectEntity = (offset: number) => {
     const nextRow = soup.navigate.by(offset, { skipGroupHeaders: true });
     if (!nextRow) return true;
+    if (nextRow.row.original.type === 'email') {
+      prefetchEmailThread(nextRow.row.original.id);
+    }
     soup.selection.select(nextRow.row.original);
     scrollTo(nextRow.index);
     return true;

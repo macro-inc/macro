@@ -103,6 +103,7 @@ import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import InfoIcon from '@phosphor/info.svg';
 import Spinner from '@phosphor/spinner.svg';
+import { prefetchEmailThread } from '@queries/email/thread';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer, Tooltip } from '@ui';
@@ -1508,6 +1509,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         if (panel.handle.isControllerSplit())
                                           return;
                                         soup.focus.setIndex(row.index);
+                                        if (row.original.type === 'email') {
+                                          prefetchEmailThread(row.original.id);
+                                        }
                                       }}
                                       showUnrollNotifications={
                                         row.original.type !== 'email' &&
