@@ -5,10 +5,10 @@ use axum::http::{Request, header};
 use chrono::Utc;
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
-    BotScope, HARNESS_TOKEN_HEADER, HarnessAuthentication, HarnessAuthorizationOwner,
-    HarnessAuthorizer, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, MacroUserAuthentication, NoUserApiKeyAuthorizer,
-    ValidatedIdentity,
+    BotScope, HARNESS_FOR_MACRO_USER_ID_HEADER, HARNESS_TOKEN_HEADER, HarnessAuthentication,
+    HarnessAuthorizationOwner, HarnessAuthorizer, InternalAuthConfig, JwtValidator,
+    MacroAuthorizationError, MacroAuthorizationServiceImpl, MacroUserAuthentication,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
@@ -267,6 +267,17 @@ fn as_harness(request_body: String) -> Request<Body> {
         .unwrap()
 }
 
+/// A harness request that forwards a verified acting-user claim, the way the
+/// daemon does for the user who mentioned the agent.
+fn as_harness_for(user: &str, request_body: String) -> Request<Body> {
+    Request::post("/")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(HARNESS_TOKEN_HEADER, HARNESS_TOKEN)
+        .header(HARNESS_FOR_MACRO_USER_ID_HEADER, user)
+        .body(Body::from(request_body))
+        .unwrap()
+}
+
 fn as_user(user: &str, request_body: String) -> Request<Body> {
     Request::post("/")
         .header(header::CONTENT_TYPE, "application/json")
@@ -357,8 +368,29 @@ async fn a_bot_may_not_name_another_bot() {
 }
 
 #[tokio::test]
-async fn a_harness_opens_a_session_for_a_bound_agent() {
+async fn a_harness_session_is_owned_by_its_verified_acting_user() {
     let opener = Arc::new(RecordingOpener::default());
+    // The daemon forwards the mention sender as a verified acting-user claim;
+    // that user - not the token's default owner - owns the session.
+    let request = as_harness_for(
+        STRANGER,
+        body(Some(BotId::TEST_A.as_uuid()), "/srv/agent", None),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let opened = opener.opened.lock().unwrap();
+    assert_eq!(opened[0].bot_id, BotId::TEST_A);
+    assert_eq!(opened[0].owner.as_ref(), STRANGER);
+}
+
+#[tokio::test]
+async fn a_harness_may_not_own_a_session_by_an_unverified_body_claim() {
+    let opener = Arc::new(RecordingOpener::default());
+    // No forwarded claim, so the harness acts as its verified default owner.
+    // The body's `owner` is a claim the harness cannot verify and must be
+    // ignored - otherwise a daemon could plant sessions in any account.
     let request = as_harness(body(
         Some(BotId::TEST_A.as_uuid()),
         "/srv/agent",
@@ -370,9 +402,7 @@ async fn a_harness_opens_a_session_for_a_bound_agent() {
     assert_eq!(response.status(), StatusCode::CREATED);
     let opened = opener.opened.lock().unwrap();
     assert_eq!(opened[0].bot_id, BotId::TEST_A);
-    // The body's claimed owner wins for harness callers: the daemon opens
-    // sessions for whoever mentioned the agent.
-    assert_eq!(opened[0].owner.as_ref(), STRANGER);
+    assert_eq!(opened[0].owner.as_ref(), OWNER);
 }
 
 #[tokio::test]

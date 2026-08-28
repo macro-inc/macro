@@ -1,9 +1,9 @@
 # Everything a coding agent daemon needs to serve one harness's sessions.
 #
-# Deliberately credential-free: run `macrod login` (or just `macrod` on a
-# fresh setup) to pair this daemon with a Macro deployment. Pairing prints a
-# code, you approve it in the web app (choosing private or team), and the
-# minted credential is kept in `macro.credentials.json` next to this file.
+# Deliberately credential-free: `macrod` starts unpaired and the control
+# panel offers pairing (press p). Pairing shows a code, you approve it in the
+# web app (choosing private or team), and the minted credential is kept in
+# `macro.credentials.json` next to this file.
 
 [macro]
 # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime

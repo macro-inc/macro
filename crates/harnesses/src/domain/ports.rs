@@ -10,8 +10,8 @@ use uuid::Uuid;
 
 use super::models::{
     ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreatePairingRequest, CreatedPairing,
-    Harness, HarnessAgent, HarnessOwner, PairingClaimFacts, PairingDetails, PairingStatus,
-    RequestedHarnessScope,
+    Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
+    PairingStatus, RequestedHarnessScope,
 };
 
 /// A pairing row to persist.
@@ -156,6 +156,12 @@ pub trait HarnessRepo: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessAgent>, Self::Err>> + Send;
+
+    /// List recent sessions of agents bound to a harness, newest first.
+    fn list_sessions(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Vec<HarnessSession>, Self::Err>> + Send;
 }
 
 /// Harness service.
@@ -206,6 +212,27 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessAgent>, HarnessError>> + Send;
+
+    /// The authenticated harness's own registration.
+    fn get_self(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
+
+    /// Retire the authenticated harness: soft-delete it and revoke its tokens.
+    ///
+    /// Holding a valid credential is the whole authorization - the daemon may
+    /// always retire itself.
+    fn delete_self(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
+
+    /// List recent sessions of agents bound to the authenticated harness.
+    fn list_sessions(
+        &self,
+        harness_id: HarnessId,
+    ) -> impl Future<Output = Result<Vec<HarnessSession>, HarnessError>> + Send;
 }
 
 /// Harness service error.

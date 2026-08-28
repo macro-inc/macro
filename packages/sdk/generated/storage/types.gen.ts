@@ -5904,6 +5904,52 @@ export type HarnessOwner = {
     type: 'team';
 };
 
+/**
+ * An agent session running on a harness, as listed for the daemon's UI.
+ */
+export type HarnessSession = {
+    /**
+     * The agent's `@` handle.
+     */
+    bot_handle: string;
+    /**
+     * The agent the session runs for.
+     */
+    bot_id: BotId;
+    /**
+     * The agent's display name.
+     */
+    bot_name: string;
+    /**
+     * Creation timestamp.
+     */
+    created_at: string;
+    /**
+     * Model the session was opened with.
+     */
+    model: string;
+    /**
+     * Last-activity timestamp.
+     */
+    modified_at: string;
+    /**
+     * The session's display name.
+     */
+    name: string;
+    /**
+     * The user the session belongs to.
+     */
+    owner_id: string;
+    /**
+     * The session id.
+     */
+    session_id: string;
+    /**
+     * Session lifecycle status, e.g. `no_messages`, `active`.
+     */
+    status: string;
+};
+
 export type HashMap = {
     [key: string]: (PresignedUrl & {
         type: 'external';
@@ -12574,6 +12620,48 @@ export type ListHarnessesResponses = {
 
 export type ListHarnessesResponse = ListHarnessesResponses[keyof ListHarnessesResponses];
 
+export type DeleteSelfHarnessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me';
+};
+
+export type DeleteSelfHarnessErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteSelfHarnessError = DeleteSelfHarnessErrors[keyof DeleteSelfHarnessErrors];
+
+export type DeleteSelfHarnessResponses = {
+    204: void;
+};
+
+export type DeleteSelfHarnessResponse = DeleteSelfHarnessResponses[keyof DeleteSelfHarnessResponses];
+
+export type GetSelfHarnessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me';
+};
+
+export type GetSelfHarnessErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSelfHarnessError = GetSelfHarnessErrors[keyof GetSelfHarnessErrors];
+
+export type GetSelfHarnessResponses = {
+    200: Harness;
+};
+
+export type GetSelfHarnessResponse = GetSelfHarnessResponses[keyof GetSelfHarnessResponses];
+
 export type ListHarnessAgentsData = {
     body?: never;
     path?: never;
@@ -12593,6 +12681,26 @@ export type ListHarnessAgentsResponses = {
 };
 
 export type ListHarnessAgentsResponse = ListHarnessAgentsResponses[keyof ListHarnessAgentsResponses];
+
+export type ListHarnessSessionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me/sessions';
+};
+
+export type ListHarnessSessionsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessSessionsError = ListHarnessSessionsErrors[keyof ListHarnessSessionsErrors];
+
+export type ListHarnessSessionsResponses = {
+    200: Array<HarnessSession>;
+};
+
+export type ListHarnessSessionsResponse = ListHarnessSessionsResponses[keyof ListHarnessSessionsResponses];
 
 export type DeleteHarnessData = {
     body?: never;

@@ -173,6 +173,13 @@ impl HarnessRepo for FakeRepo {
     ) -> Result<Vec<HarnessAgent>, Self::Err> {
         Ok(Vec::new())
     }
+
+    async fn list_sessions(
+        &self,
+        _harness_id: HarnessId,
+    ) -> Result<Vec<HarnessSession>, Self::Err> {
+        Ok(Vec::new())
+    }
 }
 
 fn service(repo: FakeRepo) -> HarnessServiceImpl<FakeRepo> {

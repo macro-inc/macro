@@ -766,6 +766,7 @@ export * from './harnessOwnerOneOf';
 export * from './harnessOwnerOneOfThree';
 export * from './harnessOwnerOneOfThreeType';
 export * from './harnessOwnerOneOfType';
+export * from './harnessSession';
 export * from './hashMap';
 export * from './hashMapOneOf';
 export * from './hashMapOneOfAllOf';

@@ -8414,6 +8414,47 @@ export const listHarnessesResponseItem = zod
 export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 
 /**
+ * @summary Handler for `GET /harnesses/me`.
+ */
+export const getSelfHarnessResponse = zod
+  .object({
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .union([
+        zod
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('User-owned (private) harness.'),
+        zod
+          .object({
+            team_id: zod.uuid().describe('Owner team id.'),
+            type: zod.enum(['team']),
+          })
+          .describe('Team-owned harness, usable by every team member.'),
+      ])
+      .describe(
+        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+
+/**
  * @summary Handler for `GET /harnesses/me/agents`.
  */
 export const listHarnessAgentsResponseItem = zod
@@ -8425,6 +8466,31 @@ export const listHarnessAgentsResponseItem = zod
   .describe('An agent bound to a harness, as listed for the daemon.');
 export const listHarnessAgentsResponse = zod.array(
   listHarnessAgentsResponseItem
+);
+
+/**
+ * @summary Handler for `GET /harnesses/me/sessions`.
+ */
+export const listHarnessSessionsResponseItem = zod
+  .object({
+    bot_handle: zod.string().describe("The agent's `@` handle."),
+    bot_id: zod.string(),
+    bot_name: zod.string().describe("The agent's display name."),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    model: zod.string().describe('Model the session was opened with.'),
+    modified_at: zod.iso.datetime({}).describe('Last-activity timestamp.'),
+    name: zod.string().describe("The session's display name."),
+    owner_id: zod.string().describe('The user the session belongs to.'),
+    session_id: zod.uuid().describe('The session id.'),
+    status: zod
+      .string()
+      .describe('Session lifecycle status, e.g. `no_messages`, `active`.'),
+  })
+  .describe(
+    "An agent session running on a harness, as listed for the daemon's UI."
+  );
+export const listHarnessSessionsResponse = zod.array(
+  listHarnessSessionsResponseItem
 );
 
 /**

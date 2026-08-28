@@ -835,7 +835,7 @@
           },
           "owner": {
             "type": ["string", "null"],
-            "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions; required for bot callers without verified\nacting-user claims.\n\nFor bot callers this is a claim, not a verified fact: it is scoped to\nthe bot's own sessions, but the named user owns the session on the\nbot's say-so."
+            "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions, and for harness callers, whose verified acting\nuser (owner or confirmed team member) owns the session instead;\nrequired for bot callers without verified acting-user claims.\n\nFor bot callers this is a claim, not a verified fact: it is scoped to\nthe bot's own sessions, but the named user owns the session on the\nbot's say-so."
           },
           "prompt": {
             "type": ["string", "null"],

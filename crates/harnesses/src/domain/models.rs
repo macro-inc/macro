@@ -192,6 +192,32 @@ pub struct HarnessAgent {
     pub handle: String,
 }
 
+/// An agent session running on a harness, as listed for the daemon's UI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct HarnessSession {
+    /// The session id.
+    pub session_id: Uuid,
+    /// The agent the session runs for.
+    pub bot_id: BotId,
+    /// The agent's display name.
+    pub bot_name: String,
+    /// The agent's `@` handle.
+    pub bot_handle: String,
+    /// The session's display name.
+    pub name: String,
+    /// Session lifecycle status, e.g. `no_messages`, `active`.
+    pub status: String,
+    /// Model the session was opened with.
+    pub model: String,
+    /// The user the session belongs to.
+    pub owner_id: String,
+    /// Creation timestamp.
+    pub created_at: DateTime<Utc>,
+    /// Last-activity timestamp.
+    pub modified_at: DateTime<Utc>,
+}
+
 /// Persisted pairing state consumed by the domain service.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PairingStatus {

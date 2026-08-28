@@ -56,7 +56,13 @@ impl HarnessApi {
         }
     }
 
-    /// Open an external session for one of this harness's bound agents.
+    /// Open an external session for one of this harness's bound agents,
+    /// acting for the user who mentioned the agent.
+    ///
+    /// The acting-user header is what the service verifies the session's owner
+    /// against (owner for a private harness, a team member for a team one), so
+    /// it carries the sender the way the control calls do - the body's `owner`
+    /// is not trusted for a harness caller.
     ///
     /// A thread routes to at most one of a bot's sessions, so a redelivered
     /// mention lands on [`ApiError::ThreadSessionExists`] carrying the
@@ -64,11 +70,13 @@ impl HarnessApi {
     pub async fn create_session(
         &self,
         request: &CreateAgentSessionRequest,
+        acting_user: &MacroUserIdStr<'static>,
     ) -> Result<CreateAgentSessionResponse, ApiError> {
         let response = self
             .http
             .post(format!("{}/agent-sessions", self.base))
             .header(HARNESS_TOKEN_HEADER, &self.token)
+            .header(HARNESS_ACTING_USER_HEADER, acting_user.as_ref())
             .json(request)
             .send()
             .await?;
@@ -127,7 +135,7 @@ async fn refuse_errors(response: reqwest::Response) -> Result<reqwest::Response,
     if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
         tracing::error!(
             %status,
-            "the server refused this harness's credentials; run `macrod login` to re-pair"
+            "the server refused this harness's credentials; press p to re-pair"
         );
     }
     Err(ApiError::Refused { status, message })

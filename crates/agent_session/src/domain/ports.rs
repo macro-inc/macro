@@ -472,4 +472,16 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
         size: SandboxSize,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The harness currently bound to serve this session, resolved through its
+    /// bot's binding. `None` for a managed session or an unbound bot.
+    ///
+    /// The control routes use it to confine a harness caller to the sessions
+    /// its own daemon serves: ownership alone would let a harness that merely
+    /// acts for a user drive or delete sessions another harness serves for the
+    /// same user.
+    fn session_harness(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<harness_id::HarnessId>>> + Send;
 }

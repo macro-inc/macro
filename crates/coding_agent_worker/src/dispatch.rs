@@ -71,7 +71,7 @@ impl WorkExecutor for Dispatcher {
                     // there is nothing to state here.
                     instructions: None,
                 };
-                let created = match self.api.create_session(&request).await {
+                let created = match self.api.create_session(&request, &sender).await {
                     Ok(created) => created,
                     // A redelivered mention: the thread's session exists.
                     // Resume serving it - the first attempt may have died

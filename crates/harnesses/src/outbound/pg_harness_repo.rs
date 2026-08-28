@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        Harness, HarnessAgent, HarnessOwner, PairingClaimFacts, PairingDetails, PairingStatus,
-        RequestedHarnessScope,
+        Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
+        PairingStatus, RequestedHarnessScope,
     },
     ports::{HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
 };
@@ -470,6 +470,50 @@ impl HarnessRepo for PgHarnessRepo {
                 bot_id: bot_id::BotId::new_from_uuid(row.id),
                 name: row.name,
                 handle: row.handle,
+            })
+            .collect())
+    }
+
+    async fn list_sessions(&self, harness_id: HarnessId) -> Result<Vec<HarnessSession>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                s.id AS session_id,
+                s.bot_id,
+                b.name AS bot_name,
+                b.handle AS bot_handle,
+                s.name,
+                s.status,
+                s.model,
+                s.owner_id,
+                s.created_at,
+                s.modified_at
+            FROM agent_session s
+            JOIN agent_configs ac ON ac.bot_id = s.bot_id
+            JOIN bots b ON b.id = s.bot_id
+            WHERE ac.harness_id = $1
+            ORDER BY s.modified_at DESC
+            LIMIT 50
+            "#,
+            harness_id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list harness sessions")?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| HarnessSession {
+                session_id: row.session_id,
+                bot_id: bot_id::BotId::new_from_uuid(row.bot_id),
+                bot_name: row.bot_name,
+                bot_handle: row.bot_handle,
+                name: row.name,
+                status: row.status,
+                model: row.model,
+                owner_id: row.owner_id,
+                created_at: row.created_at,
+                modified_at: row.modified_at,
             })
             .collect())
     }

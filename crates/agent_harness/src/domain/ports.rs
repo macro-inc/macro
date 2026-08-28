@@ -160,6 +160,15 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         bot: BotId,
         session: AgentSessionId,
     ) -> impl Future<Output = Option<RuntimeAttachment<Self::Connector>>> + Send;
+
+    /// The harness a bot's sessions currently bind to, without attaching
+    /// anything. `None` for an unbound bot. Same resolution as [`bind`], for
+    /// callers that need to know which harness serves a bot rather than to
+    /// route to it.
+    fn bound_harness(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at

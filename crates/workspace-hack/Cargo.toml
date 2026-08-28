@@ -73,6 +73,7 @@ hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", de
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
+itertools = { version = "0.13" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
@@ -206,6 +207,7 @@ hyper-rustls-adf3d7031871b0af = { package = "hyper-rustls", version = "0.24", de
 hyper-util = { version = "0.1", features = ["client-legacy", "client-proxy", "http1", "http2", "server", "service"] }
 idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
+itertools = { version = "0.13" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
@@ -261,7 +263,7 @@ sqlx-core = { version = "0.8", features = ["_rt-tokio", "_tls-rustls-ring-webpki
 sqlx-postgres = { version = "0.8", default-features = false, features = ["any", "chrono", "json", "migrate", "offline", "uuid"] }
 stable_deref_trait = { version = "1" }
 subtle = { version = "2" }
-syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["visit-mut"] }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "full", "visit-mut"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
@@ -295,9 +297,11 @@ hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", de
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
+mio = { version = "1", features = ["net", "os-ext"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 spin = { version = "0.9" }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
@@ -314,9 +318,11 @@ hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", de
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
 linux-raw-sys = { version = "0.12", default-features = false, features = ["auxvec", "elf", "errno", "general", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "system", "xdp"] }
+mio = { version = "1", features = ["net", "os-ext"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
+signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 spin = { version = "0.9" }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
@@ -333,10 +339,12 @@ getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-f
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
+mio = { version = "1", features = ["net", "os-ext"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 security-framework-sys = { version = "2" }
+signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
 tower = { version = "0.5", default-features = false, features = ["retry", "timeout"] }
@@ -352,10 +360,12 @@ getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-f
 hyper-rustls-754bda37e0fb3874 = { package = "hyper-rustls", version = "0.27", default-features = false, features = ["aws-lc-rs", "http1", "http2", "native-tokio", "ring", "tls12", "webpki-tokio"] }
 hyper-util = { version = "0.1", default-features = false, features = ["client-proxy-system"] }
 ipnet = { version = "2", features = ["serde"] }
+mio = { version = "1", features = ["net", "os-ext"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 security-framework-sys = { version = "2" }
+signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["aws-lc-rs", "ring"] }
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
 tower = { version = "0.5", default-features = false, features = ["retry", "timeout"] }

@@ -387,3 +387,118 @@ async fn bound_agents_lists_only_live_agents_of_this_harness(pool: PgPool) {
     assert_eq!(agents[0].bot_id.as_uuid(), bot_id);
     assert_eq!(agents[0].name, "Bound agent");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sessions_list_only_this_harness_newest_first(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    // Sessions reference their owner row.
+    insert_user(&pool, OWNER_ID).await;
+    let harness_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by)
+        VALUES ($1, 'mine', $2, $2)
+        "#,
+        harness_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let bot_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
+        VALUES ($1, 'owned', $2, 'Bound agent', $3, true)
+        "#,
+        bot_id,
+        OWNER_ID,
+        format!("bound-{bot_id}"),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope, harness_id)
+        VALUES ($1, 'prompt', 'macrod', 'default', 'all', $2)
+        "#,
+        bot_id,
+        harness_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    for (offset, status, event_name) in [
+        (2_i32, "no_messages", None),
+        (1_i32, "event", Some("prompted")),
+    ] {
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_session
+                (id, owner_id, bot_id, model, harness, workspace, status, status_event_name,
+                 created_at, modified_at)
+            VALUES ($1, $2, $3, 'default', 'macrod', '/workspace', $4, $5,
+                    now() - make_interval(mins => $6), now() - make_interval(mins => $6))
+            "#,
+            Uuid::new_v4(),
+            OWNER_ID,
+            bot_id,
+            status,
+            event_name as Option<&str>,
+            offset,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    // A session on a bot bound to no harness stays invisible.
+    let other_bot = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
+        VALUES ($1, 'owned', $2, 'Other agent', $3, true)
+        "#,
+        other_bot,
+        OWNER_ID,
+        format!("other-{other_bot}"),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_configs (bot_id, instructions, harness, default_model, channel_scope)
+        VALUES ($1, 'prompt', 'in-memory', 'default', 'all')
+        "#,
+        other_bot,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace)
+        VALUES ($1, $2, $3, 'default', 'in-memory', '/workspace')
+        "#,
+        Uuid::new_v4(),
+        OWNER_ID,
+        other_bot,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let sessions = repo
+        .list_sessions(HarnessId::new_from_uuid(harness_id))
+        .await
+        .unwrap();
+    assert_eq!(sessions.len(), 2);
+    assert_eq!(sessions[0].status, "event");
+    assert_eq!(sessions[1].status, "no_messages");
+    assert_eq!(sessions[0].bot_name, "Bound agent");
+    assert_eq!(sessions[0].owner_id, OWNER_ID);
+}

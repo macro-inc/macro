@@ -21,7 +21,8 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, PairingDetails,
+        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessSession,
+        PairingDetails,
     },
     ports::{HarnessError, HarnessService},
 };
@@ -100,9 +101,18 @@ where
             post(claim_pairing_handler::<S, Auth>),
         )
         .route("/harnesses", get(list_harnesses_handler::<S, Auth>))
+        .route("/harnesses/me", get(get_self_harness_handler::<S, Auth>))
+        .route(
+            "/harnesses/me",
+            delete(delete_self_harness_handler::<S, Auth>),
+        )
         .route(
             "/harnesses/me/agents",
             get(list_bound_agents_handler::<S, Auth>),
+        )
+        .route(
+            "/harnesses/me/sessions",
+            get(list_harness_sessions_handler::<S, Auth>),
         )
         .route(
             "/harnesses/{harness_id}",
@@ -289,6 +299,81 @@ pub async fn delete_harness_handler<S: HarnessService, Auth: MacroAuthorizationS
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `GET /harnesses/me`.
+#[utoipa::path(
+    get,
+    tag = "harnesses",
+    operation_id = "get_self_harness",
+    path = "/harnesses/me",
+    responses(
+        (status = 200, body = Harness),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn get_self_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+) -> Result<Json<Harness>, HarnessesHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .get_self(authorization.authorization.harness_id)
+            .await?,
+    ))
+}
+
+/// Handler for `DELETE /harnesses/me`.
+///
+/// A daemon retiring itself: the valid credential is the authorization.
+#[utoipa::path(
+    delete,
+    tag = "harnesses",
+    operation_id = "delete_self_harness",
+    path = "/harnesses/me",
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn delete_self_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+) -> Result<StatusCode, HarnessesHandlerErr> {
+    state
+        .service
+        .delete_self(authorization.authorization.harness_id)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `GET /harnesses/me/sessions`.
+#[utoipa::path(
+    get,
+    tag = "harnesses",
+    operation_id = "list_harness_sessions",
+    path = "/harnesses/me/sessions",
+    responses(
+        (status = 200, body = Vec<HarnessSession>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_harness_sessions_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+) -> Result<Json<Vec<HarnessSession>>, HarnessesHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_sessions(authorization.authorization.harness_id)
+            .await?,
+    ))
 }
 
 /// Handler for `GET /harnesses/me/agents`.

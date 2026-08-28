@@ -13,8 +13,8 @@ use uuid::Uuid;
 use super::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, PairingDetails,
-        PairingStatus,
+        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, HarnessSession,
+        PairingDetails, PairingStatus,
     },
     ports::{HarnessError, HarnessRepo, HarnessService, NewHarness, NewPairing},
     tokens,
@@ -146,7 +146,9 @@ where
         )))
     }
 
-    #[tracing::instrument(skip(self), err)]
+    // `code` is the user-facing device secret for the pairing's 15-minute
+    // window; it must never reach a span field or a log line.
+    #[tracing::instrument(skip(self, code), err)]
     async fn get_pairing(&self, code: &str) -> Result<PairingDetails, HarnessError> {
         let code = tokens::normalize_pairing_code(code)
             .ok_or_else(|| HarnessError::BadRequest("malformed pairing code".to_owned()))?;
@@ -169,7 +171,8 @@ where
         Ok(pairing.details)
     }
 
-    #[tracing::instrument(skip(self, req), fields(caller = %caller), err)]
+    // Skip `code` (the device secret) and `req`; the caller is safe to record.
+    #[tracing::instrument(skip(self, req, code), fields(caller = %caller), err)]
     async fn approve_pairing(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -325,6 +328,42 @@ where
         Ok(self
             .repo
             .list_bound_agents(harness_id)
+            .await
+            .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_self(&self, harness_id: HarnessId) -> Result<Harness, HarnessError> {
+        self.repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn delete_self(&self, harness_id: HarnessId) -> Result<(), HarnessError> {
+        // The valid credential that authenticated this call is the whole
+        // authorization: a daemon may always retire itself.
+        if !self
+            .repo
+            .delete_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+        {
+            return Err(HarnessError::NotFound("unknown harness".to_owned()));
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn list_sessions(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Vec<HarnessSession>, HarnessError> {
+        Ok(self
+            .repo
+            .list_sessions(harness_id)
             .await
             .map_err(Into::into)?)
     }

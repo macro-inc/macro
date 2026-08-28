@@ -9000,6 +9000,96 @@
         }
       }
     },
+    "/harnesses/me": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/me`.",
+        "operationId": "get_self_harness",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `DELETE /harnesses/me`.",
+        "description": "A daemon retiring itself: the valid credential is the authorization.",
+        "operationId": "delete_self_harness",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harnesses/me/agents": {
       "get": {
         "tags": ["harnesses"],
@@ -9014,6 +9104,48 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/HarnessAgent"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/me/sessions": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/me/sessions`.",
+        "operationId": "list_harness_sessions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HarnessSession"
                   }
                 }
               }
@@ -21334,6 +21466,67 @@
           }
         ],
         "description": "Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses."
+      },
+      "HarnessSession": {
+        "type": "object",
+        "description": "An agent session running on a harness, as listed for the daemon's UI.",
+        "required": [
+          "session_id",
+          "bot_id",
+          "bot_name",
+          "bot_handle",
+          "name",
+          "status",
+          "model",
+          "owner_id",
+          "created_at",
+          "modified_at"
+        ],
+        "properties": {
+          "bot_handle": {
+            "type": "string",
+            "description": "The agent's `@` handle."
+          },
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The agent the session runs for."
+          },
+          "bot_name": {
+            "type": "string",
+            "description": "The agent's display name."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model the session was opened with."
+          },
+          "modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last-activity timestamp."
+          },
+          "name": {
+            "type": "string",
+            "description": "The session's display name."
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "The user the session belongs to."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session id."
+          },
+          "status": {
+            "type": "string",
+            "description": "Session lifecycle status, e.g. `no_messages`, `active`."
+          }
+        }
       },
       "HashMap": {
         "type": "object",

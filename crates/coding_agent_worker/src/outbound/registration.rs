@@ -171,6 +171,12 @@ impl<S: FeedStateStore> FeedReconciler<S> {
             .await
             .context(format!("could not reach the service to {what}"))?;
         let status = response.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+            rootcause::bail!(
+                "the service refused this harness's credentials ({status}) while trying to \
+                 {what}; the harness was likely removed - press p to pair again"
+            );
+        }
         if !status.is_success() {
             let message = response.text().await.unwrap_or_default();
             rootcause::bail!("the service answered {status} to {what}: {message}");

@@ -2,9 +2,9 @@
 //! serves, the webhook server it listens on, and the harness it runs per
 //! session. See `config.example.toml` at the crate root.
 //!
-//! Deliberately credential-free: identity comes from pairing (`macrod login`,
-//! or the first `macrod` run), which persists the harness credential in a
-//! state file next to this config.
+//! Deliberately credential-free: identity comes from pairing (press `p` in
+//! the control panel), which persists the harness credential in a state file
+//! next to this config.
 
 use serde::Deserialize;
 use std::path::{Path, PathBuf};

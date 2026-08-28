@@ -179,4 +179,8 @@ where
             .map(|entry| Arc::clone(&entry))?;
         Some(connection.bind(session).await)
     }
+
+    async fn bound_harness(&self, bot: BotId) -> anyhow::Result<Option<HarnessId>> {
+        self.bindings.harness_for(bot).await
+    }
 }

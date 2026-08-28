@@ -396,6 +396,21 @@ where
             .await
             .map_err(into_session_error)
     }
+
+    async fn session_harness(
+        &self,
+        id: AgentSessionId,
+    ) -> agent_session::domain::error::Result<Option<harness_id::HarnessId>> {
+        // The row is the source of truth for which bot the session runs, and
+        // the binding resolves the bot's current harness the same way `bind`
+        // does at delivery time.
+        let session = self.inner.sessions.get_session(id).await?;
+        self.inner
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)
+    }
 }
 
 /// External sessions create the row and announce - the magic-chip message

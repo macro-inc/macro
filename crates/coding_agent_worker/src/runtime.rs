@@ -182,7 +182,7 @@ fn worth_redialing(error: &tungstenite::Error) -> bool {
         {
             tracing::error!(
                 status = %response.status(),
-                "the gateway refused this harness's credentials; run `macrod login` to re-pair"
+                "the gateway refused this harness's credentials; press p to re-pair"
             );
         }
         return false;

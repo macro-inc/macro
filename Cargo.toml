@@ -175,6 +175,7 @@ chrono-tz = { version = "0.10.4", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 constant_time_eq = "0.3.1"
+crossterm = "0.28"
 cookie = "0.18.1"
 cron = "0.16.0"
 csv = "1"
@@ -240,6 +241,7 @@ postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 quote = "1"
 rand = "0.9.0"
+ratatui = "0.29"
 # uses vendored to fix lambda builds failing.
 rdkafka = { version = "0.37", default-features = false, features = [
   "cmake-build",
@@ -299,6 +301,7 @@ tower-http = { version = "0.6.1", features = [
   "trace",
 ] }
 toml = "0.8"
+toml_edit = "0.22"
 tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }

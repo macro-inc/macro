@@ -1,138 +1,129 @@
 //! The daemon's half of device-code pairing: ask for a code, tell the user
 //! where to approve it, poll until the credential is released.
-
-use std::time::Duration;
+//!
+//! [`PairingClient`] speaks the HTTP protocol without printing anything; the
+//! control panel drives it frame by frame.
 
 use harnesses::domain::models::{
-    ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing,
+    ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing, HarnessOwner,
     RequestedHarnessScope,
 };
 use reqwest::StatusCode;
 use rootcause::prelude::ResultExt as _;
+use uuid::Uuid;
 
 use crate::config::Config;
 use crate::outbound::credentials::{HarnessCredentials, HarnessScope};
 
-/// How long past the server-stated expiry polling keeps trying: zero. The
-/// server keeps an approved pairing claimable, so expiry here only ends the
-/// wait for a user who never approved.
-const POLL_GRACE: Duration = Duration::ZERO;
+/// One claim poll's answer.
+#[derive(Debug)]
+pub enum ClaimStatus {
+    /// Not approved yet; poll again.
+    Pending,
+    /// Approved: the minted credential, released exactly once.
+    Claimed(HarnessCredentials),
+    /// The pairing can no longer be claimed (expired or already used).
+    Gone(String),
+}
 
-/// Walk the whole pairing flow interactively and return minted credentials.
-///
-/// Prints the code and approval link to stdout on purpose: this is the one
-/// conversation the daemon has with a human.
-pub async fn pair(config: &Config) -> rootcause::Result<HarnessCredentials> {
-    let http = reqwest::Client::new();
-    let base = config
-        .macro_api
-        .storage_url
-        .trim_end_matches('/')
-        .to_owned();
+/// The pairing protocol against one deployment, print-free.
+pub struct PairingClient {
+    http: reqwest::Client,
+    base: String,
+}
 
-    let name = config
-        .identity
-        .name
-        .clone()
-        .or_else(local_hostname)
-        .unwrap_or_else(|| "macrod".to_owned());
-    let host = host_info();
-    let scope = match config.identity.scope {
-        crate::config::IdentityScope::Private => RequestedHarnessScope::Private,
-        crate::config::IdentityScope::Team => RequestedHarnessScope::Team,
-    };
-
-    let response = http
-        .post(format!("{base}/harness-pairings"))
-        .json(&CreatePairingRequest {
-            name,
-            host: Some(host),
-            scope: Some(scope),
-        })
-        .send()
-        .await
-        .context("could not reach the service to start pairing")?;
-    if !response.status().is_success() {
-        let status = response.status();
-        let message = response.text().await.unwrap_or_default();
-        rootcause::bail!("the service refused to start pairing ({status}): {message}");
-    }
-    let pairing: CreatedPairing = response
-        .json()
-        .await
-        .context("could not read the pairing the service created")?;
-
-    let approval_url = config.macro_api.pairing_approval_url(&pairing.code);
-    let expires_in = (pairing.expires_at - chrono::Utc::now())
-        .to_std()
-        .unwrap_or_default();
-    println!();
-    println!("  Your pairing code:  {}", pairing.code);
-    let scope_word = match scope {
-        RequestedHarnessScope::Private => "private",
-        RequestedHarnessScope::Team => "team",
-    };
-    println!();
-    println!("  Open  {approval_url}");
-    println!("  and approve this daemon (confirm the code; it asks to be {scope_word}).");
-    println!();
-    println!(
-        "  Waiting for approval... (expires in {} minutes)",
-        expires_in.as_secs() / 60
-    );
-
-    let poll_interval = Duration::from_secs(pairing.poll_interval_seconds.max(1));
-    let deadline = tokio::time::Instant::now() + expires_in + POLL_GRACE;
-    loop {
-        tokio::time::sleep(poll_interval).await;
-        if tokio::time::Instant::now() > deadline {
-            rootcause::bail!(
-                "the pairing expired before it was approved; run `macrod login` to start over"
-            );
+impl PairingClient {
+    /// A client for the deployment the config names.
+    pub fn new(config: &Config) -> Self {
+        Self {
+            http: reqwest::Client::new(),
+            base: config
+                .macro_api
+                .storage_url
+                .trim_end_matches('/')
+                .to_owned(),
         }
+    }
 
-        let response = http
-            .post(format!(
-                "{base}/harness-pairings/{}/claim",
-                pairing.pairing_id
-            ))
+    /// Open a pairing using the config's identity.
+    pub async fn start(&self, config: &Config) -> rootcause::Result<CreatedPairing> {
+        let name = config
+            .identity
+            .name
+            .clone()
+            .or_else(local_hostname)
+            .unwrap_or_else(|| "macrod".to_owned());
+        let scope = match config.identity.scope {
+            crate::config::IdentityScope::Private => RequestedHarnessScope::Private,
+            crate::config::IdentityScope::Team => RequestedHarnessScope::Team,
+        };
+
+        let response = self
+            .http
+            .post(format!("{}/harness-pairings", self.base))
+            .json(&CreatePairingRequest {
+                name,
+                host: Some(host_info()),
+                scope: Some(scope),
+            })
+            .send()
+            .await
+            .context("could not reach the service to start pairing")?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let message = response.text().await.unwrap_or_default();
+            rootcause::bail!("the service refused to start pairing ({status}): {message}");
+        }
+        Ok(response
+            .json()
+            .await
+            .context("could not read the pairing the service created")?)
+    }
+
+    /// Poll the claim once.
+    pub async fn claim(
+        &self,
+        pairing_id: Uuid,
+        device_secret: &str,
+    ) -> rootcause::Result<ClaimStatus> {
+        let response = self
+            .http
+            .post(format!("{}/harness-pairings/{pairing_id}/claim", self.base))
             .json(&ClaimPairingRequest {
-                device_secret: pairing.device_secret.clone(),
+                device_secret: device_secret.to_owned(),
             })
             .send()
             .await
             .context("could not reach the service to poll the pairing")?;
         match response.status() {
-            StatusCode::ACCEPTED => continue,
+            StatusCode::ACCEPTED => Ok(ClaimStatus::Pending),
             StatusCode::OK => {
                 let claimed: ClaimedPairing = response
                     .json()
                     .await
                     .context("could not read the claimed credential")?;
-                let scope = match claimed.harness.owner {
-                    harnesses::domain::models::HarnessOwner::User { .. } => HarnessScope::User,
-                    harnesses::domain::models::HarnessOwner::Team { .. } => HarnessScope::Team,
-                };
-                println!(
-                    "Approved. This machine is now the harness \"{}\" ({}).",
-                    claimed.harness.name, claimed.harness.id
-                );
-                return Ok(HarnessCredentials {
-                    harness_id: claimed.harness.id,
-                    token: claimed.token,
-                    scope,
-                });
+                Ok(ClaimStatus::Claimed(credentials_from(claimed)))
             }
-            StatusCode::GONE => {
-                rootcause::bail!(
-                    "the pairing is no longer claimable (expired or already used); run `macrod login` to start over"
-                );
-            }
+            StatusCode::GONE => Ok(ClaimStatus::Gone(
+                "the pairing is no longer claimable (expired or already used)".to_owned(),
+            )),
             status => {
                 let message = response.text().await.unwrap_or_default();
                 rootcause::bail!("the service refused the pairing poll ({status}): {message}");
             }
         }
+    }
+}
+
+fn credentials_from(claimed: ClaimedPairing) -> HarnessCredentials {
+    let scope = match claimed.harness.owner {
+        HarnessOwner::User { .. } => HarnessScope::User,
+        HarnessOwner::Team { .. } => HarnessScope::Team,
+    };
+    HarnessCredentials {
+        harness_id: claimed.harness.id,
+        token: claimed.token,
+        scope,
     }
 }
 

@@ -61,7 +61,8 @@ impl FileCredentialStore {
         }
     }
 
-    /// Where the file lives, for messages that tell the user about it.
+    /// Where the file lives, so tests can inspect and corrupt it.
+    #[cfg(test)]
     pub fn path(&self) -> &Path {
         &self.path
     }
