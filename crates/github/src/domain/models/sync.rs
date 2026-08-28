@@ -98,12 +98,21 @@ pub struct GithubUserInstallationsPage {
 }
 
 /// GitHub App installation access token response
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct GithubInstallationAccessToken {
     /// The installation access token
     pub token: String,
     /// When the token expires, as GitHub sent it (RFC 3339).
     pub expires_at: String,
+}
+
+impl std::fmt::Debug for GithubInstallationAccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GithubInstallationAccessToken")
+            .field("token", &"[REDACTED]")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
 }
 
 impl GithubInstallationAccessToken {

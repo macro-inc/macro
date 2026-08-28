@@ -176,10 +176,10 @@ fn usable(cached: Option<CachedToken>) -> Option<CachedToken> {
 
 /// When a freshly minted token expires, read off its own `exp` claim.
 ///
-/// Read *unverified*, deliberately: this process just received the token from
-/// `authentication_service` over an internally-authenticated call, and it only
-/// needs the timestamp to schedule a re-mint - `mcp_service` is what verifies
-/// the signature before anything acts on the token.
+/// Read *unverified*, deliberately: this process signed the token itself
+/// moments ago, and it only needs the timestamp to schedule a re-mint -
+/// `mcp_service` is what verifies the signature before anything acts on the
+/// token.
 fn token_expiry(token: &str) -> Result<DateTime<Utc>, EgressError> {
     use base64::Engine;
 

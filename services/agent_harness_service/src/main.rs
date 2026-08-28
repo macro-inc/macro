@@ -469,8 +469,8 @@ async fn run() -> anyhow::Result<()> {
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
     // slug, then the owner's Pipedream connections. The `macro` credential is
-    // exchanged, never signed here - authentication_service keeps the key,
-    // this process only ever holds a single-user, short-lived token.
+    // signed inline with the same key authentication_service holds; what this
+    // process hands out is always single-user and minutes from expiry.
     let mcp_credentials = WithMacroMcp::new(
         PipedreamMcpCredentials::new(mcp_connections, pipedream),
         MacroApiTokenSigner::new(

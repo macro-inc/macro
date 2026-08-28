@@ -191,7 +191,9 @@ impl LocalContainerManager {
 impl ContainerManager for LocalContainerManager {
     type Transport = SidecarTransport;
 
-    #[tracing::instrument(err, skip(self))]
+    // `skip_all`: `SpawnContainer` carries the egress session token; nothing
+    // secret-bearing may be Debug-recorded into the span.
+    #[tracing::instrument(err, skip_all, fields(session_id = %command.session_id))]
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         let SpawnContainer {
             session_id,

@@ -652,7 +652,6 @@ const STRIPPED_RESPONSE_HEADERS: &[HeaderName] = &[
     header::PROXY_AUTHORIZATION,
     header::CONNECTION,
     header::PROXY_AUTHENTICATE,
-    header::PROXY_AUTHORIZATION,
     header::TE,
     header::TRAILER,
     header::TRANSFER_ENCODING,
@@ -661,15 +660,17 @@ const STRIPPED_RESPONSE_HEADERS: &[HeaderName] = &[
     header::SET_COOKIE,
 ];
 
-/// The prefix of Pipedream's scoping headers, all of which are stripped from
-/// requests.
+/// The prefix of Pipedream's scoping headers, all of which are stripped in
+/// both directions.
 ///
 /// These headers *are* the authorization: `x-pd-external-user-id` alone
 /// decides whose connected account a request spends. The ones this proxy
 /// stamps would overwrite a sandbox's copy anyway; the prefix strip is for
 /// the ones it does not stamp, so a scoping header Pipedream understands and
-/// we have never heard of cannot ride through from model-authored code.
-const STRIPPED_REQUEST_PREFIX: &str = "x-pd-";
+/// we have never heard of cannot ride through from model-authored code - and,
+/// on the way back, so an upstream that echoes its scoping metadata does not
+/// report it to the sandbox.
+const STRIPPED_SCOPING_PREFIX: &str = "x-pd-";
 
 /// Drop everything the upstream must not see.
 ///
@@ -678,18 +679,22 @@ const STRIPPED_REQUEST_PREFIX: &str = "x-pd-";
 /// stream, and `accept` is how a client asks for one.
 pub fn sanitize_request_headers(headers: &mut HeaderMap) {
     strip(headers, STRIPPED_REQUEST_HEADERS);
-
-    let scoping: Vec<HeaderName> = headers
-        .keys()
-        .filter(|name| name.as_str().starts_with(STRIPPED_REQUEST_PREFIX))
-        .cloned()
-        .collect();
-    strip(headers, &scoping);
+    strip_scoping(headers);
 }
 
 /// Drop everything the sandbox must not see.
 pub fn sanitize_response_headers(headers: &mut HeaderMap) {
     strip(headers, STRIPPED_RESPONSE_HEADERS);
+    strip_scoping(headers);
+}
+
+fn strip_scoping(headers: &mut HeaderMap) {
+    let scoping: Vec<HeaderName> = headers
+        .keys()
+        .filter(|name| name.as_str().starts_with(STRIPPED_SCOPING_PREFIX))
+        .cloned()
+        .collect();
+    strip(headers, &scoping);
 }
 
 fn strip(headers: &mut HeaderMap, stripped: &[HeaderName]) {

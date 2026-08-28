@@ -89,11 +89,16 @@ impl NamespaceContainerManager {
 impl ContainerManager for NamespaceContainerManager {
     type Transport = NamespaceContainer;
 
+    // `skip_all`: `SpawnContainer` carries the egress session token; nothing
+    // secret-bearing may be Debug-recorded into the span.
     #[tracing::instrument(
         name = "agent.container.spawn",
         err,
-        skip(self),
-        fields(agent.container.provider = "namespace")
+        skip_all,
+        fields(
+            agent.container.provider = "namespace",
+            session_id = %command.session_id,
+        )
     )]
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         let mut env = Vec::new();

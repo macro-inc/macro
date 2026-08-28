@@ -152,6 +152,21 @@ fn keeps_the_upstreams_session_id_on_the_way_back() {
     assert_eq!(names(&headers), ["mcp-session-id", "content-type"]);
 }
 
+/// The scoping strip is symmetric: an upstream that echoes its `x-pd-*`
+/// vocabulary does not report whose account was spent to the sandbox.
+#[test]
+fn echoed_scoping_headers_never_reach_the_sandbox() {
+    let mut headers = header_map(&[
+        ("x-pd-external-user-id", "macro|owner@macro.com"),
+        ("x-pd-project-id", "proj_abc"),
+        ("content-type", "application/json"),
+    ]);
+
+    sanitize_response_headers(&mut headers);
+
+    assert_eq!(names(&headers), ["content-type"]);
+}
+
 #[test]
 fn secrets_do_not_print() {
     let session = SessionToken::new("header.payload.signature");
