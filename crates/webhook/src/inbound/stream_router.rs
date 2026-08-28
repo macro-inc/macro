@@ -9,7 +9,7 @@
 //! window is rejected with 400, in which case clients must resync out of band
 //! and reconnect without the header. Clients must deduplicate by event id.
 
-use crate::domain::models::{WebhookFilter, WebhookFilters};
+use crate::domain::models::WebhookFilters;
 use crate::domain::stream::{WebhookEventStreamService, WebhookStreamError};
 use axum::{
     Json, Router,
@@ -79,56 +79,24 @@ where
 }
 
 /// Query parameters selecting the events a stream delivers.
-///
-/// Provide either `filters` (the full typed model) or the `events`/`ids`
-/// shorthand, not both.
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct StreamEventsQuery {
-    /// JSON-encoded array of webhook filters, identical to the persisted
+    /// URL-encoded JSON array of webhook filters, identical to the persisted
     /// webhook `filters` field.
     pub filters: Option<String>,
-    /// Comma-separated event names; shorthand for a single filter.
-    pub events: Option<String>,
-    /// Comma-separated entity ids constraining `events`.
-    pub ids: Option<String>,
 }
 
-/// Parse the query's two filter spellings into the typed filter model.
+/// Parse the query's filters into the typed filter model.
 fn parse_filters(query: StreamEventsQuery) -> Result<WebhookFilters, WebhookStreamHandlerError> {
-    let bad_request = |message: &str| {
-        WebhookStreamHandlerError(WebhookStreamError::BadRequest(message.to_string()))
-    };
+    let bad_request =
+        |message: String| WebhookStreamHandlerError(WebhookStreamError::BadRequest(message));
 
-    match (query.filters, query.events) {
-        (Some(_), Some(_)) => Err(bad_request(
-            "provide either `filters` or `events`, not both",
-        )),
-        (Some(filters), None) => {
-            if query.ids.is_some() {
-                return Err(bad_request("`ids` only applies to `events`"));
-            }
-            serde_json::from_str(&filters)
-                .map_err(|error| bad_request(&format!("invalid `filters` JSON: {error}")))
-        }
-        (None, Some(events)) => {
-            let events: Vec<String> = events
-                .split(',')
-                .map(str::trim)
-                .filter(|event| !event.is_empty())
-                .map(str::to_string)
-                .collect();
-            let ids = query.ids.map(|ids| {
-                ids.split(',')
-                    .map(str::trim)
-                    .filter(|id| !id.is_empty())
-                    .map(str::to_string)
-                    .collect::<Vec<String>>()
-            });
-            Ok(vec![WebhookFilter { events, ids }])
-        }
-        (None, None) => Err(bad_request("`filters` or `events` is required")),
-    }
+    let Some(filters) = query.filters else {
+        return Err(bad_request("`filters` is required".to_string()));
+    };
+    serde_json::from_str(&filters)
+        .map_err(|error| bad_request(format!("invalid `filters` JSON: {error}")))
 }
 
 /// Parse the standard SSE resume header into a broker event id.
