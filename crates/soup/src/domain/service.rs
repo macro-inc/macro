@@ -462,6 +462,7 @@ where
         user: MacroUserIdStr<'static>,
         limit: u16,
         link_ids: Vec<Uuid>,
+        include_projection: bool,
     ) -> Result<(Vec<SoupCandidate>, Option<TouchedPagePosition>), SoupErr> {
         // Channel and email filter trees fold in their own domains' query
         // builders, which the touched candidate query cannot reach.
@@ -585,7 +586,7 @@ where
                     entities: &main_entities,
                     user_id: user.copied(),
                 },
-                false,
+                include_projection,
             )
             .await
             .map_err(anyhow::Error::from)
@@ -611,40 +612,35 @@ where
             self.handle_email_request(email_request),
         );
 
-        let mut items_by_entity: HashMap<(EntityType, String), SoupItem<()>> = HashMap::new();
-        for item in main_items?
+        let mut candidates_by_entity: HashMap<(EntityType, String), SoupCandidate> = HashMap::new();
+        for candidate in main_items?
             .into_iter()
-            .map(|candidate| candidate.item)
-            .chain(project_items?)
-            .chain(channel_candidates?.map(|c| c.item))
-            .chain(email_candidates?.map(|c| c.item))
+            .chain(project_items?.into_iter().map(SoupCandidate::plain))
+            .chain(channel_candidates?)
+            .chain(email_candidates?)
         {
             let key = {
-                let entity = item.entity();
+                let entity = candidate.item.entity();
                 (entity.entity_type, entity.entity_id.to_string())
             };
-            items_by_entity.insert(key, item);
+            candidates_by_entity.insert(key, candidate);
         }
 
         let candidates = touched
             .into_iter()
-            .filter_map(|candidate| {
+            .filter_map(|touched_candidate| {
                 let key = (
-                    candidate.entity.entity_type,
-                    candidate.entity.entity_id.to_string(),
+                    touched_candidate.entity.entity_type,
+                    touched_candidate.entity.entity_id.to_string(),
                 );
-                let item = items_by_entity.remove(&key).or_else(|| {
+                let mut candidate = candidates_by_entity.remove(&key).or_else(|| {
                     // The candidate query gates on existence and access, so
                     // a miss is a race (revoked/deleted mid-request).
                     tracing::warn!(entity_type = ?key.0, "touched entity did not hydrate; skipping");
                     None
                 })?;
-                Some(SoupCandidate {
-                    item,
-                    document_server_facts: None,
-                    frecency_score: None,
-                    touched_at: Some(candidate.touched_at),
-                })
+                candidate.touched_at = Some(touched_candidate.touched_at);
+                Some(candidate)
             })
             .collect();
 
@@ -1212,7 +1208,14 @@ where
             )),
             SoupQuery::Touched(TouchedQueryInner(cursor)) => {
                 let (candidates, next) = self
-                    .handle_touched_request(cursor, req.soup_type, req.user, limit, req.link_ids)
+                    .handle_touched_request(
+                        cursor,
+                        req.soup_type,
+                        req.user,
+                        limit,
+                        req.link_ids,
+                        include_projection,
+                    )
                     .await?;
                 let next_cursor = next.map(|position| {
                     Base64Str::encode_json(Cursor {
