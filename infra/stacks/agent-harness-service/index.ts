@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
+  config,
   getAiToolsInfra,
   getMacroApiToken,
   stack,
@@ -26,8 +27,6 @@ const tags = {
 const jwtSecretKeyArn = aws.secretsmanager
   .getSecretVersionOutput({ secretId: `fusionauth-jwt-secret-${stack}` })
   .apply((secret) => secret.arn);
-
-const config = new pulumi.Config();
 
 // The egress proxy mints GitHub App installation tokens and Macro API tokens
 // inline, so the task role needs the App's PEM and the signing key - both
