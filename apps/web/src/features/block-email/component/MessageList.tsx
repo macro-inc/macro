@@ -33,6 +33,8 @@ interface MessageListProps {
    */
   underScrollsBottom?: boolean;
   showMiddleMessages: boolean;
+  hiddenChipFocused: boolean;
+  onHiddenChipFocus: () => void;
   onOpenMiddle: () => void;
 }
 
@@ -204,7 +206,12 @@ export function MessageList(props: MessageListProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          class="relative bg-panel px-2 text-xs font-medium text-ink-muted"
+                          class={cn(
+                            'relative bg-panel px-2 text-xs font-medium text-ink-muted outline-none',
+                            props.hiddenChipFocused && 'bg-active text-ink'
+                          )}
+                          data-hidden-messages
+                          onFocus={() => props.onHiddenChipFocus()}
                           onClick={() => props.onOpenMiddle()}
                         >
                           Show {hiddenCount()} hidden{' '}

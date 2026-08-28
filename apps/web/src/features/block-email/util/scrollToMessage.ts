@@ -39,6 +39,37 @@ export function nextShownChronologicalIndex(
   return chronologicalIndex + 1;
 }
 
+export function hiddenMessagesFollowsShownIndex(
+  chronologicalIndex: number,
+  length: number,
+  showMiddle: boolean
+): boolean {
+  return (
+    !showMiddle &&
+    truncatedMiddleCount(length) > 0 &&
+    chronologicalIndex === 0
+  );
+}
+
+export function hiddenMessagesPrecedesShownIndex(
+  chronologicalIndex: number,
+  length: number,
+  showMiddle: boolean
+): boolean {
+  return (
+    !showMiddle &&
+    truncatedMiddleCount(length) > 0 &&
+    chronologicalIndex === length - 2
+  );
+}
+
+export function hiddenMessagesControl(
+  container: HTMLElement
+): HTMLButtonElement | undefined {
+  const el = container.querySelector('[data-hidden-messages]');
+  return el instanceof HTMLButtonElement ? el : undefined;
+}
+
 /** Previous newer-to-older shown index, or null when the expand control or list start precedes. */
 export function prevShownChronologicalIndex(
   chronologicalIndex: number,

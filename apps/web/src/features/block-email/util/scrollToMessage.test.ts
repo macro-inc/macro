@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   adjustScrollAfterPrepend,
   alignmentDelta,
+  hiddenMessagesControl,
+  hiddenMessagesFollowsShownIndex,
+  hiddenMessagesPrecedesShownIndex,
   isTruncatedMiddleMessage,
   nearestDelta,
   nextShownChronologicalIndex,
@@ -58,6 +61,28 @@ describe('prevShownChronologicalIndex', () => {
   it('walks consecutive shown messages when the middle is open', () => {
     expect(prevShownChronologicalIndex(1, 6, true)).toBe(0);
     expect(prevShownChronologicalIndex(5, 6, true)).toBe(4);
+  });
+});
+
+describe('hiddenMessages chip stops', () => {
+  it('sits after the first shown card when the middle is collapsed', () => {
+    expect(hiddenMessagesFollowsShownIndex(0, 6, false)).toBe(true);
+    expect(hiddenMessagesFollowsShownIndex(0, 6, true)).toBe(false);
+    expect(hiddenMessagesFollowsShownIndex(4, 6, false)).toBe(false);
+  });
+
+  it('sits before the penultimate shown card when the middle is collapsed', () => {
+    expect(hiddenMessagesPrecedesShownIndex(4, 6, false)).toBe(true);
+    expect(hiddenMessagesPrecedesShownIndex(5, 6, false)).toBe(false);
+    expect(hiddenMessagesPrecedesShownIndex(4, 6, true)).toBe(false);
+  });
+
+  it('finds the expand control in the list', () => {
+    const list = document.createElement('div');
+    const button = document.createElement('button');
+    button.setAttribute('data-hidden-messages', '');
+    list.append(button);
+    expect(hiddenMessagesControl(list)).toBe(button);
   });
 });
 
