@@ -121,6 +121,7 @@ type ToolParserMap = {
   };
   ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
   ListTags: { call: types.ListTags; response: types.ListTagsResponse };
+  ListTasks: { call: types.ListTasks; response: types.ListTasksResponse };
   ListTeamMembers: {
     call: types.ListTeamMembers;
     response: types.ListTeamMembersResponse;
@@ -355,6 +356,7 @@ const toolParserMap = {
     response: schemas.ListSkillsResponse,
   },
   ListTags: { call: schemas.ListTags, response: schemas.ListTagsResponse },
+  ListTasks: { call: schemas.ListTasks, response: schemas.ListTasksResponse },
   ListTeamMembers: {
     call: schemas.ListTeamMembers,
     response: schemas.ListTeamMembersResponse,
@@ -597,6 +599,7 @@ type ToolDataMap = {
   };
   ListSkills: { call: types.ListSkills; response: types.ListSkillsResponse };
   ListTags: { call: types.ListTags; response: types.ListTagsResponse };
+  ListTasks: { call: types.ListTasks; response: types.ListTasksResponse };
   ListTeamMembers: {
     call: types.ListTeamMembers;
     response: types.ListTeamMembersResponse;

@@ -45,6 +45,7 @@ import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
 import { listTagsHandler } from './ListTags';
+import { listTasksHandler } from './ListTasks';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
 import { moveToProjectHandler } from './MoveToProject';
@@ -119,6 +120,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListCompanies: listCompaniesHandler,
   ListImportEntities: listImportEntitiesHandler,
   ListEntities: listEntitiesHandler,
+  ListTasks: listTasksHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListSkills: listSkillsHandler,
