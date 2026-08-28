@@ -361,7 +361,11 @@ services:
     depends_on:
       - postgres
       - redis
+      - fusionauth
     networks:
+      # `auth` too: boot resolves the Google identity provider in FusionAuth,
+      # which lives on that network only.
+      auth:
       databases:
       services:
         aliases:
