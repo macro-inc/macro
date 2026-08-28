@@ -184,6 +184,10 @@ export const channelThemeSender = createTheme(
     },
     quote: 'border-l-2 border-current/20 pl-4 py-2 italic text-current/80 my-4',
     list: {
+      // createTheme replaces rather than joins here, so the base classes are
+      // restated. chat-blue is the hook styles.css uses to swap the unchecked
+      // checkbox outline over to currentcolor on a bubble.
+      checklist: 'md-list md-check chat-blue',
       listitemChecked: 'checked chat-blue md-strike text-current/50',
     },
     link: 'text-link hover:text-link-hover visited:text-link-visited underline',

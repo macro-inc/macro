@@ -48,10 +48,13 @@
   /* Midline of the first line of text; every marker centres on this. */
   --md-marker-middle: 0.75em;
 
-  /* Outline of an unchecked checkbox. Faded from currentcolor rather than
-  * pinned to an ink token so it still tracks the text colour inside chat
-  * bubbles, which theme the whole markdown tree off text-current. */
-  --md-check-border: color-mix(in oklab, currentcolor 45%, transparent);
+  /*
+  * Outline of an unchecked checkbox. An ink token by default, overridden to a
+  * currentcolor fade on chat bubbles just below -- the same split the rest of
+  * the markdown theme uses for de-emphasis (ink tokens in documents,
+  * text-current/N in channelThemeSender; see listitemChecked and quote).
+  */
+  --md-check-border: var(--color-ink-extra-muted);
 }
 
 .md-inline-code {
@@ -86,6 +89,16 @@
   border-radius: 1em;
   line-height: 0;
   background-color: currentcolor;
+}
+
+/*
+* Chat bubbles theme the markdown tree off the bubble's own text colour rather
+* than the ink scale, so the unchecked outline follows currentcolor there. The
+* 50% matches listitemChecked's text-current/50 in the same theme.
+* channelThemeSender puts chat-blue on the checklist to provide this hook.
+*/
+.md-list.md-check.chat-blue {
+  --md-check-border: color-mix(in oklab, currentcolor 50%, transparent);
 }
 
 .md-list.md-check > li::before {
