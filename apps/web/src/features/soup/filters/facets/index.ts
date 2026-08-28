@@ -22,8 +22,6 @@ export type {
 export { NIL_ID as NIL_UUID } from './constants';
 export { testFacets } from './evaluate';
 export {
-  type CreateFacetSelectionStateOptions,
-  createFacetSelectionState,
   deserializeFacetSelection,
   normalizeFacetSelection,
   serializeFacetSelection,
@@ -38,5 +36,4 @@ export type {
   FacetOptionResolver,
   FacetPredicate,
   FacetSelection,
-  FacetSelectionState,
 } from './types';

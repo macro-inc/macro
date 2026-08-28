@@ -1,4 +1,3 @@
-import type { Accessor } from 'solid-js';
 import type { TargetExpr } from './clause';
 import type { Target } from './constants';
 
@@ -51,16 +50,4 @@ export type Facet<
   /** Constrains unrepresented entity targets with NIL filters. */
   restrict?: boolean;
   options: TOption[] | FacetOptionResolver<TItem, TContext, TOption>;
-};
-
-export type FacetSelectionState = {
-  selection: Accessor<FacetSelection>;
-  has: (facetId: string, optionId: string) => boolean;
-  get: (facetId: string) => string[];
-  select: (facetId: string, optionId: string) => void;
-  deselect: (facetId: string, optionId: string) => void;
-  toggle: (facetId: string, optionId: string) => void;
-  set: (facetId: string, optionIds: Iterable<string>) => void;
-  replace: (selection: FacetSelection) => void;
-  clear: (facetId?: string) => void;
 };
