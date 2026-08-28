@@ -1,6 +1,6 @@
 import { TextField } from '@kobalte/core/text-field';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
+import MagnifyingGlassIcon from '@lucide/search.svg';
+import XIcon from '@lucide/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { Button, cn, Hotkey, Surface } from '@ui';
 import type { JSX } from 'solid-js';

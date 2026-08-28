@@ -1,8 +1,8 @@
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import SortIcon from '@phosphor/sort-ascending.svg';
-import GroupIcon from '@phosphor/stack.svg';
+import SortIcon from '@lucide/arrow-up-narrow-wide.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
+import FilterIcon from '@lucide/funnel.svg';
+import GroupIcon from '@lucide/layers.svg';
 import { buttonClasses, cn, Dropdown } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 

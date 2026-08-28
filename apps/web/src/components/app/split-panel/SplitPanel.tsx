@@ -1,7 +1,7 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CaretLeftIcon from '@lucide/chevron-left.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
+import CloseIcon from '@lucide/x.svg';
 import { Button, type ButtonProps, cn } from '@ui';
 import {
   createContext,
