@@ -747,6 +747,16 @@ async fn run() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
+        webhook::outbound::KafkaWebhookStreamSourceFactory::new(config.kafka_brokers.as_ref()),
+        entity_access_service.clone(),
+        webhook_repository.clone(),
+    );
+    let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
+        sse_stream_service,
+        authorization_state.clone(),
+    );
+
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
             entity_access_service.clone(),
@@ -1362,6 +1372,7 @@ async fn run() -> anyhow::Result<()> {
         call_state,
         call_webhook_state,
         webhook_state,
+        sse_stream_state,
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,

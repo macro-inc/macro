@@ -38,6 +38,25 @@ impl<M: MacroEventCollection> KafkaConsumerAdapter<Ungrouped, M> {
             topics: PhantomData,
         })
     }
+
+    /// Creates an ungrouped adapter and manually assigns every topic in `M`,
+    /// starting each partition at the earliest offset whose record timestamp
+    /// is at or after `timestamp_ms` (milliseconds since the Unix epoch).
+    ///
+    /// Partitions with no record at or after the timestamp start at the end.
+    /// Topic metadata and offset lookups must complete within
+    /// `metadata_timeout`; failures are returned to the caller.
+    pub fn new_at_timestamp(
+        consumer: KafkaEventConsumer<Ungrouped>,
+        timestamp_ms: i64,
+        metadata_timeout: Duration,
+    ) -> Result<Self, rootcause::Report> {
+        consumer.assign_topics_at_timestamp(M::topics(), timestamp_ms, metadata_timeout)?;
+        Ok(KafkaConsumerAdapter {
+            inner: consumer,
+            topics: PhantomData,
+        })
+    }
 }
 
 impl<T: GroupName> KafkaConsumerAdapter<T, ()> {
