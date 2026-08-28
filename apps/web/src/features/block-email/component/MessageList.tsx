@@ -101,7 +101,7 @@ export function MessageList(props: MessageListProps) {
               'macro-message-width macro-message-padding w-full',
               isTouchDevice()
                 ? 'pt-6 pb-3'
-                : 'border-b border-edge-muted/50 pt-12 pb-2.5'
+                : 'pt-12 pb-2.5'
             )}
           >
             <EmailThreadTitle
