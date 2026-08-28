@@ -152,14 +152,19 @@ ol.static-md > li:not(.list-none)::before {
   left: var(--md-marker-left);
   width: var(--md-marker-width);
   /*
-  * Centred rather than right-aligned so numbers share the same centre axis as
-  * bullets and checkboxes. The trade-off: a right-aligned number grows only
-  * leftwards, holding a constant gap to the text, whereas a centred one grows
-  * both ways. With a 1em column and a 0.4em gap that is fine to two digits
-  * ("10." leaves roughly 0.28em of gap); at three digits the number reaches
-  * the text edge. Widen --md-marker-gap if a list ever runs that long.
+  * Right-aligned, which keeps a constant gap to the text however many digits
+  * the number has. The period sits in the last ~0.25em, which already places
+  * a single digit's glyph on the -0.9em marker axis shared with bullets and
+  * checkboxes -- so this centres the number without centring the string.
+  *
+  * tabular-nums is what makes "1" line up with "2". Inter's default figures
+  * are proportional, so "1" is narrower than the other digits and its glyph
+  * lands right of theirs in a right-aligned column. Tabular figures give every
+  * digit the same advance and draw each one centred inside it, so "1" sits
+  * directly above "2" and multi-digit numbers stay in a regular column too.
   */
-  text-align: center;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 ol.static-md.depth-1 > li:not(.list-none) {
