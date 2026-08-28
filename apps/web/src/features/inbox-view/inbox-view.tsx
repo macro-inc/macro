@@ -1,6 +1,6 @@
 import {
-  useViewTabHotkeys,
   useViewShell,
+  useViewTabHotkeys,
   ViewShell,
 } from '@app/components/view-shell';
 import { buildFlatSoupRows } from '@app/features/soup';
@@ -31,8 +31,6 @@ import type { InboxTab } from './types';
 const INBOX_TAB_IDS: readonly InboxTab[] = ['signal', 'noise', 'all'];
 
 export type InboxViewProps = {
-  /** Externally owned state; bypasses the view's built-in persistence. */
-  state?: InboxViewState;
   /** Explicit navigation state. When present, it wins over entry restoration. */
   initialState?: CreateInboxViewStateOptions;
 };
@@ -119,11 +117,10 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
 /** Composable heterogeneous Inbox built on the shared view and Soup primitives. */
 export function InboxView(props: InboxViewProps) {
   const panel = useSplitPanelOrThrow();
-  const state =
-    props.state ??
-    createInboxViewState(props.initialState, {
-      handle: panel.handle,
-    });
+  const state = createInboxViewState(props.initialState, {
+    handle: panel.handle,
+  });
+
   const source = useInboxQuery(state);
 
   createEffect(() => {
