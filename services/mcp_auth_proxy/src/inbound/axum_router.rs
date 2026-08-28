@@ -46,7 +46,9 @@ async fn register<I: InflightAuthStore + 'static>(
     axum::Json(body): axum::Json<ClientRegistrationRequest>,
 ) -> Response {
     match auth_proxy.register_client(body).await {
-        Ok(registration) => (axum::http::StatusCode::CREATED, Json(registration)).into_response(),
+        // RFC 7591 section 3.2.1 only says SHOULD for 201, and clients already
+        // work against the 200 this endpoint has always returned.
+        Ok(registration) => Json(registration).into_response(),
         Err(RegisterClientError::RedirectUrisRequired) => (
             axum::http::StatusCode::BAD_REQUEST,
             "at least one redirect_uri is required",
