@@ -48,6 +48,12 @@ export type PreviewPanelProps = {
   ref?: (el: HTMLElement) => void;
 };
 
+type PreviewBlockTarget = {
+  blockType: BlockName;
+  blockId: string;
+  aliasContext: BlockAliasContext | undefined;
+};
+
 function PreviewPanelContent(
   props: PreviewPanelProps & { selectedEntity: EntityData }
 ) {
@@ -58,11 +64,8 @@ function PreviewPanelContent(
   const blockInstance = createMemo(() => {
     const entity = props.selectedEntity;
 
-    const target: {
-      blockType: BlockName;
-      blockId: string;
-      aliasContext: BlockAliasContext | undefined;
-    } = match(entity)
+    const target = match(entity)
+      .returnType<PreviewBlockTarget>()
       .when(isTaskEntity, (task) => ({
         blockType: fileTypeToResolvedBlockName(task.fileType),
         blockId: task.id,

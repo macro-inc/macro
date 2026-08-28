@@ -6,7 +6,6 @@ import {
   soupItemMatchesTagFilter,
 } from '@app/constants/list-views';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import {
   createSoupState,
   type GroupMeta,
@@ -42,6 +41,7 @@ import {
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
 import { deduplicateEntities } from '@app/features/next-soup/utils';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makeFlaggedPersisted } from '@app/preferences/make-flagged-persisted';
 import { useDealStages } from '@companies/crm/deal-stages';
