@@ -24,9 +24,11 @@ import {
   DEFAULT_ASIDE_LAYOUT,
   DEFAULT_DETAIL_LAYOUT,
   DEFAULT_LAYOUT_BREAKPOINT,
+  DEFAULT_MAIN_LAYOUT,
   DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS,
   type DetailLayout,
   type DetailPlacement,
+  type MainLayout,
 } from './view-shell-layout';
 
 export type ViewShellLayout = {
@@ -41,6 +43,9 @@ export type ViewShellLayout = {
     mode: Accessor<AsideMode>;
     isCollapsed: Accessor<boolean>;
   };
+  main: {
+    layout: Accessor<MainLayout>;
+  };
   detail: {
     layout: Accessor<DetailLayout>;
     isOpen: Accessor<boolean>;
@@ -53,7 +58,6 @@ export type ViewShellLayout = {
 
 type ViewShellInternal = ViewShellLayout & { id: string };
 
-const MAIN_MIN_WIDTH = 320;
 const RESIZE_GUTTER = 8;
 
 const ViewShellContext = createContext<ViewShellInternal>();
@@ -72,6 +76,7 @@ export function useViewShell(): ViewShellLayout {
     width: ctx.width,
     breakpoints: ctx.breakpoints,
     aside: ctx.aside,
+    main: ctx.main,
     detail: ctx.detail,
   };
 }
@@ -97,7 +102,9 @@ export type ViewShellRootProps = Omit<
    * Defaults to false — panels still size via the Resize solver, without handles.
    */
   resizable?: boolean;
-  aside?: Partial<AsideLayout>;
+  /** Set to false when the workspace has no navigation region. */
+  aside?: false | Partial<AsideLayout>;
+  main?: Partial<MainLayout>;
   detail?: Partial<DetailLayout>;
   /** Controlled detail open state. Omit for uncontrolled. */
   detailOpen?: boolean;
@@ -119,6 +126,7 @@ function Root(props: ViewShellRootProps) {
     'layoutBreakpoint',
     'resizable',
     'aside',
+    'main',
     'detail',
     'detailOpen',
     'defaultDetailOpen',
@@ -143,7 +151,12 @@ function Root(props: ViewShellRootProps) {
 
   const asideLayout = (): AsideLayout => ({
     ...DEFAULT_ASIDE_LAYOUT,
-    ...local.aside,
+    ...(local.aside || {}),
+  });
+
+  const mainLayout = (): MainLayout => ({
+    ...DEFAULT_MAIN_LAYOUT,
+    ...local.main,
   });
 
   const detailLayout = (): DetailLayout => ({
@@ -175,7 +188,7 @@ function Root(props: ViewShellRootProps) {
   };
 
   const asideMode = (): AsideMode =>
-    atLayoutBreakpoint() ? 'collapsed' : 'docked';
+    local.aside === false || atLayoutBreakpoint() ? 'collapsed' : 'docked';
 
   const canFitInlineDetail = () => {
     const currentWidth = width();
@@ -185,7 +198,7 @@ function Root(props: ViewShellRootProps) {
     const panelCount = asideMode() === 'docked' ? 3 : 2;
     const minimumWidth =
       asideMin +
-      MAIN_MIN_WIDTH +
+      mainLayout().min +
       detailLayout().min +
       (panelCount - 1) * RESIZE_GUTTER;
     return currentWidth >= minimumWidth;
@@ -207,6 +220,9 @@ function Root(props: ViewShellRootProps) {
       layout: asideLayout,
       mode: asideMode,
       isCollapsed: () => asideMode() === 'collapsed',
+    },
+    main: {
+      layout: mainLayout,
     },
     detail: {
       layout: detailLayout,
@@ -279,9 +295,23 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
 function Main(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   const ws = useViewShellInternal();
+  const layout = ws.main.layout;
+  const target = () => {
+    const width = layout().width;
+    if (ws.detail.placement() !== 'inline' || width === undefined) {
+      return undefined;
+    }
+    return { kind: 'px' as const, px: width };
+  };
 
   return (
-    <Resize.Panel id={`${ws.id}-main`} index={1} minSize={MAIN_MIN_WIDTH}>
+    <Resize.Panel
+      id={`${ws.id}-main`}
+      index={1}
+      minSize={layout().min}
+      maxSize={ws.detail.placement() === 'inline' ? layout().max : undefined}
+      target={target()}
+    >
       <main
         {...rest}
         class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}

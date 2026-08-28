@@ -16,6 +16,16 @@ export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
   max: 360,
 };
 
+export type MainLayout = {
+  width?: number;
+  min: number;
+  max?: number;
+};
+
+export const DEFAULT_MAIN_LAYOUT: MainLayout = {
+  min: 320,
+};
+
 export type DetailNarrowBehavior = 'overlay' | 'replace' | 'hide';
 
 export type DetailLayout = {

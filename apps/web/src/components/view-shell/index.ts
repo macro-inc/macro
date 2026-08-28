@@ -26,8 +26,10 @@ export {
   DEFAULT_ASIDE_LAYOUT,
   DEFAULT_DETAIL_LAYOUT,
   DEFAULT_LAYOUT_BREAKPOINT,
+  DEFAULT_MAIN_LAYOUT,
   DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS,
   type DetailLayout,
   type DetailNarrowBehavior,
   type DetailPlacement,
+  type MainLayout,
 } from './view-shell-layout';
