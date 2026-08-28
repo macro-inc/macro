@@ -8,14 +8,25 @@ const INTERCEPTED_PROTOCOLS = new Set([
   'sms:',
 ]);
 
-function isInterceptedHref(raw: string): boolean {
+/**
+ * Absolute URL to open for a raw `href` attribute, or `undefined` to leave
+ * the click to the browser.
+ *
+ * Reads the attribute, not `HTMLAnchorElement.href`. The resolved property
+ * turns `#section` into `https://localhost/#section` and `//example.com` into
+ * `tauri://example.com` inside the desktop shell. Protocol-relative hrefs
+ * are forced to https so they stay on the public web.
+ */
+export function urlToOpenFromHref(raw: string): string | undefined {
   const href = raw.trim();
-  if (!href || href.startsWith('#')) return false;
-  if (href.startsWith('//')) return true;
+  if (!href || href.startsWith('#')) return undefined;
+  const absolute = href.startsWith('//') ? `https:${href}` : href;
   try {
-    return INTERCEPTED_PROTOCOLS.has(new URL(href).protocol);
+    const url = new URL(absolute);
+    if (!INTERCEPTED_PROTOCOLS.has(url.protocol)) return undefined;
+    return url.href;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -27,13 +38,23 @@ function isInterceptedHref(raw: string): boolean {
  */
 export function interceptExternalLinks(root: ParentNode) {
   for (const a of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
-    if (!isInterceptedHref(a.getAttribute('href') ?? '')) continue;
+    const url = urlToOpenFromHref(a.getAttribute('href') ?? '');
+    if (!url) continue;
     a.addEventListener('click', (e) => {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
         return;
       }
       e.preventDefault();
-      openExternalUrl(a.href);
+      openExternalUrl(url);
     });
   }
+}
+
+/** Stamp new-tab fallback attrs, then intercept primary clicks. */
+export function stampHtmlEmailAnchors(root: ParentNode) {
+  for (const a of root.querySelectorAll('a[href]')) {
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener noreferrer');
+  }
+  interceptExternalLinks(root);
 }

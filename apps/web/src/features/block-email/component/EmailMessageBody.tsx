@@ -7,7 +7,7 @@ import {
   processEmailColors,
   type ThemeColorParams,
 } from '@core/email';
-import { interceptExternalLinks } from '@core/util/interceptExternalLinks';
+import { stampHtmlEmailAnchors } from '@core/util/interceptExternalLinks';
 import DotsThree from '@phosphor/dots-three.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn } from '@ui';
@@ -163,11 +163,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         }
       }
     }
-    for (const a of messageDiv.querySelectorAll('a[href]')) {
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener noreferrer');
-    }
-    interceptExternalLinks(messageDiv);
+    stampHtmlEmailAnchors(messageDiv);
     messageDiv.style.userSelect = 'text';
     // Safari resolves only the -webkit- prefixed form of user-select
     // (unprefixed shipped in Safari 26.4), and WebKit inherits the app-wide

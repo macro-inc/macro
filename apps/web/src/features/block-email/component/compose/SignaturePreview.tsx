@@ -1,5 +1,5 @@
 import { isMobile } from '@core/mobile/isMobile';
-import { interceptExternalLinks } from '@core/util/interceptExternalLinks';
+import { stampHtmlEmailAnchors } from '@core/util/interceptExternalLinks';
 import InfoIcon from '@phosphor/info.svg';
 import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
@@ -46,11 +46,7 @@ export function SignaturePreview(props: {
     // Lazily attach (idempotent): a shadow root can only be attached once.
     const root = mountEl.shadowRoot ?? mountEl.attachShadow({ mode: 'open' });
     root.innerHTML = `<style>${SHADOW_STYLE}</style>${html}`;
-    for (const a of root.querySelectorAll('a[href]')) {
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener noreferrer');
-    }
-    interceptExternalLinks(root);
+    stampHtmlEmailAnchors(root);
   });
 
   return (
