@@ -391,7 +391,8 @@ async fn strips_hop_by_hop_headers_from_the_response() {
 }
 
 /// The proxy is staff-only for now: a session owned outside macro.com gets
-/// nothing, whatever its token says - and learns nothing about why.
+/// nothing, whatever its token says - told only, in our words, that staff
+/// membership is what it lacks.
 #[tokio::test]
 async fn a_session_owned_outside_macro_gets_nothing() {
     let service = EgressServiceImpl::new(

@@ -90,9 +90,9 @@ where
         span.record("owner", tracing::field::display(&grant.owner));
 
         // Staff-only for now, checked here so every target - git, connected
-        // MCP servers, Macro's own - passes one gate. Refused as
-        // unauthenticated on purpose: the sandbox cannot act on the
-        // distinction, and the detail is in the trace for the person who can.
+        // MCP servers, Macro's own - passes one gate. The refusal names
+        // itself ("not Macro staff") so the sandbox can report an actionable
+        // reason; the reason is our own static wording, never the request's.
         if !is_macro_staff(&grant.owner) {
             tracing::warn!(owner = %grant.owner, "refusing egress for a session owned outside macro.com");
             return Err(EgressError::Unauthenticated(

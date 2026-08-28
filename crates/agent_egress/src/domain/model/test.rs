@@ -310,3 +310,54 @@ fn an_echoed_credential_never_reaches_the_sandbox() {
 
     assert_eq!(names(&headers), ["content-type"]);
 }
+
+/// The staff gate is an exact match on the parsed domain part, and the
+/// parser behind `MacroUserIdStr` is what makes the lookalikes
+/// unrepresentable - a suffixed domain is a different domain, a second `@`
+/// or a trailing dot is not an email, and casing normalizes before the
+/// compare rather than defeating it.
+#[test]
+fn the_staff_gate_admits_exactly_the_macro_domain() {
+    for staff in ["wolf@macro.com", "wolf@MACRO.COM", "wolf+agents@macro.com"] {
+        let owner = MacroUserIdStr::try_from_email(staff).expect(staff);
+        assert!(is_macro_staff(&owner), "refused {staff}");
+    }
+
+    for visitor in [
+        "visitor@example.com",
+        "evil@macro.com.attacker.net",
+        "evil@xmacro.com",
+        "evil@macro.org",
+    ] {
+        let owner = MacroUserIdStr::try_from_email(visitor).expect(visitor);
+        assert!(!is_macro_staff(&owner), "admitted {visitor}");
+    }
+
+    for not_an_email in [
+        "wolf@macro.com@evil.com",
+        "wolf@macro.com.",
+        "wolf@macro com",
+        "wolf@macrо.com", // Cyrillic 'о': non-ASCII labels are not emails here.
+        "not-an-email",
+    ] {
+        assert!(
+            MacroUserIdStr::try_from_email(not_an_email).is_err(),
+            "parsed {not_an_email}"
+        );
+    }
+}
+
+/// A repeated `service=` cannot smuggle a second verb: the first pair decides,
+/// and the upstream query is rebuilt from the parsed endpoint, never echoed.
+#[test]
+fn a_repeated_git_service_parameter_does_not_escalate() {
+    assert_eq!(
+        GitEndpoint::parse(
+            "info/refs",
+            Some("service=git-upload-pack&service=git-receive-pack")
+        ),
+        Some(GitEndpoint::InfoRefs {
+            service: GitService::UploadPack
+        })
+    );
+}

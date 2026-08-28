@@ -6,11 +6,12 @@
 //! `mcp_service` authenticates a *user*, so the proxy exchanges the session
 //! owner's identity for a short-lived Macro API token and stamps that.
 //!
-//! The exchange is deliberately a call to `authentication_service`'s existing
-//! mint endpoint rather than local signing. The RS256 key behind Macro API
-//! tokens can impersonate any user at every service that accepts them; custody
-//! stays where it is, and the only thing this process ever holds is a
-//! single-user token already near its expiry.
+//! The exchange is local signing with the same RS256 key
+//! `authentication_service` uses - this process holds a key that can
+//! impersonate any user at every service accepting Macro API tokens. That
+//! custody is the cost of not putting a mint-for-anyone endpoint on the
+//! network; what limits the blast radius is that every token minted here is
+//! single-user, scoped to the session's owner, and minutes from expiry.
 
 use chrono::{DateTime, Duration as ChronoDuration, TimeZone, Utc};
 use lru::LruCache;
