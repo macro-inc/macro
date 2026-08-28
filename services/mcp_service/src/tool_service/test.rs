@@ -80,14 +80,14 @@ async fn server_instructions_link_items_as_urls_not_mention_tags() {
         instructions.contains("https://macro.com/app/"),
         "instructions should build item links from the app base url"
     );
-    // And must steer the model away from the in-app mention markup.
-    assert!(
-        instructions.contains("<m-document-mention>"),
-        "instructions should reference the mention tag it is forbidding"
-    );
+    // External MCP hosts must not emit mention tags; Macro agent sessions must.
     assert!(
         instructions.contains("Do NOT emit"),
-        "instructions should forbid emitting mention tags in MCP responses"
+        "instructions should forbid emitting mention tags in external MCP hosts"
+    );
+    assert!(
+        instructions.contains("If you are a Macro agent session"),
+        "instructions should require mention tags in Macro agent-session replies"
     );
     // Lists of items should be rendered as a table with number/name/link columns.
     for column in ["number", "name", "link"] {

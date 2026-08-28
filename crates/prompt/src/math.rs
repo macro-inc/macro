@@ -33,7 +33,7 @@ Example:
 
 ### Mentions
 
-Entity mentions use the `<m-document-mention>` / `<m-user-mention>` XML tags described in the mentioning section — never GFM `@name` or a bare URL when a mention tag exists.
+When a tool returns a document, channel, chat, project, task, email thread, calendar event, or user, cite it with the XML mention tags in the mentioning section. Never a bare URL, a Markdown link, or GFM `@name`.
 "##;
 
 static INTENT: &str = "Markdown is authored in Macro's internal XML syntax: math in \
@@ -41,10 +41,26 @@ static INTENT: &str = "Markdown is authored in Macro's internal XML syntax: math
 as mention tags — never GFM $$ / $ / \\( \\) math or pipe tables.";
 
 /// Compact always-on reminder injected as `<global_instructions>` on every
-/// in-process agent-session turn. Complements the full section above, which
-/// already lives in the standing tool-use prompt; this block sits after that
-/// prompt so the syntax rule is not buried in the long standing text.
-pub const GLOBAL_INSTRUCTIONS: &str = r#"Author every reply in Macro internal markdown. Use `<m-katex-equation>{"equation":"<latex>","inline":<bool>}</m-katex-equation>` for math, `<m-table>` / `<m-table-row>` / `<m-table-cell>` for tables, and `<m-*>` mention tags for entities. Never use GFM math (`$$`, `$`, `\(...\)`, `\[...\]`) or pipe tables."#;
+/// in-process agent-session turn. Complements the standing tool-use prompt;
+/// this block sits after it so the syntax rule is not buried. Includes the
+/// mention-tag shapes (also in [`crate::mentions`]) so listing documents
+/// via tools or Macro MCP still renders as @mentions in the session UI.
+pub const GLOBAL_INSTRUCTIONS: &str = r#"Author every reply in Macro internal markdown.
+
+When a tool (including Macro MCP) returns a document, channel, chat, project, task, email thread, calendar event, or user, cite it with an XML mention tag so it renders as an @mention. Never a bare URL, a Markdown link, or GFM `@name`. Empty names are fine.
+
+- Document: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>`
+- Channel: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"channel","blockParams":{}}</m-document-mention>`
+- Channel message: `<m-document-mention>{"documentId":"{channel_id}","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"{message_id}"}}</m-document-mention>`
+- Chat: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"chat","blockParams":{}}</m-document-mention>`
+- Project: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"project","blockParams":{}}</m-document-mention>`
+- Task: `<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"task","blockParams":{}}</m-document-mention>`
+- Email thread: `<m-document-mention>{"documentId":"{thread_id}","documentName":"","blockName":"email","blockParams":{}}</m-document-mention>` (`blockName` is exactly `email`)
+- Calendar event: `<m-document-mention>{"documentId":"{event_id}","documentName":"","blockName":"calendar","blockParams":{}}</m-document-mention>` (`blockName` is exactly `calendar`)
+- User: `<m-user-mention>{"userId":"{id}","email":"{email}"}</m-user-mention>`
+
+Math: `<m-katex-equation>{"equation":"<latex>","inline":<bool>}</m-katex-equation>` (never `$$`, `$`, `\(...\)`, `\[...\]`).
+Tables: `<m-table>` / `<m-table-row>` / `<m-table-cell>` (never GitHub pipe tables)."#;
 
 /// The internal-markdown prompt.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

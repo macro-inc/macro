@@ -6,7 +6,7 @@ const BASE_TITLES: [&str; 6] = [
     "# Tone and Style",
     "# Internal Markdown",
     "# Citation Rules",
-    "# Mentioning documents, channels, channel messages, chats, projects, email threads, and calendar events",
+    "# Mentioning documents, channels, channel messages, chats, projects, email threads, calendar events, and users",
     "# Do Not Rules",
     "# Terms",
 ];

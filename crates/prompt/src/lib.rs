@@ -46,10 +46,13 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// item-linking rules for the model's own replies are not, because they
 /// depend on the runtime app base URL — see [`mcp_instructions`].
 ///
-/// Deliberately omits the in-app [`mentions`] section (MCP clients cannot render
-/// `<m-document-mention>` tags in a chat reply) as well as chat tone/style and
-/// general tool-use instructions, which belong to the host client, not to Macro.
-/// [`document_content_links`] is the exception: it still applies over MCP
+/// Deliberately omits the in-app [`mentions`] catalog as a standing section
+/// (external MCP hosts cannot render `<m-document-mention>` tags in a chat
+/// reply) as well as chat tone/style and general tool-use instructions, which
+/// belong to the host client, not to Macro. [`mcp_item_links`] still names the
+/// mention tag: it forbids it in external MCP hosts and requires it when the
+/// caller is a Macro agent session whose replies render in-app.
+/// [`document_content_links`] is the other exception: it still applies over MCP
 /// because it governs content written *into* a Markdown document (via
 /// `CreateDocument`/`EditDocument`), not the model's chat replies. See
 /// [`mentions`] for the full statement of which surfaces (replies, channel
@@ -64,15 +67,15 @@ static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
 /// `instructions` field.
 ///
 /// Carries the formatting/correctness rules Macro features depend on so that AI
-/// used through MCP produces valid output. Item links in the model's own chat
-/// replies are rendered as plain Markdown URLs (built from `base_url`, the
-/// runtime `APP_BASE_URL` value) and lists of items as Markdown tables — NOT
-/// the in-app `<m-document-mention>` markup, which MCP clients cannot render.
-/// Content the model writes *into* a Macro document via `CreateDocument` or
-/// `EditDocument` is the opposite: it must still use `<m-document-mention>`
-/// tags (see [`document_content_links`]), since the Macro app renders that
-/// content regardless of which surface created it. `base_url` should already
-/// have any trailing slash trimmed.
+/// used through MCP produces valid output. Item links in replies rendered by
+/// *external* MCP hosts are plain Markdown URLs (built from `base_url`, the
+/// runtime `APP_BASE_URL` value) and lists of items are Markdown tables. Macro
+/// agent sessions are the opposite: their replies render in the Macro app, so
+/// they must emit `<m-document-mention>` tags (see [`mcp_item_links`]). Content
+/// the model writes *into* a Macro document via `CreateDocument` or
+/// `EditDocument` always uses mention tags (see [`document_content_links`]),
+/// since the Macro app renders that content regardless of which surface created
+/// it. `base_url` should already have any trailing slash trimmed.
 pub fn mcp_instructions(base_url: &str) -> String {
     format!(
         "{}\n{MCP_STATIC_INSTRUCTIONS}",
@@ -98,13 +101,23 @@ mod tests {
     fn mcp_instructions_forbid_mention_tags_but_in_app_prompt_keeps_them() {
         let instructions = mcp_instructions("https://macro.com");
 
-        // MCP responses must steer away from the in-app mention markup...
+        // External MCP hosts must steer away from the in-app mention markup...
         assert!(instructions.contains("Do NOT emit `<m-document-mention>`"));
+        assert!(instructions.contains("External MCP hosts"));
 
-        // ...while the in-app base prompt still instructs the model to use it.
+        // ...while a Macro agent session (replies render in-app, even if tools
+        // arrived over MCP) must emit the same mention tags as in-app agents.
+        assert!(instructions.contains("If you are a Macro agent session"));
+        assert!(instructions.contains(
+            r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#
+        ));
+        assert!(instructions.contains("<m-user-mention>"));
+
+        // ...and the in-app base prompt still instructs the model to use it.
         let in_app = BASE_PROMPT.to_string();
         assert!(in_app.contains("<m-document-mention>"));
         assert!(in_app.contains("use XML mention tags"));
+        assert!(in_app.contains("<m-user-mention>"));
     }
 
     #[test]
@@ -132,10 +145,13 @@ mod tests {
             r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#
         ));
 
-        // The plain-URL rule and the mention-tag rule must not silently
-        // contradict each other: the plain-URL section explicitly scopes
-        // itself to the model's own replies, not to document content.
-        assert!(instructions.contains("does NOT apply to content you write into a Macro document"));
+        // The URL rule and the mention-tag rule must not silently contradict
+        // each other: the URL section scopes itself to external MCP hosts and
+        // explicitly carves out Macro agent sessions plus document content.
+        assert!(
+            instructions
+                .contains("URL-vs-mention split applies to your own conversational replies")
+        );
     }
 
     #[test]
@@ -158,6 +174,12 @@ mod tests {
         const TAG: &str = r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#;
         assert!(mentions::PROMPT.instructions.contains(TAG));
         assert!(document_content_links::PROMPT.instructions.contains(TAG));
+        assert!(math::GLOBAL_INSTRUCTIONS.contains(TAG));
+        assert!(
+            mentions::PROMPT.instructions.contains(
+                r#"<m-user-mention>{"userId":"{id}","email":"{email}"}</m-user-mention>"#
+            )
+        );
     }
 
     #[test]
@@ -177,7 +199,16 @@ mod tests {
     fn global_instructions_are_a_compact_xml_syntax_reminder() {
         assert!(math::GLOBAL_INSTRUCTIONS.contains("<m-katex-equation>"));
         assert!(math::GLOBAL_INSTRUCTIONS.contains("<m-table>"));
-        assert!(math::GLOBAL_INSTRUCTIONS.contains("Never use GFM math"));
+        assert!(math::GLOBAL_INSTRUCTIONS.contains("Never"));
+        assert!(math::GLOBAL_INSTRUCTIONS.contains(
+            r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#
+        ));
+        assert!(
+            math::GLOBAL_INSTRUCTIONS.contains(
+                r#"<m-user-mention>{"userId":"{id}","email":"{email}"}</m-user-mention>"#
+            )
+        );
+        assert!(math::GLOBAL_INSTRUCTIONS.contains("Macro MCP"));
     }
 
     #[test]

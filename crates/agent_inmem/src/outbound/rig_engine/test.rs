@@ -26,6 +26,14 @@ fn global_instructions_are_always_injected_after_the_standing_prompt() {
         prompt.contains("<m-katex-equation>"),
         "the global block names the internal math tag"
     );
+    assert!(
+        prompt.contains("<m-document-mention>"),
+        "the global block names the document @mention tag"
+    );
+    assert!(
+        prompt.contains("<m-user-mention>"),
+        "the global block names the user @mention tag"
+    );
 }
 
 #[test]

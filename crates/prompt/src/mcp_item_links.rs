@@ -1,12 +1,12 @@
 //! Rules for linking to Macro items in the model's own *conversational
-//! replies* sent to external MCP clients.
+//! replies* sent over MCP.
 //!
-//! Unlike the in-app [`crate::mentions`] section — which tells the model to emit
-//! `<m-document-mention>` XML tags that only render inside the Macro app — MCP
-//! responses are rendered by third-party clients that cannot resolve that
-//! markup. So over MCP the model must link items in its own replies as plain
-//! Markdown URLs built from the app base URL, and list multiple items as a
-//! Markdown table.
+//! External MCP hosts (Claude Desktop, Cursor IDE, and similar) cannot render
+//! [`crate::mentions`]'s `<m-document-mention>` tags, so those replies must
+//! use plain Markdown URLs built from the app base URL. Macro agent sessions
+//! are the exception: their replies stream back into the Macro app, which
+//! *can* render mention tags, so they must use the same XML mentions as
+//! in-app agents — even when the tools they called arrived over MCP.
 //!
 //! This is scoped to the model's chat replies only. It does not govern content
 //! the model writes *into* a Macro document (e.g. via `CreateDocument` or
@@ -26,28 +26,32 @@ static TITLE: &str = "Linking to and listing Macro items";
 pub fn render(base_url: &str) -> String {
     format!(
         "# {TITLE}\n\
-         When referring the user to a Macro item (document, channel, chat, \
-         project, task, or email thread) in your responses, write a plain URL of \
-         the form `{base_url}/app/<type>/<id>`, where `<type>` is the item's type \
-         — `md` for a document, `channel`, `chat`, `project`, `task`, or `email` \
-         for an email thread — and `<id>` is the item id. Render it as a normal \
-         Markdown link, e.g. `[Name]({base_url}/app/md/<id>)`.\n\
+         External MCP hosts (Claude Desktop, Cursor IDE, and similar) cannot \
+         render Macro mention tags. In those hosts, when referring the user to a \
+         Macro item (document, channel, chat, project, task, or email thread) in \
+         your responses, write a plain URL of the form `{base_url}/app/<type>/<id>`, \
+         where `<type>` is the item's type — `md` for a document, `channel`, \
+         `chat`, `project`, `task`, or `email` for an email thread — and `<id>` \
+         is the item id. Render it as a normal Markdown link, e.g. \
+         `[Name]({base_url}/app/md/<id>)`. Do NOT emit `<m-document-mention>` XML \
+         tags in those hosts — they appear as raw text.\n\
          \n\
-         Do NOT emit `<m-document-mention>` XML tags or any other Macro internal \
-         mention/markup format in these responses. Those only render inside the \
-         Macro app and appear as raw text to MCP clients. This rule overrides any \
-         other instruction about mention tags for your own conversational \
-         replies: over MCP, always link items in your chat responses with plain \
-         Markdown URLs, never mention tags.\n\
+         If you are a Macro agent session (your replies stream back into the \
+         Macro app), ignore the URL rule above. Cite each item with an \
+         `<m-document-mention>` tag so it renders as an @mention, e.g. \
+         `<m-document-mention>{{\"documentId\":\"{{id}}\",\"documentName\":\"\",\"blockName\":\"md\",\"blockParams\":{{}}}}</m-document-mention>`. \
+         People use `<m-user-mention>{{\"userId\":\"{{id}}\",\"email\":\"{{email}}\"}}</m-user-mention>`. \
+         Never a bare URL or GFM `@name` in a Macro agent-session reply.\n\
          \n\
-         This rule does NOT apply to content you write into a Macro document, \
-         e.g. via the `CreateDocument` or `EditDocument` tools. That content is \
-         rendered by the Macro app itself, not by this MCP client, so it must \
-         still use `<m-document-mention>` tags to link correctly — see \"Linking \
-         Macro items inside document content\" below.\n\
+         This URL-vs-mention split applies to your own conversational replies \
+         only. Content you write into a Macro document, e.g. via the \
+         `CreateDocument` or `EditDocument` tools, is rendered by the Macro app \
+         itself, so it must still use `<m-document-mention>` tags to link \
+         correctly — see \"Linking Macro items inside document content\" below.\n\
          \n\
-         When you list multiple Macro items, present them as a Markdown table with \
-         the columns `number`, `name`, and `link`, where `link` is the \
-         `{base_url}/app/<type>/<id>` URL for each item.\n"
+         When you list multiple Macro items in an external MCP host, present \
+         them as a Markdown table with the columns `number`, `name`, and `link`, \
+         where `link` is the `{base_url}/app/<type>/<id>` URL for each item. In a \
+         Macro agent session, list them as mention tags instead.\n"
     )
 }
