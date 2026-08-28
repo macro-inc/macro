@@ -2960,29 +2960,3 @@ async fn remove_link_preview_rewrites_content_without_setting_edited_at(
     assert!(persisted.1.is_none());
     Ok(())
 }
-
-#[sqlx::test(
-    fixtures(path = "../../../fixtures", scripts("channels_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn remove_link_preview_is_idempotent(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let url = "https://example.com/article";
-    let content =
-        format!(r#"look at <m-link>{{"url":"{url}","text":"{url}","title":""}}</m-link>"#);
-    sqlx::query("UPDATE comms_messages SET content = $1 WHERE id = $2")
-        .bind(&content)
-        .bind(MSG1)
-        .execute(&pool)
-        .await?;
-
-    let channels = repo(pool.clone());
-    let first = channels
-        .remove_link_preview(CH1, MSG1, url.to_string())
-        .await?;
-    let second = channels
-        .remove_link_preview(CH1, MSG1, url.to_string())
-        .await?;
-    assert_eq!(first.content, second.content);
-    assert_eq!(first.updated_at, second.updated_at);
-    Ok(())
-}

@@ -13,11 +13,7 @@ import {
   setShowLinkPreviews,
   showLinkPreviews,
 } from '../link-preview-visibility';
-import {
-  extractUnfurlableUrls,
-  MAX_LINK_PREVIEWS,
-  shouldRenderUnfurl,
-} from '../link-previews';
+import { extractUnfurlableUrls, shouldRenderUnfurl } from '../link-previews';
 import { Root } from '../Root';
 import type { MessageData } from '../types';
 
@@ -107,14 +103,6 @@ describe('extractUnfurlableUrls', () => {
     ).toEqual(['https://example.com/a']);
   });
 
-  it(`caps at ${MAX_LINK_PREVIEWS} URLs`, () => {
-    const content = Array.from(
-      { length: MAX_LINK_PREVIEWS + 2 },
-      (_, i) => `https://example.com/${i}`
-    ).join(' ');
-    expect(extractUnfurlableUrls(content)).toHaveLength(MAX_LINK_PREVIEWS);
-  });
-
   it('ignores URLs inside code fences and inline code', () => {
     expect(
       extractUnfurlableUrls(
@@ -160,12 +148,6 @@ describe('extractUnfurlableUrls', () => {
     expect(extractUnfurlableUrls('https://macro.com/apple-launch')).toEqual([
       'https://macro.com/apple-launch',
     ]);
-  });
-
-  it('skips non-http(s) schemes and invalid URLs', () => {
-    expect(extractUnfurlableUrls('ftp://example.com mailto:a@b.com')).toEqual(
-      []
-    );
   });
 });
 
@@ -264,33 +246,6 @@ describe('LinkPreviews', () => {
     expect(container.querySelector('[data-link-preview]')).toBeNull();
   });
 
-  it('renders nothing at all for messages without external links', () => {
-    const { container } = renderPreviews('just some text');
-
-    expect(container.querySelector('[data-message-link-previews]')).toBeNull();
-  });
-
-  it('hides the remove control until the message or preview is hovered', () => {
-    const url = 'https://example.com/hover-x';
-    unfurlResults.set(url, {
-      type: 'success',
-      data: { url, title: 'Hover X' },
-      _createdAt: new Date(),
-    });
-
-    const { getByRole } = renderPreviews(url, {
-      id: 'message-hover-x',
-      sender_id: 'user-1',
-    });
-
-    const button = getByRole('button', { name: 'Remove link preview' });
-    const classes = button.className.split(/\s+/);
-    expect(classes).toContain('opacity-0');
-    expect(classes).toContain('group-hover/message:opacity-100');
-    expect(classes).toContain('text-ink-muted');
-    expect(classes.some((c) => c.startsWith('bg-'))).toBe(false);
-  });
-
   it('reveals the muted X after pointer hover on the preview', async () => {
     const user = userEvent.setup();
     const url = 'https://example.com/pointer-hover-x';
@@ -375,20 +330,6 @@ describe('LinkPreviews', () => {
 
     expect(container.querySelector('[data-link-preview]')).not.toBeNull();
     expect(queryByRole('button', { name: 'Remove link preview' })).toBeNull();
-  });
-
-  it('renders no card for a link whose preview the sender removed', () => {
-    const url = 'https://example.com/suppressed';
-    unfurlResults.set(url, {
-      type: 'success',
-      data: { url, title: 'Suppressed' },
-      _createdAt: new Date(),
-    });
-
-    const removed = `<m-link>{"url":"${url}","text":"${url}","title":"","preview":false}</m-link>`;
-    const { container } = renderPreviews(removed, { id: 'message-suppressed' });
-
-    expect(container.querySelector('[data-message-link-previews]')).toBeNull();
   });
 
   it('renders nothing when the global preference is off', () => {

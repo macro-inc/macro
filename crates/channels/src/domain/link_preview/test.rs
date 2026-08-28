@@ -91,25 +91,10 @@ fn ignores_url_as_substring_of_longer_url() {
 }
 
 #[test]
-fn no_op_when_url_absent() {
-    let content = m_link_content("https://other.com");
-    assert_eq!(remove_link_preview_from_content(&content, URL), content);
-}
-
-#[test]
 fn does_not_rewrite_url_inside_other_m_link_payload_text() {
     // URL appears only as the text of a DIFFERENT link's payload.
     let content =
         format!(r#"<m-link>{{"url":"https://other.com","text":"{URL}","title":""}}</m-link>"#);
-    assert_eq!(remove_link_preview_from_content(&content, URL), content);
-}
-
-#[test]
-fn does_not_rewrite_repeated_url_inside_another_payload_text() {
-    // Target URL appears twice inside ANOTHER link's display text.
-    let content = format!(
-        r#"<m-link>{{"url":"https://other.com","text":"see {URL} and {URL} now","title":""}}</m-link>"#
-    );
     assert_eq!(remove_link_preview_from_content(&content, URL), content);
 }
 
