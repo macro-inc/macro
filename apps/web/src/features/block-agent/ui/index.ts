@@ -31,11 +31,6 @@ export {
   type QueuedPromptListProps,
 } from './QueuedPromptList';
 export {
-  type SandboxSize,
-  SandboxSizeSelector,
-  type SandboxSizeSelectorProps,
-} from './SandboxSizeSelector';
-export {
   type SessionStatusLike,
   SessionStatusPill,
 } from './SessionStatusPill';

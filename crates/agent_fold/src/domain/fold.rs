@@ -748,6 +748,8 @@ impl FoldState {
                 &call.locations,
                 call.meta.as_ref(),
             ),
+            raw_input: call.raw_input.clone().map(Box::new),
+            raw_output: call.raw_output.clone().map(Box::new),
         };
 
         // A repeated open for the same id patches in place rather than
@@ -789,6 +791,8 @@ impl FoldState {
             label,
             status,
             detail,
+            raw_input,
+            raw_output,
             ..
         }) = parts.get_mut(position)
         else {
@@ -818,6 +822,13 @@ impl FoldState {
             fields.locations.as_deref(),
             update.meta.as_ref(),
         );
+
+        if let Some(found) = fields.raw_input {
+            *raw_input = Some(Box::new(found));
+        }
+        if let Some(found) = fields.raw_output {
+            *raw_output = Some(Box::new(found));
+        }
 
         Some(Changed::updated(message))
     }

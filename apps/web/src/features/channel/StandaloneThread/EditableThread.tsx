@@ -11,6 +11,7 @@ import { createDeleteMessageConfirmation } from '../Channel/create-delete-messag
 import type { InputHandle, InputSnapshot } from '../Input';
 import { Thread } from '../Thread';
 import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
+import { channelReplyInputOffsetX } from '../Thread/utils/thread-rail-geometry';
 import { useStandaloneThread } from './context';
 import { StandaloneThread } from './StandaloneThread';
 
@@ -81,18 +82,21 @@ function EditableThreadInner() {
       <StandaloneThread.Replies
         getMessageActions={getMessageActions}
         showReplyButton
-      />
-      <Show when={ctx.isReplying()}>
-        <Thread.ReplyInput
-          channelId={ctx.channelId()}
-          messageId={ctx.messageId()}
-          replyInputState={replyInputState}
-          setReplyInputState={setReplyInputState}
-          setIsReplying={ctx.setIsReplying}
-          setReplyInputHandle={setReplyInputHandle}
-          focusRequest={ctx.replyInputFocusRequest}
-        />
-      </Show>
+      >
+        <Show when={ctx.isReplying()}>
+          <Thread.ReplyInput
+            connectorRail="thread"
+            offsetX={channelReplyInputOffsetX}
+            channelId={ctx.channelId()}
+            messageId={ctx.messageId()}
+            replyInputState={replyInputState}
+            setReplyInputState={setReplyInputState}
+            setIsReplying={ctx.setIsReplying}
+            setReplyInputHandle={setReplyInputHandle}
+            focusRequest={ctx.replyInputFocusRequest}
+          />
+        </Show>
+      </StandaloneThread.Replies>
     </>
   );
 }
