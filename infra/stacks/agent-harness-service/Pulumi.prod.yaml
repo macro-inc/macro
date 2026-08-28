@@ -1,3 +1,5 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
+  agent-harness-service:github_sync_app_pem: github-sync-app-pem-prod
+  agent-harness-service:macro_api_token_private_secret_key: macro-api-token-private-key-prod

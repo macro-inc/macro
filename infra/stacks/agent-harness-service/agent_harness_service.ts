@@ -4,6 +4,8 @@ import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  DEFAULT_DEREGISTRATION_DELAY_SECONDS,
+  DEFAULT_TARGET_GROUP_HEALTH_CHECK,
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
@@ -25,6 +27,15 @@ export const SERVICE_DOMAIN_NAME = `agent-harness${
   stack === 'prod' ? '' : `-${stack}`
 }.${BASE_DOMAIN}`;
 
+// The sandbox-facing egress proxy gets its own hostname rather than paths
+// carved out of the control API's: the control routes authenticate Macro
+// users, the egress routes authenticate session tokens presented by
+// model-authored code, and a separate host keeps the two trust domains
+// separable at the load balancer.
+export const EGRESS_DOMAIN_NAME = `agent-harness-egress${
+  stack === 'prod' ? '' : `-${stack}`
+}.${BASE_DOMAIN}`;
+
 type Args = {
   vpc: {
     vpcId: pulumi.Output<string> | string;
@@ -35,6 +46,8 @@ type Args = {
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   serviceContainerPort: number;
+  /** Container port of the sandbox-facing egress proxy listener. */
+  egressContainerPort: number;
   healthCheckPath: string;
   isPrivate?: boolean;
   ecsClusterArn: pulumi.Output<string> | string;
@@ -60,7 +73,9 @@ export class AgentHarnessService extends pulumi.ComponentResource {
   public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
   public domain: string;
+  public egressDomain: string;
   public targetGroup: aws.lb.TargetGroup;
+  public egressTargetGroup: aws.lb.TargetGroup;
   public lb: aws.lb.LoadBalancer;
   public listener: aws.lb.Listener;
   public service: awsx.ecs.FargateService;
@@ -78,6 +93,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       tags,
       platform,
       serviceContainerPort,
+      egressContainerPort,
       healthCheckPath,
       isPrivate,
       ecsClusterArn,
@@ -89,6 +105,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     } = args;
 
     this.domain = `https://${SERVICE_DOMAIN_NAME}`;
+    this.egressDomain = `https://${EGRESS_DOMAIN_NAME}`;
     this.cloudStorageClusterName = cloudStorageClusterName;
     this.tags = tags;
 
@@ -228,6 +245,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     const { serviceAlbSg, serviceSg } = this.initializeSecurityGroups({
       vpcId: vpc.vpcId,
       serviceContainerPort,
+      egressContainerPort,
     });
     this.serviceAlbSg = serviceAlbSg;
     this.serviceSg = serviceSg;
@@ -244,6 +262,46 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     this.targetGroup = targetGroup;
     this.lb = lb;
     this.listener = listener;
+
+    // The egress proxy listener, published on the same ALB under its own
+    // hostname. The default action still forwards to the control API, so
+    // nothing about the existing surface changes; only requests naming the
+    // egress host reach the egress port.
+    this.egressTargetGroup = new aws.alb.TargetGroup(
+      `${BASE_NAME}-egress-tg-${stack}`,
+      {
+        name: `agent-harness-egress-tg-${stack}`,
+        deregistrationDelay: DEFAULT_DEREGISTRATION_DELAY_SECONDS,
+        port: egressContainerPort,
+        protocol: 'HTTP',
+        targetType: 'ip',
+        vpcId: vpc.vpcId,
+        healthCheck: {
+          path: healthCheckPath,
+          protocol: 'HTTP',
+          ...DEFAULT_TARGET_GROUP_HEALTH_CHECK,
+        },
+        tags,
+      },
+      { parent: this }
+    );
+
+    new aws.lb.ListenerRule(
+      `${BASE_NAME}-egress-rule-${stack}`,
+      {
+        listenerArn: listener.arn,
+        priority: 10,
+        conditions: [{ hostHeader: { values: [EGRESS_DOMAIN_NAME] } }],
+        actions: [
+          {
+            type: 'forward',
+            targetGroupArn: this.egressTargetGroup.arn,
+          },
+        ],
+        tags,
+      },
+      { parent: this }
+    );
 
     const dopplerEcsEnvironment = new DopplerEcsEnvironment(
       BASE_NAME,
@@ -299,6 +357,13 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                   name: 'BASE_URL',
                   value: this.domain,
                 },
+                // Where sandboxes dial the egress proxy - through the ALB,
+                // not the container port, so it is set here where the
+                // hostname is defined rather than in Doppler.
+                {
+                  name: 'EGRESS_BASE_URL',
+                  value: this.egressDomain,
+                },
               ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
@@ -320,6 +385,13 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                   hostPort: serviceContainerPort,
                   containerPort: serviceContainerPort,
                   targetGroup,
+                },
+                {
+                  appProtocol: 'http',
+                  name: `${BASE_NAME}-egress-tcp-${stack}`,
+                  hostPort: egressContainerPort,
+                  containerPort: egressContainerPort,
+                  targetGroup: this.egressTargetGroup,
                 },
               ],
             },
@@ -357,14 +429,32 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+    new aws.route53.Record(
+      `${BASE_NAME}-egress-domain-record`,
+      {
+        name: EGRESS_DOMAIN_NAME,
+        type: 'A',
+        zoneId: zone.zoneId,
+        aliases: [
+          {
+            evaluateTargetHealth: false,
+            name: this.lb.dnsName,
+            zoneId: this.lb.zoneId,
+          },
+        ],
+      },
+      { parent: this }
+    );
   }
 
   private initializeSecurityGroups({
     vpcId,
     serviceContainerPort,
+    egressContainerPort,
   }: {
     vpcId: pulumi.Output<string> | string;
     serviceContainerPort: number;
+    egressContainerPort: number;
   }) {
     const serviceAlbSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-alb-sg-${stack}`,
@@ -396,6 +486,20 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         referencedSecurityGroupId: serviceAlbSg.id,
         fromPort: serviceContainerPort,
         toPort: serviceContainerPort,
+        ipProtocol: 'tcp',
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.vpc.SecurityGroupIngressRule(
+      `${BASE_NAME}-alb-in-egress`,
+      {
+        securityGroupId: serviceSg.id,
+        description: 'Allow inbound egress-proxy traffic from the service ALB',
+        referencedSecurityGroupId: serviceAlbSg.id,
+        fromPort: egressContainerPort,
+        toPort: egressContainerPort,
         ipProtocol: 'tcp',
         tags: this.tags,
       },
@@ -450,6 +554,20 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         referencedSecurityGroupId: serviceSg.id,
         fromPort: serviceContainerPort,
         toPort: serviceContainerPort,
+        ipProtocol: 'tcp',
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.vpc.SecurityGroupEgressRule(
+      `${BASE_NAME}-alb-out-egress`,
+      {
+        securityGroupId: serviceAlbSg.id,
+        description: 'Allow egress-proxy traffic to the service security group',
+        referencedSecurityGroupId: serviceSg.id,
+        fromPort: egressContainerPort,
+        toPort: egressContainerPort,
         ipProtocol: 'tcp',
         tags: this.tags,
       },
