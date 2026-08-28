@@ -48,6 +48,16 @@ pub struct OpenSession {
 /// provider becomes a compile error at every decision site instead of a
 /// silently wrong `else`. This becomes a bot attribute the day the set
 /// stops being closed.
+///
+/// A session's instructions are stored on its row whichever kind serves it,
+/// but only [`Self::InMemory`] reads them today - it builds its system prompt
+/// in this process, so there is nothing to transport. The rest need one, and
+/// ACP supplies none: `session/new` carries a working directory, MCP servers
+/// and `_meta`, and nothing else. [`Self::SandboxedCoder`] will get a
+/// per-session file listed alongside `SYSTEM.md` in `container/opencode.json`,
+/// [`Self::External`] `_meta` on `session/new` for macrod to translate, and
+/// [`Self::Cursor`] - whose API takes a prompt and nothing more - has to fold
+/// them into the prompt body's hidden agent-context node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentKind {
     /// A sandbox this deployment provisions (Daytona, or local Docker when

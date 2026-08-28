@@ -73,6 +73,8 @@ pub struct OpenExternalAgentSession {
     pub owner: MacroUserIdStr<'static>,
     /// The thread whose mention triggered the session, when one did.
     pub thread: Option<SessionThread>,
+    /// Instructions the session's runtime works under, when any were stated.
+    pub instructions: Option<String>,
 }
 
 /// Everything needed to open a session the server hosts itself.
@@ -88,6 +90,9 @@ pub struct OpenManagedSession {
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
     pub prompt: Option<String>,
+    /// Instructions the session's runtime works under, for its whole life.
+    /// `None` runs the runtime's own default.
+    pub instructions: Option<String>,
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which

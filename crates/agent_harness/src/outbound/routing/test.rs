@@ -116,6 +116,7 @@ impl AgentSessionRepo for FixedBotSessions {
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             sandbox_size: SandboxSize::Default,
+            instructions: None,
             acp_session_id: None,
             external: None,
             status: SessionStatus::NoMessages,

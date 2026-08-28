@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE egress_token_hash = $1\n            ",
+  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, instructions,\n                acp_session_id, status, status_event_name, egress_token_hash\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                -- A row being created cannot have an external identity yet.\n                NULL::TEXT AS \"external_provider?\", NULL::TEXT AS \"external_id?\",\n                NULL::TEXT AS \"external_name?\", NULL::TEXT AS \"external_url?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -60,57 +60,76 @@
       },
       {
         "ordinal": 11,
-        "name": "acp_session_id",
+        "name": "instructions",
         "type_info": "Text"
       },
       {
         "ordinal": 12,
-        "name": "status",
+        "name": "acp_session_id",
         "type_info": "Text"
       },
       {
         "ordinal": 13,
-        "name": "status_event_name",
+        "name": "status",
         "type_info": "Text"
       },
       {
         "ordinal": 14,
+        "name": "status_event_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "modified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "external_provider?",
         "type_info": "Text"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "external_id?",
         "type_info": "Text"
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "external_name?",
         "type_info": "Text"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "external_url?",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
         "Text"
       ]
     },
@@ -127,16 +146,17 @@
       false,
       false,
       true,
+      true,
       false,
       true,
       false,
       false,
       null,
-      false,
-      false,
-      true,
-      true
+      null,
+      null,
+      null,
+      null
     ]
   },
-  "hash": "0f26267379d1fe3337f14aa30959204ac2d89c9acbe728426c199bde4b41eda7"
+  "hash": "4993e942985404ec388cc858815e82d08ad0185cfaa24300545f290e1ba87e49"
 }

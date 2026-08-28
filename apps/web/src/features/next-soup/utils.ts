@@ -1,4 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
+import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCalendarBlockRange } from '@block-calendar/calendar-range';
 import {
@@ -55,13 +56,11 @@ import {
 } from '@entity';
 import {
   compositeEntity,
-  getAllNotificationsFromGroup,
   getChannelNotificationParams,
   markNotificationsForEntityAsRead,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
-  stackNotifications,
   type UnifiedNotification,
 } from '@notifications';
 import { queryClient } from '@queries/client';
@@ -92,6 +91,8 @@ import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { withPreviewSourceEntityId } from './preview-history';
+
+export { scopeChannelNotificationsForEntity };
 
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -1129,81 +1130,6 @@ export type MarkEntitiesDoneContext = {
   /** Reverts email/soup caches and forces `done=false` override. Use for undo. */
   applyUndone: () => void;
 };
-
-function channelThreadNotificationIds(
-  notifications: UnifiedNotification[],
-  threadId?: string
-): Set<string> {
-  const ids = new Set<string>();
-
-  if (threadId !== undefined) {
-    for (const notification of notifications) {
-      const metadata = notification.notification_metadata;
-
-      const belongsToThread = match(metadata)
-        .with(
-          { tag: 'channel_message_send' },
-          (m) => m.content.messageId === threadId
-        )
-        .with(
-          { tag: 'channel_mention' },
-          (m) => (m.content.threadId ?? m.content.messageId) === threadId
-        )
-        .with(
-          { tag: 'channel_message_reply' },
-          (m) => m.content.threadId === threadId
-        )
-        .otherwise(() => false);
-
-      if (!belongsToThread) {
-        continue;
-      }
-      ids.add(notification.id);
-    }
-
-    return ids;
-  }
-
-  for (const stack of stackNotifications(notifications)) {
-    // New inbox renders thread replies and mentions separately from channels.
-    if (
-      stack.type !== 'channel_message_reply' &&
-      stack.type !== 'channel_mention'
-    ) {
-      continue;
-    }
-
-    for (const notification of getAllNotificationsFromGroup(stack)) {
-      ids.add(notification.id);
-    }
-  }
-
-  return ids;
-}
-
-export function scopeChannelNotificationsForEntity(
-  entity: EntityData,
-  notifications: UnifiedNotification[]
-): UnifiedNotification[] {
-  if (entity.type === 'channel') {
-    const threadNotificationIds = channelThreadNotificationIds(notifications);
-    return notifications.filter(
-      (notification) => !threadNotificationIds.has(notification.id)
-    );
-  }
-
-  if (entity.type === 'channel_thread') {
-    const threadNotificationIds = channelThreadNotificationIds(
-      notifications,
-      entity.messageId
-    );
-    return notifications.filter((notification) =>
-      threadNotificationIds.has(notification.id)
-    );
-  }
-
-  return notifications;
-}
 
 function notificationsForMarkDone(
   entity: EntityData,

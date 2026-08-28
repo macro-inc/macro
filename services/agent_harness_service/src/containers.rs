@@ -127,6 +127,7 @@ where
                 id: session,
                 owner: row.owner_id,
                 model: row.model,
+                instructions: row.instructions,
                 acp_session_id: row.acp_session_id,
             }));
         }
