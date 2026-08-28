@@ -351,28 +351,17 @@ where
     }
 }
 
-/// Reject filters that could never match or that name nothing.
+/// Reject filter sets a persisted webhook could not be created with.
+///
+/// Streams share the persisted-webhook validation rules exactly, so a filter
+/// set is either valid for both delivery mechanisms or neither.
 fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookStreamError> {
-    if filters.is_empty() {
-        return Err(WebhookStreamError::BadRequest(
-            "at least one filter is required".to_string(),
-        ));
-    }
-    for filter in filters {
-        if filter.events.is_empty() || filter.events.iter().any(String::is_empty) {
-            return Err(WebhookStreamError::BadRequest(
-                "every filter must name at least one non-empty event".to_string(),
-            ));
+    crate::domain::service::validate_filters(filters).map_err(|error| match error {
+        crate::domain::ports::WebhookError::BadRequest(message) => {
+            WebhookStreamError::BadRequest(message)
         }
-        if let Some(ids) = &filter.ids
-            && (ids.is_empty() || ids.iter().any(String::is_empty))
-        {
-            return Err(WebhookStreamError::BadRequest(
-                "filter ids, when present, must be non-empty".to_string(),
-            ));
-        }
-    }
-    Ok(())
+        other => WebhookStreamError::BadRequest(other.to_string()),
+    })
 }
 
 impl<F, A, R> WebhookEventStreamService for WebhookEventStreamServiceImpl<F, A, R>
