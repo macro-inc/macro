@@ -3,6 +3,7 @@ import { testFacets } from './evaluate';
 import type { Facet } from './types';
 
 type Item = { status: 'closed' | 'open' };
+const item = (status: Item['status']): Item => ({ status });
 
 const statusFacet = (mode: 'and' | 'or'): Facet<Item, undefined> => ({
   id: 'status',
@@ -21,7 +22,7 @@ describe('testFacets', () => {
       testFacets(
         { status: ['open', 'unresolved'] },
         [statusFacet('or')],
-        { status: 'closed' },
+        item('closed'),
         undefined
       )
     ).toBe(true);
@@ -32,7 +33,7 @@ describe('testFacets', () => {
       testFacets(
         { status: ['open'] },
         [statusFacet('or')],
-        { status: 'closed' },
+        item('closed'),
         undefined
       )
     ).toBe(false);
@@ -43,7 +44,7 @@ describe('testFacets', () => {
       testFacets(
         { status: ['open', 'unresolved'] },
         [statusFacet('and')],
-        { status: 'closed' },
+        item('closed'),
         undefined
       )
     ).toBe(false);
