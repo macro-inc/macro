@@ -44,8 +44,8 @@ export type UseListInteractionsOptions<TItem, TMetadata> = {
   controller: ListController<TItem, TMetadata>;
   scopeId: string;
   scrollHandle: Accessor<ListScrollHandle | undefined>;
-  /** Whether the list currently owns keyboard interaction. */
-  isActive: () => boolean;
+  /** Optional view-level gate in addition to hotkey-scope ownership. */
+  enabled?: () => boolean;
   conditions?: ListInteractionConditions;
   navigation?: ListInteractionNavigation<TItem>;
   activation?: ListInteractionActivation<TMetadata>;
@@ -71,8 +71,8 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     | undefined
   >();
 
-  const enabled = (condition?: () => boolean) =>
-    options.isActive() && (condition?.() ?? true);
+  const canHandle = (condition?: () => boolean) =>
+    (options.enabled?.() ?? true) && (condition?.() ?? true);
 
   const scrollFocusedIntoView = () => {
     const index = list.focus.index();
@@ -226,7 +226,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     hotkeyToken: TOKENS.entity.step.end,
     scopeId: options.scopeId,
     description: 'Move down',
-    condition: () => enabled(options.conditions?.move),
+    condition: () => canHandle(options.conditions?.move),
     hide: true,
     keyDownHandler: () => {
       move(1);
@@ -239,7 +239,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     hotkeyToken: TOKENS.entity.step.start,
     scopeId: options.scopeId,
     description: 'Move up',
-    condition: () => enabled(options.conditions?.move),
+    condition: () => canHandle(options.conditions?.move),
     hide: true,
     keyDownHandler: () => {
       move(-1);
@@ -251,7 +251,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     hotkey: ['shift+arrowdown', 'shift+j'],
     scopeId: options.scopeId,
     description: 'Extend selection down',
-    condition: () => enabled(options.conditions?.extendSelection),
+    condition: () => canHandle(options.conditions?.extendSelection),
     hide: true,
     keyDownHandler: () => {
       extendSelection(1);
@@ -263,7 +263,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     hotkey: ['shift+arrowup', 'shift+k'],
     scopeId: options.scopeId,
     description: 'Extend selection up',
-    condition: () => enabled(options.conditions?.extendSelection),
+    condition: () => canHandle(options.conditions?.extendSelection),
     hide: true,
     keyDownHandler: () => {
       extendSelection(-1);
@@ -276,7 +276,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     hotkeyToken: TOKENS.entity.jump.home,
     scopeId: options.scopeId,
     description: 'Go to first item',
-    condition: () => enabled(options.conditions?.first),
+    condition: () => canHandle(options.conditions?.first),
     hide: true,
     keyDownHandler: () => {
       first();
@@ -289,7 +289,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     hotkeyToken: TOKENS.entity.jump.end,
     scopeId: options.scopeId,
     description: 'Go to last item',
-    condition: () => enabled(options.conditions?.last),
+    condition: () => canHandle(options.conditions?.last),
     hide: true,
     keyDownHandler: () => {
       last();
@@ -298,7 +298,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   const canOpen = () =>
-    enabled(options.conditions?.open) && list.focus.key() !== undefined;
+    canHandle(options.conditions?.open) && list.focus.key() !== undefined;
   const open = (intent: ListInteractionActivationIntent) => {
     const metadata = options.activation?.createMetadata?.(intent);
     const activation = list.activate.current({
@@ -328,7 +328,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   const canToggleSelection = () => {
-    if (!enabled(options.conditions?.toggleSelection)) return false;
+    if (!canHandle(options.conditions?.toggleSelection)) return false;
     const key = list.focus.key();
     return key !== undefined && list.selection.isSelectable(key);
   };
@@ -349,7 +349,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     scopeId: options.scopeId,
     description: 'Toggle all visible items',
     condition: () =>
-      enabled(options.conditions?.toggleAllVisible) &&
+      canHandle(options.conditions?.toggleAllVisible) &&
       list.selection.visibleKeys().size > 0,
     keyDownHandler: () => {
       toggleAllVisible();
@@ -363,7 +363,8 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     scopeId: options.scopeId,
     description: 'Clear selection',
     condition: () =>
-      enabled(options.conditions?.clearSelection) && list.selection.count() > 0,
+      canHandle(options.conditions?.clearSelection) &&
+      list.selection.count() > 0,
     keyDownHandler: () => {
       clearSelection();
       return true;
