@@ -30,11 +30,15 @@ export function SendButton(props: SendButtonProps) {
       draggable={false}
       aria-label={local['aria-label'] ?? 'Send'}
       tooltip={local.tooltip ?? 'Send'}
+      // `md` rather than the `glass-sm` that icon-sm would pick up: the send
+      // button is a prominent floating action, and at half strength the rim
+      // vanishes into the solid accent fill. It has to be this prop rather
+      // than a `glass` class below — two glass utilities on one element fight
+      // over the same custom properties, and index.css order, not attribute
+      // order, decides the winner.
+      glass="md"
       class={cn(
-        // `glass` rather than the `glass-sm` that icon-sm would pick up: the
-        // send button is a prominent floating action, and at half strength the
-        // rim vanishes into the solid accent fill.
-        'rounded-[11px] size-7.5 [&_svg]:stroke-[2.5] glass',
+        'rounded-[11px] size-7.5 [&_svg]:stroke-[2.5]',
         'transition-transform ease duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',

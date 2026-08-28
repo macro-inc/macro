@@ -69,6 +69,9 @@ export type ButtonVariantProps = VariantProps<typeof buttonVariants>;
 export type ButtonVariant = NonNullable<ButtonVariantProps['variant']>;
 export type ButtonSize = NonNullable<ButtonVariantProps['size']>;
 
+/** Glass strength, when a caller needs one the size would not pick. */
+export type ButtonGlass = 'sm' | 'md' | 'lg';
+
 export type ButtonClassOptions = {
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -108,6 +111,13 @@ export type ButtonProps = ButtonRootProps<'button'> &
      */
     shortcut?: string | string[];
     size?: ButtonSize;
+    /**
+     * Force a glass strength instead of the one the size implies. Passing a
+     * second glass class through `class` does NOT work: the utilities are
+     * separate rules setting the same custom properties, so whichever is
+     * defined later in index.css wins no matter the order in the attribute.
+     */
+    glass?: ButtonGlass;
     class?: string;
     tooltipDisabled?: boolean;
   };
@@ -170,10 +180,32 @@ const hoverGlassSizeStyles: Record<ButtonSize, string> = {
 
 const HOVER_ONLY_GLASS_VARIANTS = new Set<ButtonVariant>(['ghost', 'outline']);
 
-const glassClass = (variant: ButtonVariant, size: ButtonSize): string =>
-  HOVER_ONLY_GLASS_VARIANTS.has(variant)
-    ? hoverGlassSizeStyles[size]
-    : glassSizeStyles[size];
+const glassOverrideStyles: Record<ButtonGlass, string> = {
+  sm: 'glass-sm',
+  md: 'glass',
+  lg: 'glass-lg',
+};
+
+const hoverGlassOverrideStyles: Record<ButtonGlass, string> = {
+  sm: 'not-disabled:hover:glass-sm',
+  md: 'not-disabled:hover:glass',
+  lg: 'not-disabled:hover:glass-lg',
+};
+
+const glassClass = (
+  variant: ButtonVariant,
+  size: ButtonSize,
+  override: ButtonGlass | undefined
+): string => {
+  if (HOVER_ONLY_GLASS_VARIANTS.has(variant)) {
+    return override === undefined
+      ? hoverGlassSizeStyles[size]
+      : hoverGlassOverrideStyles[override];
+  }
+  return override === undefined
+    ? glassSizeStyles[size]
+    : glassOverrideStyles[override];
+};
 
 function isIconSize(size: ButtonSize): boolean {
   return size.startsWith('icon-');
@@ -196,6 +228,7 @@ export const Button = (props: ButtonProps) => {
     'square',
     'tooltipDisabled',
     'aria-label',
+    'glass',
   ]);
 
   const group = useButtonGroupContext();
@@ -214,7 +247,7 @@ export const Button = (props: ButtonProps) => {
       // borders and rounding), so it carries the glass for the whole row —
       // one pane of glass instead of one per segment.
       class: cn(
-        group === undefined && glassClass(variant(), size()),
+        group === undefined && glassClass(variant(), size(), local.glass),
         local.class
       ),
     });
