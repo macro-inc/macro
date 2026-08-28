@@ -151,7 +151,15 @@ ol.static-md > li:not(.list-none)::before {
   position: absolute;
   left: var(--md-marker-left);
   width: var(--md-marker-width);
-  text-align: right;
+  /*
+  * Centred rather than right-aligned so numbers share the same centre axis as
+  * bullets and checkboxes. The trade-off: a right-aligned number grows only
+  * leftwards, holding a constant gap to the text, whereas a centred one grows
+  * both ways. With a 1em column and a 0.4em gap that is fine to two digits
+  * ("10." leaves roughly 0.28em of gap); at three digits the number reaches
+  * the text edge. Widen --md-marker-gap if a list ever runs that long.
+  */
+  text-align: center;
 }
 
 ol.static-md.depth-1 > li:not(.list-none) {
