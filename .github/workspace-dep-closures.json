@@ -2656,6 +2656,7 @@
       "crates/cal",
       "crates/calendar_events",
       "crates/call",
+      "crates/channel_bots",
       "crates/channel_sender",
       "crates/channels",
       "crates/chat",
