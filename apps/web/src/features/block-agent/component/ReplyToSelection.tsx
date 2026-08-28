@@ -55,7 +55,7 @@ export function ReplyToSelection(props: {
         <ScopedPortal scope="block">
           <button
             type="button"
-            class="fixed top-0 left-0 z-highlight-menu flex items-center gap-1.5 rounded-full border border-edge bg-surface px-2.5 py-1 text-xs font-medium text-ink shadow-lg hover:overlay-[color-mix(in_oklch,var(--color-ink)_8%,transparent)]"
+            class="fixed top-0 left-0 z-highlight-menu flex items-center gap-1.5 rounded-full border border-edge bg-surface px-2.5 py-1 text-xs font-medium text-ink shadow-lg hover:bg-ink/10"
             use:floatWithSelection={{
               selection: selection(),
               reactiveOnContainer: props.container,
