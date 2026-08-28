@@ -1,11 +1,14 @@
-import { type Accessor, onCleanup, untrack } from 'solid-js';
+import { type Accessor, onCleanup, type Setter, untrack } from 'solid-js';
 import { reconcile, type SetStoreFunction, type Store } from 'solid-js/store';
 
-type AccessorState = [get: Accessor<any>, set: (...args: any[]) => any];
+type AccessorState<TValue> = [get: Accessor<TValue>, set: Setter<TValue>];
 
-type StoreState = [get: Store<any>, set: SetStoreFunction<any>];
+type StoreState<TValue extends object> = [
+  get: Store<TValue>,
+  set: SetStoreFunction<TValue>,
+];
 
-type PersistableState = AccessorState | StoreState;
+type PersistableState = AccessorState<any> | StoreState<any>;
 
 type PersistedStateValue<TState extends PersistableState> =
   TState[0] extends Accessor<infer TValue>
@@ -48,6 +51,14 @@ export type MakePersistedStateOptions<T> = {
  * Restoration is synchronous and ordered. All state mutations must use the
  * returned setter to reach storages.
  */
+export function makePersistedState<TValue>(
+  state: AccessorState<TValue>,
+  options: MakePersistedStateOptions<TValue>
+): PersistedState<AccessorState<TValue>>;
+export function makePersistedState<TValue extends object>(
+  state: StoreState<TValue>,
+  options: MakePersistedStateOptions<TValue>
+): PersistedState<StoreState<TValue>>;
 export function makePersistedState<TState extends PersistableState>(
   state: TState,
   options: MakePersistedStateOptions<PersistedStateValue<TState>>
