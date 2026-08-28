@@ -3,7 +3,7 @@ import CheckIcon from '@phosphor/check.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import SortIcon from '@phosphor/sort-ascending.svg';
 import GroupIcon from '@phosphor/stack.svg';
-import { cn, Dropdown } from '@ui';
+import { buttonClasses, cn, Dropdown } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 
 export type ListControlOption<TId extends string> = {
@@ -132,7 +132,6 @@ export type ListFilterDropdownProps<
     optionId: TOptionId,
     selected: boolean
   ) => void;
-  activeCount?: number;
   onClear?: () => void;
   label?: string;
   clearLabel?: string;
@@ -151,11 +150,7 @@ export function ListFilterDropdown<
         size="md"
         square
         depth={2}
-        class={cn(
-          'rounded-lg bg-surface',
-          (props.activeCount ?? 0) > 0 && 'bg-active text-ink',
-          props.class
-        )}
+        class={cn('rounded-lg bg-surface', props.class)}
         label={props.label ?? 'Filter list'}
       >
         <FilterIcon />
@@ -164,21 +159,20 @@ export function ListFilterDropdown<
         <Dropdown.Group>
           <For each={props.groups}>
             {(group) => {
-              const selectedCount = () =>
-                group.options.reduce(
-                  (count, option) =>
-                    count + Number(props.isSelected(group.id, option.id)),
-                  0
+              const hasSelection = () =>
+                group.options.some((option) =>
+                  props.isSelected(group.id, option.id)
                 );
 
               return (
                 <Dropdown.Sub>
                   <Dropdown.SubTrigger>
                     <span class="flex-1 text-ink">{group.label}</span>
-                    <Show when={selectedCount() > 0}>
-                      <span class="text-xs text-ink-muted">
-                        {selectedCount()}
-                      </span>
+                    <Show when={hasSelection()}>
+                      <span
+                        aria-hidden="true"
+                        class="size-1.5 shrink-0 rounded-full bg-accent"
+                      />
                     </Show>
                     <CaretRightIcon class="size-3 shrink-0 text-ink-muted" />
                   </Dropdown.SubTrigger>
@@ -230,7 +224,13 @@ export function ListFilterDropdown<
           {(onClear) => (
             <Dropdown.Group>
               <Dropdown.Item
-                class="justify-center text-xs"
+                class={buttonClasses({
+                  variant: 'strong',
+                  size: 'sm',
+                  fullWidth: true,
+                  class:
+                    'rounded-lg text-xs data-highlighted:bg-ink data-highlighted:text-surface-4 data-highlighted:overlay-[color-mix(in_oklch,var(--color-surface-4)_12%,transparent)]',
+                })}
                 onSelect={onClear()}
               >
                 {props.clearLabel ?? 'Clear filters'}
