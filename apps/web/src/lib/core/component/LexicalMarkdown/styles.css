@@ -42,11 +42,12 @@
   --md-marker-width: 1em;
   --md-marker-gap: 0.4em;
   --md-marker-left: calc(-1 * (var(--md-marker-gap) + var(--md-marker-width)));
-  --md-marker-center: calc(
+  /* The point a marker centers on: x from the column, y from the text. */
+  --md-marker-center-x: calc(
     -1 * (var(--md-marker-gap) + var(--md-marker-width) / 2)
   );
-  /* Midline of the first line of text; every marker centers on this. */
-  --md-marker-middle: 0.75em;
+  /* Half the 1.5em line box, so markers sit on the first line's midline. */
+  --md-marker-center-y: 0.75em;
 
   /*
   * Outline of an unchecked checkbox. An ink token by default, overridden to a
@@ -84,8 +85,8 @@
   width: var(--md-bullet-size);
   height: var(--md-bullet-size);
   position: absolute;
-  left: calc(var(--md-marker-center) - var(--md-bullet-size) / 2);
-  top: calc(var(--md-marker-middle) - var(--md-bullet-size) / 2);
+  left: calc(var(--md-marker-center-x) - var(--md-bullet-size) / 2);
+  top: calc(var(--md-marker-center-y) - var(--md-bullet-size) / 2);
   border-radius: 1em;
   line-height: 0;
   background-color: currentcolor;
@@ -108,7 +109,7 @@
   height: var(--md-marker-width);
   position: absolute;
   left: var(--md-marker-left);
-  top: calc(var(--md-marker-middle) - var(--md-marker-width) / 2);
+  top: calc(var(--md-marker-center-y) - var(--md-marker-width) / 2);
   border: 1.5px solid var(--md-check-border);
   outline: none;
   background-color: transparent;
@@ -139,9 +140,9 @@
   width: var(--md-check-w);
   height: var(--md-check-h);
   position: absolute;
-  left: calc(var(--md-marker-center) - var(--md-check-w) / 2);
+  left: calc(var(--md-marker-center-x) - var(--md-check-w) / 2);
   /* 0.02em above the midline: a rotated tick reads low when truly centered. */
-  top: calc(var(--md-marker-middle) - var(--md-check-h) / 2 - 0.02em);
+  top: calc(var(--md-marker-center-y) - var(--md-check-h) / 2 - 0.02em);
   transform: rotate(-45deg);
   transition:
     background-color 0.2s ease,
