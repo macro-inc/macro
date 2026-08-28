@@ -2,7 +2,11 @@
 
 import { openExternalUrl } from '@core/util/url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { interceptExternalLinks } from './interceptExternalLinks';
+import {
+  interceptExternalLinks,
+  stampHtmlEmailAnchors,
+  urlToOpenFromHref,
+} from './interceptExternalLinks';
 
 vi.mock('@core/util/url', () => ({
   openExternalUrl: vi.fn(),
@@ -16,38 +20,74 @@ function makeAnchor(href: string): HTMLAnchorElement {
   return a;
 }
 
-function clickAnchor(a: HTMLAnchorElement, init: MouseEventInit = {}): boolean {
+function click(a: HTMLAnchorElement, init: MouseEventInit = {}): boolean {
   return a.dispatchEvent(
     new MouseEvent('click', { bubbles: true, cancelable: true, ...init })
   );
 }
+
+describe('urlToOpenFromHref', () => {
+  it.each([
+    ['https://example.com/path', 'https://example.com/path'],
+    ['http://example.com', 'http://example.com/'],
+    ['mailto:alice@example.com', 'mailto:alice@example.com'],
+    ['tel:+15551212', 'tel:+15551212'],
+    ['sms:+15551212', 'sms:+15551212'],
+    ['//cdn.example.com/img.png', 'https://cdn.example.com/img.png'],
+    ['  https://example.com/x  ', 'https://example.com/x'],
+  ])('opens %s', (href, opened) => {
+    expect(urlToOpenFromHref(href)).toBe(opened);
+  });
+
+  it.each([
+    '#section',
+    '',
+    '   ',
+    'javascript:void(0)',
+    '/inbox/email/abc',
+    './rel',
+    '../up',
+    'cid:inline-image@mail',
+    'data:text/html,hi',
+    'ftp://files.example.com/a',
+    'www.example.com',
+  ])('does not open %s', (href) => {
+    expect(urlToOpenFromHref(href)).toBeUndefined();
+  });
+
+  it('does not treat a hash href as the page URL', () => {
+    const a = makeAnchor('#section');
+    expect(new URL(a.href).protocol).toMatch(/^https?:$/);
+    expect(urlToOpenFromHref(a.getAttribute('href') ?? '')).toBeUndefined();
+  });
+});
 
 describe('interceptExternalLinks', () => {
   beforeEach(() => {
     openExternalUrlMock.mockClear();
   });
 
-  it('routes a plain left-click on a mailto anchor through openExternalUrl and prevents default', () => {
-    const container = document.createElement('div');
-    const anchor = makeAnchor('mailto:alice@example.com');
-    container.append(anchor);
+  it('prevents default and opens protocol-relative hrefs as https', () => {
+    const a = makeAnchor('//example.com/email-link-test');
+    const root = document.createElement('div');
+    root.append(a);
+    interceptExternalLinks(root);
 
-    interceptExternalLinks(container);
-    const defaultPrevented = !clickAnchor(anchor);
+    const defaultPrevented = !click(a);
 
+    expect(defaultPrevented).toBe(true);
     expect(openExternalUrlMock).toHaveBeenCalledTimes(1);
     expect(openExternalUrlMock).toHaveBeenCalledWith(
-      'mailto:alice@example.com'
+      'https://example.com/email-link-test'
     );
-    expect(defaultPrevented).toBe(true);
   });
 
-  it('leaves modifier / non-primary clicks for the browser default', () => {
-    const container = document.createElement('div');
-    const anchor = makeAnchor('mailto:alice@example.com');
-    container.append(anchor);
-    anchor.addEventListener('click', (e) => e.preventDefault());
-    interceptExternalLinks(container);
+  it('leaves modifier and non-primary clicks to the browser', () => {
+    const a = makeAnchor('https://example.com');
+    a.addEventListener('click', (e) => e.preventDefault());
+    const root = document.createElement('div');
+    root.append(a);
+    interceptExternalLinks(root);
 
     for (const init of [
       { metaKey: true },
@@ -56,54 +96,35 @@ describe('interceptExternalLinks', () => {
       { altKey: true },
       { button: 1 },
     ] satisfies MouseEventInit[]) {
-      clickAnchor(anchor, init);
+      click(a, init);
     }
 
     expect(openExternalUrlMock).not.toHaveBeenCalled();
   });
+});
 
-  it('ignores hash-only anchors', () => {
-    const container = document.createElement('div');
-    const anchor = makeAnchor('#section');
-    container.append(anchor);
-
-    interceptExternalLinks(container);
-    clickAnchor(anchor);
-
-    expect(openExternalUrlMock).not.toHaveBeenCalled();
+describe('stampHtmlEmailAnchors', () => {
+  beforeEach(() => {
+    openExternalUrlMock.mockClear();
   });
 
-  it('routes a plain left-click on an https anchor through openExternalUrl and prevents default', () => {
-    const container = document.createElement('div');
-    const anchor = makeAnchor('https://example.com/path');
-    container.append(anchor);
+  it('stamps new-tab attrs on every href, but only intercepts classified ones', () => {
+    const root = document.createElement('div');
+    const https = makeAnchor('https://example.com/x');
+    const hash = makeAnchor('#section');
+    root.append(https, hash);
 
-    interceptExternalLinks(container);
-    const defaultPrevented = !clickAnchor(anchor);
+    stampHtmlEmailAnchors(root);
 
-    expect(openExternalUrlMock).toHaveBeenCalledTimes(1);
-    expect(openExternalUrlMock).toHaveBeenCalledWith(
-      'https://example.com/path'
-    );
-    expect(defaultPrevented).toBe(true);
-  });
+    expect(https.getAttribute('target')).toBe('_blank');
+    expect(https.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(hash.getAttribute('target')).toBe('_blank');
 
-  it('routes a plain left-click on an http anchor through openExternalUrl', () => {
-    const container = document.createElement('div');
-    const anchor = makeAnchor('http://example.com');
-    container.append(anchor);
-    interceptExternalLinks(container);
-    clickAnchor(anchor);
-    expect(openExternalUrlMock).toHaveBeenCalledWith('http://example.com/');
-  });
+    expect(!click(https)).toBe(true);
+    expect(openExternalUrlMock).toHaveBeenCalledWith('https://example.com/x');
 
-  it('does not intercept javascript hrefs', () => {
-    const container = document.createElement('div');
-    const anchor = makeAnchor('javascript:void(0)');
-    container.append(anchor);
-    anchor.addEventListener('click', (e) => e.preventDefault());
-    interceptExternalLinks(container);
-    clickAnchor(anchor);
+    openExternalUrlMock.mockClear();
+    click(hash);
     expect(openExternalUrlMock).not.toHaveBeenCalled();
   });
 });
