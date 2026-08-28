@@ -21,6 +21,15 @@ export {
 } from './ViewShell';
 export { ViewSidebar } from './ViewSidebar';
 export {
+  type UseViewControlHotkeysOptions,
+  useViewControlHotkeys,
+  type ViewControlHotkeyAction,
+} from './use-view-control-hotkeys';
+export {
+  type UseViewTabHotkeysOptions,
+  useViewTabHotkeys,
+} from './use-view-tab-hotkeys';
+export {
   type AsideLayout,
   type AsideMode,
   DEFAULT_ASIDE_LAYOUT,

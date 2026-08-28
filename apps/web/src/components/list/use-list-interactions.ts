@@ -1,8 +1,10 @@
+import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isScopeInActiveBranch } from '@core/hotkey/utils';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type { ListController } from './create-list-controller';
-import type { ListKey, ListNavigationOptions } from './types';
+import type { ListItemResult, ListKey, ListNavigationOptions } from './types';
 
 /** Minimal scrolling contract implemented by virtualized list handles. */
 export type ListScrollHandle = {
@@ -16,8 +18,6 @@ type ListInteractionConditions = Partial<
   Record<
     | 'move'
     | 'extendSelection'
-    | 'first'
-    | 'last'
     | 'open'
     | 'toggleSelection'
     | 'toggleAllVisible'
@@ -31,7 +31,19 @@ export type ListInteractionNavigation<TItem> = {
   first?: ListNavigationOptions<TItem>;
   last?: ListNavigationOptions<TItem>;
   extendSelection?: ListNavigationOptions<TItem>;
+  onNavigate?: (event: ListInteractionNavigationEvent<TItem>) => void;
 };
+
+export type ListInteractionNavigationEvent<TItem> =
+  | {
+      kind: 'move';
+      direction: 1 | -1;
+      result: ListItemResult<TItem> | undefined;
+    }
+  | {
+      kind: 'first' | 'last';
+      result: ListItemResult<TItem> | undefined;
+    };
 
 export type ListInteractionActivationIntent = 'primary' | 'alternate';
 
@@ -81,30 +93,40 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     }
   };
 
-  const finishNavigation = (key: ListKey) => {
-    setSelectionAnchor(key);
+  const finishNavigation = (result: ListItemResult<TItem>) => {
+    setSelectionAnchor(result.key);
     setRangeSession(undefined);
     scrollFocusedIntoView();
   };
 
   const move = (offset: 1 | -1) => {
     const result = list.navigate.by(offset, options.navigation?.move);
+    options.navigation?.onNavigate?.({
+      kind: 'move',
+      direction: offset,
+      result,
+    });
     if (!result) return false;
-    finishNavigation(result.key);
+
+    finishNavigation(result);
     return true;
   };
 
   const first = () => {
     const result = list.navigate.toFirst(options.navigation?.first);
+    options.navigation?.onNavigate?.({ kind: 'first', result });
     if (!result) return false;
-    finishNavigation(result.key);
+
+    finishNavigation(result);
     return true;
   };
 
   const last = () => {
     const result = list.navigate.toLast(options.navigation?.last);
+    options.navigation?.onNavigate?.({ kind: 'last', result });
     if (!result) return false;
-    finishNavigation(result.key);
+
+    finishNavigation(result);
     return true;
   };
 
@@ -248,6 +270,37 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   }).withGroup(group);
 
   registerHotkey({
+    hotkey: 'home',
+    hotkeyToken: TOKENS.entity.jump.home,
+    scopeId: options.scopeId,
+    description: 'Go to first item',
+    condition: () => canHandle(options.conditions?.move),
+    hide: true,
+    keyDownHandler: first,
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkey: GO_TO_LEADER_KEY,
+    scopeId: GO_TO_COMMAND_SCOPE,
+    description: 'Go to first item',
+    condition: () =>
+      canHandle(options.conditions?.move) &&
+      isScopeInActiveBranch(options.scopeId),
+    keyDownHandler: first,
+    registrationType: 'add',
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkey: ['end', 'shift+g'],
+    hotkeyToken: TOKENS.entity.jump.end,
+    scopeId: options.scopeId,
+    description: 'Go to last item',
+    condition: () => canHandle(options.conditions?.move),
+    hide: true,
+    keyDownHandler: last,
+  }).withGroup(group);
+
+  registerHotkey({
     hotkey: ['shift+arrowdown', 'shift+j'],
     scopeId: options.scopeId,
     description: 'Extend selection down',
@@ -267,32 +320,6 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     hide: true,
     keyDownHandler: () => {
       extendSelection(-1);
-      return true;
-    },
-  }).withGroup(group);
-
-  registerHotkey({
-    hotkey: 'home',
-    hotkeyToken: TOKENS.entity.jump.home,
-    scopeId: options.scopeId,
-    description: 'Go to first item',
-    condition: () => canHandle(options.conditions?.first),
-    hide: true,
-    keyDownHandler: () => {
-      first();
-      return true;
-    },
-  }).withGroup(group);
-
-  registerHotkey({
-    hotkey: ['end', 'shift+g'],
-    hotkeyToken: TOKENS.entity.jump.end,
-    scopeId: options.scopeId,
-    description: 'Go to last item',
-    condition: () => canHandle(options.conditions?.last),
-    hide: true,
-    keyDownHandler: () => {
-      last();
       return true;
     },
   }).withGroup(group);
@@ -369,6 +396,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
       clearSelection();
       return true;
     },
+    registrationType: 'add',
   }).withGroup(group);
 
   onCleanup(() => group.dispose());

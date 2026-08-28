@@ -29,9 +29,15 @@ export type {
   ListRestoreFocusOptions,
 } from './types';
 export {
+  type ListHotkeyDisclosure,
+  type UseListDisclosureHotkeysOptions,
+  useListDisclosureHotkeys,
+} from './use-list-disclosure-hotkeys';
+export {
   type ListInteractionActivation,
   type ListInteractionActivationIntent,
   type ListInteractionNavigation,
+  type ListInteractionNavigationEvent,
   type ListScrollHandle,
   type UseListInteractionsOptions,
   useListInteractions,
