@@ -145,7 +145,6 @@ pub struct Config {
     ///
     /// Not derivable from `egress_port`: the sandbox reaches this through
     /// whatever ingress fronts the deployment, not on the container's own port.
-    #[macro_config_default(String::from("http://localhost:8102"))]
     pub egress_base_url: String,
     /// OAuth client ID for the Pipedream API.
     pub pipedream_client_id: PipedreamClientId,
