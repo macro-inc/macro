@@ -130,8 +130,8 @@
 
 .md-list.md-check > li.checked::after {
   content: " ";
-  --md-check-w: 0.52em;
-  --md-check-h: 0.28em;
+  --md-check-w: 0.6em;
+  --md-check-h: 0.32em;
   border-bottom: 1.5px solid var(--color-surface);
   border-left: 1.5px solid var(--color-surface);
   border-bottom-left-radius: 1px;
