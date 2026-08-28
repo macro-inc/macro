@@ -88,7 +88,7 @@ export function CompanyListEntity(props: BaseListEntityProps) {
         isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
         'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-lg',
         {
-          'min-h-10 mx-1': !isMobile(),
+          'min-h-10 mx-(--soup-row-gutter)': !isMobile(),
           'bg-list-selected': props.checked,
           'bg-list-selected-highlighted':
             props.checked && props.highlighted && !isTouchDevice(),
