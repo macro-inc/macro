@@ -2,7 +2,7 @@
 
 import { openExternalUrl } from '@core/util/url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { interceptMailtoLinks } from './interceptMailtoLinks';
+import { interceptExternalLinks } from './interceptExternalLinks';
 
 vi.mock('@core/util/url', () => ({
   openExternalUrl: vi.fn(),
@@ -22,7 +22,7 @@ function clickAnchor(a: HTMLAnchorElement, init: MouseEventInit = {}): boolean {
   );
 }
 
-describe('interceptMailtoLinks', () => {
+describe('interceptExternalLinks', () => {
   beforeEach(() => {
     openExternalUrlMock.mockClear();
   });
@@ -32,7 +32,7 @@ describe('interceptMailtoLinks', () => {
     const anchor = makeAnchor('mailto:alice@example.com');
     container.append(anchor);
 
-    interceptMailtoLinks(container);
+    interceptExternalLinks(container);
     const notPrevented = clickAnchor(anchor);
 
     expect(openExternalUrlMock).toHaveBeenCalledTimes(1);
@@ -50,7 +50,7 @@ describe('interceptMailtoLinks', () => {
     container.append(anchor);
     // Swallow the default so jsdom doesn't attempt (unimplemented) navigation.
     anchor.addEventListener('click', (e) => e.preventDefault());
-    interceptMailtoLinks(container);
+    interceptExternalLinks(container);
 
     for (const init of [
       { metaKey: true },
@@ -71,7 +71,7 @@ describe('interceptMailtoLinks', () => {
     const anchor = makeAnchor('#section');
     container.append(anchor);
 
-    interceptMailtoLinks(container);
+    interceptExternalLinks(container);
     clickAnchor(anchor);
 
     expect(openExternalUrlMock).not.toHaveBeenCalled();
@@ -82,7 +82,7 @@ describe('interceptMailtoLinks', () => {
     const anchor = makeAnchor('https://example.com/path');
     container.append(anchor);
 
-    interceptMailtoLinks(container);
+    interceptExternalLinks(container);
     const notPrevented = clickAnchor(anchor);
 
     expect(openExternalUrlMock).toHaveBeenCalledTimes(1);
@@ -90,5 +90,24 @@ describe('interceptMailtoLinks', () => {
       'https://example.com/path'
     );
     expect(notPrevented).toBe(false);
+  });
+
+  it('routes a plain left-click on an http anchor through openExternalUrl', () => {
+    const container = document.createElement('div');
+    const anchor = makeAnchor('http://example.com');
+    container.append(anchor);
+    interceptExternalLinks(container);
+    clickAnchor(anchor);
+    expect(openExternalUrlMock).toHaveBeenCalledWith('http://example.com/');
+  });
+
+  it('does not intercept javascript hrefs', () => {
+    const container = document.createElement('div');
+    const anchor = makeAnchor('javascript:void(0)');
+    container.append(anchor);
+    anchor.addEventListener('click', (e) => e.preventDefault());
+    interceptExternalLinks(container);
+    clickAnchor(anchor);
+    expect(openExternalUrlMock).not.toHaveBeenCalled();
   });
 });
