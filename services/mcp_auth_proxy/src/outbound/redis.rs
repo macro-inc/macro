@@ -1,5 +1,8 @@
 //! Redis-backed storage for short-lived OAuth handshake state.
 
+#[cfg(test)]
+mod test;
+
 use anyhow::Context;
 use redis::AsyncCommands;
 use std::{
