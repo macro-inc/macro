@@ -3,6 +3,7 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
+  markChannelNotificationsSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
@@ -131,15 +132,18 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       filterValidNotifications(entity.notifications?.() ?? [])
     );
     const splitManager = globalSplitManager();
-    return (
+    const didOpen =
       !!splitManager &&
       openSingleStackNotification(
         validNotifs,
         splitManager,
         newSplit,
         splitHandle
-      )
-    );
+      );
+    if (didOpen) {
+      markChannelNotificationsSeenOnOpen(entity);
+    }
+    return didOpen;
   };
 
   // enter - Open entity in split, toggle group, or load more

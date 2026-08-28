@@ -72,6 +72,7 @@ import {
 import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
+  bulkMarkNotificationsAsSeen,
   bulkMarkNotificationsAsUndone,
   restoreUserNotifications,
   snapshotUserNotifications,
@@ -669,6 +670,8 @@ export const openEntityInSplitFromUnifiedList = async (
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
 
+  markChannelNotificationsSeenOnOpen(entity);
+
   let params: Record<string, string> | undefined;
   if (entity.type === 'channel' && location?.type === 'channel') {
     params = getChannelParams(location.messageId, location.threadId);
@@ -734,32 +737,33 @@ export const openEntityInSplitFromUnifiedList = async (
 };
 
 /**
- * Mark the attached notification that caused a channel row to target a message.
+ * Mark every unread notification represented by an opened channel Soup row.
  *
- * The row's Soup edge is authoritative here. The channel block's message marker
- * discovers notifications through the separately paginated global source, so
- * an older notification can drive navigation without being present there.
+ * The row's attached Soup edge is authoritative. The channel block's message
+ * marker discovers notifications through the separately paginated global
+ * source, so it cannot reliably clear older notifications. ID-scoped writes
+ * update normalized Soup edges optimistically; the uncached fallback refetches.
  */
-export function markChannelTargetSeenOnOpen(
-  entity: EntityData,
-  notificationSource: NotificationSource
-) {
-  const target = getChannelEntityTarget(entity);
-  if (target?.kind !== 'message' || !isWithNotification(entity)) return;
+export function markChannelNotificationsSeenOnOpen(entity: EntityData) {
+  if (
+    (entity.type !== 'channel' &&
+      entity.type !== 'channel_message' &&
+      entity.type !== 'channel_thread') ||
+    !isWithNotification(entity)
+  ) {
+    return;
+  }
 
   const notifications = scopeChannelNotificationsForEntity(
     entity,
     entity.notifications?.() ?? []
-  ).filter((notification) => {
-    if (notificationIsRead(notification)) return false;
-    return (
-      getChannelNotificationParams(notification).messageId === target.messageId
-    );
-  });
+  ).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 
-  void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
-    console.error('Failed to mark message notifications as read', error);
+  void bulkMarkNotificationsAsSeen(
+    notifications.map((notification) => notification.id)
+  ).catch((error) => {
+    console.error('Failed to mark channel notifications as read', error);
   });
 }
 

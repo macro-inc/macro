@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationKeys } from '../keys';
 import {
   applyNotificationStatusUpdate,
+  bulkMarkNotificationsAsSeen,
   optimisticInsertNotification,
   type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
@@ -24,20 +25,26 @@ const {
   createGraphqlMutationMock,
   createGraphqlQueryMock,
   executeGraphqlMutationMock,
+  graphqlCacheEnabledMock,
   graphqlSoupEnabledMock,
+  refreshActiveSoupQueriesMock,
   restMarkDoneMock,
   restMarkSeenMock,
   restUserNotificationsMock,
   restMarkUndoneMock,
+  updateNotificationsMock,
 } = vi.hoisted(() => ({
   createGraphqlMutationMock: vi.fn(),
   createGraphqlQueryMock: vi.fn(),
   executeGraphqlMutationMock: vi.fn(),
+  graphqlCacheEnabledMock: vi.fn(() => true),
   graphqlSoupEnabledMock: vi.fn(() => true),
+  refreshActiveSoupQueriesMock: vi.fn(async () => undefined),
   restMarkDoneMock: vi.fn(),
   restMarkSeenMock: vi.fn(),
   restUserNotificationsMock: vi.fn(),
   restMarkUndoneMock: vi.fn(),
+  updateNotificationsMock: vi.fn(async () => []),
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -62,13 +69,21 @@ vi.mock('../graphql/user-notifications', () => ({
 }));
 
 vi.mock('@service-storage/graphql-notifications', () => ({
-  updateNotifications: vi.fn(),
+  updateNotifications: updateNotificationsMock,
+}));
+
+vi.mock('@queries/soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: refreshActiveSoupQueriesMock,
 }));
 
 vi.mock('@queries/soup/normalized-cache', () => ({
   optimisticUpdateSoupItemUpdatedAt: vi.fn(),
   hasSoupEntity: vi.fn(() => false),
   refetchSoupEntity: vi.fn(),
+}));
+
+vi.mock('@service-storage/graphql-soup', () => ({
+  graphqlCacheEnabled: graphqlCacheEnabledMock,
 }));
 
 import {
@@ -108,6 +123,7 @@ type GraphqlMutationOptions = {
 };
 
 beforeEach(() => {
+  graphqlCacheEnabledMock.mockReturnValue(true);
   graphqlSoupEnabledMock.mockReturnValue(true);
   restUserNotificationsMock.mockResolvedValue(
     ok({ items: [], next_cursor: null })
@@ -404,6 +420,26 @@ describe('notification mutations', () => {
     testQueryClient.clear();
   });
 
+  describe('bulkMarkNotificationsAsSeen', () => {
+    it('writes notification IDs without refreshing the normalized cache', async () => {
+      await bulkMarkNotificationsAsSeen(['notification-1']);
+
+      expect(updateNotificationsMock).toHaveBeenCalledWith({
+        notificationIds: ['notification-1'],
+        operation: 'MARK_SEEN',
+      });
+      expect(refreshActiveSoupQueriesMock).not.toHaveBeenCalled();
+    });
+
+    it('refreshes active Soup queries for the uncached fallback', async () => {
+      graphqlCacheEnabledMock.mockReturnValue(false);
+
+      await bulkMarkNotificationsAsSeen(['notification-1']);
+
+      expect(refreshActiveSoupQueriesMock).toHaveBeenCalledOnce();
+    });
+  });
+
   describe('useMarkNotificationsAsSeenMutation', () => {
     it('should optimistically update viewed_at when marking as seen', async () => {
       const n1 = createMockNotification({ id: 'n1', viewed_at: null });
@@ -431,7 +467,26 @@ describe('notification mutations', () => {
       const notifications = getNotificationsFromCache();
       expect(typeof notifications[0].viewed_at).toBe('string');
       expect(notifications[1].viewed_at).toBe(null);
+      expect(refreshActiveSoupQueriesMock).not.toHaveBeenCalled();
 
+      cleanup();
+    });
+
+    it('refreshes active Soup queries when the GraphQL cache is unavailable', async () => {
+      graphqlCacheEnabledMock.mockReturnValue(false);
+      executeGraphqlMutationMock.mockResolvedValue([]);
+
+      let mutatePromise: Promise<unknown> | undefined;
+      const TestComponent = () => {
+        const mutation = useMarkNotificationsAsSeenMutation();
+        mutatePromise = mutation.mutateAsync({ notificationIds: ['n1'] });
+        return null;
+      };
+      const cleanup = renderWithClient(TestComponent);
+
+      await mutatePromise;
+
+      expect(refreshActiveSoupQueriesMock).toHaveBeenCalledOnce();
       cleanup();
     });
 
