@@ -233,7 +233,7 @@ export function MessageContainer(props: MessageContainerProps) {
             class="relative p-4 border bg-message rounded-lg"
             style={{ '--user-icon-width': '1rem' }}
             classList={{
-              'border-rail': props.isFocused,
+              'border-edge': props.isFocused,
               'border-edge-muted': !props.isFocused,
               'z-1': props.isFocused,
               'shadow-md': props.isFocused,
