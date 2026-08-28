@@ -66,7 +66,13 @@ where
     Tokens: GithubTokens,
     Forward: Forwarder,
 {
-    #[tracing::instrument(skip_all, err, fields(destination = ?target))]
+    #[tracing::instrument(skip_all, err, fields(
+        destination = ?target,
+        method = %request.method(),
+        session = tracing::field::Empty,
+        owner = tracing::field::Empty,
+        upstream_status = tracing::field::Empty,
+    ))]
     async fn proxy(
         &self,
         token: &SessionToken,
@@ -79,6 +85,9 @@ where
         // servers, and an unverified token must not be able to probe which
         // of those exist.
         let grant = self.sessions.authorize(token).await?;
+        let span = tracing::Span::current();
+        span.record("session", tracing::field::display(&grant.session));
+        span.record("owner", tracing::field::display(&grant.owner));
 
         // Staff-only for now, checked here so every target - git, connected
         // MCP servers, Macro's own - passes one gate. Refused as
@@ -148,6 +157,9 @@ where
 
         let mut response = self.forward.forward(request).await?;
         sanitize_response_headers(response.headers_mut());
+
+        tracing::Span::current().record("upstream_status", response.status().as_u16());
+        tracing::debug!(status = %response.status(), "upstream answered");
 
         Ok(response)
     }

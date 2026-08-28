@@ -45,7 +45,11 @@ impl ReqwestForwarder {
 }
 
 impl Forwarder for ReqwestForwarder {
-    #[tracing::instrument(skip_all, err, fields(method = %request.method()))]
+    #[tracing::instrument(skip_all, err, fields(
+        method = %request.method(),
+        host = request.uri().host(),
+        status = tracing::field::Empty,
+    ))]
     async fn forward(&self, request: ProxyRequest) -> Result<ProxyResponse, EgressError> {
         // Streamed both ways. `wrap_stream` rather than `Body::wrap` because
         // the latter wants a `Sync` body and a request body arriving off a
@@ -59,6 +63,7 @@ impl Forwarder for ReqwestForwarder {
         let response = self.client.execute(request).await.map_err(|error| {
             EgressError::Upstream(rootcause::report!("upstream did not answer: {error}"))
         })?;
+        tracing::Span::current().record("status", response.status().as_u16());
 
         // Statuses pass through untouched, including failures: MCP and git both
         // use them semantically, and swallowing a 401 into an error of our own

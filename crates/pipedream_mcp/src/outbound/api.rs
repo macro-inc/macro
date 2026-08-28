@@ -96,6 +96,7 @@ impl PipedreamClient {
         {
             return Ok(cached.token.clone());
         }
+        tracing::debug!("pipedream api token absent or near expiry; requesting a fresh one");
 
         let response = self
             .http

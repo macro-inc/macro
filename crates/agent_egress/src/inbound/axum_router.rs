@@ -76,6 +76,10 @@ async fn health() -> &'static str {
     "ok"
 }
 
+// `skip_all` on every handler is load-bearing: the request's headers carry the
+// sandbox's session token, and an instrument attribute that Debug-formatted
+// `request` would put it in the trace.
+#[tracing::instrument(skip_all, err, fields(%slug))]
 async fn mcp_handler<Service>(
     State(state): State<EgressRouterState<Service>>,
     Path(slug): Path<String>,
@@ -96,6 +100,7 @@ where
 /// Macro's own MCP server, on its own route rather than under `/mcp/{slug}`:
 /// with no name shared between the built-in server and the owner's connected
 /// apps, no connected app can collide with it.
+#[tracing::instrument(skip_all, err)]
 async fn macro_mcp_handler<Service>(
     State(state): State<EgressRouterState<Service>>,
     request: Request,
@@ -134,6 +139,7 @@ where
 }
 
 /// One git smart-HTTP request through the proxy.
+#[tracing::instrument(skip_all, err, fields(%path))]
 async fn git_proxy<Service>(
     state: EgressRouterState<Service>,
     path: String,

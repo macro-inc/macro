@@ -576,12 +576,14 @@ where
     /// holds no token (a provider whose sessions carry no egress environment,
     /// or a sandbox from before tokens existed) gets no servers, which is
     /// also everything it could do with them.
+    #[tracing::instrument(err, skip(self, owner), fields(%session_id, %owner))]
     async fn resumed_mcp_servers(
         &self,
         session_id: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
     ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
         let Some(session_token) = self.containers.session_token(session_id).await? else {
+            tracing::debug!("container holds no egress token; restoring no MCP servers");
             return Ok(Vec::new());
         };
         Ok(self

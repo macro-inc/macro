@@ -63,7 +63,7 @@ where
             ))
         })?;
 
-        Ok(records
+        let slugs: Vec<McpServerSlug> = records
             .into_iter()
             .filter(|record| record.enabled)
             .filter_map(|record| {
@@ -80,7 +80,12 @@ where
                 }
                 slug
             })
-            .collect())
+            .collect();
+        tracing::debug!(
+            mcp_servers = slugs.len(),
+            "advertising the owner's connected MCP servers"
+        );
+        Ok(slugs)
     }
 }
 

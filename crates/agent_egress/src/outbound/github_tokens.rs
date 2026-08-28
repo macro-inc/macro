@@ -106,11 +106,15 @@ where
         {
             let mut cached = self.cached.lock().expect("token cache poisoned");
             match usable(cached.get(&key).cloned()) {
-                Some(live) => return Ok(live.token),
+                Some(live) => {
+                    tracing::debug!(%owner, %repo, "github token cache hit");
+                    return Ok(live.token);
+                }
                 // A stale entry is evicted now rather than on capacity
                 // pressure: there is no reason to keep a dead credential.
                 None => {
-                    cached.pop(&key);
+                    let expired = cached.pop(&key).is_some();
+                    tracing::debug!(%owner, %repo, expired, "github token cache miss; minting");
                 }
             }
         }

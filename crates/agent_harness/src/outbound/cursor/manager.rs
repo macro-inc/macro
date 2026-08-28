@@ -397,6 +397,10 @@ impl<Sessions> CursorAgents for RecordingCursor<Sessions>
 where
     Sessions: ExternalSessionRepo + Clone,
 {
+    #[tracing::instrument(skip_all, err, fields(
+        session = %self.session_id,
+        mcp_servers = mcp_servers.len(),
+    ))]
     async fn create_agent(
         &self,
         prompt: &str,
