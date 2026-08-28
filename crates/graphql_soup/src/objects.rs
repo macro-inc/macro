@@ -33,18 +33,18 @@ use serde_json::Value;
 use soup::domain::models::{
     EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField, grouping::NestedSoupGroups,
 };
-use soup_filter_projection::{encode_cache_projection, project_soup_hydration};
+use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
 
 use crate::loaders::SoupItemDataLoader;
 
-/// Opaque, version-framed cache projection selected only by cache-aware Soup
-/// operations.
+/// Opaque, version-framed server-fact supplement selected only by cache-aware
+/// Soup operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SoupCacheProjection(String);
 
-/// Opaque versioned cache-projection capsule for authoritative local reevaluation.
+/// Opaque versioned supplement containing authoritative server-only facts.
 #[Scalar(name = "SoupCacheProjection")]
 impl ScalarType for SoupCacheProjection {
     fn parse(value: GraphqlValue) -> InputValueResult<Self> {
@@ -142,7 +142,7 @@ impl<E: SoupEntityEdges> SoupPage<E> {
         }
     }
 
-    /// Construct a GraphQL page from authoritative item/source hydration.
+    /// Construct a GraphQL page from authoritative item/server-fact hydration.
     pub fn new_with_projection(page: PaginatedOpaqueCursor<SoupProjectionHydration>) -> Self {
         Self {
             items: page
@@ -166,7 +166,7 @@ impl<E: SoupEntityEdges> SoupPage<E> {
         }
     }
 
-    /// Construct a GraphQL page from projection hydration carrying frecency.
+    /// Construct a GraphQL page from server-fact hydration carrying frecency.
     pub fn new_from_enriched_with_projection(
         page: PaginatedOpaqueCursor<SoupProjectionHydration<EnrichedSoupItem>>,
     ) -> Self {
@@ -233,7 +233,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
         Self::new(item.map_extra(|_| ())).with_frecency(score)
     }
 
-    /// Construct a GraphQL entity from authoritative projection hydration
+    /// Construct a GraphQL entity from authoritative server-fact hydration
     /// carrying a frecency-enriched item.
     pub fn new_from_enriched_with_projection(
         hydration: SoupProjectionHydration<EnrichedSoupItem>,
@@ -266,13 +266,13 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
         self
     }
 
-    /// Attach authoritative cache projection data to supported entity variants.
-    fn with_cache_projection(mut self, projection: Option<SoupCacheProjection>) -> Self {
+    /// Attach authoritative server-only facts to a document entity.
+    fn with_cache_supplement(mut self, supplement: Option<SoupCacheProjection>) -> Self {
         match &mut self {
-            Self::Document(entity) => entity.3 = projection,
-            Self::Chat(entity) => entity.3 = projection,
-            Self::Project(entity) => entity.3 = projection,
-            Self::EmailThread(_)
+            Self::Document(entity) => entity.3 = supplement,
+            Self::Chat(_)
+            | Self::Project(_)
+            | Self::EmailThread(_)
             | Self::Channel(_)
             | Self::ChannelMessage(_)
             | Self::Call(_)
@@ -318,7 +318,7 @@ pub struct GraphqlEntityMetadata {
         name = "cacheProjection",
         method = "cache_projection",
         ty = "Option<SoupCacheProjection>",
-        desc = "Opaque cache projection metadata for authoritative local reevaluation."
+        desc = "Opaque supplement containing authoritative server-only projection facts."
     ),
     field(
         name = "entity_type",
@@ -425,11 +425,11 @@ where
         )
     }
 
-    /// Construct a GraphQL entity and opaque capsule from one authoritative
-    /// item/source hydration value.
+    /// Construct a GraphQL entity and opaque server-fact supplement from one
+    /// authoritative hydration value.
     pub fn new_with_projection(hydration: SoupProjectionHydration) -> Self {
         let entity = hydration.item.entity();
-        let projection: Result<Option<SoupCacheProjection>, String> =
+        let supplement: Result<Option<SoupCacheProjection>, String> =
             Self::graphql_type_name_for(entity.entity_type)
                 .ok_or_else(|| "Soup item has no GraphQL entity type".to_owned())
                 .and_then(|type_name| {
@@ -437,25 +437,25 @@ where
                         .map_err(|error| error.to_string())
                 })
                 .and_then(|record_key| {
-                    project_soup_hydration(record_key, &hydration)
+                    project_soup_cache_supplement(record_key, &hydration)
                         .map_err(|error| error.to_string())
                 })
-                .and_then(|document| {
-                    document
-                        .map(|document| {
-                            encode_cache_projection(&document)
+                .and_then(|supplement| {
+                    supplement
+                        .map(|supplement| {
+                            encode_cache_projection_supplement(&supplement)
                                 .map(SoupCacheProjection)
                                 .map_err(|error| error.to_string())
                         })
                         .transpose()
                 });
-        let projection = projection
+        let supplement = supplement
             .inspect_err(|error| {
-                tracing::error!(error = ?error, "failed to compile Soup cache projection");
+                tracing::error!(error = ?error, "failed to compile Soup cache projection supplement");
             })
             .ok()
             .flatten();
-        Self::new(hydration.item).with_cache_projection(projection)
+        Self::new(hydration.item).with_cache_supplement(supplement)
     }
 
     /// Construct a GraphQL entity from a plain Soup item.
@@ -471,13 +471,13 @@ where
                 let edges = E::from_entity(
                     model_entity::EntityType::Chat.with_entity_string(item.id.to_string()),
                 );
-                Self::Chat(GraphqlSoupChat(item, edges, None, None))
+                Self::Chat(GraphqlSoupChat(item, edges, None))
             }
             SoupItem::Project(item) => {
                 let edges = E::from_entity(
                     model_entity::EntityType::Project.with_entity_string(item.id.to_string()),
                 );
-                Self::Project(GraphqlSoupProject(item, edges, None, None))
+                Self::Project(GraphqlSoupProject(item, edges, None))
             }
             SoupItem::EmailThread(item) => {
                 let edges = E::from_entity(
@@ -663,7 +663,7 @@ where
         GraphqlSoupEntityType::Document
     }
 
-    /// Opaque authoritative cache projection metadata.
+    /// Opaque authoritative server-only projection facts.
     async fn cache_projection(&self) -> Option<SoupCacheProjection> {
         self.3.clone()
     }
@@ -796,12 +796,7 @@ impl GraphqlSoupDocumentSubType {
 }
 
 /// GraphQL chat entity.
-pub struct GraphqlSoupChat<E: SoupEntityEdges>(
-    SoupChat<()>,
-    E,
-    Option<f64>,
-    Option<SoupCacheProjection>,
-);
+pub struct GraphqlSoupChat<E: SoupEntityEdges>(SoupChat<()>, E, Option<f64>);
 
 /// GraphQL representation of the soup chat.
 #[Object(name = "GraphqlSoupChat")]
@@ -819,9 +814,9 @@ where
         GraphqlSoupEntityType::Chat
     }
 
-    /// Opaque authoritative cache projection metadata.
+    /// Server-only projection facts are unavailable for chats.
     async fn cache_projection(&self) -> Option<SoupCacheProjection> {
-        self.3.clone()
+        None
     }
 
     /// User-visible display name.
@@ -897,12 +892,7 @@ where
 }
 
 /// GraphQL project entity.
-pub struct GraphqlSoupProject<E: SoupEntityEdges>(
-    SoupProject<()>,
-    E,
-    Option<f64>,
-    Option<SoupCacheProjection>,
-);
+pub struct GraphqlSoupProject<E: SoupEntityEdges>(SoupProject<()>, E, Option<f64>);
 
 /// GraphQL representation of the soup project.
 #[Object(name = "GraphqlSoupProject")]
@@ -920,9 +910,9 @@ where
         GraphqlSoupEntityType::Project
     }
 
-    /// Opaque authoritative cache projection metadata.
+    /// Server-only projection facts are unavailable for projects.
     async fn cache_projection(&self) -> Option<SoupCacheProjection> {
-        self.3.clone()
+        None
     }
 
     /// User-visible display name.

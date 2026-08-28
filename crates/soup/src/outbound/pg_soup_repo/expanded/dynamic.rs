@@ -30,7 +30,7 @@ use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 use crate::domain::models::{
-    SoupProjectionHydration, SoupProjectionSource, grouping::ItemGroupingInfo,
+    SoupDocumentServerFacts, SoupProjectionHydration, grouping::ItemGroupingInfo,
 };
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_select_expr,
@@ -1661,23 +1661,21 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
 }
 
 impl SoupRow {
-    fn projection_source(&self) -> SoupProjectionSource {
+    fn document_server_facts(&self) -> Option<SoupDocumentServerFacts> {
         match self {
-            Self::Document(row) => SoupProjectionSource::Document {
+            Self::Document(row) => Some(SoupDocumentServerFacts {
                 is_email_attachment: row.is_email_attachment,
-            },
-            Self::Chat(_) => SoupProjectionSource::Chat,
-            Self::Project(_) => SoupProjectionSource::Project,
-            Self::CalendarEvent(_) => SoupProjectionSource::Unsupported,
+            }),
+            Self::Chat(_) | Self::Project(_) | Self::CalendarEvent(_) => None,
         }
     }
 
     #[tracing::instrument(err)]
     fn into_projection_hydration(self) -> Result<SoupProjectionHydration, sqlx::Error> {
-        let source = self.projection_source();
+        let document_server_facts = self.document_server_facts();
         Ok(SoupProjectionHydration {
             item: self.into_soup_item()?,
-            source,
+            document_server_facts,
         })
     }
 
@@ -1847,7 +1845,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     Ok(items)
 }
 
-/// Execute a flat expanded dynamic query and retain projection source facts.
+/// Execute a flat expanded dynamic query and retain document server facts.
 #[tracing::instrument(skip(db), err)]
 pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
     db: &PgPool,

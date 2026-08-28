@@ -1,4 +1,4 @@
-//! Versioned direct-field Soup projections for `soup-flat-v1`.
+//! Direct-field Soup projection helpers and typed server-fact supplements.
 #![deny(missing_docs)]
 
 use std::str::FromStr;
@@ -6,18 +6,13 @@ use std::str::FromStr;
 use item_filter_index::vocabulary;
 use model_file_type::FileType;
 #[cfg(feature = "models")]
-use models_soup::{
-    chat::SoupChat,
-    document::{SoupDocument, SoupDocumentSubType},
-    item::SoupItem,
-    project::SoupProject,
-};
+use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use predicate_index::{
     ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
     OptimisticProjectionMutation, RecordKey, Token, ValidationError, utc_timestamp_micros,
 };
 #[cfg(feature = "models")]
-use soup::domain::models::{SoupProjectionHydration, SoupProjectionSource};
+use soup::domain::models::SoupProjectionHydration;
 use thiserror::Error;
 
 mod profile;
@@ -25,10 +20,10 @@ mod wire;
 
 pub use profile::{ProfileValidationError, validate_soup_flat_v2};
 pub use wire::{
-    ExactFactWire, IntegerFactWire, MAX_SOUP_CACHE_PROJECTION_BYTES,
-    MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES, SOUP_CACHE_PROJECTION_WIRE_VERSION,
-    SoupCacheProjectionCapsuleV1, SoupCacheProjectionWireError, decode_cache_projection,
-    encode_cache_projection,
+    MAX_SOUP_CACHE_PROJECTION_BYTES, MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES,
+    SOUP_CACHE_PROJECTION_WIRE_VERSION, SoupCacheProjectionCapsuleV1,
+    SoupCacheProjectionSupplement, SoupCacheProjectionWireError,
+    decode_cache_projection_supplement, encode_cache_projection_supplement,
 };
 
 #[cfg(test)]
@@ -40,12 +35,9 @@ pub enum ProjectionError {
     /// The authoritative document contained an unknown file-type value.
     #[error("invalid authoritative Soup document file type `{0}`")]
     InvalidFileType(String),
-    /// Projection source metadata does not match the accompanying item.
-    #[error("projection source does not match Soup item variant")]
+    /// Document server facts do not match the accompanying item variant.
+    #[error("document server facts do not match Soup item variant")]
     SourceMismatch,
-    /// The generated v2 document violated the Soup profile contract.
-    #[error(transparent)]
-    ProfileValidation(#[from] ProfileValidationError),
     /// The generic projection violated bounded IR invariants.
     #[error(transparent)]
     Validation(#[from] ValidationError),
@@ -289,55 +281,28 @@ pub fn project_chat<T>(
     })
 }
 
-/// Compile an authorized item/source pair into a complete `soup-flat-v2`
-/// document.
+/// Compile an authorized item/server-facts pair into a typed supplement.
 ///
-/// Unsupported item variants and hydration paths return `None`; a non-null
-/// source attached to the wrong entity variant is rejected.
+/// Only documents hydrated with authoritative `document_email` relation state
+/// produce a supplement. Direct entity fields, including document subtype,
+/// are deliberately excluded and must be projected from the same GraphQL
+/// response by the browser. A document supplement attached to another entity
+/// variant is rejected.
 #[cfg(feature = "models")]
-pub fn project_soup_hydration(
+pub fn project_soup_cache_supplement(
     record_key: RecordKey,
     hydration: &SoupProjectionHydration,
-) -> Result<Option<IndexDocument>, ProjectionError> {
-    if hydration.source == SoupProjectionSource::Unsupported {
+) -> Result<Option<SoupCacheProjectionSupplement>, ProjectionError> {
+    let Some(server_facts) = hydration.document_server_facts else {
         return Ok(None);
-    }
-
-    let mut document = match (&hydration.item, hydration.source) {
-        (
-            SoupItem::Document(item),
-            SoupProjectionSource::Document {
-                is_email_attachment,
-            },
-        ) => {
-            let mut document = project_document(record_key, item)?;
-            document.exact_facts.push(ExactFact {
-                attribute: vocabulary::email_attachment(),
-                value: ExactValue::new(vec![u8::from(is_email_attachment)])?,
-            });
-            if let Some(sub_type) = &item.sub_type {
-                let value = match sub_type {
-                    SoupDocumentSubType::Task { .. } => "task",
-                    SoupDocumentSubType::Snippet {} => "snippet",
-                    SoupDocumentSubType::Skill {} => "skill",
-                };
-                document
-                    .exact_facts
-                    .push(utf8_fact(vocabulary::document_sub_type(), value)?);
-            }
-            document
-        }
-        (SoupItem::Project(item), SoupProjectionSource::Project) => {
-            project_project(record_key, item)?
-        }
-        (SoupItem::Chat(item), SoupProjectionSource::Chat) => project_chat(record_key, item)?,
-        _ => return Err(ProjectionError::SourceMismatch),
     };
-
-    document.profile = vocabulary::profile_v2();
-    document.canonicalize();
-    validate_soup_flat_v2(&document)?;
-    Ok(Some(document))
+    if !matches!(&hydration.item, SoupItem::Document(_)) {
+        return Err(ProjectionError::SourceMismatch);
+    }
+    Ok(Some(SoupCacheProjectionSupplement::document(
+        record_key,
+        server_facts.is_email_attachment,
+    )))
 }
 
 fn common_exact_facts(id: uuid::Uuid, owner: String) -> Result<Vec<ExactFact>, ValidationError> {

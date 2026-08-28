@@ -11,10 +11,10 @@ pub enum ProfileValidationError {
     /// Generic storage-neutral document bounds were violated.
     #[error(transparent)]
     Generic(#[from] ValidationError),
-    /// The capsule declared a profile other than `soup-flat-v2`.
+    /// The complete document declares a profile other than `soup-flat-v2`.
     #[error("unsupported Soup projection profile `{0}`")]
     UnsupportedProfile(String),
-    /// The capsule declared a partition outside the v2 profile.
+    /// The complete document declares a partition outside the v2 profile.
     #[error("unsupported Soup projection partition `{0}`")]
     UnsupportedPartition(String),
     /// A fact attribute is not allowed for this partition and profile.
@@ -44,7 +44,7 @@ enum PartitionKind {
 }
 
 /// Validate strict Soup-specific completeness and canonical value semantics for
-/// one server-minted `soup-flat-v2` index document.
+/// one composed `soup-flat-v2` index document.
 pub fn validate_soup_flat_v2(document: &IndexDocument) -> Result<(), ProfileValidationError> {
     document.validate()?;
     if document.profile != vocabulary::profile_v2() {

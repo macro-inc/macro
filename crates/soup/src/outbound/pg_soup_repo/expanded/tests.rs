@@ -1,5 +1,5 @@
 use crate::{
-    domain::models::SoupProjectionSource,
+    domain::models::SoupDocumentServerFacts,
     outbound::pg_soup_repo::{
         expanded::{
             by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
@@ -5479,25 +5479,25 @@ async fn projection_hydration_carries_attachment_state_from_flat_and_by_id_rows(
 
     let attachment_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let ordinary_id = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?;
-    let attachment_source = flat
+    let attachment_facts = flat
         .iter()
         .find(|hydration| hydration.item.id() == attachment_id)
-        .map(|hydration| hydration.source)
-        .expect("attachment document is hydrated");
-    let ordinary_source = flat
+        .and_then(|hydration| hydration.document_server_facts)
+        .expect("attachment document server facts are hydrated");
+    let ordinary_facts = flat
         .iter()
         .find(|hydration| hydration.item.id() == ordinary_id)
-        .map(|hydration| hydration.source)
-        .expect("ordinary document is hydrated");
+        .and_then(|hydration| hydration.document_server_facts)
+        .expect("ordinary document server facts are hydrated");
     assert_eq!(
-        attachment_source,
-        SoupProjectionSource::Document {
+        attachment_facts,
+        SoupDocumentServerFacts {
             is_email_attachment: true,
         }
     );
     assert_eq!(
-        ordinary_source,
-        SoupProjectionSource::Document {
+        ordinary_facts,
+        SoupDocumentServerFacts {
             is_email_attachment: false,
         }
     );
@@ -5510,17 +5510,17 @@ async fn projection_hydration_carries_attachment_state_from_flat_and_by_id_rows(
     assert_eq!(by_id.len(), 2);
     assert!(by_id.iter().any(|hydration| {
         hydration.item.id() == attachment_id
-            && hydration.source
-                == SoupProjectionSource::Document {
+            && hydration.document_server_facts
+                == Some(SoupDocumentServerFacts {
                     is_email_attachment: true,
-                }
+                })
     }));
     assert!(by_id.iter().any(|hydration| {
         hydration.item.id() == ordinary_id
-            && hydration.source
-                == SoupProjectionSource::Document {
+            && hydration.document_server_facts
+                == Some(SoupDocumentServerFacts {
                     is_email_attachment: false,
-                }
+                })
     }));
 
     // The relation probe is backed by the composite primary key's leading

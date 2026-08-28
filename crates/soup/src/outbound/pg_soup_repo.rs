@@ -2,8 +2,8 @@ use crate::{
     domain::{
         models::{
             AdvancedSortParams, GroupedSortRequest, SimpleSortQuery, SimpleSortRequest,
-            SoupProjectionHydration, SoupProjectionSource, SoupPropertiesField, TouchedEntity,
-            TouchedSoupRequest, grouping::ItemGroupingInfo,
+            SoupProjectionHydration, SoupPropertiesField, TouchedEntity, TouchedSoupRequest,
+            grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -110,7 +110,7 @@ impl SoupRepo for PgSoupRepo {
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
                     item,
-                    source: SoupProjectionSource::Unsupported,
+                    document_server_facts: None,
                 }),
         );
         sort_and_truncate_hydrations(&mut items, sort, limit);
@@ -180,7 +180,7 @@ impl SoupRepo for PgSoupRepo {
                 .into_iter()
                 .map(|item| SoupProjectionHydration {
                     item,
-                    source: SoupProjectionSource::Unsupported,
+                    document_server_facts: None,
                 }),
         );
         Ok(items)
@@ -444,21 +444,23 @@ macro_rules! map_soup_type {
 }
 
 /// Maps statically checked expanded Soup rows into an item plus authoritative
-/// cache-projection source metadata from that same row.
+/// server-only document facts from that same row.
 #[macro_export]
 macro_rules! map_soup_projection_hydration {
     () => {
         |r| {
-            let source = match r.item_type.as_ref() {
-                "document" => $crate::domain::models::SoupProjectionSource::Document {
+            let document_server_facts = match r.item_type.as_ref() {
+                "document" => Some($crate::domain::models::SoupDocumentServerFacts {
                     is_email_attachment: r.is_email_attachment,
-                },
-                "chat" => $crate::domain::models::SoupProjectionSource::Chat,
-                "project" => $crate::domain::models::SoupProjectionSource::Project,
-                _ => $crate::domain::models::SoupProjectionSource::Unsupported,
+                }),
+                _ => None,
             };
-            $crate::map_soup_type!(@item r)
-                .map(|item| $crate::domain::models::SoupProjectionHydration { item, source })
+            $crate::map_soup_type!(@item r).map(|item| {
+                $crate::domain::models::SoupProjectionHydration {
+                    item,
+                    document_server_facts,
+                }
+            })
         }
     };
 }

@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
-
 use serde::Deserialize;
-use soup_filter_projection::{decode_cache_projection, encode_cache_projection};
+use soup_filter_projection::{
+    decode_cache_projection_supplement, encode_cache_projection_supplement,
+};
 
 use super::*;
 
@@ -267,7 +267,6 @@ fn production_documents_presets_are_characterized_as_unsupported_in_v1() {
 struct CapsuleFixtureFile {
     fixture_format: String,
     transport: CapsuleFixtureTransport,
-    canonical_exact_values: CanonicalExactValues,
     capsules: Vec<CapsuleFixtureCase>,
 }
 
@@ -276,181 +275,67 @@ struct CapsuleFixtureTransport {
     base64_variant: String,
     frame: String,
     wire_version: u8,
-}
-
-#[derive(Debug, Deserialize)]
-struct CanonicalExactValues {
-    boolean_false_hex: String,
-    boolean_true_hex: String,
-    sub_types: BTreeMap<String, String>,
+    max_decoded_bytes: usize,
 }
 
 #[derive(Debug, Deserialize)]
 struct CapsuleFixtureCase {
     name: String,
-    expected: CapsuleFixtureExpected,
     capsule: SemanticCapsuleV1,
     expected_base64: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct CapsuleFixtureExpected {
-    is_email_attachment: bool,
-    sub_type: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
 struct SemanticCapsuleV1 {
-    profile: String,
+    target_profile: String,
     record_key: String,
     partition: String,
-    exact_facts: Vec<SemanticExactFact>,
-    integer_facts: Vec<WireIntegerFact>,
-    sort_facts: Vec<WireIntegerFact>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SemanticExactFact {
-    attribute: String,
-    value_hex: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-struct WireIntegerFact {
-    attribute: String,
-    value: i64,
-}
-
-fn decode_hex(value: &str) -> Vec<u8> {
-    assert!(
-        value.len().is_multiple_of(2),
-        "hex value must be byte-aligned"
-    );
-    (0..value.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&value[index..index + 2], 16).expect("valid fixture hex"))
-        .collect()
+    is_email_attachment: bool,
 }
 
 #[test]
-fn soup_flat_v2_capsule_golden_fixtures_lock_wire_and_fact_encodings() {
+fn soup_flat_v2_supplement_goldens_lock_typed_server_fact_wire() {
     let fixtures: CapsuleFixtureFile = serde_json::from_str(include_str!(
         "../../soup_filter_projection/testdata/soup-flat-v2-capsules.json"
     ))
     .expect("valid capsule fixture JSON");
 
-    assert_eq!(fixtures.fixture_format, "semantic-capsule-v1");
+    assert_eq!(fixtures.fixture_format, "server-fact-supplement-capsule-v1");
     assert_eq!(fixtures.transport.base64_variant, "RFC4648_STANDARD_NO_PAD");
     assert_eq!(fixtures.transport.frame, "wire-version-byte-plus-postcard");
     assert_eq!(fixtures.transport.wire_version, 1);
-    assert_eq!(fixtures.canonical_exact_values.boolean_false_hex, "00");
-    assert_eq!(fixtures.canonical_exact_values.boolean_true_hex, "01");
     assert_eq!(
-        fixtures.canonical_exact_values.sub_types,
-        BTreeMap::from([
-            ("skill".to_owned(), "736b696c6c".to_owned()),
-            ("snippet".to_owned(), "736e6970706574".to_owned()),
-            ("task".to_owned(), "7461736b".to_owned()),
-        ])
+        fixtures.transport.max_decoded_bytes,
+        soup_filter_projection::MAX_SOUP_CACHE_PROJECTION_BYTES
     );
 
-    let mut missing_goldens = false;
     for case in fixtures.capsules {
-        assert_eq!(case.capsule.profile, "soup-flat-v2", "{}", case.name);
+        assert_eq!(case.capsule.target_profile, "soup-flat-v2", "{}", case.name);
         assert_eq!(case.capsule.partition, "document", "{}", case.name);
-
-        let attributes: Vec<&str> = case
-            .capsule
-            .exact_facts
-            .iter()
-            .map(|fact| fact.attribute.as_str())
-            .collect();
-        let mut sorted_attributes = attributes.clone();
-        sorted_attributes.sort_unstable();
-        assert_eq!(
-            attributes, sorted_attributes,
-            "{} exact fact order",
+        assert!(
+            !case.expected_base64.is_empty(),
+            "{} must lock scalar bytes",
             case.name
         );
 
-        if case.expected_base64.is_empty() {
-            missing_goldens = true;
-            continue;
-        }
-        let decoded = decode_cache_projection(&case.expected_base64)
+        let decoded = decode_cache_projection_supplement(&case.expected_base64)
             .unwrap_or_else(|error| panic!("{} must decode: {error}", case.name));
-        assert_eq!(decoded.profile.token().as_str(), case.capsule.profile);
-        assert_eq!(decoded.record_key.as_str(), case.capsule.record_key);
-        assert_eq!(decoded.partition.as_str(), case.capsule.partition);
-        assert_eq!(decoded.exact_facts.len(), case.capsule.exact_facts.len());
-        for (actual, expected) in decoded.exact_facts.iter().zip(&case.capsule.exact_facts) {
-            assert_eq!(
-                actual.attribute.as_str(),
-                expected.attribute,
-                "{}",
-                case.name
-            );
-            assert_eq!(
-                actual.value.as_bytes(),
-                decode_hex(&expected.value_hex),
-                "{}",
-                case.name
-            );
-        }
-
-        let email_attachment = decoded
-            .exact_facts
-            .iter()
-            .find(|fact| fact.attribute.as_str() == "email-attachment")
-            .unwrap_or_else(|| panic!("{} requires explicit attachment state", case.name));
         assert_eq!(
-            email_attachment.value.as_bytes(),
-            [u8::from(case.expected.is_email_attachment)],
-            "{} attachment encoding",
-            case.name
+            decoded.target_profile().token().as_str(),
+            case.capsule.target_profile
         );
-        let sub_type = decoded
-            .exact_facts
-            .iter()
-            .find(|fact| fact.attribute.as_str() == "document-sub-type")
-            .map(|fact| String::from_utf8(fact.value.as_bytes().to_vec()).expect("UTF-8 subtype"));
-        assert_eq!(sub_type, case.expected.sub_type, "{} subtype", case.name);
-
-        let actual_integer: Vec<_> = decoded
-            .integer_facts
-            .iter()
-            .map(|fact| (fact.attribute.as_str(), fact.value))
-            .collect();
-        let expected_integer: Vec<_> = case
-            .capsule
-            .integer_facts
-            .iter()
-            .map(|fact| (fact.attribute.as_str(), fact.value))
-            .collect();
+        assert_eq!(decoded.record_key().as_str(), case.capsule.record_key);
+        assert_eq!(decoded.partition().as_str(), case.capsule.partition);
         assert_eq!(
-            actual_integer, expected_integer,
-            "{} integer facts",
-            case.name
+            decoded.is_email_attachment(),
+            case.capsule.is_email_attachment
         );
-        let actual_sorts: Vec<_> = decoded
-            .sort_facts
-            .iter()
-            .map(|fact| (fact.attribute.as_str(), fact.value))
-            .collect();
-        let expected_sorts: Vec<_> = case
-            .capsule
-            .sort_facts
-            .iter()
-            .map(|fact| (fact.attribute.as_str(), fact.value))
-            .collect();
-        assert_eq!(actual_sorts, expected_sorts, "{} sort facts", case.name);
         assert_eq!(
-            encode_cache_projection(&decoded).expect("decoded fixture re-encodes"),
+            encode_cache_projection_supplement(&decoded)
+                .expect("decoded fixture supplement re-encodes"),
             case.expected_base64,
             "{} scalar bytes",
             case.name
         );
     }
-
-    assert!(!missing_goldens, "populate expected_base64 fixture values");
 }

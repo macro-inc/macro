@@ -172,7 +172,7 @@ async fn expanded_soup_by_ids_hydrated<'a>(
     Ok(items)
 }
 
-/// Returns expanded authorized items by ID with projection source metadata.
+/// Returns expanded authorized items by ID with optional document server facts.
 #[tracing::instrument(err, skip(db, entities))]
 pub async fn expanded_soup_by_ids_with_projection<'a>(
     db: &PgPool,

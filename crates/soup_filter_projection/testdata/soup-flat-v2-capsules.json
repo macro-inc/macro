@@ -1,302 +1,31 @@
 {
-  "fixture_format": "semantic-capsule-v1",
+  "fixture_format": "server-fact-supplement-capsule-v1",
   "transport": {
     "base64_variant": "RFC4648_STANDARD_NO_PAD",
     "frame": "wire-version-byte-plus-postcard",
-    "wire_version": 1
-  },
-  "canonical_exact_values": {
-    "boolean_false_hex": "00",
-    "boolean_true_hex": "01",
-    "sub_types": {
-      "task": "7461736b",
-      "snippet": "736e6970706574",
-      "skill": "736b696c6c"
-    }
+    "wire_version": 1,
+    "max_decoded_bytes": 1024
   },
   "capsules": [
     {
       "name": "ordinary-document",
-      "expected": {
-        "is_email_attachment": false,
-        "sub_type": null
-      },
       "capsule": {
-        "profile": "soup-flat-v2",
+        "target_profile": "soup-flat-v2",
         "record_key": "GraphqlSoupDocument:00000000-0000-0000-0000-000000000001",
         "partition": "document",
-        "exact_facts": [
-          {
-            "attribute": "email-attachment",
-            "value_hex": "00"
-          },
-          {
-            "attribute": "file-type",
-            "value_hex": "6d64"
-          },
-          {
-            "attribute": "id",
-            "value_hex": "00000000000000000000000000000001"
-          },
-          {
-            "attribute": "owner",
-            "value_hex": "6d6163726f7c6f776e6572406578616d706c652e636f6d"
-          }
-        ],
-        "integer_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ],
-        "sort_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ]
+        "is_email_attachment": false
       },
-      "expected_base64": "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQEEGVtYWlsLWF0dGFjaG1lbnQBAAlmaWxlLXR5cGUCbWQCaWQQAAAAAAAAAAAAAAAAAAAAAQVvd25lchdtYWNyb3xvd25lckBleGFtcGxlLmNvbQIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBgIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBg"
+      "expected_base64": "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQA"
     },
     {
       "name": "email-attachment-document",
-      "expected": {
-        "is_email_attachment": true,
-        "sub_type": null
-      },
       "capsule": {
-        "profile": "soup-flat-v2",
+        "target_profile": "soup-flat-v2",
         "record_key": "GraphqlSoupDocument:00000000-0000-0000-0000-000000000002",
         "partition": "document",
-        "exact_facts": [
-          {
-            "attribute": "email-attachment",
-            "value_hex": "01"
-          },
-          {
-            "attribute": "file-type",
-            "value_hex": "706466"
-          },
-          {
-            "attribute": "id",
-            "value_hex": "00000000000000000000000000000002"
-          },
-          {
-            "attribute": "owner",
-            "value_hex": "6d6163726f7c6f776e6572406578616d706c652e636f6d"
-          },
-          {
-            "attribute": "project-id",
-            "value_hex": "000000000000000000000000000000aa"
-          }
-        ],
-        "integer_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ],
-        "sort_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ]
+        "is_email_attachment": true
       },
-      "expected_base64": "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIIZG9jdW1lbnQFEGVtYWlsLWF0dGFjaG1lbnQBAQlmaWxlLXR5cGUDcGRmAmlkEAAAAAAAAAAAAAAAAAAAAAIFb3duZXIXbWFjcm98b3duZXJAZXhhbXBsZS5jb20KcHJvamVjdC1pZBAAAAAAAAAAAAAAAAAAAACqAgpjcmVhdGVkLWF0gICC4ojSowYKdXBkYXRlZC1hdICAvb+M16MGAgpjcmVhdGVkLWF0gICC4ojSowYKdXBkYXRlZC1hdICAvb+M16MG"
-    },
-    {
-      "name": "task-document",
-      "expected": {
-        "is_email_attachment": false,
-        "sub_type": "task"
-      },
-      "capsule": {
-        "profile": "soup-flat-v2",
-        "record_key": "GraphqlSoupDocument:00000000-0000-0000-0000-000000000003",
-        "partition": "document",
-        "exact_facts": [
-          {
-            "attribute": "document-sub-type",
-            "value_hex": "7461736b"
-          },
-          {
-            "attribute": "email-attachment",
-            "value_hex": "00"
-          },
-          {
-            "attribute": "file-type",
-            "value_hex": "6d64"
-          },
-          {
-            "attribute": "id",
-            "value_hex": "00000000000000000000000000000003"
-          },
-          {
-            "attribute": "owner",
-            "value_hex": "6d6163726f7c6f776e6572406578616d706c652e636f6d"
-          },
-          {
-            "attribute": "project-id",
-            "value_hex": "000000000000000000000000000000aa"
-          }
-        ],
-        "integer_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ],
-        "sort_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ]
-      },
-      "expected_base64": "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDMIZG9jdW1lbnQGEWRvY3VtZW50LXN1Yi10eXBlBHRhc2sQZW1haWwtYXR0YWNobWVudAEACWZpbGUtdHlwZQJtZAJpZBAAAAAAAAAAAAAAAAAAAAADBW93bmVyF21hY3JvfG93bmVyQGV4YW1wbGUuY29tCnByb2plY3QtaWQQAAAAAAAAAAAAAAAAAAAAqgIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBgIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBg"
-    },
-    {
-      "name": "snippet-document",
-      "expected": {
-        "is_email_attachment": false,
-        "sub_type": "snippet"
-      },
-      "capsule": {
-        "profile": "soup-flat-v2",
-        "record_key": "GraphqlSoupDocument:00000000-0000-0000-0000-000000000004",
-        "partition": "document",
-        "exact_facts": [
-          {
-            "attribute": "document-sub-type",
-            "value_hex": "736e6970706574"
-          },
-          {
-            "attribute": "email-attachment",
-            "value_hex": "00"
-          },
-          {
-            "attribute": "file-type",
-            "value_hex": "6d64"
-          },
-          {
-            "attribute": "id",
-            "value_hex": "00000000000000000000000000000004"
-          },
-          {
-            "attribute": "owner",
-            "value_hex": "6d6163726f7c6f776e6572406578616d706c652e636f6d"
-          },
-          {
-            "attribute": "project-id",
-            "value_hex": "000000000000000000000000000000aa"
-          }
-        ],
-        "integer_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ],
-        "sort_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ]
-      },
-      "expected_base64": "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDQIZG9jdW1lbnQGEWRvY3VtZW50LXN1Yi10eXBlB3NuaXBwZXQQZW1haWwtYXR0YWNobWVudAEACWZpbGUtdHlwZQJtZAJpZBAAAAAAAAAAAAAAAAAAAAAEBW93bmVyF21hY3JvfG93bmVyQGV4YW1wbGUuY29tCnByb2plY3QtaWQQAAAAAAAAAAAAAAAAAAAAqgIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBgIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBg"
-    },
-    {
-      "name": "skill-document",
-      "expected": {
-        "is_email_attachment": false,
-        "sub_type": "skill"
-      },
-      "capsule": {
-        "profile": "soup-flat-v2",
-        "record_key": "GraphqlSoupDocument:00000000-0000-0000-0000-000000000005",
-        "partition": "document",
-        "exact_facts": [
-          {
-            "attribute": "document-sub-type",
-            "value_hex": "736b696c6c"
-          },
-          {
-            "attribute": "email-attachment",
-            "value_hex": "00"
-          },
-          {
-            "attribute": "file-type",
-            "value_hex": "6d64"
-          },
-          {
-            "attribute": "id",
-            "value_hex": "00000000000000000000000000000005"
-          },
-          {
-            "attribute": "owner",
-            "value_hex": "6d6163726f7c6f776e6572406578616d706c652e636f6d"
-          },
-          {
-            "attribute": "project-id",
-            "value_hex": "000000000000000000000000000000aa"
-          }
-        ],
-        "integer_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ],
-        "sort_facts": [
-          {
-            "attribute": "created-at",
-            "value": 1767225600000000
-          },
-          {
-            "attribute": "updated-at",
-            "value": 1767312000000000
-          }
-        ]
-      },
-      "expected_base64": "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDUIZG9jdW1lbnQGEWRvY3VtZW50LXN1Yi10eXBlBXNraWxsEGVtYWlsLWF0dGFjaG1lbnQBAAlmaWxlLXR5cGUCbWQCaWQQAAAAAAAAAAAAAAAAAAAABQVvd25lchdtYWNyb3xvd25lckBleGFtcGxlLmNvbQpwcm9qZWN0LWlkEAAAAAAAAAAAAAAAAAAAAKoCCmNyZWF0ZWQtYXSAgILiiNKjBgp1cGRhdGVkLWF0gIC9v4zXowYCCmNyZWF0ZWQtYXSAgILiiNKjBgp1cGRhdGVkLWF0gIC9v4zXowY"
+      "expected_base64": "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIIZG9jdW1lbnQB"
     }
   ]
 }

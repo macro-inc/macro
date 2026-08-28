@@ -30,9 +30,11 @@ use model_entity::EntityType as ModelEntityType;
 use model_user::UserContext;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{
+    chat::SoupChat,
     document::SoupDocument,
     email_thread::{SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview},
     item::SoupItem,
+    project::SoupProject,
 };
 use rootcause::Report;
 use soup_realtime::domain::models::Patch;
@@ -77,6 +79,35 @@ struct CountingSoupService {
 
 fn soup_document(id: Uuid) -> SoupItem<()> {
     grouped_document(id).map_extra(|_| ())
+}
+
+fn soup_project(id: Uuid) -> SoupItem<()> {
+    SoupItem::Project(SoupProject {
+        id,
+        name: format!("Project {id}"),
+        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        parent_id: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        viewed_at: None,
+        deleted_at: None,
+        extra: (),
+    })
+}
+
+fn soup_chat(id: Uuid) -> SoupItem<()> {
+    SoupItem::Chat(SoupChat {
+        id,
+        name: format!("Chat {id}"),
+        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        project_id: None,
+        is_persistent: true,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        viewed_at: None,
+        deleted_at: None,
+        extra: (),
+    })
 }
 
 fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesField> {
@@ -147,15 +178,15 @@ impl SoupService for CountingSoupService {
     {
         self.get_user_soup(req, team_receipt).await.map(|output| {
             output.map(|item| {
-                let source = match &item {
-                    SoupItem::Document(_) => soup::domain::models::SoupProjectionSource::Document {
+                let document_server_facts = matches!(&item, SoupItem::Document(_)).then_some(
+                    soup::domain::models::SoupDocumentServerFacts {
                         is_email_attachment: false,
                     },
-                    SoupItem::Project(_) => soup::domain::models::SoupProjectionSource::Project,
-                    SoupItem::Chat(_) => soup::domain::models::SoupProjectionSource::Chat,
-                    _ => soup::domain::models::SoupProjectionSource::Unsupported,
-                };
-                soup::domain::models::SoupProjectionHydration { item, source }
+                );
+                soup::domain::models::SoupProjectionHydration {
+                    item,
+                    document_server_facts,
+                }
             })
         })
     }
@@ -1239,13 +1270,17 @@ async fn soup_passes_team_receipt_to_raw_path() {
 }
 
 #[tokio::test]
-async fn flat_soup_emits_entity_scoped_cache_projection() {
+async fn flat_soup_emits_document_server_fact_supplement_only() {
     let harness = harness();
     let document_id = Uuid::from_u128(88);
     let email_thread_id = Uuid::from_u128(89);
+    let project_id = Uuid::from_u128(90);
+    let chat_id = Uuid::from_u128(91);
     harness.soup_service.set_raw_response(vec![
         soup_document(document_id),
         soup_email_thread(email_thread_id),
+        soup_project(project_id),
+        soup_chat(chat_id),
     ]);
 
     let response = harness
@@ -1269,6 +1304,17 @@ async fn flat_soup_emits_entity_scoped_cache_projection() {
         .unwrap();
     assert_eq!(email["id"], email_thread_id.to_string());
     assert!(email["cacheProjection"].is_null());
+    for (typename, id) in [
+        ("GraphqlSoupProject", project_id),
+        ("GraphqlSoupChat", chat_id),
+    ] {
+        let item = items
+            .iter()
+            .find(|item| item["__typename"] == typename)
+            .unwrap();
+        assert_eq!(item["id"], id.to_string());
+        assert!(item["cacheProjection"].is_null());
+    }
 }
 
 #[tokio::test]

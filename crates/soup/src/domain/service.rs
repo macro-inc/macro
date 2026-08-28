@@ -2,7 +2,7 @@ use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
         GetRemindersRequest, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupProjectionHydration, SoupProjectionSource,
+        SimpleSortRequest, SoupDocumentServerFacts, SoupErr, SoupProjectionHydration,
         SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
         TouchedPagePosition, TouchedQueryInner, TouchedSoupRequest, grouping::ItemGroupingInfo,
     },
@@ -66,7 +66,7 @@ mod tests;
 #[derive(Debug)]
 struct SoupCandidate {
     item: SoupItem<()>,
-    projection_source: SoupProjectionSource,
+    document_server_facts: Option<SoupDocumentServerFacts>,
     frecency_score: Option<AggregateFrecency>,
     touched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -76,17 +76,17 @@ impl SoupCandidate {
     fn plain(item: SoupItem<()>) -> Self {
         SoupCandidate {
             item,
-            projection_source: SoupProjectionSource::Unsupported,
+            document_server_facts: None,
             frecency_score: None,
             touched_at: None,
         }
     }
 
-    /// A candidate whose projection source came from the same repository row.
+    /// A candidate whose optional server facts came from the same repository row.
     fn from_projection_hydration(hydration: SoupProjectionHydration) -> Self {
         SoupCandidate {
             item: hydration.item,
-            projection_source: hydration.source,
+            document_server_facts: hydration.document_server_facts,
             frecency_score: None,
             touched_at: None,
         }
@@ -641,7 +641,7 @@ where
                 })?;
                 Some(SoupCandidate {
                     item,
-                    projection_source: SoupProjectionSource::Unsupported,
+                    document_server_facts: None,
                     frecency_score: None,
                     touched_at: Some(candidate.touched_at),
                 })
@@ -694,7 +694,7 @@ where
         Ok(Either::Right(items.into_iter().zip(frecency_scores).map(
             |(item, frecency_score)| SoupCandidate {
                 item,
-                projection_source: SoupProjectionSource::Unsupported,
+                document_server_facts: None,
                 frecency_score,
                 touched_at: None,
             },
@@ -721,7 +721,7 @@ where
                         let soup_channel = SoupChannel::new_from_channels(c);
                         SoupCandidate {
                             item: SoupItem::Channel(soup_channel),
-                            projection_source: SoupProjectionSource::Unsupported,
+                            document_server_facts: None,
                             frecency_score,
                             touched_at: None,
                         }
@@ -1022,7 +1022,7 @@ where
     ) -> SoupOutput<R, SoupProjectionHydration> {
         output.map(|candidate| SoupProjectionHydration {
             item: candidate.item,
-            source: candidate.projection_source,
+            document_server_facts: candidate.document_server_facts,
         })
     }
 
@@ -1037,7 +1037,7 @@ where
                 frecency_score: candidate.frecency_score,
                 touched_at: candidate.touched_at,
             },
-            source: candidate.projection_source,
+            document_server_facts: candidate.document_server_facts,
         })
     }
 

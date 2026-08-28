@@ -4083,7 +4083,7 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
-	Opaque authoritative cache projection metadata.
+	Server-only projection facts are unavailable for chats.
 	"""
 	cacheProjection: SoupCacheProjection
 	"""
@@ -4255,7 +4255,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
-	Opaque authoritative cache projection metadata.
+	Opaque authoritative server-only projection facts.
 	"""
 	cacheProjection: SoupCacheProjection
 	"""
@@ -4859,7 +4859,7 @@ interface GraphqlSoupEntity {
 	"""
 	id: ID!
 	"""
-	Opaque cache projection metadata for authoritative local reevaluation.
+	Opaque supplement containing authoritative server-only projection facts.
 	"""
 	cacheProjection: SoupCacheProjection
 	"""
@@ -5043,7 +5043,7 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
-	Opaque authoritative cache projection metadata.
+	Server-only projection facts are unavailable for projects.
 	"""
 	cacheProjection: SoupCacheProjection
 	"""
@@ -5539,7 +5539,7 @@ input SetEntityPropertyInput {
 }
 
 """
-Opaque versioned cache-projection capsule for authoritative local reevaluation.
+Opaque versioned supplement containing authoritative server-only facts.
 """
 scalar SoupCacheProjection
 

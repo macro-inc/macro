@@ -1,71 +1,92 @@
 use base64::{Engine, engine::general_purpose::STANDARD_NO_PAD};
-use predicate_index::{
-    ExactFact, ExactValue, IndexDocument, IntegerFact, Profile, RecordKey, Token, ValidationError,
-};
+use item_filter_index::vocabulary;
+use predicate_index::{Profile, RecordKey, Token, ValidationError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{ProfileValidationError, validate_soup_flat_v2};
-
-/// Framing byte for the first immutable Soup cache-projection capsule layout.
+/// Framing byte for the first immutable Soup server-fact supplement layout.
 pub const SOUP_CACHE_PROJECTION_WIRE_VERSION: u8 = 0x01;
-/// Maximum decoded bytes accepted for one entity capsule, including framing.
-pub const MAX_SOUP_CACHE_PROJECTION_BYTES: usize = 64 * 1024;
+/// Maximum decoded bytes accepted for one entity supplement, including framing.
+pub const MAX_SOUP_CACHE_PROJECTION_BYTES: usize = 1_024;
 /// Maximum RFC 4648 unpadded base64 bytes accepted before decoding.
 pub const MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES: usize =
-    MAX_SOUP_CACHE_PROJECTION_BYTES.div_ceil(3) * 4;
+    (MAX_SOUP_CACHE_PROJECTION_BYTES * 4).div_ceil(3);
 
-/// One exact-match fact in the immutable capsule-v1 layout.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ExactFactWire {
-    /// Stable profile-owned attribute token.
-    pub attribute: String,
-    /// Canonical bounded exact value bytes.
-    pub value: Vec<u8>,
+/// Typed server-only facts supplement for one Soup document projection.
+///
+/// The browser must bind this value to the surrounding normalized record,
+/// derive direct facts from that same GraphQL response, merge this supplement,
+/// and validate the resulting complete target-profile document. This type is
+/// intentionally not convertible into an [`predicate_index::IndexDocument`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoupCacheProjectionSupplement {
+    record_key: RecordKey,
+    target_profile: Profile,
+    partition: Token,
+    is_email_attachment: bool,
 }
 
-/// One integer or sort fact in the immutable capsule-v1 layout.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IntegerFactWire {
-    /// Stable profile-owned attribute token.
-    pub attribute: String,
-    /// Signed canonical integer value.
-    pub value: i64,
+impl SoupCacheProjectionSupplement {
+    /// Construct the supplement for authoritative document relation state.
+    pub fn document(record_key: RecordKey, is_email_attachment: bool) -> Self {
+        Self {
+            record_key,
+            target_profile: vocabulary::profile_v2(),
+            partition: vocabulary::document_partition(),
+            is_email_attachment,
+        }
+    }
+
+    /// Read the normalized record binding.
+    pub fn record_key(&self) -> &RecordKey {
+        &self.record_key
+    }
+
+    /// Read the complete projection profile this supplement targets.
+    pub fn target_profile(&self) -> &Profile {
+        &self.target_profile
+    }
+
+    /// Read the entity partition binding.
+    pub fn partition(&self) -> &Token {
+        &self.partition
+    }
+
+    /// Read the authoritative email-attachment relation fact.
+    pub fn is_email_attachment(&self) -> bool {
+        self.is_email_attachment
+    }
 }
 
-/// Immutable postcard payload for one server-minted entity projection.
+/// Immutable postcard payload for one server-fact supplement.
 ///
 /// Field order is wire-significant and locked by cross-adapter golden fixtures.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SoupCacheProjectionCapsuleV1 {
-    /// Embedded projection profile completeness contract.
-    pub profile: String,
+    /// Complete projection profile to which these server facts may be applied.
+    pub target_profile: String,
     /// Defensive normalized-record binding.
     pub record_key: String,
     /// Defensive entity-partition binding.
     pub partition: String,
-    /// Exact-match facts.
-    pub exact_facts: Vec<ExactFactWire>,
-    /// Integer membership/range facts.
-    pub integer_facts: Vec<IntegerFactWire>,
-    /// Integer sort facts.
-    pub sort_facts: Vec<IntegerFactWire>,
+    /// Explicit authoritative `document_email` membership state.
+    pub is_email_attachment: bool,
 }
 
-/// Failure to encode or decode a bounded Soup cache-projection capsule.
+/// Failure to encode or decode a bounded Soup server-fact supplement.
 #[derive(Debug, Error)]
 pub enum SoupCacheProjectionWireError {
     /// The untrusted encoded scalar exceeds the pre-decode bound.
     #[error("Soup cache-projection scalar is too large")]
     EncodedTooLarge,
-    /// The decoded framing and postcard payload exceed the capsule bound.
-    #[error("Soup cache-projection capsule is too large")]
+    /// The decoded framing and postcard payload exceed the supplement bound.
+    #[error("Soup cache-projection supplement is too large")]
     DecodedTooLarge,
     /// The scalar is not canonical RFC 4648 standard unpadded base64.
     #[error("invalid Soup cache-projection base64")]
     InvalidBase64(#[source] base64::DecodeError),
     /// The framing byte is absent.
-    #[error("Soup cache-projection capsule is empty")]
+    #[error("Soup cache-projection supplement is empty")]
     Empty,
     /// The framing byte is not understood by this decoder.
     #[error("unsupported Soup cache-projection wire version {0}")]
@@ -74,25 +95,29 @@ pub enum SoupCacheProjectionWireError {
     #[error("invalid Soup cache-projection postcard payload")]
     InvalidPostcard(#[source] postcard::Error),
     /// Bytes remain after decoding the immutable v1 postcard value.
-    #[error("Soup cache-projection capsule contains trailing bytes")]
+    #[error("Soup cache-projection supplement contains trailing bytes")]
     TrailingBytes,
-    /// A storage-neutral token, value, key, or fact bound is invalid.
+    /// A storage-neutral token or key bound is invalid.
     #[error(transparent)]
     GenericValidation(#[from] ValidationError),
-    /// The decoded document violates `soup-flat-v2` semantics.
-    #[error(transparent)]
-    ProfileValidation(#[from] ProfileValidationError),
+    /// The supplement targets a projection profile not understood by this wire contract.
+    #[error("unsupported Soup cache-projection target profile `{0}`")]
+    UnsupportedTargetProfile(String),
+    /// The supplement declares a partition that has no server-only v1 facts.
+    #[error("unsupported Soup cache-projection supplement partition `{0}`")]
+    UnsupportedPartition(String),
+    /// The defensive record key does not identify a document in the declared partition.
+    #[error("Soup cache-projection record key does not match its document partition")]
+    RecordKeyPartitionMismatch,
 }
 
-/// Encode one complete canonical `soup-flat-v2` document as standard unpadded
+/// Encode one canonical document server-fact supplement as standard unpadded
 /// base64 over a version byte and postcard capsule-v1 payload.
-pub fn encode_cache_projection(
-    document: &IndexDocument,
+pub fn encode_cache_projection_supplement(
+    supplement: &SoupCacheProjectionSupplement,
 ) -> Result<String, SoupCacheProjectionWireError> {
-    validate_soup_flat_v2(document)?;
-    let mut canonical = document.clone();
-    canonical.canonicalize();
-    let capsule = SoupCacheProjectionCapsuleV1::from(&canonical);
+    validate_supplement(supplement)?;
+    let capsule = SoupCacheProjectionCapsuleV1::from(supplement);
     let payload =
         postcard::to_stdvec(&capsule).map_err(SoupCacheProjectionWireError::InvalidPostcard)?;
     let decoded_len = payload.len().saturating_add(1);
@@ -106,10 +131,10 @@ pub fn encode_cache_projection(
     Ok(STANDARD_NO_PAD.encode(framed))
 }
 
-/// Decode and strictly validate one single-entity Soup cache-projection scalar.
-pub fn decode_cache_projection(
+/// Decode and strictly validate one single-entity Soup server-fact supplement.
+pub fn decode_cache_projection_supplement(
     encoded: &str,
-) -> Result<IndexDocument, SoupCacheProjectionWireError> {
+) -> Result<SoupCacheProjectionSupplement, SoupCacheProjectionWireError> {
     if encoded.len() > MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES {
         return Err(SoupCacheProjectionWireError::EncodedTooLarge);
     }
@@ -133,87 +158,54 @@ pub fn decode_cache_projection(
     if !trailing.is_empty() {
         return Err(SoupCacheProjectionWireError::TrailingBytes);
     }
-    let document = IndexDocument::try_from(capsule)?;
-    validate_soup_flat_v2(&document)?;
-    Ok(document)
+    SoupCacheProjectionSupplement::try_from(capsule)
 }
 
-impl From<&IndexDocument> for SoupCacheProjectionCapsuleV1 {
-    fn from(document: &IndexDocument) -> Self {
+impl From<&SoupCacheProjectionSupplement> for SoupCacheProjectionCapsuleV1 {
+    fn from(supplement: &SoupCacheProjectionSupplement) -> Self {
         Self {
-            profile: document.profile.token().as_str().to_owned(),
-            record_key: document.record_key.as_str().to_owned(),
-            partition: document.partition.as_str().to_owned(),
-            exact_facts: document
-                .exact_facts
-                .iter()
-                .map(|fact| ExactFactWire {
-                    attribute: fact.attribute.as_str().to_owned(),
-                    value: fact.value.as_bytes().to_vec(),
-                })
-                .collect(),
-            integer_facts: document
-                .integer_facts
-                .iter()
-                .map(IntegerFactWire::from)
-                .collect(),
-            sort_facts: document
-                .sort_facts
-                .iter()
-                .map(IntegerFactWire::from)
-                .collect(),
+            target_profile: supplement.target_profile.token().as_str().to_owned(),
+            record_key: supplement.record_key.as_str().to_owned(),
+            partition: supplement.partition.as_str().to_owned(),
+            is_email_attachment: supplement.is_email_attachment,
         }
     }
 }
 
-impl From<&IntegerFact> for IntegerFactWire {
-    fn from(fact: &IntegerFact) -> Self {
-        Self {
-            attribute: fact.attribute.as_str().to_owned(),
-            value: fact.value,
-        }
-    }
-}
-
-impl TryFrom<SoupCacheProjectionCapsuleV1> for IndexDocument {
+impl TryFrom<SoupCacheProjectionCapsuleV1> for SoupCacheProjectionSupplement {
     type Error = SoupCacheProjectionWireError;
 
     fn try_from(capsule: SoupCacheProjectionCapsuleV1) -> Result<Self, Self::Error> {
-        let exact_facts = capsule
-            .exact_facts
-            .into_iter()
-            .map(|fact| {
-                Ok(ExactFact {
-                    attribute: Token::new(fact.attribute)?,
-                    value: ExactValue::new(fact.value)?,
-                })
-            })
-            .collect::<Result<Vec<_>, SoupCacheProjectionWireError>>()?;
-        let integer_membership_facts = integer_facts(capsule.integer_facts)?;
-        let sort_facts = integer_facts(capsule.sort_facts)?;
-        let document = IndexDocument {
+        let supplement = Self {
             record_key: RecordKey::new(capsule.record_key)?,
-            profile: Profile::new(Token::new(capsule.profile)?),
+            target_profile: Profile::new(Token::new(capsule.target_profile)?),
             partition: Token::new(capsule.partition)?,
-            exact_facts,
-            integer_facts: integer_membership_facts,
-            sort_facts,
+            is_email_attachment: capsule.is_email_attachment,
         };
-        document.validate()?;
-        Ok(document)
+        validate_supplement(&supplement)?;
+        Ok(supplement)
     }
 }
 
-fn integer_facts(
-    facts: Vec<IntegerFactWire>,
-) -> Result<Vec<IntegerFact>, SoupCacheProjectionWireError> {
-    facts
-        .into_iter()
-        .map(|fact| {
-            Ok(IntegerFact {
-                attribute: Token::new(fact.attribute)?,
-                value: fact.value,
-            })
-        })
-        .collect()
+fn validate_supplement(
+    supplement: &SoupCacheProjectionSupplement,
+) -> Result<(), SoupCacheProjectionWireError> {
+    if supplement.target_profile != vocabulary::profile_v2() {
+        return Err(SoupCacheProjectionWireError::UnsupportedTargetProfile(
+            supplement.target_profile.token().as_str().to_owned(),
+        ));
+    }
+    if supplement.partition != vocabulary::document_partition() {
+        return Err(SoupCacheProjectionWireError::UnsupportedPartition(
+            supplement.partition.as_str().to_owned(),
+        ));
+    }
+    if !supplement
+        .record_key
+        .as_str()
+        .starts_with("GraphqlSoupDocument:")
+    {
+        return Err(SoupCacheProjectionWireError::RecordKeyPartitionMismatch);
+    }
+    Ok(())
 }

@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::domain::models::{
     AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SimpleSortRequest,
-    SoupErr, SoupProjectionHydration, SoupProjectionSource, SoupPropertiesField, SoupRequest,
-    TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
+    SoupErr, SoupProjectionHydration, SoupPropertiesField, SoupRequest, TouchedEntity,
+    TouchedSoupRequest, grouping::ItemGroupingInfo,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -34,8 +34,8 @@ pub trait SoupRepo: Send + Sync + 'static {
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
-    /// Fetch expanded Soup items and projection source metadata from the same
-    /// authorized detail rows.
+    /// Fetch expanded Soup items and optional document server facts from the
+    /// same authorized detail rows.
     fn expanded_generic_cursor_soup_with_projection<'a>(
         &self,
         req: SimpleSortRequest<'a>,
@@ -53,8 +53,8 @@ pub trait SoupRepo: Send + Sync + 'static {
         req: AdvancedSortParams<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
-    /// Fetch expanded Soup items by ID with projection source metadata from
-    /// the same authorized detail rows.
+    /// Fetch expanded Soup items by ID with optional document server facts
+    /// from the same authorized detail rows.
     fn expanded_soup_by_ids_with_projection<'a>(
         &self,
         req: AdvancedSortParams<'a>,
@@ -190,11 +190,11 @@ pub trait SoupService: Send + Sync + 'static {
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
 
-    /// Run a Soup query and retain authoritative cache-projection source
-    /// metadata for supported expanded items.
+    /// Run a Soup query and retain authoritative document server facts for
+    /// expanded items.
     ///
-    /// Implementations that do not opt into projection hydration safely mark
-    /// every item unsupported. The production service overrides this method.
+    /// Implementations that do not opt into relation hydration leave every
+    /// item's server facts empty. The production service overrides this method.
     fn get_user_soup_with_projection<T>(
         &self,
         req: SoupRequest<T>,
@@ -208,7 +208,7 @@ pub trait SoupService: Send + Sync + 'static {
             self.get_user_soup(req, team_receipt).await.map(|output| {
                 output.map(|item| SoupProjectionHydration {
                     item,
-                    source: SoupProjectionSource::Unsupported,
+                    document_server_facts: None,
                 })
             })
         }
@@ -234,8 +234,8 @@ pub trait SoupService: Send + Sync + 'static {
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
 
-    /// Run a Soup query with frecency and authoritative cache-projection
-    /// source metadata for supported expanded items.
+    /// Run a Soup query with frecency and authoritative document server facts
+    /// for expanded items.
     fn get_user_soup_with_frecency_and_projection<T>(
         &self,
         req: SoupRequest<T>,
@@ -253,7 +253,7 @@ pub trait SoupService: Send + Sync + 'static {
                 .map(|output| {
                     output.map(|item| SoupProjectionHydration {
                         item,
-                        source: SoupProjectionSource::Unsupported,
+                        document_server_facts: None,
                     })
                 })
         }
