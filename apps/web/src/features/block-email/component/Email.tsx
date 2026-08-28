@@ -33,6 +33,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { isPersonalMessage } from '../util/isPersonalMessage';
@@ -311,33 +312,29 @@ function EmailContent(props: EmailViewProps) {
     list: HTMLElement
   ) => {
     if (!stop) return true;
-    switch (stop.kind) {
-      case 'title': {
+    return match(stop)
+      .with({ kind: 'title' }, () => {
         const startDelta = scrollToListStartDelta(list);
         if (startDelta !== 0) return animateListScroll(list, startDelta);
         context.messages.setFocused(undefined);
         return true;
-      }
-      case 'hidden-chip':
-        return focusHiddenMessages();
-      case 'message': {
-        const id = messages[stop.index]?.db_id;
+      })
+      .with({ kind: 'hidden-chip' }, () => focusHiddenMessages())
+      .with({ kind: 'message' }, ({ index }) => {
+        const id = messages[index]?.db_id;
         if (!id) return false;
         return performScrollToMessage(id, {
           behavior: 'smooth',
           focus: true,
         });
-      }
-      case 'composer':
+      })
+      .with({ kind: 'composer' }, () => {
         leaveHiddenChip();
         context.messages.setFocused(undefined);
         markdownDomRef.focus();
         return true;
-      default: {
-        const _exhaustive: never = stop;
-        return _exhaustive;
-      }
-    }
+      })
+      .exhaustive();
   };
 
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {

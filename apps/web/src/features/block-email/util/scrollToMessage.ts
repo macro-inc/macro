@@ -1,3 +1,5 @@
+import { match } from 'ts-pattern';
+
 export type ScrollAlign = 'start' | 'end' | 'nearest';
 export type NavDirection = 'prev' | 'next';
 
@@ -54,18 +56,11 @@ export function alignmentDelta(
 ): number {
   const containerBox = container.getBoundingClientRect();
   const elementBox = element.getBoundingClientRect();
-  switch (align) {
-    case 'end':
-      return elementBox.bottom - containerBox.bottom;
-    case 'start':
-      return elementBox.top - containerBox.top;
-    case 'nearest':
-      return nearestDelta(container, element);
-    default: {
-      const _exhaustive: never = align;
-      return _exhaustive;
-    }
-  }
+  return match(align)
+    .with('end', () => elementBox.bottom - containerBox.bottom)
+    .with('start', () => elementBox.top - containerBox.top)
+    .with('nearest', () => nearestDelta(container, element))
+    .exhaustive();
 }
 
 export function messageElement(
@@ -139,22 +134,18 @@ export function pageThenAdvanceDelta(
   const containerBox = container.getBoundingClientRect();
   const elementBox = element.getBoundingClientRect();
   const page = containerBox.height;
-  switch (dir) {
-    case 'next': {
+  return match(dir)
+    .with('next', () => {
       const overflow = elementBox.bottom - containerBox.bottom;
       if (overflow <= 1) return 0;
       return Math.min(overflow, page);
-    }
-    case 'prev': {
+    })
+    .with('prev', () => {
       const overflow = containerBox.top - elementBox.top;
       if (overflow <= 1) return 0;
       return -Math.min(overflow, page);
-    }
-    default: {
-      const _exhaustive: never = dir;
-      return _exhaustive;
-    }
-  }
+    })
+    .exhaustive();
 }
 
 /** Remaining scroll to the thread title. 0 means the list is already at the top. */
