@@ -165,6 +165,7 @@ import { saveDocumentHandlerResponse } from './generated/zod';
 import type { ItemType } from './itemType';
 
 export type { ItemType } from './itemType';
+export { itemTypeToReferenceEntityType } from './itemType';
 
 import type {
   CollabSurfaceResponse,

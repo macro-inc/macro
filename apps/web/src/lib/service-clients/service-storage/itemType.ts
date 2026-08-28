@@ -14,6 +14,17 @@ export type ItemType =
   | 'crm_company'
   | 'crm_contact';
 
+/**
+ * Entity type stored on channel attachments, mentions, and referencium.
+ *
+ * Email threads are `thread` in that system (`ReferencedShareItemType::EmailThread`).
+ * Mentions already map `email` → `thread`; share-menu attachments must do the same
+ * or they will not appear in the references side panel.
+ */
+export function itemTypeToReferenceEntityType(itemType: ItemType): string {
+  return itemType === 'email' ? 'thread' : itemType;
+}
+
 /** Item types accepted by user history endpoints. */
 export const ITEM_TYPES = [
   'document',
