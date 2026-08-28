@@ -234,52 +234,62 @@ describe('createAgentSessionFeed live updates', () => {
     expect(feed.session()?.name).toBe('New Name');
   });
 
-  /**
-   * The link out to the provider is minted inside the first prompt, so the
-   * snapshot the block loaded predates it. Nothing announces it, so a settled
-   * turn is the cue to look again.
-   */
-  it('picks up the external agent link once the first turn settles', async () => {
-    let calls = 0;
-    worker.getSession = async () => {
-      calls += 1;
-      return {
-        isErr: () => false,
-        value: {
-          id: 'session',
-          name: 'Agent Session',
-          modifiedAt: '2026-08-24T12:00:00Z',
-          harness: 'claude-code',
-          botId: CURSOR_BOT_ID,
-          // The agent exists only from the second read onwards.
-          external:
-            calls > 1
-              ? {
-                  provider: 'cursor',
-                  name: 'Add a health check',
-                  url: 'https://cursor.com/agents/bc-1',
-                }
-              : undefined,
-        },
-      };
-    };
+  it('adopts a polled snapshot that carries the external url', async () => {
+    worker.getSession = async () => ({
+      isErr: () => false,
+      value: {
+        id: 'session',
+        name: 'Agent Session',
+        modifiedAt: '2026-08-24T12:00:00Z',
+        harness: 'claude-code',
+        botId: CURSOR_BOT_ID,
+      },
+    });
     const { createAgentSessionFeed } = await import(
       './create-agent-session-feed'
     );
-
-    worker.messages = [
-      message(0, 'user', 'add a health check'),
-      message(0, 'agent', 'done', { kind: 'end_turn' }),
-    ];
     const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
     await flush();
-    await flush();
-    await flush();
 
-    expect(feed.working()).toBe(false);
+    feed.applySnapshot({
+      id: 'session',
+      name: 'Agent Session',
+      modifiedAt: '2026-08-24T12:00:01Z',
+      harness: 'claude-code',
+      botId: CURSOR_BOT_ID,
+      external: {
+        provider: 'cursor',
+        name: 'Add a health check',
+        url: 'https://cursor.com/agents/bc-1',
+      },
+    } as AgentSessionResponse);
+
     expect(feed.session()?.external?.url).toBe(
       'https://cursor.com/agents/bc-1'
     );
+  });
+
+  it('ignores a polled snapshot for a different session', async () => {
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
+    await flush();
+
+    feed.applySnapshot({
+      id: 'other',
+      name: 'Other',
+      modifiedAt: '2026-08-24T12:00:01Z',
+      harness: 'claude-code',
+      botId: CURSOR_BOT_ID,
+      external: {
+        provider: 'cursor',
+        url: 'https://cursor.com/agents/bc-other',
+      },
+    } as AgentSessionResponse);
+
+    expect(feed.session()?.id).toBe('session');
+    expect(feed.session()?.external?.url).toBeUndefined();
   });
 
   it('does not re-read the snapshot for a session with no provider', async () => {
