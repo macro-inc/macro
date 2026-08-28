@@ -210,6 +210,11 @@ export function pageThenAdvanceDelta(
   }
 }
 
+/** Remaining scroll to the thread title. 0 means the list is already at the top. */
+export function scrollToListStartDelta(container: HTMLElement): number {
+  return container.scrollTop > 1 ? -container.scrollTop : 0;
+}
+
 export function revealMessageInView(
   messageId: string,
   messages: Array<{ db_id?: string | null }>,

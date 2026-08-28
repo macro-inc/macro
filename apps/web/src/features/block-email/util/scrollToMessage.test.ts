@@ -12,6 +12,7 @@ import {
   pageThenAdvanceDelta,
   prevShownChronologicalIndex,
   revealDelta,
+  scrollToListStartDelta,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from './scrollToMessage';
@@ -238,6 +239,20 @@ describe('pageThenAdvanceDelta', () => {
     box(container, 0, 800);
     box(element, -400, 600);
     expect(pageThenAdvanceDelta(container, element, 'prev')).toBe(-400);
+  });
+});
+
+describe('scrollToListStartDelta', () => {
+  it('scrolls the leftover distance to the title', () => {
+    const container = document.createElement('div');
+    container.scrollTop = 80;
+    expect(scrollToListStartDelta(container)).toBe(-80);
+  });
+
+  it('is zero when the list is already at the top', () => {
+    const container = document.createElement('div');
+    container.scrollTop = 0;
+    expect(scrollToListStartDelta(container)).toBe(0);
   });
 });
 
