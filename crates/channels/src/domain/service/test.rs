@@ -1054,6 +1054,41 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
 }
 
 #[tokio::test]
+async fn post_message_treats_email_attachments_as_thread_share_items() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let share = FakeReferenceSharing::default();
+    let svc = mutation_service(repo, FakeEvents::default(), share.clone());
+
+    svc.post_message(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PostMessageRequest {
+            content: "sharing an email".to_string(),
+            mentions: vec![],
+            thread_id: None,
+            attachments: vec![NewChannelAttachment {
+                entity_type: "email".to_string(),
+                entity_id: "thread-1".to_string(),
+                width: None,
+                height: None,
+            }],
+            nonce: None,
+            notification_policy: Default::default(),
+            triggered_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let shared = share.items.lock().unwrap();
+    assert!(shared.contains(&ReferencedShareItem::new(
+        "thread-1",
+        ReferencedShareItemType::EmailThread
+    )));
+}
+
+#[tokio::test]
 async fn post_message_ignores_channel_touch_errors() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");

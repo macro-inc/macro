@@ -38,15 +38,18 @@ function Root(props: RootProps): JSX.Element {
   return (
     <div
       class={cn(
-        // `pl-9` reserves a fixed left column for the select checkbox (rendered
-        // by the row wrapper) so content never reflows when it appears on hover.
-        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 pr-2 pl-9',
+        // The left padding reserves a fixed column for the select checkbox
+        // (rendered by the row wrapper) so content never reflows when it
+        // appears on hover. It comes from the --soup-row-* geometry in
+        // ListEntity.css — which also carries the mobile rail value — so group
+        // headers can line their label up with this card's content.
+        'group/inbox-item relative min-h-16 grid w-full grid-cols-[2rem_minmax(0,1fr)_max-content] grid-rows-[min-content_min-content] items-start gap-x-3 rounded-lg py-2.5 pr-2 pl-(--soup-row-padding-l)',
         // Mobile renders the same cards in slightly different visual
         // language: a full-bleed row whose left rail holds the unread dot
         // (see the span below) instead of the checkbox gutter, with the
         // avatar column centered against the content. The --soup-inbox-*
         // vars come from `.soup-list-entity` on the row wrapper.
-        'mobile:rounded-none mobile:grid-cols-[auto_minmax(0,1fr)_max-content] mobile:items-center mobile:content-center mobile:pl-(--soup-inbox-unread) mobile:pr-3',
+        'mobile:rounded-none mobile:grid-cols-[auto_minmax(0,1fr)_max-content] mobile:items-center mobile:content-center mobile:pr-3',
         {
           'bg-list-selected': props.selected,
           'bg-list-selected-highlighted': props.selected && props.highlighted,

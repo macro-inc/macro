@@ -618,7 +618,10 @@ export const SoupViewContextProvider: FlowComponent<
   // backend date grouping is unreliable, and we'd rather keep paginating the
   // single flat list and regenerate buckets from whatever's loaded.
   const isClientDateGroup = createMemo(
-    () => soup.grouping.activeGroupId() === 'date'
+    () =>
+      soup.grouping.activeGroupId() === 'date' &&
+      // The inbox shouldn't have any date-grouping on mobile/tablet.
+      !(activeListView() === 'inbox' && isTouchDevice())
   );
 
   const groupByField = createMemo((): GroupByField | undefined => {

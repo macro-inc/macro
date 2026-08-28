@@ -17,6 +17,7 @@ import {
   useIsShared,
 } from '@entity';
 import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
+import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
@@ -145,9 +146,12 @@ export function TaskListEntity(props: TaskListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
+        // Carries the --soup-row-* geometry (ListEntity.css) that the narrow
+        // layout below reads for its leading edge.
+        isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
         'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-lg',
         {
-          'min-h-10 mx-1': !isMobile(),
+          'min-h-10 mx-(--soup-row-gutter)': !isMobile(),
           'bg-list-selected': props.checked,
           'bg-list-selected-highlighted':
             props.checked && props.highlighted && !isTouchDevice(),
