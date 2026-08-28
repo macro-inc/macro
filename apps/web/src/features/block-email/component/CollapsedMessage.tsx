@@ -61,7 +61,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
 
   return (
     <div class="shrink-0 flex justify-center w-full">
-      <div class="macro-message-width macro-message-padding w-full">
+      <div class="@container macro-message-width macro-message-padding w-full">
         <div
           class={cn(
             'relative macro-thread-collapsed-row p-4 min-w-0 border bg-message rounded-lg',
@@ -93,7 +93,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
               </EmailUserTooltip>
             </div>
           </div>
-          <div class="min-w-0 text-sm text-ink-extra-muted truncate">
+          <div class="min-w-0 text-sm text-ink-extra-muted">
             {snippet()}
           </div>
           <Show when={props.message.internal_date_ts}>
