@@ -174,7 +174,7 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
           <Dynamic
             component={props.icon}
             class={cn(
-              'fill-ink-muted ml-.5 mr-1 min-w-5',
+              'text-ink-muted ml-.5 mr-1 min-w-5',
               props.isSlidable && 'cursor-ew-resize'
             )}
             style={{
