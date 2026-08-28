@@ -8,9 +8,9 @@ import { type LayoutProps, RowIndicator } from './shared';
 export function NarrowCondensedLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-1 items-center pr-2 pl-1 grid text-sm"
+      class="w-full gap-x-(--soup-row-column-gap) items-center pr-2 pl-(--soup-row-padding-l) grid text-sm"
       style={{
-        'grid-template-columns': 'auto 1fr',
+        'grid-template-columns': 'var(--soup-row-indicator-width) 1fr',
         'grid-template-rows': '36px',
         'grid-template-areas': '"indicator title"',
       }}
