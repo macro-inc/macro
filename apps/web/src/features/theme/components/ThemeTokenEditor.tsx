@@ -311,7 +311,7 @@ function TokenSlider(props: {
         step="0.01"
         value={draft()}
         aria-label={props.label}
-        class="theme-token-slider h-1 min-w-16 flex-1 cursor-pointer appearance-none rounded-full"
+        class="theme-token-slider h-1 min-w-16 flex-1 appearance-none rounded-full"
         style={{
           '--slider-color': props.color,
           'accent-color': props.color,

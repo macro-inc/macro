@@ -124,7 +124,7 @@ function SignatureEditor(props: SignatureEditorProps) {
     >
       <Portal mount={document.getElementById('modal') ?? undefined}>
         <Dialog.Overlay
-          class="flex sm:max-h-full items-center justify-content z-modal-overlay fixed inset-0 bg-modal-overlay"
+          class="dialog-overlay-open-animation flex sm:max-h-full items-center justify-center z-modal-overlay fixed inset-0 bg-modal-overlay"
           style={{
             'max-height': `calc(100dvh - env(safe-area-inset-top, 0px))`,
           }}
@@ -136,11 +136,7 @@ function SignatureEditor(props: SignatureEditorProps) {
             'bg-surface shadow',
             'rounded-lg border border-edge',
             'flex-col justify-start inline-flex gap-3',
-            'duration-100',
-            'data-open:animate-in',
-            'data-open:fade-in-0 data-open:zoom-in-95',
-            'data-closed:animate-out',
-            'data-closed:fade-out-0 data-closed:zoom-out-95'
+            'dialog-content-open-animation'
           )}
           style={positionStyle()}
         >

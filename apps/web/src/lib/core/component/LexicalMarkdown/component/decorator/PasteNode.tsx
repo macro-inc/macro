@@ -96,7 +96,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
       <div
         contentEditable={false}
         class={cn(
-          'relative my-2 w-full rounded border border-edge bg-surface no-select-children select-none overflow-hidden cursor-pointer',
+          'relative my-2 w-full rounded border border-edge bg-surface no-select-children select-none overflow-hidden',
           isSelectedAsNode() && 'bg-active outline-edge outline-4'
         )}
         on:click={(e) => {

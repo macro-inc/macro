@@ -67,10 +67,7 @@ export function StaticSplitLabel(props: {
   };
   return (
     <SplitLabelContextMenu>
-      <HeaderIsland
-        class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
-        onClick={openTitleFileMenu}
-      >
+      <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div
           class={cn(
             'z-split-header-content relative flex items-center gap-2 max-w-full h-full shrink',
@@ -243,10 +240,7 @@ export function BlockItemSplitLabel(props: {
 
   return (
     <SplitLabelContextMenu>
-      <HeaderIsland
-        class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
-        onClick={openTitleFileMenu}
-      >
+      <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
           <Show when={props.badges}>{props.badges}</Show>

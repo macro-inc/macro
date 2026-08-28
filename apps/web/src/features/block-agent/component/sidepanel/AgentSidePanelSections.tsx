@@ -98,7 +98,7 @@ export function AgentSidePanelSections() {
               <SidePanel.Row label="Repository">
                 <button
                   type="button"
-                  class={`${SidePanel.pillClass} hover:bg-hover cursor-pointer`}
+                  class={`${SidePanel.pillClass} hover:bg-hover`}
                   onClick={() => openExternalUrl(url())}
                 >
                   <GitBranch class="size-3 shrink-0" />

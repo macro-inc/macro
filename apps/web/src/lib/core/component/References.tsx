@@ -86,7 +86,7 @@ function ReferenceRow(props: ReferenceRowProps) {
     <div
       role="button"
       tabIndex={0}
-      class="group/ref-row flex flex-col px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer"
+      class="group/ref-row flex flex-col px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden"
       onMouseDown={navHandlers.onMouseDown}
       onClick={navHandlers.onClick}
       onKeyDown={(e) => {

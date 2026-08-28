@@ -36,14 +36,7 @@ export const AI_NAMES = [
   'Hutch',
 ].map((n) => `${n} (AI)`);
 /** Palette names must resolve to `--color-<name>` (see collaboration/color.ts). */
-export const COLORS = [
-  'accent-210',
-  'accent-30',
-  'accent-90',
-  'accent-150',
-  'accent-270',
-  'accent-330',
-];
+export const COLORS = ['cyan', 'red', 'yellow', 'green', 'violet', 'pink'];
 
 /** How long the cursor lingers after a writer finishes before it disappears. */
 const LINGER_MS = 700;

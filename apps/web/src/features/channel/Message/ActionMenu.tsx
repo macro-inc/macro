@@ -194,7 +194,7 @@ function ActionMenuContent(props: ActionMenuProps) {
                     data-message-action="react-quick"
                     data-emoji={emoji}
                   >
-                    <span class="text-md my-0">{emoji}</span>
+                    <span class="text-base my-0">{emoji}</span>
                   </Button>
                 )}
               </For>

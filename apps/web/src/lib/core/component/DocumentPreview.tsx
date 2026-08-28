@@ -241,7 +241,7 @@ function PopupIconButton(props: {
         }}
         class="rounded-md py-1 hover:bg-hover transition flex items-center gap-1.5"
       >
-        <div class="w-fit flex justify-right items-center m-0.5 text-xs font-normal text-current/90">
+        <div class="w-fit flex justify-end items-center m-0.5 text-xs font-normal text-current/90">
           <PopupIcon icon={props.icon} />
         </div>
       </button>
@@ -260,7 +260,8 @@ function MetadataInfo(props: {
   return (
     <div
       class={cn(
-        props.align === 'right' ? 'justify-right' : 'justify-left',
+        'flex',
+        props.align === 'right' ? 'justify-end' : 'justify-start',
         'mt-2',
         props.align === 'left' && 'w-fit max-w-[66%]',
         'text-ink-muted',
@@ -281,7 +282,7 @@ function MetadataInfo(props: {
 function UserInfo(props: { userId: string }) {
   const displayName = () => getDisplayName(tryMacroId(props.userId));
   return (
-    <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted truncate flex items-center gap-1.5">
+    <div class="justify-start mt-2 w-fit max-w-[66%] text-ink-muted truncate flex items-center gap-1.5">
       <UserIconComponent
         id={props.userId}
         size="sm"

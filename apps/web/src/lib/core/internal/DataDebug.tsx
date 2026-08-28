@@ -94,7 +94,7 @@ const DataDebug: Component = () => {
         }
       ></Bar>
       <div class="flex flex-col gap-6 p-6 overflow-scroll">
-        <div class="grid grid-cols-2 @width-md/split:-grid-cols-1 gap-6">
+        <div class="grid grid-cols-2 @max-md/split:grid-cols-1 gap-6">
           <SignalDebugCard
             title="useContacts()"
             data={contacts()}
