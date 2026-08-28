@@ -347,13 +347,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                   name: 'BASE_URL',
                   value: this.domain,
                 },
-                // Where sandboxes dial the egress proxy - through the ALB,
-                // not the container port, so it is set here where the
-                // hostname is defined rather than in Doppler.
-                {
-                  name: 'EGRESS_BASE_URL',
-                  value: this.egressDomain,
-                },
               ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
