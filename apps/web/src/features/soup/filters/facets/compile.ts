@@ -91,8 +91,14 @@ export const compileFacets = <
 
     if (!activeIds.length) continue;
 
-    const clauses = activeIds.map((id) =>
-      resolveClause(resolveFacetOption(facet, id, context)?.clause, context)
+    const activeOptions = activeIds.flatMap((id) => {
+      const option = resolveFacetOption(facet, id, context);
+      return option ? [option] : [];
+    });
+    if (!activeOptions.length) continue;
+
+    const clauses = activeOptions.map((option) =>
+      resolveClause(option.clause, context)
     );
 
     const exprsByTarget = new Map<Target, TargetExpr[]>();

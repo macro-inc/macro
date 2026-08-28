@@ -94,6 +94,28 @@ describe('facet compiler', () => {
     ).toEqual({});
   });
 
+  it('leaves unresolved restricting options inert', () => {
+    expect(
+      compileFacets(
+        { type: ['missing'] },
+        [
+          {
+            id: 'type',
+            mode: 'or',
+            restrict: true,
+            options: [
+              {
+                id: 'documents',
+                clause: { df: clause.eq('documentId', ['document-id']) },
+              },
+            ],
+          },
+        ],
+        undefined
+      )
+    ).toEqual({});
+  });
+
   it('keeps each target admitted by confined OR options', () => {
     const result = compileFacets(
       { type: ['documents', 'email'] },

@@ -40,9 +40,17 @@ export const FILTER_TARGETS = {
     documentOwnerId: { backend: 'o' },
     documentSeen: { backend: 'ns', domain: [true, false] },
     documentDone: { backend: 'nd', domain: [true, false] },
+    documentImportance: { backend: 'imp', domain: [true, false] },
     isEmailAttachment: { backend: 'iea', domain: [true, false] },
     documentCreatedAt: { backend: 'ca', compile: 'dateRange' },
     documentUpdatedAt: { backend: 'ua', compile: 'dateRange' },
+  },
+
+  // calf — calendar events
+  calf: {
+    calendarEventId: { backend: 'id' },
+    calendarEventSeen: { backend: 'ns', domain: [true, false] },
+    calendarEventDone: { backend: 'nd', domain: [true, false] },
   },
 
   // ef — email
@@ -79,6 +87,7 @@ export const FILTER_TARGETS = {
     channelThreadId: { backend: 'ThreadId' },
     channelThreadRootSenderId: { backend: 'RootSender' },
     channelThreadParticipantId: { backend: 'Participant' },
+    channelThreadSeen: { backend: 'NotificationSeen', domain: [true, false] },
     channelThreadDone: { backend: 'NotificationDone', domain: [true, false] },
   },
 
@@ -128,6 +137,14 @@ export const FILTER_TARGETS = {
     crmCompanyHidden: { backend: 'hidden', domain: [true, false] },
   },
 
+  // remf — reminders
+  remf: {
+    reminderId: { backend: 'id' },
+    reminderCompleted: { backend: 'comp', domain: [true, false] },
+    reminderFired: { backend: 'fired', domain: [true, false] },
+    includeReminders: { backend: 'inc', compile: 'unit' },
+  },
+
   // propf — properties
   propf: {
     properties: { backend: 'properties' },
@@ -145,9 +162,17 @@ type FilterTargetsMeta = {
     documentOwnerId: string[];
     documentSeen: boolean;
     documentDone: boolean;
+    documentImportance: boolean;
     isEmailAttachment: boolean;
     documentCreatedAt: DateRangeFilter;
     documentUpdatedAt: DateRangeFilter;
+  };
+
+  // calf — calendar events
+  calf: {
+    calendarEventId: string[];
+    calendarEventSeen: boolean;
+    calendarEventDone: boolean;
   };
 
   // ef — email
@@ -181,6 +206,7 @@ type FilterTargetsMeta = {
     channelThreadId: string[];
     channelThreadRootSenderId: string[];
     channelThreadParticipantId: string[];
+    channelThreadSeen: boolean;
     channelThreadDone: boolean;
   };
 
@@ -230,6 +256,14 @@ type FilterTargetsMeta = {
     crmCompanyHidden: boolean;
   };
 
+  // remf — reminders
+  remf: {
+    reminderId: string[];
+    reminderCompleted: boolean;
+    reminderFired: boolean;
+    includeReminders: boolean;
+  };
+
   // propf — properties
   propf: {
     properties: PropertyFilter[];
@@ -252,6 +286,7 @@ export type Target = keyof FilterTargets;
 
 export const TARGETS: Target[] = [
   'df',
+  'calf',
   'ef',
   'chanf',
   'cthf',
@@ -260,6 +295,7 @@ export const TARGETS: Target[] = [
   'callf',
   'fef',
   'ccf',
+  'remf',
   'propf',
 ];
 
@@ -273,6 +309,7 @@ export type EntityTarget = Exclude<Target, 'propf'>;
 
 export const ENTITY_TARGETS: EntityTarget[] = [
   'df',
+  'calf',
   'ef',
   'chanf',
   'cthf',
@@ -281,10 +318,12 @@ export const ENTITY_TARGETS: EntityTarget[] = [
   'callf',
   'fef',
   'ccf',
+  'remf',
 ];
 
 export const ENTITY_ID_BACKENDS: Record<EntityTarget, string> = {
   df: 'id',
+  calf: 'id',
   ef: 'ThreadId',
   chanf: 'ChannelId',
   cthf: 'ChannelId',
@@ -293,10 +332,12 @@ export const ENTITY_ID_BACKENDS: Record<EntityTarget, string> = {
   callf: 'CallId',
   fef: 'id',
   ccf: 'id',
+  remf: 'id',
 };
 
 export const ENTITY_ID_FIELDS: Record<EntityTarget, string> = {
   df: 'documentId',
+  calf: 'calendarEventId',
   ef: 'threadId',
   chanf: 'channelId',
   cthf: 'channelThreadChannelId',
@@ -305,6 +346,7 @@ export const ENTITY_ID_FIELDS: Record<EntityTarget, string> = {
   callf: 'callId',
   fef: 'foreignEntityRecordId',
   ccf: 'crmCompanyId',
+  remf: 'reminderId',
 };
 
 export const NIL_ID = '00000000-0000-0000-0000-000000000000';
