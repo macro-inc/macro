@@ -1,3 +1,4 @@
+import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { Entity } from '../../entity';
 import {
@@ -13,6 +14,7 @@ import {
   ChannelMessageSingleLine,
 } from './channel';
 import { EmailIdentity, EmailInboxChip } from './email';
+import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
 /**
@@ -28,7 +30,10 @@ import { type LayoutProps, RowIndicator } from './shared';
 export function NarrowSingleLineLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-(--soup-row-column-gap) items-center text-sm pr-2 pl-(--soup-row-padding-l) grid"
+      class={cn(
+        SOUP_ROW_CLASS.narrow,
+        'w-full gap-x-(--soup-row-column-gap) items-center text-sm pr-2 pl-(--soup-row-padding-l) grid'
+      )}
       style={{
         'grid-template-columns':
           'var(--soup-row-indicator-width) 1fr max-content',

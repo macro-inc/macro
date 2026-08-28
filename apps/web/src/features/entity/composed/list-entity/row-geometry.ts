@@ -14,10 +14,12 @@
 export type SoupRowFamily = 'row' | 'card';
 
 /**
- * Class that puts a family's --soup-row-* values on an element. Rows carry
- * their own; group headers carry the one matching the rows they sit among. The
- * `row` family splits into `wide` and `narrow` by container width — the same
- * `isWide` its rows read — while `card` has a single form.
+ * Class that puts a family's --soup-row-* values on an element. Each layout
+ * carries the one it is, so its own geometry always resolves no matter who
+ * renders it; row roots carry theirs too, for the outer gutter that sits
+ * outside the layout; and group headers carry the one matching the rows they
+ * sit among. The `row` family splits into `wide` and `narrow` by container
+ * width — the same `isWide` its rows read — while `card` has a single form.
  */
 export const SOUP_ROW_CLASS = {
   wide: 'soup-row-wide',

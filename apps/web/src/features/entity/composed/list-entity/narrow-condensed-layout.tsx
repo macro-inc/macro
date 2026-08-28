@@ -1,14 +1,19 @@
+import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
 import { isChannelEntity } from '../../types/entity';
 import { ChannelActiveCallBadge, ChannelJoinButton } from './channel';
+import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
 /** Condensed row used for maximum density. */
 export function NarrowCondensedLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-(--soup-row-column-gap) items-center pr-2 pl-(--soup-row-padding-l) grid text-sm"
+      class={cn(
+        SOUP_ROW_CLASS.narrow,
+        'w-full gap-x-(--soup-row-column-gap) items-center pr-2 pl-(--soup-row-padding-l) grid text-sm'
+      )}
       style={{
         'grid-template-columns': 'var(--soup-row-indicator-width) 1fr',
         'grid-template-rows': '36px',

@@ -18,6 +18,7 @@ export const DateGroupHeader = (props: GroupHeaderProps) => {
 
   return (
     <SoupSectionHeader
+      highlighted={props.highlighted}
       class={cn(
         // Take the geometry of the rows this header sits among, so the label
         // starts exactly where their content does — just past the

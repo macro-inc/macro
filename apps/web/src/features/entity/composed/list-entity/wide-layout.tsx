@@ -43,6 +43,7 @@ import {
   GithubPullRequestPills,
 } from './foreign';
 import { ReminderWideContent } from './reminder';
+import { SOUP_ROW_CLASS } from './row-geometry';
 import type { LayoutProps } from './shared';
 
 function RowTags(props: {
@@ -73,6 +74,7 @@ export function WideLayout(props: LayoutProps) {
         // Leading edge (left padding, indicator column, column gap) comes from
         // the --soup-row-* geometry in ListEntity.css so group headers can line
         // their label up with this row's content.
+        SOUP_ROW_CLASS.wide,
         'w-full min-h-[inherit] items-center text-sm pl-(--soup-row-padding-l) pr-2',
         'gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr]',
         // Drop the indicator column entirely when the checkbox is hidden so the
