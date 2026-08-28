@@ -230,7 +230,7 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative p-4 border bg-message macro-thread-card-outdent"
+            class="relative p-4 border bg-message rounded-lg"
             style={{ '--user-icon-width': '1rem' }}
             classList={{
               'border-rail': props.isFocused,

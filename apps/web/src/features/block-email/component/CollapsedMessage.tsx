@@ -64,7 +64,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'relative macro-thread-collapsed-row p-4 min-w-0 border bg-message macro-thread-card-outdent',
+            'relative macro-thread-collapsed-row p-4 min-w-0 border bg-message rounded-lg',
             props.isFocused
               ? 'z-1 border-rail shadow-md shadow-drop-shadow'
               : 'border-edge-muted'
