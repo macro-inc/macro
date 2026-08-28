@@ -40,13 +40,13 @@ function CommentContainer(
     <div
       class="relative isolate group"
       classList={{
-        'outline-1 outline-yellow/20 -outline-offset-1': props.isHighlighted,
+        'outline-1 outline-comment/20 -outline-offset-1': props.isHighlighted,
       }}
     >
       <div
         class="absolute top-0 left-0 size-[calc(100%)] rounded-lg -z-1"
         classList={{
-          'bg-yellow/5 opacity-100': props.isHighlighted,
+          'bg-comment/5 opacity-100': props.isHighlighted,
           'bg-hover/50 opacity-0 group-hover:opacity-100': !props.isHighlighted,
         }}
       />

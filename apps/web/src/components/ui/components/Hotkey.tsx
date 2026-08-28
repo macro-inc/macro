@@ -56,7 +56,7 @@ const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
   },
   reverse: {
     hotkey: 'bg-ink border border-surface text-surface',
-    label: 'bg-surface border border dialog text-ink',
+    label: 'bg-surface border border-dialog text-ink',
   },
 
   base: {

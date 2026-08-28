@@ -553,11 +553,11 @@ mark {
 }
 
 .highlighted {
-  background-color: rgb(from var(--color-accent-270) r g b / 0.3);
+  background-color: rgb(from var(--color-accent) r g b / 0.3);
 }
 
 .md-highlight-selected-nodes {
-  background-color: rgb(from var(--color-accent-270) r g b / 0.2);
+  background-color: rgb(from var(--color-accent) r g b / 0.2);
   transition: background-color 0.3s ease;
 }
 
