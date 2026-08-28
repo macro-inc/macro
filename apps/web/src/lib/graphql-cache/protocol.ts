@@ -104,7 +104,7 @@ export type EntityFilterCacheResult =
     }
   | { kind: 'incomplete'; revision: CacheRevision };
 
-/** Payload-free diagnostics emitted by Soup capsule composition in WASM. */
+/** Payload-free diagnostics emitted by Soup direct-field/supplement composition. */
 export type SoupProjectionTelemetry = {
   operation: 'soup' | 'backfill' | 'updates' | 'other';
   requestedCount: number;
@@ -116,10 +116,10 @@ export type SoupProjectionTelemetry = {
   incompatibleCount: number;
   mismatchedKeyCount: number;
   unsupportedProfileCount: number;
-  capsuleCount: number;
-  capsuleBytes: number;
+  supplementCount: number;
+  supplementBytes: number;
   factCount: number;
-  decodeDurationMicros: number;
+  compositionDurationMicros: number;
 };
 
 export type ReadRecordsByKeysArgs = {
@@ -332,7 +332,7 @@ export type HydrationResult =
 export type WriteResult = {
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
-  /** Anonymous Soup capsule diagnostics, absent for unrelated writes. */
+  /** Anonymous Soup projection-composition diagnostics, absent for unrelated writes. */
   soupProjectionTelemetry?: SoupProjectionTelemetry;
   /** Entity keys whose records changed. */
   changed: string[];

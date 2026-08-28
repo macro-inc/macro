@@ -199,7 +199,7 @@ export async function dssGraphqlFetch(
 
   // A mixed deployment remains network-correct: retry without the additive
   // metadata field and suppress v2 local authority for this session. Backfill
-  // still refuses to checkpoint missing capsules.
+  // still refuses to checkpoint missing required Document supplements.
   soupProjectionServerSupported = false;
   return await authorizedDssGraphqlFetch(input, legacyInit);
 }

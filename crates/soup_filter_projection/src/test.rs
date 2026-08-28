@@ -65,20 +65,29 @@ fn composed_v2_document(
     sub_type: Option<&str>,
     is_email_attachment: bool,
 ) -> IndexDocument {
-    let mut projection = project_document(document_key(id), &document(id, None)).unwrap();
-    projection.profile = vocabulary::profile_v2();
-    projection.exact_facts.push(ExactFact {
-        attribute: vocabulary::email_attachment(),
-        value: ExactValue::new(vec![u8::from(is_email_attachment)]).unwrap(),
+    let document = document(id, None);
+    let sub_type = sub_type.map(|value| match value {
+        "task" => DocumentSubType::Task,
+        "snippet" => DocumentSubType::Snippet,
+        "skill" => DocumentSubType::Skill,
+        value => panic!("unsupported test subtype {value}"),
     });
-    if let Some(sub_type) = sub_type {
-        projection.exact_facts.push(ExactFact {
-            attribute: vocabulary::document_sub_type(),
-            value: ExactValue::utf8(sub_type).unwrap(),
-        });
-    }
-    projection.canonicalize();
-    projection
+    let supplement = SoupCacheProjectionSupplement::document(document_key(id), is_email_attachment);
+    compose_soup_flat_v2(
+        DirectProjectionInput {
+            record_key: document_key(id),
+            kind: SoupFlatEntityKind::Document,
+            id: document.id,
+            owner: document.owner_id.to_string(),
+            project_id: document.project_id,
+            file_type: document.file_type,
+            created_at: document.created_at,
+            updated_at: document.updated_at,
+        },
+        sub_type,
+        Some(&supplement),
+    )
+    .unwrap()
 }
 
 #[test]

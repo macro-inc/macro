@@ -1,7 +1,9 @@
 use serde::Deserialize;
 use soup_filter_projection::{
-    decode_cache_projection_supplement, encode_cache_projection_supplement,
+    SoupCacheProjectionSupplement, decode_cache_projection_supplement,
+    encode_cache_projection_supplement, validate_soup_flat_v2,
 };
+use std::collections::BTreeMap;
 
 use super::*;
 
@@ -203,9 +205,7 @@ fn authoritative_direct_fields_do_not_require_a_projection_schema_field() {
     ));
 }
 
-const ORDINARY_DOCUMENT_CAPSULE: &str = "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQEEGVtYWlsLWF0dGFjaG1lbnQBAAlmaWxlLXR5cGUCbWQCaWQQAAAAAAAAAAAAAAAAAAAAAQVvd25lchdtYWNyb3xvd25lckBleGFtcGxlLmNvbQIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBgIKY3JlYXRlZC1hdICAguKI0qMGCnVwZGF0ZWQtYXSAgL2/jNejBg";
-
-const CAPSULE_SUBSCRIPTION: &str = r#"subscription Capsule {
+const SUPPLEMENT_SUBSCRIPTION: &str = r#"subscription Supplement {
     soupUpdates {
         __typename
         ... on SoupUpdated {
@@ -213,106 +213,256 @@ const CAPSULE_SUBSCRIPTION: &str = r#"subscription Capsule {
                 __typename
                 id
                 cacheProjection @cacheOnly
+                ... on GraphqlSoupDocument {
+                    ownerId
+                    projectId
+                    fileType
+                    createdAt
+                    updatedAt
+                    subType { __typename }
+                }
             }
         }
     }
 }"#;
 
-const CAPSULE_BACKFILL: &str = r#"query SoupBackfill {
+const SUPPLEMENT_BACKFILL: &str = r#"query SoupBackfill {
     user {
         soup(input: { initial: { limit: 1 } }) {
             items {
                 __typename
                 id
                 cacheProjection @cacheOnly
+                ... on GraphqlSoupDocument {
+                    ownerId
+                    projectId
+                    fileType
+                    createdAt
+                    updatedAt
+                    subType { __typename }
+                }
             }
         }
     }
 }"#;
 
-fn capsule_subscription_data(id: &str, capsule: serde_json::Value) -> serde_json::Value {
+fn document_supplement(id: &str, is_email_attachment: bool) -> String {
+    encode_cache_projection_supplement(&SoupCacheProjectionSupplement::document(
+        RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap(),
+        is_email_attachment,
+    ))
+    .unwrap()
+}
+
+fn selected_document(
+    id: &str,
+    cache_projection: serde_json::Value,
+    sub_type: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::json!({
+        "__typename": "GraphqlSoupDocument",
+        "id": id,
+        "cacheProjection": cache_projection,
+        "ownerId": "macro|owner@example.com",
+        "projectId": null,
+        "fileType": "md",
+        "createdAt": "2025-01-01T00:00:00.000001Z",
+        "updatedAt": "2025-01-02T00:00:00.000001Z",
+        "subType": sub_type,
+    })
+}
+
+fn supplement_subscription_data(item: serde_json::Value) -> serde_json::Value {
     serde_json::json!({
         "soupUpdates": [{
             "__typename": "SoupUpdated",
-            "item": {
-                "__typename": "GraphqlSoupDocument",
-                "id": id,
-                "cacheProjection": capsule
-            }
+            "item": item,
         }]
     })
 }
 
 #[test]
-fn selected_capsules_replace_v2_and_bind_to_the_surrounding_entity() {
+fn selected_document_supplement_composes_direct_fields_and_only_adds_attachment_state() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let encoded = document_supplement(id, false);
     let batch = authoritative_projection_batch(
-        CAPSULE_SUBSCRIPTION,
-        Some("Capsule"),
-        &capsule_subscription_data(
-            "00000000-0000-0000-0000-000000000001",
-            serde_json::Value::String(ORDINARY_DOCUMENT_CAPSULE.to_owned()),
-        ),
+        SUPPLEMENT_SUBSCRIPTION,
+        Some("Supplement"),
+        &supplement_subscription_data(selected_document(
+            id,
+            serde_json::Value::String(encoded.clone()),
+            serde_json::Value::Null,
+        )),
     )
     .unwrap();
     let [ProjectionMutation::Replace(document)] = batch.mutations.as_slice() else {
-        panic!("valid selected capsule must replace authority");
+        panic!("a valid selected supplement and direct fields must replace authority");
     };
     assert_eq!(document.profile, vocabulary::profile_v2());
     assert_eq!(document.partition, vocabulary::document_partition());
-    let telemetry = batch.telemetry.expect("selected capsule is observable");
+    assert!(document.exact_facts.iter().any(|fact| {
+        fact.attribute == vocabulary::owner()
+            && fact.value == ExactValue::utf8("macro|owner@example.com").unwrap()
+    }));
+    assert!(document.exact_facts.iter().any(|fact| {
+        fact.attribute == vocabulary::email_attachment()
+            && fact.value == ExactValue::new([0]).unwrap()
+    }));
+
+    let telemetry = batch.telemetry.expect("selected supplement is observable");
     assert_eq!(telemetry.operation, "other");
     assert_eq!(telemetry.requested_count, 1);
     assert_eq!(telemetry.present_count, 1);
     assert_eq!(telemetry.complete_count, 1);
-    assert_eq!(telemetry.capsule_count, 1);
-    assert_eq!(
-        telemetry.capsule_bytes,
-        u64::try_from(ORDINARY_DOCUMENT_CAPSULE.len()).unwrap()
-    );
+    assert_eq!(telemetry.supplement_count, 1);
+    assert_eq!(telemetry.supplement_bytes, encoded.len() as u64);
     assert_eq!(telemetry.fact_count, 8);
 
-    for (name, data, expected_kind) in [
-        (
-            "absent",
-            serde_json::json!({
-                "soupUpdates": [{
-                    "__typename": "SoupUpdated",
-                    "item": {
-                        "__typename": "GraphqlSoupDocument",
-                        "id": "00000000-0000-0000-0000-000000000001"
-                    }
-                }]
-            }),
-            ProjectionIncompleteKind::Missing,
-        ),
+    let attached = authoritative_projection_mutations(
+        SUPPLEMENT_SUBSCRIPTION,
+        Some("Supplement"),
+        &supplement_subscription_data(selected_document(
+            id,
+            serde_json::Value::String(document_supplement(id, true)),
+            serde_json::Value::Null,
+        )),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(attached)] = attached.as_slice() else {
+        panic!("authoritative attachment state must compose");
+    };
+    let mut attached = attached.clone();
+    let mut unattached = document.clone();
+    let is_attachment =
+        |fact: &predicate_index::ExactFact| fact.attribute == vocabulary::email_attachment();
+    assert!(
+        attached
+            .exact_facts
+            .iter()
+            .any(|fact| { is_attachment(fact) && fact.value == ExactValue::new([1]).unwrap() })
+    );
+    attached.exact_facts.retain(|fact| !is_attachment(fact));
+    unattached.exact_facts.retain(|fact| !is_attachment(fact));
+    assert_eq!(
+        attached, unattached,
+        "the supplement contributes no direct facts"
+    );
+}
+
+#[test]
+fn document_subtype_postings_are_composed_from_graphql_typenames() {
+    for (suffix, typename, expected) in [
+        (2, "GraphqlTaskSubType", "task"),
+        (3, "GraphqlSnippetSubType", "snippet"),
+        (4, "GraphqlSkillSubType", "skill"),
+    ] {
+        let id = format!("00000000-0000-0000-0000-{suffix:012}");
+        let mutations = authoritative_projection_mutations(
+            SUPPLEMENT_SUBSCRIPTION,
+            Some("Supplement"),
+            &supplement_subscription_data(selected_document(
+                &id,
+                serde_json::Value::String(document_supplement(&id, false)),
+                serde_json::json!({ "__typename": typename }),
+            )),
+        )
+        .unwrap();
+        let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
+            panic!("{typename} must compose a complete Document projection");
+        };
+        assert!(document.exact_facts.iter().any(|fact| {
+            fact.attribute == vocabulary::document_sub_type()
+                && fact.value == ExactValue::utf8(expected).unwrap()
+        }));
+    }
+}
+
+#[test]
+fn selected_project_and_chat_null_supplements_are_valid_direct_only_v2_hydration() {
+    let query = r#"query SoupBackfill {
+        user { soup(input: { initial: { limit: 2 } }) { items {
+            __typename
+            id
+            cacheProjection @cacheOnly
+            ... on GraphqlSoupProject { ownerId parentId createdAt updatedAt }
+            ... on GraphqlSoupChat { ownerId projectId createdAt updatedAt }
+        } } }
+    }"#;
+    let batch = authoritative_projection_batch(
+        query,
+        Some("SoupBackfill"),
+        &serde_json::json!({
+            "user": { "soup": { "items": [
+                {
+                    "__typename": "GraphqlSoupProject",
+                    "id": "00000000-0000-0000-0000-000000000010",
+                    "cacheProjection": null,
+                    "ownerId": "macro|owner@example.com",
+                    "parentId": null,
+                    "createdAt": "2025-01-01T00:00:00Z",
+                    "updatedAt": "2025-01-02T00:00:00Z"
+                },
+                {
+                    "__typename": "GraphqlSoupChat",
+                    "id": "00000000-0000-0000-0000-000000000011",
+                    "cacheProjection": null,
+                    "ownerId": "macro|owner@example.com",
+                    "projectId": null,
+                    "createdAt": "2025-01-01T00:00:00Z",
+                    "updatedAt": "2025-01-02T00:00:00Z"
+                }
+            ] } }
+        }),
+    )
+    .expect("direct-only entities must not fail strict backfill");
+    assert_eq!(batch.mutations.len(), 2);
+    for mutation in &batch.mutations {
+        let ProjectionMutation::Replace(document) = mutation else {
+            panic!("direct-only entity must produce a complete replacement");
+        };
+        validate_soup_flat_v2(document).unwrap();
+        assert_ne!(document.partition, vocabulary::document_partition());
+    }
+    assert!(batch.telemetry.is_none());
+}
+
+#[test]
+fn missing_malformed_or_mismatched_document_supplements_remain_incomplete() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let mut absent = selected_document(id, serde_json::Value::Null, serde_json::Value::Null);
+    absent.as_object_mut().unwrap().remove("cacheProjection");
+    for (name, item, expected_kind) in [
+        ("absent", absent, ProjectionIncompleteKind::Missing),
         (
             "null",
-            capsule_subscription_data(
-                "00000000-0000-0000-0000-000000000001",
-                serde_json::Value::Null,
-            ),
+            selected_document(id, serde_json::Value::Null, serde_json::Value::Null),
             ProjectionIncompleteKind::Missing,
         ),
         (
             "malformed",
-            capsule_subscription_data(
-                "00000000-0000-0000-0000-000000000001",
+            selected_document(
+                id,
                 serde_json::Value::String("not-base64".to_owned()),
+                serde_json::Value::Null,
             ),
             ProjectionIncompleteKind::IncompatibleVersion,
         ),
         (
             "mismatched-key",
-            capsule_subscription_data(
+            selected_document(
                 "00000000-0000-0000-0000-000000000099",
-                serde_json::Value::String(ORDINARY_DOCUMENT_CAPSULE.to_owned()),
+                serde_json::Value::String(document_supplement(id, false)),
+                serde_json::Value::Null,
             ),
             ProjectionIncompleteKind::IncompatibleVersion,
         ),
     ] {
-        let mutations =
-            authoritative_projection_mutations(CAPSULE_SUBSCRIPTION, Some("Capsule"), &data)
-                .unwrap_or_else(|error| panic!("{name}: {error}"));
+        let mutations = authoritative_projection_mutations(
+            SUPPLEMENT_SUBSCRIPTION,
+            Some("Supplement"),
+            &supplement_subscription_data(item),
+        )
+        .unwrap_or_else(|error| panic!("{name}: {error}"));
         assert!(
             matches!(
                 mutations.as_slice(),
@@ -325,28 +475,30 @@ fn selected_capsules_replace_v2_and_bind_to_the_surrounding_entity() {
 }
 
 #[test]
-fn backfill_rejects_incomplete_capsules_before_planning_any_write() {
-    let data = |cache_projection: serde_json::Value| {
-        serde_json::json!({
-            "user": {
-                "soup": {
-                    "items": [{
-                        "__typename": "GraphqlSoupDocument",
-                        "id": "00000000-0000-0000-0000-000000000001",
-                        "cacheProjection": cache_projection
-                    }]
-                }
-            }
-        })
-    };
-
-    for value in [
+fn backfill_rejects_invalid_supplements_and_missing_direct_document_fields() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let mut missing_owner = selected_document(
+        id,
+        serde_json::Value::String(document_supplement(id, false)),
         serde_json::Value::Null,
-        serde_json::Value::String("not-base64".to_owned()),
+    );
+    missing_owner.as_object_mut().unwrap().remove("ownerId");
+
+    for item in [
+        selected_document(id, serde_json::Value::Null, serde_json::Value::Null),
+        selected_document(
+            id,
+            serde_json::Value::String("not-base64".to_owned()),
+            serde_json::Value::Null,
+        ),
+        missing_owner,
     ] {
-        let error =
-            authoritative_projection_batch(CAPSULE_BACKFILL, Some("SoupBackfill"), &data(value))
-                .expect_err("an incomplete backfill page must not reach storage");
+        let error = authoritative_projection_batch(
+            SUPPLEMENT_BACKFILL,
+            Some("SoupBackfill"),
+            &serde_json::json!({ "user": { "soup": { "items": [item] } } }),
+        )
+        .expect_err("an incomplete backfill page must not reach storage");
         assert_eq!(
             error.to_string(),
             "SoupBackfill page contains an incomplete required cache projection"
@@ -354,11 +506,15 @@ fn backfill_rejects_incomplete_capsules_before_planning_any_write() {
     }
 
     let batch = authoritative_projection_batch(
-        CAPSULE_BACKFILL,
+        SUPPLEMENT_BACKFILL,
         Some("SoupBackfill"),
-        &data(serde_json::Value::String(
-            ORDINARY_DOCUMENT_CAPSULE.to_owned(),
-        )),
+        &serde_json::json!({
+            "user": { "soup": { "items": [selected_document(
+                id,
+                serde_json::Value::String(document_supplement(id, false)),
+                serde_json::Value::Null,
+            )] } }
+        }),
     )
     .expect("a complete backfill page is ingestible");
     assert!(matches!(

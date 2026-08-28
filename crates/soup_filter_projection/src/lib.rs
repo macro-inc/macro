@@ -3,6 +3,7 @@
 
 use std::str::FromStr;
 
+pub use document_sub_type::DocumentSubType;
 use item_filter_index::vocabulary;
 use model_file_type::FileType;
 #[cfg(feature = "models")]
@@ -41,6 +42,38 @@ pub enum ProjectionError {
     /// The generic projection violated bounded IR invariants.
     #[error(transparent)]
     Validation(#[from] ValidationError),
+}
+
+/// Failure to compose one complete `soup-flat-v2` projection.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum SoupFlatV2CompositionError {
+    /// A Document did not carry authoritative relation state.
+    #[error("missing authoritative Document projection supplement")]
+    MissingDocumentSupplement,
+    /// A direct-only Project or Chat unexpectedly received a supplement.
+    #[error("unexpected projection supplement for direct-only Soup entity")]
+    UnexpectedSupplement,
+    /// A non-Document projection was supplied a Document subtype.
+    #[error("unexpected Document subtype for Soup entity partition")]
+    UnexpectedDocumentSubType,
+    /// The supplement belongs to another normalized record.
+    #[error("projection supplement record key does not match the GraphQL entity")]
+    SupplementRecordKeyMismatch,
+    /// The supplement targets another complete projection profile.
+    #[error("projection supplement target profile does not match soup-flat-v2")]
+    SupplementTargetProfileMismatch,
+    /// The supplement belongs to another entity partition.
+    #[error("projection supplement partition does not match the GraphQL entity")]
+    SupplementPartitionMismatch,
+    /// Direct GraphQL fields could not be projected canonically.
+    #[error(transparent)]
+    Direct(#[from] ProjectionError),
+    /// A composed canonical fact violated generic IR bounds.
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
+    /// The final composed document violated the complete v2 profile.
+    #[error(transparent)]
+    Profile(#[from] ProfileValidationError),
 }
 
 /// Supported direct-field Soup entity kind.
@@ -128,6 +161,62 @@ pub fn project_direct_fields(
         input.created_at,
         input.updated_at,
     )
+}
+
+/// Compose direct GraphQL facts and an optional server-only supplement into one
+/// canonical, validated `soup-flat-v2` projection.
+///
+/// Documents require exactly one supplement and obtain only their authoritative
+/// email-attachment fact from it. Projects and Chats are complete from direct
+/// fields alone and reject supplements.
+pub fn compose_soup_flat_v2(
+    input: DirectProjectionInput,
+    document_sub_type: Option<DocumentSubType>,
+    supplement: Option<&SoupCacheProjectionSupplement>,
+) -> Result<IndexDocument, SoupFlatV2CompositionError> {
+    let kind = input.kind;
+    let expected_record_key = input.record_key.clone();
+    let expected_partition = kind.partition();
+    let mut document = project_direct_fields(input)?;
+    document.profile = vocabulary::profile_v2();
+
+    match kind {
+        SoupFlatEntityKind::Document => {
+            let supplement =
+                supplement.ok_or(SoupFlatV2CompositionError::MissingDocumentSupplement)?;
+            if supplement.record_key() != &expected_record_key {
+                return Err(SoupFlatV2CompositionError::SupplementRecordKeyMismatch);
+            }
+            if supplement.target_profile() != &vocabulary::profile_v2() {
+                return Err(SoupFlatV2CompositionError::SupplementTargetProfileMismatch);
+            }
+            if supplement.partition() != &expected_partition {
+                return Err(SoupFlatV2CompositionError::SupplementPartitionMismatch);
+            }
+            if let Some(sub_type) = document_sub_type {
+                document.exact_facts.push(utf8_fact(
+                    vocabulary::document_sub_type(),
+                    sub_type.to_string(),
+                )?);
+            }
+            document.exact_facts.push(ExactFact {
+                attribute: vocabulary::email_attachment(),
+                value: ExactValue::new([u8::from(supplement.is_email_attachment())])?,
+            });
+        }
+        SoupFlatEntityKind::Project | SoupFlatEntityKind::Chat => {
+            if supplement.is_some() {
+                return Err(SoupFlatV2CompositionError::UnexpectedSupplement);
+            }
+            if document_sub_type.is_some() {
+                return Err(SoupFlatV2CompositionError::UnexpectedDocumentSubType);
+            }
+        }
+    }
+
+    document.canonicalize();
+    validate_soup_flat_v2(&document)?;
+    Ok(document)
 }
 
 /// Generate a generic optimistic patch from partial direct Soup fields.

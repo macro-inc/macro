@@ -394,22 +394,23 @@ For a future profile upgrade, ship client decode/validation/compiler support bef
 
 ### Backfill
 
-The existing GraphQL Soup backfill must request and ingest capsules. Completion/checkpoint behavior must not advance past a page whose normalized records committed but whose required v2 projections failed. On capsule validation/storage failure, retry or leave the scope incomplete; do not checkpoint an approximate index.
+The existing GraphQL Soup backfill requests Document supplements and composes them with selected direct fields; Projects and Chats are direct-only. Completion/checkpoint behavior must not advance past a page whose normalized records committed but whose required v2 projections failed. On supplement, direct-field, final-profile, or storage failure, retry or leave the scope incomplete; do not checkpoint an approximate index.
 
 ### Telemetry
 
 Track at least:
 
-- entity capsule requested/present/null/missing by operation (`Soup`, `SoupBackfill`, `SoupUpdates`);
-- supplement bytes and server-fact count per capsule, plus capsules per operation emission;
-- decode and semantic-validation latency;
-- complete, missing, incompatible, mismatched-key, unsupported-profile, and storage-error outcomes;
+- Document supplement requested/present/null/missing by operation (`Soup`, `SoupBackfill`, `SoupUpdates`); Projects and Chats do not enter these counts;
+- supplement bytes and supplement count per operation emission;
+- complete projection and final composed fact counts after direct-field merge and v2 validation;
+- supplement decode, composition, canonicalization, and semantic-validation latency;
+- complete, missing, incompatible composition, mismatched-binding, unsupported-profile, and storage-error outcomes;
 - server supplement compilation latency;
 - attachment fact true/false counts as coarse diagnostics only if privacy review permits;
 - local filter outcomes by unsupported reason, proving Documents presets move from unsupported to complete/incomplete;
 - stale-fallback duration and whether network or local authority resumed it.
 
-Do not log fact values, record IDs, user IDs, or raw capsules.
+Do not log fact values, record IDs, user IDs, or raw supplements.
 
 ## Implementation phases
 

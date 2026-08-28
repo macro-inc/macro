@@ -137,11 +137,14 @@ It retains every v1 fact and adds exactly:
 - `GraphqlDocumentLiteral.isEmailAttachment`, encoded as exactly one explicit
   Boolean exact posting for every complete Document projection.
 
-The relation-backed attachment fact comes from the authorized Soup PostgreSQL
-hydration row and is transported in the opaque, entity-bound
-`GraphqlSoupEntity.cacheProjection` capsule. It is not exposed on
-`GraphqlSoupDocument`, is not inferred in the UI, and is never treated as
-permission evidence. Project and Chat v2 documents retain their v1 direct facts.
+The browser derives subtype and every other direct fact from the selected
+`GraphqlSoupDocument` object, including `subType.__typename`. The relation-backed
+attachment fact comes from the authorized Soup PostgreSQL hydration row and is
+transported in the opaque, entity-bound `GraphqlSoupEntity.cacheProjection`
+server-fact supplement. It is not exposed on `GraphqlSoupDocument`, is not
+inferred in the UI, and is never treated as permission evidence. Project and
+Chat v2 documents are composed entirely from their selected direct fields; their
+`cacheProjection: null` value is expected.
 
 The browser compiler remains all-or-network across direct, `and`, `or`, and
 `not` trees. Created/Updated ascending and descending sorts are supported;
@@ -151,10 +154,12 @@ than reinterpreting it as v2.
 
 Rollout safety is part of the profile contract:
 
-- canonical Soup, backfill, and realtime emissions ingest capsule facts in the
-  same transaction/revision as normalized records;
-- a backfill page with a missing or invalid required v2 capsule rejects before
-  storage and therefore cannot advance its checkpoint;
+- canonical Soup, backfill, and realtime emissions compose direct fields plus
+  the Document supplement, validate one complete v2 replacement, and ingest it
+  in the same transaction/revision as normalized records;
+- a backfill page with a missing or invalid required Document supplement or
+  malformed required direct field rejects before storage and therefore cannot
+  advance its checkpoint;
 - new-client/old-server validation failures retry the network operation without
   `cacheProjection` and suppress v2 local evaluation for that session;
 - provider reconciliation preserves document-linked source attachments, while

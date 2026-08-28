@@ -470,12 +470,12 @@ where
         );
         span.record("projection.fact_count", fact_count);
         match &supplement {
-            Ok(Some(capsule)) => {
+            Ok(Some(supplement)) => {
                 span.record("projection.outcome", "complete");
-                span.record("projection.bytes", capsule.0.len());
+                span.record("projection.bytes", supplement.0.len());
             }
             Ok(None) => {
-                span.record("projection.outcome", "unsupported-entity");
+                span.record("projection.outcome", "not-required");
                 span.record("projection.bytes", 0);
             }
             Err(error) => {

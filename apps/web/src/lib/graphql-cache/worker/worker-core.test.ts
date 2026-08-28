@@ -124,10 +124,10 @@ describe('CacheWorkerCore', () => {
         incompatibleCount: 0,
         mismatchedKeyCount: 0,
         unsupportedProfileCount: 0,
-        capsuleCount: 1,
-        capsuleBytes: 128,
+        supplementCount: 1,
+        supplementBytes: 128,
         factCount: 8,
-        decodeDurationMicros: 2500,
+        compositionDurationMicros: 2500,
       },
     });
     loadCacheWasmMock.mockResolvedValue({

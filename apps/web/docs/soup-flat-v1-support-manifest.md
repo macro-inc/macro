@@ -50,23 +50,27 @@ V2 retains every v1 option and literal above. It additionally supports:
 
 A complete v2 Document has exactly one explicit attachment Boolean. Missing is
 not false. A null subtype has no subtype posting; a supported non-null subtype
-has exactly one canonical posting. These facts arrive only through a bounded
-server-minted `GraphqlSoupEntity.cacheProjection` capsule bound to the
-surrounding normalized key and partition. The browser accepts only wire version
-1 carrying profile `soup-flat-v2`.
+has exactly one canonical posting derived from the selected
+`subType.__typename`. Every direct fact comes from that same GraphQL entity
+object. Only the attachment Boolean arrives through the bounded server-minted
+`GraphqlSoupEntity.cacheProjection` supplement, defensively bound to the
+surrounding normalized key, Document partition, and `soup-flat-v2` target.
 
 V2 remains initial-page-only and supports `CREATED_AT`/`UPDATED_AT` in both
 directions. Every unsupported sibling under direct, `and`, `or`, or `not`
 causes whole-request network fallback. V2 does not broaden the cached corpus or
 provide authorization evidence.
 
-Canonical `Soup`, `SoupBackfill`, and `SoupUpdates` operations select and ingest
-the capsule atomically. Backfill rejects a page before storage when a supported
-entity's selected capsule is absent, null, malformed, mismatched, or uses an
-unsupported profile, so its checkpoint cannot pass an approximate page. A
-new client receiving an old-server unknown-field validation error retries the
-network request without `cacheProjection` and disables v2 local evaluation for
-the session. Compatibility epoch 2 clears stale persisted v1 authority.
+Canonical `Soup`, `SoupBackfill`, and `SoupUpdates` operations compose selected
+direct fields with the Document supplement, canonicalize and validate the final
+projection, then ingest one replacement atomically with the normalized record.
+Projects and Chats need no server facts, so their selected `cacheProjection:
+null` is valid direct-only hydration. Backfill rejects before storage when a
+required Document supplement or direct field is missing, malformed, mismatched,
+or incompatible, so its checkpoint cannot pass an approximate page. A new
+client receiving an old-server unknown-field validation error retries without
+`cacheProjection` and disables v2 local evaluation for the session.
+Compatibility epoch 2 clears stale persisted v1 authority.
 
 Optimistic Document, Project, and Chat payloads are projected as durable ordered
 replacement, direct-field patch, or deletion overlays. Missing optimistic
@@ -164,8 +168,10 @@ experiment and evaluate canonical query-result reuse instead of broadening the
 semantic profile.
 
 Rollout observations and alert formulas are fixed in
-`apps/web/ops/soup-flat-v2-rollout-dashboard.json`. They include capsule
-requested/present/null/absent and semantic outcomes by operation, bytes/facts,
-decode and server compilation latency, storage failures, local filter fallback
-reasons, authority source, and stale-fallback resumption. They expressly forbid
-record IDs, user IDs, raw capsules, and fact values.
+`apps/web/ops/soup-flat-v2-rollout-dashboard.json`. Supplement
+requested/present/null/absent counts apply only to Documents requiring server
+facts. Complete/fact counts describe final validated composed projections; cost
+metrics cover supplement bytes and full composition validation latency. The
+contract also covers storage failures, local filter fallback reasons, authority,
+and stale-fallback resumption while forbidding IDs, raw supplements, and fact
+values.
