@@ -106,6 +106,7 @@ struct AgentSessionRow {
     repo_url: Option<String>,
     workspace: String,
     sandbox_size: String,
+    instructions: Option<String>,
     acp_session_id: Option<String>,
     external_provider: Option<String>,
     external_id: Option<String>,
@@ -136,6 +137,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             repo_url: row.repo_url,
             workspace: row.workspace,
             sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
+            instructions: row.instructions,
             acp_session_id: row.acp_session_id.map(Into::into),
             external: row
                 .external_provider
@@ -166,6 +168,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             repo_url,
             workspace,
             sandbox_size,
+            instructions,
             egress_token_hash,
         } = params;
 
@@ -184,13 +187,14 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             INSERT INTO agent_session (
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
-                harness, repo_url, workspace, sandbox_size, acp_session_id, status,
-                status_event_name, egress_token_hash
+                harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status, status_event_name, egress_token_hash
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -208,6 +212,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             repo_url,
             workspace,
             sandbox_size.as_str(),
+            instructions,
             None::<String>,
             status,
             status_event_name,
@@ -279,7 +284,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -311,7 +317,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -349,7 +356,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -380,7 +388,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",

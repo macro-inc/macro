@@ -315,6 +315,7 @@ async fn disconnected_session(
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
             egress_token_hash: None,
         },
     )
@@ -1185,6 +1186,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
 
 fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
     OpenExternalAgentSession {
+        instructions: None,
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         workspace: workspace.to_owned(),
         repo_url: None,
@@ -1434,6 +1436,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
 
     let session = service
         .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            instructions: None,
             owner: sender(),
             prompt: None,
         })
@@ -1666,6 +1669,7 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
 
     let result = service
         .open_managed_session(OpenManagedSession {
+            instructions: None,
             owner: sender(),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
         })
@@ -1687,6 +1691,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         .expect("the user default should persist");
 
     let open = service.open_managed_session(OpenManagedSession {
+        instructions: None,
         owner: sender(),
         prompt: None,
     });

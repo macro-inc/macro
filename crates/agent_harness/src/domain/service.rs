@@ -343,6 +343,7 @@ where
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
+                instructions: request.instructions,
                 // No sandbox: the runtime dials in and reaches the network on
                 // its operator's own terms, so there is no egress token.
                 egress_token_hash: None,
@@ -431,6 +432,7 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
+                instructions: request.instructions,
                 egress_token_hash: Some(egress.session_token_hash),
             })
             .await?;
@@ -696,6 +698,10 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
+                // A mention carries no instructions: the prompt is whatever
+                // was said in the channel, and nothing there states how the
+                // runtime should work.
+                instructions: None,
                 egress_token_hash: Some(egress.session_token_hash),
                 // This open came from the trigger pipeline seeing the mention.
             })

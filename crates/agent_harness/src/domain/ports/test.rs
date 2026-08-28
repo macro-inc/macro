@@ -36,6 +36,7 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         repo_url: Some("https://github.com/macro/macro".to_owned()),
         workspace: "/workspace".to_owned(),
         sandbox_size: agent_session::domain::model::SandboxSize::Default,
+        instructions: None,
         egress_token_hash: None,
     }
 }

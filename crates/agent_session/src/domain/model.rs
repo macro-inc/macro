@@ -56,6 +56,13 @@ pub struct CreateAgentSessionParams {
     pub workspace: String,
     /// Compute tier the managed sandbox was spawned with.
     pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, when any were stated.
+    ///
+    /// Snapshotted here rather than resolved per turn because they are the
+    /// runtime's system prompt: how a harness is handed them differs by
+    /// provider, but every provider needs the same answer for the session's
+    /// whole life.
+    pub instructions: Option<String>,
     /// SHA-256 hex of the opaque token the session's sandbox presents to the
     /// egress proxy, or `None` for a session that never gets one.
     ///
@@ -98,6 +105,10 @@ pub struct AgentSession {
     pub workspace: String,
     /// Compute tier of the managed sandbox, snapshotted at spawn.
     pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, snapshotted at
+    /// creation. Immutable for the session's life; `None` when none were
+    /// stated.
+    pub instructions: Option<String>,
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
     /// The provider-side identity, when an external provider serves this

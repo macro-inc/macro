@@ -14,6 +14,9 @@ pub struct TurnRequest {
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,
+    /// The session's instructions, appended to the engine's own system
+    /// prompt. `None` runs the engine's default prompt unchanged.
+    pub instructions: Option<String>,
     /// The full conversation, oldest first, ending with the prompt being
     /// answered.
     pub messages: Vec<ChatMessage>,

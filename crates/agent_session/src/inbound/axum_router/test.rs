@@ -79,6 +79,7 @@ impl SessionOpener for RecordingOpener {
             repo_url: request.repo_url.clone(),
             workspace: request.workspace.clone(),
             sandbox_size: crate::domain::model::SandboxSize::Default,
+            instructions: request.instructions.clone(),
             acp_session_id: None,
             external: None,
             status: SessionStatus::NoMessages,
@@ -106,6 +107,7 @@ impl SessionOpener for RecordingOpener {
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
             workspace: crate::MANAGED_CONTAINER_WORKSPACE.to_owned(),
             sandbox_size: crate::domain::model::SandboxSize::Default,
+            instructions: request.instructions.clone(),
             acp_session_id: None,
             external: None,
             status: SessionStatus::NoMessages,
@@ -414,4 +416,67 @@ fn other_domain_failures_stay_500() {
     let response = error.into_response();
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+/// Instructions on a managed open reach the opener verbatim.
+#[tokio::test]
+async fn a_managed_open_carries_its_instructions() {
+    const INSTRUCTIONS: &str = "Answer in one sentence.";
+
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "prompt": "fix it", "instructions": INSTRUCTIONS }).to_string(),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    assert_eq!(
+        managed
+            .iter()
+            .map(|open| open.instructions.as_deref())
+            .collect::<Vec<_>>(),
+        vec![Some(INSTRUCTIONS)]
+    );
+}
+
+/// Whitespace-only instructions are absence stated clumsily, and are
+/// normalized away rather than stored as a section a runtime would splice in
+/// empty.
+#[tokio::test]
+async fn blank_instructions_are_normalized_to_none() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "prompt": "fix it", "instructions": "   \n  " }).to_string(),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(opener.managed.lock().unwrap()[0].instructions, None);
+}
+
+/// An external open records instructions too. Nothing on that side reads them
+/// yet, but the row is the durable statement of what the session was opened
+/// with, so dropping them here would lose the fact rather than defer it.
+#[tokio::test]
+async fn an_external_open_carries_its_instructions() {
+    const INSTRUCTIONS: &str = "Never force-push.";
+
+    let opener = Arc::new(RecordingOpener::default());
+    let mut request_body: serde_json::Value =
+        serde_json::from_str(&body(None, "/home/wolf/code", Some(OWNER))).unwrap();
+    request_body["instructions"] = serde_json::json!(INSTRUCTIONS);
+    let request = as_bot(request_body.to_string());
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert_eq!(
+        opener.opened.lock().unwrap()[0].instructions.as_deref(),
+        Some(INSTRUCTIONS)
+    );
 }

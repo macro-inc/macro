@@ -93,6 +93,7 @@ fn new_session(
         repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
         sandbox_size: SandboxSize::Default,
+        instructions: None,
         egress_token_hash: None,
     }
 }
@@ -191,7 +192,56 @@ async fn create_and_get_round_trips(pool: PgPool) {
     );
     assert_eq!(session.thread_id, None);
     assert_eq!(session.sandbox_size, SandboxSize::Default);
+    assert_eq!(session.instructions, None);
     assert!(matches!(session.status, SessionStatus::NoMessages));
+}
+
+/// Instructions survive the round trip, and come back on every read path a
+/// runtime uses to find its session - not just the one `create` returned.
+///
+/// The read paths matter more than the write here: what a session runs under
+/// is resolved at attach, and attach reaches the row through `get`, so a
+/// column the INSERT stores but a SELECT drops would look correct until the
+/// first reconnect.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn instructions_round_trip_on_every_read_path(pool: PgPool) {
+    const INSTRUCTIONS: &str = "Answer in one sentence.\nNever open a pull request.";
+
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let (_channel_id, thread_id, originating_message_id) =
+        insert_originating_thread_fixture(&pool).await;
+    let params = CreateAgentSessionParams {
+        instructions: Some(INSTRUCTIONS.to_owned()),
+        egress_token_hash: Some("token-hash".to_owned()),
+        ..new_session(bot_id, Some(thread_id), Some(originating_message_id))
+    };
+    let id = params.id;
+
+    let created = create_session(&repo, params).await;
+    assert_eq!(created.instructions.as_deref(), Some(INSTRUCTIONS));
+
+    let fetched = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get agent session");
+    assert_eq!(fetched.instructions.as_deref(), Some(INSTRUCTIONS));
+
+    let by_token = AgentSessionRepo::find_by_egress_token_hash(&repo, "token-hash")
+        .await
+        .expect("the token lookup should run")
+        .expect("the token should resolve to the session");
+    assert_eq!(by_token.instructions.as_deref(), Some(INSTRUCTIONS));
+
+    let for_thread = AgentSessionRepo::find_all_for_thread(&repo, thread_id)
+        .await
+        .expect("the thread lookup should run");
+    assert_eq!(
+        for_thread
+            .iter()
+            .map(|session| session.instructions.as_deref())
+            .collect::<Vec<_>>(),
+        vec![Some(INSTRUCTIONS)]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

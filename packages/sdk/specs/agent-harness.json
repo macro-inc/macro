@@ -743,6 +743,10 @@
             "format": "uuid",
             "description": "The session id."
           },
+          "instructions": {
+            "type": ["string", "null"],
+            "description": "Instructions the session's runtime works under, when any were stated\nat creation. Absent otherwise, so existing payloads are unchanged."
+          },
           "model": {
             "type": "string",
             "description": "Model slug."
@@ -824,6 +828,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own. External sessions only: a managed session runs as the\nbot its deployment is configured for."
+          },
+          "instructions": {
+            "type": ["string", "null"],
+            "description": "Instructions the session's runtime works under, for its whole life.\n\nRecorded on the session whichever runtime serves it. Only the\nin-process one acts on them today; `agent_harness`'s `AgentKind`\nrecords what each of the others will need to."
           },
           "owner": {
             "type": ["string", "null"],
