@@ -33,22 +33,19 @@ describe('interceptExternalLinks', () => {
     container.append(anchor);
 
     interceptExternalLinks(container);
-    const notPrevented = clickAnchor(anchor);
+    const defaultPrevented = !clickAnchor(anchor);
 
     expect(openExternalUrlMock).toHaveBeenCalledTimes(1);
     expect(openExternalUrlMock).toHaveBeenCalledWith(
       'mailto:alice@example.com'
     );
-    // dispatchEvent returns false when the default was prevented — so the
-    // browser won't also hand the mailto off to the OS mail client.
-    expect(notPrevented).toBe(false);
+    expect(defaultPrevented).toBe(true);
   });
 
   it('leaves modifier / non-primary clicks for the browser default', () => {
     const container = document.createElement('div');
     const anchor = makeAnchor('mailto:alice@example.com');
     container.append(anchor);
-    // Swallow the default so jsdom doesn't attempt (unimplemented) navigation.
     anchor.addEventListener('click', (e) => e.preventDefault());
     interceptExternalLinks(container);
 
@@ -67,7 +64,6 @@ describe('interceptExternalLinks', () => {
 
   it('ignores hash-only anchors', () => {
     const container = document.createElement('div');
-    // Hash href: a same-page jump jsdom can "navigate" without complaining.
     const anchor = makeAnchor('#section');
     container.append(anchor);
 
@@ -83,13 +79,13 @@ describe('interceptExternalLinks', () => {
     container.append(anchor);
 
     interceptExternalLinks(container);
-    const notPrevented = clickAnchor(anchor);
+    const defaultPrevented = !clickAnchor(anchor);
 
     expect(openExternalUrlMock).toHaveBeenCalledTimes(1);
     expect(openExternalUrlMock).toHaveBeenCalledWith(
       'https://example.com/path'
     );
-    expect(notPrevented).toBe(false);
+    expect(defaultPrevented).toBe(true);
   });
 
   it('routes a plain left-click on an http anchor through openExternalUrl', () => {

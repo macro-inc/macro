@@ -163,7 +163,6 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         }
       }
     }
-    // Open links in a new tab instead of navigating the current one
     for (const a of messageDiv.querySelectorAll('a[href]')) {
       a.setAttribute('target', '_blank');
       a.setAttribute('rel', 'noopener noreferrer');
