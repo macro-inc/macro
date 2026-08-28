@@ -129,21 +129,25 @@ export function CalendarWideContent(props: { entity: CalendarEventEntity }) {
         <Show when={time()}>
           <span class="shrink-0">{time()}</span>
         </Show>
-        <Show when={iconProps()}>
-          {(props_) => (
+        <Show when={organizerName(props.entity)}>
+          {(name) => (
             <span class="flex shrink-0 items-center gap-1.5">
               <Dot />
-              <span class="size-4 shrink-0 overflow-hidden rounded-full">
-                <UserIcon
-                  {...props_()}
-                  size="fill"
-                  suppressClick
-                  showTooltip={false}
-                />
-              </span>
-              <span class="max-w-40 truncate">
-                {organizerName(props.entity)}
-              </span>
+              {/* Avatar only when the organizer resolves to a Macro user (needs
+                  an email); a name-only organizer still shows its name. */}
+              <Show when={iconProps()}>
+                {(props_) => (
+                  <span class="size-4 shrink-0 overflow-hidden rounded-full">
+                    <UserIcon
+                      {...props_()}
+                      size="fill"
+                      suppressClick
+                      showTooltip={false}
+                    />
+                  </span>
+                )}
+              </Show>
+              <span class="max-w-40 truncate">{name()}</span>
             </span>
           )}
         </Show>

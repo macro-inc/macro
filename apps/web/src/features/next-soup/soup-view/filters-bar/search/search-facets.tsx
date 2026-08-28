@@ -4,6 +4,7 @@ import type {
   PropertyFilter,
   TagFilterMode,
 } from '@app/features/next-soup/filters/filter-store/types';
+import { usePosthog } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -312,14 +313,22 @@ export function useSearchFacets(
 
   const tagSource = useTagOptions();
   const calendarSearchEnabled = useCalendarSearchUiFlag();
+  const posthog = usePosthog();
 
   // The calendar type exists only while calendar search is enabled. If the flag
   // turns off (or a persisted search restores a calendar scope while it is off),
   // its Type option disappears and the chip falls back to "All", but the
   // compiled query would still carry the calendar seed — reset the type so the
-  // displayed chip and the query agree.
+  // displayed chip and the query agree. Wait for the flags to load first: a
+  // PostHog flag reads `false` until it resolves, and resetting on that would
+  // rewrite a legitimately-restored Calendar search to All before the flag
+  // arrives.
   createEffect(() => {
-    if (!calendarSearchEnabled() && controller.type() === 'calendar') {
+    if (
+      posthog.flagsLoaded() &&
+      !calendarSearchEnabled() &&
+      controller.type() === 'calendar'
+    ) {
       controller.setType('all');
     }
   });
