@@ -363,7 +363,7 @@ export function FloatingLinkMenu(props: {
             }}
             ref={menuRef}
           >
-            <Surface depth={2} class="rounded-xl bg-menu p-1.5 shadow-menu">
+            <Surface depth={2} class="rounded-xl glass-lg bg-menu-glass p-1.5">
               {props.children}
             </Surface>
           </div>
