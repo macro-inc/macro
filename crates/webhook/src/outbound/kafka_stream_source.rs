@@ -6,7 +6,6 @@
 //! durable group and commits nothing: the subscriber's resume cursor is the
 //! last event id it saw, presented on reconnect.
 
-use crate::domain::events::WebhookMacroEvent;
 use crate::domain::ingestion::{
     WebhookEventIngestionError, normalized_agent_trigger_event, normalized_channel_event,
     normalized_document_event, normalized_webhook_event,
@@ -15,21 +14,12 @@ use crate::domain::stream::{
     StreamAudience, StreamCandidateEvent, StreamStart, WebhookStreamSource,
     WebhookStreamSourceFactory,
 };
-use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
-use channels::domain::broker_events::ChannelMacroEvent;
-use documents::domain::events::DocumentMacroEvent;
+use crate::topics::DeclaredMacroEvent;
 use entity_access::domain::models::EntityType;
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{EventConsumer as _, KafkaConsumerAdapter, MacroEvent as _};
 use std::sync::Arc;
 use std::time::Duration;
-
-macro_event_broker::declare_topics!(
-    StreamDeclaredMacroEvent: DocumentMacroEvent,
-    ChannelMacroEvent,
-    WebhookMacroEvent,
-    AgentSessionMacroEvent,
-);
 
 /// Time allowed for topic metadata and offset-for-timestamp lookups while
 /// positioning a new stream's consumer.
@@ -64,7 +54,7 @@ impl WebhookStreamSourceFactory for KafkaWebhookStreamSourceFactory {
         let adapter = tokio::task::spawn_blocking(move || {
             let consumer = KafkaEventConsumer::<Ungrouped>::from_env(&brokers)
                 .map_err(|error| rootcause::report!(error))?;
-            KafkaConsumerAdapter::<Ungrouped, StreamDeclaredMacroEvent>::new(
+            KafkaConsumerAdapter::<Ungrouped, DeclaredMacroEvent>::new(
                 consumer,
                 initial_offset,
                 METADATA_TIMEOUT,
@@ -79,7 +69,7 @@ impl WebhookStreamSourceFactory for KafkaWebhookStreamSourceFactory {
 
 /// One stream's positioned Kafka consumer.
 pub struct KafkaWebhookStreamSource {
-    adapter: KafkaConsumerAdapter<Ungrouped, StreamDeclaredMacroEvent>,
+    adapter: KafkaConsumerAdapter<Ungrouped, DeclaredMacroEvent>,
 }
 
 impl WebhookStreamSource for KafkaWebhookStreamSource {
@@ -112,10 +102,10 @@ impl WebhookStreamSource for KafkaWebhookStreamSource {
 /// `None` means the event shape is deliberately not exposed to subscribers,
 /// mirroring webhook ingestion's normalization.
 fn candidate_from(
-    decoded: &StreamDeclaredMacroEvent,
+    decoded: &DeclaredMacroEvent,
 ) -> Result<Option<StreamCandidateEvent>, WebhookEventIngestionError> {
     match decoded {
-        StreamDeclaredMacroEvent::DocumentMacroEvent(event) => Ok(normalized_document_event(
+        DeclaredMacroEvent::DocumentMacroEvent(event) => Ok(normalized_document_event(
             event.event(),
         )?
         .map(|normalized| StreamCandidateEvent {
@@ -125,7 +115,7 @@ fn candidate_from(
             },
             event: normalized,
         })),
-        StreamDeclaredMacroEvent::ChannelMacroEvent(event) => {
+        DeclaredMacroEvent::ChannelMacroEvent(event) => {
             let normalized = normalized_channel_event(event.event())?;
             Ok(Some(StreamCandidateEvent {
                 audience: StreamAudience::Entity {
@@ -135,14 +125,14 @@ fn candidate_from(
                 event: normalized,
             }))
         }
-        StreamDeclaredMacroEvent::WebhookMacroEvent(event) => {
+        DeclaredMacroEvent::WebhookMacroEvent(event) => {
             let (normalized, workspace_id) = normalized_webhook_event(event.event())?;
             Ok(Some(StreamCandidateEvent {
                 audience: StreamAudience::Workspace { workspace_id },
                 event: normalized,
             }))
         }
-        StreamDeclaredMacroEvent::AgentSessionMacroEvent(event) => {
+        DeclaredMacroEvent::AgentSessionMacroEvent(event) => {
             let (normalized, audience) = normalized_agent_trigger_event(event.event())?;
             Ok(Some(StreamCandidateEvent {
                 audience: StreamAudience::Entity {
