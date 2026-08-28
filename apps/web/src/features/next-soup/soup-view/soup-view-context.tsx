@@ -29,7 +29,6 @@ import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { createGroupedSoupQueries } from '@app/features/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
 import {
   createTagFilter,
@@ -41,10 +40,8 @@ import {
   registerInboxFilterSplit,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
-import {
-  deduplicateEntities,
-  scopeChannelNotificationsForEntity,
-} from '@app/features/next-soup/utils';
+import { deduplicateEntities } from '@app/features/next-soup/utils';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makeFlaggedPersisted } from '@app/preferences/make-flagged-persisted';
 import { useDealStages } from '@companies/crm/deal-stages';
@@ -69,14 +66,12 @@ import {
   type EntityData,
   getPropertyOptionLabel,
   isWithNotification,
-  type Notification,
-  toNotificationEntity,
   unreadFilterFn,
 } from '@entity';
-import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
+import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
@@ -286,10 +281,6 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'viewed_updated',
 ];
 
-type EntityWithRawNotifications = EntityData & {
-  notifications?: Notification[];
-};
-
 const NATIVE_OFFLINE_LOAD_ERROR = new Error(NATIVE_OFFLINE_ERROR_MESSAGE);
 
 /** Retryable load error for a data-less view once iOS reports no network path. */
@@ -297,13 +288,6 @@ function nativeOfflineLoadError(hasData: () => boolean): Error | null {
   return nativeNetworkStatus() === 'offline' && !hasData()
     ? NATIVE_OFFLINE_LOAD_ERROR
     : null;
-}
-
-function rawEntityNotifications(
-  entity: EntityData
-): Notification[] | undefined {
-  const notifications = (entity as EntityWithRawNotifications).notifications;
-  return Array.isArray(notifications) ? notifications : undefined;
 }
 
 export const SoupViewContextProvider: FlowComponent<
@@ -923,37 +907,10 @@ export const SoupViewContextProvider: FlowComponent<
   // the migration to graphql. We should not need this since
   // the items themselves have the notifications on them. Remove
   // when completely migrated
-  const attachNotifications = (entity: EntityData) => {
-    const rawNotifications = rawEntityNotifications(entity);
-    if (rawNotifications) {
-      const {
-        notifications: _notifications,
-        ...entityWithoutRawNotifications
-      } = entity as EntityWithRawNotifications;
-      return {
-        ...entityWithoutRawNotifications,
-        notifications: () =>
-          isInboxView()
-            ? scopeChannelNotificationsForEntity(
-                entityWithoutRawNotifications,
-                rawNotifications
-              )
-            : rawNotifications,
-      };
-    }
-
-    const notifications = useNotificationsForEntity(
-      notificationSource,
-      toNotificationEntity(entity)
-    );
-    return {
-      ...entity,
-      notifications: () =>
-        isInboxView()
-          ? scopeChannelNotificationsForEntity(entity, notifications())
-          : notifications(),
-    };
-  };
+  const attachNotifications = (entity: EntityData) =>
+    withEntityNotifications(entity, notificationSource, {
+      scopeChannelThreads: isInboxView(),
+    });
 
   // Active tag option ids and combine mode, used to gate optimistic websocket
   // inserts so an active tag filter is honored even on the grouped render path.
@@ -1001,6 +958,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
+        onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
           itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
@@ -1184,8 +1142,7 @@ export const SoupViewContextProvider: FlowComponent<
     groupByField: serverGroupByField,
     soupParams,
     soupBody,
-    graphqlReactive: () =>
-      itemsQuery.transport === 'graphql' && serverGroupByField() !== undefined,
+    transport: () => itemsQuery.transport,
     queryOptions: () => {
       const view = activeListView();
       return {

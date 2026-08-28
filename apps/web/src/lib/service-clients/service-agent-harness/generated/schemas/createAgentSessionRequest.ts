@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequestBotId';
+import type { CreateAgentSessionRequestInstructions } from './createAgentSessionRequestInstructions';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
 import type { CreateAgentSessionRequestRepoUrl } from './createAgentSessionRequestRepoUrl';
@@ -31,6 +32,12 @@ is used) and must not name another bot; user callers must supply a
 bot they own. External sessions only: a managed session runs as the
 bot its deployment is configured for. */
   botId?: CreateAgentSessionRequestBotId;
+  /** Instructions the session's runtime works under, for its whole life.
+
+Recorded on the session whichever runtime serves it. Only the
+in-process one acts on them today; `agent_harness`'s `AgentKind`
+records what each of the others will need to. */
+  instructions?: CreateAgentSessionRequestInstructions;
   /** The user who owns the session. Ignored for user callers, who always
 own their own sessions; required for bot callers without verified
 acting-user claims.

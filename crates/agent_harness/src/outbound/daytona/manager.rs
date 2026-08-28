@@ -12,9 +12,7 @@ use tracing::Instrument as _;
 
 use super::client::DaytonaClient;
 use super::errors::DaytonaError;
-use super::types::{
-    AnthropicApiKey, DaytonaSettings, Env, GithubToken, Labels, PortPreview, Snapshot,
-};
+use super::types::{AnthropicApiKey, DaytonaSettings, Env, Labels, PortPreview, Snapshot};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
@@ -26,6 +24,7 @@ use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
 
 const LOG_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
+const EXEC_TIMEOUT: Duration = Duration::from_secs(15);
 const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const REAP_INTERVAL: Duration = Duration::from_secs(1);
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
@@ -86,7 +85,6 @@ impl DaytonaContainerManagerState {
 pub struct DaytonaContainerManager {
     client: DaytonaClient,
     snapshot: Snapshot,
-    github_token: GithubToken,
     anthropic_api_key: AnthropicApiKey,
     managed: Arc<DaytonaContainerManagerState>,
 }
@@ -99,7 +97,6 @@ impl DaytonaContainerManager {
             api_url,
             api_key,
             snapshot,
-            github_token,
             anthropic_api_key,
         } = settings;
         let client = DaytonaClient::new(api_url, api_key);
@@ -110,7 +107,6 @@ impl DaytonaContainerManager {
         Self {
             client,
             snapshot,
-            github_token,
             anthropic_api_key,
             managed,
         }
@@ -361,33 +357,21 @@ impl ContainerManager for DaytonaContainerManager {
     async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
         let SpawnContainer {
             session_id,
-            // Routing already consumed the kind; every spawn that reaches
-            // Daytona is a sandbox spawn.
-            kind: _,
-            repo_url,
             size,
+            egress,
+            ..
         } = command;
-        // `GITHUB_TOKEN` is here for `gh auth setup-git` and the github MCP
-        // server. It is also the env var opencode's `github-copilot` provider
-        // activates on, so its mere presence makes opencode advertise every
-        // Copilot model - and a plain PAT is not a Copilot credential, so each
-        // one fails at prompt time with "Authorization header is badly
-        // formatted". `container/opencode.json` pins `enabled_providers` to
-        // keep that list honest; do not drop that pin while this var is set.
         // `ANTHROPIC_API_KEY` is what activates opencode's `anthropic`
         // provider — with `enabled_providers` pinned in
         // `container/opencode.json`, it is the sandbox's only model source.
-        let env = Env::from(HashMap::from([
-            ("REPO_URL".to_owned(), repo_url),
-            (
-                "GITHUB_TOKEN".to_owned(),
-                self.github_token.expose().to_owned(),
-            ),
-            (
-                "ANTHROPIC_API_KEY".to_owned(),
-                self.anthropic_api_key.expose().to_owned(),
-            ),
-        ]));
+        // Nothing else goes in: the repository and its credential now reach
+        // the sandbox through the egress proxy.
+        let mut env = HashMap::from([(
+            "ANTHROPIC_API_KEY".to_owned(),
+            self.anthropic_api_key.expose().to_owned(),
+        )]);
+        env.extend(egress.environment());
+        let env = Env::from(env);
         let labels = Labels::from(HashMap::from([(
             SESSION_LABEL.to_owned(),
             session_id.to_string(),
@@ -507,6 +491,29 @@ impl ContainerManager for DaytonaContainerManager {
                 Err(error)
             }
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        let Some(id) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+            .map(DaytonaSandboxId::new)
+        else {
+            return Ok(None);
+        };
+        let output = self
+            .client
+            .exec(
+                id.as_str(),
+                &provision::session_token_command(),
+                EXEC_TIMEOUT,
+            )
+            .await
+            .map_err(unavailable)?;
+        Ok(provision::parse_session_token(&output))
     }
 
     #[tracing::instrument(err, skip(self))]

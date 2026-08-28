@@ -85,13 +85,16 @@ pub fn stop_command(instance: &Instance) -> String {
 /// Print the mode/instance/endpoints block after a successful startup.
 /// `frontend_url` differs by flow: the dev-server origin for `run_local`, the
 /// proxy-served bundle for headless `stack up`; `mailpit_url` follows the same
-/// direct-versus-single-origin distinction.
+/// direct-versus-single-origin distinction. `shared_app_url` is the public
+/// app tunnel when `--with-cf-tunnel` opened one — passed explicitly because,
+/// unlike the egress tunnel, it is not written into the env.
 pub fn print(
     mode: Mode,
     instance: &Instance,
     env: &ResolvedEnv,
     frontend_url: &str,
     mailpit_url: &str,
+    shared_app_url: Option<&str>,
 ) {
     let key = Style::new().dim();
     let link = Style::new().cyan();
@@ -146,6 +149,18 @@ pub fn print(
                 .to_string(),
         );
         row("Receive webhooks at", sdk_webhook::relay_url().to_string());
+    }
+    // The Cursor egress tunnel, when one opened this run: a public
+    // `EGRESS_BASE_URL` is always a tunnel, and the in-network default is not
+    // worth a row.
+    if let Some(url) = env.merged.get("EGRESS_BASE_URL")
+        && url.starts_with("https://")
+    {
+        row("cursor egress", url.clone());
+    }
+    // The public app tunnel (`--with-cf-tunnel`) — the URL to hand a friend.
+    if let Some(url) = shared_app_url {
+        row("shared app", url.to_string());
     }
     // The frontend and mailpit rows come from the caller (they differ by
     // flow); the rest of the endpoint list is shared with `status-local`.

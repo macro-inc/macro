@@ -19,11 +19,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Create a managed session, optionally delivering its first prompt. */
   static async createManaged(
     client: MacroClient,
-    opts?: { prompt?: string },
+    opts?: { prompt?: string; instructions?: string },
   ): Promise<AgentSession> {
     const { session } = unwrap(
       await client.agentHarness.createAgentSession({
-        body: { prompt: opts?.prompt },
+        body: { prompt: opts?.prompt, instructions: opts?.instructions },
       }),
     );
     return new AgentSession(client, session.id, session);
@@ -51,6 +51,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
 
   /** The directory in which the agent harness runs. */
   readonly workspace = this.field('workspace');
+
+  /**
+   * Instructions the session's runtime works under, when any were stated at
+   * creation. Fixed for the session's life.
+   */
+  readonly instructions = this.field('instructions');
 
   /** The session's latest runtime status. */
   readonly status = this.field('status');

@@ -28,6 +28,33 @@
 
 .md-list {
   margin-left: 1.5em;
+
+  /*
+  * Shared marker column. Bullets and checkboxes center on these values so the
+  * two line up with each other; the column sits immediately to the left of the
+  * text, separated by --md-marker-gap. Everything is in em so the column
+  * scales with the list's font size.
+  *
+  * Ordered-list numbers are deliberately not on this column yet -- they still
+  * use their own rem-based positioning further down, and the editor's numbers
+  * use the native ::marker, which CSS cannot position at all.
+  */
+  --md-marker-width: 1em;
+  --md-marker-gap: 0.4em;
+  --md-marker-left: calc(-1 * (var(--md-marker-gap) + var(--md-marker-width)));
+  /* The point a marker centers on: x from the column, y from the text. */
+  --md-marker-center-x: calc(
+    -1 * (var(--md-marker-gap) + var(--md-marker-width) / 2)
+  );
+  /* Half the 1.5em line box, so markers sit on the first line's midline. */
+  --md-marker-center-y: 0.75em;
+
+  /*
+  * Outline of an unchecked checkbox. The same token listitemChecked uses, so
+  * the unchecked outline and a checked item's text are de-emphasized by one
+  * value.
+  */
+  --md-check-border: var(--color-ink-extra-muted);
 }
 
 .md-inline-code {
@@ -53,12 +80,12 @@
 
 .md-list.md-bullet > li::before {
   content: " ";
-  width: 0.4em;
-  height: 0.4em;
+  --md-bullet-size: 0.4em;
+  width: var(--md-bullet-size);
+  height: var(--md-bullet-size);
   position: absolute;
-  left: -1.05em;
-  top: 0;
-  transform: translateY(0.55em);
+  left: calc(var(--md-marker-center-x) - var(--md-bullet-size) / 2);
+  top: calc(var(--md-marker-center-y) - var(--md-bullet-size) / 2);
   border-radius: 1em;
   line-height: 0;
   background-color: currentcolor;
@@ -66,43 +93,49 @@
 
 .md-list.md-check > li::before {
   content: " ";
-  width: 0.8em;
-  height: 0.8em;
+  box-sizing: border-box;
+  width: var(--md-marker-width);
+  height: var(--md-marker-width);
   position: absolute;
-  left: -1.25em;
-  top: 0.35em;
-  transform: none;
-  outline: 2px solid currentcolor;
+  left: var(--md-marker-left);
+  top: calc(var(--md-marker-center-y) - var(--md-marker-width) / 2);
+  border: 1.5px solid var(--md-check-border);
+  outline: none;
   background-color: transparent;
-  border-radius: 0;
+  border-radius: 0.25em;
   transition:
     background-color 0.2s ease,
-    outline 0.1s ease;
+    border-color 0.15s ease;
 }
 
 .md-list.md-check > li.checked::before {
   background-color: var(--color-accent);
-  outline: 2px solid var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .md-list.md-check > li.checked.chat-blue::before {
   background-color: var(--color-accent);
-  outline: 2px solid var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .md-list.md-check > li.checked::after {
-  border-bottom: 2px solid var(--color-surface);
-  border-left: 2px solid var(--color-surface);
   content: " ";
-  width: 0.7em;
-  height: 0.4em;
+  --md-check-w: 0.6em;
+  --md-check-h: 0.32em;
+  border-bottom: 1.5px solid var(--color-surface);
+  border-left: 1.5px solid var(--color-surface);
+  border-bottom-left-radius: 1px;
+  box-sizing: border-box;
+  width: var(--md-check-w);
+  height: var(--md-check-h);
   position: absolute;
-  left: -1.2em;
-  top: 0.45em;
+  left: calc(var(--md-marker-center-x) - var(--md-check-w) / 2);
+  /* 0.02em above the midline: a rotated tick reads low when truly centered. */
+  top: calc(var(--md-marker-center-y) - var(--md-check-h) / 2 - 0.02em);
   transform: rotate(-45deg);
   transition:
     background-color 0.2s ease,
-    outline 0.1s ease;
+    border-color 0.15s ease;
 }
 
 .md-list > li.nested::before {

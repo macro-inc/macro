@@ -7,7 +7,11 @@
  */
 
 export { ActionLine, type ActionLineProps } from './ActionLine';
-export { AgentInput, type AgentInputProps } from './AgentInput';
+export {
+  AgentInput,
+  type AgentInputProps,
+  type QuoteInsert,
+} from './AgentInput';
 export { AgentModelSelector } from './AgentModelSelector';
 export { AnimatedNumber } from './AnimatedNumber';
 export {
@@ -26,11 +30,6 @@ export {
   QueuedPromptList,
   type QueuedPromptListProps,
 } from './QueuedPromptList';
-export {
-  type SandboxSize,
-  SandboxSizeSelector,
-  type SandboxSizeSelectorProps,
-} from './SandboxSizeSelector';
 export {
   type SessionStatusLike,
   SessionStatusPill,

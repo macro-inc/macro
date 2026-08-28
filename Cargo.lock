@@ -169,6 +169,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_egress"
+version = "0.1.0"
+dependencies = [
+ "agent_fold",
+ "agent_runtime_protocol",
+ "agent_session",
+ "anyhow",
+ "axum",
+ "axum-extra",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "github",
+ "http 1.4.0",
+ "http-body-util",
+ "lru",
+ "macro_auth",
+ "macro_db_client",
+ "macro_user_id",
+ "pipedream_mcp",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_fold"
 version = "0.1.0"
 dependencies = [
@@ -199,6 +235,7 @@ name = "agent_harness"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_egress",
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
@@ -224,6 +261,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mockall",
+ "pipedream_mcp",
  "reqwest 0.13.4",
  "rootcause",
  "rustls 0.23.40",
@@ -243,6 +281,7 @@ dependencies = [
 name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
+ "agent_egress",
  "agent_fold",
  "agent_harness",
  "agent_inmem",
@@ -265,6 +304,7 @@ dependencies = [
  "cursor_cloud_agents",
  "database_env_vars",
  "entity_access",
+ "github",
  "kafka_util",
  "lexical_client",
  "macro_auth",
@@ -282,6 +322,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "notification",
+ "pipedream_mcp",
  "rdkafka",
  "secretsmanager_client",
  "serde",
@@ -290,6 +331,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "url",
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
@@ -12026,6 +12068,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "url",
  "utoipa",
  "workspace-hack",
 ]

@@ -45,6 +45,7 @@ import { Portal } from 'solid-js/web';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
+import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
@@ -204,22 +205,8 @@ function SplitCloseButton() {
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 
-  // A Viewer has no close affordance or close hotkey: it closes with its
-  // Controller, when its Preview Pair dissolves (external navigation or the
-  // Controller leaving its list view), or via the preview toggle.
-  const isPreviewViewer = () => context.handle.isViewerSplit();
-
-  // A Preview Pair occupies two split slots but is a single logical split: its
-  // Viewer isn't independently closable. Subtract one slot per pair so that
-  // when the only splits open are a single Preview Pair, the Controller hides
-  // its close button — just like a lone split does.
-  const hasMultipleSplits = createMemo(
-    () =>
-      layout.manager.splits().length - layout.manager.previewPairs().length > 1
-  );
-
   return (
-    <Show when={hasMultipleSplits() && !isPreviewViewer()}>
+    <Show when={shouldShowSplitCloseButton(layout.manager, context.handle)}>
       <Button
         square
         size="sm"

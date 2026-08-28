@@ -354,6 +354,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             id,
             session.acp_session_id,
             session.workspace,
+            attachment.mcp_servers,
             attachment.connector,
             logs,
             command_rx,
@@ -843,6 +844,13 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> Result<Option<AgentSession>> {
+        self.repo.find_by_egress_token_hash(egress_token_hash).await
     }
 
     async fn session_bot(

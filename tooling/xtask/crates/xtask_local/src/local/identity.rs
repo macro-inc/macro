@@ -56,6 +56,16 @@ pub const GOOGLE_GMAIL_IDP_ID: &str = "55555555-5555-4555-8555-555555555555";
 /// sign-in with a Google account that is linked as a secondary inbox).
 pub const RECONCILE_LAMBDA_ID: &str = "66666666-6666-4666-8666-666666666666";
 
+/// Fixed id for the `github` identity provider. Only created when a real
+/// GitHub OAuth client is configured (see `kickstart::GithubIdp`).
+///
+/// Read from both ends, which is why it is here rather than written twice:
+/// `authentication_service` resolves the provider *by name* when it starts a
+/// link, and separately takes this id from `GITHUB_IDP_ID` for the link calls
+/// themselves. The kickstart therefore has to create one provider that is both
+/// named `github` and has this id, or the two halves address different things.
+pub const GITHUB_IDP_ID: &str = "99999999-9999-4999-8999-999999999999";
+
 /// Local from-address for FusionAuth-sent mail (lands in Mailpit).
 pub const MAIL_FROM: &str = "noreply@macro.local";
 

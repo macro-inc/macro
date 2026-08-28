@@ -126,6 +126,12 @@ pub struct RunArgs {
     /// for what each backend does.
     #[arg(long)]
     pub traces: Option<TracesBackend>,
+    /// Open Cloudflare quick tunnels into this stack: one for `@cursor`
+    /// sessions (a public `EGRESS_BASE_URL`) and one sharing the app itself
+    /// through the reverse proxy. Off by default — nothing dials out and the
+    /// stack stays localhost-only. `run_local` only.
+    #[arg(long)]
+    pub with_cf_tunnel: bool,
 }
 
 /// Which OTLP trace collector `--traces` should bring up.

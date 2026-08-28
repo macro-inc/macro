@@ -74,6 +74,16 @@ where
         }
     }
 
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        match AgentKind::of(self.sessions.get(session).await?.bot_id) {
+            AgentKind::Cursor => self.cursor.session_token(session).await,
+            AgentKind::SandboxedCoder | AgentKind::InMemory => {
+                self.sandbox.session_token(session).await
+            }
+            AgentKind::External => Err(external_is_unroutable()),
+        }
+    }
+
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
         match AgentKind::of(self.sessions.get(session).await?.bot_id) {
             AgentKind::Cursor => self.cursor.teardown(session).await,

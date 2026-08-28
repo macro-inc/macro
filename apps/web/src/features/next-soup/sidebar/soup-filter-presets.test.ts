@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   remindersEnabled: true,
   calendarUiEnabled: true,
+  calendarSearchEnabled: true,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_CALENDAR_UI: () => mocks.calendarUiEnabled,
+  ENABLE_CALENDAR_SEARCH_UI: () => mocks.calendarSearchEnabled,
   ENABLE_REMINDERS: () => mocks.remindersEnabled,
   ENABLE_SNIPPETS: () => true,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE: false,
@@ -15,6 +17,7 @@ vi.mock('@core/constant/featureFlags', () => ({
 afterEach(() => {
   mocks.remindersEnabled = true;
   mocks.calendarUiEnabled = true;
+  mocks.calendarSearchEnabled = true;
 });
 
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -89,10 +92,10 @@ describe('calendar event scoping', () => {
     ).toBeUndefined();
   });
 
-  it('excludes them from search when the calendar UI is off', () => {
+  it('excludes them from search when calendar search is off', () => {
     // Opening a hit needs the calendar block, which the flag gates, so
     // without it a result would render an inert row.
-    mocks.calendarUiEnabled = false;
+    mocks.calendarSearchEnabled = false;
 
     expect(
       getViewPreset('search', 'all')?.filters.include?.calendarEventId

@@ -34,8 +34,8 @@ use macro_authorization::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+    ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
+    StaticFileServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -690,7 +690,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized onboarding service");
 
-    let mcp_public_url = DocumentCognitionServiceUrl::new()?;
+    let mcp_public_url = &config.mcp_public_url;
     let mcp_client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
         format!("{mcp_public_url}/mcp/servers/auth/client-metadata"),
         format!("{mcp_public_url}/mcp/servers/auth/callback"),

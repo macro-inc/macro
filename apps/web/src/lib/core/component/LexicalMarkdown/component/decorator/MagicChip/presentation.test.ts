@@ -45,6 +45,8 @@ describe('deriveMagicChipPresentation', () => {
         parts: [
           {
             kind: 'tool_use',
+            rawInput: null,
+            rawOutput: null,
             id: 'running',
             label: 'Terminal',
             status: 'running',
@@ -57,6 +59,8 @@ describe('deriveMagicChipPresentation', () => {
           },
           {
             kind: 'tool_use',
+            rawInput: null,
+            rawOutput: null,
             id: 'done',
             label: 'Read',
             status: 'completed',
@@ -89,6 +93,8 @@ describe('deriveMagicChipPresentation', () => {
           parts: [
             {
               kind: 'tool_use',
+              rawInput: null,
+              rawOutput: null,
               id: 'tool',
               label: 'Terminal',
               status: 'pending',
@@ -139,6 +145,8 @@ describe('deriveMagicChipPresentation', () => {
           { kind: 'text', text: 'Let me check the tests.' },
           {
             kind: 'tool_use',
+            rawInput: null,
+            rawOutput: null,
             id: 'running',
             label: 'Terminal',
             status: 'running',

@@ -169,11 +169,11 @@ async fn turns_accumulate_history_and_send_the_model() {
 
     let requests = engine.requests();
     assert_eq!(requests.len(), 2);
-    assert_eq!(requests[0].0, "test-model");
-    assert_eq!(requests[0].1, vec!["first".to_owned()]);
+    assert_eq!(requests[0].model, "test-model");
+    assert_eq!(requests[0].messages, vec!["first".to_owned()]);
     // The second turn carries the first turn's prompt and reply.
     assert_eq!(
-        requests[1].1,
+        requests[1].messages,
         vec!["first".to_owned(), "ok".to_owned(), "second".to_owned()]
     );
 }
@@ -205,7 +205,7 @@ async fn compact_clears_history_without_running_a_turn() {
     let requests = engine.requests();
     assert_eq!(requests.len(), 2, "/compact must not reach the engine");
     assert_eq!(
-        requests[1].1,
+        requests[1].messages,
         vec!["after".to_owned()],
         "compaction empties the conversation"
     );

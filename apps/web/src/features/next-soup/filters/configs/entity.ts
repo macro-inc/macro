@@ -2,6 +2,7 @@ import { getEntityProjectId } from '@entity';
 import { defineQueryFilters } from '../filter-store/compile';
 import {
   activeAgentFilter as activeAgentPredicate,
+  calendarEventFilter as calendarEventPredicate,
   callsFilter as callsPredicate,
   channelsFilter as channelsPredicate,
   crmCompanyActiveFilter as crmCompanyActivePredicate,
@@ -66,6 +67,15 @@ export const callsFilter = config({
   id: 'calls',
   predicate: callsPredicate,
   query: defineQueryFilters({}, { skipTargets: ['callf'] }),
+});
+
+// Calendar events are searchable by title. Scoping to them alone means
+// NIL-excluding every other entity type's id target while leaving `calf`
+// untouched, which is exactly what skipping `calf` produces.
+export const calendarFilter = config({
+  id: 'calendar',
+  predicate: calendarEventPredicate,
+  query: defineQueryFilters({}, { skipTargets: ['calf'] }),
 });
 
 export const crmCompanyFilter = config({

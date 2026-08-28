@@ -127,6 +127,7 @@ where
                 id: session,
                 owner: row.owner_id,
                 model: row.model,
+                instructions: row.instructions,
                 acp_session_id: row.acp_session_id,
             }));
         }
@@ -191,6 +192,15 @@ where
                 .resume(session)
                 .await
                 .map(RoutedTransport::Sandbox),
+        }
+    }
+
+    /// An in-process session has no container and no egress environment, so
+    /// there is no token to read back; sandboxes delegate to their provider.
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        match self.route(session).await? {
+            Route::InMem(_) => Ok(None),
+            Route::Sandbox => self.sandbox.session_token(session).await,
         }
     }
 

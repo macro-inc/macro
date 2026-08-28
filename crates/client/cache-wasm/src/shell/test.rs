@@ -30,6 +30,33 @@ const PROPERTY_MUTATION: &str = r#"mutation SetEntityProperty($input: SetEntityP
     setEntityProperty(input: $input) { id displayName }
 }"#;
 
+const OPTIMISTIC_DOCUMENT_MUTATION: &str = r#"mutation RenameEntities($inputs: [RenameEntityInput!]!) {
+    renameEntities(inputs: $inputs) {
+        results {
+            __typename
+            ... on GraphqlMutationSuccess {
+                effects {
+                    __typename
+                    ... on SoupUpdated {
+                        item {
+                            __typename
+                            id
+                            displayName
+                            ... on GraphqlSoupDocument {
+                                ownerId
+                                projectId
+                                fileType
+                                createdAt
+                                updatedAt
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}"#;
+
 const SOUP_UPDATES_SUBSCRIPTION: &str = r#"subscription SoupUpdates {
     soupUpdates {
         __typename
@@ -170,6 +197,29 @@ fn realtime_document_data(document_id: &str) -> serde_json::Value {
     })
 }
 
+fn optimistic_document_data(document_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "renameEntities": {
+            "results": [{
+                "__typename": "GraphqlMutationSuccess",
+                "effects": [{
+                    "__typename": "SoupUpdated",
+                    "item": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": document_id,
+                        "displayName": "Optimistic document",
+                        "ownerId": "macro|user@example.com",
+                        "projectId": null,
+                        "fileType": "md",
+                        "createdAt": "2026-01-01T00:00:00.000Z",
+                        "updatedAt": "2026-01-03T00:00:00.000Z"
+                    }
+                }]
+            }]
+        }
+    })
+}
+
 fn exact_document_filter(document_id: &str) -> serde_json::Value {
     const NIL_ID: &str = "00000000-0000-0000-0000-000000000000";
     serde_json::json!({
@@ -248,8 +298,11 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
         ))
         .await,
     );
-    assert_eq!(selected[0]["recordKey"], "GraphqlSoupDocument:doc-1");
-    assert_eq!(selected[0]["record"]["id"], "doc-1");
+    assert_eq!(
+        selected["records"][0]["recordKey"],
+        "GraphqlSoupDocument:doc-1"
+    );
+    assert_eq!(selected["records"][0]["record"]["id"], "doc-1");
 
     let variants: serde_json::Value = from_js(
         resolved(engine.inspect_query_variants(
@@ -298,9 +351,12 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
     );
     assert_eq!(read["kind"], "hit");
 
-    let affected: Vec<String> =
+    let affected: serde_json::Value =
         from_js(resolved(engine.invalidate_keys(vec!["GraphqlSoupDocument:doc-1".into()])).await);
-    assert_eq!(affected, ["tab:z", "tab:a"]);
+    assert_eq!(
+        affected["affectedOps"],
+        serde_json::json!(["tab:z", "tab:a"])
+    );
 
     resolved(engine.delete_keys(vec!["GraphqlSoupDocument:doc-1".into()])).await;
     let read: serde_json::Value = from_js(
@@ -364,6 +420,75 @@ async fn realtime_soup_items_are_locally_filterable_without_a_query_fetch() {
     );
 
     close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn optimistic_soup_item_is_filterable_after_enqueue_reopen_and_rollback() {
+    const SCOPE: &str = "cache-wasm-optimistic-local-filter";
+    const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000002";
+    let engine = fresh_engine(SCOPE).await;
+
+    let enqueue: serde_json::Value = from_js(
+        resolved(engine.enqueue_optimistic_mutation(
+            None,
+            OPTIMISTIC_DOCUMENT_MUTATION.into(),
+            Some("RenameEntities".into()),
+            js(serde_json::json!({
+                "inputs": [{
+                    "entity": { "type": "DOCUMENT", "id": DOCUMENT_ID },
+                    "displayName": "Optimistic document"
+                }]
+            })),
+            js(optimistic_document_data(DOCUMENT_ID)),
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            1.0,
+            "optimistic-filter-runner".into(),
+            0.0,
+            100.0,
+        ))
+        .await,
+    );
+    assert_eq!(enqueue["initialClaim"]["kind"], "claimed");
+    let transaction_id = enqueue["transactionId"].as_str().unwrap().to_owned();
+    let generation = enqueue["initialClaim"]["mutation"]["leaseGeneration"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let filtered: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
+    assert_eq!(filtered["kind"], "complete");
+    assert_eq!(
+        filtered["keys"],
+        serde_json::json!([format!("GraphqlSoupDocument:{DOCUMENT_ID}")])
+    );
+    assert_eq!(filtered["optimistic"], true);
+
+    resolved(engine.close()).await;
+    let reopened = open_cache(SCOPE.into(), None)
+        .await
+        .expect("reopen preserved optimistic shadow index");
+    let filtered: serde_json::Value =
+        from_js(resolved(reopened.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
+    assert_eq!(
+        filtered["keys"],
+        serde_json::json!([format!("GraphqlSoupDocument:{DOCUMENT_ID}")])
+    );
+    assert_eq!(filtered["optimistic"], true);
+
+    resolved(reopened.rollback_optimistic_write(
+        transaction_id,
+        "optimistic-filter-runner".into(),
+        generation,
+    ))
+    .await;
+    let filtered: serde_json::Value =
+        from_js(resolved(reopened.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
+    assert_eq!(filtered["keys"], serde_json::json!([]));
+    assert_eq!(filtered["optimistic"], false);
+
+    close_and_destroy(&reopened, SCOPE).await;
 }
 
 #[wasm_bindgen_test(async)]

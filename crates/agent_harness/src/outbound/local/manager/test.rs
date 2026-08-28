@@ -1,5 +1,6 @@
 use super::*;
-use crate::outbound::daytona::{AnthropicApiKey, GithubToken};
+use crate::outbound::daytona::AnthropicApiKey;
+use crate::testing::helpers::egress::test_egress;
 
 /// One container per session, so a resume finds exactly one and `docker ps`
 /// says which session it belongs to.
@@ -22,25 +23,27 @@ fn a_sidecar_is_dialed_by_container_name() {
     );
 }
 
-/// Same credentials Daytona injects, so the readiness recipe is exercised
-/// against the same environment a deployed sandbox sees. The Anthropic key
-/// is what activates the one model provider `container/opencode.json`
-/// enables.
+/// Same environment Daytona injects, so the readiness recipe is exercised
+/// against what a deployed sandbox sees: the Anthropic key that activates the
+/// one model provider `container/opencode.json` enables, plus the egress
+/// variables the clone and every outbound call go through. No GitHub
+/// credential - the proxy holds that one.
 #[test]
-fn sandbox_env_carries_the_repo_and_credentials() {
+fn sandbox_env_carries_the_model_key_and_egress() {
     let env = sandbox_env(
-        "https://github.com/macro-inc/macro".to_owned(),
-        &GithubToken::new("test-token".to_owned()),
         &AnthropicApiKey::new("test-anthropic-key".to_owned()),
+        test_egress(),
     );
 
-    assert!(env.contains(&(
-        "REPO_URL".to_owned(),
-        "https://github.com/macro-inc/macro".to_owned()
-    )));
-    assert!(env.contains(&("GITHUB_TOKEN".to_owned(), "test-token".to_owned())));
     assert!(env.contains(&(
         "ANTHROPIC_API_KEY".to_owned(),
         "test-anthropic-key".to_owned()
     )));
+    assert!(
+        !env.iter()
+            .any(|(key, _)| key == "GITHUB_TOKEN" || key == "REPO_URL")
+    );
+    for (key, value) in test_egress().environment() {
+        assert!(env.contains(&(key, value)));
+    }
 }

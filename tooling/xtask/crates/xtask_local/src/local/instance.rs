@@ -104,6 +104,10 @@ pub enum Port {
     AgentProxy = 8091,
     /// Agent session control API.
     AgentHarness = 8101,
+    /// The agent egress proxy, `agent_harness_service`'s second listener.
+    /// Published on every local instance - it is what the Cursor egress
+    /// tunnel points at, and Cursor's cloud is outside the compose network.
+    AgentHarnessEgress = 8102,
 }
 
 impl Port {

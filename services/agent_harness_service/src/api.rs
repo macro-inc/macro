@@ -5,6 +5,8 @@
 
 use std::time::Duration;
 
+use agent_egress::domain::service::EgressService;
+use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -25,6 +27,32 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 pub mod swagger;
+
+/// Serve the sandbox-facing egress proxy on its own listener.
+///
+/// No CORS layer and no Swagger: nothing browses this. Its only client is a
+/// sandbox, and its only credential is a session token.
+pub async fn serve_egress<Service>(
+    service: Service,
+    port: u16,
+    shutdown: impl Future<Output = ()> + Send + 'static,
+) -> anyhow::Result<()>
+where
+    Service: EgressService + 'static,
+{
+    let app = egress_router(EgressRouterState::new(std::sync::Arc::new(service)));
+
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
+        .await
+        .with_context(|| format!("failed to bind agent harness egress to port {port}"))?;
+
+    tracing::info!(port, "agent harness egress listening");
+
+    axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(shutdown)
+        .await
+        .context("agent harness egress http failed")
+}
 
 /// Build the router and serve it until the process is asked to stop.
 pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
