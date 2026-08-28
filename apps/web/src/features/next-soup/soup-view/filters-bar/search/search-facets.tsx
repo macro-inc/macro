@@ -1,4 +1,4 @@
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import type {
   CallStatus,
   PropertyFilter,
@@ -311,15 +311,15 @@ export function useSearchFacets(
   });
 
   const tagSource = useTagOptions();
-  const calendarUiEnabled = useCalendarUiFlag();
+  const calendarSearchEnabled = useCalendarSearchUiFlag();
 
-  // The calendar type exists only while the calendar UI is enabled. If the flag
+  // The calendar type exists only while calendar search is enabled. If the flag
   // turns off (or a persisted search restores a calendar scope while it is off),
   // its Type option disappears and the chip falls back to "All", but the
   // compiled query would still carry the calendar seed — reset the type so the
   // displayed chip and the query agree.
   createEffect(() => {
-    if (!calendarUiEnabled() && controller.type() === 'calendar') {
+    if (!calendarSearchEnabled() && controller.type() === 'calendar') {
       controller.setType('all');
     }
   });
@@ -328,7 +328,7 @@ export function useSearchFacets(
     { id: 'all', label: 'All' },
     ...[
       ...SEARCH_INDEX_OPTIONS,
-      ...(calendarUiEnabled() ? [CALENDAR_TYPE_OPTION] : []),
+      ...(calendarSearchEnabled() ? [CALENDAR_TYPE_OPTION] : []),
     ].map((o) => ({ id: o.value, label: o.label, icon: o.icon })),
   ]);
 
