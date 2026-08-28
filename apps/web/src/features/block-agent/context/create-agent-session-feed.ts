@@ -27,6 +27,7 @@ import {
   type Accessor,
   batch,
   createEffect,
+  createMemo,
   createResource,
   createSignal,
   onCleanup,
@@ -49,6 +50,14 @@ export type AgentSessionFeed = {
   /** The newest turn has no stop reason yet — the agent is working. */
   working: Accessor<boolean>;
 };
+
+/**
+ * How often, and how many times, to re-read a Cursor session's snapshot
+ * while its cursor.com url is still missing. Together they span ~30s, which
+ * comfortably covers Cursor's agent creation inside the first prompt.
+ */
+export const EXTERNAL_URL_POLL_INTERVAL_MS = 2_000;
+export const EXTERNAL_URL_POLL_ATTEMPTS = 15;
 
 /** Prompt sorts before reply within a turn. */
 function authorRank(message: FoldedMessage): number {
@@ -196,28 +205,50 @@ export function createAgentSessionFeed(
   };
 
   // The external identity — the Cursor agent's id, name, and the link out to
-  // it — is minted inside the session's *first prompt*, so the snapshot
-  // fetched at load never carries it: `create` returns those columns NULL by
-  // construction. Nothing announces it on the wire either, so re-read the
-  // snapshot once a turn has settled, and keep the whole payload this time.
+  // it — is minted by Cursor's API inside the session's *first prompt*, so
+  // the snapshot fetched at load never carries it: `create` returns those
+  // columns NULL by construction. Nothing announces it on the wire either,
+  // so a session opened before the mint must poll the snapshot for it.
   //
-  // Bounded by construction: the only session kind that gets one is Cursor's,
-  // and the moment it lands this stops matching. A turn that settles without
-  // minting one (a prompt that failed outright) is retried on the next.
-  createEffect(() => {
+  // The url specifically, not the row: the harness writes the row the moment
+  // the agent exists, but fills the url from a best-effort follow-up fetch
+  // that can fail, and a url-less row is exactly as unopenable as no row.
+  // The budget covers a slow mint; a session still url-less past it is that
+  // failed follow-up, which no amount of polling can repair.
+  // The memo gate keeps the interval from restarting — and the attempts
+  // budget from resetting — when the snapshot changes for unrelated reasons
+  // (a rename refresh replaces the whole value).
+  const sessionAwaitingExternalUrl = createMemo(() => {
     const id = sessionId();
     const session = resource.latest;
-    if (!id || !session || session.external) return;
-    if (!isCursorBotId(session.botId) || working() || messages().length === 0) {
-      return;
-    }
-    const run = generation;
-    void agentHarnessServiceClient.get(id).then((refreshed) => {
-      // A superseded run has already replaced the value this would land on.
-      if (refreshed.isErr() || closed || generation !== run) return;
-      if (sessionId() !== id || !refreshed.value.external) return;
-      mutate(refreshed.value);
-    });
+    if (!id || !session || session.external?.url) return undefined;
+    return isCursorBotId(session.botId) ? id : undefined;
+  });
+  createEffect(() => {
+    const id = sessionAwaitingExternalUrl();
+    if (!id) return;
+    let attempts = EXTERNAL_URL_POLL_ATTEMPTS;
+    let inFlight = false;
+    const read = () => {
+      if (inFlight) return;
+      if (attempts <= 0) {
+        clearInterval(timer);
+        return;
+      }
+      attempts -= 1;
+      inFlight = true;
+      void agentHarnessServiceClient.get(id).then((refreshed) => {
+        inFlight = false;
+        if (refreshed.isErr() || closed || sessionId() !== id) return;
+        if (!refreshed.value.external?.url) return;
+        // Landing the url flips the gate, so the interval is cleaned up
+        // rather than polling on.
+        mutate(refreshed.value);
+      });
+    };
+    const timer = setInterval(read, EXTERNAL_URL_POLL_INTERVAL_MS);
+    onCleanup(() => clearInterval(timer));
+    read();
   });
 
   return {
