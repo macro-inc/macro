@@ -9,8 +9,12 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { Button, SendButton, Surface } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+
+/** Quote text into the composer as a referenced paste chip. */
+export type QuoteInsert = (text: string) => void;
 
 export interface AgentInputProps {
   placeholder?: string;
@@ -28,6 +32,12 @@ export interface AgentInputProps {
   onStop?: () => void;
   /** Sits as a pill above the input box, e.g. the session's model selector. */
   modelControl?: JSX.Element;
+  /**
+   * Ref-style: receives the quote-insert function once the editor mounts
+   * (and `undefined` again on unmount), so the transcript's "Reply to this"
+   * chip can quote selected text into this composer.
+   */
+  registerQuoteInsert?: (insert: QuoteInsert | undefined) => void;
 }
 
 /** Past this height the controls drop below the text instead of overlaying it. */
@@ -69,6 +79,17 @@ export function AgentInput(props: AgentInputProps) {
       return true;
     })
     .onChange(setMarkdown);
+
+  onMount(() => {
+    props.registerQuoteInsert?.((text) => {
+      // Discrete so the chip is committed to the DOM before focus moves in.
+      editor.lexical.update(() => $insertReferencedPaste(text), {
+        discrete: true,
+      });
+      editor.controls.focus();
+    });
+    onCleanup(() => props.registerQuoteInsert?.(undefined));
+  });
 
   return (
     <div class="flex flex-col gap-1.5">

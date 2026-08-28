@@ -1,6 +1,11 @@
 import type { ElementTransformer } from '@lexical/markdown';
 import type { ElementNode, LexicalNode } from 'lexical';
-import { $createPasteNode, $isPasteNode, PasteNode } from '../nodes/PasteNode';
+import {
+  $createPasteNode,
+  $isPasteNode,
+  normalizePasteOrigin,
+  PasteNode,
+} from '../nodes/PasteNode';
 import {
   replaceElementWithUnknownMention,
   UnknownMentionNode,
@@ -19,6 +24,7 @@ export const I_PASTE_NODE: ElementTransformer = {
     if (!$isPasteNode(node)) return null;
     const data = JSON.stringify({
       content: node.getContent(),
+      origin: node.getOrigin(),
     })
       .replace(/</g, '\\u003c')
       .replace(/>/g, '\\u003e');
@@ -32,7 +38,10 @@ export const I_PASTE_NODE: ElementTransformer = {
     try {
       const data = JSON.parse(match[1]);
       if (!('content' in data)) throw new Error('Missing field content');
-      const pasteNode = $createPasteNode({ content: data.content });
+      const pasteNode = $createPasteNode({
+        content: data.content,
+        origin: normalizePasteOrigin(data.origin),
+      });
       parentNode.replace(pasteNode);
     } catch (e) {
       console.error('Error in I_PASTE_NODE replace:', e);

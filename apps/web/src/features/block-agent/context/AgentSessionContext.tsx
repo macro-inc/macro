@@ -25,6 +25,7 @@ import {
   useContext,
 } from 'solid-js';
 import { controlOutcome } from '../state/control-message';
+import type { QuoteInsert } from '../ui';
 import { createAgentSessionFeed } from './create-agent-session-feed';
 import {
   type ComposerController,
@@ -83,6 +84,13 @@ export type AgentSessionState = {
    */
   resuming: Accessor<boolean>;
   composer: ComposerController;
+  /**
+   * Quote selected transcript text into the composer as a referenced paste
+   * chip. No-op until the composer editor has mounted.
+   */
+  quoteSelection: QuoteInsert;
+  /** The composer registers its quote-insert handler here on mount. */
+  registerQuoteInsert: (insert: QuoteInsert | undefined) => void;
 };
 
 const AgentSessionCtx = createContext<AgentSessionState>();
@@ -118,6 +126,15 @@ export function AgentSessionProvider(
     controlOutcome: (requestId) => controlOutcome(feed.messages(), requestId),
   });
 
+  // The transcript's "Reply to this" chip hands selected text to the
+  // composer through here. A plain variable, not a signal: it is only read
+  // at call time, never rendered from.
+  let quoteInsert: QuoteInsert | undefined;
+  const registerQuoteInsert = (insert: QuoteInsert | undefined) => {
+    quoteInsert = insert;
+  };
+  const quoteSelection: QuoteInsert = (text) => quoteInsert?.(text);
+
   // Anything the service can only deliver over a live transport: a prompt on
   // the wire, or a model change waiting to be seen in the fold.
   const awaitingRuntime = () =>
@@ -143,6 +160,8 @@ export function AgentSessionProvider(
         status: status.status,
         resuming,
         composer,
+        quoteSelection,
+        registerQuoteInsert,
       }}
     >
       {props.children}
