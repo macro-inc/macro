@@ -30,11 +30,14 @@
   margin-left: 1.5em;
 
   /*
-  * Shared marker column. Bullets, checkboxes and numbers are all positioned
-  * against these values so the three list types line up with each other. The
-  * column sits immediately to the left of the text, separated by
-  * --md-marker-gap. Numbers right-align to it; bullets and checkboxes centre
-  * on it. Everything is in em so the column scales with the list's font size.
+  * Shared marker column. Bullets and checkboxes centre on these values so the
+  * two line up with each other; the column sits immediately to the left of the
+  * text, separated by --md-marker-gap. Everything is in em so the column
+  * scales with the list's font size.
+  *
+  * Ordered-list numbers are deliberately not on this column yet -- they still
+  * use their own rem-based positioning further down, and the editor's numbers
+  * use the native ::marker, which CSS cannot position at all.
   */
   --md-marker-width: 1em;
   --md-marker-gap: 0.4em;
@@ -149,22 +152,10 @@ ol.static-md > li {
 
 ol.static-md > li:not(.list-none)::before {
   position: absolute;
-  left: var(--md-marker-left);
-  width: var(--md-marker-width);
-  /*
-  * Right-aligned, which keeps a constant gap to the text however many digits
-  * the number has. The period sits in the last ~0.25em, which already places
-  * a single digit's glyph on the -0.9em marker axis shared with bullets and
-  * checkboxes -- so this centres the number without centring the string.
-  *
-  * tabular-nums is what makes "1" line up with "2". Inter's default figures
-  * are proportional, so "1" is narrower than the other digits and its glyph
-  * lands right of theirs in a right-aligned column. Tabular figures give every
-  * digit the same advance and draw each one centred inside it, so "1" sits
-  * directly above "2" and multi-digit numbers stay in a regular column too.
-  */
+  left: -1.5rem;
   text-align: right;
-  font-variant-numeric: tabular-nums;
+  width: 1.5rem;
+  padding-right: 0.25rem;
 }
 
 ol.static-md.depth-1 > li:not(.list-none) {
