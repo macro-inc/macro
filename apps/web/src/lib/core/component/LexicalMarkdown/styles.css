@@ -28,6 +28,27 @@
 
 .md-list {
   margin-left: 1.5em;
+
+  /*
+  * Shared marker column. Bullets, checkboxes and numbers are all positioned
+  * against these values so the three list types line up with each other. The
+  * column sits immediately to the left of the text, separated by
+  * --md-marker-gap. Numbers right-align to it; bullets and checkboxes centre
+  * on it. Everything is in em so the column scales with the list's font size.
+  */
+  --md-marker-width: 1em;
+  --md-marker-gap: 0.4em;
+  --md-marker-left: calc(-1 * (var(--md-marker-gap) + var(--md-marker-width)));
+  --md-marker-center: calc(
+    -1 * (var(--md-marker-gap) + var(--md-marker-width) / 2)
+  );
+  /* Midline of the first line of text; every marker centres on this. */
+  --md-marker-middle: 0.75em;
+
+  /* Outline of an unchecked checkbox. Faded from currentcolor rather than
+  * pinned to an ink token so it still tracks the text colour inside chat
+  * bubbles, which theme the whole markdown tree off text-current. */
+  --md-check-border: color-mix(in oklab, currentcolor 45%, transparent);
 }
 
 .md-inline-code {
@@ -53,12 +74,12 @@
 
 .md-list.md-bullet > li::before {
   content: " ";
-  width: 0.4em;
-  height: 0.4em;
+  --md-bullet-size: 0.4em;
+  width: var(--md-bullet-size);
+  height: var(--md-bullet-size);
   position: absolute;
-  left: -1.05em;
-  top: 0;
-  transform: translateY(0.55em);
+  left: calc(var(--md-marker-center) - var(--md-bullet-size) / 2);
+  top: calc(var(--md-marker-middle) - var(--md-bullet-size) / 2);
   border-radius: 1em;
   line-height: 0;
   background-color: currentcolor;
@@ -66,43 +87,49 @@
 
 .md-list.md-check > li::before {
   content: " ";
-  width: 0.8em;
-  height: 0.8em;
+  box-sizing: border-box;
+  width: var(--md-marker-width);
+  height: var(--md-marker-width);
   position: absolute;
-  left: -1.25em;
-  top: 0.35em;
-  transform: none;
-  outline: 2px solid currentcolor;
+  left: var(--md-marker-left);
+  top: calc(var(--md-marker-middle) - var(--md-marker-width) / 2);
+  border: 1.5px solid var(--md-check-border);
+  outline: none;
   background-color: transparent;
-  border-radius: 0;
+  border-radius: 0.25em;
   transition:
     background-color 0.2s ease,
-    outline 0.1s ease;
+    border-color 0.15s ease;
 }
 
 .md-list.md-check > li.checked::before {
   background-color: var(--color-accent);
-  outline: 2px solid var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .md-list.md-check > li.checked.chat-blue::before {
   background-color: var(--color-accent);
-  outline: 2px solid var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .md-list.md-check > li.checked::after {
-  border-bottom: 2px solid var(--color-surface);
-  border-left: 2px solid var(--color-surface);
   content: " ";
-  width: 0.7em;
-  height: 0.4em;
+  --md-check-w: 0.52em;
+  --md-check-h: 0.28em;
+  border-bottom: 1.5px solid var(--color-surface);
+  border-left: 1.5px solid var(--color-surface);
+  border-bottom-left-radius: 1px;
+  box-sizing: border-box;
+  width: var(--md-check-w);
+  height: var(--md-check-h);
   position: absolute;
-  left: -1.2em;
-  top: 0.45em;
+  left: calc(var(--md-marker-center) - var(--md-check-w) / 2);
+  /* 0.02em above the midline: a rotated tick reads low when truly centred. */
+  top: calc(var(--md-marker-middle) - var(--md-check-h) / 2 - 0.02em);
   transform: rotate(-45deg);
   transition:
     background-color 0.2s ease,
-    outline 0.1s ease;
+    border-color 0.15s ease;
 }
 
 .md-list > li.nested::before {
@@ -122,10 +149,9 @@ ol.static-md > li {
 
 ol.static-md > li:not(.list-none)::before {
   position: absolute;
-  left: -1.5rem;
+  left: var(--md-marker-left);
+  width: var(--md-marker-width);
   text-align: right;
-  width: 1.5rem;
-  padding-right: 0.25rem;
 }
 
 ol.static-md.depth-1 > li:not(.list-none) {
@@ -133,7 +159,7 @@ ol.static-md.depth-1 > li:not(.list-none) {
 }
 
 ol.static-md.depth-1 > li:not(.list-none)::before {
-  content: counter(static-md-counter-1) ". ";
+  content: counter(static-md-counter-1) ".";
 }
 
 ol.static-md.depth-2 > li:not(.list-none) {
@@ -141,7 +167,7 @@ ol.static-md.depth-2 > li:not(.list-none) {
 }
 
 ol.static-md.depth-2 > li:not(.list-none)::before {
-  content: counter(static-md-counter-2) ". ";
+  content: counter(static-md-counter-2) ".";
 }
 
 ol.static-md.depth-3 > li:not(.list-none) {
@@ -149,7 +175,7 @@ ol.static-md.depth-3 > li:not(.list-none) {
 }
 
 ol.static-md.depth-3 > li:not(.list-none)::before {
-  content: counter(static-md-counter-3) ". ";
+  content: counter(static-md-counter-3) ".";
 }
 
 ol.static-md.depth-4 > li:not(.list-none) {
@@ -157,7 +183,7 @@ ol.static-md.depth-4 > li:not(.list-none) {
 }
 
 ol.static-md.depth-4 > li:not(.list-none)::before {
-  content: counter(static-md-counter-4) ". ";
+  content: counter(static-md-counter-4) ".";
 }
 
 ol.static-md.depth-5 > li:not(.list-none) {
@@ -165,7 +191,7 @@ ol.static-md.depth-5 > li:not(.list-none) {
 }
 
 ol.static-md.depth-5 > li:not(.list-none)::before {
-  content: counter(static-md-counter-5) ". ";
+  content: counter(static-md-counter-5) ".";
 }
 
 ol.static-md.depth-6 > li:not(.list-none) {
@@ -173,7 +199,7 @@ ol.static-md.depth-6 > li:not(.list-none) {
 }
 
 ol.static-md.depth-6 > li:not(.list-none)::before {
-  content: counter(static-md-counter-6) ". ";
+  content: counter(static-md-counter-6) ".";
 }
 
 .md-strike {
