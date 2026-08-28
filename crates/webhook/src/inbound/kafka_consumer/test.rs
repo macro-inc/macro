@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    events::{WebhookDeletedMetadata, WebhookTopicEvent},
+    events::{WebhookDeletedMetadata, WebhookMacroEvent, WebhookTopicEvent},
     ingestion::WebhookEventIngestionError,
 };
 use channel_sender::ChannelSender;
