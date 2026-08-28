@@ -3,11 +3,13 @@ import {
   clause,
   combine,
   compileFacets,
+  confine,
   type Facet,
   type FacetClause,
   type FacetOption,
   literal,
   mergeAst,
+  NIL_UUID,
 } from '.';
 
 type Item = { status: string };
@@ -44,6 +46,21 @@ const facets: Facet<Item, Context, Option>[] = [
   },
 ];
 
+const confinedFacet: Facet<Item, undefined> = {
+  id: 'type',
+  mode: 'or',
+  options: [
+    {
+      id: 'documents',
+      clause: confine({ df: clause.eq('subType', ['task']) }),
+    },
+    {
+      id: 'email',
+      clause: confine({ ef: clause.eq('emailSeen', false) }),
+    },
+  ],
+};
+
 const propertyLiteral = (propertyId: string, optionId: string) => ({
   l: { pd: propertyId, v: { so: optionId } },
 });
@@ -75,6 +92,21 @@ describe('facet compiler', () => {
         propertyId: 'priority-property',
       })
     ).toEqual({});
+  });
+
+  it('keeps each target admitted by confined OR options', () => {
+    const result = compileFacets(
+      { type: ['documents', 'email'] },
+      [confinedFacet],
+      undefined
+    );
+
+    expect(result.df).toEqual({
+      '|': [{ l: { dst: ['task'] } }, { l: { id: NIL_UUID } }],
+    });
+    expect(result.ef).toEqual({
+      '|': [{ l: { ThreadId: NIL_UUID } }, { l: { NotificationSeen: false } }],
+    });
   });
 
   it('builds and combines transport-neutral AST nodes', () => {

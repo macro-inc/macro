@@ -22,14 +22,9 @@ export function testFacets<
     const active = selection[facet.id] ?? [];
     if (active.length === 0) return true;
 
-    const options = active.flatMap((optionId) => {
-      const option = resolveFacetOption(facet, optionId, context);
-      if (!option) return [];
-      return [option];
-    });
-    if (options.length === 0) return true;
-
-    const results = options.map((option) => option.predicate?.(item, context));
+    const results = active.map((optionId) =>
+      resolveFacetOption(facet, optionId, context)?.predicate?.(item, context)
+    );
     const testable = results.filter(
       (result): result is boolean => result !== undefined
     );

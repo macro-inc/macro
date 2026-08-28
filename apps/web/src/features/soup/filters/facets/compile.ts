@@ -71,12 +71,9 @@ export const confine = (facetClause: FacetClause): FacetClause => {
 const isEntityTarget = (target: Target): target is EntityTarget =>
   ENTITY_TARGETS.includes(target as EntityTarget);
 
-const isNilExpr = (expr: TargetExpr): boolean =>
-  'field' in expr && (expr as { value: unknown }).value === NIL_ID;
-
 // per target: combine each facet's active options by mode, then AND the facets.
-// `confine`d clauses exclude entity targets via a top-level NIL leaf; facets
-// with `restrict` (multi-select type filters) confine via the engine instead.
+// Keep `confine`d NIL leaves inside each facet's expression so OR semantics
+// preserve targets admitted by another active option.
 export const compileFacets = <
   TItem,
   TContext,
@@ -88,7 +85,6 @@ export const compileFacets = <
 ): BackendAstMap => {
   const byTarget = new Map<Target, BackendAstNode[]>();
   let allowed: Set<EntityTarget> | undefined;
-  const excluded = new Set<EntityTarget>();
 
   for (const facet of facets) {
     const activeIds = [...new Set(selection[facet.id] ?? [])].sort();
@@ -108,12 +104,6 @@ export const compileFacets = <
 
         const expr = clause[target];
         if (!expr) continue;
-
-        // A top-level NIL leaf excludes its entity target (AND with ⊥).
-        if (isEntityTarget(target) && isNilExpr(expr)) {
-          excluded.add(target);
-          continue;
-        }
 
         const list = exprsByTarget.get(target) ?? [];
         list.push(expr);
@@ -145,8 +135,6 @@ export const compileFacets = <
   const result: BackendAstMap = {};
 
   for (const target of TARGETS) {
-    if (isEntityTarget(target) && excluded.has(target)) continue;
-
     const asts = byTarget.get(target);
     if (!asts?.length) continue;
 
@@ -161,12 +149,6 @@ export const compileFacets = <
         l: { [ENTITY_ID_BACKENDS[target]]: NIL_ID },
       };
     }
-  }
-
-  for (const target of excluded) {
-    result[target] = {
-      l: { [ENTITY_ID_BACKENDS[target]]: NIL_ID },
-    };
   }
 
   return result;
