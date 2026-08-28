@@ -60,11 +60,18 @@ type Args = {
 
 /**
  * The agent harness service. Like agent-proxy before it, this component pins
- * `desiredCount` to 1 and forces a stop-then-start deployment (min healthy
- * 0%, max 100%) with no autoscaling: the harness owns the live agent-session
- * actors in process memory with no cross-instance sync, and its Kafka consumer
- * groups must not split partitions across two momentarily-coexisting tasks
- * (see the consumer groups in `services/agent_harness_service`).
+ * `desiredCount` to 1 with no autoscaling: the harness owns the live
+ * agent-session actors in process memory with no cross-instance sync (see the
+ * consumer groups in `services/agent_harness_service`).
+ *
+ * Deploys roll (min healthy 100%, max 200%): the outgoing task keeps serving
+ * until the replacement passes health checks, so the control API and egress
+ * proxy stay up instead of blacking out for the old task's sandbox cleanup.
+ * The two tasks coexist briefly, during which the Kafka consumer group splits
+ * partitions between them; a command routed to the new task for a session
+ * whose live actor is still on the old one self-heals through resume. Live
+ * sessions already restart across every deploy (`shutdown_all` stops each
+ * sandbox), so the overlap narrows the blast radius rather than widening it.
  */
 export class AgentHarnessService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
@@ -310,18 +317,16 @@ export class AgentHarnessService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
-        // Never run 2 tasks at once, even transiently during a deploy: stop
-        // the old one before the new one starts (see the class doc comment).
-        // This blackout covers the egress proxy too - sandbox git and MCP
-        // calls fail for the whole window, they are not more available than
-        // the control API.
-        deploymentMinimumHealthyPercent: 0,
-        deploymentMaximumPercent: 100,
+        // Rolling replace: the old task serves until the new one is healthy
+        // (see the class doc comment for the overlap semantics). A failed
+        // deploy rolls back with the old task still up rather than at zero.
+        deploymentMinimumHealthyPercent: 100,
+        deploymentMaximumPercent: 200,
         desiredCount: 1,
         // ALB checks /health every 10s and fails the target after two
         // misses (~20s). HTTP does not listen until after DB, AWS config,
         // and JWT secrets, so a 0s grace period trips the circuit breaker
-        // on this stop-then-start replace. Ignore those checks until bind.
+        // before the replacement binds. Ignore those checks until then.
         healthCheckGracePeriodSeconds: 120,
         taskDefinitionArgs: {
           taskRole: {
