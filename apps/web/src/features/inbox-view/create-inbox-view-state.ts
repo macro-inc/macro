@@ -1,0 +1,156 @@
+import { createDisclosureState } from '@app/components/list';
+import {
+  type FacetSelection,
+  normalizeFacetSelection,
+} from '@app/features/soup';
+import { makePersistedState } from '@app/lib/persistence';
+import { createStore, produce } from 'solid-js/store';
+import {
+  type CreateInboxViewPersistenceOptions,
+  createInboxViewPersistence,
+} from './persistence';
+import type { InboxGroupBy, InboxTab } from './types';
+
+export type CreateInboxViewStateOptions = {
+  tab?: InboxTab;
+  search?: string;
+  groupBy?: InboxGroupBy;
+  facets?: FacetSelection;
+  collapsedGroupIds?: readonly string[];
+  focusKey?: string;
+  selectedKeys?: readonly string[];
+};
+
+export type InboxViewSnapshot = {
+  tab: InboxTab;
+  search: string;
+  groupBy: InboxGroupBy;
+  facets: FacetSelection;
+  collapsedGroupIds: string[];
+  focusKey: string | undefined;
+  selectedKeys: string[];
+};
+
+export type CreateInboxViewStateContext = Pick<
+  CreateInboxViewPersistenceOptions,
+  'handle'
+>;
+
+function defaultGroupBy(tab: InboxTab): InboxGroupBy {
+  return tab === 'reminders' ? 'none' : 'date';
+}
+
+/** Canonical setter-owned state for one mounted Inbox view. */
+export function createInboxViewState(
+  options?: CreateInboxViewStateOptions,
+  context?: CreateInboxViewStateContext
+) {
+  const initial = options ?? {};
+  const initialTab = initial.tab ?? 'signal';
+
+  const rawState = createStore<InboxViewSnapshot>({
+    tab: initialTab,
+    search: initial.search ?? '',
+    groupBy: initial.groupBy ?? defaultGroupBy(initialTab),
+    facets: normalizeFacetSelection(initial.facets),
+    collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
+    focusKey: initial.focusKey,
+    selectedKeys: [...(initial.selectedKeys ?? [])],
+  });
+  const persisted = context
+    ? makePersistedState(
+        rawState,
+        createInboxViewPersistence({
+          ...context,
+          restoreEntryState: options === undefined,
+        })
+      )
+    : rawState;
+  const [state, setState] = persisted;
+
+  const groups = createDisclosureState({
+    defaultExpanded: true,
+    initialToggledKeys: state.collapsedGroupIds,
+    onChange: (keys) => setState('collapsedGroupIds', [...keys]),
+  });
+
+  const setTab = (tab: InboxTab) => {
+    if (state.tab === tab) return;
+
+    setState(
+      produce((draft) => {
+        draft.tab = tab;
+        draft.groupBy = defaultGroupBy(tab);
+        draft.facets = {};
+        draft.collapsedGroupIds = [];
+        draft.focusKey = undefined;
+        draft.selectedKeys = [];
+      })
+    );
+
+    groups.reset();
+  };
+
+  const setFacetOption = (
+    facetId: string,
+    optionId: string,
+    selected: boolean
+  ) => {
+    const next = new Set(state.facets[facetId] ?? []);
+
+    if (selected) {
+      next.add(optionId);
+    } else {
+      next.delete(optionId);
+    }
+
+    const facets = { ...state.facets, [facetId]: [...next] };
+    setState('facets', normalizeFacetSelection(facets));
+  };
+
+  return {
+    setState,
+    tab: () => state.tab,
+    setTab,
+
+    search: () => state.search,
+    setSearch: (search: string) => setState('search', search),
+
+    groupBy: () => state.groupBy,
+    setGroupBy: (groupBy: InboxGroupBy) => {
+      setState('groupBy', groupBy);
+      groups.reset();
+    },
+
+    facets: () => state.facets,
+    setFacetOption,
+    clearFacets: () => setState('facets', {}),
+
+    groups,
+
+    listFocusKey: () => state.focusKey,
+    setListFocusKey: (focusKey: string | undefined) =>
+      setState('focusKey', focusKey),
+    listSelectedKeys: () => state.selectedKeys,
+    setListSelectedKeys: (selectedKeys: string[]) =>
+      setState('selectedKeys', [...selectedKeys]),
+
+    snapshot: (): InboxViewSnapshot => ({
+      tab: state.tab,
+      search: state.search,
+      groupBy: state.groupBy,
+      facets: normalizeFacetSelection(state.facets),
+      collapsedGroupIds: [...state.collapsedGroupIds],
+      focusKey: state.focusKey,
+      selectedKeys: [...state.selectedKeys],
+    }),
+
+    activeFacetCount: () =>
+      Object.values(state.facets).reduce(
+        (count, optionIds) => count + optionIds.length,
+        0
+      ),
+  };
+}
+
+export type InboxViewState = ReturnType<typeof createInboxViewState>;

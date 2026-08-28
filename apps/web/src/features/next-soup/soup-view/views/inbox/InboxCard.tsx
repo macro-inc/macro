@@ -24,6 +24,8 @@ interface RootProps extends SlotProps {
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  /** Set false when a parent list owns keyboard focus and activation. */
+  focusable?: boolean;
 }
 
 function Root(props: RootProps): JSX.Element {
@@ -59,7 +61,7 @@ function Root(props: RootProps): JSX.Element {
       )}
       data-unread={props.dimmed ? undefined : true}
       role={interactive() ? 'button' : undefined}
-      tabIndex={interactive() ? 0 : undefined}
+      tabIndex={interactive() && props.focusable !== false ? 0 : undefined}
       onClick={props.onClick}
       onKeyDown={onKeyDown}
     >
