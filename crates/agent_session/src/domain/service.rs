@@ -48,7 +48,8 @@ use super::error::{AgentSessionError, Result};
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionRenamed, AuthorKind, ChannelSession,
     ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS, Message,
-    MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog, StoredAgentSessionLog,
+    MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog, SessionManagement,
+    StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionNameGenerator,
@@ -147,6 +148,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// Persist that a session disconnected before a live actor could report it.
     fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Where the session's live actor runs, from this instance's viewpoint:
+    /// unmanaged (claimable here), ours, or a live peer's - in which case
+    /// commands belong at the peer's address rather than in this process.
+    fn management(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<SessionManagement>> + Send;
 
     /// Attach a new transport to an existing persisted session.
     ///
@@ -286,6 +295,19 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     #[must_use]
     pub fn replica_id(&self) -> ReplicaId {
         self.replica
+    }
+
+    /// Adopt a caller-minted replica identity, replacing the constructor's.
+    ///
+    /// For processes with more than one attach-capable service instance: the
+    /// lease's replica is the *process* (commands forward to an address, and
+    /// every instance in a process shares one), so the composition root mints
+    /// a single id and stamps it on each instance. The instances' session
+    /// sets are disjoint by construction, so they never contend for a lease.
+    #[must_use]
+    pub fn with_replica(mut self, replica: ReplicaId) -> Self {
+        self.replica = replica;
+        self
     }
 
     /// Stop active actors and wait for their tasks to release their transports.
@@ -563,6 +585,14 @@ where
             Arc::ptr_eq(&active.marker, &marker) && !active.deleting
         });
         Ok(())
+    }
+
+    async fn management(&self, id: AgentSessionId) -> Result<SessionManagement> {
+        Ok(match self.repo.manager_of(id).await? {
+            None => SessionManagement::Unmanaged,
+            Some(manager) if manager.replica == self.replica => SessionManagement::Ours,
+            Some(manager) => SessionManagement::Peer(manager),
+        })
     }
 
     async fn mark_disconnected(&self, id: AgentSessionId) -> Result<()> {

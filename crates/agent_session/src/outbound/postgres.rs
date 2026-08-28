@@ -8,8 +8,8 @@ mod test;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
-    CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaId, SandboxSize,
-    SessionBot, SessionClaim, SessionStatus, StoredAgentSessionLog,
+    CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId,
+    SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -952,14 +952,20 @@ impl SessionOwnership for PgAgentSessionRepo {
         Ok(())
     }
 
-    async fn heartbeat(&self, replica: ReplicaId) -> Result<()> {
+    async fn heartbeat(&self, replica: ReplicaId, address: Option<&ReplicaAddress>) -> Result<()> {
+        // COALESCE keeps a previously published address when a beat carries
+        // none, so a claim-created row filled in by one heartbeat is not
+        // blanked by the next.
         sqlx::query!(
             r#"
-            INSERT INTO harness_replica (id, last_heartbeat_at)
-            VALUES ($1, now())
-            ON CONFLICT (id) DO UPDATE SET last_heartbeat_at = now()
+            INSERT INTO harness_replica (id, last_heartbeat_at, address)
+            VALUES ($1, now(), $2)
+            ON CONFLICT (id) DO UPDATE
+            SET last_heartbeat_at = now(),
+                address = COALESCE(EXCLUDED.address, harness_replica.address)
             "#,
             replica.as_uuid(),
+            address.map(ReplicaAddress::as_str),
         )
         .execute(&self.pool)
         .await
@@ -975,6 +981,27 @@ impl SessionOwnership for PgAgentSessionRepo {
         .await
         .context("failed to prune stale harness replicas")?;
         Ok(())
+    }
+
+    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT live.id AS replica_id, live.address
+            FROM agent_session
+            JOIN harness_replica live ON live.id = agent_session.manager_replica_id
+            WHERE agent_session.id = $1
+              AND live.last_heartbeat_at > now() - make_interval(secs => $2)
+            "#,
+            session.as_uuid(),
+            REPLICA_STALE_AFTER.as_secs_f64(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's live manager")?;
+        Ok(row.map(|row| SessionManager {
+            replica: ReplicaId::from_uuid(row.replica_id),
+            address: row.address.map(ReplicaAddress::new),
+        }))
     }
 }
 

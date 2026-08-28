@@ -59,10 +59,14 @@ type Args = {
 };
 
 /**
- * The agent harness service. Like agent-proxy before it, this component pins
- * `desiredCount` to 1 with no autoscaling: the harness owns the live
- * agent-session actors in process memory with no cross-instance sync (see the
- * consumer groups in `services/agent_harness_service`).
+ * The agent harness service. Replicated in production: each replica claims
+ * the sessions whose live actors it holds through a fenced Postgres lease,
+ * and a command landing on the wrong replica is forwarded task-to-task over
+ * the private network (`POST /internal/agent-sessions/{id}/command`,
+ * internal-key authenticated) - which is why the service security group
+ * allows itself ingress on the service port. The Kafka consumer group splits
+ * partitions across live tasks; the lease plus forwarding is what makes that
+ * split correct.
  *
  * Deploys roll (min healthy 100%, max 200%): the outgoing task keeps serving
  * until the replacement passes health checks, so the control API and egress
@@ -322,7 +326,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // deploy rolls back with the old task still up rather than at zero.
         deploymentMinimumHealthyPercent: 100,
         deploymentMaximumPercent: 200,
-        desiredCount: 1,
+        desiredCount: stack === 'prod' ? 2 : 1,
         // ALB checks /health every 10s and fails the target after two
         // misses (~20s). HTTP does not listen until after DB, AWS config,
         // and JWT secrets, so a 0s grace period trips the circuit breaker
@@ -470,6 +474,24 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         securityGroupId: serviceSg.id,
         description: 'Allow inbound traffic from the service ALB',
         referencedSecurityGroupId: serviceAlbSg.id,
+        fromPort: serviceContainerPort,
+        toPort: serviceContainerPort,
+        ipProtocol: 'tcp',
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
+    // Replica-to-replica command forwarding: a task that consumed a command
+    // for a session another replica manages POSTs it directly to that
+    // replica's private address, bypassing the load balancer.
+    new aws.vpc.SecurityGroupIngressRule(
+      `${BASE_NAME}-peer-in`,
+      {
+        securityGroupId: serviceSg.id,
+        description:
+          'Allow harness replicas to forward session commands to each other',
+        referencedSecurityGroupId: serviceSg.id,
         fromPort: serviceContainerPort,
         toPort: serviceContainerPort,
         ipProtocol: 'tcp',

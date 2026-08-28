@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
+use agent_harness::domain::service::ForwardedCommands;
+use agent_harness::inbound::forward::{ForwardGatewayState, forward_router};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -55,11 +57,12 @@ where
 }
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
+pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Harness>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Bots, Auth>,
+    forward_state: ForwardGatewayState<Harness, Auth>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
@@ -70,12 +73,19 @@ where
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
+    Harness: ForwardedCommands,
 {
-    let app = api_router(read_state, control_state, create_state, gateway_state)
-        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-        .merge(Router::new().route("/health", get(health)))
-        .layer(macro_cors::cors_layer())
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+    let app = api_router(
+        read_state,
+        control_state,
+        create_state,
+        gateway_state,
+        forward_state,
+    )
+    .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
+    .merge(Router::new().route("/health", get(health)))
+    .layer(macro_cors::cors_layer())
+    .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -89,11 +99,12 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth>(
+fn api_router<T, R, Opener, Bots, Access, Auth, Harness>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Bots, Auth>,
+    forward_state: ForwardGatewayState<Harness, Auth>,
 ) -> Router
 where
     T: AgentSessionService,
@@ -102,6 +113,7 @@ where
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
+    Harness: ForwardedCommands,
 {
     let agent_sessions = agent_session_read_router(read_state.clone())
         .merge(agent_session_control_router(control_state))
@@ -110,6 +122,11 @@ where
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(read_state))
         .nest("/runtime", runtime_gateway_router(gateway_state))
+        // Replica-to-replica command forwarding. Internal-key authenticated,
+        // and reached over task-to-task networking rather than the load
+        // balancer; mounting it on the public listener is fine because the
+        // extractor refuses anything without the deployment's internal key.
+        .nest("/internal", forward_router(forward_state))
 }
 
 async fn health() -> &'static str {

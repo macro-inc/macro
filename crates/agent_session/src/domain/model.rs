@@ -48,6 +48,56 @@ impl std::fmt::Display for ReplicaId {
     }
 }
 
+/// A replica's own base URL, as peers should dial it for command forwarding.
+///
+/// Private-network address discovered by the replica itself at boot (the ECS
+/// task metadata endpoint in deployments), published with its heartbeat.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaAddress(String);
+
+impl ReplicaAddress {
+    /// Wrap a base URL, e.g. `http://10.0.1.7:8100`.
+    #[must_use]
+    pub fn new(address: impl Into<String>) -> Self {
+        Self(address.into())
+    }
+
+    /// The base URL as a string.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ReplicaAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// The live manager of a session, as read from the lease.
+#[derive(Debug, Clone)]
+pub struct SessionManager {
+    /// The replica holding the claim.
+    pub replica: ReplicaId,
+    /// Where to forward its commands, when the replica has published one.
+    /// `None` means the manager is live but unreachable - hold the error
+    /// rather than execute somewhere the actor is not.
+    pub address: Option<ReplicaAddress>,
+}
+
+/// Where a session's live actor runs, from one service instance's viewpoint.
+#[derive(Debug, Clone)]
+pub enum SessionManagement {
+    /// No live replica manages the session; this instance may claim it by
+    /// attaching, so commands execute locally.
+    Unmanaged,
+    /// This instance's replica manages it; commands execute locally.
+    Ours,
+    /// A live peer manages it; commands belong at its address.
+    Peer(SessionManager),
+}
+
 /// A session's takeover counter, bumped by every successful claim.
 ///
 /// Carried by the claim holder into each live-actor write; the store rejects

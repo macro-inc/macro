@@ -7,8 +7,9 @@
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
-    CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaId,
-    SandboxSize, SessionBot, SessionClaim, SessionStatus, StoredAgentSessionLog,
+    CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, REPLICA_STALE_AFTER,
@@ -27,6 +28,9 @@ use std::sync::{Arc, Mutex};
 /// which outlives the holder as in the real schema.
 type Lease = (Option<ReplicaId>, i64);
 
+/// One replica's row: its last heartbeat and published forwarding address.
+type ReplicaRow = (std::time::Instant, Option<ReplicaAddress>);
+
 /// An in-memory [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
 ///
 /// Cheap to clone - clones share one store, so a handle kept for assertions
@@ -43,8 +47,8 @@ pub struct InMemoryAgentSessionRepo {
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
-    /// Replica heartbeats, mirroring `harness_replica`.
-    replicas: Arc<Mutex<HashMap<ReplicaId, std::time::Instant>>>,
+    /// Replica heartbeats and published addresses, mirroring `harness_replica`.
+    replicas: Arc<Mutex<HashMap<ReplicaId, ReplicaRow>>>,
     /// Session -> lease, mirroring the lease columns: release clears the
     /// holder and leaves the counter.
     leases: Arc<Mutex<HashMap<AgentSessionId, Lease>>>,
@@ -346,7 +350,7 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
             .replicas
             .lock()
             .expect("in-memory replica store is not poisoned");
-        replicas.insert(replica, now);
+        replicas.entry(replica).or_insert((now, None)).0 = now;
         let mut leases = self
             .leases
             .lock()
@@ -355,7 +359,7 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
         let holder_is_live = holder.filter(|holder| *holder != replica).filter(|holder| {
             replicas
                 .get(holder)
-                .is_some_and(|beat| now.duration_since(*beat) < REPLICA_STALE_AFTER)
+                .is_some_and(|(beat, _)| now.duration_since(*beat) < REPLICA_STALE_AFTER)
         });
         if let Some(holder) = holder_is_live {
             return Ok(ClaimOutcome::ManagedElsewhere(holder));
@@ -383,12 +387,42 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
         Ok(())
     }
 
-    async fn heartbeat(&self, replica: ReplicaId) -> Result<()> {
-        self.replicas
+    async fn heartbeat(&self, replica: ReplicaId, address: Option<&ReplicaAddress>) -> Result<()> {
+        let mut replicas = self
+            .replicas
             .lock()
-            .expect("in-memory replica store is not poisoned")
-            .insert(replica, std::time::Instant::now());
+            .expect("in-memory replica store is not poisoned");
+        let entry = replicas
+            .entry(replica)
+            .or_insert((std::time::Instant::now(), None));
+        entry.0 = std::time::Instant::now();
+        // As in the real adapter: a beat carrying no address keeps the one
+        // already published.
+        if let Some(address) = address {
+            entry.1 = Some(address.clone());
+        }
         Ok(())
+    }
+
+    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+        let leases = self
+            .leases
+            .lock()
+            .expect("in-memory lease store is not poisoned");
+        let Some((Some(holder), _)) = leases.get(&session) else {
+            return Ok(None);
+        };
+        let replicas = self
+            .replicas
+            .lock()
+            .expect("in-memory replica store is not poisoned");
+        Ok(replicas
+            .get(holder)
+            .filter(|(beat, _)| beat.elapsed() < REPLICA_STALE_AFTER)
+            .map(|(_, address)| SessionManager {
+                replica: *holder,
+                address: address.clone(),
+            }))
     }
 }
 

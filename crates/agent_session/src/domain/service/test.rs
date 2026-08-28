@@ -1,6 +1,8 @@
 use super::*;
 use crate::PROTOCOL_VERSION;
-use crate::domain::model::{DEFAULT_AGENT_SESSION_NAME, Message, SessionBot};
+use crate::domain::model::{
+    DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,
+};
 use crate::domain::ports::NoOpRealtime;
 use crate::domain::session::HandshakeStatus;
 use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
@@ -426,8 +428,12 @@ impl SessionOwnership for BlockingPromptLogs {
         self.repo.release(claim).await
     }
 
-    async fn heartbeat(&self, replica: ReplicaId) -> Result<()> {
-        self.repo.heartbeat(replica).await
+    async fn heartbeat(&self, replica: ReplicaId, address: Option<&ReplicaAddress>) -> Result<()> {
+        self.repo.heartbeat(replica, address).await
+    }
+
+    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+        self.repo.manager_of(session).await
     }
 }
 
