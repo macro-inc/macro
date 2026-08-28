@@ -65,9 +65,9 @@ describe('interceptMailtoLinks', () => {
     expect(openExternalUrlMock).not.toHaveBeenCalled();
   });
 
-  it('ignores non-mailto anchors', () => {
+  it('ignores hash-only anchors', () => {
     const container = document.createElement('div');
-    // Hash href: a non-mailto link jsdom can "navigate" without complaining.
+    // Hash href: a same-page jump jsdom can "navigate" without complaining.
     const anchor = makeAnchor('#section');
     container.append(anchor);
 
@@ -75,5 +75,20 @@ describe('interceptMailtoLinks', () => {
     clickAnchor(anchor);
 
     expect(openExternalUrlMock).not.toHaveBeenCalled();
+  });
+
+  it('routes a plain left-click on an https anchor through openExternalUrl and prevents default', () => {
+    const container = document.createElement('div');
+    const anchor = makeAnchor('https://example.com/path');
+    container.append(anchor);
+
+    interceptMailtoLinks(container);
+    const notPrevented = clickAnchor(anchor);
+
+    expect(openExternalUrlMock).toHaveBeenCalledTimes(1);
+    expect(openExternalUrlMock).toHaveBeenCalledWith(
+      'https://example.com/path'
+    );
+    expect(notPrevented).toBe(false);
   });
 });
