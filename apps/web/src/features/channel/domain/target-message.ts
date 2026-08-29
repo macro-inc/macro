@@ -38,7 +38,7 @@ export type Command =
   | { t: 'cancel-flash' }
   | { t: 'restore-default-pagination'; loadAround: string };
 
-export type Transition = {
+type Reduction = {
   state: MachineState;
   commands: Command[];
 };
@@ -52,22 +52,219 @@ export function makeTarget(messageId: string, replyId?: string): Target {
   return replyId === undefined ? { messageId } : { messageId, replyId };
 }
 
+function unchanged(state: MachineState): Reduction {
+  return { state, commands: [] };
+}
+
+function changed(state: MachineState, commands: Command[] = []): Reduction {
+  return { state, commands };
+}
+
+function controlTarget(control: Control): Target | undefined {
+  return match(control)
+    .with({ t: 'idle' }, () => undefined)
+    .with({ t: 'loading' }, ({ target }) => target)
+    .with({ t: 'awaiting-viewport' }, ({ target }) => target)
+    .with({ t: 'scrolling' }, ({ target }) => target)
+    .with({ t: 'flashing' }, ({ target }) => target)
+    .exhaustive();
+}
+
 export function initialState(input: {
   messageId?: string;
   replyId?: string;
+  targetLoaded?: boolean;
 }): MachineState {
-  if (!input.messageId) return idleState;
+  if (input.messageId === undefined) return idleState;
+
+  const target = makeTarget(input.messageId, input.replyId);
   return {
-    control: {
-      t: 'loading',
-      target: makeTarget(input.messageId, input.replyId),
-    },
+    control: input.targetLoaded
+      ? { t: 'awaiting-viewport', target }
+      : { t: 'loading', target },
     loadAround: input.messageId,
   };
 }
 
-function controlTarget(control: Control): Target | undefined {
-  return control.t === 'idle' ? undefined : control.target;
+function reduceNavigate(
+  state: MachineState,
+  event: Extract<TargetEvent, { t: 'navigate' }>
+): Reduction {
+  const currentTarget = controlTarget(state.control);
+  const sameTarget =
+    currentTarget?.messageId === event.messageId &&
+    currentTarget?.replyId === event.replyId;
+  if (sameTarget && pendingScrollTargetId(state) === event.messageId) {
+    return unchanged(state);
+  }
+
+  const target = makeTarget(event.messageId, event.replyId);
+  if (!event.targetLoaded) {
+    return changed(
+      {
+        control: { t: 'loading', target },
+        loadAround: event.messageId,
+      },
+      [{ t: 'cancel-flash' }]
+    );
+  }
+
+  return changed(
+    {
+      control: { t: 'awaiting-viewport', target },
+      loadAround: state.loadAround,
+    },
+    [{ t: 'cancel-flash' }]
+  );
+}
+
+function reduceTargetLoaded(state: MachineState): Reduction {
+  return match(state.control)
+    .with({ t: 'idle' }, () => unchanged(state))
+    .with({ t: 'loading' }, ({ target }) =>
+      changed({
+        control: { t: 'awaiting-viewport', target },
+        loadAround: state.loadAround,
+      })
+    )
+    .with({ t: 'awaiting-viewport' }, () => unchanged(state))
+    .with({ t: 'scrolling' }, () => unchanged(state))
+    .with({ t: 'flashing' }, () => unchanged(state))
+    .exhaustive();
+}
+
+function reduceViewportReady(state: MachineState): Reduction {
+  return match(state.control)
+    .with({ t: 'idle' }, () => unchanged(state))
+    .with({ t: 'loading' }, () => unchanged(state))
+    .with({ t: 'awaiting-viewport' }, ({ target }) =>
+      changed(
+        {
+          control: {
+            t: 'scrolling',
+            target,
+            rootDone: target.replyId !== undefined,
+          },
+          loadAround: state.loadAround,
+        },
+        state.loadAround === undefined
+          ? []
+          : [
+              {
+                t: 'restore-default-pagination',
+                loadAround: state.loadAround,
+              },
+            ]
+      )
+    )
+    .with({ t: 'scrolling' }, () => unchanged(state))
+    .with({ t: 'flashing' }, () => unchanged(state))
+    .exhaustive();
+}
+
+function reduceRootScrollDone(
+  state: MachineState,
+  event: Extract<TargetEvent, { t: 'root-scroll-done' }>
+): Reduction {
+  return match(state.control)
+    .with({ t: 'idle' }, () => unchanged(state))
+    .with({ t: 'loading' }, () => unchanged(state))
+    .with({ t: 'awaiting-viewport' }, () => unchanged(state))
+    .with({ t: 'scrolling' }, ({ target }) => {
+      if (
+        target.replyId !== undefined ||
+        target.messageId !== event.messageId
+      ) {
+        return unchanged(state);
+      }
+
+      return changed(
+        {
+          control: { t: 'flashing', target },
+          loadAround: state.loadAround,
+        },
+        [{ t: 'schedule-flash', messageId: target.messageId }]
+      );
+    })
+    .with({ t: 'flashing' }, () => unchanged(state))
+    .exhaustive();
+}
+
+function reduceReplyScrollDone(
+  state: MachineState,
+  event: Extract<TargetEvent, { t: 'reply-scroll-done' }>
+): Reduction {
+  return match(state.control)
+    .with({ t: 'idle' }, () => unchanged(state))
+    .with({ t: 'loading' }, () => unchanged(state))
+    .with({ t: 'awaiting-viewport' }, () => unchanged(state))
+    .with({ t: 'scrolling' }, ({ target }) => {
+      if (
+        target.messageId !== event.messageId ||
+        target.replyId !== event.replyId
+      ) {
+        return unchanged(state);
+      }
+
+      return changed(
+        {
+          control: { t: 'flashing', target },
+          loadAround: state.loadAround,
+        },
+        [{ t: 'schedule-flash', messageId: target.messageId }]
+      );
+    })
+    .with({ t: 'flashing' }, () => unchanged(state))
+    .exhaustive();
+}
+
+function reduceFlashElapsed(
+  state: MachineState,
+  event: Extract<TargetEvent, { t: 'flash-elapsed' }>
+): Reduction {
+  return match(state.control)
+    .with({ t: 'idle' }, () => unchanged(state))
+    .with({ t: 'loading' }, () => unchanged(state))
+    .with({ t: 'awaiting-viewport' }, () => unchanged(state))
+    .with({ t: 'scrolling' }, () => unchanged(state))
+    .with({ t: 'flashing' }, ({ target }) =>
+      target.messageId === event.messageId
+        ? changed({ control: { t: 'idle' }, loadAround: state.loadAround })
+        : unchanged(state)
+    )
+    .exhaustive();
+}
+
+function reduceRelease(
+  state: MachineState,
+  event: Extract<TargetEvent, { t: 'release' }>
+): Reduction {
+  const target = controlTarget(state.control);
+  if (target?.messageId !== event.messageId) return unchanged(state);
+
+  return changed({ control: { t: 'idle' }, loadAround: state.loadAround }, [
+    { t: 'cancel-flash' },
+  ]);
+}
+
+export function reduce(state: MachineState, event: TargetEvent): Reduction {
+  return match(event)
+    .with({ t: 'navigate' }, (next) => reduceNavigate(state, next))
+    .with({ t: 'target-loaded' }, () => reduceTargetLoaded(state))
+    .with({ t: 'viewport-ready' }, () => reduceViewportReady(state))
+    .with({ t: 'root-scroll-done' }, (next) =>
+      reduceRootScrollDone(state, next)
+    )
+    .with({ t: 'reply-scroll-done' }, (next) =>
+      reduceReplyScrollDone(state, next)
+    )
+    .with({ t: 'flash-elapsed' }, (next) => reduceFlashElapsed(state, next))
+    .with({ t: 'release' }, (next) => reduceRelease(state, next))
+    .with({ t: 'pagination-restored' }, () =>
+      changed({ control: state.control, loadAround: undefined })
+    )
+    .with({ t: 'reset' }, () => changed(idleState, [{ t: 'cancel-flash' }]))
+    .exhaustive();
 }
 
 export function activeTargetMessageId(state: MachineState): string | undefined {
@@ -85,204 +282,22 @@ export function loadAroundMessageId(state: MachineState): string | undefined {
 }
 
 export function pendingScrollTargetId(state: MachineState): string | undefined {
-  const { control } = state;
-  if (control.t === 'loading' || control.t === 'awaiting-viewport') {
-    return control.target.messageId;
-  }
-  if (control.t === 'scrolling' && !control.rootDone) {
-    return control.target.messageId;
-  }
-  return undefined;
+  return match(state.control)
+    .with({ t: 'idle' }, () => undefined)
+    .with({ t: 'loading' }, ({ target }) => target.messageId)
+    .with({ t: 'awaiting-viewport' }, ({ target }) => target.messageId)
+    .with({ t: 'scrolling', rootDone: false }, ({ target }) => target.messageId)
+    .with({ t: 'scrolling', rootDone: true }, () => undefined)
+    .with({ t: 'flashing' }, () => undefined)
+    .exhaustive();
 }
 
 export function pendingTargetReplyId(state: MachineState): string | undefined {
-  const { control } = state;
-  if (
-    control.t === 'loading' ||
-    control.t === 'awaiting-viewport' ||
-    control.t === 'scrolling'
-  ) {
-    return control.target.replyId;
-  }
-  return undefined;
-}
-
-function isSameTargetPending(
-  state: MachineState,
-  messageId: string,
-  replyId?: string
-): boolean {
-  const target = controlTarget(state.control);
-  if (!target) return false;
-  if (target.messageId !== messageId || target.replyId !== replyId) {
-    return false;
-  }
-  return pendingScrollTargetId(state) === messageId;
-}
-
-function unchanged(state: MachineState): Transition {
-  return { state, commands: [] };
-}
-
-function reduceNavigate(
-  state: MachineState,
-  event: Extract<TargetEvent, { t: 'navigate' }>
-): Transition {
-  if (isSameTargetPending(state, event.messageId, event.replyId)) {
-    return unchanged(state);
-  }
-
-  const target = makeTarget(event.messageId, event.replyId);
-  if (!event.targetLoaded) {
-    return {
-      state: {
-        control: { t: 'loading', target },
-        loadAround: event.messageId,
-      },
-      commands: [{ t: 'cancel-flash' }],
-    };
-  }
-
-  return {
-    state: {
-      control: { t: 'awaiting-viewport', target },
-      loadAround: state.loadAround,
-    },
-    commands: [{ t: 'cancel-flash' }],
-  };
-}
-
-function reduceRelease(state: MachineState, messageId: string): Transition {
-  const target = controlTarget(state.control);
-  if (!target || target.messageId !== messageId) return unchanged(state);
-  return {
-    state: { control: { t: 'idle' }, loadAround: state.loadAround },
-    commands: [{ t: 'cancel-flash' }],
-  };
-}
-
-function reduceFlashElapsed(
-  state: MachineState,
-  messageId: string
-): Transition {
-  if (state.control.t !== 'flashing') return unchanged(state);
-  if (state.control.target.messageId !== messageId) return unchanged(state);
-  return {
-    state: { control: { t: 'idle' }, loadAround: state.loadAround },
-    commands: [],
-  };
-}
-
-function reduceTargetLoaded(state: MachineState): Transition {
-  if (state.control.t !== 'loading') return unchanged(state);
-  return {
-    state: {
-      control: { t: 'awaiting-viewport', target: state.control.target },
-      loadAround: state.loadAround,
-    },
-    commands: [],
-  };
-}
-
-function reduceViewportReady(state: MachineState): Transition {
-  if (state.control.t !== 'awaiting-viewport') return unchanged(state);
-  const { target } = state.control;
-  const commands: Command[] = [];
-  if (state.loadAround) {
-    commands.push({
-      t: 'restore-default-pagination',
-      loadAround: state.loadAround,
-    });
-  }
-  return {
-    state: {
-      control: {
-        t: 'scrolling',
-        target,
-        rootDone: target.replyId != null,
-      },
-      loadAround: state.loadAround,
-    },
-    commands,
-  };
-}
-
-function enterFlashing(state: MachineState, target: Target): Transition {
-  return {
-    state: { control: { t: 'flashing', target }, loadAround: state.loadAround },
-    commands: [{ t: 'schedule-flash', messageId: target.messageId }],
-  };
-}
-
-function reduceRootScrollDone(
-  state: MachineState,
-  messageId: string
-): Transition {
-  const { control } = state;
-  if (control.t === 'idle' || control.t === 'flashing') {
-    return unchanged(state);
-  }
-  if (control.target.messageId !== messageId) return unchanged(state);
-
-  if (control.t === 'loading' || control.t === 'awaiting-viewport') {
-    if (control.target.replyId) {
-      return {
-        state: {
-          control: { t: 'scrolling', target: control.target, rootDone: true },
-          loadAround: state.loadAround,
-        },
-        commands: [],
-      };
-    }
-    return enterFlashing(state, control.target);
-  }
-
-  if (control.rootDone) return unchanged(state);
-  if (control.target.replyId) {
-    return {
-      state: {
-        control: { t: 'scrolling', target: control.target, rootDone: true },
-        loadAround: state.loadAround,
-      },
-      commands: [],
-    };
-  }
-  return enterFlashing(state, control.target);
-}
-
-function reduceReplyScrollDone(
-  state: MachineState,
-  messageId: string,
-  replyId: string
-): Transition {
-  if (state.control.t !== 'scrolling') return unchanged(state);
-  if (state.control.target.messageId !== messageId) return unchanged(state);
-  if (state.control.target.replyId !== replyId) return unchanged(state);
-  return enterFlashing(state, state.control.target);
-}
-
-export function reduce(state: MachineState, event: TargetEvent): Transition {
-  return match(event)
-    .with({ t: 'navigate' }, (next) => reduceNavigate(state, next))
-    .with({ t: 'target-loaded' }, () => reduceTargetLoaded(state))
-    .with({ t: 'viewport-ready' }, () => reduceViewportReady(state))
-    .with({ t: 'root-scroll-done' }, (next) =>
-      reduceRootScrollDone(state, next.messageId)
-    )
-    .with({ t: 'reply-scroll-done' }, (next) =>
-      reduceReplyScrollDone(state, next.messageId, next.replyId)
-    )
-    .with({ t: 'flash-elapsed' }, (next) =>
-      reduceFlashElapsed(state, next.messageId)
-    )
-    .with({ t: 'release' }, (next) => reduceRelease(state, next.messageId))
-    .with({ t: 'pagination-restored' }, () => ({
-      state: { control: state.control, loadAround: undefined },
-      commands: [],
-    }))
-    .with({ t: 'reset' }, () => ({
-      state: idleState,
-      commands: [{ t: 'cancel-flash' } as const],
-    }))
+  return match(state.control)
+    .with({ t: 'idle' }, () => undefined)
+    .with({ t: 'loading' }, ({ target }) => target.replyId)
+    .with({ t: 'awaiting-viewport' }, ({ target }) => target.replyId)
+    .with({ t: 'scrolling' }, ({ target }) => target.replyId)
+    .with({ t: 'flashing' }, () => undefined)
     .exhaustive();
 }

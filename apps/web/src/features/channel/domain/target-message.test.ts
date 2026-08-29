@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type Command,
+  type MachineState,
+  type Target,
+  type TargetEvent,
   activeTargetMessageId,
   activeTargetMessageReplyId,
-  type Command,
   idleState,
   initialState,
   loadAroundMessageId,
-  type MachineState,
   makeTarget,
   pendingScrollTargetId,
   pendingTargetReplyId,
   reduce,
-  type Target,
-  type TargetEvent,
 } from './target-message';
 
 const loading = (
@@ -48,6 +48,11 @@ const flashing = (
   loadAround,
 });
 
+const noAround = (state: MachineState): MachineState => ({
+  ...state,
+  loadAround: undefined,
+});
+
 const result = (
   state: MachineState,
   commands: Command[] = []
@@ -78,6 +83,11 @@ describe('initialState', () => {
       name: 'starts loading around the initial nested target',
       input: { messageId: 'message-a', replyId: 'reply-a' },
       expected: loading(makeTarget('message-a', 'reply-a')),
+    },
+    {
+      name: 'starts awaiting-viewport when the constructor knows the target is loaded',
+      input: { messageId: 'message-a', targetLoaded: true },
+      expected: awaitingViewport(makeTarget('message-a')),
     },
   ])('$name', ({ input, expected }) => {
     expect(initialState(input)).toEqual(expected);
@@ -154,10 +164,9 @@ describe('reduce', () => {
         messageId: 'message-a',
         replyId: 'reply-a',
       },
-      expected: result(
-        flashing(makeTarget('message-a', 'reply-a'), 'message-a'),
-        [{ t: 'schedule-flash', messageId: 'message-a' }]
-      ),
+      expected: result(flashing(makeTarget('message-a', 'reply-a'), 'message-a'), [
+        { t: 'schedule-flash', messageId: 'message-a' },
+      ]),
     },
     {
       name: 'releases a flashing target when its flash elapses',
@@ -201,21 +210,19 @@ describe('reduce', () => {
       name: 'clears loadAround after pagination restoration',
       state: scrolling(makeTarget('message-a'), false, 'message-a'),
       event: { t: 'pagination-restored' as const },
-      expected: result(scrolling(makeTarget('message-a'), false, undefined)),
+      expected: result(noAround(scrolling(makeTarget('message-a'), false))),
     },
     {
-      name: 'completes an early root scroll from loading',
+      name: 'ignores root-scroll-done before scrolling',
       state: loading(makeTarget('message-a')),
       event: { t: 'root-scroll-done' as const, messageId: 'message-a' },
-      expected: result(flashing(makeTarget('message-a')), [
-        { t: 'schedule-flash', messageId: 'message-a' },
-      ]),
+      expected: result(loading(makeTarget('message-a'))),
     },
     {
-      name: 'exposes a nested reply when the root completes before viewport-ready',
+      name: 'ignores root-scroll-done while awaiting-viewport',
       state: awaitingViewport(makeTarget('message-a', 'reply-a')),
       event: { t: 'root-scroll-done' as const, messageId: 'message-a' },
-      expected: result(scrolling(makeTarget('message-a', 'reply-a'), true)),
+      expected: result(awaitingViewport(makeTarget('message-a', 'reply-a'))),
     },
   ];
 
@@ -224,15 +231,10 @@ describe('reduce', () => {
   });
 
   it('marks a nested root complete when the viewport is ready', () => {
-    const state = awaitingViewport(
-      makeTarget('message-a', 'reply-a'),
-      undefined
-    );
-
     check(
-      state,
+      noAround(awaitingViewport(makeTarget('message-a', 'reply-a'))),
       { t: 'viewport-ready' },
-      result(scrolling(makeTarget('message-a', 'reply-a'), true, undefined))
+      result(noAround(scrolling(makeTarget('message-a', 'reply-a'), true)))
     );
   });
 
@@ -379,10 +381,9 @@ describe('reduce', () => {
           replyId: 'reply-a',
           targetLoaded: true,
         },
-        result(
-          awaitingViewport(makeTarget('message-a', 'reply-a'), 'message-a'),
-          [{ t: 'cancel-flash' }]
-        )
+        result(awaitingViewport(makeTarget('message-a', 'reply-a'), 'message-a'), [
+          { t: 'cancel-flash' },
+        ])
       );
     }
   );
