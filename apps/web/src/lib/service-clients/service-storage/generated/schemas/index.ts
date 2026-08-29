@@ -1150,6 +1150,7 @@ export * from './soupThreadInfoLatestReplyAt';
 export * from './soupThreadReply';
 export * from './soupThreadReplyEditedAt';
 export * from './starterDocumentsResponse';
+export * from './streamEventsParams';
 export * from './string';
 export * from './successResponse';
 export * from './surfaceState';
