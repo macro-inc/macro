@@ -1,5 +1,8 @@
 //! Service implementation for the MCP OAuth broker.
 
+#[cfg(test)]
+mod test;
+
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 use std::{future::Future, sync::Arc, time::Duration};
@@ -196,8 +199,10 @@ where
         tracing::debug!("oauth-protected-resource metadata requested");
         let base = &self.public_url;
         serde_json::json!({
+            "resource": format!("{base}/mcp"),
             "authorization_server": base,
             "authorization_servers": [base],
+            "resource_name": "Macro MCP",
         })
     }
 

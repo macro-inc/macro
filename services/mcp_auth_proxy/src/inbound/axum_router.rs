@@ -1,5 +1,8 @@
 //! Axum router for the MCP OAuth broker.
 
+#[cfg(test)]
+mod test;
+
 use std::time::Duration;
 
 use axum::{
@@ -209,14 +212,18 @@ where
 {
     let oauth_routes = Router::new()
         .route("/health", routing::get(health))
+        // Origin well-known (pre-existing). Same document as the `/mcp` paths
+        // below so SEP-style clients that probe the origin still get metadata.
         .route(
             "/.well-known/oauth-protected-resource",
             routing::get(protected_resource_metadata),
         )
+        // Path-insertion discovery URL for resource `{public_url}/mcp` (RFC 9728 §3).
         .route(
             "/.well-known/oauth-protected-resource/mcp",
             routing::get(protected_resource_metadata),
         )
+        // RFC 9728 also allows well-known inserted under the resource path.
         .route(
             "/mcp/.well-known/oauth-protected-resource",
             routing::get(protected_resource_metadata),

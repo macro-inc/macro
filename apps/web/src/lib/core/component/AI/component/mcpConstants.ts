@@ -24,6 +24,11 @@ export const CLI_COMMANDS = [
     label: 'Codex CLI',
     command: `codex mcp add macro --url ${MACRO_MCP_URL}`,
   },
+  {
+    key: 'grok-cli',
+    label: 'Grok Build',
+    command: `grok mcp add --transport http macro ${MACRO_MCP_URL}`,
+  },
 ] as const;
 
 export const WEB_CLIENTS = [
