@@ -3,8 +3,26 @@ import {
   getChannelMessagesQueryKey,
 } from '@queries/channel/channel-messages';
 import { queryClient } from '@queries/client';
-import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
+import { match } from 'ts-pattern';
+import {
+  activeTargetMessageId,
+  activeTargetMessageReplyId,
+  type Command,
+  initialState,
+  loadAroundMessageId,
+  type MachineState,
+  pendingScrollTargetId,
+  pendingTargetReplyId,
+  reduce,
+  type TargetEvent,
+} from '../domain/target-message';
 import type { ThreadListNavigation } from './ThreadList';
 
 /**
@@ -36,27 +54,15 @@ export type TargetMessageController = ReturnType<
   typeof createTargetMessageController
 >;
 
-type TargetMessageData = {
-  activeTargetMessageId: string | undefined;
-  activeTargetMessageReplyId: string | undefined;
-  loadAroundMessageId: string | undefined;
-  pendingScrollTargetId: string | undefined;
-  pendingTargetReplyId: string | undefined;
-};
-
 export function createTargetMessageController(
   options: CreateTargetMessageControllerOptions
 ) {
-  const initialTargetMessageData: TargetMessageData = {
-    activeTargetMessageId: options.initialTargetMessageId,
-    activeTargetMessageReplyId: options.initialTargetMessageReplyId,
-    loadAroundMessageId: options.initialTargetMessageId,
-    pendingScrollTargetId: options.initialTargetMessageId,
-    pendingTargetReplyId: options.initialTargetMessageReplyId,
-  };
-
-  const [targetMessageData, setTargetMessageData] =
-    createStore<TargetMessageData>(initialTargetMessageData);
+  const [state, setState] = createSignal<MachineState>(
+    initialState({
+      messageId: options.initialTargetMessageId,
+      replyId: options.initialTargetMessageReplyId,
+    })
+  );
 
   let flashTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -66,148 +72,94 @@ export function createTargetMessageController(
     flashTimeout = undefined;
   };
 
-  const syncFlash = () => {
-    cancelFlash();
-
-    const activeTargetMessageId = targetMessageData['activeTargetMessageId'];
-    const hasPendingScroll =
-      targetMessageData['pendingScrollTargetId'] !== undefined ||
-      targetMessageData['pendingTargetReplyId'] !== undefined;
-
-    if (!activeTargetMessageId || hasPendingScroll) return;
-
-    flashTimeout = setTimeout(() => {
-      flashTimeout = undefined;
-      clearActiveTarget(activeTargetMessageId);
-    }, TARGETED_MESSAGE_FLASH_MS);
+  const runCommands = (commands: Command[]) => {
+    for (const command of commands) {
+      match(command)
+        .with({ t: 'cancel-flash' }, () => {
+          cancelFlash();
+        })
+        .with({ t: 'schedule-flash' }, ({ messageId }) => {
+          cancelFlash();
+          flashTimeout = setTimeout(() => {
+            flashTimeout = undefined;
+            dispatch({ t: 'flash-elapsed', messageId });
+          }, TARGETED_MESSAGE_FLASH_MS);
+        })
+        .with({ t: 'restore-default-pagination' }, ({ loadAround }) => {
+          const restored = restoreDefaultChannelPaginationAfterTargetLoad(
+            options.channelId(),
+            loadAround
+          );
+          if (restored) dispatch({ t: 'pagination-restored' });
+        })
+        .exhaustive();
+    }
   };
 
-  // Highlight and scroll-state changes go through this function so the flash
-  // timer stays synchronized. loadAroundMessageId does not affect highlighting,
-  // so it can be updated directly with setTargetMessageData.
-  const updateTargetMessageData = (patch: Partial<TargetMessageData>) => {
-    setTargetMessageData(patch);
-    syncFlash();
+  const dispatch = (event: TargetEvent) => {
+    const { state: next, commands } = reduce(state(), event);
+    setState(next);
+    runCommands(commands);
   };
 
   onCleanup(cancelFlash);
 
-  const hasMessageLoaded = (messageId: string) =>
-    options.messageKeys().includes(messageId);
-
-  const goToMessage = (messageId: string, replyId?: string) => {
-    const isSameTarget =
-      targetMessageData['activeTargetMessageId'] === messageId;
-    const isSameReplyTarget =
-      targetMessageData['activeTargetMessageReplyId'] === replyId;
-    const isPending = targetMessageData['pendingScrollTargetId'] === messageId;
-
-    if (isSameTarget && isSameReplyTarget && isPending) return;
-
-    updateTargetMessageData({
-      activeTargetMessageId: messageId,
-      activeTargetMessageReplyId: replyId,
-      // TODO: need a better approach where the load around should be undefined
-      // the current approach is a hack to fix rapid navigation race condition
-      loadAroundMessageId: hasMessageLoaded(messageId)
-        ? targetMessageData['loadAroundMessageId']
-        : messageId,
-      pendingScrollTargetId: messageId,
-      pendingTargetReplyId: replyId,
-    });
-  };
-
-  const completePendingScroll = (messageId: string) => {
-    if (targetMessageData['pendingScrollTargetId'] !== messageId) return;
-    updateTargetMessageData({ pendingScrollTargetId: undefined });
-  };
-
-  const completePendingReplyScroll = (messageId: string, replyId: string) => {
-    if (targetMessageData['activeTargetMessageId'] !== messageId) return;
-    if (targetMessageData['pendingTargetReplyId'] !== replyId) return;
-    updateTargetMessageData({ pendingTargetReplyId: undefined });
-  };
-
   createEffect(
     on(
-      [
-        options.navigation,
-        () => targetMessageData['pendingScrollTargetId'],
-        options.messageKeys,
-        options.didInitialScroll,
-      ],
-      ([navigation, pendingTargetId, , didInitialScroll]) => {
-        if (!navigation || !pendingTargetId) return;
-        if (!hasMessageLoaded(pendingTargetId)) return;
-
-        // Defer the scroll until the ThreadList has completed its initial
-        // scroll. This prevents a goToMessage call from being overridden by
-        // the initial-scroll retry logic in ThreadList's handleScrollEnd,
-        // which validates position against the *original* scroll target.
-        // The pending target stays queued; once didInitialScroll flips to
-        // true the effect re-fires and executes the scroll.
-        if (!didInitialScroll) return;
-
-        // Channel keeps a pending target's row mounted. Scrolling the whole
-        // row first can land on the wrong part of a tall thread and creates a
-        // visible intermediate position, so the measured root/reply element
-        // performs the only viewport movement.
-        const nestedTarget = !!targetMessageData['pendingTargetReplyId'];
-
-        const restoredDefaultPagination =
-          restoreDefaultChannelPaginationAfterTargetLoad(
-            options.channelId(),
-            targetMessageData['loadAroundMessageId']
-          );
-        if (restoredDefaultPagination) {
-          setTargetMessageData('loadAroundMessageId', undefined);
+      [() => state().control, options.messageKeys],
+      ([control, messageKeys]) => {
+        if (
+          control.t === 'loading' &&
+          messageKeys.includes(control.target.messageId)
+        ) {
+          dispatch({ t: 'target-loaded' });
         }
-        // Nested replies acknowledge the outer row immediately so their own
-        // measured-element scroll can begin. Root messages stay pending until
-        // ChannelThread positions the message inside its potentially tall row.
-        if (nestedTarget) completePendingScroll(pendingTargetId);
       }
     )
   );
 
-  const reset = () => {
-    updateTargetMessageData({
-      activeTargetMessageId: undefined,
-      activeTargetMessageReplyId: undefined,
-      loadAroundMessageId: undefined,
-      pendingScrollTargetId: undefined,
-      pendingTargetReplyId: undefined,
-    });
-  };
-
-  /**
-   * Clear the active target (and any pending scroll) if it still points at
-   * `messageId`; no-op if navigation has since moved elsewhere. Leaves
-   * `loadAroundMessageId` untouched so pagination is not disturbed.
-   */
-  function clearActiveTarget(messageId: string) {
-    if (targetMessageData['activeTargetMessageId'] !== messageId) return;
-    updateTargetMessageData({
-      activeTargetMessageId: undefined,
-      activeTargetMessageReplyId: undefined,
-      pendingScrollTargetId: undefined,
-      pendingTargetReplyId: undefined,
-    });
-  }
+  createEffect(
+    on(
+      [() => state().control, options.navigation, options.didInitialScroll],
+      ([control, navigation, didInitialScroll]) => {
+        if (
+          control.t === 'awaiting-viewport' &&
+          navigation &&
+          didInitialScroll
+        ) {
+          dispatch({ t: 'viewport-ready' });
+        }
+      }
+    )
+  );
 
   return {
-    activeTargetMessageId: () => targetMessageData['activeTargetMessageId'],
-    activeTargetMessageReplyId: () =>
-      targetMessageData['activeTargetMessageReplyId'],
-    loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
-    pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
-    pendingTargetReplyId: () => targetMessageData['pendingTargetReplyId'],
+    activeTargetMessageId: () => activeTargetMessageId(state()),
+    activeTargetMessageReplyId: () => activeTargetMessageReplyId(state()),
+    loadAroundMessageId: () => loadAroundMessageId(state()),
+    pendingScrollTargetId: () => pendingScrollTargetId(state()),
+    pendingTargetReplyId: () => pendingTargetReplyId(state()),
 
-    goToMessage,
-    completePendingScroll,
-    completePendingReplyScroll,
-    clearActiveTarget,
-    reset,
+    goToMessage: (messageId: string, replyId?: string) => {
+      dispatch({
+        t: 'navigate',
+        messageId,
+        replyId,
+        targetLoaded: options.messageKeys().includes(messageId),
+      });
+    },
+    completePendingScroll: (messageId: string) => {
+      dispatch({ t: 'root-scroll-done', messageId });
+    },
+    completePendingReplyScroll: (messageId: string, replyId: string) => {
+      dispatch({ t: 'reply-scroll-done', messageId, replyId });
+    },
+    clearActiveTarget: (messageId: string) => {
+      dispatch({ t: 'release', messageId });
+    },
+    reset: () => {
+      dispatch({ t: 'reset' });
+    },
   };
 }
 
