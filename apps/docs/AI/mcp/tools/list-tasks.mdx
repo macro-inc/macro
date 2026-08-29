@@ -1,13 +1,13 @@
 ---
 title: ListTasks
-description: "List Macro tasks with the same filters and sorts as the tasks view. Prefer this over ListEntities for any task question (\"my tasks\", \"urgent tasks\", \"tasks assigned to me\", \"overdue\", \"in review\"). Do not use Linear or other external trackers unless the user names them.  Defaults match the My tasks tab: assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope=\"all\" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.  Filters compose with AND. Multiple values on one filter are OR (status=[\"in_progress\",\"in_review\"] matches either). dueAfter/dueBefore filter the Due Date property; updatedAfter/updatedBefore filter last edit time (use those for \"completed yesterday\")."
+description: "List Macro tasks with the same filters and sorts as the tasks view. Prefer this over ListEntities for any task question (\"my tasks\", \"urgent tasks\", \"tasks assigned to me\", \"overdue\", \"in review\"). Do not use Linear or other external trackers unless the user names them.  Defaults match the My tasks tab: owned by or assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope=\"all\" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.  Filters compose with AND. Multiple values on one filter are OR (status=[\"in_progress\",\"in_review\"] matches either). dueAfter/dueBefore filter the Due Date property; updatedAfter/updatedBefore filter last edit time (use those for \"completed yesterday\")."
 ---
 
 # ListTasks
 
 List Macro tasks with the same filters and sorts as the tasks view. Prefer this over ListEntities for any task question ("my tasks", "urgent tasks", "tasks assigned to me", "overdue", "in review"). Do not use Linear or other external trackers unless the user names them.
 
-Defaults match the My tasks tab: assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope="all" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.
+Defaults match the My tasks tab: owned by or assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope="all" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.
 
 Filters compose with AND. Multiple values on one filter are OR (status=["in_progress","in_review"] matches either). dueAfter/dueBefore filter the Due Date property; updatedAfter/updatedBefore filter last edit time (use those for "completed yesterday").
 
@@ -18,7 +18,7 @@ Filters compose with AND. Multiple values on one filter are OR (status=["in_prog
 | `scope` | `"my_tasks"` \| `"all"` | No | Which task list to query, matching the tasks view tabs. |
 | `status` | (`"not_started"` \| `"in_progress"` \| `"in_review"` \| `"completed"` \| `"canceled"`)[] | No | Filter by status. Values: not_started, in_progress, in_review, completed, canceled. Multiple values are OR'd. On my_tasks this defaults to the three open statuses; pass completed to see finished work. |
 | `priority` | (`"urgent"` \| `"high"` \| `"medium"` \| `"low"` \| `"none"`)[] | No | Filter by priority. Values: urgent, high, medium, low, none. Multiple values are OR'd. "none" matches tasks with no priority set. |
-| `assignee` | string | No | Filter by assignee. Use "me" for the current user, a Macro user id (macro\|user@example.com), or a bare email. Use ListTeamMembers to find ids. Overrides the my_tasks assignee default when set. |
+| `assignee` | string | No | Filter by assignee. Use "me" for the current user, a Macro user id (macro\|user@example.com), or a bare email. Use ListTeamMembers to find ids. Overrides the my_tasks owner-or-assignee default when set. |
 | `projectId` | string | No | Only tasks in this project (UUID from ListEntities or ReadProject). |
 | `dueAfter` | string | No | Inclusive Due Date lower bound, RFC 3339 UTC (e.g. 2026-08-20T00:00:00Z). Tasks with no due date are excluded when this or dueBefore is set. |
 | `dueBefore` | string | No | Inclusive Due Date upper bound, RFC 3339 UTC. |
