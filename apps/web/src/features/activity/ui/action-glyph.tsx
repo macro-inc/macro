@@ -8,31 +8,28 @@ import SlidersHorizontal from '@phosphor/sliders-horizontal.svg';
 import Trash from '@phosphor/trash.svg';
 import UserMinus from '@phosphor/user-minus.svg';
 import UserPlus from '@phosphor/user-plus.svg';
-import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import { Dynamic } from 'solid-js/web';
+import type { ActivityAction } from '../domain/event';
 
 const GLYPHS = {
-  GraphqlActivityCreated: Plus,
-  GraphqlActivityEdited: PencilSimple,
-  GraphqlActivityOpened: Eye,
-  GraphqlActivityDeleted: Trash,
-  GraphqlActivityMessaged: ChatCircle,
-  GraphqlActivitySent: PaperPlaneTilt,
-  GraphqlActivityPropertyChanged: SlidersHorizontal,
-  GraphqlActivityParticipantAdded: UserPlus,
-  GraphqlActivityParticipantRemoved: UserMinus,
-  GraphqlActivityCallStarted: Phone,
-  GraphqlActivityUnknownAction: PencilSimple,
+  created: Plus,
+  edited: PencilSimple,
+  opened: Eye,
+  deleted: Trash,
+  messaged: ChatCircle,
+  'email-sent': PaperPlaneTilt,
+  'property-changed': SlidersHorizontal,
+  'participant-added': UserPlus,
+  'participant-removed': UserMinus,
+  'call-started': Phone,
+  unknown: PencilSimple,
 } as const;
 
 /** A small icon for the kind of action, for glyph-led activity rows. */
-export function ActionGlyph(props: {
-  action: ActivityEvent['action'];
-  class?: string;
-}) {
+export function ActionGlyph(props: { action: ActivityAction; class?: string }) {
   return (
     <Dynamic
-      component={GLYPHS[props.action.__typename]}
+      component={GLYPHS[props.action.kind]}
       class={props.class ?? 'size-3'}
     />
   );

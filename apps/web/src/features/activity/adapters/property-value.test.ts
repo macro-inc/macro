@@ -1,6 +1,6 @@
 import type { PropertyDefinitionDomain } from '@property/types';
 import { describe, expect, it } from 'vitest';
-import { propertyValueLabel } from './property-change-label';
+import { propertyValueLabel } from './property-value';
 
 const definition = {
   id: 'def-1',

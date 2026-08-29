@@ -1,0 +1,52 @@
+id: ts-no-activity-ui-adapter-imports
+language: typescript
+# Twin of tsx-no-activity-ui-adapter-imports — ast-grep rules are
+# single-language, and `tsx` only scans .tsx files.
+severity: warning
+message: Activity UI leaves must not import adapters or shared query factories. Views compose those.
+note: |-
+  Rule FE-31 in docs/STYLE_GUIDE.md. `features/activity/ui` takes domain
+  values (and resolved display strings) and returns JSX. Query factories
+  and decode live in `adapters/` and are composed in `views/`. The one
+  sanctioned adapter import is `property-value`, which parses untyped
+  wire JSON for property-changed rows. Resolver hooks such as
+  `usePropertyEntityDisplay` are also allowed. Do not add more adapter
+  imports to leave components.
+files:
+  - apps/web/src/features/activity/ui/**
+rule:
+  any:
+    - kind: string
+      regex: ^['"]@queries/
+      any:
+        - inside:
+            kind: import_statement
+            field: source
+        - inside:
+            kind: export_statement
+            field: source
+        - inside:
+            kind: arguments
+            inside:
+              kind: call_expression
+              has:
+                field: function
+                kind: import
+    - kind: string
+      regex: ^['"]((\.\./)+adapters/|@app/features/activity/adapters/)
+      not:
+        regex: property-value
+      any:
+        - inside:
+            kind: import_statement
+            field: source
+        - inside:
+            kind: export_statement
+            field: source
+        - inside:
+            kind: arguments
+            inside:
+              kind: call_expression
+              has:
+                field: function
+                kind: import

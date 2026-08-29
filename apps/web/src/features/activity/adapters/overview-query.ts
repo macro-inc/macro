@@ -6,9 +6,8 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Accessor } from 'solid-js';
-
-export type ActivityOverview =
-  MyActivityOverviewQuery['user']['activityOverview'];
+import type { ActivityOverview } from '../domain/event';
+import { decodeActivityOverview } from './decode';
 
 function browserTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -30,6 +29,6 @@ export function createMyActivityOverviewQuery(options: {
     enabled: options.enabled(),
     requestPolicy: 'cache-and-network',
     keepPreviousData: true,
-    select: (data) => data.user.activityOverview,
+    select: (data) => decodeActivityOverview(data.user.activityOverview),
   }));
 }

@@ -229,7 +229,7 @@ function RecentViewWrapper() {
 }
 
 const MyActivityView = lazy(() =>
-  import('@app/features/activity/my-activity-view').then((module) => ({
+  import('@app/features/activity/views/my-activity-view').then((module) => ({
     default: module.MyActivityView,
   }))
 );

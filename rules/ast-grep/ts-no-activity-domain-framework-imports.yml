@@ -1,0 +1,32 @@
+id: ts-no-activity-domain-framework-imports
+language: typescript
+# Twin of tsx-no-activity-domain-framework-imports — ast-grep rules are
+# single-language, and `tsx` only scans .tsx files.
+severity: warning
+message: Activity domain modules must stay pure TypeScript — no Solid, urql, queries, generated GraphQL, or feature adapters.
+note: |-
+  Rule FE-31 in docs/STYLE_GUIDE.md. `features/activity/domain` owns the
+  activity vocabulary and the functions that describe, group, and summarize
+  it. Wire types, clients, and UI stay outside this directory so a schema
+  rename cannot churn domain tests. Decode and query factories live in
+  `features/activity/adapters`. The `dateBucket` import from next-soup is
+  the documented exception for feed labels that must match soup views.
+files:
+  - apps/web/src/features/activity/domain/**
+rule:
+  kind: string
+  regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/graphql/generated/|(\.\./)+adapters/|@app/features/activity/adapters)
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: import

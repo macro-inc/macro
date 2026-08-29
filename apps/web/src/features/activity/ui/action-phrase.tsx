@@ -1,6 +1,6 @@
-import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import { Show } from 'solid-js';
-import { actionAsPropertyChange, describeAction } from './describe-action';
+import { describeAction } from '../domain/describe-action';
+import type { ActivityEvent } from '../domain/event';
 import { PropertyChangeText } from './property-change';
 
 function capitalize(value: string): string {
@@ -18,7 +18,11 @@ export function ActionPhrase(props: {
 }) {
   return (
     <Show
-      when={actionAsPropertyChange(props.event.action)}
+      when={
+        props.event.action.kind === 'property-changed'
+          ? props.event.action
+          : undefined
+      }
       fallback={
         props.capitalize
           ? capitalize(describeAction(props.event.action))

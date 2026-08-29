@@ -2,13 +2,11 @@ import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-hea
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { usePropertyEntityDisplay } from '@property/hooks';
-import type { ActivityOverview } from '@queries/activity/graphql/overview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show } from 'solid-js';
-import { displayEntityType } from './display-entity-type';
+import type { ActivityTopEntity } from '../domain/event';
+import { toPropertyEntityType } from '../domain/event';
 import { EntityMention } from './entity-mention';
-
-type EntityRank = ActivityOverview['topEntities'][number];
 
 const ROW_CLASS = 'mx-1 flex w-[calc(100%-0.5rem)] items-stretch px-2 text-sm';
 const ROW_BODY_CLASS =
@@ -18,9 +16,7 @@ const ROW_BODY_CLASS =
  * The entities the viewer touched most, as a list that shares the activity
  * feed's row chrome — mention on the left, action count on the right.
  */
-export function TopEntities(props: {
-  entities: ActivityOverview['topEntities'];
-}) {
+export function TopEntities(props: { entities: ActivityTopEntity[] }) {
   return (
     <section class="min-w-0" aria-label="Most active">
       <SoupSectionHeader>Most active</SoupSectionHeader>
@@ -38,8 +34,8 @@ export function TopEntities(props: {
   );
 }
 
-function TopEntityRow(props: { entity: EntityRank }) {
-  const displayType = () => displayEntityType(props.entity.entityType);
+function TopEntityRow(props: { entity: ActivityTopEntity }) {
+  const displayType = () => toPropertyEntityType(props.entity.entityType);
 
   return (
     <div class={ROW_CLASS}>
@@ -47,9 +43,7 @@ function TopEntityRow(props: { entity: EntityRank }) {
         when={displayType()}
         fallback={
           <div class={ROW_BODY_CLASS}>
-            <span class="min-w-0 truncate text-ink-extra-muted">
-              {props.entity.entityType}
-            </span>
+            <span class="min-w-0 truncate text-ink-extra-muted">Item</span>
             <ActionCount count={props.entity.count} />
           </div>
         }
@@ -63,7 +57,7 @@ function TopEntityRow(props: { entity: EntityRank }) {
 }
 
 function MappedEntityRow(props: {
-  entity: EntityRank;
+  entity: ActivityTopEntity;
   entityType: EntityType;
 }) {
   const display = usePropertyEntityDisplay(

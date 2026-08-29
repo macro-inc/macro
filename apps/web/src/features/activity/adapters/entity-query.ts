@@ -2,16 +2,19 @@ import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
 import { buildEntityPropertiesInput } from '@queries/properties/graphql/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
-  type ActivityEventFieldsFragment,
   EntityActivityDocument,
   type EntityActivityQuery,
   type EntityActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo } from 'solid-js';
+import {
+  type EntityActivityResult,
+  selectEntityActivity,
+} from './select-entity-activity';
 
-/** One activity event as both activity queries return it. */
-export type ActivityEvent = ActivityEventFieldsFragment;
+export type { EntityActivityResult };
+export { selectEntityActivity };
 
 /** Rows requested for a side-panel activity preview. */
 export const ENTITY_ACTIVITY_PREVIEW_LIMIT = 20;
@@ -39,7 +42,7 @@ export function createEntityActivityQuery(options: EntityActivityQueryOptions) {
   const result = createUrqlQuery<
     EntityActivityQuery,
     EntityActivityQueryVariables,
-    ActivityEvent[]
+    EntityActivityResult
   >(() => {
     const currentInput = input();
     const entityId = options.entityId();
@@ -54,9 +57,7 @@ export function createEntityActivityQuery(options: EntityActivityQueryOptions) {
       enabled: currentInput !== undefined,
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
-      select: (data) =>
-        data.user.soup.items.find((item) => item.id === entityId)?.activity ??
-        [],
+      select: (data) => selectEntityActivity(data, entityId),
     };
   });
 

@@ -2,16 +2,16 @@ import { PropertyValueIcon } from '@property/component/propertyValue/PropertyVal
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { TagDot } from '@property/tags/TagDot';
 import type { PropertyDefinitionDomain } from '@property/types';
-import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import { For, Show } from 'solid-js';
 import {
   propertyValueLabel,
   selectOptionEntries,
-} from './property-change-label';
+} from '../adapters/property-value';
+import type { ActivityAction } from '../domain/event';
 
 type PropertyChangedAction = Extract<
-  ActivityEvent['action'],
-  { __typename: 'GraphqlActivityPropertyChanged' }
+  ActivityAction,
+  { kind: 'property-changed' }
 >;
 
 /**

@@ -1,21 +1,21 @@
-import type { ActivityOverview } from '@queries/activity/graphql/overview';
 import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
 import { createMemo, For, type JSX } from 'solid-js';
-import { OVERVIEW_TZ, parseOverviewDate } from './activity-dates';
+import { OVERVIEW_TZ, parseOverviewDate } from '../domain/activity-dates';
 import {
   type ActivityStats,
   formatDayLabel,
   formatMonthName,
   formatStreak,
   summarizeActivity,
-} from './activity-stats';
+} from '../domain/activity-stats';
 import {
   buildContributionGrid,
   type ContributionDay,
   type ContributionWeek,
-} from './contribution-grid';
-import { INTENSITY_CLASS } from './intensity';
+} from '../domain/contribution-grid';
+import type { ActivityOverview } from '../domain/event';
+import { INTENSITY_CLASS } from '../domain/intensity';
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
 

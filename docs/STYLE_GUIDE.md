@@ -242,3 +242,10 @@ TypeScript · `[ui]` UI / UX conventions
   string can't carry structure, props, or behavior. Extract a component, or inline the
   literal at its single use; styling variants are component props, not exported
   strings. (enforced: ast-grep `tsx-no-class-string-consts`, warning)
+- **FE-31** `[data]` `features/activity` keeps a one-way import graph: `domain/`
+  stays free of Solid, urql, `@queries/*`, generated GraphQL, and `adapters/`;
+  `ui/` stays free of `adapters/` (except `property-value`) and `@queries/*`;
+  `views/` compose adapters, domain, and ui. `grep -r generated/graphql features/activity`
+  must hit only `adapters/`. (enforced: ast-grep
+  `ts-no-activity-domain-framework-imports` + `tsx-no-activity-domain-framework-imports`
+  + `ts-no-activity-ui-adapter-imports` + `tsx-no-activity-ui-adapter-imports`, warning)

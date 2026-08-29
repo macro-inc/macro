@@ -1,4 +1,4 @@
-import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
+import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
 import {
   EntityPropertiesSection,
   EntityTagsSection,

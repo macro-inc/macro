@@ -6,7 +6,8 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Accessor } from 'solid-js';
-import type { ActivityEvent } from './entity';
+import type { ActivityEvent } from '../domain/event';
+import { decodeActivityEvent } from './decode';
 
 /** Rows fetched per feed page. */
 export const ACTIVITY_FEED_PAGE_LIMIT = 50;
@@ -33,6 +34,9 @@ export function createMyActivityQuery(options: { enabled: Accessor<boolean> }) {
     enabled: options.enabled(),
     requestPolicy: 'cache-and-network',
     keepPreviousData: true,
-    select: ({ pages }) => pages.flatMap((page) => page.user.activity.items),
+    select: ({ pages }) =>
+      pages
+        .flatMap((page) => page.user.activity.items)
+        .map(decodeActivityEvent),
   }));
 }
