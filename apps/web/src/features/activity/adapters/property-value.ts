@@ -5,6 +5,7 @@ import {
   formatNumber,
   formatOptionValue,
 } from '@property/utils/formatting';
+import { match } from 'ts-pattern';
 
 /** One resolved select option of a stored property value. */
 export type SelectOptionEntry = {
@@ -71,22 +72,22 @@ export function propertyValueLabel(
   const tagged = asTaggedValue(raw);
   if (!tagged) return undefined;
 
-  switch (tagged.type) {
-    case 'String':
-      return typeof tagged.value === 'string' ? tagged.value : undefined;
-    case 'Number':
-      return typeof tagged.value === 'number'
-        ? formatNumber(tagged.value)
-        : undefined;
-    case 'Boolean':
-      return typeof tagged.value === 'boolean'
+  return match(tagged.type)
+    .with('String', () =>
+      typeof tagged.value === 'string' ? tagged.value : undefined
+    )
+    .with('Number', () =>
+      typeof tagged.value === 'number' ? formatNumber(tagged.value) : undefined
+    )
+    .with('Boolean', () =>
+      typeof tagged.value === 'boolean'
         ? formatBoolean(tagged.value)
-        : undefined;
-    case 'Date':
-      return typeof tagged.value === 'string'
-        ? formatDate(tagged.value)
-        : undefined;
-    case 'SelectOption': {
+        : undefined
+    )
+    .with('Date', () =>
+      typeof tagged.value === 'string' ? formatDate(tagged.value) : undefined
+    )
+    .with('SelectOption', () => {
       if (!Array.isArray(tagged.value)) return undefined;
       const labels = tagged.value
         .filter((id): id is string => typeof id === 'string')
@@ -96,19 +97,19 @@ export function propertyValueLabel(
         })
         .filter((label): label is string => label !== undefined);
       return labels.length > 0 ? labels.join(', ') : undefined;
-    }
-    case 'Link':
-      return Array.isArray(tagged.value)
+    })
+    .with('Link', () =>
+      Array.isArray(tagged.value)
         ? tagged.value.filter((v) => typeof v === 'string').join(', ') ||
-            undefined
-        : undefined;
-    case 'EntityReference':
-      return Array.isArray(tagged.value) && tagged.value.length > 0
+          undefined
+        : undefined
+    )
+    .with('EntityReference', () =>
+      Array.isArray(tagged.value) && tagged.value.length > 0
         ? tagged.value.length === 1
           ? 'an item'
           : `${tagged.value.length} items`
-        : undefined;
-    default:
-      return undefined;
-  }
+        : undefined
+    )
+    .otherwise(() => undefined);
 }

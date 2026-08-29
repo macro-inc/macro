@@ -3,14 +3,27 @@ import { openDocument } from '@core/component/LexicalMarkdown/component/core/Blo
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import type { ActivityTopEntity } from '../domain/event';
 import { toPropertyEntityType } from '../domain/event';
 import { EntityMention } from './entity-mention';
 
-const ROW_CLASS = 'mx-1 flex w-[calc(100%-0.5rem)] items-stretch px-2 text-sm';
-const ROW_BODY_CLASS =
-  'flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-0.5 hover:bg-hover/30';
+function Row(props: { children: JSX.Element }) {
+  return (
+    <div class="mx-1 flex w-[calc(100%-0.5rem)] items-stretch px-2 text-sm">
+      {props.children}
+    </div>
+  );
+}
+
+function RowBody(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      {...props}
+      class="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-0.5 hover:bg-hover/30"
+    />
+  );
+}
 
 /**
  * The entities the viewer touched most, as a list that shares the activity
@@ -38,21 +51,21 @@ function TopEntityRow(props: { entity: ActivityTopEntity }) {
   const displayType = () => toPropertyEntityType(props.entity.entityType);
 
   return (
-    <div class={ROW_CLASS}>
+    <Row>
       <Show
         when={displayType()}
         fallback={
-          <div class={ROW_BODY_CLASS}>
+          <RowBody>
             <span class="min-w-0 truncate text-ink-extra-muted">Item</span>
             <ActionCount count={props.entity.count} />
-          </div>
+          </RowBody>
         }
       >
         {(type) => (
           <MappedEntityRow entity={props.entity} entityType={type()} />
         )}
       </Show>
-    </div>
+    </Row>
   );
 }
 
@@ -76,12 +89,12 @@ function MappedEntityRow(props: {
   });
 
   return (
-    <div {...navHandlers} class={ROW_BODY_CLASS}>
+    <RowBody {...navHandlers}>
       <span class="min-w-0 truncate">
         <EntityMention entityId={props.entity.entityId} display={display} />
       </span>
       <ActionCount count={props.entity.count} />
-    </div>
+    </RowBody>
   );
 }
 

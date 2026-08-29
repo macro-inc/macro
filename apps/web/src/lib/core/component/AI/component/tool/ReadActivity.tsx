@@ -19,22 +19,14 @@ type Activity = NamedTool<
 >['data']['activities'][number];
 
 function decodeToolEntityType(raw: string): ActivityEntityType {
-  switch (raw) {
-    case 'document':
-      return 'document';
-    case 'project':
-      return 'project';
-    case 'chat':
-      return 'chat';
-    case 'email_thread':
-      return 'email-thread';
-    case 'channel':
-      return 'channel';
-    case 'user':
-      return 'user';
-    default:
-      return { kind: 'unsupported', raw };
-  }
+  return match(raw)
+    .with('document', () => 'document' as const)
+    .with('project', () => 'project' as const)
+    .with('chat', () => 'chat' as const)
+    .with('email_thread', () => 'email-thread' as const)
+    .with('channel', () => 'channel' as const)
+    .with('user', () => 'user' as const)
+    .otherwise((value) => ({ kind: 'unsupported' as const, raw: value }));
 }
 
 function activityAction(action: Activity['action']): ActivityAction {

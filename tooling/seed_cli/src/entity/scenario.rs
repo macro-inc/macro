@@ -20,8 +20,7 @@ const LOCAL_E2E_RESET_SQL: &str = include_str!("../../seed/local_e2e/reset.sql")
 const LOCAL_E2E_USERS_JSON: &str = include_str!("../../seed/local_e2e/users.json");
 const LOCAL_E2E_CHANNEL_MESSAGES_SQL: &str =
     include_str!("../../seed/local_e2e/channel_messages.sql");
-const LOCAL_E2E_ACTIVITY_SQL: &str =
-    include_str!("../../seed/local_e2e/activity.sql");
+const LOCAL_E2E_ACTIVITY_SQL: &str = include_str!("../../seed/local_e2e/activity.sql");
 
 #[derive(Debug, Deserialize)]
 struct LocalE2eManifest {

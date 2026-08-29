@@ -1,3 +1,5 @@
+import { match } from 'ts-pattern';
+
 export type ActivityAction =
   | { kind: 'created' }
   | { kind: 'edited' }
@@ -55,19 +57,13 @@ export type PropertyEntityType =
 export function toPropertyEntityType(
   entityType: ActivityEntityType
 ): PropertyEntityType | undefined {
-  if (typeof entityType === 'object') return undefined;
-  switch (entityType) {
-    case 'document':
-      return 'DOCUMENT';
-    case 'project':
-      return 'PROJECT';
-    case 'chat':
-      return 'CHAT';
-    case 'email-thread':
-      return 'THREAD';
-    case 'channel':
-      return 'CHANNEL';
-    case 'user':
-      return 'USER';
-  }
+  return match(entityType)
+    .with({ kind: 'unsupported' }, () => undefined)
+    .with('document', () => 'DOCUMENT' as const)
+    .with('project', () => 'PROJECT' as const)
+    .with('chat', () => 'CHAT' as const)
+    .with('email-thread', () => 'THREAD' as const)
+    .with('channel', () => 'CHANNEL' as const)
+    .with('user', () => 'USER' as const)
+    .exhaustive();
 }

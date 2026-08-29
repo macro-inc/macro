@@ -1,6 +1,7 @@
 import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
 import { createMemo, For, type JSX } from 'solid-js';
+import { match } from 'ts-pattern';
 import { OVERVIEW_TZ, parseOverviewDate } from '../domain/activity-dates';
 import {
   type ActivityStats,
@@ -15,7 +16,7 @@ import {
   type ContributionWeek,
 } from '../domain/contribution-grid';
 import type { ActivityOverview } from '../domain/event';
-import { INTENSITY_CLASS } from '../domain/intensity';
+import type { ActivityIntensity } from '../domain/intensity';
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
 
@@ -102,7 +103,7 @@ function IntensityLegend() {
       <span>Fewer</span>
       <For each={[0, 1, 2, 3, 4] as const}>
         {(level) => (
-          <span class={`size-2.5 rounded-[3px] ${INTENSITY_CLASS[level]}`} />
+          <IntensitySwatch level={level} class="size-2.5 rounded-[3px]" />
         )}
       </For>
       <span>More</span>
@@ -181,11 +182,34 @@ function DaySquare(props: { day: ContributionDay | null }) {
       class="aspect-square w-full shrink-0"
       label={label}
     >
-      <span
+      <IntensitySwatch
+        level={day.intensity}
+        class="block size-full rounded-[3px]"
         aria-label={label}
-        class={`block size-full rounded-[3px] ${INTENSITY_CLASS[day.intensity]}`}
       />
     </Tooltip>
+  );
+}
+
+function IntensitySwatch(props: {
+  level: ActivityIntensity;
+  class?: string;
+  'aria-label'?: string;
+}) {
+  return (
+    <span
+      aria-label={props['aria-label']}
+      class={cn(
+        match(props.level)
+          .with(0, () => 'bg-ink/10')
+          .with(1, () => 'bg-accent/25')
+          .with(2, () => 'bg-accent/45')
+          .with(3, () => 'bg-accent/70')
+          .with(4, () => 'bg-accent')
+          .exhaustive(),
+        props.class
+      )}
+    />
   );
 }
 

@@ -3,7 +3,7 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { describeActionForEntity } from '../domain/describe-action';
 import type { ActivityEvent } from '../domain/event';
 import { toPropertyEntityType } from '../domain/event';
@@ -63,7 +63,7 @@ export function ActivityTimelineRow(props: {
       <Show
         when={entityType()}
         fallback={
-          <div class={ROW_BODY_CLASS}>
+          <RowBody>
             <Show when={showActor()}>
               <span class="shrink-0 font-medium">
                 <ActorName name={actorName()} />
@@ -73,7 +73,7 @@ export function ActivityTimelineRow(props: {
               <ActionPhrase event={props.event} capitalize={!showActor()} />
             </span>
             <Timestamp event={props.event} />
-          </div>
+          </RowBody>
         }
       >
         {(type) => (
@@ -89,8 +89,14 @@ export function ActivityTimelineRow(props: {
   );
 }
 
-const ROW_BODY_CLASS =
-  'flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-0.5 hover:bg-hover/30';
+function RowBody(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      {...props}
+      class="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-0.5 hover:bg-hover/30"
+    />
+  );
+}
 
 function EntityRow(props: {
   event: ActivityEvent;
@@ -115,7 +121,7 @@ function EntityRow(props: {
   });
 
   return (
-    <div {...navHandlers} class={ROW_BODY_CLASS}>
+    <RowBody {...navHandlers}>
       <Show when={props.showActor}>
         <span class="shrink-0 font-medium">
           <ActorName name={props.actorName} />
@@ -147,6 +153,6 @@ function EntityRow(props: {
         <EntityMention entityId={props.event.entityId} display={display} />
       </span>
       <Timestamp event={props.event} />
-    </div>
+    </RowBody>
   );
 }

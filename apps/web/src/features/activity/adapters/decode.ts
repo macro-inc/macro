@@ -3,6 +3,7 @@ import type {
   GraphqlEntityType,
   MyActivityOverviewQuery,
 } from '@service-storage/graphql/generated/graphql';
+import { match } from 'ts-pattern';
 import type {
   ActivityAction,
   ActivityEntityType,
@@ -43,61 +44,70 @@ export function decodeActivityOverview(
 export function decodeEntityType(
   entityType: GraphqlEntityType
 ): ActivityEntityType {
-  switch (entityType) {
-    case 'DOCUMENT':
-      return 'document';
-    case 'PROJECT':
-      return 'project';
-    case 'CHAT':
-      return 'chat';
-    case 'EMAIL_THREAD':
-      return 'email-thread';
-    case 'CHANNEL':
-      return 'channel';
-    case 'USER':
-      return 'user';
-    default:
-      return { kind: 'unsupported', raw: entityType };
-  }
+  return match(entityType)
+    .with('DOCUMENT', () => 'document' as const)
+    .with('PROJECT', () => 'project' as const)
+    .with('CHAT', () => 'chat' as const)
+    .with('EMAIL_THREAD', () => 'email-thread' as const)
+    .with('CHANNEL', () => 'channel' as const)
+    .with('USER', () => 'user' as const)
+    .otherwise((raw) => ({ kind: 'unsupported' as const, raw }));
 }
 
 function decodeAction(
   action: ActivityEventFieldsFragment['action']
 ): ActivityAction {
-  switch (action.__typename) {
-    case 'GraphqlActivityCreated':
-      return { kind: 'created' };
-    case 'GraphqlActivityEdited':
-      return { kind: 'edited' };
-    case 'GraphqlActivityOpened':
-      return { kind: 'opened' };
-    case 'GraphqlActivityDeleted':
-      return { kind: 'deleted' };
-    case 'GraphqlActivityMessaged':
-      return { kind: 'messaged' };
-    case 'GraphqlActivitySent':
-      return { kind: 'email-sent' };
-    case 'GraphqlActivityCallStarted':
-      return { kind: 'call-started' };
-    case 'GraphqlActivityPropertyChanged':
-      return {
-        kind: 'property-changed',
-        property: action.property,
-        from: action.from,
-        to: action.to,
-      };
-    case 'GraphqlActivityParticipantAdded':
-      return { kind: 'participant-added', participant: action.participant };
-    case 'GraphqlActivityParticipantRemoved':
-      return { kind: 'participant-removed', participant: action.participant };
-    case 'GraphqlActivityUnknownAction':
-      return { kind: 'unknown', tag: action.tag };
-    default: {
-      const unexpected = action as { __typename?: string };
-      return {
-        kind: 'unknown',
-        tag: unexpected.__typename ?? 'unknown',
-      };
-    }
-  }
+  return match(action)
+    .with({ __typename: 'GraphqlActivityCreated' }, () => ({
+      kind: 'created' as const,
+    }))
+    .with({ __typename: 'GraphqlActivityEdited' }, () => ({
+      kind: 'edited' as const,
+    }))
+    .with({ __typename: 'GraphqlActivityOpened' }, () => ({
+      kind: 'opened' as const,
+    }))
+    .with({ __typename: 'GraphqlActivityDeleted' }, () => ({
+      kind: 'deleted' as const,
+    }))
+    .with({ __typename: 'GraphqlActivityMessaged' }, () => ({
+      kind: 'messaged' as const,
+    }))
+    .with({ __typename: 'GraphqlActivitySent' }, () => ({
+      kind: 'email-sent' as const,
+    }))
+    .with({ __typename: 'GraphqlActivityCallStarted' }, () => ({
+      kind: 'call-started' as const,
+    }))
+    .with(
+      { __typename: 'GraphqlActivityPropertyChanged' },
+      ({ property, from, to }) => ({
+        kind: 'property-changed' as const,
+        property,
+        from,
+        to,
+      })
+    )
+    .with(
+      { __typename: 'GraphqlActivityParticipantAdded' },
+      ({ participant }) => ({
+        kind: 'participant-added' as const,
+        participant,
+      })
+    )
+    .with(
+      { __typename: 'GraphqlActivityParticipantRemoved' },
+      ({ participant }) => ({
+        kind: 'participant-removed' as const,
+        participant,
+      })
+    )
+    .with({ __typename: 'GraphqlActivityUnknownAction' }, ({ tag }) => ({
+      kind: 'unknown' as const,
+      tag,
+    }))
+    .otherwise((unexpected) => ({
+      kind: 'unknown' as const,
+      tag: (unexpected as { __typename?: string }).__typename ?? 'unknown',
+    }));
 }

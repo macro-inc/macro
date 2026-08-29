@@ -2,7 +2,15 @@ import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-hea
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Button } from '@ui';
-import { type Component, createMemo, For, Match, Show, Switch } from 'solid-js';
+import {
+  type Component,
+  createMemo,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { createMyActivityQuery } from '../adapters/feed-query';
 import { createMyActivityOverviewQuery } from '../adapters/overview-query';
 import type { ActivityEvent } from '../domain/event';
@@ -18,8 +26,21 @@ type FeedView =
   | { t: 'empty' }
   | { t: 'ready'; groups: FeedGroup[] };
 
-/** The soup list inset shared by section headers, feed rows, and the overview. */
-const INSET_CLASS = 'mx-1 w-[calc(100%-0.5rem)]';
+function OverviewInset(props: { children: JSX.Element }) {
+  return (
+    <div class="mx-1 flex w-[calc(100%-0.5rem)] min-w-0 flex-col gap-2 pb-2">
+      {props.children}
+    </div>
+  );
+}
+
+function FeedStatus(props: { children: JSX.Element }) {
+  return (
+    <p class="mx-1 w-[calc(100%-0.5rem)] px-2 py-2 text-ink-muted text-sm">
+      {props.children}
+    </p>
+  );
+}
 
 /** The user's own activity, newest first, behind the activity-feed flag. */
 export function MyActivityView() {
@@ -41,7 +62,7 @@ export function MyActivityView() {
       <StaticMarkdownContext>
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
           <div class="mx-auto w-full max-w-[1000px]">
-            <div class={`${INSET_CLASS} flex min-w-0 flex-col gap-2 pb-2`}>
+            <OverviewInset>
               <Show
                 when={overview.data}
                 fallback={
@@ -54,7 +75,7 @@ export function MyActivityView() {
               >
                 {(data) => <ActionGraph overview={data()} />}
               </Show>
-            </div>
+            </OverviewInset>
             <Show when={overview.data}>
               {(data) => <TopEntities entities={data().topEntities} />}
             </Show>
@@ -86,19 +107,15 @@ export function MyActivityView() {
                 )}
               </Match>
               <Match when={feedView().t === 'loading'}>
-                <p class={`${INSET_CLASS} px-2 py-2 text-ink-muted text-sm`}>
-                  Loading…
-                </p>
+                <FeedStatus>Loading…</FeedStatus>
               </Match>
               <Match when={feedView().t === 'error'}>
-                <p class={`${INSET_CLASS} px-2 py-2 text-ink-muted text-sm`}>
+                <FeedStatus>
                   Activity is unavailable right now. Try again in a moment.
-                </p>
+                </FeedStatus>
               </Match>
               <Match when={feedView().t === 'empty'}>
-                <p class={`${INSET_CLASS} px-2 py-2 text-ink-muted text-sm`}>
-                  No activity yet.
-                </p>
+                <FeedStatus>No activity yet.</FeedStatus>
               </Match>
             </Switch>
           </div>
