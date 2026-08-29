@@ -350,6 +350,7 @@ export const storageBacklog = [
   'presaveDocumentHandler',
   'saveDocumentHandler',
   'simpleSave',
+  'streamEvents',
   'toggleShareWithTeam',
   'updateAgent',
   'updateReminder',

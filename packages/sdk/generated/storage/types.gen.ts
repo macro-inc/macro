@@ -14010,6 +14010,49 @@ export type EditProjectV2Responses = {
 
 export type EditProjectV2Response = EditProjectV2Responses[keyof EditProjectV2Responses];
 
+export type StreamEventsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * URL-encoded JSON array of webhook filters, identical to the persisted
+         * webhook `filters` field.
+         */
+        filters?: string;
+    };
+    url: '/webhook/events/stream';
+};
+
+export type StreamEventsErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Too many concurrent streams
+     */
+    429: ErrorResponse;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type StreamEventsError = StreamEventsErrors[keyof StreamEventsErrors];
+
+export type StreamEventsResponses = {
+    /**
+     * Server-Sent Events stream of matching broker events
+     */
+    200: string;
+};
+
+export type StreamEventsResponse = StreamEventsResponses[keyof StreamEventsResponses];
+
 export type ListWebhooksData = {
     body?: never;
     path?: never;
