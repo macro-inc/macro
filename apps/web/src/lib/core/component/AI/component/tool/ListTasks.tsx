@@ -97,12 +97,7 @@ const TaskRow = (props: { task: TaskListItem }) => {
 const ListTasksToolResponse = (props: { tasks: TaskListItem[] }) => (
   <Tool.List>
     <div class="max-h-60 overflow-y-auto overscroll-contain">
-      <Show
-        when={props.tasks.length > 0}
-        fallback={<Tool.ListItem>No matching tasks.</Tool.ListItem>}
-      >
-        <For each={props.tasks}>{(task) => <TaskRow task={task} />}</For>
-      </Show>
+      <For each={props.tasks}>{(task) => <TaskRow task={task} />}</For>
     </div>
   </Tool.List>
 );
