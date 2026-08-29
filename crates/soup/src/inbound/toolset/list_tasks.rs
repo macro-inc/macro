@@ -30,7 +30,7 @@ use super::list_entities::fetch_caller_tag_sets;
 #[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskScope {
-    /// Tasks assigned to the current user. Defaults to open statuses
+    /// Tasks you own or are assigned to. Defaults to open statuses
     /// (Not Started, In Progress, In Review) unless `status` is set.
     #[default]
     MyTasks,
@@ -196,12 +196,12 @@ pub struct ListTasksResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListTasks",
-    description = "List Macro tasks with the same filters and sorts as the tasks view. Prefer this over ListEntities for any task question (\"my tasks\", \"urgent tasks\", \"tasks assigned to me\", \"overdue\", \"in review\"). Do not use Linear or other external trackers unless the user names them.\n\nDefaults match the My tasks tab: assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope=\"all\" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.\n\nFilters compose with AND. Multiple values on one filter are OR (status=[\"in_progress\",\"in_review\"] matches either). dueAfter/dueBefore filter the Due Date property; updatedAfter/updatedBefore filter last edit time (use those for \"completed yesterday\")."
+    description = "List Macro tasks with the same filters and sorts as the tasks view. Prefer this over ListEntities for any task question (\"my tasks\", \"urgent tasks\", \"tasks assigned to me\", \"overdue\", \"in review\"). Do not use Linear or other external trackers unless the user names them.\n\nDefaults match the My tasks tab: owned by or assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope=\"all\" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.\n\nFilters compose with AND. Multiple values on one filter are OR (status=[\"in_progress\",\"in_review\"] matches either). dueAfter/dueBefore filter the Due Date property; updatedAfter/updatedBefore filter last edit time (use those for \"completed yesterday\")."
 )]
 pub struct ListTasks {
     /// My tasks (default) or every visible task.
     #[schemars(
-        description = "Which list to query. \"my_tasks\" (default) is assigned to the current user with open statuses unless status is set. \"all\" drops those defaults."
+        description = "Which list to query. \"my_tasks\" (default) is owned by or assigned to the current user with open statuses unless status is set. \"all\" drops those defaults."
     )]
     #[serde(default)]
     pub scope: TaskScope,
@@ -222,7 +222,7 @@ pub struct ListTasks {
 
     /// Assignee to filter on.
     #[schemars(
-        description = "Filter by assignee. Use \"me\" for the current user, a Macro user id (macro|user@example.com), or a bare email. Use ListTeamMembers to find ids. Overrides the my_tasks assignee default when set."
+        description = "Filter by assignee. Use \"me\" for the current user, a Macro user id (macro|user@example.com), or a bare email. Use ListTeamMembers to find ids. Overrides the my_tasks owner-or-assignee default when set."
     )]
     #[serde(default)]
     pub assignee: Option<String>,
@@ -304,16 +304,16 @@ impl ListTasks {
             },
         };
 
-        let assignee_user_id = match self
+        let explicit_assignee = self
             .assignee
             .as_deref()
             .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            Some(assignee) => Some(resolve_assignee_id(assignee, current_user_id)),
+            .filter(|s| !s.is_empty());
+        let (assignee_user_id, mine_user_id) = match explicit_assignee {
+            Some(assignee) => (Some(resolve_assignee_id(assignee, current_user_id)), None),
             None => match self.scope {
-                TaskScope::MyTasks => Some(current_user_id.to_string()),
-                TaskScope::All => None,
+                TaskScope::MyTasks => (None, Some(current_user_id.to_string())),
+                TaskScope::All => (None, None),
             },
         };
 
@@ -336,6 +336,7 @@ impl ListTasks {
                 .map(TaskPriorityFilter::from)
                 .collect(),
             assignee_user_id,
+            mine_user_id,
             project_id: self.project_id,
             due_after: self.due_after,
             due_before: self.due_before,
@@ -437,6 +438,7 @@ where
             })?;
 
         let paginated = result.type_erase();
+        let more_from_soup = paginated.next_cursor.is_some();
         if tag_sets.is_none() && any_task_has_tags(&paginated.items) {
             tag_sets = Some(fetch_caller_tag_sets(&service_context, &request_context).await?);
         }
@@ -459,7 +461,7 @@ where
         let total_matching = tasks.len();
         tasks.truncate(usize::from(response_limit));
         let items: Vec<TaskListItem> = tasks.into_iter().map(to_list_item).collect();
-        let summary = build_summary(&items, total_matching, query.sort);
+        let summary = build_summary(&items, total_matching, more_from_soup, query.sort);
 
         Ok(ListTasksResponse {
             tasks: items,
@@ -501,7 +503,12 @@ fn any_task_has_tags(items: &[EnrichedSoupItem]) -> bool {
     })
 }
 
-fn build_summary(items: &[TaskListItem], total_matching: usize, sort: TaskSort) -> String {
+pub(super) fn build_summary(
+    items: &[TaskListItem],
+    total_matching: usize,
+    more_from_soup: bool,
+    sort: TaskSort,
+) -> String {
     let sort_label = match sort {
         TaskSort::RecentlyUpdated => "most recently updated",
         TaskSort::RecentlyViewed => "most recently viewed",
@@ -514,12 +521,25 @@ fn build_summary(items: &[TaskListItem], total_matching: usize, sort: TaskSort) 
     if items.is_empty() {
         return "No tasks match the given filters.".to_string();
     }
-    if total_matching > items.len() {
-        format!(
-            "Showing {} of {} matching tasks, sorted by {sort_label}. Narrow the filters or raise limit.",
-            items.len(),
-            total_matching
-        )
+
+    let truncated = total_matching > items.len();
+    if truncated || more_from_soup {
+        if truncated {
+            let total = if more_from_soup {
+                format!("at least {total_matching}")
+            } else {
+                total_matching.to_string()
+            };
+            format!(
+                "Showing {} of {total} matching tasks, sorted by {sort_label}. Narrow the filters or raise limit.",
+                items.len(),
+            )
+        } else {
+            format!(
+                "Showing {} matching tasks, sorted by {sort_label}. More tasks match; narrow the filters or raise limit.",
+                items.len(),
+            )
+        }
     } else {
         format!(
             "Found {} task{}, sorted by {sort_label}.",

@@ -26,6 +26,7 @@ use item_filters::ast::{
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::SimpleSortMethod;
 use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
@@ -86,7 +87,11 @@ pub struct TaskListQuery {
     /// Priority buckets to match. Empty means any priority.
     pub priorities: Vec<TaskPriorityFilter>,
     /// Assignee Macro user id (`macro|email`). `None` means any assignee.
+    /// Set only when the caller passed an explicit `assignee` filter.
     pub assignee_user_id: Option<String>,
+    /// When set, match the My tasks tab: owner **or** assignee of this user.
+    /// Unused when `assignee_user_id` is set.
+    pub mine_user_id: Option<String>,
     /// Restrict to tasks in this project.
     pub project_id: Option<Uuid>,
     /// Inclusive due-date lower bound.
@@ -169,7 +174,7 @@ impl TaskListQuery {
         &self,
         tag_filter: Option<Expr<PropertiesLiteral>>,
     ) -> Result<EntityFilterAst, String> {
-        let document_filter = self.document_filter();
+        let document_filter = self.document_filter()?;
         let properties_filter = match (self.properties_filter()?, tag_filter) {
             (Some(existing), Some(tags)) => Some(Expr::and(existing, tags)),
             (None, Some(tags)) => Some(tags),
@@ -179,8 +184,15 @@ impl TaskListQuery {
         Ok(task_only_ast(document_filter, properties_filter))
     }
 
-    fn document_filter(&self) -> Expr<DocumentLiteral> {
+    fn document_filter(&self) -> Result<Expr<DocumentLiteral>, String> {
         let mut parts = vec![Expr::val(DocumentLiteral::SubType(DocumentSubType::Task))];
+        if let Some(user_id) = self.mine_user_id.as_deref() {
+            let owner = MacroUserIdStr::try_from(user_id.to_string()).map_err(|e| e.to_string())?;
+            parts.push(Expr::or(
+                Expr::val(DocumentLiteral::Owner(owner)),
+                Expr::val(DocumentLiteral::Importance(true)),
+            ));
+        }
         if let Some(project_id) = self.project_id {
             parts.push(Expr::val(DocumentLiteral::ProjectId(project_id)));
         }
@@ -194,7 +206,7 @@ impl TaskListQuery {
                 DateLiteral::LessThan(updated_before),
             )));
         }
-        and_all(parts).expect("task subtype is always present")
+        Ok(and_all(parts).expect("task subtype is always present"))
     }
 
     fn properties_filter(&self) -> Result<Option<Expr<PropertiesLiteral>>, String> {

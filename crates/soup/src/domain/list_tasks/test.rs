@@ -61,6 +61,7 @@ fn query() -> TaskListQuery {
         statuses: vec![],
         priorities: vec![],
         assignee_user_id: None,
+        mine_user_id: None,
         project_id: None,
         due_after: None,
         due_before: None,
@@ -224,25 +225,52 @@ fn search_matches_name_case_insensitively() {
 }
 
 #[test]
-fn my_tasks_ast_filters_status_and_assignee() {
+fn my_tasks_ast_filters_status_and_owner_or_assignee() {
     let q = TaskListQuery {
         statuses: OPEN_STATUSES.to_vec(),
-        assignee_user_id: Some("macro|me@example.com".into()),
+        mine_user_id: Some("macro|me@example.com".into()),
         ..query()
     };
     let ast = q.entity_filter_ast(None).expect("ast");
     let df = ast.document_filter.expect("document filter");
     let encoded = serde_json::to_string(&df).unwrap();
     assert!(encoded.contains(r#""dst":"task""#));
+    assert!(
+        encoded.contains(r#""o":"macro|me@example.com""#),
+        "my_tasks must include document owner: {encoded}"
+    );
+    assert!(
+        encoded.contains(r#""imp":true"#),
+        "my_tasks must include assignee importance: {encoded}"
+    );
 
     let propf = ast.properties_filter.expect("properties filter");
     let encoded = serde_json::to_string(&propf).unwrap();
     assert!(encoded.contains(&StatusOption::InProgress.uuid().to_string()));
-    assert!(encoded.contains("macro|me@example.com"));
+    assert!(
+        !encoded.contains("macro|me@example.com"),
+        "default my_tasks must not use the Assignees property filter: {encoded}"
+    );
     assert!(
         !encoded.contains(&StatusOption::Completed.uuid().to_string()),
         "open-status default must not include Completed"
     );
+}
+
+#[test]
+fn explicit_assignee_uses_property_filter_not_mine() {
+    let q = TaskListQuery {
+        assignee_user_id: Some("macro|other@example.com".into()),
+        ..query()
+    };
+    let ast = q.entity_filter_ast(None).expect("ast");
+    let df = serde_json::to_string(&ast.document_filter).unwrap();
+    assert!(
+        !df.contains(r#""o":"#) && !df.contains(r#""imp":"#),
+        "explicit assignee must not add owner/importance: {df}"
+    );
+    let propf = serde_json::to_string(&ast.properties_filter).unwrap();
+    assert!(propf.contains("macro|other@example.com"));
 }
 
 #[test]

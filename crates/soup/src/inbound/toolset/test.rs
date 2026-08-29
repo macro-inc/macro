@@ -1,5 +1,8 @@
 use super::list_entities::{build_summary, retain_excluding_self_chat};
-use super::list_tasks::{ListTasks, TaskScope, ToolTaskSort, ToolTaskStatus};
+use super::list_tasks::{
+    ListTasks, TaskListItem, TaskScope, ToolTaskSort, ToolTaskStatus,
+    build_summary as build_task_summary,
+};
 #[allow(unused_imports)]
 use super::*;
 use crate::domain::list_tasks::{OPEN_STATUSES, TaskSort};
@@ -570,15 +573,27 @@ fn test_list_tasks_schema_validation() {
 }
 
 #[test]
-fn my_tasks_defaults_to_open_statuses_assigned_to_me_sorted_by_priority() {
+fn my_tasks_defaults_to_open_statuses_owned_or_assigned_sorted_by_priority() {
     let list = ListTasks::default();
     let query = list.resolved_query("macro|me@example.com");
     assert_eq!(query.statuses, OPEN_STATUSES);
+    assert!(query.assignee_user_id.is_none());
+    assert_eq!(query.mine_user_id.as_deref(), Some("macro|me@example.com"));
+    assert_eq!(query.sort, TaskSort::Priority);
+}
+
+#[test]
+fn explicit_assignee_overrides_my_tasks_mine_scope() {
+    let list = ListTasks {
+        assignee: Some("me".into()),
+        ..ListTasks::default()
+    };
+    let query = list.resolved_query("macro|me@example.com");
     assert_eq!(
         query.assignee_user_id.as_deref(),
         Some("macro|me@example.com")
     );
-    assert_eq!(query.sort, TaskSort::Priority);
+    assert!(query.mine_user_id.is_none());
 }
 
 #[test]
@@ -600,7 +615,44 @@ fn scope_all_drops_assignee_and_status_defaults() {
     let query = list.resolved_query("macro|me@example.com");
     assert!(query.statuses.is_empty());
     assert!(query.assignee_user_id.is_none());
+    assert!(query.mine_user_id.is_none());
     assert_eq!(query.sort, TaskSort::RecentlyUpdated);
+}
+
+#[test]
+fn list_tasks_summary_is_honest_when_soup_has_another_page() {
+    let item = TaskListItem {
+        id: Uuid::from_u128(1),
+        name: "Task".into(),
+        status: None,
+        priority: None,
+        assignees: vec![],
+        due_date: None,
+        project_id: None,
+        tags: vec![],
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+    let found = build_task_summary(&[item.clone()], 1, false, TaskSort::RecentlyUpdated);
+    assert!(found.starts_with("Found 1 task,"), "{found}");
+
+    let showing = build_task_summary(&[item.clone()], 1, true, TaskSort::RecentlyUpdated);
+    assert!(
+        showing.contains("Showing 1 matching tasks") && showing.contains("More tasks match"),
+        "{showing}"
+    );
+
+    let truncated = build_task_summary(&[item.clone()], 80, false, TaskSort::Priority);
+    assert!(
+        truncated.contains("Showing 1 of 80 matching tasks"),
+        "{truncated}"
+    );
+
+    let truncated_and_more = build_task_summary(&[item], 80, true, TaskSort::Priority);
+    assert!(
+        truncated_and_more.contains("Showing 1 of at least 80 matching tasks"),
+        "{truncated_and_more}"
+    );
 }
 
 #[test]
