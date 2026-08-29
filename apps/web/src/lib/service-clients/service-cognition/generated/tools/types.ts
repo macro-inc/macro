@@ -2010,7 +2010,7 @@ export interface CreateCustomProperty {
   data_type: ToolPropertyDataType;
   scope?: ToolPropertyScope & string;
   /**
-   * For select and select_number, the choices to create with the property, in display order. For select_number each value must be a number (e.g. ["1", "2", "3"]). Omit for other types.
+   * For select and select_number, the choices to create with the property, in display order. For select_number each value must be a numeric string (e.g. ["1", "2", "3"]). Omit for other types.
    */
   options?: string[];
   /**

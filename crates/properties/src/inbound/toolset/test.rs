@@ -116,6 +116,10 @@ fn test_create_custom_property_schema_validation() {
         schema_json.contains("select") && schema_json.contains("entity"),
         "schema should expose select and entity data types"
     );
+    assert!(
+        schema_json.contains("numeric string"),
+        "schema should describe select_number options as numeric strings"
+    );
 }
 
 #[test]
@@ -179,6 +183,64 @@ fn test_create_custom_property_rejects_options_on_string() {
         .expect_err("string rejects options");
     assert!(
         err.description.contains("only valid for select"),
+        "unexpected error: {}",
+        err.description
+    );
+}
+
+#[test]
+fn test_create_custom_property_rejects_multi_on_string() {
+    let tool = CreateCustomProperty {
+        display_name: "Notes".to_string(),
+        data_type: super::create_custom_property::ToolPropertyDataType::String,
+        scope: super::create_custom_property::ToolPropertyScope::User,
+        options: vec![],
+        multi: true,
+        referenced_entity_type: None,
+    };
+    let err = tool.to_create_request().expect_err("string rejects multi");
+    assert!(
+        err.description.contains("`multi` is only valid"),
+        "unexpected error: {}",
+        err.description
+    );
+}
+
+#[test]
+fn test_create_custom_property_rejects_equivalent_select_number_options() {
+    let tool = CreateCustomProperty {
+        display_name: "Priority".to_string(),
+        data_type: super::create_custom_property::ToolPropertyDataType::SelectNumber,
+        scope: super::create_custom_property::ToolPropertyScope::User,
+        options: vec!["1".into(), "1.0".into()],
+        multi: false,
+        referenced_entity_type: None,
+    };
+    let err = tool
+        .to_create_request()
+        .expect_err("1 and 1.0 are the same select_number option");
+    assert!(
+        err.description.contains("Duplicate select_number option"),
+        "unexpected error: {}",
+        err.description
+    );
+}
+
+#[test]
+fn test_create_custom_property_rejects_non_finite_select_number_options() {
+    let tool = CreateCustomProperty {
+        display_name: "Priority".to_string(),
+        data_type: super::create_custom_property::ToolPropertyDataType::SelectNumber,
+        scope: super::create_custom_property::ToolPropertyScope::User,
+        options: vec!["NaN".into()],
+        multi: false,
+        referenced_entity_type: None,
+    };
+    let err = tool
+        .to_create_request()
+        .expect_err("NaN is not a finite select_number option");
+    assert!(
+        err.description.contains("finite numbers"),
         "unexpected error: {}",
         err.description
     );

@@ -82,7 +82,7 @@ pub struct CreateCustomProperty {
     pub scope: ToolPropertyScope,
 
     #[schemars(
-        description = "For select and select_number, the choices to create with the property, in display order. For select_number each value must be a number (e.g. [\"1\", \"2\", \"3\"]). Omit for other types."
+        description = "For select and select_number, the choices to create with the property, in display order. For select_number each value must be a numeric string (e.g. [\"1\", \"2\", \"3\"]). Omit for other types."
     )]
     #[serde(default)]
     pub options: Vec<String>,
@@ -152,21 +152,25 @@ impl CreateCustomProperty {
             ToolPropertyDataType::String => {
                 self.reject_select_fields("string")?;
                 self.reject_entity_fields("string")?;
+                self.reject_multi("string")?;
                 Ok(PropertyDataType::String)
             }
             ToolPropertyDataType::Number => {
                 self.reject_select_fields("number")?;
                 self.reject_entity_fields("number")?;
+                self.reject_multi("number")?;
                 Ok(PropertyDataType::Number)
             }
             ToolPropertyDataType::Boolean => {
                 self.reject_select_fields("boolean")?;
                 self.reject_entity_fields("boolean")?;
+                self.reject_multi("boolean")?;
                 Ok(PropertyDataType::Boolean)
             }
             ToolPropertyDataType::Date => {
                 self.reject_select_fields("date")?;
                 self.reject_entity_fields("date")?;
+                self.reject_multi("date")?;
                 Ok(PropertyDataType::Date)
             }
             ToolPropertyDataType::Select => {
@@ -216,6 +220,15 @@ impl CreateCustomProperty {
         )))
     }
 
+    fn reject_multi(&self, data_type: &str) -> Result<(), ToolCallError> {
+        if !self.multi {
+            return Ok(());
+        }
+        Err(tool_error(format!(
+            "`multi` is only valid for select, select_number, entity, and link properties, not {data_type}."
+        )))
+    }
+
     fn select_string_options(&self) -> Result<Vec<SelectStringOption>, ToolCallError> {
         let values = self.trimmed_options()?;
         Ok(values
@@ -230,21 +243,32 @@ impl CreateCustomProperty {
 
     fn select_number_options(&self) -> Result<Vec<SelectNumberOption>, ToolCallError> {
         let values = self.trimmed_options()?;
-        values
-            .into_iter()
-            .enumerate()
-            .map(|(i, value)| {
-                let parsed = value.parse::<f64>().map_err(|_| {
-                    tool_error(format!(
-                        "select_number options must be numbers, got \"{value}\"."
-                    ))
-                })?;
-                Ok(SelectNumberOption {
-                    display_order: i as i32,
-                    value: parsed,
-                })
-            })
-            .collect()
+        let mut parsed_options = Vec::with_capacity(values.len());
+        for (i, value) in values.into_iter().enumerate() {
+            let parsed = value.parse::<f64>().map_err(|_| {
+                tool_error(format!(
+                    "select_number options must be numeric strings, got \"{value}\"."
+                ))
+            })?;
+            if !parsed.is_finite() {
+                return Err(tool_error(format!(
+                    "select_number options must be finite numbers, got \"{value}\"."
+                )));
+            }
+            if parsed_options
+                .iter()
+                .any(|option: &SelectNumberOption| option.value == parsed)
+            {
+                return Err(tool_error(format!(
+                    "Duplicate select_number option \"{value}\". Each numeric choice must be unique (\"1\" and \"1.0\" are the same)."
+                )));
+            }
+            parsed_options.push(SelectNumberOption {
+                display_order: i as i32,
+                value: parsed,
+            });
+        }
+        Ok(parsed_options)
     }
 
     fn trimmed_options(&self) -> Result<Vec<String>, ToolCallError> {
@@ -326,19 +350,27 @@ where
                 .service
                 .get_property_options(property.id, user_id, team_ref)
                 .await
-                .map(|opts| {
-                    opts.into_iter()
-                        .map(|opt| ToolPropertyOption {
-                            id: opt.id,
-                            display_order: opt.display_order,
-                            display_value: option_display_value(&opt.value),
-                        })
-                        .collect()
+                .map_err(|e| {
+                    tracing::error!(
+                        error=?e,
+                        property_definition_id = %property.id,
+                        "failed to load options for newly created property"
+                    );
+                    tool_error_with(
+                        format!(
+                            "Created the property definition (`{}`) but could not load its options. Do not create another property with the same name. Call GetEntityProperties to read the new definition, then SetEntityProperty to assign a value.",
+                            property.id
+                        ),
+                        e,
+                    )
+                })?
+                .into_iter()
+                .map(|opt| ToolPropertyOption {
+                    id: opt.id,
+                    display_order: opt.display_order,
+                    display_value: option_display_value(&opt.value),
                 })
-                .unwrap_or_else(|e| {
-                    tracing::error!(error=?e, "failed to load options for newly created property");
-                    Vec::new()
-                })
+                .collect()
         } else {
             Vec::new()
         };
