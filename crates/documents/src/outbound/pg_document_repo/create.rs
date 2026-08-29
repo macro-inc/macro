@@ -259,39 +259,60 @@ where
     .await
 }
 
-pub async fn find_live_email_document_id_by_sha<'e, E>(
-    executor: E,
+/// Finds a live email-linked document owned by `owner` whose latest instance
+/// sha matches `sha`.
+///
+/// Split into two queries so Postgres cannot plan this as "all live documents
+/// for the owner, then filter sha". The first statement is a sha index probe;
+/// the second is PK lookups of those document ids.
+#[tracing::instrument(skip(conn), err)]
+pub async fn find_live_email_document_id_by_sha(
+    conn: &mut sqlx::PgConnection,
     owner: &str,
     sha: &str,
-) -> Result<Option<String>, sqlx::Error>
-where
-    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
-{
+) -> Result<Option<String>, sqlx::Error> {
+    let candidate_document_ids = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT i."documentId"
+        FROM "DocumentInstance" i
+        WHERE i.sha = $1
+        "#,
+        sha,
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+
+    if candidate_document_ids.is_empty() {
+        return Ok(None);
+    }
+
     sqlx::query_scalar!(
         r#"
         SELECT d.id
         FROM "Document" d
-        INNER JOIN LATERAL (
-            SELECT i.sha
-            FROM "DocumentInstance" i
-            WHERE i."documentId" = d.id
-            ORDER BY i."createdAt" DESC
-            LIMIT 1
-        ) latest ON latest.sha = $2
-        WHERE d.owner = $1
+        WHERE d.id = ANY($1)
+          AND d.owner = $2
           AND d."deletedAt" IS NULL
           AND EXISTS (
               SELECT 1
               FROM document_email de
               WHERE de.document_id = d.id
           )
+          AND (
+              SELECT i.sha
+              FROM "DocumentInstance" i
+              WHERE i."documentId" = d.id
+              ORDER BY i."createdAt" DESC
+              LIMIT 1
+          ) = $3
         ORDER BY d."createdAt" ASC, d.id ASC
         LIMIT 1
         "#,
+        &candidate_document_ids,
         owner,
         sha,
     )
-    .fetch_optional(executor)
+    .fetch_optional(&mut *conn)
     .await
 }
 
@@ -314,6 +335,11 @@ pub async fn link_document_email(
     Ok(())
 }
 
+/// Serializes first-time creates of the same `(owner, sha)` email document.
+///
+/// Callers should try unlocked reuse first. This lock is only needed when a
+/// concurrent import might insert the first document for this key.
+#[tracing::instrument(skip(transaction), err)]
 pub async fn reuse_email_document(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     owner: &str,
@@ -334,9 +360,7 @@ pub async fn reuse_email_document(
         return Ok(Some(document_id));
     }
 
-    if let Some(document_id) =
-        find_live_email_document_id_by_sha(&mut **transaction, owner, sha).await?
-    {
+    if let Some(document_id) = find_live_email_document_id_by_sha(transaction, owner, sha).await? {
         link_document_email(transaction, &document_id, email_attachment_id).await?;
         return Ok(Some(document_id));
     }

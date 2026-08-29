@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT i.\"documentId\"\n        FROM \"DocumentInstance\" i\n        WHERE i.sha = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "documentId",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0f657a7428537ac369cc5d69d710b466d10d52620f8ee73e0027d0f9b17a6877"
+}
