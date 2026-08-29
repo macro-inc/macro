@@ -25,12 +25,6 @@ import {
 } from '../domain/target-message';
 import type { ThreadListNavigation } from './ThreadList';
 
-/**
- * How long a navigation target keeps its accent highlight after its scroll
- * has positioned it on screen. When the flash elapses the target releases
- * itself; highlights owned by other state (e.g. the unified input's reply
- * binding) are unaffected.
- */
 export const TARGETED_MESSAGE_FLASH_MS = 1000;
 
 type CreateTargetMessageControllerOptions = {
@@ -175,8 +169,6 @@ export function restoreDefaultChannelPaginationAfterTargetLoad(
   if (!aroundData) return false;
 
   queryClient.setQueryData(defaultKey, aroundData);
-  // Remove the around-query variant so it doesn't linger in cache across
-  // component mounts.
   queryClient.removeQueries({ queryKey: aroundKey });
   return true;
 }
