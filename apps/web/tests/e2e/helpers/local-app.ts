@@ -49,3 +49,23 @@ export async function fillEditable(locator: Locator, text: string) {
 export function uniqueE2EText(prefix: string): string {
   return `${prefix} ${Date.now()} ${Math.random().toString(36).slice(2)}`;
 }
+
+export async function sendChannelMessage(
+  page: Page,
+  channelId: string,
+  text: string
+): Promise<Locator> {
+  const input = page.locator(`[data-input-id="channel-input-${channelId}"]`);
+  await fillEditable(input.locator('[contenteditable="true"]').first(), text);
+
+  const sendButton = input.locator('[data-input-action="send"]');
+  await expect(sendButton).toBeEnabled({ timeout: 10_000 });
+  await sendButton.click();
+
+  const message = page
+    .locator('[data-message]')
+    .filter({ hasText: text })
+    .last();
+  await expect(message).toBeVisible({ timeout: 30_000 });
+  return message;
+}
