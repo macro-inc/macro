@@ -263,8 +263,11 @@ where
 /// sha matches `sha`.
 ///
 /// Split into two queries so Postgres cannot plan this as "all live documents
-/// for the owner, then filter sha". The first statement is a sha index probe;
-/// the second is PK lookups of those document ids.
+/// for the owner, then filter sha". The probe is a sha index scan; owner is
+/// applied as a scalar PK lookup so a `JOIN` / `EXISTS` cannot be rewritten
+/// into an owner-index drive. Reuse is per-owner, so a popular attachment
+/// sha (logo, signature) must not load every tenant's hits into the process.
+/// The second statement applies liveness, `document_email`, and latest-sha.
 #[tracing::instrument(skip(conn), err)]
 pub async fn find_live_email_document_id_by_sha(
     conn: &mut sqlx::PgConnection,
@@ -276,8 +279,14 @@ pub async fn find_live_email_document_id_by_sha(
         SELECT DISTINCT i."documentId"
         FROM "DocumentInstance" i
         WHERE i.sha = $1
+          AND (
+              SELECT d.owner
+              FROM "Document" d
+              WHERE d.id = i."documentId"
+          ) = $2
         "#,
         sha,
+        owner,
     )
     .fetch_all(&mut *conn)
     .await?;
