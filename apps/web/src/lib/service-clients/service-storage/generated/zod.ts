@@ -27233,6 +27233,18 @@ export const editProjectV2Response = zod.object({
 });
 
 /**
+ * @summary Stream matching broker events to the caller over Server-Sent Events.
+ */
+export const streamEventsQueryParams = zod.object({
+  filters: zod
+    .string()
+    .optional()
+    .describe(
+      'URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.'
+    ),
+});
+
+/**
  * @summary List the caller's webhooks.
  */
 export const listWebhooksResponse = zod
