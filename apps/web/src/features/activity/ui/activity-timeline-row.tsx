@@ -1,15 +1,11 @@
-import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
-import { usePropertyEntityDisplay } from '@property/hooks';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type JSX, Show } from 'solid-js';
 import { describeActionForEntity } from '../domain/describe-action';
 import type { ActivityEvent } from '../domain/event';
-import { toPropertyEntityType } from '../domain/event';
 import { ActionGlyph } from './action-glyph';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
+import type { EntityDisplay } from './entity-mention';
 import { EntityMention } from './entity-mention';
 import { PropertyChangeText } from './property-change';
 
@@ -31,17 +27,16 @@ function capitalize(value: string): string {
 }
 
 /**
- * Shared glyph-rail activity row used by the activity feed and AI activity
- * results. Entity references, property definitions, and option/tag values all
- * flow through the same resolvers regardless of where the row is rendered.
+ * Glyph-rail activity row. Mentions and click-to-open handlers are passed
+ * in already resolved so this leaf stays presentational.
  */
 export function ActivityTimelineRow(props: {
   event: ActivityEvent;
   actorName?: string;
-  /** Activity feeds name the actor; caller-scoped tool results can omit it. */
   showActor?: boolean;
+  display?: EntityDisplay;
+  rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
 }) {
-  const entityType = () => toPropertyEntityType(props.event.entityType);
   const showActor = () => props.showActor !== false;
   const actorName = () => props.actorName ?? '';
 
@@ -61,7 +56,7 @@ export function ActivityTimelineRow(props: {
         </span>
       </div>
       <Show
-        when={entityType()}
+        when={props.display}
         fallback={
           <RowBody>
             <Show when={showActor()}>
@@ -76,12 +71,13 @@ export function ActivityTimelineRow(props: {
           </RowBody>
         }
       >
-        {(type) => (
+        {(display) => (
           <EntityRow
             event={props.event}
-            entityType={type()}
+            display={display()}
             showActor={showActor()}
             actorName={actorName()}
+            rowProps={props.rowProps}
           />
         )}
       </Show>
@@ -100,28 +96,15 @@ function RowBody(props: JSX.HTMLAttributes<HTMLDivElement>) {
 
 function EntityRow(props: {
   event: ActivityEvent;
-  entityType: EntityType;
+  display: EntityDisplay;
   showActor: boolean;
   actorName: string;
+  rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
 }) {
   const parts = () => describeActionForEntity(props.event.action);
-  const display = usePropertyEntityDisplay(
-    () => props.event.entityId,
-    () => props.entityType
-  );
-  const navHandlers = useSplitNavigationHandler<HTMLDivElement>((event) => {
-    const block = display.blockOrFileType();
-    if (!block) return;
-    openDocument(
-      block,
-      props.event.entityId,
-      display.linkParams(),
-      event.shiftKey
-    );
-  });
 
   return (
-    <RowBody {...navHandlers}>
+    <RowBody {...props.rowProps}>
       <Show when={props.showActor}>
         <span class="shrink-0 font-medium">
           <ActorName name={props.actorName} />
@@ -150,7 +133,10 @@ function EntityRow(props: {
         )}
       </Show>
       <span class="min-w-0 truncate">
-        <EntityMention entityId={props.event.entityId} display={display} />
+        <EntityMention
+          entityId={props.event.entityId}
+          display={props.display}
+        />
       </span>
       <Timestamp event={props.event} />
     </RowBody>

@@ -12,10 +12,9 @@ export type EntityDisplay = ReturnType<typeof usePropertyEntityDisplay>;
  * preview, access states, and click-to-open. Entity kinds without a block
  * mapping fall back to a plain icon + name chip.
  *
- * Takes the already-resolved display from the row (which also needs it for
- * click-to-open) rather than resolving its own, so each row subscribes to
- * the entity's preview once. Must render under a `<StaticMarkdownContext>`
- * ancestor.
+ * Takes the already-resolved display from the view so each row
+ * subscribes to the entity's preview once. Must render under a
+ * `<StaticMarkdownContext>` ancestor.
  */
 export function EntityMention(props: {
   entityId: string;

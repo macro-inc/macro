@@ -3,7 +3,7 @@ import type {
   ActivityEntityType,
   ActivityEvent,
 } from '@app/features/activity/domain/event';
-import { ActivityTimelineRow } from '@app/features/activity/ui/activity-timeline-row';
+import { ActivityTimelineRow } from '@app/features/activity/views/activity-timeline-row';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import ClockCounterClockwise from '@phosphor-icons/core/regular/clock-counter-clockwise.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';

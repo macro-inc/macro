@@ -1,11 +1,9 @@
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { For, type JSX, Show } from 'solid-js';
+import { type Component, For, type JSX, Show } from 'solid-js';
 import type { ActivityTopEntity } from '../domain/event';
 import { toPropertyEntityType } from '../domain/event';
+import type { EntityDisplay } from './entity-mention';
 import { EntityMention } from './entity-mention';
 
 function Row(props: { children: JSX.Element }) {
@@ -29,7 +27,13 @@ function RowBody(props: JSX.HTMLAttributes<HTMLDivElement>) {
  * The entities the viewer touched most, as a list that shares the activity
  * feed's row chrome — mention on the left, action count on the right.
  */
-export function TopEntities(props: { entities: ActivityTopEntity[] }) {
+export function TopEntities(props: {
+  entities: ActivityTopEntity[];
+  mappedRow: Component<{
+    entity: ActivityTopEntity;
+    entityType: EntityType;
+  }>;
+}) {
   return (
     <section class="min-w-0" aria-label="Most active">
       <SoupSectionHeader>Most active</SoupSectionHeader>
@@ -40,14 +44,22 @@ export function TopEntities(props: { entities: ActivityTopEntity[] }) {
         }
       >
         <For each={props.entities}>
-          {(entity) => <TopEntityRow entity={entity} />}
+          {(entity) => (
+            <TopEntityRow entity={entity} mappedRow={props.mappedRow} />
+          )}
         </For>
       </Show>
     </section>
   );
 }
 
-function TopEntityRow(props: { entity: ActivityTopEntity }) {
+function TopEntityRow(props: {
+  entity: ActivityTopEntity;
+  mappedRow: Component<{
+    entity: ActivityTopEntity;
+    entityType: EntityType;
+  }>;
+}) {
   const displayType = () => toPropertyEntityType(props.entity.entityType);
 
   return (
@@ -62,36 +74,25 @@ function TopEntityRow(props: { entity: ActivityTopEntity }) {
         }
       >
         {(type) => (
-          <MappedEntityRow entity={props.entity} entityType={type()} />
+          <props.mappedRow entity={props.entity} entityType={type()} />
         )}
       </Show>
     </Row>
   );
 }
 
-function MappedEntityRow(props: {
+export function TopEntityBody(props: {
   entity: ActivityTopEntity;
-  entityType: EntityType;
+  display: EntityDisplay;
+  rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
 }) {
-  const display = usePropertyEntityDisplay(
-    () => props.entity.entityId,
-    () => props.entityType
-  );
-  const navHandlers = useSplitNavigationHandler<HTMLDivElement>((event) => {
-    const block = display.blockOrFileType();
-    if (!block) return;
-    openDocument(
-      block,
-      props.entity.entityId,
-      display.linkParams(),
-      event.shiftKey
-    );
-  });
-
   return (
-    <RowBody {...navHandlers}>
+    <RowBody {...props.rowProps}>
       <span class="min-w-0 truncate">
-        <EntityMention entityId={props.entity.entityId} display={display} />
+        <EntityMention
+          entityId={props.entity.entityId}
+          display={props.display}
+        />
       </span>
       <ActionCount count={props.entity.count} />
     </RowBody>

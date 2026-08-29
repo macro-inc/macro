@@ -16,9 +16,9 @@ import { createMyActivityOverviewQuery } from '../adapters/overview-query';
 import type { ActivityEvent } from '../domain/event';
 import { type FeedGroup, groupEventsByDay } from '../domain/group-events';
 import { ActionGraph } from '../ui/action-graph';
-import { ActivityTimelineRow } from '../ui/activity-timeline-row';
-import { TopEntities } from '../ui/top-entities';
+import { ActivityTimelineRow } from './activity-timeline-row';
 import { useActorDisplayName } from './resolve-actor-name';
+import { TopEntities } from './top-entities';
 
 type FeedView =
   | { t: 'loading' }
