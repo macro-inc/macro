@@ -8,12 +8,7 @@ import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { match } from 'ts-pattern';
-import { useMaybePropertiesContext } from '../context/PropertiesContext';
-import {
-  emailThreadSubjectFallback,
-  entityTypeToItemType,
-  previewableEntityDisplayName,
-} from '../utils';
+import { entityTypeToItemType } from '../utils';
 
 const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
   'DOCUMENT',
@@ -65,7 +60,6 @@ export function usePropertyEntityDisplay(
     specificMessageId?: Accessor<string | null | undefined>;
   }
 ): PropertyEntityDisplayResult {
-  const propertiesContext = useMaybePropertiesContext();
   const previewType = () => entityTypeToItemType(entityType());
 
   const previewWrapper = () => {
@@ -107,16 +101,14 @@ export function usePropertyEntityDisplay(
       .with('USER', () => userName())
       .with('CHANNEL', () => channelName() || 'Channel')
       .with('COMPANY', () => entityId())
-      .otherwise(() =>
-        previewableEntityDisplayName(
-          entityType(),
-          preview(),
-          emailThreadSubjectFallback(
-            entityType(),
-            propertiesContext?.properties() ?? []
-          )
-        )
-      )
+      .otherwise(() => {
+        const item = preview();
+        if (!item || item.loading) return 'Loading...';
+        if (isAccessiblePreviewItem(item)) {
+          return item.name;
+        }
+        return `Unknown ${entityType().toLowerCase()}`;
+      })
   );
 
   const icon = createMemo(() =>

@@ -9,7 +9,6 @@ export * from './formatting';
 // Export icon component
 export { PropertyDataTypeIcon } from './PropertyDataTypeIcon';
 export * from './position';
-export * from './previewableEntityDisplayName';
 export * from './suggestedProperties';
 export * from './transforms';
 export * from './typeGuards';
