@@ -1,8 +1,0 @@
-language js
-
-`$expr as ItemType` where {
-  register_diagnostic(
-    span = $expr,
-    message = "Do not cast entity-type strings to ItemType. Parse with stringToItemType from @service-storage/client."
-  )
-}
