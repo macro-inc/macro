@@ -31,7 +31,7 @@ use uuid::Uuid;
 
 use crate::domain::models::grouping::ItemGroupingInfo;
 use crate::outbound::pg_soup_repo::grouping::{
-    GroupJoinClause, group_join_clause, group_select_expr,
+    GroupJoinClause, group_join_clause, group_select_expr_at,
 };
 use crate::outbound::pg_soup_repo::type_err;
 use models_grouping::{GroupByField, GroupingConfig, date_bucket_sql_order};
@@ -1860,7 +1860,12 @@ fn build_grouped_items_cte(
     builder: &mut QueryBuilder<'_, Postgres>,
     grouping: &GroupingConfig,
 ) -> Option<String> {
-    let select_expr = group_select_expr(&grouping.field);
+    // Pin the clock: due-date bucketing bakes day boundaries into the SQL, and
+    // the expression is emitted three times below (select, partition, filter).
+    // Generating them from one moment keeps a request that lands on midnight
+    // from partitioning against one set of boundaries and counting against
+    // another.
+    let select_expr = group_select_expr_at(&grouping.field, Utc::now());
 
     builder.push("GroupedItems AS (SELECT t.*, (");
     builder.push(&select_expr);
