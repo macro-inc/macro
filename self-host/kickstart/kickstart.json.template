@@ -1,0 +1,183 @@
+{
+  "//": "Rendered by `macroctl init` from kickstart.json.template. Mirrors the request order in tooling/xtask/crates/xtask_local/src/local/kickstart.rs: key + email template -> tenant -> application -> admin registration -> webhooks. Do not reorder; each request depends on entities the ones above it create.",
+  "apiKeys": [
+    {
+      "key": "@@FUSIONAUTH_API_KEY@@",
+      "description": "Macro self-host API key"
+    }
+  ],
+  "variables": {
+    "defaultTenantId": "@@FUSIONAUTH_TENANT_ID@@"
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "url": "/api/key/import/@@FUSIONAUTH_JWT_SIGNING_KEY_ID@@",
+      "body": {
+        "key": {
+          "id": "@@FUSIONAUTH_JWT_SIGNING_KEY_ID@@",
+          "algorithm": "HS256",
+          "name": "Macro JWT Signing Key",
+          "secret": "@@JWT_SECRET_KEY@@",
+          "type": "HMAC"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/lambda/@@POPULATE_JWT_LAMBDA_ID@@",
+      "body": {
+        "lambda": {
+          "id": "@@POPULATE_JWT_LAMBDA_ID@@",
+          "name": "Populate JWT",
+          "type": "JWTPopulate",
+          "enabled": true,
+          "body": "/* Kickstart flattens this to one line, so block comments only — a // comment would swallow the rest. Derives claims instead of calling authentication-service over HTTP, because Lambda HTTP Connect is a licensed FusionAuth feature that fails silently without a Reactor license. Same macro|<email> convention as the production webhook path. */ function populate(jwt, user, _registration) { jwt.fusion_user_id = user.id; jwt.email = user.email; jwt.macro_user_id = 'macro|' + user.email; }"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/email/template/@@FUSIONAUTH_PASSWORDLESS_TEMPLATE_ID@@",
+      "body": {
+        "emailTemplate": {
+          "name": "Passwordless Login",
+          "defaultSubject": "Your Macro login code",
+          "defaultHtmlTemplate": "<p>Your Macro login code:</p><h1>${code}</h1><p>If you did not request this, you can ignore this email.</p>",
+          "defaultTextTemplate": "Your Macro login code: ${code}",
+          "fromEmail": "@@MAIL_FROM@@"
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "url": "/api/tenant/@@FUSIONAUTH_TENANT_ID@@",
+      "body": {
+        "tenant": {
+          "name": "Macro",
+          "issuer": "@@ISSUER@@",
+          "eventConfiguration": {
+            "events": {
+              "user.create": { "enabled": true, "transactionType": "AbsoluteMajority" },
+              "user.create.complete": { "enabled": true, "transactionType": "None" },
+              "user.delete.complete": { "enabled": true, "transactionType": "None" },
+              "user.email.verified": { "enabled": true, "transactionType": "AbsoluteMajority" }
+            }
+          },
+          "jwtConfiguration": {
+            "accessTokenKeyId": "@@FUSIONAUTH_JWT_SIGNING_KEY_ID@@",
+            "idTokenKeyId": "@@FUSIONAUTH_JWT_SIGNING_KEY_ID@@",
+            "refreshTokenTimeToLiveInMinutes": 43200,
+            "timeToLiveInSeconds": 3600
+          },
+          "emailConfiguration": {
+            "host": "@@SMTP_HOST@@",
+            "port": @@SMTP_PORT@@,
+            "security": "@@SMTP_SECURITY@@",
+            "username": "@@SMTP_USERNAME@@",
+            "password": "@@SMTP_PASSWORD@@",
+            "defaultFromEmail": "@@MAIL_FROM@@",
+            "defaultFromName": "Macro",
+            "passwordlessEmailTemplateId": "@@FUSIONAUTH_PASSWORDLESS_TEMPLATE_ID@@"
+          },
+          "externalIdentifierConfiguration": {
+            "passwordlessLoginGenerator": {
+              "length": 6,
+              "type": "randomDigits"
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/application/@@FUSIONAUTH_CLIENT_ID@@",
+      "tenantId": "@@FUSIONAUTH_TENANT_ID@@",
+      "body": {
+        "application": {
+          "name": "Macro",
+          "tenantId": "@@FUSIONAUTH_TENANT_ID@@",
+          "loginConfiguration": {
+            "allowTokenRefresh": true,
+            "requireAuthentication": true,
+            "generateRefreshTokens": true
+          },
+          "oauthConfiguration": {
+            "clientId": "@@FUSIONAUTH_CLIENT_ID@@",
+            "clientSecret": "@@FUSIONAUTH_CLIENT_SECRET_KEY@@",
+            "enabledGrants": ["authorization_code", "refresh_token"],
+            "authorizedRedirectURLs": [
+              "@@APP_BASE_URL@@",
+              "@@FUSIONAUTH_OAUTH_REDIRECT_URI@@",
+              "http://authentication-service:8080/oauth/redirect"
+            ],
+            "authorizedURLValidationPolicy": "AllowWildcards",
+            "logoutBehavior": "AllApplications",
+            "generateRefreshTokens": true,
+            "requireClientAuthentication": false
+          },
+          "jwtConfiguration": {
+            "enabled": true,
+            "accessTokenKeyId": "@@FUSIONAUTH_JWT_SIGNING_KEY_ID@@",
+            "idTokenKeyId": "@@FUSIONAUTH_JWT_SIGNING_KEY_ID@@",
+            "timeToLiveInSeconds": 3600,
+            "refreshTokenTimeToLiveInMinutes": 43200,
+            "refreshTokenExpirationPolicy": "SlidingWindow"
+          },
+          "lambdaConfiguration": {
+            "accessTokenPopulateId": "@@POPULATE_JWT_LAMBDA_ID@@"
+          },
+          "passwordlessConfiguration": { "enabled": true }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/user/registration",
+      "body": {
+        "user": {
+          "email": "@@ADMIN_EMAIL@@",
+          "password": "@@ADMIN_PASSWORD@@"
+        },
+        "registration": {
+          "applicationId": "3c219e58-ed0e-4b18-ad48-f4f92793ae32",
+          "roles": ["admin"]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/webhook",
+      "body": {
+        "webhook": {
+          "description": "Create User Webhook",
+          "connectTimeout": 1000,
+          "readTimeout": 2000,
+          "url": "http://authentication-service:8080/webhooks/user",
+          "global": true,
+          "eventsEnabled": {
+            "user.create": true,
+            "user.create.complete": true,
+            "user.email.verified": true
+          },
+          "headers": { "x-internal-auth-key": "@@INTERNAL_API_SECRET_KEY@@" }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/webhook",
+      "body": {
+        "webhook": {
+          "description": "Delete User Webhook",
+          "connectTimeout": 1000,
+          "readTimeout": 2000,
+          "url": "http://authentication-service:8080/webhooks/user/delete",
+          "global": true,
+          "eventsEnabled": { "user.delete.complete": true },
+          "headers": { "x-internal-auth-key": "@@INTERNAL_API_SECRET_KEY@@" }
+        }
+      }
+    }
+  ]
+}

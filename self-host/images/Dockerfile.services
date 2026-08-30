@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+#
+# Every Rust service binary in one image. Each compose service runs a different
+# binary out of /app/out, exactly as the local dev stack does with its
+# bind-mounted build directory — so a self-hosted deployment and a developer's
+# stack run the same artifacts the same way.
+#
+# The binaries are built ahead of this by `nix build .#local-stack-binaries`
+# and staged into the build context; see
+# .github/workflows/push_self_host_images.yml.
+FROM debian:trixie-slim
+
+ARG BIN_DIR=bin
+ARG MACRO_VERSION=dev
+
+LABEL org.opencontainers.image.title="Macro services" \
+      org.opencontainers.image.source="https://github.com/macro-inc/macro" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.version="${MACRO_VERSION}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates dumb-init curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY ${BIN_DIR}/ /app/out/
+RUN chmod +x /app/out/*
+
+# Services listen here; only the reverse proxy is published to the host.
+ENV PORT=8080
+EXPOSE 8080
+
+# No default CMD: compose supplies `command: ["/app/out/<binary>"]` per service.
+ENTRYPOINT ["dumb-init", "--"]

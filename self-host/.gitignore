@@ -1,0 +1,10 @@
+# Secrets and per-deployment state. Never commit these.
+.env
+.env.bak
+generated/
+backups/
+
+# The template, however, IS the install flow: `macroctl generate-secrets` reads
+# it. The repository root ignores `**/.env*` and `**/*.env.*`, which would
+# otherwise swallow it — a deeper .gitignore wins, so re-include it here.
+!.env.example

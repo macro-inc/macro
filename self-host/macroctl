@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# macroctl — operate a self-hosted Macro deployment.
+#
+#   ./macroctl generate-secrets   write .env with fresh secrets for your domain
+#   ./macroctl up                 provision and start (add --profile agents)
+#   ./macroctl down               stop, keeping all data
+#   ./macroctl status             container and endpoint state
+#   ./macroctl logs [service]     follow logs
+#   ./macroctl backup [dir]       dump database + object storage + config
+#   ./macroctl restore <dir>      restore a backup taken by this script
+#   ./macroctl upgrade [version]  pull a new version and restart in place
+#   ./macroctl destroy            remove containers AND all data
+#
+# The only host dependency is Docker with the Compose plugin.
+set -euo pipefail
+
+cd "$(dirname "$0")"
+ENV_FILE=.env
+COMPOSE=(docker compose --env-file "$ENV_FILE" -f docker-compose.yml)
+
+red()  { printf '\033[31m%s\033[0m\n' "$*"; }
+bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+die()  { red "error: $*"; exit 1; }
+
+need_env() {
+  [ -f "$ENV_FILE" ] || die "no $ENV_FILE — run './macroctl generate-secrets' first"
+}
+
+# ---------------------------------------------------------------------------
+# Secret generation. /dev/urandom only, so there is no openssl dependency.
+# ---------------------------------------------------------------------------
+rand_hex()  { head -c "${1:-32}" /dev/urandom | od -An -v -tx1 | tr -d ' \n'; }
+rand_b64()  { head -c "${1:-32}" /dev/urandom | base64 | tr -d '\n='; }
+rand_b64_strict() { head -c 32 /dev/urandom | base64 | tr -d '\n'; }
+
+uuid4() {
+  local h; h=$(rand_hex 16)
+  # Set version 4 and the RFC 4122 variant, as FusionAuth validates both.
+  printf '%s-%s-4%s-%s%s-%s\n' \
+    "${h:0:8}" "${h:8:4}" "${h:13:3}" \
+    "$(printf '%x' $(( 0x8 + RANDOM % 4 )))" "${h:17:3}" "${h:20:12}"
+}
+
+cmd_generate_secrets() {
+  local domain="" acme="" smtp_host="" smtp_port="587" smtp_user="" smtp_pass="" admin=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --domain)     domain="$2"; shift 2 ;;
+      --acme-email) acme="$2"; shift 2 ;;
+      --smtp-host)  smtp_host="$2"; shift 2 ;;
+      --smtp-port)  smtp_port="$2"; shift 2 ;;
+      --smtp-user)  smtp_user="$2"; shift 2 ;;
+      --smtp-pass)  smtp_pass="$2"; shift 2 ;;
+      --admin-email) admin="$2"; shift 2 ;;
+      --force)      FORCE=1; shift ;;
+      *) die "unknown flag: $1" ;;
+    esac
+  done
+
+  if [ -f "$ENV_FILE" ] && [ "${FORCE:-0}" != "1" ]; then
+    die "$ENV_FILE already exists. Re-generating rotates every secret and will
+       sign out every user and orphan encrypted data. Pass --force if you mean it."
+  fi
+
+  [ -n "$domain" ] || read -r -p "Domain for this deployment (e.g. macro.acme.io): " domain
+  [ -n "$domain" ] || die "a domain is required"
+  [ -n "$acme" ] || read -r -p "Email for Let's Encrypt notices: " acme
+  [ -n "$smtp_host" ] || read -r -p "SMTP host (login codes are emailed): " smtp_host
+  [ -n "$admin" ] || admin="admin@${domain#*.}"
+
+  # One value per identity, mirroring which env vars must agree with each other
+  # (see tooling/xtask/crates/xtask_local/src/local/local_env.rs).
+  local pg_pw fa_db_pw internal dss doc_perm internal_call url_signing jwt
+  local fa_api fa_client_secret os_pw aws_secret admin_pw mcp_key
+  local app_id tenant_id key_id template_id
+  pg_pw=$(rand_hex 24);        fa_db_pw=$(rand_hex 24)
+  internal=$(rand_b64 32);     dss=$(rand_b64 32)
+  doc_perm=$(rand_b64 32);     internal_call=$(rand_b64 32)
+  url_signing=$(rand_b64 32);  jwt=$(rand_b64 48)
+  fa_api=$(rand_b64 32);       fa_client_secret=$(rand_b64 32)
+  os_pw=$(rand_hex 24);        aws_secret=$(rand_hex 20)
+  admin_pw=$(rand_b64 18);     mcp_key=$(rand_b64_strict)
+  app_id=$(uuid4); tenant_id=$(uuid4); key_id=$(uuid4); template_id=$(uuid4)
+
+  local s3_domain="s3.${domain}" fa_domain="auth.${domain}"
+
+  MACRO_DOMAIN="$domain" S3_DOMAIN="$s3_domain" FUSIONAUTH_DOMAIN="$fa_domain" \
+  ACME_EMAIL="$acme" SMTP_HOST="$smtp_host" SMTP_PORT="$smtp_port" \
+  SMTP_USERNAME="$smtp_user" SMTP_PASSWORD="$smtp_pass" ADMIN_EMAIL="$admin" \
+  PG_PW="$pg_pw" FA_DB_PW="$fa_db_pw" INTERNAL="$internal" DSS="$dss" \
+  DOC_PERM="$doc_perm" INTERNAL_CALL="$internal_call" URL_SIGNING="$url_signing" \
+  JWT="$jwt" FA_API="$fa_api" FA_CLIENT_SECRET="$fa_client_secret" OS_PW="$os_pw" \
+  AWS_SECRET="$aws_secret" ADMIN_PW="$admin_pw" MCP_KEY="$mcp_key" \
+  APP_ID="$app_id" TENANT_ID="$tenant_id" KEY_ID="$key_id" TEMPLATE_ID="$template_id" \
+  awk '
+    function env(n) { return ENVIRON[n] }
+    BEGIN {
+      # env key -> generated value
+      v["POSTGRES_PASSWORD"]                    = env("PG_PW")
+      v["FUSIONAUTH_DB_PASSWORD"]               = env("FA_DB_PW")
+      v["INTERNAL_API_SECRET_KEY"]              = env("INTERNAL")
+      v["INTERNAL_API_KEY"]                     = env("INTERNAL")
+      v["INTERNAL_AUTH_KEY"]                    = env("INTERNAL")
+      v["AUTHENTICATION_SERVICE_SECRET_KEY"]    = env("INTERNAL")
+      v["SYNC_SERVICE_AUTH_KEY"]                = env("INTERNAL")
+      v["SERVICE_INTERNAL_AUTH_KEY"]            = env("DSS")
+      v["DOCUMENT_STORAGE_SERVICE_AUTH_KEY"]    = env("DSS")
+      v["DOCUMENT_PERMISSION_JWT"]              = env("DOC_PERM")
+      v["INTERNAL_CALL_SECRET"]                 = env("INTERNAL_CALL")
+      v["URL_SIGNING_HMAC"]                     = env("URL_SIGNING")
+      v["JWT_SECRET_KEY"]                       = env("JWT")
+      v["FUSIONAUTH_API_KEY"]                   = env("FA_API")
+      v["FUSIONAUTH_API_KEY_SECRET_KEY"]        = env("FA_API")
+      v["FUSIONAUTH_CLIENT_SECRET_KEY"]         = env("FA_CLIENT_SECRET")
+      v["FUSIONAUTH_CLIENT_ID"]                 = env("APP_ID")
+      v["AUDIENCE"]                             = env("APP_ID")
+      v["FUSIONAUTH_TENANT_ID"]                 = env("TENANT_ID")
+      v["FUSIONAUTH_JWT_SIGNING_KEY_ID"]        = env("KEY_ID")
+      v["FUSIONAUTH_PASSWORDLESS_TEMPLATE_ID"]  = env("TEMPLATE_ID")
+      v["MCP_CREDENTIALS_KEY_SECRET_NAME"]      = env("MCP_KEY")
+      v["OPENSEARCH_PASSWORD"]                  = env("OS_PW")
+      v["AWS_SECRET_ACCESS_KEY"]                = env("AWS_SECRET")
+      v["ADMIN_PASSWORD"]                       = env("ADMIN_PW")
+      v["ACME_EMAIL"]                           = env("ACME_EMAIL")
+      v["SMTP_HOST"]                            = env("SMTP_HOST")
+      v["SMTP_PORT"]                            = env("SMTP_PORT")
+      v["SMTP_USERNAME"]                        = env("SMTP_USERNAME")
+      v["SMTP_PASSWORD"]                        = env("SMTP_PASSWORD")
+      v["ADMIN_EMAIL"]                          = env("ADMIN_EMAIL")
+      v["MACRO_DOMAIN"]                         = env("MACRO_DOMAIN")
+      v["S3_DOMAIN"]                            = env("S3_DOMAIN")
+      v["FUSIONAUTH_DOMAIN"]                    = env("FUSIONAUTH_DOMAIN")
+      v["ISSUER"]                               = env("MACRO_DOMAIN")
+      v["MACRO_API_TOKEN_ISSUER"]               = env("MACRO_DOMAIN")
+      v["SENDER_BASE_ADDRESS"]                  = env("MACRO_DOMAIN")
+    }
+    # Comments and blanks pass through untouched.
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ { print; next }
+    /=/ {
+      eq = index($0, "=")
+      key = substr($0, 1, eq - 1)
+      val = substr($0, eq + 1)
+      if (key in v) { print key "=" v[key]; next }
+      # Values that embed a generated secret or the domain rather than being one.
+      gsub(/REPLACE_ME/, env("PG_PW"), val)
+      gsub(/macro\.example\.com/, env("MACRO_DOMAIN"), val)
+      gsub(/s3\.macro\.example\.com/, env("S3_DOMAIN"), val)
+      gsub(/auth\.macro\.example\.com/, env("FUSIONAUTH_DOMAIN"), val)
+      print key "=" val
+      next
+    }
+    { print }
+  ' .env.example > "$ENV_FILE"
+
+  chmod 600 "$ENV_FILE"
+
+  # Nothing may be left unfilled: a stray placeholder is a broken deployment
+  # that only fails later, at the point the value is first used.
+  # Comment lines legitimately mention both, so only check assignments.
+  if grep -vE '^[[:space:]]*#' "$ENV_FILE" | grep -q 'REPLACE_ME'; then
+    red "unfilled placeholders remain:"
+    grep -nvE '^[[:space:]]*#' "$ENV_FILE" | grep 'REPLACE_ME' >&2; exit 1
+  fi
+  if grep -vE '^[[:space:]]*#' "$ENV_FILE" | grep -q 'macro\.example\.com'; then
+    red "example domain remains:"
+    grep -nvE '^[[:space:]]*#' "$ENV_FILE" | grep 'macro\.example\.com' >&2; exit 1
+  fi
+
+  bold "Wrote $ENV_FILE (mode 600)."
+  cat <<TXT
+
+  Domain          https://${domain}
+  Object storage  https://${s3_domain}
+  Identity        https://${fa_domain}
+
+  Point all three at this machine with A/AAAA records before starting, or
+  Let's Encrypt cannot issue certificates.
+
+  FusionAuth admin console: ${admin}
+  password: ${admin_pw}
+
+  That password is in ${ENV_FILE} as ADMIN_PASSWORD and is not shown again.
+  It administers identity only — Macro sign-in is by emailed login code.
+
+  Review ${ENV_FILE} for the optional integrations (AI providers, Google,
+  GitHub, LiveKit), then run: ./macroctl up
+
+TXT
+}
+
+# ---------------------------------------------------------------------------
+cmd_init() {
+  need_env
+  bold "Rendering FusionAuth kickstart"
+  mkdir -p generated/kickstart
+  "${COMPOSE[@]}" run --rm --no-deps -T \
+    -v "$PWD/generated/kickstart:/out" \
+    --entrypoint /app/render-kickstart.sh init
+}
+
+cmd_up() {
+  need_env
+  local profiles=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --profile) profiles+=(--profile "$2"); shift 2 ;;
+      *) die "unknown flag: $1" ;;
+    esac
+  done
+
+  bold "Pulling images"
+  "${COMPOSE[@]}" "${profiles[@]}" pull --quiet
+
+  cmd_init
+
+  bold "Provisioning"
+  "${COMPOSE[@]}" up -d postgres redis opensearch kafka localstack
+  "${COMPOSE[@]}" run --rm init
+  "${COMPOSE[@]}" run --rm kafka_init
+
+  bold "Starting services"
+  "${COMPOSE[@]}" "${profiles[@]}" up -d
+
+  echo
+  bold "Up. https://$(grep -E '^MACRO_DOMAIN=' "$ENV_FILE" | cut -d= -f2-)"
+  echo "Certificates take a minute on first boot. './macroctl status' shows health."
+}
+
+cmd_down()    { need_env; "${COMPOSE[@]}" down; }
+cmd_status()  { need_env; "${COMPOSE[@]}" ps; }
+cmd_logs()    { need_env; "${COMPOSE[@]}" logs -f --tail=200 "$@"; }
+
+cmd_destroy() {
+  need_env
+  red "This deletes every container AND all data: database, files, search, identity."
+  read -r -p "Type the domain to confirm: " confirm
+  local domain; domain=$(grep -E '^MACRO_DOMAIN=' "$ENV_FILE" | cut -d= -f2-)
+  [ "$confirm" = "$domain" ] || die "aborted"
+  "${COMPOSE[@]}" down -v
+}
+
+cmd_upgrade() {
+  need_env
+  local version="${1:-}"
+  if [ -n "$version" ]; then
+    if grep -qE '^MACRO_VERSION=' "$ENV_FILE"; then
+      sed -i.bak -E "s|^MACRO_VERSION=.*|MACRO_VERSION=${version}|" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+    else
+      printf 'MACRO_VERSION=%s\n' "$version" >> "$ENV_FILE"
+    fi
+    bold "Pinned MACRO_VERSION=$version"
+  fi
+  bold "Backing up first"
+  cmd_backup
+  bold "Pulling and restarting"
+  "${COMPOSE[@]}" pull --quiet
+  cmd_init
+  "${COMPOSE[@]}" run --rm init   # migrations for the new version
+  "${COMPOSE[@]}" up -d
+  bold "Upgraded."
+}
+
+# ---------------------------------------------------------------------------
+cmd_backup() {
+  need_env
+  local dir="${1:-backups/$(date -u +%Y%m%dT%H%M%SZ)}"
+  mkdir -p "$dir"
+  bold "Backing up to $dir"
+
+  # shellcheck disable=SC1090
+  set -a; . "./$ENV_FILE"; set +a
+
+  echo "  postgres"
+  "${COMPOSE[@]}" exec -T postgres \
+    pg_dump -U "${POSTGRES_USER:-macro}" -d "${POSTGRES_DB:-macrodb}" -Fc \
+    > "$dir/macrodb.dump"
+
+  echo "  fusionauth"
+  "${COMPOSE[@]}" exec -T fusionauth_db \
+    pg_dump -U "${FUSIONAUTH_DB_USER:-postgres}" -d fusionauth -Fc \
+    > "$dir/fusionauth.dump"
+
+  echo "  object storage"
+  # LocalStack's own persisted state, which carries the buckets, their objects,
+  # and the KMS key material. Losing the CMK makes stored Cursor API keys
+  # permanently undecryptable, so it is part of the backup, not an extra.
+  "${COMPOSE[@]}" run --rm --no-deps --entrypoint sh -T \
+    -v "$PWD/$dir:/backup" localstack \
+    -c 'tar czf /backup/localstack.tar.gz -C /var/lib/localstack .' 2>/dev/null \
+    || red "  warning: object storage snapshot failed — check the localstack volume"
+
+  echo "  config"
+  cp "$ENV_FILE" "$dir/env"
+  chmod 600 "$dir/env"
+  cp -r generated "$dir/generated" 2>/dev/null || true
+
+  bold "Backup complete: $dir"
+  echo "It contains secrets. Store it the way you would store a password database."
+}
+
+cmd_restore() {
+  need_env
+  local dir="${1:-}"
+  [ -n "$dir" ] && [ -d "$dir" ] || die "usage: ./macroctl restore <backup-dir>"
+  red "This overwrites the current database and object storage."
+  read -r -p "Type RESTORE to confirm: " confirm
+  [ "$confirm" = "RESTORE" ] || die "aborted"
+
+  # shellcheck disable=SC1090
+  set -a; . "./$ENV_FILE"; set +a
+
+  "${COMPOSE[@]}" up -d postgres fusionauth_db localstack
+  sleep 5
+
+  echo "  postgres"
+  "${COMPOSE[@]}" exec -T postgres \
+    pg_restore -U "${POSTGRES_USER:-macro}" -d "${POSTGRES_DB:-macrodb}" --clean --if-exists \
+    < "$dir/macrodb.dump"
+
+  echo "  fusionauth"
+  "${COMPOSE[@]}" exec -T fusionauth_db \
+    pg_restore -U "${FUSIONAUTH_DB_USER:-postgres}" -d fusionauth --clean --if-exists \
+    < "$dir/fusionauth.dump"
+
+  if [ -f "$dir/localstack.tar.gz" ]; then
+    echo "  object storage"
+    "${COMPOSE[@]}" stop localstack
+    "${COMPOSE[@]}" run --rm --no-deps --entrypoint sh -T \
+      -v "$PWD/$dir:/backup" localstack \
+      -c 'rm -rf /var/lib/localstack/* && tar xzf /backup/localstack.tar.gz -C /var/lib/localstack'
+  fi
+
+  bold "Restored. Run './macroctl up'."
+}
+
+# ---------------------------------------------------------------------------
+case "${1:-}" in
+  generate-secrets) shift; cmd_generate_secrets "$@" ;;
+  init)     shift; cmd_init "$@" ;;
+  up)       shift; cmd_up "$@" ;;
+  down)     shift; cmd_down "$@" ;;
+  status)   shift; cmd_status "$@" ;;
+  logs)     shift; cmd_logs "$@" ;;
+  backup)   shift; cmd_backup "$@" ;;
+  restore)  shift; cmd_restore "$@" ;;
+  upgrade)  shift; cmd_upgrade "$@" ;;
+  destroy)  shift; cmd_destroy "$@" ;;
+  ""|-h|--help|help)
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "unknown command: $1 (try --help)" ;;
+esac

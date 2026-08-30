@@ -1,0 +1,275 @@
+{
+  "queues": [
+    {
+      "name": "notification-queue",
+      "bindings": [
+        {
+          "key": "NOTIFICATION_QUEUE",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "notification-ingress-queue",
+      "bindings": [
+        {
+          "key": "NOTIFICATION_INGRESS_QUEUE",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "push-delivery-queue",
+      "bindings": [
+        {
+          "key": "PUSH_NOTIFICATION_EVENT_HANDLER_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "webhook-event-queue.fifo",
+      "bindings": [
+        {
+          "key": "OVERRIDE_WEBHOOK_EVENT_QUEUE",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "email-service-backfill-queue",
+      "bindings": [
+        {
+          "key": "BACKFILL_QUEUE",
+          "form": "name"
+        },
+        {
+          "key": "EMAIL_BACKFILL_QUEUE",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "email-service-crm-cleanup-queue",
+      "bindings": [
+        {
+          "key": "OVERRIDE_EMAIL_CRM_CLEANUP_QUEUE",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "delete-chat-handler-queue",
+      "bindings": [
+        {
+          "key": "CHAT_DELETE_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "contacts-queue",
+      "bindings": [
+        {
+          "key": "CONTACTS_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "convert-service-queue",
+      "bindings": [
+        {
+          "key": "CONVERT_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "delete-document-handler-queue",
+      "bindings": [
+        {
+          "key": "DOCUMENT_DELETE_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "document-upload-finalizer-queue",
+      "bindings": [
+        {
+          "key": "DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "document-text-extractor-lambda-queue",
+      "bindings": [
+        {
+          "key": "DOCUMENT_TEXT_EXTRACTOR_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "email-service-scheduled-queue",
+      "bindings": [
+        {
+          "key": "EMAIL_SCHEDULED_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "email-service-gmail-inbox-sync-queue",
+      "bindings": [
+        {
+          "key": "GMAIL_INBOX_SYNC_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "email-service-gmail-inbox-retry-queue",
+      "bindings": [
+        {
+          "key": "GMAIL_INBOX_SYNC_RETRY_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "email-service-gmail-ops-queue",
+      "bindings": [
+        {
+          "key": "GMAIL_OPS_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "email-service-gmail-ops-retry-queue",
+      "bindings": [
+        {
+          "key": "GMAIL_OPS_RETRY_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "email-service-refresh-queue",
+      "bindings": [
+        {
+          "key": "LINK_MANAGER_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "search-event-queue",
+      "bindings": [
+        {
+          "key": "SEARCH_EVENT_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "ai-projection-queue",
+      "bindings": [
+        {
+          "key": "AI_PROJECTION_QUEUE",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "email-sfs-delete-queue",
+      "bindings": [
+        {
+          "key": "SFS_DELETE_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "email-service-sfs-mapper-queue",
+      "bindings": [
+        {
+          "key": "SFS_UPLOADER_QUEUE",
+          "form": "name"
+        }
+      ]
+    },
+    {
+      "name": "static-file-s3-event-notification-queue",
+      "bindings": [
+        {
+          "key": "STATIC_FILE_SERVICE_S3_EVENT_QUEUE_URL",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "reminder-dispatch-queue",
+      "bindings": [
+        {
+          "key": "OVERRIDE_REMINDER_DISPATCH_QUEUE",
+          "form": "url"
+        }
+      ]
+    },
+    {
+      "name": "calendar-reminder-dispatch-queue",
+      "bindings": [
+        {
+          "key": "OVERRIDE_CALENDAR_REMINDER_DISPATCH_QUEUE",
+          "form": "url"
+        }
+      ]
+    }
+  ],
+  "buckets": [
+    {
+      "name": "macro-email-attachments",
+      "env_key": "ATTACHMENT_BUCKET"
+    },
+    {
+      "name": "doc-storage",
+      "env_key": "DOCUMENT_STORAGE_BUCKET"
+    },
+    {
+      "name": "docx-upload",
+      "env_key": "DOCX_DOCUMENT_UPLOAD_BUCKET"
+    },
+    {
+      "name": "static-file-storage",
+      "env_key": "STATIC_STORAGE_BUCKET"
+    },
+    {
+      "name": "bulk-upload-staging",
+      "env_key": "UPLOAD_STAGING_BUCKET"
+    },
+    {
+      "name": "macro-call-recording-local",
+      "env_key": "CALL_RECORDING_BUCKET_NAME"
+    }
+  ],
+  "tables": [
+    {
+      "name": "bulk-upload",
+      "env_key": "BULK_UPLOAD_REQUESTS_TABLE"
+    },
+    {
+      "name": "connection-gateway-table",
+      "env_key": "CONNECTION_GATEWAY_TABLE"
+    },
+    {
+      "name": "static-file-metadata",
+      "env_key": "STATIC_FILE_SERVICE_DYNAMODB_TABLE_NAME"
+    }
+  ],
+  "kms_alias": "alias/macro-selfhost-cursor-api-key",
+  "account_id": "000000000000"
+}
