@@ -294,7 +294,14 @@ body.tauri-ios {
   /* Menu surface for glassed floating chrome (menus, popovers, cmd+k, the
      channel input): the menu color with a hint of see-through, mirroring the
      site hero bar's `--b1 86%`. Pair `bg-menu-glass` with a `glass-*` utility
-     so a backdrop blur sits behind the translucency. */
+     so a backdrop blur sits behind the translucency.
+
+     Declare this only here. Dropdown content redefines `--color-menu` to this
+     token, which is safe because inheritance carries the *computed* value —
+     the `var(--color-menu)` below is already substituted against the root by
+     the time the dropdown reads it. Redeclaring `--color-menu-glass` under an
+     element that has redefined `--color-menu` would close the loop and make
+     both invalid at computed-value time, blanking every menu surface. */
   --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
