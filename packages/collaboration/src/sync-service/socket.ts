@@ -3,6 +3,7 @@ import {
   BebopSerializer,
   ExponentialBackoff,
   type UrlResolver,
+  type WebSocketFactory,
   type Websocket,
   WebsocketBuilder,
   type WebsocketConnectionState,
@@ -39,11 +40,20 @@ export interface SyncSocket {
  * heartbeat. The `getUrl` resolver is the only environment-specific bit — the
  * browser refreshes a permission token on each (re)connect, the worker returns
  * a static URL.
+ *
+ * `factory` optionally overrides how the underlying native socket is created
+ * (the AI editing worker wraps the default to observe raw frames).
  */
-export function createSyncSocket(getUrl: UrlResolver): SyncWebsocket {
+export function createSyncSocket(
+  getUrl: UrlResolver,
+  factory?: WebSocketFactory
+): SyncWebsocket {
+  let builder = new WebsocketBuilder(getUrl).withSerializer(
+    new BebopSerializer(FromPeer, FromRemote)
+  );
+  if (factory) builder = builder.withFactory(factory);
   return (
-    new WebsocketBuilder(getUrl)
-      .withSerializer(new BebopSerializer(FromPeer, FromRemote))
+    builder
       // Capped exponential backoff. The scheduler calls next() before the first
       // retry, so the delays are 250*2^1 = 500ms doubling to a 250*2^5 = 8s
       // cap; 20 retries ≈ 2 minutes of automatic attempts, after which

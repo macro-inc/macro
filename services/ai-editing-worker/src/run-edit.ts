@@ -19,6 +19,7 @@ import type { UsageEntry } from './ai-editing/token-tracker';
 import type { CoderRunCode, DispatchEditTrace } from './ai-editing/tools';
 import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
+import type { SyncSocketDiagnostics } from './sync-diagnostics';
 import { buildTraceSession, type TraceSession } from './trace-log';
 
 export type Model = {
@@ -41,6 +42,8 @@ export type ResolvedModels = {
 export type RunEditArgs = {
   /** Live sync source, already constructed by the caller (ws in prod). */
   source: SyncServiceSource;
+  /** Diagnostics for the source's socket; reported on the sync-init span. */
+  syncDiagnostics?: SyncSocketDiagnostics;
   documentId: string;
   prompt: string;
   models: ResolvedModels;
@@ -83,10 +86,21 @@ export async function runEditSession(
 
   await Telemetry.span('edit.sync_init', async (span) => {
     const initialResult = await source.doInitialSync();
+    const diagnostics = args.syncDiagnostics;
+    if (diagnostics) {
+      for (const [key, value] of Object.entries(diagnostics.attrs())) {
+        span.setAttr(key, value);
+      }
+    }
     if (initialResult.isErr()) {
       source.cleanup();
       const e = initialResult.error;
-      const err = new Error(`initial sync failed: ${e.type} (${e.duration}ms)`);
+      // The summary rides the error into the HTTP 502 body, so callers see
+      // how far the connection got instead of just "timeout (10000ms)".
+      const detail = diagnostics ? ` [ws ${diagnostics.summary()}]` : '';
+      const err = new Error(
+        `initial sync failed: ${e.type} (${e.duration}ms)${detail}`
+      );
       span.error(err);
       throw err;
     }
