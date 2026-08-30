@@ -162,7 +162,7 @@ no toolchain to deploy. That means they can fall behind the code they were
 derived from, so a check enforces it:
 
 ```bash
-python3 self-host/scripts/check-drift.py
+python3 scripts/check-drift.py
 ```
 
 It reads the same Rust catalogs the dev stack is built from —

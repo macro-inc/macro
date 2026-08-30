@@ -44,8 +44,21 @@ for block in re.findall(r"RustService \{(.*?)\n    \},", inv, re.S):
         "modes": re.search(r"modes:\s*&\[([^\]]*)\]", block).group(1),
     })
 
+# A formatting change in inventory.rs that defeats the regex above would leave
+# `services` empty, every loop below would iterate zero times, and the check
+# would pass while verifying nothing. Fail loudly on an implausible parse
+# instead of silently reporting success.
+if len(services) < 10 or any(s["compose_name"] is None or s["cargo_bin"] is None for s in services):
+    print(f"could not parse inventory.rs: got {len(services)} services."
+          " The regex in this script no longer matches RustService entries.", file=sys.stderr)
+    sys.exit(2)
+
 # Local-mode services, minus the seed-CLI sidecar which is a dev-only fixture.
 wanted = [s for s in services if "Mode::Local" in s["modes"] and s["compose_name"] != "gmail_forwarder"]
+if not wanted:
+    print("no Mode::Local services parsed from inventory.rs; refusing to pass"
+          " a check that would verify nothing.", file=sys.stderr)
+    sys.exit(2)
 
 compose = (SELF_HOST / "docker-compose.yml").read_text()
 caddy = (SELF_HOST / "Caddyfile").read_text()
@@ -79,12 +92,34 @@ for q in manifest["queues"]:
         if binding["key"] not in env_keys:
             fail(f'queue {q["name"]}: {binding["key"]} missing from .env.example')
 
-# The manifest itself must match the Rust catalog it was extracted from.
+# The manifest must match the Rust catalog it was extracted from. Compare the
+# names rather than the counts: a renamed queue keeps the count identical while
+# leaving the deployment creating one queue and its consumer polling another.
 res = (ROOT / "tooling/xtask/crates/xtask_local/src/local/resources.rs").read_text()
-rust_queue_count = len(re.findall(r"\n    Queue \{", res.split("pub const QUEUES")[1].split("pub const BUCKETS")[0]))
-if rust_queue_count != len(manifest["queues"]):
-    fail(f'resources.json has {len(manifest["queues"])} queues, resources.rs declares {rust_queue_count}'
-         " — regenerate self-host/init/resources.json")
+queues_block = res.split("pub const QUEUES")[1].split("pub const BUCKETS")[0]
+macro_queues = (ROOT / "crates/macro_queues/src/lib.rs").read_text()
+local_names = dict(re.findall(r'pub (\w+)\s*\{\s*local:\s*"([^"]+)"', macro_queues))
+# Catalog constants that name a queue without going through macro_queues.
+consts = {"UPLOAD_FINALIZER_QUEUE": local_names.get("DocumentUploadFinalizerQueue")}
+
+rust_queue_names = set()
+for entry in re.findall(r"Queue \{(.*?)\n    \},", queues_block, re.S):
+    m = re.search(r'name:\s*(?:macro_queues::(\w+)::LOCAL|([A-Z_]+))', entry)
+    if not m:
+        fail("could not parse a queue name out of resources.rs")
+        continue
+    name = local_names.get(m.group(1)) if m.group(1) else consts.get(m.group(2))
+    if name:
+        rust_queue_names.add(name)
+
+manifest_queue_names = {q["name"] for q in manifest["queues"]}
+if rust_queue_names != manifest_queue_names:
+    missing = sorted(rust_queue_names - manifest_queue_names)
+    extra = sorted(manifest_queue_names - rust_queue_names)
+    fail("self-host/init/resources.json is out of date with resources.rs"
+         + (f"; missing {missing}" if missing else "")
+         + (f"; stale {extra}" if extra else "")
+         + " — regenerate it")
 
 # --- the auth binary must not be the local-stack build ---------------------
 # `.#local-stack-binaries` compiles authentication_service with

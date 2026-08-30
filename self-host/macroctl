@@ -14,6 +14,9 @@
 # The only host dependency is Docker with the Compose plugin.
 set -euo pipefail
 
+# Resolve the script's own name before changing directory: `$0` is relative to
+# the caller's cwd, so `--help` (which reads this file) breaks after the cd.
+SELF=$(basename "$0")
 cd "$(dirname "$0")"
 ENV_FILE=.env
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f docker-compose.yml)
@@ -66,7 +69,15 @@ cmd_generate_secrets() {
   [ -n "$domain" ] || die "a domain is required"
   [ -n "$acme" ] || read -r -p "Email for Let's Encrypt notices: " acme
   [ -n "$smtp_host" ] || read -r -p "SMTP host (login codes are emailed): " smtp_host
-  [ -n "$admin" ] || admin="admin@${domain#*.}"
+  # Default the admin address to the mail domain. Dropping the first label
+  # suits a subdomain like macro.acme.io, but on an apex domain it would leave
+  # a bare TLD, so only strip when there is a label to spare.
+  if [ -z "$admin" ]; then
+    case "$domain" in
+      *.*.*) admin="admin@${domain#*.}" ;;
+      *)     admin="admin@${domain}" ;;
+    esac
+  fi
 
   # One value per identity, mirroring which env vars must agree with each other
   # (see tooling/xtask/crates/xtask_local/src/local/local_env.rs).
@@ -140,9 +151,23 @@ cmd_generate_secrets() {
       eq = index($0, "=")
       key = substr($0, 1, eq - 1)
       val = substr($0, eq + 1)
-      if (key in v) { print key "=" v[key]; next }
-      # Values that embed a generated secret or the domain rather than being one.
-      gsub(/REPLACE_ME/, env("PG_PW"), val)
+      # Operator-supplied values can contain $ or #, and macroctl sources this
+      # file for backup and restore. Single-quote them so the shell takes them
+      # literally; compose strips the quotes the same way.
+      if (key in v) {
+        if (key == "SMTP_PASSWORD" || key == "SMTP_USERNAME") {
+          q = v[key]; gsub(/'"'"'/, "'"'"'\\'"'"''"'"'", q)
+          print key "='"'"'" q "'"'"'"
+        } else print key "=" v[key]
+        next
+      }
+      # The connection strings embed the database password rather than being a
+      # secret in their own right. Scoped to exactly those keys: a blanket
+      # substitution would hand the database password to any future key that
+      # ships a REPLACE_ME and was forgotten in the map above, instead of
+      # letting the guard below catch it.
+      if (key == "DATABASE_URL" || key == "DATABASE_URL_READONLY" || key == "MACRO_DB_URL")
+        gsub(/REPLACE_ME/, env("PG_PW"), val)
       gsub(/macro\.example\.com/, env("MACRO_DOMAIN"), val)
       gsub(/s3\.macro\.example\.com/, env("S3_DOMAIN"), val)
       gsub(/auth\.macro\.example\.com/, env("FUSIONAUTH_DOMAIN"), val)
@@ -350,6 +375,6 @@ case "${1:-}" in
   upgrade)  shift; cmd_upgrade "$@" ;;
   destroy)  shift; cmd_destroy "$@" ;;
   ""|-h|--help|help)
-    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' ;;
+    sed -n '2,14p' "$SELF" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown command: $1 (try --help)" ;;
 esac

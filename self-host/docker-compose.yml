@@ -556,6 +556,10 @@ services:
     <<: *service
     profiles: ["agents"]
     command: ["/app/out/agent_harness_service"]
+    # The only service that does not run as the image's unprivileged user: it
+    # drives the host's Docker daemon through the socket below, which the
+    # `macro` account has no access to. Another reason this is opt-in.
+    user: root
     environment:
       OVERRIDE_CONNECTION_GATEWAY_URL: http://connection-gateway:8080
       OVERRIDE_LEXICAL_SERVICE_URL: http://lexical-service:8096
