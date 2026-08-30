@@ -1,7 +1,13 @@
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
+import {
+  type CorrespondenceParty,
+  CorrespondenceSidePanelSection,
+  externalParties,
+} from '@app/features/correspondence';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
+import { useEmail } from '@core/context/user';
 import { Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
@@ -85,6 +91,42 @@ function CalendarSourcesSidePanelSection() {
   );
 }
 
+/**
+ * Correspondence for the selected event. Only present while an event is
+ * selected, and (via the section itself) only when that event has external
+ * parties on it.
+ */
+function CalendarCorrespondenceSidePanelSection() {
+  const calendarView = useCalendarView();
+  const currentUserEmail = useEmail();
+
+  // The organizer plus every attendee. `isSelf` marks the connected account
+  // on the event; `externalParties` drops it again by address, so a provider
+  // that omits the flag still can't leak the user into the panel.
+  const parties = createMemo<CorrespondenceParty[]>(() => {
+    const event = calendarView.selectedEvent();
+    if (!event) return [];
+
+    const participants: CorrespondenceParty[] = [];
+    if (event.organizerEmail) {
+      participants.push({
+        email: event.organizerEmail,
+        name: event.organizerName,
+      });
+    }
+    for (const attendee of event.attendees) {
+      if (attendee.isSelf) continue;
+      participants.push({
+        email: attendee.email,
+        name: attendee.displayName ?? undefined,
+      });
+    }
+    return externalParties(participants, currentUserEmail());
+  });
+
+  return <CorrespondenceSidePanelSection parties={parties()} order={30} />;
+}
+
 /** Registers the calendar's contextual right-side panel sections. */
 export function SidePanelSections() {
   const sidePanel = useSidePanel();
@@ -93,6 +135,7 @@ export function SidePanelSections() {
     <Show when={!sidePanel?.isNarrow()}>
       <CalendarMiniCalendarSidePanelSection />
       <CalendarSourcesSidePanelSection />
+      <CalendarCorrespondenceSidePanelSection />
     </Show>
   );
 }
