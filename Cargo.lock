@@ -6962,6 +6962,7 @@ dependencies = [
 name = "github"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "anyhow",
  "axum",
  "axum-extra",
