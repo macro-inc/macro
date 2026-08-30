@@ -9,7 +9,6 @@ export type TimelineProps = Omit<WidgetOf<'timeline'>, 'type'>;
 
 type TimelineEvent = TimelineProps['events'][number];
 
-/** Map a schema EntityType onto the ItemType ItemPreview expects. */
 function toItemType(type: EntityRef['type']): ItemType | undefined {
   switch (type) {
     case 'email_thread':

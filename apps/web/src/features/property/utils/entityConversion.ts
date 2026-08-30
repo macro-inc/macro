@@ -49,6 +49,7 @@ export function updateEntityReferences(
   return updatedRefs;
 }
 
+/** `undefined` means the entity type has no item-preview surface. */
 export function entityTypeToItemType(type: EntityType): ItemType | undefined {
   return match<EntityType, ItemType | undefined>(type)
     .with('TASK', () => 'document')
@@ -57,10 +58,8 @@ export function entityTypeToItemType(type: EntityType): ItemType | undefined {
     .with('CHANNEL', () => 'channel')
     .with('CHAT', () => 'chat')
     .with('CALL_RECORD', () => 'call')
-    .with('COMPANY', () => undefined) // huh
-    .with('USER', () => undefined) // huh
     .with('THREAD', () => 'email')
-    .with('CALENDAR_EVENT', () => undefined) // no calendar item rendering yet
+    .with('COMPANY', 'USER', 'CALENDAR_EVENT', () => undefined)
     .exhaustive();
 }
 
