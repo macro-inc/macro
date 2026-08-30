@@ -12,10 +12,11 @@ type PreviewNameInput = {
 export function previewableEntityDisplayName(
   entityType: EntityType,
   preview: PreviewNameInput | undefined,
-  _fallbackName?: string
+  fallbackName?: string
 ): string {
   if (!preview || preview.loading) return 'Loading...';
   if (preview.access === 'access' && preview.name) return preview.name;
+  if (fallbackName) return fallbackName;
   return `Unknown ${entityType.toLowerCase()}`;
 }
 
