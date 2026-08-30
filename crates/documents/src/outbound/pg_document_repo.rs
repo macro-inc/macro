@@ -39,6 +39,59 @@ impl PgDocumentRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    async fn reused_email_document(
+        &self,
+        document_id: String,
+    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+        let metadata = self.get_document_metadata(&document_id).await?;
+        Ok(EmailImportRepoOutcome::Reused(metadata))
+    }
+
+    async fn reused_linked_email_attachment(
+        &self,
+        email_attachment_id: uuid::Uuid,
+    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+        let existing_id =
+            create::find_document_id_for_email_attachment(&self.pool, email_attachment_id)
+                .await?
+                .ok_or_else(|| {
+                    sqlx::Error::Protocol(
+                        "email attachment already linked but document is missing".into(),
+                    )
+                })?;
+        self.reused_email_document(existing_id).await
+    }
+
+    async fn find_reusable_email_document_by_sha(
+        &self,
+        owner: &str,
+        sha: &str,
+    ) -> Result<Option<String>, sqlx::Error> {
+        let mut conn = self.pool.acquire().await?;
+        create::find_live_email_document_id_by_sha(&mut conn, owner, sha).await
+    }
+
+    async fn link_existing_email_document(
+        &self,
+        document_id: &str,
+        email_attachment_id: uuid::Uuid,
+    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+        let mut transaction = self.pool.begin().await?;
+        match create::link_document_email(&mut transaction, document_id, email_attachment_id).await
+        {
+            Ok(()) => {
+                transaction.commit().await?;
+                self.reused_email_document(document_id.to_string()).await
+            }
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                transaction.rollback().await?;
+                self.reused_linked_email_attachment(email_attachment_id)
+                    .await
+            }
+            Err(e) => Err(e),
+        }
+    }
 }
 
 async fn update_document_modified(pool: &PgPool, document_id: &str) -> Result<(), sqlx::Error> {
@@ -437,6 +490,24 @@ impl DocumentRepo for PgDocumentRepo {
             create,
         } = args;
 
+        // Unlocked reuse: attachment already linked, or a live email doc with
+        // this sha already exists. The advisory lock is only required when a
+        // concurrent import might insert the first document for (owner, sha).
+        if let Some(existing_id) =
+            create::find_document_id_for_email_attachment(&self.pool, email_attachment_id).await?
+        {
+            return self.reused_email_document(existing_id).await;
+        }
+
+        if let Some(existing_id) = self
+            .find_reusable_email_document_by_sha(create.user_id.as_ref(), &create.sha)
+            .await?
+        {
+            return self
+                .link_existing_email_document(&existing_id, email_attachment_id)
+                .await;
+        }
+
         let mut transaction = self.pool.begin().await?;
 
         if let Some(existing_id) = create::reuse_email_document(
@@ -448,8 +519,7 @@ impl DocumentRepo for PgDocumentRepo {
         .await?
         {
             transaction.commit().await?;
-            let metadata = self.get_document_metadata(&existing_id).await?;
-            return Ok(EmailImportRepoOutcome::Reused(metadata));
+            return self.reused_email_document(existing_id).await;
         }
 
         let metadata =
@@ -465,16 +535,9 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(()) => {}
             Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
                 transaction.rollback().await?;
-                let existing_id =
-                    create::find_document_id_for_email_attachment(&self.pool, email_attachment_id)
-                        .await?
-                        .ok_or_else(|| {
-                            sqlx::Error::Protocol(
-                                "email attachment already linked but document is missing".into(),
-                            )
-                        })?;
-                let metadata = self.get_document_metadata(&existing_id).await?;
-                return Ok(EmailImportRepoOutcome::Reused(metadata));
+                return self
+                    .reused_linked_email_attachment(email_attachment_id)
+                    .await;
             }
             Err(e) => return Err(e),
         }

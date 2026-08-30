@@ -59,7 +59,7 @@ function ItemOption(props: { file: FileItem; type: ItemType }) {
 
 export function FileSelector() {
   const [userFiles, setUserFiles] = createSignal<
-    { file: FileItem; type: string }[]
+    { file: FileItem; type: ItemType }[]
   >([]);
   const historyQuery = useHistoryQuery();
   const { focusCanvas } = useToolManager();
@@ -67,7 +67,7 @@ export function FileSelector() {
   const [fileSelectorOpen, setFileSelectorOpen] = createSignal(false);
 
   createEffect(async () => {
-    const files: { file: FileItem; type: string }[] = [];
+    const files: { file: FileItem; type: ItemType }[] = [];
     (historyQuery.data ?? []).forEach((item) => {
       if (
         item.type === 'document' &&
@@ -116,10 +116,7 @@ export function FileSelector() {
                 >
                   {(item) => (
                     <Dropdown.Item>
-                      <ItemOption
-                        file={item.file}
-                        type={item.type as ItemType}
-                      />
+                      <ItemOption file={item.file} type={item.type} />
                     </Dropdown.Item>
                   )}
                 </VList>

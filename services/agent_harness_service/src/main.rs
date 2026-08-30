@@ -144,13 +144,15 @@ async fn run() -> anyhow::Result<()> {
         .await
         .context("failed to resolve agent harness service secrets")?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
-    // The in-process Macro bot is a compile-time identity, not configuration:
-    // it is always `bot_id::MACRO_AI_BOT_ID`, so the only real question is
-    // whether this environment serves it. Production stays off until its AI
-    // tool config lands - `build_tool_service_context_from_env` below is
-    // fatal, so turning it on without that config would refuse to boot.
+    // The in-process "macro(new)" bot is a compile-time identity, not
+    // configuration: it is always `bot_id::MACRO_NEW_BOT_ID`, so the only real
+    // question is whether this environment serves it. Production stays off
+    // until its AI tool config lands - `build_tool_service_context_from_env`
+    // below is fatal, so turning it on without that config would refuse to
+    // boot. (`@macro` itself is not served here at all: its mentions get the
+    // classic in-channel reply from `document_storage_service`.)
     let inmem_bot = match config.environment {
-        Environment::Local | Environment::Develop => Some(bot_id::MACRO_AI_BOT_ID),
+        Environment::Local | Environment::Develop => Some(bot_id::MACRO_NEW_BOT_ID),
         Environment::Production => None,
     };
 
@@ -293,7 +295,8 @@ async fn run() -> anyhow::Result<()> {
         .collect();
     // Logged because the failure mode this replaced was silent: a harness that
     // resolved no in-process bot booted healthy, passed its health check, and
-    // dropped every `@macro` mention as ForeignBot with nothing to show for it.
+    // dropped every in-process-bot mention as ForeignBot with nothing to show
+    // for it.
     tracing::info!(
         bots = ?our_bots.iter().map(|bot| bot.as_uuid()).collect::<Vec<_>>(),
         in_process_bot = ?inmem_bot.map(BotId::as_uuid),

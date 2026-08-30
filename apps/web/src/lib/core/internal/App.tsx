@@ -27,7 +27,7 @@ const App: Component = () => {
     'red',
   ] as const;
 
-  const testIds = [
+  const testIds: { id: string; type: ItemType }[] = [
     { id: '15085bba-d188-4c80-aac6-657b15b255d8', type: 'document' },
     { id: '6f1ea347-fee1-4717-b118-89e7bda1eacd', type: 'document' },
     { id: 'dd2ec57b-0bce-4051-8522-cf8a5f0802d5', type: 'document' },
@@ -183,7 +183,7 @@ const App: Component = () => {
       <div class="w-full flex gap-2 justify-center flex-wrap">
         <For each={testIds}>
           {(item) => {
-            return <ItemPreview id={item.id} type={item.type as ItemType} />;
+            return <ItemPreview id={item.id} type={item.type} />;
           }}
         </For>
       </div>

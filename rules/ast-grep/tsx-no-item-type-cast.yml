@@ -1,0 +1,16 @@
+id: tsx-no-item-type-cast
+language: tsx
+# Twin of ts-no-item-type-cast — ast-grep rules are single-language, and
+# `typescript` only scans .ts files.
+severity: error
+message: Don't cast to ItemType — parse the string with stringToItemType from @service-storage/client.
+note: |-
+  Rule FE-31 in docs/STYLE_GUIDE.md. Entity-type strings arrive in several
+  stored spellings (email threads alone are `email`, `thread`, and
+  `email_thread`), so a cast smuggles a value no preview fetcher handles.
+  stringToItemType in src/lib/service-clients/service-storage/itemType.ts is
+  the one parser; extend it there if a spelling is missing.
+files:
+  - apps/web/src/**
+rule:
+  pattern: $EXPR as ItemType

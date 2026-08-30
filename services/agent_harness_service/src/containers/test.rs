@@ -28,12 +28,12 @@ fn sessions_with(bot: BotId) -> (AgentSessionId, impl AgentSessionService + use<
     (id, service)
 }
 
-/// The whole point of the refusal: `@macro`'s sessions have no repository to
+/// The whole point of the refusal: `@macro-new`'s sessions have no repository to
 /// clone, so a deployment that cannot run them in-process must not quietly
 /// bill a sandbox for one.
 #[tokio::test]
 async fn refuses_the_in_process_bot_when_no_in_memory_runtime_is_configured() {
-    let (id, sessions) = sessions_with(bot_id::MACRO_AI_BOT_ID);
+    let (id, sessions) = sessions_with(bot_id::MACRO_NEW_BOT_ID);
     let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions);
 
     let error = containers

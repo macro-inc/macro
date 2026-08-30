@@ -65,7 +65,7 @@ pub enum AgentKind {
     SandboxedCoder,
     /// A Cursor cloud agent, served over an in-process ACP pipe.
     Cursor,
-    /// The in-process (in-memory) Macro bot, served by `agent_inmem`.
+    /// The in-process (in-memory) "macro(new)" bot, served by `agent_inmem`.
     InMemory,
     /// The bot's operator hosts the runtime and dials the gateway; no
     /// deployment here provisions anything for it.
@@ -80,7 +80,7 @@ impl AgentKind {
             Self::SandboxedCoder
         } else if bot == bot_id::CURSOR_BOT_ID {
             Self::Cursor
-        } else if bot == bot_id::MACRO_AI_BOT_ID {
+        } else if bot == bot_id::MACRO_NEW_BOT_ID {
             Self::InMemory
         } else {
             Self::External
