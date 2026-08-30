@@ -481,7 +481,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
 
         let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
         let entity_access_receipt = task_property_edit_receipt(
-            &*self.entity_access_service,
+            self.entity_access_service.as_ref(),
             &user_id,
             attribution,
             entity_id,
