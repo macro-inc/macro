@@ -32,11 +32,19 @@ subst() {
   printf '%s' "$content"
 }
 
-SMTP_SECURITY="${SMTP_SECURITY:-TLS}"
-case "${SMTP_PORT:-587}" in
-  25) SMTP_SECURITY="${SMTP_SECURITY:-NONE}" ;;
-  465) SMTP_SECURITY=SSL ;;
-esac
+# An explicit SMTP_SECURITY always wins. Otherwise derive it from the port:
+# 25 is plain, 465 is implicit TLS, everything else is STARTTLS. Deriving has
+# to happen before the default is applied, or a blank setting on port 25 gets
+# TLS and login-code mail to a plain relay fails.
+if [ -n "${SMTP_SECURITY:-}" ]; then
+  :
+else
+  case "${SMTP_PORT:-587}" in
+    25)  SMTP_SECURITY=NONE ;;
+    465) SMTP_SECURITY=SSL ;;
+    *)   SMTP_SECURITY=TLS ;;
+  esac
+fi
 
 base=$(subst "$TPL/kickstart.json.template" \
   FUSIONAUTH_API_KEY                  "$(esc "$FUSIONAUTH_API_KEY")" \

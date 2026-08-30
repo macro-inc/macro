@@ -73,7 +73,37 @@ jobs:
           mkdir -p self-host/build/bin
           cp -L result-bins/bin/* self-host/build/bin/ 2>/dev/null \
             || cp -RL result-bins/* self-host/build/bin/
+
+          # The local-stack aggregate builds authentication_service with
+          # `--no-default-features --features return_passwordless_code`, which
+          # hands the one-time login code back in the API response and drops
+          # the default rate_limit feature. That is a local-development
+          # affordance and a full authentication bypass if it is ever served
+          # publicly: anyone who can reach the deployment could request a code
+          # for any address and read it out of the response. Replace it with
+          # the production build the deploy pipeline uses.
+          nix build --print-build-logs \
+            ".#deploy-service-binaries-authentication-service" --out-link result-auth
+          cp -L result-auth/bin/authentication_service self-host/build/bin/authentication_service
+
+          # The seeding CLI is development tooling; it has no place in a
+          # deployment image.
+          rm -f self-host/build/bin/seed_cli
           ls -la self-host/build/bin
+
+      - name: Verify the auth binary is the production build
+        # A silent failure of the copy above would ship the code-leaking build,
+        # so assert the swap actually happened rather than trusting it.
+        run: |
+          set -euo pipefail
+          if cmp -s result-bins/bin/authentication_service \
+                    self-host/build/bin/authentication_service; then
+            echo "::error::authentication_service is still the local-stack build," \
+                 "which returns passwordless login codes in its API response"
+            exit 1
+          fi
+          test ! -e self-host/build/bin/seed_cli
+          echo "auth binary is the production build; seed CLI is not shipped"
 
       - name: Build the migration runner
         # Not part of the local-stack aggregate: only the init image needs it.

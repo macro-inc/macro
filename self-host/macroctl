@@ -255,7 +255,11 @@ cmd_upgrade() {
   bold "Pulling and restarting"
   "${COMPOSE[@]}" pull --quiet
   cmd_init
-  "${COMPOSE[@]}" run --rm init   # migrations for the new version
+  # Both provisioners, not just migrations: a release that adds an event topic
+  # or a queue needs them created on an existing deployment too, or the
+  # consumers for them fail on a stack that only ever ran `up` once.
+  "${COMPOSE[@]}" run --rm init
+  "${COMPOSE[@]}" run --rm kafka_init
   "${COMPOSE[@]}" up -d
   bold "Upgraded."
 }

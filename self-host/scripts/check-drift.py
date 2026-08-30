@@ -86,6 +86,22 @@ if rust_queue_count != len(manifest["queues"]):
     fail(f'resources.json has {len(manifest["queues"])} queues, resources.rs declares {rust_queue_count}'
          " — regenerate self-host/init/resources.json")
 
+# --- the auth binary must not be the local-stack build ---------------------
+# `.#local-stack-binaries` compiles authentication_service with
+# `return_passwordless_code` and without `rate_limit`, which returns the
+# one-time login code in the API response. Shipping that is a full
+# authentication bypass, so the publish workflow replaces it with the
+# production build. Guard the step: deleting it would silently reintroduce
+# the bypass and nothing else would notice.
+workflow = (ROOT / ".github/workflows/self-host-images.yml").read_text()
+if "local-stack-binaries" in workflow:
+    if "deploy-service-binaries-authentication-service" not in workflow:
+        fail("self-host-images.yml builds from local-stack-binaries but never replaces"
+             " authentication_service with the production build — that ships a login-code"
+             " leak and no rate limiting")
+    if "Verify the auth binary is the production build" not in workflow:
+        fail("self-host-images.yml no longer verifies the auth binary was replaced")
+
 # --- kafka -----------------------------------------------------------------
 topics_src = json.loads((ROOT / ".github/kafka-cluster-topics.json").read_text())
 topics_copy = json.loads((SELF_HOST / "init/kafka-topics.json").read_text())

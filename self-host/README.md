@@ -170,9 +170,12 @@ It reads the same Rust catalogs the dev stack is built from —
 `macro_queues` for buckets, queues and tables — and fails if this directory has
 drifted. CI runs it before publishing any image.
 
-The service images run `.#local-stack-binaries`, the same aggregate a
-developer's local stack runs, so self-hosted and local deployments execute
-identical artifacts.
+Service images are built from the same nix derivations the rest of the project
+uses, with one deliberate exception: `authentication_service` comes from the
+**deploy** build, not the local-stack one. The local-stack build carries
+`return_passwordless_code` and drops the rate limit so a developer can complete
+a login without opening a mailbox. Served publicly that is an authentication
+bypass, so the publish workflow replaces the binary and then asserts it did.
 
 ## Layout
 
