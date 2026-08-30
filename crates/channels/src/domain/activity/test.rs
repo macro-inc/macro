@@ -103,5 +103,6 @@ fn created_maps_to_created_by_the_actor() {
         panic!("expected activities");
     };
     assert_eq!(activities[0].action, Action::Created);
+    assert_eq!(activities[0].actor.as_ref(), "macro|owner@example.com");
     assert_eq!(activities[0].subject_id, "macro|owner@example.com");
 }
