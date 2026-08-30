@@ -15,7 +15,7 @@ import {
   useItemPreview,
 } from '@queries/preview';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
-import type { ItemType } from '@service-storage/client';
+import { type ItemType, stringToItemType } from '@service-storage/client';
 import type { ApiAttachmentEntityReference as EntityReference } from '@service-storage/generated/schemas/apiAttachmentEntityReference';
 import type { ApiAttachmentGenericReference as GenericReference } from '@service-storage/generated/schemas/apiAttachmentGenericReference';
 import { createMemo, For, type JSX, Show } from 'solid-js';
@@ -186,9 +186,11 @@ function GenericReferenceRow(props: {
     });
     return parts.firstName || parts.fullName;
   };
+  const sourceItemType = () =>
+    stringToItemType(props.reference.source_entity_type);
   const [item] = useItemPreview(() => ({
     id: props.reference.source_entity_id,
-    type: props.reference.source_entity_type as ItemType,
+    type: sourceItemType(),
   }));
 
   return (
@@ -196,7 +198,7 @@ function GenericReferenceRow(props: {
       source={
         <InlineItemPreview
           id={props.reference.source_entity_id}
-          type={props.reference.source_entity_type as ItemType}
+          type={sourceItemType()}
         />
       }
       senderAvatar={
