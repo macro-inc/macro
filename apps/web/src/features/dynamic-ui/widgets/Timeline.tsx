@@ -2,6 +2,7 @@ import { ItemPreview } from '@core/component/ItemPreview';
 import type { ItemType } from '@service-storage/client';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { EntityRef, WidgetOf } from '../schema';
 import { TEXT } from '../tokens';
 
@@ -10,21 +11,19 @@ export type TimelineProps = Omit<WidgetOf<'timeline'>, 'type'>;
 type TimelineEvent = TimelineProps['events'][number];
 
 function toItemType(type: EntityRef['type']): ItemType | undefined {
-  switch (type) {
-    case 'email_thread':
-      return 'email';
-    case 'foreign_entity':
-      return 'foreign';
-    case 'user':
-    case 'team':
-    case 'static_file':
-    case 'reminder':
-    case 'skill':
-    case 'agent_session':
-      return undefined;
-    default:
-      return type;
-  }
+  return match<EntityRef['type'], ItemType | undefined>(type)
+    .with('email_thread', () => 'email')
+    .with('foreign_entity', () => 'foreign')
+    .with(
+      'user',
+      'team',
+      'static_file',
+      'reminder',
+      'skill',
+      'agent_session',
+      () => undefined
+    )
+    .otherwise((itemType) => itemType);
 }
 
 /**

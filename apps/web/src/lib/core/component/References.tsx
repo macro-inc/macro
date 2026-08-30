@@ -15,9 +15,10 @@ import {
   useItemPreview,
 } from '@queries/preview';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
-import { type ItemType, stringToItemType } from '@service-storage/client';
+import type { ItemType } from '@service-storage/client';
 import type { ApiAttachmentEntityReference as EntityReference } from '@service-storage/generated/schemas/apiAttachmentEntityReference';
 import type { ApiAttachmentGenericReference as GenericReference } from '@service-storage/generated/schemas/apiAttachmentGenericReference';
+import { stringToItemType } from '@service-storage/itemType';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import { InlineItemPreview } from './ItemPreview';
 import { StaticMarkdown } from './LexicalMarkdown/component/core/StaticMarkdown';
