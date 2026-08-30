@@ -9,13 +9,20 @@ export type TimelineProps = Omit<WidgetOf<'timeline'>, 'type'>;
 
 type TimelineEvent = TimelineProps['events'][number];
 
-/** Map a schema EntityType onto the ItemType string ItemPreview expects. */
-function toItemType(type: EntityRef['type']): string {
+/** Map a schema EntityType onto the ItemType ItemPreview expects. */
+function toItemType(type: EntityRef['type']): ItemType | undefined {
   switch (type) {
     case 'email_thread':
       return 'email';
     case 'foreign_entity':
       return 'foreign';
+    case 'user':
+    case 'team':
+    case 'static_file':
+    case 'reminder':
+    case 'skill':
+    case 'agent_session':
+      return undefined;
     default:
       return type;
   }
@@ -115,7 +122,7 @@ function TimeLineItem(props: {
             <div class="mt-0.5 w-fit max-w-full">
               <ItemPreview
                 id={entity().id}
-                type={toItemType(entity().type) as ItemType}
+                type={toItemType(entity().type)}
                 class="ring-0"
               />
             </div>
