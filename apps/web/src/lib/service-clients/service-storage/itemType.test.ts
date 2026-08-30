@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
-import { blockNameToItemType, stringToItemType } from './client';
-import { type ItemType, itemTypeToReferenceEntityType } from './itemType';
+import {
+  blockNameToItemType,
+  type ItemType,
+  itemTypeToReferenceEntityType,
+  stringToItemType,
+} from './itemType';
 
 describe('itemTypeToReferenceEntityType', () => {
   test('maps email to the thread type used by referencium', () => {

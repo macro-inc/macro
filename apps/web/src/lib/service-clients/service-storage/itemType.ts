@@ -1,3 +1,4 @@
+import type { BlockAlias, BlockName } from '@core/block';
 import type { CloudStorageItemType } from './generated/schemas/cloudStorageItemType';
 
 /** Item type accepted by user history endpoints. */
@@ -14,6 +15,9 @@ export type ItemType =
   | 'crm_company'
   | 'crm_contact';
 
+/** Item type assumed when a surface has no better information. */
+export const DEFAULT_ITEM_TYPE: ItemType = 'document';
+
 /**
  * Entity type stored on channel attachments, mentions, and referencium.
  *
@@ -23,6 +27,60 @@ export type ItemType =
  */
 export function itemTypeToReferenceEntityType(itemType: ItemType): string {
   return itemType === 'email' ? 'thread' : itemType;
+}
+
+/**
+ * Parse a stored or transported entity-type string into an [`ItemType`].
+ *
+ * Referencium, mentions, and older rows spell email threads three ways
+ * (`email`, `thread`, `email_thread`); all of them parse to `email`.
+ * Never cast these strings to `ItemType` directly.
+ */
+export function stringToItemType(str: string): ItemType | undefined {
+  switch (str) {
+    case 'email':
+    case 'thread':
+    case 'email_thread': {
+      return 'email';
+    }
+    case 'call':
+    case 'calendar_event':
+    case 'chat':
+    case 'document':
+    case 'project':
+    case 'channel':
+    case 'crm_company':
+      return str;
+    default:
+      return undefined;
+  }
+}
+
+export function blockNameToItemType(
+  blockName: BlockName | BlockAlias
+): ItemType {
+  switch (blockName) {
+    case 'chat':
+      return 'chat';
+    case 'call':
+      return 'call';
+    case 'calendar':
+      return 'calendar_event';
+    case 'channel':
+      return 'channel';
+    case 'project':
+      return 'project';
+    case 'email':
+      return 'email';
+    case 'automation':
+      return 'automation';
+    case 'company':
+      return 'crm_company';
+    case 'contact':
+      return 'crm_contact';
+    default:
+      return DEFAULT_ITEM_TYPE;
+  }
 }
 
 /** Item types accepted by user history endpoints. */
