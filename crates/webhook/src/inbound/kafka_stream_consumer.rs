@@ -7,58 +7,35 @@ use crate::domain::ingestion::{
 use crate::domain::stream::{StreamCandidateEvent, WebhookStreamCandidateSink};
 use crate::topics::DeclaredMacroEvent;
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
-use macro_event_broker::{EventConsumer as _, KafkaConsumerAdapter, MacroEvent as _};
+use macro_event_broker::{KafkaConsumerAdapter, MacroEvent as _, MacroEventConsumerService};
 use std::time::Duration;
 
 /// Time allowed for topic metadata lookup.
 const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// One process's positioned Kafka consumer.
-pub struct KafkaWebhookStreamConsumer {
-    adapter: KafkaConsumerAdapter<Ungrouped, DeclaredMacroEvent>,
-}
+type WebhookStreamKafkaAdapter = KafkaConsumerAdapter<Ungrouped, DeclaredMacroEvent>;
+type WebhookStreamKafkaConsumer =
+    MacroEventConsumerService<DeclaredMacroEvent, WebhookStreamKafkaAdapter>;
 
-impl KafkaWebhookStreamConsumer {
-    /// Connect and position every declared topic at its current end.
-    pub async fn connect(brokers: String) -> Result<Self, rootcause::Report> {
-        let adapter = tokio::task::spawn_blocking(move || {
-            let consumer = KafkaEventConsumer::<Ungrouped>::from_env(&brokers)
-                .map_err(|error| rootcause::report!(error))?;
-            KafkaConsumerAdapter::<Ungrouped, DeclaredMacroEvent>::new(
-                consumer,
-                InitialOffset::Latest,
-                METADATA_TIMEOUT,
-            )
-        })
-        .await
-        .map_err(|error| {
-            rootcause::report!("webhook stream consumer setup task failed: {error}")
-        })??;
+/// Consume broker events from now onward and publish normalized stream candidates.
+pub async fn run_webhook_stream_consumer<S: WebhookStreamCandidateSink>(
+    brokers: &str,
+    sink: &S,
+) -> Result<(), rootcause::Report> {
+    let consumer = KafkaEventConsumer::<Ungrouped>::from_env(brokers)
+        .map_err(|error| rootcause::report!(error))?;
+    let consumer =
+        WebhookStreamKafkaAdapter::new(consumer, InitialOffset::Latest, METADATA_TIMEOUT)?;
+    let consumer = WebhookStreamKafkaConsumer::new(consumer);
 
-        Ok(Self { adapter })
-    }
-
-    /// Consume forever, normalizing each record once into the shared sink.
-    pub async fn run<S: WebhookStreamCandidateSink>(
-        &self,
-        sink: &S,
-    ) -> Result<(), rootcause::Report> {
-        loop {
-            self.receive_and_publish(sink).await?;
-        }
-    }
-
-    async fn receive_and_publish<S: WebhookStreamCandidateSink>(
-        &self,
-        sink: &S,
-    ) -> Result<(), rootcause::Report> {
-        let message = self.adapter.recv().await?;
+    loop {
+        let message = consumer.recv().await?;
         let decoded = match message.decode_payload() {
             Ok(decoded) => decoded,
             // Poison records must not wedge the process-level stream consumer.
             Err(error) => {
                 tracing::warn!(error = ?error, "skipping undecodable broker event");
-                return Ok(());
+                continue;
             }
         };
         match candidate_from(&decoded) {
@@ -68,7 +45,6 @@ impl KafkaWebhookStreamConsumer {
                 tracing::warn!(error = ?error, "skipping non-streamable broker event");
             }
         }
-        Ok(())
     }
 }
 

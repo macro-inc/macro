@@ -103,9 +103,6 @@ pub trait WebhookStreamCandidateSink: Send + Sync + 'static {
 /// Failure to open a positioned stream source.
 #[derive(Debug, thiserror::Error)]
 pub enum WebhookStreamSourceOpenError {
-    /// The process-local source is loading or reconnecting.
-    #[error("webhook event stream source is unavailable")]
-    Unavailable,
     /// The requested cursor predates the history retained by this process.
     #[error(
         "resume cursor does not identify a retained webhook event; resync and reconnect without Last-Event-ID"
@@ -122,9 +119,6 @@ pub enum WebhookStreamError {
     /// The subscriber already holds [`MAX_STREAMS_PER_USER`] streams.
     #[error("too many concurrent event streams")]
     TooManyStreams,
-    /// The process-level event source is loading or reconnecting.
-    #[error("webhook event stream source is temporarily unavailable")]
-    Unavailable,
     /// Adapter or infrastructure failure.
     #[error("internal stream failure")]
     Internal(rootcause::Report),
@@ -458,12 +452,7 @@ where
             .source_factory
             .open(start)
             .await
-            .map_err(|error| match error {
-                WebhookStreamSourceOpenError::ReplayUnavailable => {
-                    WebhookStreamError::BadRequest(error.to_string())
-                }
-                WebhookStreamSourceOpenError::Unavailable => WebhookStreamError::Unavailable,
-            })?;
+            .map_err(|error| WebhookStreamError::BadRequest(error.to_string()))?;
 
         let state = StreamState {
             source,
