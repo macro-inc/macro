@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO \"UserApiKey\" (id, name, user_id, hash)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, name\n            ",
+  "query": "\n            INSERT INTO \"UserApiKey\" (id, name, user_id, hash)\n            VALUES ($1, $2, $3, $4)\n            RETURNING id, name, created_at\n            ",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "ordinal": 1,
         "name": "name",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -24,8 +29,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "3da7e16091bf4e48037b54f2fd875e1c4cbae922da882a188d57d66cf3e07e0f"
+  "hash": "6fbfd0102ede6268fb3289d4f93eef6505d272859a0a1f09c392e6a1407ac454"
 }
