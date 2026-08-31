@@ -1,6 +1,6 @@
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { onCleanup } from 'solid-js';
 

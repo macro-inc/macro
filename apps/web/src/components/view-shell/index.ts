@@ -14,13 +14,6 @@ export {
 } from './ListDropdowns';
 export { SearchBar, type SearchBarProps } from './SearchBar';
 export {
-  useViewShell,
-  ViewShell,
-  type ViewShellLayout,
-  type ViewShellRootProps,
-} from './ViewShell';
-export { ViewSidebar } from './ViewSidebar';
-export {
   type UseViewControlHotkeysOptions,
   useViewControlHotkeys,
   type ViewControlHotkeyAction,
@@ -29,6 +22,13 @@ export {
   type UseViewTabHotkeysOptions,
   useViewTabHotkeys,
 } from './use-view-tab-hotkeys';
+export {
+  useViewShell,
+  ViewShell,
+  type ViewShellLayout,
+  type ViewShellRootProps,
+} from './ViewShell';
+export { ViewSidebar } from './ViewSidebar';
 export {
   type AsideLayout,
   type AsideMode,

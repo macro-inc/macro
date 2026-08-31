@@ -29,7 +29,7 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
 import { persistSoupNavigationTouchHighlight } from '../next-soup/soup-view/soup-navigation-touch-highlight';
 import {
-  markChannelTargetSeenOnOpen,
+  markChannelNotificationsSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../next-soup/utils';
@@ -141,7 +141,7 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
   ) {
     markReminderSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
-      markChannelTargetSeenOnOpen(entity, notificationSource);
+      markChannelNotificationsSeenOnOpen(entity, notificationSource);
     }
 
     if (!options.newSplit && shell.detail.placement() === 'inline') return;
