@@ -211,9 +211,8 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // Before `prepare` (which resolves env and reads the OTLP port to decide
     // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
     // the same auto-wiring as a collector started manually beforehand.
-    if let Some(backend) = args.traces {
-        ensure_tracing_backend(&stage, backend)?;
-    }
+    ensure_tracing_backend(&stage, args.traces)?;
+    ensure_headless_chrome(&stage);
 
     // `run_local`/`run_dev` are full delete + full create: tear the previous
     // stack and ALL its stateful volumes down so the bring-up is always from a
@@ -361,11 +360,14 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         stage.note("frontend disabled (--no-frontend)");
         None
     } else {
+        // Mirror `env_layer::resolve`'s port probe: if the collector never
+        // came up (best-effort default backend), don't point the browser
+        // exporter at a dead endpoint.
         frontend::start(
             &stage,
             &instance,
             mode,
-            args.traces.is_some(),
+            args.traces.enabled() && summary::port_open(4318),
             args.enable_onboarding,
         )?
     };
@@ -829,6 +831,10 @@ fn bring_up_app(
 /// idempotent (like `start_localstack`): one collector per machine, shared
 /// across instances, left running across `run_local` invocations.
 fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<()> {
+    let (Some(profile), Some(service)) = (backend.compose_profile(), backend.compose_service())
+    else {
+        return Ok(()); // --traces off
+    };
     // A keyed backend with a missing key accepts telemetry locally and drops
     // every payload at the vendor intake (403), which looks like "traces are
     // broken" rather than "key is missing" — so fail loud up front.
@@ -836,11 +842,79 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
         && macro_env_var::maybe_read_env(var).is_none_or(|v| v.is_empty())
     {
         anyhow::bail!(
-            "--traces {} requires the {var} env var to be set (export it in \
-             the shell you run this from)",
-            backend.compose_profile()
+            "--traces {profile} requires the {var} env var to be set (export it in \
+             the shell you run this from)"
         );
     }
+    evict_other_collector(stage, service);
+    let result =
+        start_global_compose_service(stage, profile, service, "trace collector").and_then(|()| {
+            // `up -d` returns once the container starts, not once it's accepting
+            // connections; `env_layer::resolve` (which runs right after this, in
+            // `prepare`) needs the OTLP port live NOW to decide whether to wire
+            // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of racing.
+            for _ in 0..50 {
+                if summary::port_open(4318) {
+                    return Ok(());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            anyhow::bail!("{profile} trace collector did not come up on port 4318 in time")
+        });
+    // The default backend must not brick a run that never asked for tracing
+    // (offline, image pull failure): warn loud and continue without export —
+    // the env probe simply won't wire `OTEL_EXPORTER_OTLP_ENDPOINT`. An
+    // explicitly keyed backend still fails hard above.
+    match result {
+        Err(e) if backend == cli::TracesBackend::Lgtm => {
+            stage.note(&format!(
+                "  WARNING: could not start the lgtm trace collector ({e:#}); \
+                 continuing without tracing (`--traces off` silences this)"
+            ));
+            Ok(())
+        }
+        other => other,
+    }
+}
+
+/// Remove a *different* collector holding the OTLP ports before starting the
+/// requested one. All backends bind 4317/4318, so a leftover collector from a
+/// previous `--traces` choice would otherwise win the port race and keep
+/// receiving the telemetry — silently, since the port probe only asks "is
+/// something listening", not "is it the backend that was asked for".
+fn evict_other_collector(stage: &Stage, wanted_service: &str) {
+    if !summary::port_open(4318) {
+        return;
+    }
+    let Some(holder) = Command::new("docker")
+        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|name| !name.is_empty())
+    else {
+        return; // not a docker container (host collector) — leave it alone
+    };
+    // Compose names containers `<project>-<service>-<n>`.
+    if holder.contains(&format!("-{wanted_service}-")) {
+        return;
+    }
+    stage.note(&format!(
+        "  replacing running trace collector {holder} (all collectors share the OTLP ports)"
+    ));
+    let _ = Command::new("docker").args(["rm", "-f", &holder]).output();
+}
+
+/// Start a profile-gated service from the base compose file under the global
+/// `macro` project (one per machine, shared across instances, left running
+/// across invocations) — the pattern the trace collectors and headless Chrome
+/// share.
+fn start_global_compose_service(
+    stage: &Stage,
+    profile: &str,
+    service: &str,
+    label: &str,
+) -> Result<()> {
     let compose = repo_root().join("docker/docker-compose.yml");
     let mut up = Command::new("docker");
     up.arg("compose")
@@ -849,30 +923,28 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
         .arg("-f")
         .arg(&compose)
         .arg("--profile")
-        .arg(backend.compose_profile())
+        .arg(profile)
         .arg("up")
         .arg("-d")
         .arg("--remove-orphans")
-        .arg(backend.compose_service());
-    stage.run(
-        &format!("Starting {} trace collector", backend.compose_profile()),
-        &mut up,
-    )?;
+        .arg(service);
+    stage.run(&format!("Starting {profile} {label}"), &mut up)
+}
 
-    // `up -d` returns once the container starts, not once it's accepting
-    // connections; `env_layer::resolve` (which runs right after this, in
-    // `prepare`) needs the OTLP port live NOW to decide whether to wire
-    // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of racing.
-    for _ in 0..50 {
-        if summary::port_open(4318) {
-            return Ok(());
-        }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+/// Start the shared headless Chrome (compose profile `chrome`, CDP on 9222)
+/// that agents drive over the DevTools protocol — see the `headless-chrome`
+/// service in `docker/docker-compose.yml` and the `live-debug` skill.
+/// Best-effort: a machine that can't pull the image still gets a full stack.
+fn ensure_headless_chrome(stage: &Stage) {
+    if summary::port_open(9222) {
+        return; // already running (ours or a host Chrome — either works)
     }
-    anyhow::bail!(
-        "{} trace collector did not come up on port 4318 in time",
-        backend.compose_profile()
-    )
+    if let Err(e) = start_global_compose_service(stage, "chrome", "headless-chrome", "browser") {
+        stage.note(&format!(
+            "  WARNING: could not start headless Chrome ({e:#}); browser \
+             debugging via CDP on :9222 will be unavailable"
+        ));
+    }
 }
 
 /// If the global trace collector (Jaeger or the Datadog agent) is running,

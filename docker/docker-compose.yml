@@ -594,6 +594,66 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # lgtm (Grafana UI 3001, OTLP 4317/4318) — profile: lgtm
+  # Grafana + Tempo (traces) + Loki (logs) + Prometheus (metrics) in one
+  # container: the default `--traces` backend. Fully local, no account needed.
+  # UI at http://localhost:3001 (anonymous admin). The backing stores are also
+  # published for direct API queries (agents/scripts): Tempo 3200, Loki 3100,
+  # Prometheus 9090. Binds the same OTLP ports as jaeger/datadog-agent — run
+  # exactly one collector at a time.
+  # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d lgtm
+  # ============================================================================
+  lgtm:
+    profiles:
+      - lgtm
+    image: grafana/otel-lgtm:latest
+    # The all-in-one occasionally loses a component on first boot (observed:
+    # Pyroscope readiness flake) and exits; it's the default collector, so let
+    # Docker bring it back rather than leaving telemetry dark.
+    restart: unless-stopped
+    environment:
+      # No login wall: agents and humans hit the UI/API without credentials.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    ports:
+      - "3001:3000"
+      - "4317:4317"
+      - "4318:4318"
+      - "3100:3100"
+      - "3200:3200"
+      - "9090:9090"
+    volumes:
+      # Keep telemetry across container restarts — traces/logs are the local
+      # debugging record; losing them on a collector bounce defeats the point.
+      - lgtm_data:/data
+    networks:
+      services:
+        aliases:
+          - otel-collector
+
+  # ============================================================================
+  # headless-chrome (CDP port 9222) — profile: chrome
+  # Remote headless Chrome for agents: connect over the Chrome DevTools
+  # Protocol at http://localhost:9222 (chrome-devtools-mcp, Playwright
+  # connectOverCDP, raw CDP). Runs on the host network so pages can load the
+  # host-run frontend dev server and proxy with plain localhost URLs — bridge
+  # networking can't reach host ports on firewalled hosts (NixOS default).
+  # Global and shared (one per machine), started automatically by
+  # `just run_local` / `just stack up`.
+  # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d headless-chrome
+  # ============================================================================
+  headless-chrome:
+    profiles:
+      - chrome
+    image: chromedp/headless-shell:latest
+    restart: unless-stopped
+    # Do NOT override command/entrypoint: the image's run.sh starts Chrome on
+    # an internal port and its own socat on 0.0.0.0:9222 (Chrome itself only
+    # binds loopback), and duplicate --remote-debugging-port flags break that
+    # forwarding. Extra Chrome flags would be appended via `command`.
+    network_mode: host
+
+  # ============================================================================
   # jaeger (UI port 16686, OTLP 4317/4318) — profile: jaeger
   # Fully local trace viewer, no account needed. UI at http://localhost:16686.
   # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d jaeger
@@ -651,6 +711,10 @@ services:
       services:
         aliases:
           - otel-collector
+
+volumes:
+  # Backing store for the `lgtm` collector (profile-gated, global project).
+  lgtm_data:
 
 networks:
   services:

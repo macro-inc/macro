@@ -74,12 +74,13 @@ pub fn resolve(
         for (k, v) in local.to_env() {
             env.insert(k, v);
         }
-        // Opt-in local trace export: point services at the local OTLP collector
+        // Local telemetry export: point services at the local OTLP collector
         // (docker-network alias `otel-collector`) only when one answers on the
         // OTLP HTTP port, so services don't spam export errors when none is
-        // running. Both viewers bind 4318 — Jaeger (compose profile `jaeger`)
-        // and the Datadog agent (profile `datadog`) — so (re)start the stack
-        // after starting one to pick up tracing.
+        // running. All collectors bind 4318 — LGTM (compose profile `lgtm`,
+        // the `--traces` default), Jaeger (`jaeger`), and the Datadog agent
+        // (`datadog`) — so (re)start the stack after starting one to pick up
+        // tracing.
         if super::summary::port_open(4318) {
             env.insert(
                 "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
