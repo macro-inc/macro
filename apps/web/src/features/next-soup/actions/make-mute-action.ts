@@ -10,7 +10,7 @@ import {
   useMuteItemMutation,
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeMuteActionOptions = {
   notificationSource: () => NotificationSource;
@@ -88,7 +88,10 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     }
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

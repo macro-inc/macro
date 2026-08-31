@@ -390,7 +390,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(muteAction.canExecute)) return false;
 
-      void muteAction.executeWithSoup(entities, soup);
+      void muteAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
