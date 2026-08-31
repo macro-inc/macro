@@ -50,16 +50,7 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
 import { parseISO } from 'date-fns';
-import {
-  createContext,
-  createMemo,
-  For,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-  useContext,
-} from 'solid-js';
+import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard } from './InboxCard';
@@ -70,13 +61,6 @@ import {
   getNotificationTag,
   itemContent,
 } from './utils';
-
-type InboxCardRootOverrides = {
-  class?: string;
-  focusable?: boolean;
-};
-
-const InboxCardRootOverridesContext = createContext<InboxCardRootOverrides>();
 
 export interface InboxCardLayoutProps {
   /** The already-derived item to render. */
@@ -527,9 +511,11 @@ const githubAction = (notification?: Notification): string => {
  */
 function BaseCard(props: {
   item: InboxCardDisplayItem;
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  focusable?: boolean;
   /** Contents of the avatar bubble (glyph or avatar); the circle is ours. */
   icon: JSX.Element;
   /**
@@ -542,12 +528,10 @@ function BaseCard(props: {
   titleLeading?: JSX.Element;
   children?: JSX.Element;
 }) {
-  const rootOverrides = useContext(InboxCardRootOverridesContext);
-
   return (
     <InboxCard.Root
-      class={rootOverrides?.class}
-      focusable={rootOverrides?.focusable}
+      class={props.class}
+      focusable={props.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -714,10 +698,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={!isDM()}
@@ -775,10 +756,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
   // its three-line neighbors.
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
     >
@@ -1031,10 +1009,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1098,10 +1073,7 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1146,10 +1118,7 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
   // two-line clamp of the response summary with its height reserved.
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1204,10 +1173,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<ActionBubble tag="new_email" />}
       titleLeading={
         <Show when={text().isDraft}>
@@ -1290,10 +1256,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={
@@ -1389,10 +1352,7 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}
@@ -1461,10 +1421,7 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />}
       title={props.item.entity.name || '(No title)'}
     >
@@ -1504,10 +1461,7 @@ export function ReminderCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       // Always the bell, never the referenced entity's icon: the row is a
       // reminder first, and the thing it points at is named right below.
       icon={<BellSimpleIcon class={AVATAR_GLYPH_CLASS} />}
@@ -1595,10 +1549,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}
@@ -1637,58 +1588,54 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
   };
 
   return (
-    <InboxCardRootOverridesContext.Provider
-      value={{ class: props.class, focusable: props.focusable }}
-    >
-      <Switch>
-        <Match when={props.item.entity.type === 'email'}>
-          <EmailCardLayout {...props} />
-        </Match>
-        <Match
-          when={
-            notificationTag() === 'call_started' ||
-            props.item.entity.type === 'call'
-          }
-        >
-          <CallCardLayout {...props} />
-        </Match>
-        <Match when={isGithub()}>
-          <GithubCardLayout {...props} />
-        </Match>
-        <Match
-          when={
-            notificationTag() === 'ai_response' ||
-            props.item.entity.type === 'chat'
-          }
-        >
-          <AiCardLayout {...props} />
-        </Match>
-        <Match when={isTask()}>
-          <TaskCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'document'}>
-          <DocumentCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'channel'}>
-          <ChannelCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'channel_message'}>
-          <ChannelMessageCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'channel_thread'}>
-          <ChannelThreadCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'reminder'}>
-          <ReminderCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'calendar_event'}>
-          <CalendarEventCardLayout {...props} />
-        </Match>
-        <Match when={true}>
-          <GenericCardLayout {...props} />
-        </Match>
-      </Switch>
-    </InboxCardRootOverridesContext.Provider>
+    <Switch>
+      <Match when={props.item.entity.type === 'email'}>
+        <EmailCardLayout {...props} />
+      </Match>
+      <Match
+        when={
+          notificationTag() === 'call_started' ||
+          props.item.entity.type === 'call'
+        }
+      >
+        <CallCardLayout {...props} />
+      </Match>
+      <Match when={isGithub()}>
+        <GithubCardLayout {...props} />
+      </Match>
+      <Match
+        when={
+          notificationTag() === 'ai_response' ||
+          props.item.entity.type === 'chat'
+        }
+      >
+        <AiCardLayout {...props} />
+      </Match>
+      <Match when={isTask()}>
+        <TaskCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'document'}>
+        <DocumentCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'channel'}>
+        <ChannelCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'channel_message'}>
+        <ChannelMessageCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'channel_thread'}>
+        <ChannelThreadCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'reminder'}>
+        <ReminderCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'calendar_event'}>
+        <CalendarEventCardLayout {...props} />
+      </Match>
+      <Match when={true}>
+        <GenericCardLayout {...props} />
+      </Match>
+    </Switch>
   );
 }
 
