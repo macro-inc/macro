@@ -1,9 +1,11 @@
 import type { ListDataSource } from '@app/components/list';
 import {
   buildFlatSoupRows,
+  createSearchState,
   createSoupLoadMoreRow,
   type SoupRow,
   testFacets,
+  useSearchContext,
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -16,7 +18,6 @@ import {
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { debouncedDependent } from '@core/util/debounce';
 import {
   type EntityData,
   isSnippetEntity,
@@ -24,7 +25,6 @@ import {
 } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import { useSearchSoupQuery } from '@queries/soup/search';
 import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -40,7 +40,11 @@ import {
 import type { InboxViewState } from '../create-inbox-view-state';
 import { INBOX_FACETS, type InboxFacetContext } from '../inbox-facets';
 import type { InboxTab } from '../types';
-import { buildInboxQuery, type InboxQueryCapabilities } from './inbox-query';
+import {
+  buildInboxQuery,
+  type InboxQueryCapabilities,
+  type InboxViewContext,
+} from './inbox-query';
 import { buildInboxSearchRequest } from './inbox-search';
 
 export type InboxDataSourceItem = SoupRow<WithNotification<EntityData>>;
@@ -106,123 +110,132 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
     snippets: ENABLE_SNIPPETS(),
   });
 
-  const queryArgs = createMemo(() =>
-    buildInboxQuery({
+  const viewContext = createMemo(
+    (): InboxViewContext => ({
       tab: state.tab(),
       facets: state.facets(),
       facetContext: facetContext(),
-      userId: userId(),
       capabilities: capabilities(),
+      userId: userId(),
     })
   );
 
-  const searchText = () => state.search().trim();
-  const serviceSearchText = debouncedDependent(searchText, 300);
-  const usesServiceSearch = () => serviceSearchText().length >= 3;
+  const queryArgs = createMemo(() => buildInboxQuery(viewContext()));
 
   const query = useSoupAstItemsQuery(queryArgs, () => ({
-    enabled: !usesServiceSearch(),
+    enabled: true,
     showSupportedForeignEntities: foreignEntities().enabled,
   }));
 
-  const searchQuery = useSearchSoupQuery(
-    () =>
-      buildInboxSearchRequest({
-        query: serviceSearchText(),
-        tab: state.tab(),
-        facets: state.facets(),
-        userId: userId(),
-        capabilities: capabilities(),
-      }),
-    () => ({ enabled: usesServiceSearch() })
-  );
-
-  const usesPlaceholderData = () =>
-    !usesServiceSearch() && query.isPlaceholderData;
-
-  const sourceEntities = () => {
-    if (usesPlaceholderData()) return [];
-    if (usesServiceSearch()) return searchQuery.data ?? [];
-
-    return query.data?.entities ?? [];
-  };
-
-  const attachedEntities = createMemo(() =>
-    sourceEntities()
-      .filter((entity) => matchesCapabilities(entity, capabilities()))
+  const transformEntities = (entities: EntityData[]) => {
+    const context = viewContext();
+    return entities
+      .filter((entity) => matchesCapabilities(entity, context.capabilities))
       .map((entity) =>
         withEntityNotifications(entity, notificationSource, {
           scopeChannelThreads: true,
         })
       )
-  );
+      .filter((entity) => matchesTab(entity, context.tab, notificationSource));
+  };
 
-  const tabEntities = createMemo(() =>
-    attachedEntities().filter((entity) =>
-      matchesTab(entity, state.tab(), notificationSource)
-    )
-  );
+  const { entityPool } = useSearchContext();
+  const localPool = createMemo(() => {
+    if (!state.search().trim()) return [];
+    const pool = entityPool();
+    const matchingIds = new Set(
+      transformEntities(pool.map((item) => item.data)).map(
+        (entity) => entity.id
+      )
+    );
+    return pool.filter((item) => matchingIds.has(item.data.id));
+  });
 
-  const readFacet = () => state.facets().read ?? [];
-  const admittedByReadFilter = createMemo<{
-    scope: string;
-    ids: ReadonlySet<string>;
+  const search = createSearchState({
+    text: state.search,
+    localPool,
+    buildRequest: (request) => buildInboxSearchRequest(viewContext(), request),
+  });
+
+  const rawEntities = createMemo<EntityData[]>((previous) => {
+    if (!search.isSearching()) {
+      return query.isPlaceholderData ? [] : (query.data?.entities ?? []);
+    }
+
+    const results = search.data();
+    if (
+      results.length === 0 &&
+      previous.length > 0 &&
+      search.isLocalSearchSettling()
+    ) {
+      return previous;
+    }
+    return results;
+  }, []);
+
+  // Keep rows admitted after they transition from unread to read. Changing the
+  // tab or read filter starts a new admission scope.
+  const entities = createMemo<{
+    readScope: string;
+    admittedIds: Set<string>;
+    items: WithNotification<EntityData>[];
   }>(
     (previous) => {
-      const active = readFacet();
-      const scope = `${state.tab()}:${active.join(',')}`;
-      const ids =
-        previous?.scope === scope ? new Set(previous.ids) : new Set<string>();
+      const context = viewContext();
+      const transformed = transformEntities(rawEntities());
+      const activeReadFacets = context.facets.read ?? [];
+      const readScope = `${context.tab}:${activeReadFacets.join(',')}`;
+      const admittedIds =
+        previous.readScope === readScope
+          ? new Set(previous.admittedIds)
+          : new Set<string>();
 
-      if (active.length === 0) {
-        for (const entity of tabEntities()) ids.add(entity.id);
-        return { scope, ids };
-      }
-
-      const selection = { read: active };
-      for (const entity of tabEntities()) {
-        if (testFacets(selection, INBOX_FACETS, entity, facetContext())) {
-          ids.add(entity.id);
+      if (activeReadFacets.length === 0) {
+        for (const entity of transformed) admittedIds.add(entity.id);
+      } else {
+        const readSelection = { read: activeReadFacets };
+        for (const entity of transformed) {
+          if (
+            testFacets(
+              readSelection,
+              INBOX_FACETS,
+              entity,
+              context.facetContext
+            )
+          ) {
+            admittedIds.add(entity.id);
+          }
         }
       }
 
-      return { scope, ids };
+      const selection = { ...context.facets, read: [] };
+      return {
+        readScope,
+        admittedIds,
+        items: transformed.filter(
+          (entity) =>
+            admittedIds.has(entity.id) &&
+            testFacets(selection, INBOX_FACETS, entity, context.facetContext)
+        ),
+      };
     },
-    { scope: '', ids: new Set<string>() }
+    { readScope: '', admittedIds: new Set<string>(), items: [] }
   );
 
-  const refinedEntities = createMemo(() => {
-    const selection = { ...state.facets(), read: [] };
-    return tabEntities().filter(
-      (entity) =>
-        admittedByReadFilter().ids.has(entity.id) &&
-        testFacets(selection, INBOX_FACETS, entity, facetContext())
-    );
-  });
-
-  const searchedEntities = createMemo(() => {
-    if (usesServiceSearch()) return refinedEntities();
-
-    const search = state.search().trim().toLocaleLowerCase();
-    if (!search) return refinedEntities();
-
-    return refinedEntities().filter((entity) =>
-      entity.name.toLocaleLowerCase().includes(search)
-    );
-  });
+  const usesServiceSearch = search.usesServiceSearch;
 
   const hasMore = () => {
-    if (usesServiceSearch()) return searchQuery.hasNextPage ?? false;
+    if (usesServiceSearch()) return search.hasNextPage();
     return query.hasNextPage;
   };
 
   const isLoadingMore = () => {
-    if (usesServiceSearch()) return searchQuery.isFetchingNextPage;
+    if (usesServiceSearch()) return search.isFetchingNextPage();
     return query.isFetchingNextPage;
   };
 
   const items = createMemo<InboxDataSourceItem[]>(() => {
-    const result: InboxDataSourceItem[] = buildFlatSoupRows(searchedEntities());
+    const result: InboxDataSourceItem[] = buildFlatSoupRows(entities().items);
 
     if (hasMore()) {
       result.push(
@@ -236,30 +249,38 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
     return result;
   });
 
+  const isLoading = () => {
+    if (!search.isSearching()) {
+      return query.isLoading || query.isPlaceholderData;
+    }
+    if (entities().items.length > 0) return false;
+    if (usesServiceSearch()) return search.isLoading();
+    return query.isLoading || query.isPlaceholderData;
+  };
+
   return {
     items,
-    isLoading: () =>
-      usesServiceSearch()
-        ? searchQuery.isLoading
-        : query.isLoading || query.isPlaceholderData,
-    isFetching: () =>
-      usesServiceSearch() ? searchQuery.isFetching : query.isFetching,
+    isLoading,
+    isFetching: () => {
+      if (search.isSettling()) return true;
+      return usesServiceSearch() ? search.isFetching() : query.isFetching;
+    },
     error: () => {
       if (!usesServiceSearch()) return query.error ?? undefined;
-      return searchQuery.error instanceof Error ? searchQuery.error : undefined;
+      return search.error();
     },
     hasMore,
     isLoadingMore,
     loadMore: async () => {
       if (usesServiceSearch()) {
-        await searchQuery.fetchNextPage();
+        await search.fetchNextPage();
         return;
       }
       await query.fetchNextPage();
     },
     refresh: async () => {
       if (usesServiceSearch()) {
-        await searchQuery.refetch();
+        await search.refetch();
         return;
       }
       await query.refresh();

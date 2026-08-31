@@ -1,11 +1,15 @@
-import { type FacetSelection, NIL_UUID } from '@app/features/soup';
+import {
+  type FacetSelection,
+  NIL_UUID,
+  type SoupSearchRequest,
+} from '@app/features/soup';
 import type { SearchSoupQueryArgs } from '@queries/soup/search';
 import type {
   EntityFilters,
   NotificationFilters,
 } from '@service-search/generated/models';
 import type { InboxTab, InboxTypeFilter } from '../types';
-import type { InboxQueryCapabilities } from './inbox-query';
+import type { InboxQueryCapabilities, InboxViewContext } from './inbox-query';
 
 const tabTypes: Record<InboxTab, ReadonlySet<InboxTypeFilter>> = {
   signal: new Set([
@@ -65,18 +69,15 @@ function resolveTypes(
 }
 
 /** Mirrors Inbox tab/type/read semantics for service-backed search. */
-export function buildInboxSearchRequest(options: {
-  query: string;
-  tab: InboxTab;
-  facets: FacetSelection;
-  userId: string | undefined;
-  capabilities: InboxQueryCapabilities;
-}): SearchSoupQueryArgs {
-  const types = resolveTypes(options.tab, options.facets, options.capabilities);
-  const notification = readFilter(options.facets);
+export function buildInboxSearchRequest(
+  context: InboxViewContext,
+  search: SoupSearchRequest
+): SearchSoupQueryArgs {
+  const types = resolveTypes(context.tab, context.facets, context.capabilities);
+  const notification = readFilter(context.facets);
 
   const filtersIncompleteEntities =
-    options.tab === 'signal' || options.tab === 'noise';
+    context.tab === 'signal' || context.tab === 'noise';
 
   const notificationFilters: NotificationFilters = {};
 
@@ -116,7 +117,7 @@ export function buildInboxSearchRequest(options: {
   if (types.has('channels')) {
     const channelFilters: NonNullable<EntityFilters['channel_filters']> = {};
 
-    if (options.tab === 'signal') {
+    if (context.tab === 'signal') {
       channelFilters.is_participant = true;
     }
 
@@ -129,7 +130,7 @@ export function buildInboxSearchRequest(options: {
 
   if (types.has('channels') && filtersIncompleteEntities) {
     filters.channel_thread_filters = {
-      participant_ids: [options.userId ?? NIL_UUID],
+      participant_ids: [context.userId ?? NIL_UUID],
     };
   }
 
@@ -162,11 +163,11 @@ export function buildInboxSearchRequest(options: {
       shared: 'exclude',
     };
 
-    if (options.tab === 'signal') {
+    if (context.tab === 'signal') {
       emailFilters.importance = true;
     }
 
-    if (options.tab === 'noise') {
+    if (context.tab === 'noise') {
       emailFilters.importance = false;
     }
 
@@ -207,7 +208,7 @@ export function buildInboxSearchRequest(options: {
       include: true,
     };
 
-    if (options.tab === 'reminders') {
+    if (context.tab === 'reminders') {
       reminderFilters.completed = false;
       reminderFilters.fired = false;
     }
@@ -218,8 +219,8 @@ export function buildInboxSearchRequest(options: {
   return {
     params: { cursor: null, page_size: 100 },
     body: {
-      query: options.query,
-      match_type: 'partial',
+      query: search.query,
+      match_type: search.matchType,
       search_on: 'name_content',
       filters,
     },

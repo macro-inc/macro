@@ -149,37 +149,37 @@ function tabClause(
     .exhaustive();
 }
 
-export type BuildInboxQueryOptions = {
+export type InboxViewContext = {
   tab: InboxTab;
   facets: FacetSelection;
   facetContext: InboxFacetContext;
   capabilities: InboxQueryCapabilities;
   userId: string | undefined;
-  now?: Date;
 };
 
 /** Builds the heterogeneous Soup AST for the composable Inbox view. */
 export function buildInboxQuery(
-  options: BuildInboxQueryOptions
+  context: InboxViewContext,
+  options: { now?: Date } = {}
 ): SoupAstItemsQueryArgs {
   const base = compileClause(
     tabClause(
-      options.tab,
-      options.capabilities,
+      context.tab,
+      context.capabilities,
       options.now ?? new Date(),
-      options.userId
+      context.userId
     )
   );
   const refinements = compileFacets(
-    options.facets,
+    context.facets,
     INBOX_FACETS,
-    options.facetContext
+    context.facetContext
   );
   const body: SoupAstBody = mergeAst(base, refinements);
 
-  if (options.tab === 'signal' || options.tab === 'noise') {
+  if (context.tab === 'signal' || context.tab === 'noise') {
     body.emailView = 'inbox';
-  } else if (options.tab === 'all') {
+  } else if (context.tab === 'all') {
     body.emailView = 'all';
   }
 
@@ -188,7 +188,7 @@ export function buildInboxQuery(
       expand: true,
       limit: 100,
       sort_method: 'updated_at',
-      sort_direction: options.tab === 'reminders' ? 'asc' : 'desc',
+      sort_direction: context.tab === 'reminders' ? 'asc' : 'desc',
     },
     body,
   };
