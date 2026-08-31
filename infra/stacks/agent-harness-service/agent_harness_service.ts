@@ -59,23 +59,25 @@ type Args = {
 };
 
 /**
- * The agent harness service. Replicated in production: each replica claims
- * the sessions whose live actors it holds through a fenced Postgres lease,
- * and a command landing on the wrong replica is forwarded task-to-task over
- * the private network (`POST /internal/agent-sessions/{id}/command`,
+ * The agent harness service. Replicated in every environment: each replica
+ * claims the sessions whose live actors it holds through a fenced Postgres
+ * lease, and a command landing on the wrong replica is forwarded task-to-task
+ * over the private network (`POST /internal/agent-sessions/{id}/command`,
  * internal-key authenticated) - which is why the service security group
  * allows itself ingress on the service port. The Kafka consumer group splits
  * partitions across live tasks; the lease plus forwarding is what makes that
  * split correct.
  *
- * Deploys roll (min healthy 100%, max 200%): the outgoing task keeps serving
- * until the replacement passes health checks, so the control API and egress
- * proxy stay up instead of blacking out for the old task's sandbox cleanup.
- * The two tasks coexist briefly, during which the Kafka consumer group splits
- * partitions between them; a command routed to the new task for a session
- * whose live actor is still on the old one self-heals through resume. Live
- * sessions already restart across every deploy (`shutdown_all` stops each
- * sandbox), so the overlap narrows the blast radius rather than widening it.
+ * Deploys roll (min healthy 100%, max 200%): the outgoing tasks keep serving
+ * until their replacements pass health checks, so the control API and egress
+ * proxy stay up instead of blacking out for the old tasks' sandbox cleanup.
+ * A deploy therefore doubles the replica count for its duration rather than
+ * introducing coexistence - replicas coexist all the time, and the lease is
+ * what makes both the steady state and the overlap correct. A command routed
+ * to a new task for a session whose live actor is still on an old one
+ * self-heals through resume. Live sessions already restart across every
+ * deploy (`shutdown_all` stops each sandbox), so the overlap narrows the
+ * blast radius rather than widening it.
  */
 export class AgentHarnessService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
@@ -326,7 +328,11 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // deploy rolls back with the old task still up rather than at zero.
         deploymentMinimumHealthyPercent: 100,
         deploymentMaximumPercent: 200,
-        desiredCount: stack === 'prod' ? 2 : 1,
+        // Every environment runs two, so dev stays prod-shaped: forwarding is
+        // dead code at one task (management() can only answer Ours or
+        // Unmanaged), and a path only dev never exercises is one whose
+        // regressions surface in prod.
+        desiredCount: 2,
         // ALB checks /health every 10s and fails the target after two
         // misses (~20s). HTTP does not listen until after DB, AWS config,
         // and JWT secrets, so a 0s grace period trips the circuit breaker
