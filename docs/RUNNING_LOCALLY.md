@@ -175,9 +175,10 @@ across instances) debugging containers by default:
   OTLP; the frontend exports browser spans through the proxy and propagates
   `traceparent`, so one trace covers browser → proxy → services. Swap with
   `--traces jaeger|datadog`, or disable with `--traces off`.
-- **Headless Chrome** with the DevTools protocol on http://localhost:9222,
-  for agents driving the app (the `chrome-devtools` MCP server in `.mcp.json`
-  / `opencode.json` points at it).
+- **Agent browser**: Chromium with the DevTools protocol on
+  http://localhost:9222, for agents driving the app (the `chrome-devtools`
+  MCP server in `.mcp.json` / `opencode.json` / `.cursor/mcp.json` points at
+  it). Watch what an agent is doing live at http://localhost:6080/vnc.html.
 
 See `.claude/skills/live-debug/SKILL.md` for query recipes (Tempo/Loki HTTP
 APIs) and the browser-debugging workflow.
