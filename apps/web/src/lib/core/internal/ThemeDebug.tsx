@@ -1,9 +1,9 @@
-import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import CellSignalHighIcon from '@phosphor-icons/core/regular/cell-signal-high.svg?component-solid';
-import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import { Badge, Button, Panel } from '@ui';
 import { For } from 'solid-js';
+import CaretDownIcon from '~icons/ph/caret-down';
+import CellSignalHighIcon from '~icons/ph/cell-signal-high';
+import CheckIcon from '~icons/ph/check';
+import PlusIcon from '~icons/ph/plus';
 
 const LOREM_SHORT = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.';
 const LOREM_MEDIUM =

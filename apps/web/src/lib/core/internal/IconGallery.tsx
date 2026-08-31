@@ -1,7 +1,14 @@
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import LegacyWidePlus from '@icon/wide-plus.svg';
+import LegacyPlus from '@phosphor/plus.svg';
+import { Button } from '@ui';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import WideHome from '~icons/macro/wide-home';
+import WideInbox from '~icons/macro/wide-inbox';
+import WidePlus from '~icons/macro/wide-plus';
+import Plus from '~icons/ph/plus';
 
 // Theme color swatches - uses CSS variables from the theme
 const THEME_COLORS = [
@@ -144,6 +151,19 @@ for (const [name, component] of Object.entries(staticIcons)) {
 // Sort alphabetically
 STATIC_ONLY_ICONS.sort((a, b) => a.name.localeCompare(b.name));
 
+type PipelineCompare = {
+  name: string;
+  legacy?: Component;
+  next: Component;
+};
+
+const PIPELINE_COMPARE: PipelineCompare[] = [
+  { name: 'ph/plus', legacy: LegacyPlus, next: Plus },
+  { name: 'macro/wide-plus', legacy: LegacyWidePlus, next: WidePlus },
+  { name: 'macro/wide-inbox', next: WideInbox },
+  { name: 'macro/wide-home', next: WideHome },
+];
+
 export default function IconGallery() {
   const [selectedColor, setSelectedColor] = createSignal<ColorOption>(
     THEME_COLORS[0]
@@ -160,6 +180,13 @@ export default function IconGallery() {
     if (color.value === 'custom') return customColor();
     return color.css;
   };
+
+  const iconBoxStyle = () => ({
+    color: getColorStyle(),
+    width: `${iconSize()}px`,
+    height: `${iconSize()}px`,
+    'font-size': `${iconSize()}px`,
+  });
 
   const triggerAnimation = (name: string) => {
     setAnimationTriggers((prev) => ({ ...prev, [name]: true }));
@@ -298,6 +325,69 @@ export default function IconGallery() {
           </div>
         </div>
 
+        <h2 class="mb-3 flex items-center gap-3 text-xs font-semibold text-ink">
+          <span>unplugin-icons</span>
+          <span class="h-px flex-1 bg-edge-muted" />
+        </h2>
+        <div class="mb-6 flex flex-wrap gap-3">
+          <For each={PIPELINE_COMPARE}>
+            {(row) => (
+              <div class="inline-flex flex-col items-center rounded-[1px] border border-edge-muted p-2">
+                <p class="mb-2 text-xxs text-ink">{row.name}</p>
+                <div class="flex items-center justify-center gap-3">
+                  <Show when={row.legacy}>
+                    {(legacy) => (
+                      <div class="flex flex-col items-center">
+                        <div
+                          class="flex items-center justify-center"
+                          style={iconBoxStyle()}
+                        >
+                          <Dynamic component={legacy()} />
+                        </div>
+                        <span class="mt-2 text-[8px] text-ink-muted">
+                          solid-svg
+                        </span>
+                      </div>
+                    )}
+                  </Show>
+                  <div class="flex flex-col items-center">
+                    <div
+                      class="flex items-center justify-center"
+                      style={iconBoxStyle()}
+                    >
+                      <row.next />
+                    </div>
+                    <span class="mt-2 text-[8px] text-ink-muted">~icons</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </For>
+        </div>
+
+        <h2 class="mb-3 flex items-center gap-3 text-xs font-semibold text-ink">
+          <span>Button</span>
+          <span class="h-px flex-1 bg-edge-muted" />
+        </h2>
+        <div
+          class="mb-6 flex flex-wrap items-center gap-3"
+          style={{ color: getColorStyle() }}
+        >
+          <Button size="icon-sm" label="Add">
+            <Plus />
+          </Button>
+          <Button size="icon-md" label="Inbox">
+            <WideInbox />
+          </Button>
+          <Button size="icon-sm" label="Add large">
+            <Plus class="size-8" />
+          </Button>
+          <Button size="sm" variant="outline">
+            <Plus />
+            New
+          </Button>
+        </div>
+
         {/* Icons with animated versions */}
         <h2 class="mb-3 flex items-center gap-3 text-xs font-semibold text-ink">
           <span>Icons with animations</span>
@@ -315,11 +405,7 @@ export default function IconGallery() {
                       <div class="flex flex-col items-center">
                         <div
                           class="flex items-center justify-center"
-                          style={{
-                            color: getColorStyle(),
-                            width: `${iconSize()}px`,
-                            height: `${iconSize()}px`,
-                          }}
+                          style={iconBoxStyle()}
                         >
                           <Dynamic component={staticComponent()} />
                         </div>
@@ -333,11 +419,7 @@ export default function IconGallery() {
                   <div class="flex flex-col items-center">
                     <div
                       class="flex items-center justify-center"
-                      style={{
-                        color: getColorStyle(),
-                        width: `${iconSize()}px`,
-                        height: `${iconSize()}px`,
-                      }}
+                      style={iconBoxStyle()}
                       onMouseEnter={() =>
                         setAnimationTriggers((prev) => ({
                           ...prev,
@@ -391,11 +473,7 @@ export default function IconGallery() {
               <div class="inline-flex flex-col items-center rounded-[1px] border border-edge-muted p-2">
                 <div
                   class="flex items-center justify-center"
-                  style={{
-                    color: getColorStyle(),
-                    width: `${iconSize()}px`,
-                    height: `${iconSize()}px`,
-                  }}
+                  style={iconBoxStyle()}
                 >
                   <icon.component />
                 </div>

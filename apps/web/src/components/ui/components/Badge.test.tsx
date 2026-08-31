@@ -20,8 +20,7 @@ describe('badgeClasses', () => {
           sizeClass.startsWith('h-') ||
           sizeClass.startsWith('px-') ||
           sizeClass.startsWith('gap-') ||
-          sizeClass.startsWith('text-') ||
-          sizeClass.startsWith('[&>svg')
+          sizeClass.startsWith('text-')
         ) {
           expect(button).toContain(sizeClass);
         }
