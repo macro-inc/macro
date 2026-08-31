@@ -612,9 +612,15 @@ services:
     # Docker bring it back rather than leaving telemetry dark.
     restart: unless-stopped
     environment:
-      # No login wall: agents and humans hit the UI/API without credentials.
+      # No login wall: agents and humans hit the UI/API without credentials —
+      # anonymous requests get Admin, the login form and sign-out menu are
+      # gone entirely. Local-only telemetry, nothing to protect.
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_AUTH_DISABLE_SIGNOUT_MENU: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
       - "3001:3000"
       - "4317:4317"
