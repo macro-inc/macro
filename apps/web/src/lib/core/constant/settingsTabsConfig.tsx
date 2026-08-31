@@ -24,6 +24,8 @@ import {
   BOT_MANAGEMENT_OVERRIDE,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
+  ENABLE_CHAT_V3_AGENTS_FLAG,
+  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
   ENABLE_NOTIFICATION_SETTINGS_FLAG,
@@ -163,6 +165,9 @@ export const useSettingsTabAvailable = () => {
   const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
     enabledOverride: BOT_MANAGEMENT_OVERRIDE,
   });
+  const chatV3AgentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
+    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
+  });
   const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
     enabledOverride: ENABLE_CRM_OVERRIDE,
   });
@@ -199,9 +204,12 @@ export const useSettingsTabAvailable = () => {
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
       case 'Agent':
         return !isNativeMobilePlatform();
+      // Configurable agents are still rolling out; keep both tabs behind the
+      // same enable-chat-v3-agents gate as the channel mention surfaces, so
+      // settings never advertises agents to a user who cannot mention one.
       case 'Harness':
       case 'Agents':
-        return true;
+        return chatV3AgentsFlag().enabled;
       case 'Bots':
         return botManagementFlag().enabled;
       case 'Mobile':
