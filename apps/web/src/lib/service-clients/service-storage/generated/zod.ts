@@ -27013,6 +27013,22 @@ export const editThreadV2Response = zod.object({
 });
 
 /**
+ * @summary List the caller's API keys.
+ */
+export const listUserApiKeysResponse = zod
+  .object({
+    keys: zod.array(zod.string()).describe("The caller's keys."),
+  })
+  .describe("The caller's API keys.");
+
+/**
+ * @summary Delete one of the caller's API keys.
+ */
+export const deleteUserApiKeyParams = zod.object({
+  key: zod.string().describe('The full key value.'),
+});
+
+/**
  * @summary Gets a UserPdfDocumentLocation entry
  */
 export const getUserDocumentViewLocationParams = zod.object({

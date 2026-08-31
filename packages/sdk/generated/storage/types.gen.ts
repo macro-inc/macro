@@ -3237,6 +3237,16 @@ export type CreateUnthreadedPdfAnchorRequest = PdfHighlightAnchorRequest & {
     anchorType: 'highlight';
 };
 
+/**
+ * Response body for minting a key.
+ */
+export type CreateUserApiKeyResponse = {
+    /**
+     * The newly minted secret. Shown only on create.
+     */
+    key: string;
+};
+
 export type CreateViewRequest = {
     config: unknown;
     name: string;
@@ -8308,6 +8318,16 @@ export type UpsertUserDocumentViewLocationRequest = {
 };
 
 /**
+ * The caller's API keys.
+ */
+export type UserApiKeysList = {
+    /**
+     * The caller's keys.
+     */
+    keys: Array<string>;
+};
+
+/**
  * The last place a user viewed a particular document at
  */
 export type UserDocumentViewLocation = {
@@ -13052,6 +13072,76 @@ export type EditThreadV2Responses = {
 };
 
 export type EditThreadV2Response = EditThreadV2Responses[keyof EditThreadV2Responses];
+
+export type ListUserApiKeysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user-api-keys';
+};
+
+export type ListUserApiKeysErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListUserApiKeysError = ListUserApiKeysErrors[keyof ListUserApiKeysErrors];
+
+export type ListUserApiKeysResponses = {
+    200: UserApiKeysList;
+};
+
+export type ListUserApiKeysResponse = ListUserApiKeysResponses[keyof ListUserApiKeysResponses];
+
+export type CreateUserApiKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user-api-keys';
+};
+
+export type CreateUserApiKeyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateUserApiKeyError = CreateUserApiKeyErrors[keyof CreateUserApiKeyErrors];
+
+export type CreateUserApiKeyResponses = {
+    201: CreateUserApiKeyResponse;
+};
+
+export type CreateUserApiKeyResponse2 = CreateUserApiKeyResponses[keyof CreateUserApiKeyResponses];
+
+export type DeleteUserApiKeyData = {
+    body?: never;
+    path: {
+        /**
+         * The full key value.
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/user-api-keys/{key}';
+};
+
+export type DeleteUserApiKeyErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteUserApiKeyError = DeleteUserApiKeyErrors[keyof DeleteUserApiKeyErrors];
+
+export type DeleteUserApiKeyResponses = {
+    /**
+     * API key deleted
+     */
+    204: void;
+};
+
+export type DeleteUserApiKeyResponse = DeleteUserApiKeyResponses[keyof DeleteUserApiKeyResponses];
 
 export type DeleteUserDocumentViewLocationData = {
     body?: never;
