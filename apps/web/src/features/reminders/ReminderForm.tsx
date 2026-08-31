@@ -28,6 +28,7 @@ import {
   repeatPartsFromDate,
   repeatPartsFromSchedule,
 } from './reminder-schedule';
+import { TimezoneSelect } from './TimezoneSelect';
 
 /** How a reminder repeats: not at all (a one-shot), or on a weekly/monthly cron. */
 type RepeatKind = 'once' | ScheduleFrequency;
@@ -502,25 +503,11 @@ export function ReminderForm(props: ReminderFormProps) {
           <div class="flex flex-col gap-2">
             <label class="flex items-center gap-2 text-xs text-ink-muted">
               <span class="font-medium">Timezone</span>
-              <select
-                aria-label="Timezone"
+              <TimezoneSelect
                 value={timezone()}
-                onChange={(event) => setTimezone(event.currentTarget.value)}
-                class="min-w-0 flex-1 rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-              >
-                <Show
-                  when={!TIMEZONE_OPTIONS.some((o) => o.value === timezone())}
-                >
-                  <option value={timezone()}>
-                    {timezone().replace(/_/g, ' ')}
-                  </option>
-                </Show>
-                <For each={TIMEZONE_OPTIONS}>
-                  {(option) => (
-                    <option value={option.value}>{option.label}</option>
-                  )}
-                </For>
-              </select>
+                onChange={setTimezone}
+                options={TIMEZONE_OPTIONS}
+              />
             </label>
             <span class="truncate text-xs text-ink-muted">
               {describeCron(repeatParts())} · {shortZone(timezone())}
