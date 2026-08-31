@@ -745,7 +745,14 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
+          <Show
+            when={!isBoardMode()}
+            fallback={
+              <MaybeSoupEntityActionDrawerManager>
+                <CompanyKanban />
+              </MaybeSoupEntityActionDrawerManager>
+            }
+          >
             <SoupViewList />
           </Show>
         </Suspense>
