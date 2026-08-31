@@ -79,7 +79,7 @@ import {
   executeMarkEntitiesDone,
   getChannelEntityTarget,
   getRowClickFallbackLocation,
-  markChannelTargetSeenOnOpen,
+  markChannelNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
   resolveMarkEntitiesDoneVariables,
@@ -123,6 +123,10 @@ const asRead = (notification: UnifiedNotification): UnifiedNotification =>
     ...notification,
     viewed_at: '2026-07-14T00:00:00.000Z',
   }) as unknown as UnifiedNotification;
+
+const notificationSourceWithBulkMarkAsRead = (
+  bulkMarkAsRead = vi.fn(async () => {})
+) => ({ bulkMarkAsRead }) as unknown as NotificationSource;
 
 const channelMessageRow = (opts?: {
   target?: ChannelEntityTarget;
@@ -394,9 +398,12 @@ describe('getChannelEntityTarget', () => {
     });
   });
 
-  it('marks an attached agent notification read even when the global source does not contain it', () => {
-    const notification = sendNotification('agent-notification', 'agent-msg');
-    notification.notification_metadata = {
+  it('marks every unread notification attached to a channel row', () => {
+    const agentNotification = sendNotification(
+      'agent-notification',
+      'agent-msg'
+    );
+    agentNotification.notification_metadata = {
       tag: 'channel_message_send',
       content: {
         messageId: 'agent-msg',
@@ -404,19 +411,85 @@ describe('getChannelEntityTarget', () => {
         senderDisplayName: 'Macro Agent',
       },
     } as UnifiedNotification['notification_metadata'];
-    const bulkMarkAsRead = vi.fn(async () => {});
-    const notificationSource = {
-      notificationsByEntity: () => ({}),
-      bulkMarkAsRead,
-    } as unknown as NotificationSource;
+    const olderNotification = sendNotification('older-notification', 'older');
+    const readNotification = asRead(sendNotification('read', 'read-msg'));
 
-    markChannelTargetSeenOnOpen(
-      channelRow({ notifications: [notification] }),
-      notificationSource
+    const bulkMarkAsRead = vi.fn(async () => {});
+    markChannelNotificationsSeenOnOpen(
+      channelRow({
+        notifications: [agentNotification, olderNotification, readNotification],
+      }),
+      notificationSourceWithBulkMarkAsRead(bulkMarkAsRead)
     );
 
     expect(bulkMarkAsRead).toHaveBeenCalledOnce();
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([
+      agentNotification,
+      olderNotification,
+    ]);
+  });
+
+  it('marks attached channel notifications through the shared split-open path', async () => {
+    const notification = sendNotification('shared-open', 'message');
+    const openWithSplit = vi.fn();
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({
+        getBlockHandle: vi.fn(async () => undefined),
+      })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    const bulkMarkAsRead = vi.fn(async () => {});
+    await openEntityInSplitFromUnifiedList(
+      channelRow({ notifications: [notification] }),
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      }
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ channel_message_id: 'message' }),
+      }),
+      expect.any(Object)
+    );
     expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
+  });
+
+  it('does not mark a thread-stack notification when opening its parent channel row', async () => {
+    const parentNotification = sendNotification('parent-send', 'message');
+    const threadNotification = replyNotification(
+      'thread-reply',
+      'reply',
+      'thread-root'
+    );
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({
+        getBlockHandle: vi.fn(async () => undefined),
+      })),
+      getSplitByContent: vi.fn(),
+      openWithSplit: vi.fn(),
+    } as unknown as SplitManager);
+
+    const bulkMarkAsRead = vi.fn(async () => {});
+    await openEntityInSplitFromUnifiedList(
+      channelRow({
+        notifications: [parentNotification, threadNotification],
+      }),
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      }
+    );
+
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([parentNotification]);
+    expect(bulkMarkAsRead).not.toHaveBeenCalledWith(
+      expect.arrayContaining([threadNotification])
+    );
   });
 
   it('reports failures to mark an attached channel notification read', async () => {
@@ -425,21 +498,19 @@ describe('getChannelEntityTarget', () => {
       .spyOn(console, 'error')
       .mockImplementation(() => {});
     const notification = sendNotification('notification', 'message');
-    const notificationSource = {
-      bulkMarkAsRead: vi.fn(async () => {
-        throw error;
-      }),
-    } as unknown as NotificationSource;
+    const bulkMarkAsRead = vi.fn(async () => {
+      throw error;
+    });
 
     try {
-      markChannelTargetSeenOnOpen(
+      markChannelNotificationsSeenOnOpen(
         channelRow({ notifications: [notification] }),
-        notificationSource
+        notificationSourceWithBulkMarkAsRead(bulkMarkAsRead)
       );
       await Promise.resolve();
 
       expect(consoleError).toHaveBeenCalledWith(
-        'Failed to mark message notifications as read',
+        'Failed to mark channel notifications as read',
         error
       );
     } finally {

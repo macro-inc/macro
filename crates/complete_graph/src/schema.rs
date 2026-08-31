@@ -188,6 +188,7 @@ impl FromRef<SchemaOnlyState> for MacroAuthorizationState<SchemaOnlyAuthorizatio
                 default_user_id: None,
             },
             macro_authorization::NoBotAuthorizer,
+            macro_authorization::NoUserApiKeyAuthorizer,
         );
         MacroAuthorizationState::new(Arc::new(service))
     }

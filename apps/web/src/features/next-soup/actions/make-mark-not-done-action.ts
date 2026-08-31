@@ -9,7 +9,7 @@ import type { NotificationSource } from '@notifications';
 import { threadCanBeMarkedNotDone } from '@queries/email/thread';
 import { fetchDoneNotificationIdsByEventItemIds } from '@queries/notification/user-notifications';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotDoneOptions = {
   notificationSource: () => NotificationSource;
@@ -139,7 +139,10 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
 
   /** Signature parity with makeMarkDoneAction's executeWithSoup — no
    *  navigation or collapse: the rows stay in place. */
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::error::AgentSessionError;
+use agent_session::domain::model::SessionManagement;
 use agent_session::domain::model::{
     AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId, SandboxSize,
 };
@@ -25,8 +26,8 @@ use crate::domain::model::{
     OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
 };
 use crate::domain::ports::{
-    AgentPromptComposer, ChannelPromptContext, ContainerManager, RuntimeConnections,
-    SandboxEgressProvisioner, SessionAnnouncer,
+    AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
+    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::sandbox::SandboxResizeEffect;
 
@@ -38,6 +39,37 @@ struct QueuedCommand {
     /// The caller's span, carried across the queue so the work the worker does
     /// on its own task still hangs off whatever triggered it.
     span: tracing::Span,
+    /// Whether the worker resolves the session's managing replica before
+    /// executing. Commands admitted at an ingress route; a command received
+    /// *as* a forward executes here unconditionally, which is what makes
+    /// forwarding single-hop - two replicas with momentarily different lease
+    /// views cannot bounce a command between each other.
+    route: bool,
+}
+
+/// [`CommandForwarder`], object-safe.
+///
+/// Held erased inside the service so forwarding does not become an eighth
+/// type parameter on every impl block; the public port keeps its natural
+/// `impl Future` shape and this shim boxes at the one internal call site.
+trait ErasedForwarder: Send + Sync + 'static {
+    fn forward<'a>(
+        &'a self,
+        target: &'a agent_session::domain::model::ReplicaAddress,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
+}
+
+impl<F: CommandForwarder> ErasedForwarder for F {
+    fn forward<'a>(
+        &'a self,
+        target: &'a agent_session::domain::model::ReplicaAddress,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(CommandForwarder::forward(self, target, session, command))
+    }
 }
 
 struct AgentHarnessInner<
@@ -56,6 +88,7 @@ struct AgentHarnessInner<
     prompt_context: PromptContext,
     prompt_composer: PromptComposer,
     egress: Egress,
+    forwarder: Box<dyn ErasedForwarder>,
     defaults: HarnessDefaults,
 }
 
@@ -115,6 +148,7 @@ where
         prompt_context: PromptContext,
         prompt_composer: PromptComposer,
         egress: Egress,
+        forwarder: impl CommandForwarder,
         defaults: impl Into<HarnessDefaults>,
     ) -> Self {
         Self {
@@ -126,6 +160,7 @@ where
                 prompt_context,
                 prompt_composer,
                 egress,
+                forwarder: Box::new(forwarder),
                 defaults: defaults.into(),
             }),
             workers: Arc::new(DashMap::new()),
@@ -141,7 +176,32 @@ where
     pub fn execute(
         &self,
         session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<()>> + Send + 'static {
+        self.enqueue(session_id, command, true)
+    }
+
+    /// [`execute`](Self::execute), without resolving which replica manages
+    /// the session first.
+    ///
+    /// The entry point for commands received *as* forwards: the sender
+    /// already resolved management to this replica, and re-resolving here is
+    /// what could bounce a command between two replicas whose lease views
+    /// momentarily differ. Forwarding is single-hop; this is the second hop's
+    /// half of that contract.
+    pub fn execute_here(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<()>> + Send + 'static {
+        self.enqueue(session_id, command, false)
+    }
+
+    fn enqueue(
+        &self,
+        session_id: AgentSessionId,
         mut command: HarnessCommand,
+        route: bool,
     ) -> impl Future<Output = Result<()>> + Send + 'static {
         let caller = tracing::Span::current();
         let result = loop {
@@ -151,6 +211,7 @@ where
                 command,
                 completed,
                 span: caller.clone(),
+                route,
             };
 
             match commands.send(queued) {
@@ -235,6 +296,46 @@ where
                 triggered_by: prompt.sender,
             })
             .await
+    }
+}
+
+/// The receiving half of command forwarding: what the internal forward route
+/// calls, implemented by the harness as [`AgentHarnessService::execute_here`].
+pub trait ForwardedCommands: Send + Sync + 'static {
+    /// Run a command a peer already routed to this replica.
+    fn execute_forwarded(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+    ForwardedCommands
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: ChannelPromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+{
+    async fn execute_forwarded(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> Result<()> {
+        self.execute_here(session_id, command).await
     }
 }
 
@@ -541,6 +642,55 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
+    /// Execute where the session's live actor is: locally when nobody (or
+    /// this replica) manages it, on the managing peer otherwise.
+    ///
+    /// A failed forward re-reads the lease once: the one legitimate reason a
+    /// live manager refuses its own session is that it died mid-flight, and
+    /// then its heartbeat going stale is what lets this replica take over. A
+    /// manager that is alive but unreachable stays an error - executing
+    /// locally anyway is how two actors end up on one session.
+    #[tracing::instrument(err, skip(self, command), fields(%session_id))]
+    async fn route_then_execute(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> Result<()> {
+        // Open never routes: it is what creates the session row this routing
+        // would read, and a fresh id has no manager to defer to.
+        if matches!(command, HarnessCommand::Open(_)) {
+            return self.execute(session_id, command).await;
+        }
+        let manager = match self.sessions.management(session_id).await? {
+            SessionManagement::Unmanaged | SessionManagement::Ours => {
+                return self.execute(session_id, command).await;
+            }
+            SessionManagement::Peer(manager) => manager,
+        };
+        let Some(address) = manager.address else {
+            return Err(HarnessError::ManagerUnreachable(session_id));
+        };
+        tracing::info!(%session_id, peer = %manager.replica, "forwarding an agent session command");
+        match self
+            .forwarder
+            .forward(&address, session_id, command.clone())
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(forward_error) => match self.sessions.management(session_id).await? {
+                SessionManagement::Unmanaged | SessionManagement::Ours => {
+                    tracing::warn!(
+                        error = ?forward_error,
+                        %session_id,
+                        "the managing replica went stale mid-forward; executing locally"
+                    );
+                    self.execute(session_id, command).await
+                }
+                SessionManagement::Peer(_) => Err(forward_error),
+            },
+        }
+    }
+
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match &command {
             HarnessCommand::Open(open)
@@ -960,8 +1110,16 @@ async fn run_session_worker<
             command,
             completed,
             span,
+            route,
         } = queued;
-        let result = inner.execute(session_id, command).instrument(span).await;
+        let result = if route {
+            inner
+                .route_then_execute(session_id, command)
+                .instrument(span)
+                .await
+        } else {
+            inner.execute(session_id, command).instrument(span).await
+        };
         let _ = completed.send(result);
     }
 }

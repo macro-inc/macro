@@ -3237,6 +3237,16 @@ export type CreateUnthreadedPdfAnchorRequest = PdfHighlightAnchorRequest & {
     anchorType: 'highlight';
 };
 
+/**
+ * Request body for minting a key.
+ */
+export type CreateUserApiKeyRequest = {
+    /**
+     * User-facing name for the key.
+     */
+    name: string;
+};
+
 export type CreateViewRequest = {
     config: unknown;
     name: string;
@@ -3335,6 +3345,28 @@ export type CreateWebhookResponse = {
      * Owning workspace id.
      */
     workspace_id: string;
+};
+
+/**
+ * A newly minted key: safe metadata plus the secret, shown only once.
+ */
+export type CreatedUserApiKey = {
+    /**
+     * When the key was created.
+     */
+    createdAt: string;
+    /**
+     * Opaque identifier used to address the key after create.
+     */
+    id: UserApiKeyId;
+    /**
+     * The newly minted secret. Shown only on create.
+     */
+    key: string;
+    /**
+     * User-facing name.
+     */
+    name: string;
 };
 
 /**
@@ -8308,6 +8340,39 @@ export type UpsertUserDocumentViewLocationRequest = {
 };
 
 /**
+ * Opaque identifier for a stored user API key.
+ */
+export type UserApiKeyId = string;
+
+/**
+ * Safe metadata for a stored key. Never contains the secret or its hash.
+ */
+export type UserApiKeyInfo = {
+    /**
+     * When the key was created.
+     */
+    createdAt: string;
+    /**
+     * Opaque identifier used to address the key after create.
+     */
+    id: UserApiKeyId;
+    /**
+     * User-facing name.
+     */
+    name: string;
+};
+
+/**
+ * The caller's API keys as id, name, and created_at.
+ */
+export type UserApiKeysList = {
+    /**
+     * The caller's keys. Never includes the raw secret or hash.
+     */
+    keys: Array<UserApiKeyInfo>;
+};
+
+/**
  * The last place a user viewed a particular document at
  */
 export type UserDocumentViewLocation = {
@@ -13052,6 +13117,76 @@ export type EditThreadV2Responses = {
 };
 
 export type EditThreadV2Response = EditThreadV2Responses[keyof EditThreadV2Responses];
+
+export type ListUserApiKeysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user-api-keys';
+};
+
+export type ListUserApiKeysErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListUserApiKeysError = ListUserApiKeysErrors[keyof ListUserApiKeysErrors];
+
+export type ListUserApiKeysResponses = {
+    200: UserApiKeysList;
+};
+
+export type ListUserApiKeysResponse = ListUserApiKeysResponses[keyof ListUserApiKeysResponses];
+
+export type CreateUserApiKeyData = {
+    body: CreateUserApiKeyRequest;
+    path?: never;
+    query?: never;
+    url: '/user-api-keys';
+};
+
+export type CreateUserApiKeyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateUserApiKeyError = CreateUserApiKeyErrors[keyof CreateUserApiKeyErrors];
+
+export type CreateUserApiKeyResponses = {
+    201: CreatedUserApiKey;
+};
+
+export type CreateUserApiKeyResponse = CreateUserApiKeyResponses[keyof CreateUserApiKeyResponses];
+
+export type DeleteUserApiKeyData = {
+    body?: never;
+    path: {
+        /**
+         * Opaque key identifier.
+         */
+        id: UserApiKeyId;
+    };
+    query?: never;
+    url: '/user-api-keys/{id}';
+};
+
+export type DeleteUserApiKeyErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteUserApiKeyError = DeleteUserApiKeyErrors[keyof DeleteUserApiKeyErrors];
+
+export type DeleteUserApiKeyResponses = {
+    /**
+     * API key deleted
+     */
+    204: void;
+};
+
+export type DeleteUserApiKeyResponse = DeleteUserApiKeyResponses[keyof DeleteUserApiKeyResponses];
 
 export type DeleteUserDocumentViewLocationData = {
     body?: never;

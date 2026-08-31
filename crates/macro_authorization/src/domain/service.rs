@@ -12,7 +12,7 @@ use super::{
         BotActingUserClaims, BotAuthentication, BotScope, InternalAuthConfig,
         InternalIdentityClaims, MacroAuthorizationError,
     },
-    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService},
+    ports::{BotAuthorizer, JwtValidator, MacroAuthorizationService, UserApiKeyAuthorizer},
 };
 
 type BotAuthorizationFuture<'a> = Pin<
@@ -49,25 +49,44 @@ where
     }
 }
 
+type UserApiKeyAuthorizationFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send + 'a>>;
+
+trait DynUserApiKeyAuthorizer: Send + Sync {
+    fn authorize_user_api_key<'a>(&'a self, api_key: &'a str) -> UserApiKeyAuthorizationFuture<'a>;
+}
+
+impl<A> DynUserApiKeyAuthorizer for A
+where
+    A: UserApiKeyAuthorizer,
+{
+    fn authorize_user_api_key<'a>(&'a self, api_key: &'a str) -> UserApiKeyAuthorizationFuture<'a> {
+        Box::pin(UserApiKeyAuthorizer::authorize_user_api_key(self, api_key))
+    }
+}
+
 /// Default authorization service backed by a credential validator.
 #[derive(Clone)]
 pub struct MacroAuthorizationServiceImpl<V> {
     validator: V,
     internal_auth: InternalAuthConfig,
     bot_authorizer: Arc<dyn DynBotAuthorizer>,
+    user_api_key_authorizer: Arc<dyn DynUserApiKeyAuthorizer>,
 }
 
 impl<V> MacroAuthorizationServiceImpl<V> {
-    /// Create an authorization service with required user, internal, and bot authorization dependencies.
+    /// Create an authorization service with required user, internal, bot, and user API key authorization dependencies.
     pub fn new(
         validator: V,
         internal_auth: InternalAuthConfig,
         bot_authorizer: impl BotAuthorizer,
+        user_api_key_authorizer: impl UserApiKeyAuthorizer,
     ) -> Self {
         Self {
             validator,
             internal_auth,
             bot_authorizer: Arc::new(bot_authorizer),
+            user_api_key_authorizer: Arc::new(user_api_key_authorizer),
         }
     }
 }
@@ -124,6 +143,24 @@ where
         }
 
         Ok(bot)
+    }
+
+    #[tracing::instrument(
+        err,
+        skip_all,
+        fields(user_id = tracing::field::Empty)
+    )]
+    async fn authorize_user_api_key(
+        &self,
+        api_key: &str,
+    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
+        let user = self
+            .user_api_key_authorizer
+            .authorize_user_api_key(api_key)
+            .await?;
+
+        tracing::Span::current().record("user_id", tracing::field::display(&user.user_id));
+        Ok(user)
     }
 
     async fn authorize_internal(

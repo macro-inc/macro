@@ -1,4 +1,5 @@
-use crate::map_soup_type;
+use crate::domain::models::SoupProjectionHydration;
+use crate::map_soup_projection_hydration;
 use crate::outbound::pg_soup_repo::type_err;
 use document_sub_type::DocumentSubType;
 use macro_user_id::cowlike::CowLike;
@@ -18,12 +19,12 @@ use uuid::Uuid;
 /// the user doesn't have explicit permissions on those items.
 /// Sorting is dynamically controlled by the sort_method parameter.
 #[tracing::instrument(skip(db, limit))]
-pub async fn expanded_generic_cursor_soup(
+async fn expanded_generic_cursor_soup_hydrated(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
     limit: u16,
     cursor: Query<Uuid, SimpleSortMethod, ()>,
-) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
@@ -32,7 +33,7 @@ pub async fn expanded_generic_cursor_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let items: Vec<SoupItem<()>> = sqlx::query!(
+    let items: Vec<SoupProjectionHydration> = sqlx::query!(
 r#"
         -- =============================================================================
         -- EXPANDED GENERIC CURSOR SOUP QUERY
@@ -145,6 +146,11 @@ r#"
                 NULL as "is_persistent",
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
+                EXISTS (
+                    SELECT 1
+                    FROM document_email de
+                    WHERE de.document_id = d.id
+                ) as "is_email_attachment!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 t.sort_ts as "sort_ts!",
                 -- Task completion status: check if status property matches "completed"
@@ -202,6 +208,7 @@ r#"
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
                 NULL as "sub_type",
+                false as "is_email_attachment!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 t.sort_ts as "sort_ts!",
                 NULL as "is_completed",
@@ -230,6 +237,7 @@ r#"
                 NULL as "is_persistent",
                 NULL as "sha",
                 NULL as "sub_type",
+                false as "is_email_attachment!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 t.sort_ts as "sort_ts!",
                 NULL as "is_completed",
@@ -254,22 +262,52 @@ r#"
         completed_option_id, // $6
         status_property_id,  // $7
     )
-        .try_map(map_soup_type!())
+        .try_map(map_soup_projection_hydration!())
         .fetch_all(db)
         .await?;
 
     Ok(items)
 }
 
-/// this is exactly the same a [expanded_generic_cursor_soup] except it will NEVER
-/// return items that DO have frecency scores
+/// Returns expanded objects with projection metadata loaded from the same
+/// authorized detail rows.
 #[tracing::instrument(skip(db, limit))]
-pub async fn no_frecency_expanded_generic_soup(
+pub async fn expanded_generic_cursor_soup_with_projection(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    limit: u16,
+    cursor: Query<Uuid, SimpleSortMethod, ()>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    expanded_generic_cursor_soup_hydrated(db, user_id, limit, cursor).await
+}
+
+/// Returns expanded objects while discarding internal projection metadata.
+#[cfg(test)]
+#[tracing::instrument(skip(db, limit))]
+pub async fn expanded_generic_cursor_soup(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    limit: u16,
+    cursor: Query<Uuid, SimpleSortMethod, ()>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    Ok(
+        expanded_generic_cursor_soup_hydrated(db, user_id, limit, cursor)
+            .await?
+            .into_iter()
+            .map(|hydration| hydration.item)
+            .collect(),
+    )
+}
+
+/// This is the same query as the expanded generic cursor soup except it will
+/// never return items that have frecency scores.
+#[tracing::instrument(skip(db, limit))]
+async fn no_frecency_expanded_generic_soup_hydrated(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
     limit: u16,
     cursor: Query<Uuid, SimpleSortMethod, Frecency>,
-) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
@@ -278,7 +316,7 @@ pub async fn no_frecency_expanded_generic_soup(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let items: Vec<SoupItem<()>> = sqlx::query!(
+    let items: Vec<SoupProjectionHydration> = sqlx::query!(
 r#"        
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
@@ -313,6 +351,11 @@ r#"
                 NULL as "is_persistent",
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
+                EXISTS (
+                    SELECT 1
+                    FROM document_email de
+                    WHERE de.document_id = d.id
+                ) as "is_email_attachment!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
@@ -373,6 +416,7 @@ r#"
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
                 NULL as "sub_type",
+                false as "is_email_attachment!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
@@ -405,6 +449,7 @@ r#"
                 NULL as "is_persistent",
                 NULL as "sha",
                 NULL as "sub_type",
+                false as "is_email_attachment!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
@@ -446,9 +491,37 @@ r#"
         completed_option_id, // $6
         status_property_id,  // $7
     )
-        .try_map(map_soup_type!())
+        .try_map(map_soup_projection_hydration!())
         .fetch_all(db)
         .await?;
 
     Ok(items)
+}
+
+/// Returns the non-frecency expanded fallback with projection metadata.
+#[tracing::instrument(skip(db, limit))]
+pub async fn no_frecency_expanded_generic_soup_with_projection(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    limit: u16,
+    cursor: Query<Uuid, SimpleSortMethod, Frecency>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    no_frecency_expanded_generic_soup_hydrated(db, user_id, limit, cursor).await
+}
+
+/// Returns the non-frecency expanded fallback without projection metadata.
+#[tracing::instrument(skip(db, limit))]
+pub async fn no_frecency_expanded_generic_soup(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    limit: u16,
+    cursor: Query<Uuid, SimpleSortMethod, Frecency>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    Ok(
+        no_frecency_expanded_generic_soup_hydrated(db, user_id, limit, cursor)
+            .await?
+            .into_iter()
+            .map(|hydration| hydration.item)
+            .collect(),
+    )
 }

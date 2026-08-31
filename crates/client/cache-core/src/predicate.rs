@@ -4,9 +4,9 @@ use crate::{store::Storage, value::EntityKey};
 use maybe_send::MaybeSend;
 pub use predicate_index::ProjectionIncompleteKind;
 use predicate_index::{
-    EffectiveOptimisticProjection, IndexDocument, OptimisticProjectionMutation,
-    OptimisticProjectionState, OptimisticUncertainty, PendingOptimisticProjection, Profile,
-    RecordKey, Token, ValidatedIndexQuery, ValidationError,
+    EffectiveOptimisticProjection, ExactAttributePatch, IndexDocument, IntegerAttributePatch,
+    IntegerFact, OptimisticProjectionMutation, OptimisticProjectionState, OptimisticUncertainty,
+    PendingOptimisticProjection, Profile, RecordKey, Token, ValidatedIndexQuery, ValidationError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -280,42 +280,7 @@ fn apply_projection_mutation(
                 *uncertainty = OptimisticUncertainty::default();
                 return Ok(());
             }
-            for patch in exact {
-                document
-                    .exact_facts
-                    .retain(|fact| fact.attribute != patch.attribute);
-                document
-                    .exact_facts
-                    .extend(
-                        patch
-                            .values
-                            .iter()
-                            .cloned()
-                            .map(|value| predicate_index::ExactFact {
-                                attribute: patch.attribute.clone(),
-                                value,
-                            }),
-                    );
-            }
-            for patch in integers {
-                document
-                    .integer_facts
-                    .retain(|fact| fact.attribute != patch.attribute);
-                document
-                    .integer_facts
-                    .extend(patch.values.iter().copied().map(|value| {
-                        predicate_index::IntegerFact {
-                            attribute: patch.attribute.clone(),
-                            value,
-                        }
-                    }));
-            }
-            for fact in sorts {
-                document
-                    .sort_facts
-                    .retain(|existing| existing.attribute != fact.attribute);
-                document.sort_facts.push(fact.clone());
-            }
+            patch_complete_document(document, exact, integers, sorts)?;
             uncertainty.clear(
                 exact
                     .iter()
@@ -323,8 +288,6 @@ fn apply_projection_mutation(
                     .chain(integers.iter().map(|patch| patch.attribute.clone()))
                     .chain(sorts.iter().map(|fact| fact.attribute.clone())),
             );
-            document.canonicalize();
-            document.validate()?;
         }
         OptimisticProjectionMutation::Delete {
             record_key,
@@ -362,11 +325,146 @@ fn apply_projection_mutation(
     Ok(())
 }
 
+fn patch_complete_document(
+    document: &mut IndexDocument,
+    exact: &[ExactAttributePatch],
+    integers: &[IntegerAttributePatch],
+    sorts: &[IntegerFact],
+) -> Result<(), ValidationError> {
+    let patch = OptimisticProjectionMutation::Patch {
+        record_key: document.record_key.clone(),
+        profile: document.profile.clone(),
+        partition: document.partition.clone(),
+        exact: exact.to_vec(),
+        integers: integers.to_vec(),
+        sorts: sorts.to_vec(),
+    };
+    patch.validate()?;
+    for patch in exact {
+        document
+            .exact_facts
+            .retain(|fact| fact.attribute != patch.attribute);
+        document
+            .exact_facts
+            .extend(
+                patch
+                    .values
+                    .iter()
+                    .cloned()
+                    .map(|value| predicate_index::ExactFact {
+                        attribute: patch.attribute.clone(),
+                        value,
+                    }),
+            );
+    }
+    for patch in integers {
+        document
+            .integer_facts
+            .retain(|fact| fact.attribute != patch.attribute);
+        document
+            .integer_facts
+            .extend(
+                patch
+                    .values
+                    .iter()
+                    .copied()
+                    .map(|value| predicate_index::IntegerFact {
+                        attribute: patch.attribute.clone(),
+                        value,
+                    }),
+            );
+    }
+    for fact in sorts {
+        document
+            .sort_facts
+            .retain(|existing| existing.attribute != fact.attribute);
+        document.sort_facts.push(fact.clone());
+    }
+    document.canonicalize();
+    document.validate()
+}
+
+/// Apply a bounded direct-field patch over complete authoritative facts.
+///
+/// A patch can preserve facts owned by another authority (for example a
+/// relation-derived posting) only when the existing record is complete in the
+/// same profile and partition. Otherwise it yields an explicit incomplete
+/// state rather than fabricating missing facts. An invalid composed document
+/// also degrades to `Dirty` instead of becoming queryable.
+pub fn apply_authoritative_projection_patch(
+    current: Option<&ProjectionState>,
+    record_key: &RecordKey,
+    profile: &Profile,
+    partition: &Token,
+    exact: &[ExactAttributePatch],
+    integers: &[IntegerAttributePatch],
+    sorts: &[IntegerFact],
+) -> ProjectionState {
+    let mut document = match current {
+        Some(ProjectionState::Complete(document))
+            if document.record_key == *record_key
+                && document.profile == *profile
+                && document.partition == *partition =>
+        {
+            document.clone()
+        }
+        Some(ProjectionState::Incomplete {
+            record_key: existing_key,
+            profile: existing_profile,
+            partition: existing_partition,
+            kind,
+        }) if existing_key == record_key
+            && existing_profile == profile
+            && existing_partition == partition =>
+        {
+            return ProjectionState::Incomplete {
+                record_key: record_key.clone(),
+                profile: profile.clone(),
+                partition: partition.clone(),
+                kind: *kind,
+            };
+        }
+        _ => {
+            return ProjectionState::Incomplete {
+                record_key: record_key.clone(),
+                profile: profile.clone(),
+                partition: partition.clone(),
+                kind: ProjectionIncompleteKind::Missing,
+            };
+        }
+    };
+
+    match patch_complete_document(&mut document, exact, integers, sorts) {
+        Ok(()) => ProjectionState::Complete(document),
+        Err(_) => ProjectionState::Incomplete {
+            record_key: record_key.clone(),
+            profile: profile.clone(),
+            partition: partition.clone(),
+            kind: ProjectionIncompleteKind::Dirty,
+        },
+    }
+}
+
 /// Atomic change to one normalized record's generic projection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProjectionMutation {
     /// Replace all prior facts and mark the record complete.
     Replace(IndexDocument),
+    /// Patch selected fact attributes while preserving a complete same-profile base.
+    Patch {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Active profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+        /// Complete replacements for exact-value attributes.
+        exact: Vec<ExactAttributePatch>,
+        /// Complete replacements for integer-membership attributes.
+        integers: Vec<IntegerAttributePatch>,
+        /// Complete replacements for integer sort attributes.
+        sorts: Vec<IntegerFact>,
+    },
     /// Remove queryable facts and retain an explicit incomplete marker.
     MarkIncomplete {
         /// Normalized record key.
@@ -387,7 +485,9 @@ impl ProjectionMutation {
     pub fn record_key(&self) -> &RecordKey {
         match self {
             Self::Replace(document) => &document.record_key,
-            Self::MarkIncomplete { record_key, .. } | Self::Delete(record_key) => record_key,
+            Self::Patch { record_key, .. }
+            | Self::MarkIncomplete { record_key, .. }
+            | Self::Delete(record_key) => record_key,
         }
     }
 }

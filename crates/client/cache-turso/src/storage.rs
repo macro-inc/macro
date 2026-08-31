@@ -7,6 +7,7 @@ use cache_core::codec::{
 use cache_core::predicate::{
     OptimisticShadowReconciliation, PredicateIndexStorage, PredicateQueryResult,
     ProjectionIncompleteKind, ProjectionMutation, ProjectionState,
+    apply_authoritative_projection_patch,
 };
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
@@ -1697,6 +1698,44 @@ fn write_projection_mutations(
                         1,
                     )?;
                 }
+            }
+            ProjectionMutation::Patch {
+                record_key,
+                profile,
+                partition,
+                exact,
+                integers,
+                sorts,
+            } => {
+                let current =
+                    load_projection_states(connection, std::slice::from_ref(&record_key))?
+                        .into_iter()
+                        .next()
+                        .flatten();
+                let state = apply_authoritative_projection_patch(
+                    current.as_ref(),
+                    &record_key,
+                    &profile,
+                    &partition,
+                    &exact,
+                    &integers,
+                    &sorts,
+                );
+                let resolved = match state {
+                    ProjectionState::Complete(document) => ProjectionMutation::Replace(document),
+                    ProjectionState::Incomplete {
+                        record_key,
+                        profile,
+                        partition,
+                        kind,
+                    } => ProjectionMutation::MarkIncomplete {
+                        record_key,
+                        profile,
+                        partition,
+                        kind,
+                    },
+                };
+                write_projection_mutations(connection, vec![resolved])?;
             }
             ProjectionMutation::MarkIncomplete {
                 record_key,

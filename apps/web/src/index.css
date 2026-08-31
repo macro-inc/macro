@@ -539,6 +539,15 @@ html[data-theme-light='false'] {
     user-select: text;
   }
 
+  /* iOS answers a long-press on an image with its own callout ("Share", "Save
+     to Photos", "Copy"), which preempts the app's own long-press affordances
+     (e.g. the channel message action drawer). Suppress it everywhere; the
+     zero-specificity selector lets a component opt back in if it ever needs
+     the native menu. */
+  :where(img) {
+    -webkit-touch-callout: none;
+  }
+
   :where(*) {
     scrollbar-width: none;
   }

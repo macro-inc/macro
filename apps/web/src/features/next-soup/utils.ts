@@ -373,6 +373,11 @@ interface OpenEntityOptions {
   mergeHistory?: boolean;
   allowDuplicate?: boolean;
   referredFrom?: ReferredFrom;
+  /**
+   * Notification source used to keep REST-backed unread state optimistic when
+   * opening a channel row. Callers that can open channels must provide it.
+   */
+  notificationSource?: NotificationSource;
 }
 
 const DUPLICATE_CONTENT_MESSAGE = 'Content already open.';
@@ -527,6 +532,22 @@ export async function navigateChannelEntityToTarget(
   );
 }
 
+/** Retargets the singleton Calendar block to a calendar event row. */
+export async function navigateCalendarEntityToTarget(
+  entity: EntityData,
+  blockOrchestrator: BlockOrchestrator
+): Promise<void> {
+  if (entity.type !== 'calendar_event') return;
+
+  const calendarHandle = await blockOrchestrator.getBlockHandle(
+    CALENDAR_BLOCK_ID,
+    'calendar'
+  );
+  await calendarHandle?.goToLocationFromParams(
+    calendarBlockParamsForEntity(entity)
+  );
+}
+
 /**
  * Location a plain row click falls back to when no explicit location is given.
  * Email rows open like plain soup rows — at the latest message, expanded —
@@ -644,11 +665,7 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       );
     }
-    const calendarHandle = await blockOrchestrator.getBlockHandle(
-      CALENDAR_BLOCK_ID,
-      'calendar'
-    );
-    await calendarHandle?.goToLocationFromParams(params);
+    await navigateCalendarEntityToTarget(entity, blockOrchestrator);
     return;
   }
 
@@ -668,6 +685,10 @@ export const openEntityInSplitFromUnifiedList = async (
   const channelMessageTarget =
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
+
+  if (options.notificationSource) {
+    markChannelNotificationsSeenOnOpen(entity, options.notificationSource);
+  }
 
   let params: Record<string, string> | undefined;
   if (entity.type === 'channel' && location?.type === 'channel') {
@@ -734,32 +755,35 @@ export const openEntityInSplitFromUnifiedList = async (
 };
 
 /**
- * Mark the attached notification that caused a channel row to target a message.
+ * Mark every unread notification represented by an opened channel Soup row.
  *
- * The row's Soup edge is authoritative here. The channel block's message marker
- * discovers notifications through the separately paginated global source, so
- * an older notification can drive navigation without being present there.
+ * The row's attached Soup edge is authoritative. The channel block's message
+ * marker discovers notifications through the separately paginated global
+ * source, so it cannot reliably clear older notifications. Passing the row's
+ * attached notifications through the source keeps its REST cache and durable
+ * seen overrides in sync while the configured mutation updates GraphQL edges.
  */
-export function markChannelTargetSeenOnOpen(
+export function markChannelNotificationsSeenOnOpen(
   entity: EntityData,
   notificationSource: NotificationSource
 ) {
-  const target = getChannelEntityTarget(entity);
-  if (target?.kind !== 'message' || !isWithNotification(entity)) return;
+  if (
+    (entity.type !== 'channel' &&
+      entity.type !== 'channel_message' &&
+      entity.type !== 'channel_thread') ||
+    !isWithNotification(entity)
+  ) {
+    return;
+  }
 
   const notifications = scopeChannelNotificationsForEntity(
     entity,
     entity.notifications?.() ?? []
-  ).filter((notification) => {
-    if (notificationIsRead(notification)) return false;
-    return (
-      getChannelNotificationParams(notification).messageId === target.messageId
-    );
-  });
+  ).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 
   void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
-    console.error('Failed to mark message notifications as read', error);
+    console.error('Failed to mark channel notifications as read', error);
   });
 }
 
@@ -788,7 +812,6 @@ export function markReminderSeenOnOpen(
   });
 }
 
-/** Build the singleton block params for an event row's target occurrence. */
 /**
  * The event and instance a calendar row points at, resolved exactly as the
  * open path resolves it so a copied link lands where a click would.
@@ -800,7 +823,8 @@ export function calendarEventLinkTarget(
   return { eventId: eventId ?? entity.id, occurrenceKey };
 }
 
-function calendarBlockParamsForEntity(
+/** Build singleton calendar block parameters for an event row's occurrence. */
+export function calendarBlockParamsForEntity(
   entity: Extract<EntityData, { type: 'calendar_event' }>
 ): CalendarBlockProps {
   const notifications = isWithNotification(entity)

@@ -7,6 +7,7 @@ mod macro_authorization;
 mod optional;
 mod policy;
 mod user;
+mod user_api_key;
 
 use std::{borrow::Cow, fmt, sync::Arc};
 
@@ -41,6 +42,7 @@ pub use policy::{
     UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
     UserOrInternalServiceAuthorization,
 };
+pub use user_api_key::USER_API_KEY_HEADER;
 
 /// The authenticated entity responsible for a request.
 ///

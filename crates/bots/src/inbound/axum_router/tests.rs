@@ -21,7 +21,8 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, MacroAuthorizationState, NoBotAuthorizer, ValidatedIdentity,
+    MacroAuthorizationServiceImpl, MacroAuthorizationState, NoBotAuthorizer,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
@@ -368,6 +369,7 @@ fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
             default_user_id: None,
         },
         NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -410,6 +412,7 @@ fn authorization_state_with_bot(
             default_user_id: None,
         },
         SelfBotAuthorizer { bot_id },
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }

@@ -9,7 +9,7 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 /// Where a mention happened.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
     /// Channel the mentioning message was posted in.
     pub channel_id: Uuid,
@@ -30,7 +30,7 @@ pub struct MentionOrigin {
 /// [`agent_session::domain::ports::SessionOpener`] instead: they
 /// need no provisioning, no announcement, and no first prompt, so they are
 /// a plain create rather than a harness command.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenSession {
     /// The bot that was mentioned.
     pub bot_id: BotId,
@@ -105,7 +105,7 @@ pub(crate) use agent_egress::domain::model::is_macro_staff;
 
 /// Where a prompt came from, when it came from somewhere the session should
 /// answer back into.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
     /// Channel the prompt was posted in.
     pub channel_id: Uuid,
@@ -125,7 +125,7 @@ pub struct PriorChannelMessage {
 }
 
 /// Do something in a session that already exists.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DeliverAction {
     /// The id the action carries onto the wire, minted when it was accepted.
     /// A reconnect-and-retry resends under the same id.
@@ -151,7 +151,7 @@ pub struct DeliverAction {
 /// commands - whether to reconnect a dead session, whether to announce - are
 /// properties of the action and its origin, not of the request that carried
 /// it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum HarnessCommand {
     /// Open a new session.
     Open(OpenSession),

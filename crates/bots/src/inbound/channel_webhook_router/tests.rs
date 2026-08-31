@@ -24,7 +24,7 @@ use macro_authorization::{
     BotActingUserClaims as AuthorizationBotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
     MacroAuthorizationServiceImpl, MacroAuthorizationState, MacroUserAuthentication,
-    ValidatedIdentity,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use rootcause::Report;
@@ -592,6 +592,7 @@ fn authorization_state(
             default_user_id: None,
         },
         bot_authorizer,
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }

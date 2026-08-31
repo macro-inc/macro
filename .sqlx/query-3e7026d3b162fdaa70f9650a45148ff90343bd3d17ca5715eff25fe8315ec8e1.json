@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM \"UserApiKey\"\n            WHERE user_id = $1 AND id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3e7026d3b162fdaa70f9650a45148ff90343bd3d17ca5715eff25fe8315ec8e1"
+}

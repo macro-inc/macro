@@ -2,6 +2,7 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import type { BlockName } from '@core/block';
 import {
@@ -224,6 +225,7 @@ function SplitCloseButton() {
 function SoupNavigationButtons() {
   const context = useContext(SplitPanelContext);
   const soup = useSoup();
+  const notificationSource = useGlobalNotificationSource();
   if (!context) return null;
 
   const rows = createMemo(() => soup.rows());
@@ -266,6 +268,7 @@ function SoupNavigationButtons() {
       splitHandle: context.handle,
       mergeHistory: true,
       referredFrom: navigationReferredFrom(),
+      notificationSource,
     });
   };
 
@@ -461,6 +464,7 @@ export function SplitHeader(props: {
   collapseController: PriorityCollapseController;
 }) {
   const panel = useContext(SplitPanelContext);
+  const notificationSource = useGlobalNotificationSource();
   if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   }
@@ -497,6 +501,7 @@ export function SplitHeader(props: {
     void openEntityInSplitFromUnifiedList(data, {
       splitHandle: panel.handle,
       allowDuplicate: true,
+      notificationSource,
     });
   });
 

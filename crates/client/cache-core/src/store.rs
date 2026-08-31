@@ -8,7 +8,7 @@
 
 use crate::predicate::{
     OptimisticShadowReconciliation, PredicateIndexStorage, PredicateQueryResult,
-    ProjectionMutation, ProjectionState,
+    ProjectionMutation, ProjectionState, apply_authoritative_projection_patch,
 };
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
@@ -728,6 +728,25 @@ fn apply_in_memory_projection_mutations(
                     document.record_key.clone(),
                     ProjectionState::Complete(document),
                 );
+            }
+            ProjectionMutation::Patch {
+                record_key,
+                profile,
+                partition,
+                exact,
+                integers,
+                sorts,
+            } => {
+                let state = apply_authoritative_projection_patch(
+                    projections.get(&record_key),
+                    &record_key,
+                    &profile,
+                    &partition,
+                    &exact,
+                    &integers,
+                    &sorts,
+                );
+                projections.insert(record_key, state);
             }
             ProjectionMutation::MarkIncomplete {
                 record_key,

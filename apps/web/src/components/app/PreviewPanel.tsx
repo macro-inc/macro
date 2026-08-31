@@ -1,11 +1,17 @@
 import {
+  calendarBlockParamsForEntity,
   getChannelEntityTarget,
+  navigateCalendarEntityToTarget,
   navigateChannelEntityToTarget,
   reminderSplitTarget,
 } from '@app/features/next-soup/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { getChannelParams } from '@block-channel/utils/link';
-import type { BlockAliasContext, BlockName } from '@core/block';
+import type {
+  BlockAliasContext,
+  BlockComponentProps,
+  BlockName,
+} from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -52,13 +58,13 @@ type PreviewBlockTarget = {
   blockType: BlockName;
   blockId: string;
   aliasContext: BlockAliasContext | undefined;
+  params?: BlockComponentProps[BlockName];
 };
 
 function PreviewPanelContent(
   props: PreviewPanelProps & { selectedEntity: EntityData }
 ) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
-  const selectedEntityId = createMemo(() => props.selectedEntity.id);
   const [interactedWith, setInteractedWith] = createSignal(false);
 
   const blockInstance = createMemo(() => {
@@ -89,11 +95,21 @@ function PreviewPanelContent(
       }))
       .with(
         { type: P.union('channel_message', 'channel_thread') },
-        (message) => ({
-          blockType: 'channel',
-          blockId: message.channelId,
-          aliasContext: undefined,
-        })
+        (message) => {
+          const channelTarget = untrack(() => getChannelEntityTarget(message));
+          return {
+            blockType: 'channel',
+            blockId: message.channelId,
+            aliasContext: undefined,
+            params:
+              channelTarget?.kind === 'message'
+                ? getChannelParams(
+                    channelTarget.messageId,
+                    channelTarget.threadId
+                  )
+                : undefined,
+          };
+        }
       )
       .with({ type: 'foreign' }, (foreignEntity) => ({
         blockType:
@@ -113,10 +129,11 @@ function PreviewPanelContent(
         blockId: contact.id,
         aliasContext: undefined,
       }))
-      .with({ type: 'calendar_event' }, () => ({
+      .with({ type: 'calendar_event' }, (calendarEvent) => ({
         blockType: 'calendar',
         blockId: CALENDAR_BLOCK_ID,
         aliasContext: undefined,
+        params: untrack(() => calendarBlockParamsForEntity(calendarEvent)),
       }))
       .with({ type: 'reminder' }, (reminder) => {
         const reminderTarget = reminderSplitTarget(reminder);
@@ -132,32 +149,25 @@ function PreviewPanelContent(
         aliasContext: undefined,
       }));
 
-    const channelTarget =
-      target.blockType === 'channel'
-        ? untrack(() => getChannelEntityTarget(entity))
-        : undefined;
-
     return props.orchestrator.createBlockInstance(
       target.blockType,
       target.blockId,
       {
         aliasContext: target.aliasContext,
-        params:
-          channelTarget?.kind === 'message'
-            ? getChannelParams(channelTarget.messageId, channelTarget.threadId)
-            : undefined,
+        params: target.params,
       }
     );
   });
 
   createRenderEffect(
-    on(selectedEntityId, () => {
-      setInteractedWith(false);
-      void navigateChannelEntityToTarget(
-        props.selectedEntity,
-        props.orchestrator
-      );
-    })
+    on(
+      () => props.selectedEntity,
+      (entity) => {
+        setInteractedWith(false);
+        void navigateChannelEntityToTarget(entity, props.orchestrator);
+        void navigateCalendarEntityToTarget(entity, props.orchestrator);
+      }
+    )
   );
 
   return (
