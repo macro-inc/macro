@@ -490,10 +490,10 @@ function GlyphGrid(props: GlyphGridProps) {
                   class="items-center border relative group transition-colors justify-self-stretch"
                   classList={{
                     'border-edge bg-edge': isSelected(),
-                    'border-edge bg-background hover:bg-edge': !isSelected(),
+                    'border-edge bg-surface hover:bg-edge': !isSelected(),
                   }}
                 >
-                  <div class="size-20 flex items-center justify-center mx-auto m-2">
+                  <div class="size-20 flex items-center justify-center mx-auto my-2">
                     <Show when={pixels().length > 0}>
                       <PixelIcon
                         pixels={pixels()}
@@ -874,7 +874,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                   <h3 class="font-mono text-ink-extra-muted text-xs">
                     [ PREVIEW ]
                   </h3>
-                  <div class="size-24 flex items-center justify-center border border-edge bg-background">
+                  <div class="size-24 flex items-center justify-center border border-edge bg-surface">
                     <PixelIcon
                       pixels={pixels()}
                       iconSize={iconSize()}
@@ -1095,7 +1095,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               }}
               class="font-mono text-ink-muted text-sm text-left w-full border border-edge"
             />
-            <div class="size-32 flex items-center justify-center border border-edge bg-background">
+            <div class="size-32 flex items-center justify-center border border-edge bg-surface">
               <Show when={selectedPixels()}>
                 <PixelIcon
                   pixels={selectedPixels()!}

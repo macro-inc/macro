@@ -2593,6 +2593,108 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
     assert!(page.next_cursor.is_none());
 }
 
+#[tokio::test]
+async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
+    let user = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+    let attachment = Uuid::from_u128(1);
+    let ordinary_document = Uuid::from_u128(2);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_touched_soup_page()
+        .times(1)
+        .returning(move |_req| {
+            Box::pin(async move {
+                Ok(vec![
+                    TouchedEntity {
+                        entity: EntityType::Document.with_entity_string(attachment.to_string()),
+                        touched_at: base + Days::new(2),
+                    },
+                    TouchedEntity {
+                        entity: EntityType::Document
+                            .with_entity_string(ordinary_document.to_string()),
+                        touched_at: base + Days::new(1),
+                    },
+                ])
+            })
+        });
+    // Hydration is intentionally out of touched order. The authoritative
+    // relation facts must stay attached to their candidates when order is
+    // restored; GraphQL uses these values to build cacheProjection.
+    soup_mock
+        .expect_expanded_soup_by_ids_with_projection()
+        .times(1)
+        .returning(move |_params| {
+            Box::pin(async move {
+                Ok(vec![
+                    SoupProjectionHydration {
+                        item: SoupItem::Document(soup_document_uuid_with_updated(
+                            ordinary_document,
+                            Default::default(),
+                        )),
+                        document_server_facts: Some(SoupDocumentServerFacts {
+                            is_email_attachment: false,
+                        }),
+                    },
+                    SoupProjectionHydration {
+                        item: SoupItem::Document(soup_document_uuid_with_updated(
+                            attachment,
+                            Default::default(),
+                        )),
+                        document_server_facts: Some(SoupDocumentServerFacts {
+                            is_email_attachment: true,
+                        }),
+                    },
+                ])
+            })
+        });
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup_with_projection(
+        SoupRequest {
+            sort_direction: SoupSortDirection::default(),
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_ids: vec![],
+            soup_type: SoupType::Expanded,
+            limit: 20,
+            cursor: SoupQuery::new_sort_touched(EntityFilters::default()),
+            user,
+        },
+        None,
+    )
+    .await
+    .unwrap()
+    .into_touched()
+    .unwrap();
+
+    let ids: Vec<Uuid> = page.items.iter().map(|item| item.item.id()).collect();
+    assert_eq!(ids, vec![attachment, ordinary_document]);
+    assert_eq!(
+        page.items[0].document_server_facts,
+        Some(SoupDocumentServerFacts {
+            is_email_attachment: true,
+        })
+    );
+    assert_eq!(
+        page.items[1].document_server_facts,
+        Some(SoupDocumentServerFacts {
+            is_email_attachment: false,
+        })
+    );
+}
+
 /// Unexpanded touched pages hydrate projects through the main by-ids query —
 /// one round trip, not a separate project query (that split exists only for
 /// the expanded feed, whose by-ids query omits project rows by design).

@@ -1,5 +1,9 @@
 import { throwOnErr } from '@core/util/result';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import {
+  type ItemType,
+  itemTypeToReferenceEntityType,
+  storageServiceClient,
+} from '@service-storage/client';
 import type { ApiAttachmentEntityReference } from '@service-storage/generated/schemas/apiAttachmentEntityReference';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -13,7 +17,7 @@ async function fetchAttachmentReferences(
 ): Promise<ApiAttachmentEntityReference[]> {
   const response = await throwOnErr(() =>
     storageServiceClient.attachmentReferences({
-      entity_type: entityType,
+      entity_type: itemTypeToReferenceEntityType(entityType),
       entity_id: entityId,
     })
   );

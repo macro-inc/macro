@@ -361,19 +361,6 @@ body.tauri-ios {
   --color-default:     var(--color-content-1);
   --color-email:       var(--color-default);
 
-  /* Compatibility aliases for existing syntax-highlight classes. */
-  --color-accent-30:  var(--color-red);
-  --color-accent-60:  var(--color-orange);
-  --color-accent-90:  var(--color-yellow);
-  --color-accent-120: var(--color-lime);
-  --color-accent-150: var(--color-green);
-  --color-accent-180: var(--color-teal);
-  --color-accent-210: var(--color-cyan);
-  --color-accent-240: var(--color-blue);
-  --color-accent-270: var(--color-violet);
-  --color-accent-300: var(--color-purple);
-  --color-accent-330: var(--color-pink);
-
   /* Font families */
   --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-serif: "Playfair Display Variable", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
@@ -391,6 +378,8 @@ body.tauri-ios {
   --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
   --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
+  --animate-accordion-down: accordion-down 150ms ease-out;
+  --animate-accordion-up: accordion-up 150ms ease-out;
 
   /* Z-index scale — the single source of truth for stacking. Classes come
      from these tokens (`--z-index-foo` -> `z-foo`).
@@ -671,6 +660,16 @@ html[data-theme-light='false'] {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to   { height: var(--kb-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--kb-accordion-content-height); }
+  to   { height: 0; }
 }
 
 @keyframes typing-dot {

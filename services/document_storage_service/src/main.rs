@@ -892,6 +892,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(PgTaskMatchRepo::new(db.clone())),
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
+    let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
@@ -899,12 +900,13 @@ async fn run() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
+    .with_bot_trigger_sender(bot_trigger_sender)
     .with_macro_event_broker(macro_event_broker.clone());
 
     let channels_service = Arc::new(
         ChannelServiceImpl::with_dependencies(
             channels_repo,
-            SpawnedChannelEventDispatcher::new(channel_side_effects),
+            SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
             PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         )
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
@@ -953,9 +955,43 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
-    // Mentioning @macro no longer answers with an in-process chat reply: the
-    // mention rides the channel event to the agent trigger service, which
-    // opens an agent session on the harness's in-memory runtime instead.
+    // Wire Macro AI to react to mentions with the classic in-channel chat
+    // reply. The router posts replies through the channel service we just
+    // built and runs the agent loop in-process with the same pre-configured
+    // toolset used by other AI hosts. Agent sessions belong to a different
+    // bot entirely (`bot_id::MACRO_NEW_BOT_ID`, served by the harness), so
+    // the two paths can never answer the same mention.
+    let mut macro_agent_tool_context =
+        ai_tools::build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
+            .await
+            .context("failed to build Macro agent tool context")?;
+    // Wire the agent's SendChannelMessage tool to this service's own
+    // side-effect pipeline so agent-posted messages share the exact instance
+    // used by the HTTP API, including the in-process bot trigger sender (the
+    // env builder wires an equivalent pipeline, but without bot triggers).
+    macro_agent_tool_context.channel_tool_context =
+        ai_tools::build_channel_tool_context_with_dispatcher(
+            db.clone(),
+            std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
+            lexical_client.clone(),
+        );
+    let macro_agent_tools = ai_tools::all_tools();
+    let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
+        channels_service.clone(),
+        Arc::new(channel_bots::outbound::AgentLoopResponder::new(
+            macro_agent_tool_context,
+            macro_agent_tools,
+        )),
+        Arc::new(
+            channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
+                channels_service.clone(),
+                Arc::new(channel_bots::outbound::FastModelTriggerClassifier::new(
+                    ai_usage::pg_recorder(db.clone()),
+                )),
+            ),
+        ),
+    );
+    bot_trigger_router.spawn(bot_trigger_receiver);
 
     let channel_bot_webhook_state =
         bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(

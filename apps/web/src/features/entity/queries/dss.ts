@@ -24,7 +24,6 @@ import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
-import type { ItemType } from '@service-storage/client';
 import { storageServiceClient } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 import { type EntityData, getEntityProjectId } from '../types/entity';
@@ -64,7 +63,7 @@ export function createBulkDeleteDssItemsMutation() {
               storageServiceClient.reminders.deleteReminder(e.id)
             ).then(() => true);
           }
-          return deleteItem({ id: e.id, itemType: e.type as ItemType });
+          return deleteItem({ id: e.id, itemType: e.type });
         })
       );
       if (deletable.some((e) => e.type === 'call')) {

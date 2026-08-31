@@ -36,7 +36,7 @@ use models_email::service::attachment::{
 use models_email::service::message::{Message, is_inbound, is_outbound, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::service::thread::Thread;
-use notification::domain::models::SendNotificationRequestBuilder;
+use notification::domain::models::{SendNotificationRequest, SendNotificationRequestBuilder};
 use notification::domain::service::NotificationIngress;
 use std::collections::HashSet;
 use std::result;
@@ -732,18 +732,49 @@ async fn send_notifications(
     })?;
 
     let recipient_ids = build_notification_recipients(&link.macro_id, primaries);
+    let (staff_recipients, customer_recipients) = partition_email_push_recipients(recipient_ids);
 
-    let request = SendNotificationRequestBuilder {
-        notification_entity: EntityType::EmailThread
-            .with_entity_string(message.thread_db_id.to_string()),
-        secondary_notification_entity: None,
-        notification,
-        sender_id,
-        recipient_ids,
+    let notification_entity =
+        EntityType::EmailThread.with_entity_string(message.thread_db_id.to_string());
+
+    // Staff get APNS as well as the inbox / websocket row. Customers stay
+    // websocket-only so this dogfood does not turn on email lock-screen
+    // push for everyone. Split the send so a mixed owner/delegate set
+    // still creates one inbox row per recipient.
+    if !staff_recipients.is_empty() {
+        let request = SendNotificationRequestBuilder {
+            notification_entity: notification_entity.clone(),
+            secondary_notification_entity: None,
+            notification: notification.clone(),
+            sender_id: sender_id.clone(),
+            recipient_ids: staff_recipients,
+        }
+        .into_request()
+        .with_conn_gateway()
+        .with_apns();
+        publish_new_email_notification(ctx, request).await;
     }
-    .into_request()
-    .with_conn_gateway();
 
+    if !customer_recipients.is_empty() {
+        let request = SendNotificationRequestBuilder {
+            notification_entity,
+            secondary_notification_entity: None,
+            notification,
+            sender_id,
+            recipient_ids: customer_recipients,
+        }
+        .into_request()
+        .with_conn_gateway();
+        publish_new_email_notification(ctx, request).await;
+    }
+
+    Ok(())
+}
+
+async fn publish_new_email_notification<U: serde::Serialize + Send + Sync + 'static>(
+    ctx: &PubSubContext,
+    request: SendNotificationRequest<'_, NewEmailMetadata, U>,
+) {
     if let Err(e) = ctx
         .notification_ingress_service
         .send_notification(request)
@@ -751,12 +782,23 @@ async fn send_notifications(
     {
         tracing::error!(error=?e, "unable to send notification");
     }
-
-    Ok(())
 }
 
-/// Who should get an in-app / push `new_email` notification for a synced inbox
-/// message.
+/// Split recipients so only `@macro.com` users are on the APNS path.
+fn partition_email_push_recipients(
+    recipient_ids: HashSet<MacroUserIdStr<'static>>,
+) -> (
+    HashSet<MacroUserIdStr<'static>>,
+    HashSet<MacroUserIdStr<'static>>,
+) {
+    recipient_ids
+        .into_iter()
+        .partition(|id| id.is_macro_staff())
+}
+
+/// Who should get a `new_email` inbox / websocket notification for a synced
+/// inbox message. Lock-screen APNS is attached separately, and only for
+/// `@macro.com` recipients.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NewEmailNotifyPolicy {
     /// Every non-sent, non-draft inbox message. Used for `@macro.com` dogfood.

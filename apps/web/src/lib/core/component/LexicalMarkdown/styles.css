@@ -586,11 +586,11 @@ mark {
 }
 
 .highlighted {
-  background-color: rgb(from var(--color-accent-270) r g b / 0.3);
+  background-color: rgb(from var(--color-accent) r g b / 0.3);
 }
 
 .md-highlight-selected-nodes {
-  background-color: rgb(from var(--color-accent-270) r g b / 0.2);
+  background-color: rgb(from var(--color-accent) r g b / 0.2);
   transition: background-color 0.3s ease;
 }
 
@@ -646,7 +646,7 @@ mark {
 .diff-insert {
   background: color-mix(
     in srgb,
-    var(--diff-author, hsl(145, 63%, 42%)) 24%,
+    var(--diff-author-color, hsl(145, 63%, 42%)) 24%,
     transparent
   );
   border-radius: 2px;
@@ -654,6 +654,6 @@ mark {
 
 .diff-delete {
   text-decoration: line-through;
-  text-decoration-color: var(--diff-author, hsl(0, 65%, 55%));
+  text-decoration-color: var(--diff-author-color, hsl(0, 65%, 55%));
   opacity: 0.6;
 }

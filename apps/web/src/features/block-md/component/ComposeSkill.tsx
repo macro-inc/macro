@@ -169,7 +169,7 @@ function ComposeSkillTitleEditor(props: {
     <div class="relative w-full">
       <div
         contentEditable={!props.disabled()}
-        class="ph-no-capture w-full text-xl font-medium outline-none whitespace-pre-wrap wrap-break-words"
+        class="ph-no-capture w-full text-xl font-medium outline-none whitespace-pre-wrap wrap-break-word"
         ref={(el) => {
           props.ref?.(el);
           onElementConnect(el, () => onConnect(el));

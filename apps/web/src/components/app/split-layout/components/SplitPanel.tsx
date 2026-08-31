@@ -407,7 +407,7 @@ export function SplitPanel(props: SplitPanelProps) {
                           {(panel) => (
                             <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
                               <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
-                                <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-content-secondary">
+                                <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-ink-muted">
                                   {panel().title}
                                 </h3>
                                 <Button
