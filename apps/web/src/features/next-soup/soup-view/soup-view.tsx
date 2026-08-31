@@ -3,9 +3,9 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import {
   makeMarkDoneAction,
+  resolveEntityActionViewContext,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
-import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
 import type {
   GroupHeaderProps,
   SoupRow,
@@ -25,9 +25,7 @@ import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inb
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { MaybeSoupEntityActionDrawerManager } from '@app/features/next-soup/soup-view/SoupEntityActionDrawerManager';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
@@ -57,7 +55,12 @@ import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
+  restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import {
+  MaybeSoupEntityActionDrawerManager,
+  SoupEntityContextMenu,
+} from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
@@ -742,7 +745,14 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
+          <Show
+            when={!isBoardMode()}
+            fallback={
+              <MaybeSoupEntityActionDrawerManager>
+                <CompanyKanban />
+              </MaybeSoupEntityActionDrawerManager>
+            }
+          >
             <SoupViewList />
           </Show>
         </Suspense>
@@ -907,6 +917,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
   const scopeId = createMemo(() => props.scopeId ?? panel.splitHotkeyScope);
+  const entityActionViewContext = () =>
+    resolveEntityActionViewContext({
+      activeListView: panel.handle.content().id,
+      activeTab: activeTab(),
+    });
 
   // Register navigation hotkeys on the active list scope (usually the split
   // scope). Most handlers are disposed with SoupViewList, but j/k intentionally
@@ -926,8 +941,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register entity action hotkeys
   useEntityActionHotkeys({
     scopeId: scopeId(),
-    soup,
-    activeSoupViewTab: activeTab,
+    list: soup,
+    selectedEntities: soup.selection.selected,
+    focusedEntity: soup.focus.item,
+    restoreFocus: restoreSoupFocus,
+    viewContext: entityActionViewContext,
     splitHandle: panel.handle,
   });
 
@@ -1198,7 +1216,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   );
 
   const isProjectList = panel.handle.content().type === 'project';
-  const contentId = panel.handle.content().id;
 
   const readListEntryState = () =>
     panel.handle.currentEntryState()?.[SOUP_LIST_STATE_ENTRY_KEY] as
@@ -1374,13 +1391,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         const entity = entityById().get(entityId);
                         if (!entity) return false;
 
-                        const tab = activeTab();
-
-                        if (
-                          !isListViewID(contentId) ||
-                          (tab && !canExecuteMarkDoneOnView(contentId, tab))
-                        )
+                        if (!entityActionViewContext().supportsMarkDone) {
                           return false;
+                        }
 
                         return markDoneAction.canExecute(entity.original);
                       }}
@@ -1524,7 +1537,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 <Match
                                   when={!row.group || row.group?.isExpanded()}
                                 >
-                                  <SoupEntityContextMenu entity={row.original}>
+                                  <SoupEntityContextMenu
+                                    entity={row.original}
+                                    list={soup}
+                                    selectedEntities={soup.selection.selected}
+                                    viewContext={entityActionViewContext()}
+                                  >
                                     <Dynamic
                                       component={rowEntry().component}
                                       entity={row.original}

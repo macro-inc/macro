@@ -20,7 +20,7 @@ import {
   toNotificationEntityRef,
 } from '@queries/notification/entity-mutations';
 import { type UndoHandle, useUndoableMutation } from '@queries/undo';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
@@ -87,6 +87,7 @@ type MarkDoneExecuteOpts = Pick<
 >;
 
 type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
+  anchorKey?: string;
   nextEntityId?: string;
 };
 
@@ -300,7 +301,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
   const executeWithSoup = async (
     entities: EntityData[],
-    soup: SoupState,
+    soup: EntityActionListState,
     onNavigate?: (entity: EntityData) => void,
     opts?: MarkDoneExecuteWithSoupOpts
   ) => {
@@ -310,7 +311,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const targets = entities.filter(isMarkDoneTarget);
     if (targets.length === 0) return;
 
-    const focusedIdBeforeMarkDone = soup.focus.id();
+    const focusedIdBeforeMarkDone = opts?.anchorKey ?? soup.focus.id();
     const markedEntityIds = new Set(targets.map((entity) => entity.id));
     const adjacentRow = (direction: 1 | -1) => {
       let previousCandidateIndex: number | undefined;

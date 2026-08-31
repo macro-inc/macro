@@ -24,6 +24,7 @@ use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{HarnessCommand, HarnessDefaults, SessionDefaults};
 use agent_harness::domain::service::AgentHarnessService;
+use agent_harness::inbound::forward::ForwardGatewayState;
 use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
@@ -36,13 +37,15 @@ use agent_harness::outbound::daytona::{
     DaytonaContainerManager, DaytonaSettings, Snapshot,
 };
 use agent_harness::outbound::egress::EgressProvisioner;
+use agent_harness::outbound::forward::HttpCommandForwarder;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::rig_engine::RigTurnEngine;
-use agent_session::domain::ports::NoOpRealtime;
+use agent_session::domain::model::{ReplicaAddress, ReplicaId};
+use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
@@ -125,6 +128,63 @@ struct PendingHarnessWork {
     description: &'static str,
 }
 
+/// This task's own private base URL, for peers forwarding session commands.
+///
+/// On ECS the task metadata endpoint (v4) publishes the task's private IPv4;
+/// the port is the service listener peers can reach through the task-to-task
+/// security group rule. Local development has no routable address and runs
+/// one replica, so `None` is correct there; every other environment refuses
+/// to boot rather than heartbeat an unreachable identity, because a replica
+/// without an address is one whose sessions peers can see but never reach.
+async fn discover_replica_address(
+    environment: Environment,
+    port: u16,
+) -> anyhow::Result<Option<agent_session::domain::model::ReplicaAddress>> {
+    // Explicit override first: how a local multi-replica experiment names
+    // each process (`REPLICA_ADDRESS=http://127.0.0.1:<port>`), since nothing
+    // off ECS can discover an address.
+    if let Some(address) = macro_env_var::optional_read_env_var("REPLICA_ADDRESS")
+        .ok()
+        .flatten()
+    {
+        return Ok(Some(agent_session::domain::model::ReplicaAddress::new(
+            address,
+        )));
+    }
+    let Some(metadata_uri) = macro_env_var::optional_read_env_var("ECS_CONTAINER_METADATA_URI_V4")
+        .ok()
+        .flatten()
+    else {
+        if matches!(environment, Environment::Local) {
+            return Ok(None);
+        }
+        anyhow::bail!(
+            "ECS_CONTAINER_METADATA_URI_V4 is unset outside a local environment: \
+             this replica would be unreachable for command forwarding"
+        );
+    };
+    let task: serde_json::Value = reqwest::Client::new()
+        .get(format!("{metadata_uri}/task"))
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .context("failed to reach the ECS task metadata endpoint")?
+        .json()
+        .await
+        .context("failed to parse ECS task metadata")?;
+    let ip = task["Containers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|container| container["Networks"].as_array().into_iter().flatten())
+        .flat_map(|network| network["IPv4Addresses"].as_array().into_iter().flatten())
+        .find_map(serde_json::Value::as_str)
+        .context("ECS task metadata carries no private IPv4 address")?;
+    Ok(Some(agent_session::domain::model::ReplicaAddress::new(
+        format!("http://{ip}:{port}"),
+    )))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let entrypoint = MacroEntrypoint::default().init();
@@ -177,6 +237,18 @@ async fn run() -> anyhow::Result<()> {
     // log and pushes each frame at the channel's participants so a viewer sees
     // it happen.
     let session_repo = PgAgentSessionRepo::new(pool.clone());
+    // One lease identity for the whole process: commands forward to an
+    // address, and both attach-capable service instances below live at this
+    // one, so they share the id. The address is this task's own private URL,
+    // discovered from ECS metadata; a deployment that cannot learn it must
+    // not scale, so discovery failing anywhere but local refuses to boot.
+    let replica = ReplicaId::mint();
+    let replica_address = discover_replica_address(config.environment, config.port).await?;
+    tracing::info!(
+        %replica,
+        address = ?replica_address.as_ref().map(ReplicaAddress::as_str),
+        "harness replica identity"
+    );
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
@@ -185,6 +257,7 @@ async fn run() -> anyhow::Result<()> {
             session_repo.clone(),
         ),
     )
+    .with_replica(replica)
     .with_name_generator(HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(
         pool.clone(),
     )));
@@ -260,15 +333,13 @@ async fn run() -> anyhow::Result<()> {
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
-    let sandbox_and_inmem = RoutedContainers::new(
-        sandbox,
-        inmem,
-        AgentSessionServiceImpl::new(
-            session_repo.clone(),
-            FoldedMessageService::new(session_repo.clone()),
-            NoOpRealtime,
-        ),
-    );
+    let inmem_sessions = AgentSessionServiceImpl::new(
+        session_repo.clone(),
+        FoldedMessageService::new(session_repo.clone()),
+        NoOpRealtime,
+    )
+    .with_replica(replica);
+    let sandbox_and_inmem = RoutedContainers::new(sandbox, inmem, inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
     // deployment-wide key to arm this with: the manager reads each session
@@ -406,6 +477,8 @@ async fn run() -> anyhow::Result<()> {
         prompt_context,
         prompt_composer,
         EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
+        HttpCommandForwarder::new(config.internal_api_key.clone())
+            .map_err(|error| anyhow::anyhow!("failed to build the command forwarder: {error}"))?,
         defaults,
     ));
 
@@ -446,6 +519,10 @@ async fn run() -> anyhow::Result<()> {
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         bots_directory,
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    let forward_state = ForwardGatewayState::new(
+        harness.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service)),
     );
     let http_port = config.port;
@@ -455,12 +532,34 @@ async fn run() -> anyhow::Result<()> {
             control_state,
             create_state,
             gateway_state,
+            forward_state,
             http_port,
             shutdown_signal(),
         )
         .await
         {
             tracing::error!(error = ?error, "agent harness service http stopped");
+        }
+    });
+
+    // The session lease's liveness signal: while this beats, this process's
+    // claims are held; when it stops - crash or shutdown - they go stale
+    // within REPLICA_STALE_AFTER and any successor can claim. Graceful stops
+    // release each claim eagerly in the actor teardown path; this loop is
+    // what covers the ungraceful ones.
+    let heartbeat_repo = session_repo.clone();
+    let heartbeat_address = replica_address.clone();
+    let heartbeat = tokio::spawn(async move {
+        let mut ticker =
+            tokio::time::interval(agent_session::domain::ports::REPLICA_HEARTBEAT_INTERVAL);
+        loop {
+            ticker.tick().await;
+            if let Err(error) = heartbeat_repo
+                .heartbeat(replica, heartbeat_address.as_ref())
+                .await
+            {
+                tracing::warn!(error = ?error, %replica, "failed to heartbeat harness replica");
+            }
         }
     });
 
@@ -679,6 +778,7 @@ async fn run() -> anyhow::Result<()> {
     http.abort();
     trigger.abort();
     egress_http.abort();
+    heartbeat.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");

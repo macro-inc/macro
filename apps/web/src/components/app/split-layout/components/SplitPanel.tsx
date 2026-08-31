@@ -2,6 +2,7 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
@@ -36,6 +37,8 @@ import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
+import { useSplitList } from '../useSplitList';
+import { useSplitListNavigationHotkeys } from '../useSplitListNavigationHotkeys';
 import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
@@ -76,6 +79,10 @@ export function SplitPanel(props: SplitPanelProps) {
   const toolbarCollapseController = createPriorityCollapseController();
 
   const splitLayoutHelpers = useSplitLayout();
+  const isNotUnifiedList = () => {
+    const content = props.handle.content();
+    return content.type !== 'component' || !isListViewID(content.id);
+  };
 
   registerSplitHotkeys({
     // Leaving a piece of content should return you to the list you reached it
@@ -91,10 +98,7 @@ export function SplitPanel(props: SplitPanelProps) {
         referredFrom: 'hotkey',
       });
     },
-    isNotUnifiedList: () => {
-      const content = props.handle.content();
-      return !isListViewID(content.id);
-    },
+    isNotUnifiedList,
     isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
@@ -106,6 +110,20 @@ export function SplitPanel(props: SplitPanelProps) {
     closeSplit: () => props.handle.close(),
     goBack: () => props.handle.goBack(),
     splitHotkeyScope,
+  });
+
+  const splitList = useSplitList();
+
+  useSplitListNavigationHotkeys({
+    splitHotkeyScope,
+    list: splitList.list,
+    handle: props.handle,
+    openEntityInSplit: (entity, options) => {
+      void openEntityInSplitFromUnifiedList(entity, {
+        splitHandle: props.handle,
+        ...options,
+      });
+    },
   });
 
   const nextSoup = createSoupState({
@@ -288,6 +306,8 @@ export function SplitPanel(props: SplitPanelProps) {
           setTitleFileMenuTrigger,
           titleFileMenuActions,
           setTitleFileMenuActions,
+          list: splitList.list,
+          setList: splitList.setList,
           panelSize,
           panelRef,
         }}

@@ -1,49 +1,39 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
-import { triggerFocusInput } from '@core/directive/focusInput';
-import { InlineEntity } from '@entity';
+import { type EntityData, InlineEntity } from '@entity';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
-import {
-  createSoupEntityActions,
-  viewedProjectIdFromContent,
-} from './create-soup-entity-actions';
-import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
-import { useSoupView } from './soup-view-context';
 
-export function SoupEntityActionDrawer() {
-  const panel = useSplitPanelOrThrow();
-  const drawerState = useSoupEntityActionDrawer();
-  const { activeTab } = useSoupView();
-  const { buildActionGroups } = createSoupEntityActions();
+export type SoupEntityDrawerAction = {
+  id: string;
+  label: string;
+  destructive?: boolean;
+  disabled?: boolean;
+  onClick: () => void | Promise<void>;
+};
 
-  if (!drawerState) {
-    console.warn('SoupEntityActionDrawer: no drawer state');
-    return null;
-  }
+export type SoupEntityDrawerActionGroup = {
+  items: readonly SoupEntityDrawerAction[];
+};
 
-  const groups = () => {
-    const e = drawerState.entity();
-    const s = drawerState.soup();
-    if (!e || !s) return [];
-    const content = panel.handle.content();
-    return buildActionGroups(s, [e], {
-      activeTab: activeTab(),
-      activeListView: content.id,
-      viewedProjectId: viewedProjectIdFromContent(content),
-      splitHandle: panel.handle,
-    });
-  };
+type SoupEntityActionDrawerProps = {
+  entity: EntityData | undefined;
+  groups: readonly SoupEntityDrawerActionGroup[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  beforeAction?: (
+    action: SoupEntityDrawerAction,
+    trigger: HTMLButtonElement
+  ) => void;
+};
 
+/** Mobile drawer presentation shared by Soup-backed entity lists. */
+export function SoupEntityActionDrawer(props: SoupEntityActionDrawerProps) {
   return (
     <MobileDrawer
       side="bottom"
-      open={drawerState.isOpen()}
+      open={props.open}
       closeOnOutsidePointerStrategy="pointerdown"
-      onOpenChange={(v) => {
-        if (!v) drawerState.close();
-      }}
+      onOpenChange={props.onOpenChange}
       preventScroll={false}
       preventScrollbarShift={false}
       restoreFocus={false}
@@ -54,18 +44,16 @@ export function SoupEntityActionDrawer() {
         <MobileDrawer.Content aria-label="Entity actions">
           <MobileDrawer.Handle />
 
-          {/* Entity preview */}
-          <Show when={drawerState.entity()}>
-            {(e) => (
+          <Show when={props.entity}>
+            {(entity) => (
               <div class="px-4 pb-4 shrink-0 text-sm font-medium text-ink-muted">
-                <InlineEntity entity={e()} />
+                <InlineEntity entity={entity()} />
               </div>
             )}
           </Show>
 
-          {/* Action groups */}
           <MobileDrawer.ScrollBody>
-            <For each={groups()}>
+            <For each={props.groups}>
               {(group, groupIndex) => (
                 <>
                   <Show when={groupIndex() > 0}>
@@ -84,15 +72,10 @@ export function SoupEntityActionDrawer() {
                               : 'text-ink',
                             action.disabled && 'opacity-50'
                           )}
-                          onClick={async (e: MouseEvent) => {
-                            if (action.id === 'share') {
-                              triggerFocusInput(
-                                getShareDrawerRecipientInput,
-                                e.currentTarget as HTMLElement
-                              );
-                            }
+                          onClick={async (event) => {
+                            props.beforeAction?.(action, event.currentTarget);
                             await action.onClick();
-                            drawerState.close();
+                            props.onOpenChange(false);
                           }}
                         >
                           {action.label}

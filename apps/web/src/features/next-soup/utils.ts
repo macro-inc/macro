@@ -532,6 +532,22 @@ export async function navigateChannelEntityToTarget(
   );
 }
 
+/** Retargets the singleton Calendar block to a calendar event row. */
+export async function navigateCalendarEntityToTarget(
+  entity: EntityData,
+  blockOrchestrator: BlockOrchestrator
+): Promise<void> {
+  if (entity.type !== 'calendar_event') return;
+
+  const calendarHandle = await blockOrchestrator.getBlockHandle(
+    CALENDAR_BLOCK_ID,
+    'calendar'
+  );
+  await calendarHandle?.goToLocationFromParams(
+    calendarBlockParamsForEntity(entity)
+  );
+}
+
 /**
  * Location a plain row click falls back to when no explicit location is given.
  * Email rows open like plain soup rows — at the latest message, expanded —
@@ -649,11 +665,7 @@ export const openEntityInSplitFromUnifiedList = async (
         }
       );
     }
-    const calendarHandle = await blockOrchestrator.getBlockHandle(
-      CALENDAR_BLOCK_ID,
-      'calendar'
-    );
-    await calendarHandle?.goToLocationFromParams(params);
+    await navigateCalendarEntityToTarget(entity, blockOrchestrator);
     return;
   }
 
@@ -800,7 +812,6 @@ export function markReminderSeenOnOpen(
   });
 }
 
-/** Build the singleton block params for an event row's target occurrence. */
 /**
  * The event and instance a calendar row points at, resolved exactly as the
  * open path resolves it so a copied link lands where a click would.
@@ -812,7 +823,8 @@ export function calendarEventLinkTarget(
   return { eventId: eventId ?? entity.id, occurrenceKey };
 }
 
-function calendarBlockParamsForEntity(
+/** Build singleton calendar block parameters for an event row's occurrence. */
+export function calendarBlockParamsForEntity(
   entity: Extract<EntityData, { type: 'calendar_event' }>
 ): CalendarBlockProps {
   const notifications = isWithNotification(entity)

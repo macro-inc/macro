@@ -4,7 +4,7 @@ import {
   type ShareableEntityData,
 } from '@app/features/sharing/global-share-modal/shareable-entity';
 import type { EntityData } from '@entity';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeShareAction = () => {
   /**
@@ -26,7 +26,10 @@ export const makeShareAction = () => {
     });
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     const entity = entities[0];
     if (!entity) return;
 

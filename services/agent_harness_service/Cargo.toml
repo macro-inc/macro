@@ -61,6 +61,7 @@ macro_authorization = { path = "../../crates/macro_authorization", default-featu
 ] }
 macro_cors = { path = "../../crates/macro_cors" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+reqwest = { workspace = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }

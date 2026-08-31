@@ -13,7 +13,7 @@ import {
   toNotificationEntityRef,
   updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotificationsReadOptions = {
   notificationSource: () => NotificationSource;
@@ -106,7 +106,10 @@ export const makeMarkNotificationsReadAction = (
   };
 
   /** Rows remain in place; this only updates their notification read state. */
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

@@ -1,31 +1,32 @@
+import type {
+  EntityActionListState,
+  EntityActionViewContext,
+} from '@app/features/next-soup/actions';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';
-import type { SoupState } from '../create-soup-state';
 import {
   createSoupEntityActions,
   viewedProjectIdFromContent,
-} from './create-soup-entity-actions';
-import { useSoupView } from './soup-view-context';
+} from './createSoupEntityActions';
 
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
-  soup: SoupState;
+  list: EntityActionListState;
+  viewContext: EntityActionViewContext;
   onActionComplete?: () => void;
   onEditTags?: () => void;
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const panel = useSplitPanelOrThrow();
-  const { activeTab } = useSoupView();
   const { buildActionGroups } = createSoupEntityActions();
 
   const groups = () => {
     const content = panel.handle.content();
-    return buildActionGroups(props.soup, props.entities, {
-      activeTab: activeTab(),
-      activeListView: content.id,
+    return buildActionGroups(props.list, props.entities, {
+      viewContext: props.viewContext,
       viewedProjectId: viewedProjectIdFromContent(content),
       openTagPicker: props.onEditTags,
       splitHandle: panel.handle,

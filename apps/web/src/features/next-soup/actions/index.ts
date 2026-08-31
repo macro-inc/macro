@@ -1,3 +1,12 @@
+export {
+  type EntityActionListFocusTarget,
+  type EntityActionListState,
+  type EntityActionSenderBucket,
+  type EntityActionViewContext,
+  resolveEntityActionViewContext,
+  type ToEntityActionListStateOptions,
+  toEntityActionListState,
+} from './entity-action-context';
 export { makeAddTagAction } from './make-add-tag-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
 export { makeCopyAction } from './make-copy-action';

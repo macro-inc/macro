@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)\n            SELECT $1, $2, $3, $4, $5\n            WHERE EXISTS (\n                SELECT 1 FROM agent_session\n                WHERE id = $2 AND manager_replica_id = $6 AND manager_fence = $7\n            )\n            RETURNING created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "18fd730ea7a2734ac0d674edec980025a77971dac52498a2adb9470e6dc73787"
+}

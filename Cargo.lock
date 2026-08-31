@@ -324,6 +324,7 @@ dependencies = [
  "notification",
  "pipedream_mcp",
  "rdkafka",
+ "reqwest 0.13.4",
  "secretsmanager_client",
  "serde",
  "serde_json",

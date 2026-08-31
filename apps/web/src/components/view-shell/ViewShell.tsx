@@ -363,6 +363,14 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   const ws = useViewShellInternal();
   const layout = ws.detail.layout;
+  const target = () => {
+    const initialWidth = layout().initialWidth;
+    if (initialWidth === 'auto') return undefined;
+    return {
+      kind: 'px' as const,
+      px: initialWidth ?? layout().width,
+    };
+  };
 
   return (
     <Switch>
@@ -372,7 +380,7 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
           index={2}
           minSize={layout().min}
           maxSize={layout().max}
-          target={{ kind: 'px', px: layout().width }}
+          target={target()}
         >
           <div
             {...rest}
