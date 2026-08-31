@@ -27021,6 +27021,9 @@ export const listUserApiKeysResponse = zod
       .array(
         zod
           .object({
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the key was created.'),
             id: zod
               .uuid()
               .describe('Opaque identifier for a stored user API key.'),
@@ -27032,7 +27035,7 @@ export const listUserApiKeysResponse = zod
       )
       .describe("The caller's keys. Never includes the raw secret or hash."),
   })
-  .describe("The caller's API keys as id + name.");
+  .describe("The caller's API keys as id, name, and created_at.");
 
 /**
  * @summary Mint a new API key for the caller.

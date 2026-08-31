@@ -3352,6 +3352,10 @@ export type CreateWebhookResponse = {
  */
 export type CreatedUserApiKey = {
     /**
+     * When the key was created.
+     */
+    createdAt: string;
+    /**
      * Opaque identifier used to address the key after create.
      */
     id: UserApiKeyId;
@@ -8345,6 +8349,10 @@ export type UserApiKeyId = string;
  */
 export type UserApiKeyInfo = {
     /**
+     * When the key was created.
+     */
+    createdAt: string;
+    /**
      * Opaque identifier used to address the key after create.
      */
     id: UserApiKeyId;
@@ -8355,7 +8363,7 @@ export type UserApiKeyInfo = {
 };
 
 /**
- * The caller's API keys as id + name.
+ * The caller's API keys as id, name, and created_at.
  */
 export type UserApiKeysList = {
     /**

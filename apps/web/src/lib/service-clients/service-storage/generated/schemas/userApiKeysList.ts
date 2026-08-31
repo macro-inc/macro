@@ -7,7 +7,7 @@
 import type { UserApiKeyInfo } from './userApiKeyInfo';
 
 /**
- * The caller's API keys as id + name.
+ * The caller's API keys as id, name, and created_at.
  */
 export interface UserApiKeysList {
   /** The caller's keys. Never includes the raw secret or hash. */

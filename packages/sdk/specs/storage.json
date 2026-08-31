@@ -16391,8 +16391,13 @@
       "CreatedUserApiKey": {
         "type": "object",
         "description": "A newly minted key: safe metadata plus the secret, shown only once.",
-        "required": ["id", "name", "key"],
+        "required": ["id", "name", "createdAt", "key"],
         "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was created."
+          },
           "id": {
             "$ref": "#/components/schemas/UserApiKeyId",
             "description": "Opaque identifier used to address the key after create."
@@ -24885,8 +24890,13 @@
       "UserApiKeyInfo": {
         "type": "object",
         "description": "Safe metadata for a stored key. Never contains the secret or its hash.",
-        "required": ["id", "name"],
+        "required": ["id", "name", "createdAt"],
         "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was created."
+          },
           "id": {
             "$ref": "#/components/schemas/UserApiKeyId",
             "description": "Opaque identifier used to address the key after create."
@@ -24899,7 +24909,7 @@
       },
       "UserApiKeysList": {
         "type": "object",
-        "description": "The caller's API keys as id + name.",
+        "description": "The caller's API keys as id, name, and created_at.",
         "required": ["keys"],
         "properties": {
           "keys": {
