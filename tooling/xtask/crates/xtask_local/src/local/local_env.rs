@@ -19,6 +19,9 @@ use std::collections::BTreeMap;
 use super::instance::{Instance, Port};
 use super::{Mode, identity, resources};
 
+const MACRO_API_TOKEN_PRIVATE_KEY: &str = include_str!("macro_api_token_private_key.pem");
+const MACRO_API_TOKEN_PUBLIC_KEY: &str = include_str!("macro_api_token_public_key.pem");
+
 /// The full local environment for one instance.
 pub struct LocalEnv {
     environment: &'static str,
@@ -544,18 +547,16 @@ impl BootStubEnv {
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),
         );
-        // macro_auth's `JwtValidationArgs` (used by every service that mounts
-        // the auth middleware) reads these at boot. The keys are only parsed
-        // when a Macro API token is actually validated — normal local auth
-        // uses FusionAuth JWTs — so dummies are fine.
+        // The local E2E browser authenticates with a Macro API token, so these
+        // deterministic local-only keys must be a valid pair.
         env.insert("MACRO_API_TOKEN_ISSUER".into(), "local".into());
         env.insert(
             "MACRO_API_TOKEN_PUBLIC_KEY".into(),
-            "local-macro-api-token-public-key".into(),
+            MACRO_API_TOKEN_PUBLIC_KEY.into(),
         );
         env.insert(
             "MACRO_API_TOKEN_PRIVATE_SECRET_KEY".into(),
-            "local-macro-api-token-private-key".into(),
+            MACRO_API_TOKEN_PRIVATE_KEY.into(),
         );
         env.insert("MACRO_API_TOKEN_EXPIRY_SECONDS".into(), "3600".into());
         // email_service's GCP pubsub queue (gmail watch notifications) and

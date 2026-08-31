@@ -101,6 +101,22 @@ fn emits_required_keys() {
     }
 }
 
+#[test]
+fn macro_api_token_keys_are_valid_rsa_pem() {
+    let env = local_env();
+    let private_key = env
+        .get("MACRO_API_TOKEN_PRIVATE_SECRET_KEY")
+        .expect("private key is emitted");
+    let public_key = env
+        .get("MACRO_API_TOKEN_PUBLIC_KEY")
+        .expect("public key is emitted");
+
+    jsonwebtoken::EncodingKey::from_rsa_pem(private_key.as_bytes())
+        .expect("private key must encode local E2E tokens");
+    jsonwebtoken::DecodingKey::from_rsa_pem(public_key.as_bytes())
+        .expect("public key must decode local E2E tokens");
+}
+
 /// Boot stubs are a fallback layer BELOW Doppler; `to_env` is authoritative
 /// ABOVE Doppler. A key present in both would make its precedence ambiguous —
 /// whichever map wrote last would silently win.
