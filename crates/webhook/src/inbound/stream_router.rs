@@ -126,7 +126,6 @@ fn parse_last_event_id(headers: &HeaderMap) -> Result<Option<Uuid>, WebhookStrea
         (status = 400, description = "Bad request", body = ErrorResponse),
         (status = 403, description = "Forbidden", body = ErrorResponse),
         (status = 429, description = "Too many concurrent streams", body = ErrorResponse),
-        (status = 503, description = "Event stream temporarily unavailable", body = ErrorResponse),
         (status = 500, description = "Internal server error", body = ErrorResponse),
     ),
     tag = "webhook"
@@ -189,7 +188,6 @@ impl IntoResponse for WebhookStreamHandlerError {
         let status = match self.0 {
             WebhookStreamError::BadRequest(_) => StatusCode::BAD_REQUEST,
             WebhookStreamError::TooManyStreams => StatusCode::TOO_MANY_REQUESTS,
-            WebhookStreamError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
             WebhookStreamError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = if status == StatusCode::INTERNAL_SERVER_ERROR {

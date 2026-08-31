@@ -30,8 +30,6 @@ struct ReplayBuffer {
     next_sequence: u64,
     approximate_bytes: usize,
     retention: Duration,
-    generation: u64,
-    healthy: bool,
 }
 
 impl ReplayBuffer {
@@ -42,18 +40,7 @@ impl ReplayBuffer {
             next_sequence: 0,
             approximate_bytes: 0,
             retention,
-            generation: 0,
-            healthy: false,
         }
-    }
-
-    fn mark_ready(&mut self) {
-        self.healthy = true;
-    }
-
-    fn mark_unavailable(&mut self) {
-        self.healthy = false;
-        self.generation = self.generation.wrapping_add(1);
     }
 
     fn push(&mut self, candidate: StreamCandidateEvent, now: Instant) -> bool {
@@ -122,25 +109,6 @@ impl WebhookStreamHub {
             }),
         }
     }
-
-    /// Make the live source available to new streams.
-    pub fn mark_ready(&self) {
-        self.inner
-            .replay
-            .lock()
-            .expect("webhook stream replay buffer lock poisoned")
-            .mark_ready();
-    }
-
-    /// Invalidate existing streams while the process-level source reconnects.
-    pub fn mark_unavailable(&self) {
-        self.inner
-            .replay
-            .lock()
-            .expect("webhook stream replay buffer lock poisoned")
-            .mark_unavailable();
-        self.inner.changed.notify_waiters();
-    }
 }
 
 impl WebhookStreamCandidateSink for WebhookStreamHub {
@@ -161,7 +129,6 @@ impl WebhookStreamCandidateSink for WebhookStreamHub {
 pub struct HubWebhookStreamSource {
     hub: WebhookStreamHub,
     next_sequence: u64,
-    generation: u64,
 }
 
 impl WebhookStreamSource for HubWebhookStreamSource {
@@ -178,11 +145,6 @@ impl WebhookStreamSource for HubWebhookStreamSource {
                     .lock()
                     .expect("webhook stream replay buffer lock poisoned");
                 replay.prune(Instant::now());
-                if !replay.healthy || replay.generation != self.generation {
-                    return Err(rootcause::report!(
-                        "webhook event stream source unavailable"
-                    ));
-                }
                 let first_sequence = replay
                     .events
                     .front()
@@ -215,9 +177,6 @@ impl WebhookStreamSourceFactory for WebhookStreamHub {
             .lock()
             .expect("webhook stream replay buffer lock poisoned");
         replay.prune(Instant::now());
-        if !replay.healthy {
-            return Err(WebhookStreamSourceOpenError::Unavailable);
-        }
 
         let next_sequence = match start {
             StreamStart::Latest => replay.next_sequence,
@@ -235,7 +194,6 @@ impl WebhookStreamSourceFactory for WebhookStreamHub {
         Ok(HubWebhookStreamSource {
             hub: self.clone(),
             next_sequence,
-            generation: replay.generation,
         })
     }
 }

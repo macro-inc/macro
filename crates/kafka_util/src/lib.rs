@@ -327,24 +327,6 @@ where
     Ok(assignment)
 }
 
-fn initial_assignment<C, T>(
-    consumer: &T,
-    topics: &[&str],
-    initial_offset: InitialOffset,
-    metadata_timeout: Duration,
-) -> KafkaResult<TopicPartitionList>
-where
-    C: ConsumerContext,
-    T: Consumer<C>,
-{
-    match initial_offset {
-        InitialOffset::Earliest => {
-            build_assignment(consumer, topics, Offset::Beginning, metadata_timeout)
-        }
-        InitialOffset::Latest => build_assignment(consumer, topics, Offset::End, metadata_timeout),
-    }
-}
-
 impl KafkaEventProducer {
     /// Creates a producer, selecting plaintext or MSK IAM transport from the runtime environment.
     ///
@@ -442,8 +424,11 @@ impl KafkaEventConsumer<Ungrouped> {
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => {
             prime_oauth_token(consumer);
-            let assignment =
-                initial_assignment(consumer, topics, initial_offset, metadata_timeout)?;
+            let offset = match initial_offset {
+                InitialOffset::Earliest => Offset::Beginning,
+                InitialOffset::Latest => Offset::End,
+            };
+            let assignment = build_assignment(consumer, topics, offset, metadata_timeout)?;
             consumer.assign(&assignment)
         })
     }
