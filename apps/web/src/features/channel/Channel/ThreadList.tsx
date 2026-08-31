@@ -637,15 +637,18 @@ export function ThreadList(props: ThreadListProps) {
       const delta = handle.scrollOffset - previousScrollOffset;
       // Accumulate downward scroll distance only during user interaction
       // and only when the user is scrolling down. Used by the scroll-to-bottom overlay.
-      if (
+      if (delta < 0 || scrollIntent.lastDirection() === 'up') {
+        explicitScrollDownDistance = 0;
+      } else if (
         scrollIntent.isUserInteracting() &&
         delta > 0 &&
         scrollIntent.lastDirection() === 'down'
       ) {
         explicitScrollDownDistance += delta;
-      } else {
-        explicitScrollDownDistance = 0;
       }
+      // Downward scrolls the user did not drive (touch momentum outliving the
+      // interaction window, virtualizer reflows) leave the run as it stands:
+      // they neither extend it nor cancel it.
       nextIsScrollingDown =
         explicitScrollDownDistance >= EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE;
     }
