@@ -121,6 +121,7 @@ async fn main() -> Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        macro_authorization::NoUserApiKeyAuthorizer,
     );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
 

@@ -90,6 +90,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
@@ -327,6 +328,7 @@ async fn run() -> anyhow::Result<()> {
             default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(db.clone())),
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
 

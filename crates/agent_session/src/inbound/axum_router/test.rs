@@ -6,7 +6,7 @@ use chrono::Utc;
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, ValidatedIdentity,
+    MacroAuthorizationServiceImpl, NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
@@ -179,6 +179,7 @@ fn router_for(opener: Arc<RecordingOpener>, bots: OneBotDirectory) -> Router {
             default_user_id: None,
         },
         SelfBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     );
     agent_session_create_router(CreateSessionState::new(
         opener,

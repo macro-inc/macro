@@ -420,6 +420,7 @@ async fn run() -> anyhow::Result<()> {
             default_user_id: None,
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(pool.clone())),
+        macro_authorization::NoUserApiKeyAuthorizer,
     );
     let read_state = AgentSessionRouterState::new(
         AgentSessionServiceImpl::new(

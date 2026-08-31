@@ -130,6 +130,7 @@ async fn main() -> Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        macro_authorization::NoUserApiKeyAuthorizer,
     )));
 
     let app = router(AppState {

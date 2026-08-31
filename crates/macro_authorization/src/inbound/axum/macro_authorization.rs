@@ -13,6 +13,7 @@ use super::{
     internal::{authorize_internal_request, internal_header_convention},
     rejection, status_rejection,
     user::{authorize_optional_user_request, explicit_user_credential_present},
+    user_api_key::{USER_API_KEY_HEADER, authorize_user_api_key_request},
 };
 
 /// Extracts and authorizes the request principal, then narrows it with `Policy`.
@@ -71,9 +72,11 @@ where
 {
     let internal_convention = internal_header_convention(&parts.headers);
     let has_bot_token = parts.headers.contains_key(BOT_TOKEN_HEADER);
+    let has_user_api_key = parts.headers.contains_key(USER_API_KEY_HEADER);
     let has_explicit_user_credential = explicit_user_credential_present(parts);
     let explicit_credential_count = usize::from(internal_convention.is_some())
         + usize::from(has_bot_token)
+        + usize::from(has_user_api_key)
         + usize::from(has_explicit_user_credential);
 
     if explicit_credential_count > 1 {
@@ -85,6 +88,11 @@ where
 
     if let Some(convention) = internal_convention {
         return authorize_internal_request::<S, Svc>(parts, state, convention).await;
+    }
+
+    if has_user_api_key {
+        let user = authorize_user_api_key_request::<S, Svc>(parts, state).await?;
+        return Ok(Some(MacroAuthorization::User(user)));
     }
 
     if has_bot_token {

@@ -245,6 +245,7 @@ async fn main() -> anyhow::Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        macro_authorization::NoUserApiKeyAuthorizer,
     )));
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())

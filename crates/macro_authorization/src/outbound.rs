@@ -9,6 +9,9 @@ pub mod noop;
 /// PostgreSQL facts for bot authorization.
 #[cfg(feature = "postgres")]
 pub mod pg_bot_authorization;
+/// PostgreSQL facts for user API key authorization.
+#[cfg(feature = "postgres")]
+pub mod pg_user_api_key_authorization;
 
 /// JWT validator backed by the shared `macro_auth` implementation.
 #[cfg(feature = "outbound")]
@@ -19,3 +22,6 @@ pub use noop::NoopMacroAuthJwtValidator;
 /// PostgreSQL bot authorization repository and concrete authorizer.
 #[cfg(feature = "postgres")]
 pub use pg_bot_authorization::{PgBotAuthorizationRepo, PgBotAuthorizer};
+/// PostgreSQL user API key authorization repository and concrete authorizer.
+#[cfg(feature = "postgres")]
+pub use pg_user_api_key_authorization::{PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer};
