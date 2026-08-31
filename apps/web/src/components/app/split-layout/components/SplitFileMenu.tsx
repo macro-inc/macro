@@ -40,7 +40,7 @@ import Rename from '@phosphor/pencil-line.svg';
 import Star from '@phosphor/star.svg';
 import Tag from '@phosphor/tag.svg';
 import Trash from '@phosphor/trash-simple.svg';
-import { blockNameToItemType, type ItemType } from '@service-storage/client';
+import { blockNameToItemType, type ItemType } from '@service-storage/itemType';
 import { cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,

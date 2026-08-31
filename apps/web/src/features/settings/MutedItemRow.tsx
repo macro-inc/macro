@@ -14,7 +14,7 @@ import {
 import { mutedEntityTypeLabel } from '@notifications/notification-event-catalog';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
-import { ChannelTypeEnum } from '@service-storage/client';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { createMemo, Show } from 'solid-js';
 
 /**
@@ -126,7 +126,7 @@ function useMutedChannelDmRecipientId(
   return createMemo(() => {
     if (!isChannel()) return undefined;
     const channel = ctx.channelsById()[item().item_id];
-    if (channel?.channel_type !== ChannelTypeEnum.DirectMessage) {
+    if (channel?.channel_type !== ChannelType.direct_message) {
       return undefined;
     }
     const recipient =
