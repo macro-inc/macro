@@ -242,12 +242,22 @@ fn service(
     factory: FakeSourceFactory,
     access: FakeAccessService,
 ) -> WebhookEventStreamServiceImpl<FakeSourceFactory, FakeAccessService, FakeWorkspaceResolver> {
+    service_with_workspaces(
+        factory,
+        access,
+        vec![SUBSCRIBER_ID.to_string(), TEAM_WORKSPACE_ID.to_string()],
+    )
+}
+
+fn service_with_workspaces(
+    factory: FakeSourceFactory,
+    access: FakeAccessService,
+    workspace_ids: Vec<String>,
+) -> WebhookEventStreamServiceImpl<FakeSourceFactory, FakeAccessService, FakeWorkspaceResolver> {
     WebhookEventStreamServiceImpl::new(
         factory,
         Arc::new(access),
-        FakeWorkspaceResolver {
-            workspace_ids: vec![SUBSCRIBER_ID.to_string(), TEAM_WORKSPACE_ID.to_string()],
-        },
+        FakeWorkspaceResolver { workspace_ids },
     )
 }
 
@@ -319,13 +329,19 @@ async fn open_stream_delivers_only_matching_accessible_events() {
         document_candidate("document.updated", OTHER_DOCUMENT_ID),
         // Access would pass but the filter does not match: skipped.
         document_candidate("document.created", DOCUMENT_ID),
+        workspace_candidate("document.updated", SUBSCRIBER_ID),
         workspace_candidate("document.updated", TEAM_WORKSPACE_ID),
         workspace_candidate("document.updated", FOREIGN_WORKSPACE_ID),
     ]);
     let service = service(factory, FakeAccessService::allowing(&[DOCUMENT_ID]));
 
     let stream = service
-        .open_stream(subscriber(), filter(&["document.updated"]), None)
+        .open_stream(
+            subscriber(),
+            WebhookScope::Team,
+            filter(&["document.updated"]),
+            None,
+        )
         .await
         .expect("stream opens");
     let delivered: Vec<NormalizedWebhookEvent> = stream.collect().await;
@@ -335,6 +351,29 @@ async fn open_stream_delivers_only_matching_accessible_events() {
         .map(|event| event.entity_id.as_str())
         .collect();
     assert_eq!(delivered_entities, vec![DOCUMENT_ID, "wh_test"]);
+}
+
+#[tokio::test]
+async fn team_scope_requires_team_membership() {
+    let service = service_with_workspaces(
+        FakeSourceFactory::default(),
+        FakeAccessService::allowing(&[]),
+        vec![SUBSCRIBER_ID.to_string()],
+    );
+
+    let Err(error) = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::Team,
+            filter(&["webhook.updated"]),
+            None,
+        )
+        .await
+    else {
+        panic!("team scope without team membership must be rejected");
+    };
+
+    assert!(matches!(error, WebhookStreamError::BadRequest(_)));
 }
 
 #[tokio::test]
@@ -349,7 +388,12 @@ async fn open_stream_caches_access_decisions_per_entity() {
     let service = service(factory, access);
 
     let stream = service
-        .open_stream(subscriber(), filter(&["document.updated"]), None)
+        .open_stream(
+            subscriber(),
+            WebhookScope::Team,
+            filter(&["document.updated"]),
+            None,
+        )
         .await
         .expect("stream opens");
     let delivered: Vec<NormalizedWebhookEvent> = stream.collect().await;
@@ -369,14 +413,24 @@ async fn open_stream_enforces_the_per_subscriber_cap() {
     for _ in 0..MAX_STREAMS_PER_USER {
         held.push(
             service
-                .open_stream(subscriber(), filter(&["document.updated"]), None)
+                .open_stream(
+                    subscriber(),
+                    WebhookScope::Team,
+                    filter(&["document.updated"]),
+                    None,
+                )
                 .await
                 .expect("stream under the cap opens"),
         );
     }
 
     let Err(error) = service
-        .open_stream(subscriber(), filter(&["document.updated"]), None)
+        .open_stream(
+            subscriber(),
+            WebhookScope::Team,
+            filter(&["document.updated"]),
+            None,
+        )
         .await
     else {
         panic!("stream over the cap must be rejected");
@@ -386,7 +440,12 @@ async fn open_stream_enforces_the_per_subscriber_cap() {
     drop(held.pop());
     drop(
         service
-            .open_stream(subscriber(), filter(&["document.updated"]), None)
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["document.updated"]),
+                None,
+            )
             .await
             .expect("released slot is reusable"),
     );
@@ -414,7 +473,10 @@ async fn open_stream_rejects_empty_or_degenerate_filters() {
             ids: Some(vec![]),
         }],
     ] {
-        let Err(error) = service.open_stream(subscriber(), filters, None).await else {
+        let Err(error) = service
+            .open_stream(subscriber(), WebhookScope::Team, filters, None)
+            .await
+        else {
             panic!("degenerate filters must be rejected");
         };
         assert!(matches!(error, WebhookStreamError::BadRequest(_)));
@@ -429,7 +491,12 @@ async fn open_stream_passes_the_start_through_and_rejects_stale_cursors() {
 
     drop(
         service
-            .open_stream(subscriber(), filter(&["document.updated"]), None)
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["document.updated"]),
+                None,
+            )
             .await
             .expect("stream opens"),
     );
@@ -437,7 +504,12 @@ async fn open_stream_passes_the_start_through_and_rejects_stale_cursors() {
     let recent_id = uuid_v7_at_ms(recent_ms);
     drop(
         service
-            .open_stream(subscriber(), filter(&["document.updated"]), Some(recent_id))
+            .open_stream(
+                subscriber(),
+                WebhookScope::Team,
+                filter(&["document.updated"]),
+                Some(recent_id),
+            )
             .await
             .expect("stream opens"),
     );
@@ -458,6 +530,7 @@ async fn open_stream_passes_the_start_through_and_rejects_stale_cursors() {
     let Err(error) = service
         .open_stream(
             subscriber(),
+            WebhookScope::Team,
             filter(&["document.updated"]),
             Some(stale_cursor),
         )
