@@ -4,7 +4,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { cn, Layer } from '@ui';
-import { type Accessor, createSignal, Show } from 'solid-js';
+import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 
 export type TimezoneOption = { value: string; label: string };
@@ -72,15 +72,25 @@ export function TimezoneSelect(props: {
   class?: string;
 }) {
   const [search, setSearch] = createSignal('');
+  // Keep the current zone in the collection even when the runtime no longer
+  // lists it (a zone dropped between releases), so it resolves as the selection
+  // and a stray pick cannot silently replace a still-valid stored zone.
+  const optionsWithCurrent = createMemo(() =>
+    props.options.some((option) => option.value === props.value)
+      ? props.options
+      : [
+          { value: props.value, label: props.value.replace(/_/g, ' ') },
+          ...props.options,
+        ]
+  );
   const selected = () =>
-    props.options.find((option) => option.value === props.value) ?? null;
-  // A stored zone the runtime no longer lists still reads back cleanly.
+    optionsWithCurrent().find((option) => option.value === props.value) ?? null;
   const triggerLabel = () =>
     selected()?.label ?? props.value.replace(/_/g, ' ');
   const hasMatches = () => {
     const query = search().trim().toLowerCase();
-    if (!query) return props.options.length > 0;
-    return props.options.some((option) =>
+    if (!query) return optionsWithCurrent().length > 0;
+    return optionsWithCurrent().some((option) =>
       option.label.toLowerCase().includes(query)
     );
   };
@@ -88,7 +98,7 @@ export function TimezoneSelect(props: {
   return (
     <Combobox<TimezoneOption>
       multiple={false}
-      options={props.options}
+      options={optionsWithCurrent()}
       value={selected()}
       onChange={(option) => option && props.onChange(option.value)}
       onInputChange={setSearch}
@@ -118,7 +128,6 @@ export function TimezoneSelect(props: {
           <span class="truncate">{triggerLabel()}</span>
           <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
         </Combobox.Trigger>
-        <Combobox.Input class="sr-only" />
       </Combobox.Control>
 
       <Combobox.Portal>

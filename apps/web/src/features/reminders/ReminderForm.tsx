@@ -292,10 +292,21 @@ export function ReminderForm(props: ReminderFormProps) {
   };
 
   const setRepeatKind = (kind: RepeatKind) => {
+    const wasOnce = repeat() === 'once';
     setRepeat(kind);
-    if (kind !== 'once') {
-      setRepeatParts((parts) => ({ ...parts, frequency: kind }));
+    if (kind === 'once') return;
+    // Coming from a one-shot, seed the recurrence from the date and time the
+    // one-shot fields currently hold rather than the mount-time parts, so
+    // switching to Weekly or Monthly lands on that weekday and time. Between
+    // two recurring kinds, keep the parts the user set and only flip frequency.
+    if (wasOnce) {
+      const from = onceDateTime();
+      if (!Number.isNaN(from.getTime())) {
+        setRepeatParts(repeatPartsFromDate(from, kind));
+        return;
+      }
     }
+    setRepeatParts((parts) => ({ ...parts, frequency: kind }));
   };
 
   const updateParts = (patch: Partial<CronParts>) =>
