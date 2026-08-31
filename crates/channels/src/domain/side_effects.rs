@@ -1220,9 +1220,12 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
         ChannelEvent::ChannelCreated {
             channel_type: ChannelType::Private | ChannelType::DirectMessage,
             actor,
+            on_behalf_of,
             participant_user_ids,
             ..
-        } if actor.as_user().is_some() => Some(participant_user_ids.iter().cloned().collect()),
+        } if actor.as_user().is_some() || on_behalf_of.is_some() => {
+            Some(participant_user_ids.iter().cloned().collect())
+        }
         ChannelEvent::ParticipantsAdded {
             channel_type: ChannelType::Private | ChannelType::Team,
             invited_by,
