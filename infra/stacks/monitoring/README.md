@@ -14,22 +14,36 @@ monitors that already exist in Datadog. Until `pulumi import` has told Pulumi
 they exist, a deploy would create 35 duplicates — duplicate pages to
 `#holy-shit-alarms` included.
 
-Adoption is one manual workflow run: **Actions → "adopt datadog monitors" →
-`mode: import`**. It runs `pulumi import` (reads Datadog, writes Pulumi state —
-it does not create, modify, or pause anything in Datadog), prints the code it
-generated from the live monitors, then prints a preview.
+Adoption is a one-time local run. `pulumi import` reads Datadog and writes
+Pulumi state — it does not create, modify, or pause anything in Datadog. The
+Datadog keys are needed by `preview` as well: the provider validates every
+monitor against `/api/v1/monitor/validate` while diffing.
 
-The gate is the preview at the end of that run:
+```bash
+cd infra/stacks/monitoring
+export DD_API_KEY=... DD_APP_KEY=... DD_HOST=https://api.us5.datadoghq.com/
+pulumi stack select macro-inc/prod --create
+pulumi import --file import.json --out imported.generated.ts --protect --yes
+pulumi preview --diff
+```
+
+`--protect` matches the `adopted()` helper so state and code agree.
+`imported.generated.ts` is Pulumi's own rendering of the live monitors — the
+ground truth to reconcile against if the preview shows drift. Delete it after;
+it must not be committed (index.ts does not import it, and a second copy of
+every monitor would double-declare them).
+
+The gate is that preview:
 
 - **35 monitors + 1 synthetic test unchanged** — adoption is exact.
 - **2 monitors to create** (`ai-editing-*`) — expected, that's the new alerting.
 - **Any update, replace, or delete** — the hand-written code in `monitors/*.ts`
-  drifted from the live monitor. Reconcile against the generated
-  `imported.generated.ts` from that same run before deploying. An `update` here
-  silently changes who gets paged.
+  drifted from the live monitor. Reconcile against `imported.generated.ts`
+  before deploying. An `update` here silently changes who gets paged.
 
-Only then: **Actions → "deploy pulumi service"** with
-`pulumi-service-name: monitoring`, `environment: prod`.
+Only then deploy: `pulumi up` locally, or **Actions → "deploy pulumi service"**
+with `pulumi-service-name: monitoring`, `environment: prod` (that action already
+exports the DD keys from repo secrets).
 
 ## Why nothing here deploys by accident
 
