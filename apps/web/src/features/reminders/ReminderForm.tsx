@@ -197,9 +197,18 @@ export function ReminderForm(props: ReminderFormProps) {
       : samePartsShape(repeatParts(), initialParts);
   };
 
-  /** Whether anything — title or schedule — differs from what was seeded. */
-  const isDirty = () =>
-    description() !== seed.description || !scheduleUntouched();
+  /**
+   * Whether saving would actually change anything — kept in step with what
+   * `reminderEditPatch` treats as a change, so the "Unsaved changes" hint and
+   * the Save button never light up for an edit that no-ops. A blank title keeps
+   * the current description and surrounding whitespace clamps away, so only a
+   * different non-blank title counts.
+   */
+  const isDirty = () => {
+    const trimmed = description().trim();
+    const titleChanged = trimmed !== '' && trimmed !== seed.description.trim();
+    return titleChanged || !scheduleUntouched();
+  };
 
   // Let the host reflect the unsaved state (e.g. a dot on the split's title).
   createEffect(() => props.onDirtyChange?.(isDirty()));
@@ -451,7 +460,7 @@ export function ReminderForm(props: ReminderFormProps) {
             size="sm"
             depth={3}
             class="rounded-lg border-0"
-            disabled={!canSubmit()}
+            disabled={!canSubmit() || (isEdit && !isDirty())}
           >
             {props.submitLabel}
           </Button>
