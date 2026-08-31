@@ -69,6 +69,7 @@ export function AgentInput(props: AgentInputProps) {
   const editor = buildConfig('chat')
     .namespace('agent-input')
     .withEmojis()
+    .withMentions()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
