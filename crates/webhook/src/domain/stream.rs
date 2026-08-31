@@ -7,13 +7,12 @@
 //! candidate event is checked against the caller's own entity access, and
 //! nothing is persisted.
 //!
-//! Delivery is at-least-once from retained history: every event carries its
-//! UUIDv7 broker event id, and a reconnecting client resumes by presenting the
-//! last id it saw. Cursors older than [`MAX_REPLAY_WINDOW`] or evicted by the
-//! replay log's safety bounds require an out-of-band resync. A valid cursor
-//! conservatively replays the full retained window because Kafka partition
-//! ordering cannot establish one global position across replicas; clients must
-//! deduplicate by event id.
+//! Replay is best-effort from one process's retained history: every event carries
+//! its UUIDv7 broker event id, and a reconnecting client resumes by presenting
+//! the last id it saw. Cursors older than [`MAX_REPLAY_WINDOW`] or absent from
+//! the local replay log require an out-of-band resync. A Kafka reconnect or
+//! request routed to another replica may leave an undetectable gap; clients must
+//! resync when continuity matters and always deduplicate by event id.
 
 #[cfg(test)]
 mod test;
@@ -96,13 +95,7 @@ pub struct StreamCandidateEvent {
 }
 
 /// Sink for candidates consumed once and multiplexed to local subscribers.
-pub trait WebhookStreamCandidateSink: Clone + Send + Sync + 'static {
-    /// Temporarily reject new stream opens while retained history is loading.
-    fn begin_loading(&self);
-
-    /// Allow new stream opens after retained history has caught up.
-    fn mark_ready(&self);
-
+pub trait WebhookStreamCandidateSink: Send + Sync + 'static {
     /// Publish one normalized candidate into the local stream source.
     fn publish(&self, candidate: StreamCandidateEvent);
 }
