@@ -345,6 +345,13 @@ async function emitCallStartedNotification(args: {
   if (notif === 'not-supported') return;
 
   const pending = { cancelled: false };
+  // Cancel any earlier attempt for this call before taking its slot. The map
+  // holds one entry per call id, so an attempt that was replaced would never
+  // see a later `closeCallNotification` and could still register its toast
+  // once it resolved — leaving a requireInteraction notification up for a call
+  // that has already ended.
+  const superseded = pendingCallNotifications.get(callId);
+  if (superseded) superseded.cancelled = true;
   pendingCallNotifications.set(callId, pending);
   try {
     const callerName =

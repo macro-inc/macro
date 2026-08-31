@@ -157,10 +157,17 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     // The join API is a get-or-create, so rejoining a call that has ended
     // silently starts a new one and rings the channel. Confirm the call is
     // still live first: recovery may re-enter a call, never open one.
-    const targetRefusal = checkAutoRejoinTarget({
-      attempt,
-      activeCall: await lookupActiveCall(attempt.channelId),
-    });
+    const activeCall = await lookupActiveCall(attempt.channelId);
+
+    // `joinCall` reads the channel accessor, which can have moved on while the
+    // lookup was in flight (the split navigated). Joining now would drop the
+    // user into whichever channel they went to instead.
+    if (channelId() !== attempt.channelId) {
+      abandonAutoRejoin(attempt, 'channel_changed');
+      return;
+    }
+
+    const targetRefusal = checkAutoRejoinTarget({ attempt, activeCall });
     if (targetRefusal) {
       abandonAutoRejoin(attempt, targetRefusal);
       return;

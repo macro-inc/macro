@@ -40,6 +40,8 @@ export type AutoRejoinRefusal =
   | 'call_ended'
   /** A different call is running now; this session's call is over. */
   | 'call_replaced'
+  /** The dropped call could not be identified, so no rejoin can be proven safe. */
+  | 'call_unknown'
   /** The active-call lookup failed, so we cannot prove a call still exists. */
   | 'lookup_failed';
 
@@ -47,9 +49,10 @@ export type AutoRejoinRefusal =
 export type AutoRejoinAttempt = {
   channelId: string;
   /**
-   * The call the session was in when it dropped. Null when it could not be
-   * determined, in which case any live call in the channel is accepted — the
-   * "never create a call" guarantee still holds.
+   * The call the session was in when it dropped, or null when it could not be
+   * determined. A null id refuses the rejoin: without it there is no way to
+   * tell the dropped call apart from one someone else has since started, and
+   * joining that would be as unprompted as creating one.
    */
   callId: string | null;
   /**
@@ -96,10 +99,8 @@ export function checkAutoRejoinTarget(params: {
 }): AutoRejoinRefusal | null {
   if (params.activeCall === 'unavailable') return 'lookup_failed';
   if (params.activeCall === null) return 'call_ended';
-  if (
-    params.attempt.callId !== null &&
-    params.activeCall.callId !== params.attempt.callId
-  ) {
+  if (params.attempt.callId === null) return 'call_unknown';
+  if (params.activeCall.callId !== params.attempt.callId) {
     return 'call_replaced';
   }
   return null;

@@ -103,16 +103,16 @@ describe('auto-rejoin target', () => {
     ).toBe('lookup_failed');
   });
 
-  it('accepts any live call when the dropped call id is unknown', () => {
+  it('refuses when the dropped call id is unknown, even with a live call', () => {
     expect(
       checkAutoRejoinTarget({
         attempt: attempt({ callId: null }),
         activeCall: { callId: 'call-2' },
       })
-    ).toBeNull();
+    ).toBe('call_unknown');
   });
 
-  it('still refuses with an unknown call id when nothing is live', () => {
+  it('refuses with an unknown call id when nothing is live', () => {
     expect(
       checkAutoRejoinTarget({
         attempt: attempt({ callId: null }),
