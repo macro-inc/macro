@@ -497,12 +497,9 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
-  // The channel list is still served by the comms hex, mounted at,
-
-  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the,
-
-  // list moves into the channels hex (alongside the comms teardown).,
-
+  // The channel list is still served by the comms hex, mounted at
+  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
+  // list moves into the channels hex (alongside the comms teardown).
   async getChannels(args: {
     cursor?: string;
     limit?: number;
@@ -1122,8 +1119,7 @@ export const storageServiceClient = {
     }));
   },
 
-  /** Ids of the starter documents seeded at signup. */,
-
+  /** Ids of the starter documents seeded at signup. */
   async getStarterDocs() {
     return (
       await dssFetch<{
@@ -1289,8 +1285,7 @@ export const storageServiceClient = {
 
   /**
    * Creates a markdown document and initializes its sync-service content on the backend.
-   */,
-
+   */
   async createMarkdownDocument(request: CreateMarkdownDocumentRequest) {
     const result = await dssFetch<CreateMarkdownHandler200>(
       `/documents/create_markdown`,
@@ -1318,8 +1313,7 @@ export const storageServiceClient = {
 
   /**
    * Creates a task with properties and initializes its sync-service content on the backend.
-   */,
-
+   */
   async createTask(request: CreateTaskRequest) {
     const result = await dssFetch<CreateTaskHandler200>(
       `/documents/create_task`,
@@ -1345,8 +1339,7 @@ export const storageServiceClient = {
    * Creates a snippet and initializes its sync-service content on the backend.
    * Snippets are created personal; team sharing is toggled separately via
    * setDocumentTeamShare.
-   */,
-
+   */
   async createSnippet(request: CreateSnippetRequest) {
     const result = await dssFetch<CreateSnippetHandler200>(
       `/documents/create_snippet`,
@@ -1372,8 +1365,7 @@ export const storageServiceClient = {
    * Creates a skill and initializes its sync-service content on the backend.
    * Skills are markdown documents containing instructions that AI reads and
    * follows when the skill is referenced in an AI input.
-   */,
-
+   */
   async createSkill(request: CreateSkillRequest) {
     const result = await dssFetch<CreateSkillHandler200>(
       `/documents/create_skill`,
@@ -1399,8 +1391,7 @@ export const storageServiceClient = {
    * Lists the built-in system skills. System skills are static, code-defined
    * AI instructions with well-known ids; they surface like skill documents
    * but have no document behind them and must not be opened as documents.
-   */,
-
+   */
   async getSystemSkills() {
     return dssFetch<GetSystemSkillsHandler200>(`/documents/system_skills`, {
       method: 'GET',
@@ -1437,8 +1428,7 @@ export const storageServiceClient = {
 
   /**
    * Gets the team-share state of a document (resolved against the owner's team).
-   */,
-
+   */
   async getDocumentTeamShare(args: { documentId: string }) {
     return await dssFetch<DocumentTeamShareResponse>(
       `/documents/${args.documentId}/team_share`
@@ -1448,8 +1438,7 @@ export const storageServiceClient = {
   /**
    * Shares or unshares a document with the owner's team. Sharing grants the
    * team Edit access.
-   */,
-
+   */
   async setDocumentTeamShare(args: {
     documentId: string;
     shareWithTeam: boolean;
@@ -2601,15 +2590,6 @@ export const storageServiceClient = {
       );
     },
   },
-
-  // The channel list is still served by the comms hex, mounted at,
-
-  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the,
-
-  // list moves into the channels hex (alongside the comms teardown).,
-
-  /** Ids of the starter documents seeded at signup. */,
-
 } satisfies StorageServiceClient &
   typeof enhancements &
   Record<string, unknown>;

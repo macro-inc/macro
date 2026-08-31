@@ -283,15 +283,6 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
 
 const NATIVE_OFFLINE_LOAD_ERROR = new Error(NATIVE_OFFLINE_ERROR_MESSAGE);
 
-const NATIVE_OFFLINE_LOAD_ERROR = new Error(NATIVE_OFFLINE_ERROR_MESSAGE);
-
-/** Retryable load error for a data-less view once iOS reports no network path. */
-function nativeOfflineLoadError(hasData: () => boolean): Error | null {
-  return nativeNetworkStatus() === 'offline' && !hasData()
-    ? NATIVE_OFFLINE_LOAD_ERROR
-    : null;
-}
-
 /** Retryable load error for a data-less view once iOS reports no network path. */
 function nativeOfflineLoadError(hasData: () => boolean): Error | null {
   return nativeNetworkStatus() === 'offline' && !hasData()

@@ -4,17 +4,9 @@ use crate::domain::models::{
     EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label,
     Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
     ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput,
-    SavedUserDraft, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
-};
-use crate::domain::models::{
-    Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata,
-    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel,
-    Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, ParsedMessage,
-    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SenderPolicy,
-    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
+    SavedUserDraft, SenderPolicy, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow,
+    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
+    UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};

@@ -1183,17 +1183,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     void source.refresh().catch(() => undefined);
   };
 
-  const showLoadError = () =>
-    !!source.error() &&
-    shouldShowLoadError({
-      hasData: source.hasData(),
-      forceEmptyState: forceEmptyState(),
-    });
-
-  const retryLoad = () => {
-    void source.refresh().catch(() => undefined);
-  };
-
   const entityById = createMemo(
     () => {
       const list = rows() ?? [];
