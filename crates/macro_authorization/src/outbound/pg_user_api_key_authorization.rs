@@ -4,10 +4,18 @@
 mod test;
 
 use macro_user_id::user_id::MacroUserIdStr;
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use thiserror::Error;
 
 use crate::domain::{models::ResolvedApiKeyUser, ports::UserApiKeyAuthorizationRepo};
+
+/// SHA-256 of a raw user API key's UTF-8 bytes.
+///
+/// Must stay identical to `user_api_key::hash_key` and `bot_token::hash_token`.
+fn hash_user_api_key(api_key: &str) -> [u8; 32] {
+    Sha256::digest(api_key.as_bytes()).into()
+}
 
 /// PostgreSQL facts required by user API key authorization policy.
 #[derive(Clone, Debug)]
@@ -67,6 +75,7 @@ impl UserApiKeyAuthorizationRepo for PgUserApiKeyAuthorizationRepo {
     type Err = PgUserApiKeyAuthorizationRepoError;
 
     async fn find_key_owner(&self, api_key: &str) -> Result<Option<ResolvedApiKeyUser>, Self::Err> {
+        let key_hash = hash_user_api_key(api_key);
         let row = sqlx::query_as!(
             ApiKeyUserRow,
             r#"
@@ -77,9 +86,9 @@ impl UserApiKeyAuthorizationRepo for PgUserApiKeyAuthorizationRepo {
                 u."organizationId" AS "organization_id?"
             FROM "UserApiKey" k
             JOIN "User" u ON u.id = k.user_id
-            WHERE k.key = $1
+            WHERE k.hash = $1
             "#,
-            api_key,
+            &key_hash[..],
         )
         .fetch_optional(&self.pool)
         .await?;

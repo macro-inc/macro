@@ -36,11 +36,13 @@ async fn insert_user_and_key(pool: &PgPool, user_id: &str, email: &str, key: &st
     .unwrap();
     sqlx::query!(
         r#"
-        INSERT INTO "UserApiKey" (user_id, key)
-        VALUES ($1, $2)
+        INSERT INTO "UserApiKey" (id, name, user_id, hash)
+        VALUES ($1, $2, $3, $4)
         "#,
+        uuid::Uuid::new_v4(),
+        "test key",
         user_id,
-        key,
+        &hash_user_api_key(key)[..],
     )
     .execute(pool)
     .await

@@ -71,6 +71,9 @@ pub trait UserApiKeyAuthorizationRepo: Clone + Send + Sync + 'static {
     type Err: Debug + Send;
 
     /// Resolve the owner identity of a currently valid user API key.
+    ///
+    /// `api_key` is the raw secret from the request. Implementations persist
+    /// and match SHA-256 of its UTF-8 bytes, never the secret itself.
     fn find_key_owner(
         &self,
         api_key: &str,
