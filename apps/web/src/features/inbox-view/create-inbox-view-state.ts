@@ -1,4 +1,3 @@
-import { createDisclosureState } from '@app/components/list';
 import {
   type FacetSelection,
   normalizeFacetSelection,
@@ -16,7 +15,6 @@ export type CreateInboxViewStateOptions = {
   search?: string;
   groupBy?: InboxGroupBy;
   facets?: FacetSelection;
-  collapsedGroupIds?: readonly string[];
 };
 
 export type InboxViewSnapshot = {
@@ -24,7 +22,6 @@ export type InboxViewSnapshot = {
   search: string;
   groupBy: InboxGroupBy;
   facets: FacetSelection;
-  collapsedGroupIds: string[];
 };
 
 export type CreateInboxViewStateContext = Pick<
@@ -49,7 +46,6 @@ export function createInboxViewState(
     search: initial.search ?? '',
     groupBy: initial.groupBy ?? defaultGroupBy(initialTab),
     facets: normalizeFacetSelection(initial.facets),
-    collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
   });
   const persisted = context
     ? makePersistedState(
@@ -62,12 +58,6 @@ export function createInboxViewState(
     : rawState;
   const [state, setState] = persisted;
 
-  const groups = createDisclosureState({
-    defaultExpanded: true,
-    initialToggledKeys: state.collapsedGroupIds,
-    onChange: (keys) => setState('collapsedGroupIds', [...keys]),
-  });
-
   const setTab = (tab: InboxTab) => {
     if (state.tab === tab) return;
 
@@ -76,11 +66,8 @@ export function createInboxViewState(
         draft.tab = tab;
         draft.groupBy = defaultGroupBy(tab);
         draft.facets = {};
-        draft.collapsedGroupIds = [];
       })
     );
-
-    groups.reset();
   };
 
   const setFacetOption = (
@@ -109,23 +96,17 @@ export function createInboxViewState(
     setSearch: (search: string) => setState('search', search),
 
     groupBy: () => state.groupBy,
-    setGroupBy: (groupBy: InboxGroupBy) => {
-      setState('groupBy', groupBy);
-      groups.reset();
-    },
+    setGroupBy: (groupBy: InboxGroupBy) => setState('groupBy', groupBy),
 
     facets: () => state.facets,
     setFacetOption,
     clearFacets: () => setState('facets', {}),
-
-    groups,
 
     snapshot: (): InboxViewSnapshot => ({
       tab: state.tab,
       search: state.search,
       groupBy: state.groupBy,
       facets: normalizeFacetSelection(state.facets),
-      collapsedGroupIds: [...state.collapsedGroupIds],
     }),
 
     activeFacetCount: () =>

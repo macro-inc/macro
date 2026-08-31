@@ -20,6 +20,10 @@ import { scopeThreadNotifications } from './utils';
  *
  */
 type InboxListEntityProps = BaseListEntityProps & {
+  /** Classes applied to the outer list-row wrapper. */
+  class?: string;
+  /** Classes applied to the rendered Inbox card. */
+  cardClass?: string;
   focusable?: boolean;
   occurrenceKey?: string;
 };
@@ -47,7 +51,8 @@ export function InboxListEntity(props: InboxListEntityProps) {
       // NarrowInboxLayout.
       class={cn(
         'group/inbox-item soup-list-entity relative mx-(--soup-row-gutter)',
-        SOUP_ROW_CLASS.card
+        SOUP_ROW_CLASS.card,
+        props.class
       )}
       ref={props.ref}
       onMouseMove={props.onMouseMove}
@@ -57,6 +62,7 @@ export function InboxListEntity(props: InboxListEntityProps) {
         config={props.entityRowConfig}
       >
         <InboxCardLayout
+          class={props.cardClass}
           item={item()}
           selected={props.checked}
           highlighted={props.highlighted}

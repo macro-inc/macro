@@ -4,7 +4,6 @@ import {
   buildGroupedSoupRows,
   createSearchState,
   createSoupLoadMoreRow,
-  isSoupRowVisible,
   type SoupRow,
   testFacets,
   useSearchContext,
@@ -254,9 +253,7 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
       );
     }
 
-    return result.filter((row) =>
-      isSoupRowVisible(row, state.groups.isExpanded)
-    );
+    return result;
   });
 
   const isLoading = () => {

@@ -80,17 +80,12 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
       },
-      isNavigable: (row) => row.kind !== 'section-header',
+      isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
       isSelectable: (row) => row.kind === 'entity',
       onActivate: ({
         item,
         metadata,
       }: ListActivation<SplitListRow, SplitListActivationMetadata>) => {
-        if (item.kind === 'group-header') {
-          props.state.groups.toggle(item.groupId);
-          return;
-        }
-
         if (item.kind === 'load-more') {
           if (!item.isLoading) void dataSource.loadMore();
           return;
@@ -169,7 +164,7 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
 
   return (
     <>
-      <ViewShell.Main class="bg-ink/2">
+      <ViewShell.Main>
         <InboxHeader />
         <InboxTabs state={props.state} />
         <Suspense fallback={<InboxFallback />}>
