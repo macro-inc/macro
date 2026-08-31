@@ -9,6 +9,7 @@ import {
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import { Button, cn } from '@ui';
 import {
+  createEffect,
   createSignal,
   For,
   type JSX,
@@ -58,7 +59,20 @@ export interface ReminderFormProps {
   submitLabel: string;
   pending?: boolean;
   autofocus?: boolean;
-  onCancel: () => void;
+  /**
+   * Cancel reverts the fields to what they were seeded with rather than only
+   * bubbling `onCancel` — for an editor that stays open (the split view), so a
+   * cancelled edit undoes itself instead of tearing the panel down.
+   */
+  revertOnCancel?: boolean;
+  /** Notified when the fields drift from (or return to) their seeded values. */
+  onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Cancel. `wasDirty` is whether there were unsaved edits when it was clicked:
+   * with `revertOnCancel`, those edits have already been reverted, so the host
+   * can keep the panel open on a revert and only dismiss on a clean cancel.
+   */
+  onCancel: (wasDirty: boolean) => void;
   onSubmit: (values: ReminderFormValues) => void;
 }
 
@@ -166,6 +180,28 @@ export function ReminderForm(props: ReminderFormProps) {
       : samePartsShape(repeatParts(), initialParts);
   };
 
+  /** Whether anything — title or schedule — differs from what was seeded. */
+  const isDirty = () =>
+    description() !== seed.description || !scheduleUntouched();
+
+  // Let the host reflect the unsaved state (e.g. a dot on the split's title).
+  createEffect(() => props.onDirtyChange?.(isDirty()));
+
+  const reset = () => {
+    setDescription(seed.description);
+    setRepeat(seed.repeat);
+    setOnceDate(seed.onceDate);
+    setOnceTime(seed.onceTime);
+    setRepeatParts(seed.parts);
+  };
+
+  const cancel = () => {
+    const wasDirty = isDirty();
+    // Revert the edits in place; the host decides whether to also dismiss.
+    if (props.revertOnCancel && wasDirty) reset();
+    props.onCancel(wasDirty);
+  };
+
   const setRepeatKind = (kind: RepeatKind) => {
     setRepeat(kind);
     if (kind !== 'once') {
@@ -240,156 +276,169 @@ export function ReminderForm(props: ReminderFormProps) {
   };
 
   return (
-    <form
-      class="flex flex-col gap-4 text-sm"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
-      }}
-    >
+    <div class="flex flex-col gap-4 text-sm">
+      {/* Outside the <form> on purpose: the reference card carries its own
+          buttons (Copy Link, etc.), and a button inside a form submits it —
+          which here would save-and-close the panel on a stray click. */}
       <Show when={props.reference}>{(node) => node()}</Show>
 
-      <input
-        ref={titleRef}
-        type="text"
-        value={description()}
-        onInput={(event) => setDescription(event.currentTarget.value)}
-        placeholder={props.placeholder}
-        aria-label="Reminder description"
-        // Counts UTF-16 code units where the service counts characters, so this
-        // only ever stops short of the real limit, never past it. The
-        // description resolvers apply the exact cap.
-        maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
-        class="w-full rounded-md border border-edge-muted bg-surface px-2 py-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
-      />
+      <form
+        class="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
+      >
+        <input
+          ref={titleRef}
+          type="text"
+          value={description()}
+          onInput={(event) => setDescription(event.currentTarget.value)}
+          placeholder={props.placeholder}
+          aria-label="Reminder description"
+          // Counts UTF-16 code units where the service counts characters, so this
+          // only ever stops short of the real limit, never past it. The
+          // description resolvers apply the exact cap.
+          maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
+          class="w-full rounded-md border border-edge-muted bg-surface px-2 py-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
+        />
 
-      <div class="flex flex-col gap-2">
-        <span class="text-xs font-medium text-ink-muted">Repeat</span>
-        <div class="flex gap-1">
-          <For
-            each={
-              [
-                { value: 'once', label: 'Does not repeat' },
-                { value: 'week', label: 'Weekly' },
-                { value: 'month', label: 'Monthly' },
-              ] as const
-            }
-          >
-            {(option) => (
-              <button
-                type="button"
-                class={cn(
-                  'flex-1 rounded border px-2 py-1.5 text-xs',
-                  repeat() === option.value
-                    ? 'border-edge bg-active text-ink'
-                    : 'border-edge-muted text-ink-muted hover:text-ink'
-                )}
-                onClick={() => setRepeatKind(option.value)}
-              >
-                {option.label}
-              </button>
-            )}
-          </For>
+        <div class="flex flex-col gap-2">
+          <span class="text-xs font-medium text-ink-muted">Repeat</span>
+          <div class="flex gap-1">
+            <For
+              each={
+                [
+                  { value: 'once', label: 'Does not repeat' },
+                  { value: 'week', label: 'Weekly' },
+                  { value: 'month', label: 'Monthly' },
+                ] as const
+              }
+            >
+              {(option) => (
+                <button
+                  type="button"
+                  class={cn(
+                    'flex-1 rounded border px-2 py-1.5 text-xs',
+                    repeat() === option.value
+                      ? 'border-edge bg-active text-ink'
+                      : 'border-edge-muted text-ink-muted hover:text-ink'
+                  )}
+                  onClick={() => setRepeatKind(option.value)}
+                >
+                  {option.label}
+                </button>
+              )}
+            </For>
+          </div>
         </div>
-      </div>
 
-      <Switch>
-        <Match when={repeat() === 'once'}>
-          <div class="flex items-center gap-2">
-            <input
-              type="date"
-              aria-label="Date"
-              value={onceDate()}
-              onInput={(event) => setOnceDate(event.currentTarget.value)}
-              class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-            />
-            <input
-              type="time"
-              aria-label="Time"
-              value={onceTime()}
-              onInput={(event) => setOnceTime(event.currentTarget.value)}
-              class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-            />
-          </div>
-        </Match>
-        <Match when={repeat() === 'week'}>
-          <div class="flex flex-col gap-3">
-            <div class="flex gap-1">
-              <For each={WEEKDAY_OPTIONS}>
-                {(day) => (
-                  <button
-                    type="button"
-                    class={cn(
-                      'flex-1 rounded border px-1 py-1.5 text-xs',
-                      repeatParts().daysOfWeek.includes(day.value)
-                        ? 'border-edge bg-active text-ink'
-                        : 'border-edge-muted text-ink-muted hover:text-ink'
-                    )}
-                    aria-pressed={repeatParts().daysOfWeek.includes(day.value)}
-                    onClick={() => toggleDay(day.value)}
-                  >
-                    {day.label}
-                  </button>
-                )}
-              </For>
-            </div>
-            <TimeField
-              value={repeatParts().time}
-              onChange={(time) => updateParts({ time })}
-            />
-          </div>
-        </Match>
-        <Match when={repeat() === 'month'}>
-          <div class="flex items-center gap-3">
-            <label class="flex items-center gap-2 text-sm text-ink-muted">
-              Day
+        <Switch>
+          <Match when={repeat() === 'once'}>
+            <div class="flex items-center gap-2">
               <input
-                type="number"
-                min="1"
-                max="31"
-                value={repeatParts().dayOfMonth}
-                onInput={(event) =>
-                  updateParts({ dayOfMonth: event.currentTarget.value })
-                }
-                class="w-16 rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                type="date"
+                aria-label="Date"
+                value={onceDate()}
+                onInput={(event) => setOnceDate(event.currentTarget.value)}
+                class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
               />
-            </label>
-            <TimeField
-              value={repeatParts().time}
-              onChange={(time) => updateParts({ time })}
-            />
-          </div>
-        </Match>
-      </Switch>
+              <input
+                type="time"
+                aria-label="Time"
+                value={onceTime()}
+                onInput={(event) => setOnceTime(event.currentTarget.value)}
+                class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+              />
+            </div>
+          </Match>
+          <Match when={repeat() === 'week'}>
+            <div class="flex flex-col gap-3">
+              <div class="flex gap-1">
+                <For each={WEEKDAY_OPTIONS}>
+                  {(day) => (
+                    <button
+                      type="button"
+                      class={cn(
+                        'flex-1 rounded border px-1 py-1.5 text-xs',
+                        repeatParts().daysOfWeek.includes(day.value)
+                          ? 'border-edge bg-active text-ink'
+                          : 'border-edge-muted text-ink-muted hover:text-ink'
+                      )}
+                      aria-pressed={repeatParts().daysOfWeek.includes(
+                        day.value
+                      )}
+                      onClick={() => toggleDay(day.value)}
+                    >
+                      {day.label}
+                    </button>
+                  )}
+                </For>
+              </div>
+              <TimeField
+                value={repeatParts().time}
+                onChange={(time) => updateParts({ time })}
+              />
+            </div>
+          </Match>
+          <Match when={repeat() === 'month'}>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-2 text-sm text-ink-muted">
+                Day
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={repeatParts().dayOfMonth}
+                  onInput={(event) =>
+                    updateParts({ dayOfMonth: event.currentTarget.value })
+                  }
+                  class="w-16 rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                />
+              </label>
+              <TimeField
+                value={repeatParts().time}
+                onChange={(time) => updateParts({ time })}
+              />
+            </div>
+          </Match>
+        </Switch>
 
-      <Show when={repeat() !== 'once'}>
-        <span class="truncate text-xs text-ink-muted">
-          {describeCron(repeatParts())}
-        </span>
-      </Show>
+        <Show when={repeat() !== 'once'}>
+          <span class="truncate text-xs text-ink-muted">
+            {describeCron(repeatParts())}
+          </span>
+        </Show>
 
-      <div class="flex items-center justify-end gap-3 pt-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          class="rounded-lg"
-          onClick={props.onCancel}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          variant="accent"
-          size="sm"
-          depth={3}
-          class="rounded-lg border-0"
-          disabled={!canSubmit()}
-        >
-          {props.submitLabel}
-        </Button>
-      </div>
-    </form>
+        <div class="flex items-center gap-3 pt-2">
+          <Show when={isEdit && isDirty()}>
+            <span class="flex items-center gap-1.5 text-xs text-ink-muted">
+              <span class="size-1.5 rounded-full bg-warning" />
+              Unsaved changes
+            </span>
+          </Show>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            class="ml-auto rounded-lg"
+            onClick={cancel}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="accent"
+            size="sm"
+            depth={3}
+            class="rounded-lg border-0"
+            disabled={!canSubmit()}
+          >
+            {props.submitLabel}
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }
 

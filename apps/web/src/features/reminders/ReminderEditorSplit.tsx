@@ -135,7 +135,12 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
                     )}
                   </Show>
                 }
-                onCancel={() => panel.handle.close()}
+                revertOnCancel
+                onCancel={(wasDirty) => {
+                  // Reverting an edit keeps the panel open; a clean cancel
+                  // dismisses the preview.
+                  if (!wasDirty) panel.handle.close();
+                }}
                 onSubmit={(values) => void save(values, reminder())}
               />
             )}
