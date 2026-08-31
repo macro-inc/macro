@@ -50,16 +50,7 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { EntityType } from '@service-storage/generated/schemas';
 import { Avatar, cn, Tooltip } from '@ui';
 import { parseISO } from 'date-fns';
-import {
-  createContext,
-  createMemo,
-  For,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-  useContext,
-} from 'solid-js';
+import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard } from './InboxCard';
@@ -71,23 +62,12 @@ import {
   itemContent,
 } from './utils';
 
-type InboxCardRootOverrides = {
-  class?: string;
-  focusable?: boolean;
-};
-
-const InboxCardRootOverridesContext = createContext<InboxCardRootOverrides>();
-
 export interface InboxCardLayoutProps {
   /** The already-derived item to render. */
   item: InboxCardDisplayItem;
-  /** Optional root-card styling for alternate list compositions. */
-  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
-  /** Set false when a parent list owns keyboard focus and activation. */
-  focusable?: boolean;
 }
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
@@ -542,12 +522,8 @@ function BaseCard(props: {
   titleLeading?: JSX.Element;
   children?: JSX.Element;
 }) {
-  const rootOverrides = useContext(InboxCardRootOverridesContext);
-
   return (
     <InboxCard.Root
-      class={rootOverrides?.class}
-      focusable={rootOverrides?.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -894,8 +870,6 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   // the quoted-original block stacked beneath.
   return (
     <InboxCard.Root
-      class={props.class}
-      focusable={props.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -1637,58 +1611,54 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
   };
 
   return (
-    <InboxCardRootOverridesContext.Provider
-      value={{ class: props.class, focusable: props.focusable }}
-    >
-      <Switch>
-        <Match when={props.item.entity.type === 'email'}>
-          <EmailCardLayout {...props} />
-        </Match>
-        <Match
-          when={
-            notificationTag() === 'call_started' ||
-            props.item.entity.type === 'call'
-          }
-        >
-          <CallCardLayout {...props} />
-        </Match>
-        <Match when={isGithub()}>
-          <GithubCardLayout {...props} />
-        </Match>
-        <Match
-          when={
-            notificationTag() === 'ai_response' ||
-            props.item.entity.type === 'chat'
-          }
-        >
-          <AiCardLayout {...props} />
-        </Match>
-        <Match when={isTask()}>
-          <TaskCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'document'}>
-          <DocumentCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'channel'}>
-          <ChannelCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'channel_message'}>
-          <ChannelMessageCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'channel_thread'}>
-          <ChannelThreadCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'reminder'}>
-          <ReminderCardLayout {...props} />
-        </Match>
-        <Match when={props.item.entity.type === 'calendar_event'}>
-          <CalendarEventCardLayout {...props} />
-        </Match>
-        <Match when={true}>
-          <GenericCardLayout {...props} />
-        </Match>
-      </Switch>
-    </InboxCardRootOverridesContext.Provider>
+    <Switch>
+      <Match when={props.item.entity.type === 'email'}>
+        <EmailCardLayout {...props} />
+      </Match>
+      <Match
+        when={
+          notificationTag() === 'call_started' ||
+          props.item.entity.type === 'call'
+        }
+      >
+        <CallCardLayout {...props} />
+      </Match>
+      <Match when={isGithub()}>
+        <GithubCardLayout {...props} />
+      </Match>
+      <Match
+        when={
+          notificationTag() === 'ai_response' ||
+          props.item.entity.type === 'chat'
+        }
+      >
+        <AiCardLayout {...props} />
+      </Match>
+      <Match when={isTask()}>
+        <TaskCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'document'}>
+        <DocumentCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'channel'}>
+        <ChannelCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'channel_message'}>
+        <ChannelMessageCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'channel_thread'}>
+        <ChannelThreadCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'reminder'}>
+        <ReminderCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'calendar_event'}>
+        <CalendarEventCardLayout {...props} />
+      </Match>
+      <Match when={true}>
+        <GenericCardLayout {...props} />
+      </Match>
+    </Switch>
   );
 }
 
