@@ -17,6 +17,7 @@ import {
   stringifyDocument,
 } from '@urql/core';
 import type { DocumentNode } from 'graphql';
+import { validate as validateUuid } from 'uuid';
 import type {
   EmbeddedLinkPathSegment,
   OptimisticLinkPatchWire,
@@ -108,12 +109,15 @@ export type QueryRevalidation = {
 };
 
 export type OptimisticMutationOptions = {
+  /** Required RFC UUID; reuse only when the newer intent safely replaces the older one. */
+  uuid: string;
   updates?: readonly OptimisticUpdate[];
   /** Relevant queries that cannot safely be updated still revalidate on success. */
   revalidations?: readonly QueryRevalidation[];
 };
 
 export type OptimisticMutationContext<TData = unknown> = {
+  uuid: string;
   optimisticResponse: TData;
   linkPatches: OptimisticLinkPatchWire[];
   revalidations: QueryRevalidationWire[];
@@ -129,6 +133,11 @@ export type OptimisticMutationDisposition<TData> =
 export type OptimisticMutationDispositionMetadata =
   | { kind: 'committed'; transactionId?: string }
   | { kind: 'queued'; transactionId: string }
+  | {
+      kind: 'superseded';
+      transactionId: string;
+      replacementTransactionId: string;
+    }
   | { kind: 'permanently-failed'; transactionId?: string };
 
 /** Returns a copy of an operation result carrying its queue disposition. */
@@ -136,13 +145,14 @@ export function withOptimisticMutationDisposition(
   result: OperationResult,
   disposition: OptimisticMutationDispositionMetadata
 ): OperationResult {
-  const queuedData =
-    disposition.kind === 'queued'
-      ? optimisticContextOf(result.operation)?.optimisticResponse
-      : undefined;
+  const accepted =
+    disposition.kind === 'queued' || disposition.kind === 'superseded';
+  const queuedData = accepted
+    ? optimisticContextOf(result.operation)?.optimisticResponse
+    : undefined;
   return {
     ...result,
-    ...(disposition.kind === 'queued'
+    ...(accepted
       ? {
           data: queuedData ?? result.data,
           // A durable queued mutation is an accepted local write. Preserve the
@@ -172,7 +182,10 @@ export function optimisticMutationDispositionOf<
   }
 
   const metadata = value as OptimisticMutationDispositionMetadata;
-  if (metadata.kind === 'queued' && metadata.transactionId) {
+  if (
+    (metadata.kind === 'queued' || metadata.kind === 'superseded') &&
+    metadata.transactionId
+  ) {
     return { kind: 'queued', transactionId: metadata.transactionId };
   }
   if (metadata.kind === 'committed' && result.data != null) {
@@ -371,9 +384,13 @@ export function executeOptimisticMutation<
   document: TypedDocumentNode<TData, TVariables>,
   variables: TVariables,
   optimisticData: TData,
-  options: OptimisticMutationOptions = {}
+  options: OptimisticMutationOptions
 ): OperationResultSource<OperationResult<TData, TVariables>> {
+  if (!validateUuid(options.uuid)) {
+    throw new TypeError(`invalid optimistic mutation UUID: ${options.uuid}`);
+  }
   const context: OptimisticMutationContext<TData> = {
+    uuid: options.uuid,
     optimisticResponse: optimisticData,
     linkPatches: [...(options.updates ?? [])],
     revalidations: (options.revalidations ?? []).map(serializeRevalidation),
@@ -396,7 +413,13 @@ export function optimisticContextOf(
     const context = value as Partial<OptimisticMutationContext> & {
       optimisticResponse: unknown;
     };
+    if (typeof context.uuid !== 'string' || !validateUuid(context.uuid)) {
+      throw new TypeError(
+        'invalid optimistic mutation UUID in operation context'
+      );
+    }
     return {
+      uuid: context.uuid,
       optimisticResponse: context.optimisticResponse,
       linkPatches: Array.isArray(context.linkPatches)
         ? context.linkPatches

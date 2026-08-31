@@ -2926,6 +2926,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
@@ -2941,12 +2942,13 @@ dependencies = [
  "thiserror 2.0.18",
  "turso-opfs",
  "turso_core",
+ "uuid",
  "wasm-bindgen-test",
 ]
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "async-lock",
  "cache-core",

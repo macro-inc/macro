@@ -57,12 +57,14 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async claimNextMutation() {
       return undefined;
     },
-    async deferOptimisticWrite(): Promise<void> {},
+    async deferOptimisticWrite() {
+      return { kind: 'deferred' } as const;
+    },
     async commitOptimisticWrite(): Promise<WriteResult> {
       return emptyWriteResult();
     },
-    async rollbackOptimisticWrite(): Promise<WriteResult> {
-      return emptyWriteResult();
+    async rollbackOptimisticWrite() {
+      return { kind: 'rolled-back' as const, ...emptyWriteResult() };
     },
     async invalidate() {
       return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };

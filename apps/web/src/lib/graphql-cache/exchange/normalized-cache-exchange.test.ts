@@ -219,6 +219,8 @@ function makeFakeHost(): FakeHost {
     host.claims.push(head.transactionId);
     return {
       transactionId: head.transactionId,
+      uuid: head.args.uuid,
+      superseded: false,
       leaseGeneration: String(head.attemptCount),
       query: head.args.query,
       operationName: head.args.operationName,
@@ -318,6 +320,7 @@ function makeFakeHost(): FakeHost {
         changed: [],
         affectedOps: [],
         reset: false,
+        upsertKind: { kind: 'inserted' },
         initialClaim: mutation
           ? { kind: 'claimed', mutation }
           : { kind: 'not-runnable' },
@@ -347,6 +350,7 @@ function makeFakeHost(): FakeHost {
         head.leased = false;
         head.nextAttemptAtMs = nextAttemptAtMs;
       }
+      return { kind: 'deferred' };
     },
     async commitOptimisticWrite(
       transactionId,
@@ -362,10 +366,11 @@ function makeFakeHost(): FakeHost {
         reset: false,
       };
     },
-    async rollbackOptimisticWrite(transactionId, _claim): Promise<WriteResult> {
+    async rollbackOptimisticWrite(transactionId, _claim) {
       host.rollbacks.push(transactionId);
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
+        kind: 'rolled-back' as const,
         revision: INITIAL_CACHE_REVISION,
         changed: [],
         affectedOps: [],
@@ -466,7 +471,12 @@ function makeMutationOp(key: number, optimisticResponse?: unknown): Operation {
       suspense: false,
       ...(optimisticResponse === undefined
         ? {}
-        : { normalizedCacheOptimistic: { optimisticResponse } }),
+        : {
+            normalizedCacheOptimistic: {
+              uuid: crypto.randomUUID(),
+              optimisticResponse,
+            },
+          }),
     } as never
   );
 }
@@ -1539,6 +1549,7 @@ describe('normalizedCacheExchange', () => {
 
     it('replays a persisted mutation when the exchange starts', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000001',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: {} },
@@ -1556,6 +1567,7 @@ describe('normalizedCacheExchange', () => {
 
     it('rolls back when a persisted replay resolves with an urql error', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000002',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: {} },
@@ -1704,6 +1716,7 @@ describe('normalizedCacheExchange', () => {
       const operation = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [
             {
@@ -1734,6 +1747,7 @@ describe('normalizedCacheExchange', () => {
 
     it('replays an older returned claim and reports the new caller as queued', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000003',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: { restored: true } },
@@ -1819,6 +1833,7 @@ describe('normalizedCacheExchange', () => {
       const op = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [patch],
           revalidations: [],
@@ -1836,6 +1851,7 @@ describe('normalizedCacheExchange', () => {
       const op = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [
             {
@@ -1958,6 +1974,7 @@ describe('normalizedCacheExchange', () => {
       const operation = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: {
             renameEntities: { results: [] },
           },

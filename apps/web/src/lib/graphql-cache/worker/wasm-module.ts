@@ -16,6 +16,7 @@ import type {
   CacheRevision,
   CacheRevisionResult,
   ClaimedMutation,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
@@ -23,6 +24,7 @@ import type {
   QueryRevalidationWire,
   ReadRecordsByKeysResult,
   ReadResult,
+  RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
   WriteResult,
@@ -110,6 +112,7 @@ export interface CacheEngine {
   ): Promise<CacheEngineHydrationResult>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,
+    uuid: string,
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
@@ -143,7 +146,7 @@ export interface CacheEngine {
     leaseGeneration: string,
     nextAttemptAtMs: number,
     error: string
-  ): Promise<void>;
+  ): Promise<DeferOptimisticWriteResult>;
   commitOptimisticWrite(
     transactionId: string,
     leaseOwner: string,
@@ -157,7 +160,7 @@ export interface CacheEngine {
     transactionId: string,
     leaseOwner: string,
     leaseGeneration: string
-  ): Promise<WriteResult>;
+  ): Promise<RollbackOptimisticWriteResult>;
   invalidateKeys(keys: string[]): Promise<AffectedOperationsResult>;
   deleteKeys(keys: string[]): Promise<AffectedOperationsResult>;
   teardownOperation(opId: string): Promise<void>;

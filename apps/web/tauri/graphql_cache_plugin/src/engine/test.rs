@@ -368,6 +368,7 @@ fn optimistic_layer_commits_durably() {
 
     let optimistic = block_on(handle.enqueue_optimistic_mutation(
         Some("client:2".to_string()),
+        "00000000-0000-4000-8000-000000000001".to_string(),
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),
@@ -382,6 +383,7 @@ fn optimistic_layer_commits_durably() {
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
     let serialized = serde_json::to_value(&optimistic).unwrap();
+    assert_eq!(serialized["upsertKind"]["kind"], "inserted");
     assert_eq!(serialized["initialClaim"]["kind"], "claimed");
     assert_eq!(
         serialized["initialClaim"]["mutation"]["transactionId"],
@@ -391,6 +393,8 @@ fn optimistic_layer_commits_durably() {
         panic!("new queue head should be claimed")
     };
     assert_eq!(claimed.transaction_id, optimistic.transaction_id);
+    assert_eq!(claimed.uuid, "00000000-0000-4000-8000-000000000001");
+    assert!(!claimed.superseded);
 
     // The optimistic view answers reads.
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -423,6 +427,7 @@ fn rollback_drops_optimistic_contribution() {
 
     let optimistic = block_on(handle.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000002".to_string(),
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),

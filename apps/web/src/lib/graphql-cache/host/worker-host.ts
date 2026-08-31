@@ -14,6 +14,7 @@ import {
   type CacheResponseErrorCode,
   type CacheRevision,
   type ClaimedMutation,
+  type DeferOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
   type EntityFilterCacheArgs,
   type EntityFilterCacheResult,
@@ -26,6 +27,7 @@ import {
   type ReadRecordsByKeysArgs,
   type ReadRecordsByKeysResult,
   type ReadResult,
+  type RollbackOptimisticWriteResult,
   type SearchCacheArgs,
   type SearchCachePage,
   validateCacheSearchArgs,
@@ -916,6 +918,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return (await request({
         kind: 'enqueue-optimistic-mutation',
         originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+        uuid: args.uuid,
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,
@@ -973,16 +976,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       claim: MutationClaim,
       nextAttemptAtMs: number,
       error: string
-    ): Promise<void> {
+    ) {
       await ensureInitialized();
-      await request({
+      return (await request({
         kind: 'defer-optimistic-write',
         transactionId,
         leaseOwner: claim.owner,
         leaseGeneration: claim.generation,
         nextAttemptAtMs,
         error,
-      });
+      })) as DeferOptimisticWriteResult;
     },
 
     async commitOptimisticWrite(
@@ -1007,7 +1010,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       transactionId: string,
       claim: MutationClaim,
       error: string
-    ): Promise<WriteResult> {
+    ): Promise<RollbackOptimisticWriteResult> {
       await ensureInitialized();
       return (await request({
         kind: 'rollback-optimistic-write',
@@ -1015,7 +1018,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         leaseOwner: claim.owner,
         leaseGeneration: claim.generation,
         error,
-      })) as WriteResult;
+      })) as RollbackOptimisticWriteResult;
     },
 
     async invalidate(keys: string[]): Promise<AffectedOperationsResult> {

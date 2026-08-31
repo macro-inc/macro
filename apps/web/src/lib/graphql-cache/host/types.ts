@@ -14,6 +14,7 @@ import type {
   CacheReadPriority,
   CacheRevision,
   ClaimedMutation,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
@@ -26,6 +27,7 @@ import type {
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
   ReadResult,
+  RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
   WriteResult,
@@ -67,6 +69,8 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
 }
 
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
+  /** Caller-supplied RFC UUID used for explicit safe coalescing. */
+  uuid: string;
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
@@ -122,7 +126,7 @@ export interface CacheHost {
     claim: MutationClaim,
     nextAttemptAtMs: number,
     error: string
-  ): Promise<void>;
+  ): Promise<DeferOptimisticWriteResult>;
   /** Atomically commits a claimed mutation's real network response. */
   commitOptimisticWrite(
     transactionId: string,
@@ -134,7 +138,7 @@ export interface CacheHost {
     transactionId: string,
     claim: MutationClaim,
     error: string
-  ): Promise<WriteResult>;
+  ): Promise<RollbackOptimisticWriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;
   /** Apply explicit server-provided cache-deletion effects. */
@@ -157,7 +161,7 @@ export interface CacheHost {
   /** Invalidates revision watermarks before a replacement engine is used. */
   onCacheGenerationChanged(cb: () => void): () => void;
 
-  /** Subscribes to final commit/rollback events for queued mutations. */
+  /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;
 
   dispose(): void;

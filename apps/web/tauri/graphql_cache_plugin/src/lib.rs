@@ -23,9 +23,9 @@ pub mod commands;
 mod engine;
 
 pub use engine::{
-    AffectedOperationsResultWire, ClaimedMutationWire, EngineHandle,
-    EnqueueOptimisticMutationResultWire, InitialMutationClaimWire, ReadResultWire,
-    RecordSelectionResultWire, WriteResultWire,
+    AffectedOperationsResultWire, ClaimedMutationWire, DeferOptimisticWriteResultWire,
+    EngineHandle, EnqueueOptimisticMutationResultWire, InitialMutationClaimWire, ReadResultWire,
+    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteResultWire,
 };
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose
@@ -66,6 +66,8 @@ struct MutationSettledEvent {
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    replacement_transaction_id: Option<String>,
 }
 
 struct InitializedCache {
@@ -112,8 +114,8 @@ fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str) {
             revision: revision.to_owned(),
         },
     )
-        .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
-        .ok();
+    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
+    .ok();
 }
 
 fn emit_mutation_settled<R: Runtime>(
@@ -121,6 +123,7 @@ fn emit_mutation_settled<R: Runtime>(
     transaction_id: String,
     status: &'static str,
     error: Option<String>,
+    replacement_transaction_id: Option<String>,
 ) {
     app.emit(
         MUTATION_SETTLED_EVENT,
@@ -128,6 +131,7 @@ fn emit_mutation_settled<R: Runtime>(
             transaction_id,
             status,
             error,
+            replacement_transaction_id,
         },
     )
     .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql mutation settlement"))
