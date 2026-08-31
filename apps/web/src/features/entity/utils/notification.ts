@@ -115,6 +115,81 @@ export function muteItemForRef(entity: {
   return { item_id: entity.id, item_type };
 }
 
+/**
+ * Preview fetch key for a muted item. Only types the preview pipeline
+ * actually serves — reminder and GitHub have no batch preview fetcher.
+ */
+export function muteItemPreviewEntity(item: MuteItem):
+  | {
+      id: string;
+      type:
+        | 'calendar_event'
+        | 'call'
+        | 'channel'
+        | 'chat'
+        | 'document'
+        | 'email'
+        | 'project';
+    }
+  | undefined {
+  switch (normalizeMuteItemType(item.item_type)) {
+    case 'email_thread':
+      return { id: item.item_id, type: 'email' };
+    case 'channel':
+      return { id: item.item_id, type: 'channel' };
+    case 'calendar_event':
+      return { id: item.item_id, type: 'calendar_event' };
+    case 'document':
+      return { id: item.item_id, type: 'document' };
+    case 'chat':
+      return { id: item.item_id, type: 'chat' };
+    case 'project':
+      return { id: item.item_id, type: 'project' };
+    case 'call':
+      return { id: item.item_id, type: 'call' };
+    default:
+      return undefined;
+  }
+}
+
+/** Icon used before a preview loads, or when the type has no preview. */
+export function muteItemFallbackIconType(
+  itemType: string
+):
+  | 'calendar'
+  | 'call'
+  | 'channel'
+  | 'chat'
+  | 'default'
+  | 'email'
+  | 'githubPullRequest'
+  | 'md'
+  | 'project'
+  | 'reminder' {
+  switch (normalizeMuteItemType(itemType)) {
+    case 'channel':
+      return 'channel';
+    case 'document':
+      return 'md';
+    case 'email_thread':
+      return 'email';
+    case 'chat':
+      return 'chat';
+    case 'calendar_event':
+      return 'calendar';
+    case 'call':
+      return 'call';
+    case 'project':
+      return 'project';
+    case 'reminder':
+      return 'reminder';
+    case 'foreign_entity':
+      return 'githubPullRequest';
+    default:
+      return 'default';
+  }
+}
+
 export function isMutedItem(
   muted: readonly MuteItem[],
   item: MuteItem

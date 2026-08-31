@@ -14,8 +14,10 @@ import {
   getNotificationActionText,
   isMutedItem,
   isNotificationUnread,
+  muteItemFallbackIconType,
   muteItemForEntity,
   muteItemForRef,
+  muteItemPreviewEntity,
   normalizeMuteItemType,
 } from '../utils/notification';
 
@@ -655,5 +657,33 @@ describe('mute item mapping', () => {
     );
     expect(entityIsMuted(muted, entity('email'))).toBe(true);
     expect(entityIsMuted(muted, entity('email', 'other'))).toBe(false);
+  });
+
+  it('maps mute rows to preview entities the name pipeline can fetch', () => {
+    expect(
+      muteItemPreviewEntity({ item_id: 'e1', item_type: 'email_thread' })
+    ).toEqual({ id: 'e1', type: 'email' });
+    expect(
+      muteItemPreviewEntity({ item_id: 'c1', item_type: 'channel' })
+    ).toEqual({ id: 'c1', type: 'channel' });
+    expect(
+      muteItemPreviewEntity({ item_id: 'd1', item_type: 'document' })
+    ).toEqual({ id: 'd1', type: 'document' });
+    expect(
+      muteItemPreviewEntity({ item_id: 'r1', item_type: 'reminder' })
+    ).toBeUndefined();
+    expect(
+      muteItemPreviewEntity({ item_id: 'g1', item_type: 'foreign_entity' })
+    ).toBeUndefined();
+  });
+
+  it('picks a type icon when no preview has loaded', () => {
+    expect(muteItemFallbackIconType('document')).toBe('md');
+    expect(muteItemFallbackIconType('channel')).toBe('channel');
+    expect(muteItemFallbackIconType('email')).toBe('email');
+    expect(muteItemFallbackIconType('foreign_entity')).toBe(
+      'githubPullRequest'
+    );
+    expect(muteItemFallbackIconType('reminder')).toBe('reminder');
   });
 });
