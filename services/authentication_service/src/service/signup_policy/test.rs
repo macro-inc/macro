@@ -1,0 +1,174 @@
+use super::*;
+
+#[test]
+fn allow_all_accepts_public_signups() {
+    let policy = SignupPolicy::allow_all();
+
+    assert!(
+        policy
+            .authorize_public_email("new.user@example.test")
+            .is_ok()
+    );
+}
+
+#[test]
+fn allowlist_matching_trims_and_ignores_case() {
+    let policy = SignupPolicy::from_allowlist_json(
+        r#"[" User.One@Example.Test ", "second.user@example.test"]"#,
+    )
+    .expect("valid allowlist");
+
+    assert_eq!(policy.allowed_email_count(), Some(2));
+    assert!(
+        policy
+            .authorize_public_email("user.one@example.test")
+            .is_ok()
+    );
+    assert!(
+        policy
+            .authorize_public_email(" USER.ONE@EXAMPLE.TEST ")
+            .is_ok()
+    );
+    assert!(
+        policy
+            .authorize_public_email("second.user@EXAMPLE.TEST")
+            .is_ok()
+    );
+}
+
+#[test]
+fn duplicate_allowlist_entries_are_collapsed() {
+    let policy = SignupPolicy::from_allowlist_json(
+        r#"["duplicate@example.test", " DUPLICATE@example.test "]"#,
+    )
+    .expect("valid allowlist");
+
+    assert_eq!(policy.allowed_email_count(), Some(1));
+    assert!(!format!("{policy:?}").contains("duplicate@example.test"));
+}
+
+#[test]
+fn plus_aliases_remain_distinct_addresses() {
+    let policy =
+        SignupPolicy::from_allowlist_json(r#"["person@example.test"]"#).expect("valid allowlist");
+
+    assert!(policy.authorize_public_email("person@example.test").is_ok());
+    assert_eq!(
+        policy.authorize_public_email("person+trial@example.test"),
+        Err(SignupPolicyDenial::PublicEmailNotAllowed)
+    );
+}
+
+#[test]
+fn shared_mailbox_origin_is_allowed_by_allowlist_policy() {
+    let policy =
+        SignupPolicy::from_allowlist_json(r#"["person@example.test"]"#).expect("valid allowlist");
+
+    assert!(
+        policy
+            .authorize_origin(&SignupOrigin::SharedMailbox)
+            .is_ok()
+    );
+}
+
+#[test]
+fn public_origin_is_checked_against_allowlist() {
+    let policy =
+        SignupPolicy::from_allowlist_json(r#"["person@example.test"]"#).expect("valid allowlist");
+
+    assert!(
+        policy
+            .authorize_origin(&SignupOrigin::Public {
+                email: "person@example.test".to_string(),
+            })
+            .is_ok()
+    );
+    assert_eq!(
+        policy.authorize_origin(&SignupOrigin::Public {
+            email: "other@example.test".to_string(),
+        }),
+        Err(SignupPolicyDenial::PublicEmailNotAllowed)
+    );
+}
+
+#[test]
+fn malformed_json_is_rejected() {
+    assert_eq!(
+        SignupPolicy::from_allowlist_json("not json"),
+        Err(SignupPolicyConfigError::MalformedJson)
+    );
+}
+
+#[test]
+fn non_array_json_is_rejected() {
+    assert_eq!(
+        SignupPolicy::from_allowlist_json(r#"{"email":"person@example.test"}"#),
+        Err(SignupPolicyConfigError::ExpectedArray)
+    );
+}
+
+#[test]
+fn non_string_entries_are_rejected_by_index() {
+    assert_eq!(
+        SignupPolicy::from_allowlist_json(r#"["person@example.test", 42]"#),
+        Err(SignupPolicyConfigError::NonStringEntry { index: 1 })
+    );
+}
+
+#[test]
+fn invalid_emails_are_rejected_by_index() {
+    assert_eq!(
+        SignupPolicy::from_allowlist_json(r#"["person@example.test", "not-an-email"]"#),
+        Err(SignupPolicyConfigError::InvalidEmail { index: 1 })
+    );
+}
+
+#[test]
+fn blank_entries_are_rejected_by_index() {
+    assert_eq!(
+        SignupPolicy::from_allowlist_json(r#"["person@example.test", "   "]"#),
+        Err(SignupPolicyConfigError::BlankEntry { index: 1 })
+    );
+}
+
+#[test]
+fn empty_arrays_are_rejected() {
+    assert_eq!(
+        SignupPolicy::from_allowlist_json("[]"),
+        Err(SignupPolicyConfigError::EmptyAllowlist)
+    );
+}
+
+#[test]
+fn diagnostics_do_not_reveal_allowlist_or_denied_email() {
+    let policy = SignupPolicy::from_allowlist_json(r#"["secret-address@example.test"]"#)
+        .expect("valid allowlist");
+    let origin = SignupOrigin::Public {
+        email: "denied-address@example.test".to_string(),
+    };
+    let denial = policy
+        .authorize_origin(&origin)
+        .expect_err("email should be denied");
+
+    let origin_debug = format!("{origin:?}");
+    let policy_debug = format!("{policy:?}");
+    let denial_debug = format!("{denial:?}");
+    let denial_display = denial.to_string();
+
+    for diagnostic in [origin_debug, policy_debug, denial_debug, denial_display] {
+        assert!(!diagnostic.contains("secret-address@example.test"));
+        assert!(!diagnostic.contains("denied-address@example.test"));
+    }
+}
+
+#[test]
+fn config_errors_do_not_reveal_entries() {
+    let error = SignupPolicy::from_allowlist_json(r#"["not-an-email"]"#)
+        .expect_err("invalid entry should fail");
+
+    let debug = format!("{error:?}");
+    let display = error.to_string();
+
+    assert!(!debug.contains("not-an-email"));
+    assert!(!display.contains("not-an-email"));
+}
