@@ -21,6 +21,15 @@ pub struct User<'a> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct UserWithData<'a> {
+    #[serde(flatten)]
+    user: User<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<serde_json::Value>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct CreateUserRequest<'a> {
     /// The fusionauth application id
     pub application_id: Cow<'a, str>,
@@ -28,7 +37,22 @@ pub(crate) struct CreateUserRequest<'a> {
     /// Defaults to false
     pub skip_verification: bool,
     /// The user to create
-    pub user: User<'a>,
+    pub user: UserWithData<'a>,
+}
+
+impl<'a> CreateUserRequest<'a> {
+    pub(crate) fn new(
+        application_id: Cow<'a, str>,
+        skip_verification: bool,
+        user: User<'a>,
+        data: Option<serde_json::Value>,
+    ) -> Self {
+        Self {
+            application_id,
+            skip_verification,
+            user: UserWithData { user, data },
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
