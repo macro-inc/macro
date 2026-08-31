@@ -83,7 +83,11 @@ work. State (cookies, login) persists across agent sessions until the
 container restarts.
 
 - The container uses host networking, so plain localhost URLs work: the app
-  is **http://localhost:3000/app**, the proxy `http://localhost:8090`.
+  is **http://localhost:3000/app**, the proxy `http://localhost:8090` (named
+  instances remap these ports; read the stack summary).
+- A human can watch the browser live at **http://localhost:6080/vnc.html**
+  (noVNC over the Xvfb display) — work in the visible window, not isolated
+  contexts, when someone may be watching.
 - Login is passwordless: any email works, and the login API returns the code
   in its response (also visible in Mailpit at http://localhost:8025).
 - From Playwright instead: `chromium.connectOverCDP('http://localhost:9222')`.
@@ -93,6 +97,53 @@ container restarts.
 Correlate a browser repro with backend traces: note the time, then search
 Tempo for that window — the browser's `traceparent` means the frontend action
 and the Rust handler share one trace ID.
+
+### chrome-devtools technique
+
+- Snapshot-first: `take_snapshot` after every navigation or pane change; act
+  only on uids from the latest snapshot (uid prefixes bump on re-render).
+  Macro snapshots are huge — split panes duplicate the doc text — so save
+  big ones to a file (`filePath` param) and grep them.
+- `navigate_page` can time out while the SPA actually loaded (cold Vite
+  compile); follow with `wait_for` on expected text instead of re-navigating.
+- `wait_for` matches any text presence, including placeholders. For "AI
+  finished"-style conditions, poll in `evaluate_script` for the Stop
+  button's absence — the only reliable completion signal.
+- `fill` works on plain inputs but NOT contenteditable: click to focus, then
+  `type_text` (Enter splits paragraphs/sends). Combobox token fields need
+  type → wait for the "N options available" live region → Enter to tokenize.
+- If a radio/tab control won't click ("did not become interactive"), click
+  its adjacent label text node instead.
+- On any error dialog or blank state: `list_console_messages` +
+  `list_network_requests` (filter xhr/fetch), then `get_network_request` for
+  the failing request's body — pairing console error with failing request
+  localizes the fault in one step.
+- Verify editor state with `evaluate_script` (e.g. query
+  `[contenteditable] strong` to confirm an AI edit) — cheaper and more
+  precise than screenshots.
+
+### Driving the Macro app
+
+- Unauthenticated users land on `/app/welcome`: "Continue with email" → fill
+  the email input → "Continue". Locally this may log in with no code prompt;
+  otherwise the code is in Mailpit. First login auto-creates the user.
+- Documents live at `/app/md/<uuid>`; a doc-scoped AI chat at
+  `/app/md/<uuid>/chat/<chatId>`; split panes give the right pane its own URL
+  segment (`/app/md/<uuid>/channel/<channelId>`).
+- Everything is created via the top-left "Create" button (Document D,
+  Channel G, Message M, Task T, …). Sidebar buttons are named "Go to X" in
+  the a11y tree. Search is the "Search" button — results appear as you type,
+  no Enter.
+- Editor: title field is focused on creation; type the title, Enter moves
+  into the body. The contenteditable's a11y `value` exposes the full body
+  text, so snapshots double as content verification.
+- AI edit: "Edit with AI" button under the editor → type the instruction →
+  Enter. Edits apply in place; done when the "Stop" button disappears.
+  AI chat: "Ask Macro" in the doc's Actions panel (doc pre-attached), Enter
+  sends, "Stop generating" disappears when the response is complete.
+- Channels: "Create" → Channel → name it, tokenize invitees in the "To:"
+  combobox, "Create Channel". Verify membership in the Participants tab.
+  Composer: Enter sends; the "Task" switch turns a message into a task.
 
 ## Write tracing code that is debuggable
 
