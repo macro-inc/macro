@@ -1,8 +1,7 @@
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { BlockAlias, BlockName } from '@core/block';
-import { DocumentPreviewContent } from '@core/component/DocumentPreview';
+import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import type { ReminderEntity } from '@entity';
 import BellIcon from '@phosphor/bell-simple.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
@@ -22,24 +21,38 @@ import {
   resolveEditedDescription,
 } from './reminder-schedule';
 
+/** The display type an inline mention takes for the referenced entity. */
+type MentionType = NonNullable<ReminderEntity['referencedEntity']>['type'];
+
 /**
- * The block the referenced entity opens as, for the preview card.
- *
- * Derived from the reminder's stored `entityType` (the API name); the card
- * self-corrects to the real block (a document's task/canvas subtype, say) once
- * the item loads. `undefined` for a standalone reminder.
+ * The referenced entity as a mention, resolved from the reminder's stored
+ * `entityType` (the API name) to the display type a mention chip renders. The
+ * chip resolves the name, icon, and access state itself. `undefined` for a
+ * standalone reminder, or a target that has no mention of its own.
  */
-function referenceBlock(
+function referenceMention(
   reminder: Reminder
-): { id: string; type: BlockName | BlockAlias } | undefined {
+): { id: string; type: MentionType } | undefined {
   if (!reminder.entityId || !reminder.entityType) return undefined;
-  const display =
+  const type: MentionType | undefined =
     reminder.entityType === 'email_thread'
       ? 'email'
       : reminder.entityType === 'foreign_entity'
         ? 'foreign'
-        : reminder.entityType;
-  return { id: reminder.entityId, type: fileTypeToBlockName(display) };
+        : // A message reminder attaches to its parent channel; the rest map
+          // straight across (document, chat, project, channel, call, crm_*).
+          reminder.entityType === 'channel_message'
+          ? 'channel'
+          : reminder.entityType === 'document' ||
+              reminder.entityType === 'chat' ||
+              reminder.entityType === 'project' ||
+              reminder.entityType === 'channel' ||
+              reminder.entityType === 'call' ||
+              reminder.entityType === 'crm_company' ||
+              reminder.entityType === 'crm_contact'
+            ? reminder.entityType
+            : undefined;
+  return type ? { id: reminder.entityId, type } : undefined;
 }
 
 /**
@@ -73,7 +86,7 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
 
   const reference = createMemo(() => {
     const reminder = query.data;
-    return reminder ? referenceBlock(reminder) : undefined;
+    return reminder ? referenceMention(reminder) : undefined;
   });
 
   const save = async (values: ReminderFormValues, reminder: Reminder) => {
@@ -123,14 +136,8 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
                 reference={
                   <Show when={reference()}>
                     {(ref) => (
-                      <div class="rounded-lg border border-edge-muted bg-surface p-1">
-                        <DocumentPreviewContent
-                          documentInfo={{
-                            id: ref().id,
-                            type: ref().type,
-                            params: {},
-                          }}
-                        />
+                      <div class="flex">
+                        <ItemPreview id={ref().id} type={ref().type} />
                       </div>
                     )}
                   </Show>
