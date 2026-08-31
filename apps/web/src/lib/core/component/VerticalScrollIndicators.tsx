@@ -39,12 +39,9 @@ export const ScrollIndicators = (props: {
 
   const isHorizontal = () => props.direction === 'horizontal';
   const isGradient = () => props.appearance === 'gradient';
-  const gradientColor = () =>
-    GRADIENT_COLOR[props.gradientColor ?? 'surface'];
+  const gradientColor = () => GRADIENT_COLOR[props.gradientColor ?? 'surface'];
   const gradientStyle = () =>
-    isGradient()
-      ? { '--scroll-indicator-from': gradientColor() }
-      : undefined;
+    isGradient() ? { '--scroll-indicator-from': gradientColor() } : undefined;
 
   const updateIndicators = () => {
     const ref = props.scrollRef();
