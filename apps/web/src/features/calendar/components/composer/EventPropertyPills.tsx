@@ -168,8 +168,14 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
   const [search, setSearch] = createSignal('');
   const [comboboxDisabled, setComboboxDisabled] = createSignal(false);
   const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>();
+  const [portalSearchRef, setPortalSearchRef] = createSignal<HTMLDivElement>();
 
   let input: HTMLInputElement | undefined;
+  let control: HTMLDivElement | undefined;
+  let content: HTMLElement | undefined;
+
+  const portalMount = () =>
+    portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined;
 
   const propertyLabel = () => guestPropertyLabel(props.selected);
 
@@ -252,13 +258,29 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
 
   const changeOpen = (next: boolean) => {
     setOpen(next);
-    if (!next) setSearch('');
+    if (!next) {
+      setSearch('');
+      return;
+    }
+    queueMicrotask(() => input?.focus());
+  };
+
+  const keepListOpenOnControlPress = (event: {
+    detail: { originalEvent: Event };
+    preventDefault: () => void;
+  }) => {
+    const target = event.detail.originalEvent.target;
+    if (target instanceof Node && control?.contains(target)) {
+      event.preventDefault();
+    }
   };
 
   return (
     <Combobox<GuestPickerItem>
       multiple
       virtualized
+      triggerMode="manual"
+      selectionBehavior="toggle"
       open={open() && !props.disabled}
       onOpenChange={changeOpen}
       onInputChange={setSearch}
@@ -276,14 +298,26 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       }
       placeholder="Add guests..."
       closeOnSelection={false}
+      removeOnBackspace={false}
       allowsEmptyCollection
       placement="bottom-start"
       disabled={props.disabled || comboboxDisabled()}
     >
-      <Combobox.Control<GuestPickerItem> class="inline-flex min-w-0 max-w-48 shrink-0">
-        <Tooltip label="Add guests to this event" placement="bottom">
+      <div class="hidden" ref={setPortalSearchRef} />
+      <Combobox.Control<GuestPickerItem>
+        ref={(element) => {
+          control = element;
+        }}
+        class="inline-flex min-w-0 max-w-48 shrink-0"
+      >
+        <Tooltip
+          label="Add guests to this event"
+          placement="bottom"
+          disabled={open() || props.disabled}
+        >
           <Combobox.Trigger
             tabIndex={0}
+            aria-label="Guests"
             aria-readonly={props.readOnly || undefined}
             class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
             onKeyDown={(event) => {
@@ -312,10 +346,30 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
         </Tooltip>
       </Combobox.Control>
 
-      <Combobox.Portal>
+      <Combobox.Portal mount={portalMount()}>
         <Layer depth={3}>
           <Combobox.Content
+            ref={(element) => {
+              content = element;
+            }}
             class="z-action-menu flex w-96 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge bg-menu p-0 text-sm shadow-menu menu-open-animation"
+            onPointerDown={(event) => event.preventDefault()}
+            onFocusOutside={(event) => {
+              // Modal dialogs steal focus back onto an ancestor; don't treat
+              // that as dismiss. Clicks on other fields still close the list.
+              const focused = event.detail.originalEvent.target;
+              if (!(focused instanceof Node)) return;
+              if (control?.contains(focused)) {
+                event.preventDefault();
+                return;
+              }
+              if (content && focused.contains(content)) {
+                event.preventDefault();
+                input?.focus();
+              }
+            }}
+            onPointerDownOutside={keepListOpenOnControlPress}
+            onInteractOutside={keepListOpenOnControlPress}
             on:keydown={(event: KeyboardEvent) => {
               if (event.key !== 'Escape') return;
               event.preventDefault();

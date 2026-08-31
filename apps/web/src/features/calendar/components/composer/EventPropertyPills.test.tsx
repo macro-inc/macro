@@ -1,0 +1,92 @@
+/**
+ * @vitest-environment jsdom
+ */
+
+import { recipientEntityMapper } from '@core/user';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { Dialog } from '@ui';
+import userEvent from '@testing-library/user-event';
+import { createSignal } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  EventEditorGuestOption,
+  SelectedEventEditorGuest,
+} from './event-form-model';
+import { EventComposerGuestsPill } from './EventPropertyPills';
+
+vi.mock('@core/component/UserIcon', () => ({
+  UserIcon: () => <div data-testid="user-avatar" />,
+}));
+
+function guest(email: string, name: string): EventEditorGuestOption {
+  return recipientEntityMapper('user')({
+    id: `macro|${email}`,
+    email,
+    name,
+  });
+}
+
+const OPTIONS = [
+  guest('ada@example.com', 'Ada Lovelace'),
+  guest('grace@example.com', 'Grace Hopper'),
+];
+
+function renderInComposerDialog() {
+  const [selected, setSelected] = createSignal<SelectedEventEditorGuest[]>([]);
+
+  render(() => (
+    <Dialog open>
+      <input aria-label="Title" />
+      <EventComposerGuestsPill
+        options={() => OPTIONS}
+        selected={selected()}
+        onChange={setSelected}
+      />
+    </Dialog>
+  ));
+}
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  vi.stubGlobal('scrollTo', vi.fn() as unknown as typeof window.scrollTo);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe('EventComposerGuestsPill', () => {
+  it('opens the guest list on the first click from the title field', async () => {
+    const user = userEvent.setup();
+    renderInComposerDialog();
+
+    screen.getByLabelText('Title').focus();
+    const trigger = screen.getByRole('button', { name: 'Guests' });
+    await user.click(trigger);
+
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('listbox')).toBeTruthy();
+    expect(
+      screen.getByRole('combobox', { name: 'Search for guests' })
+    ).toBeTruthy();
+  });
+
+  it('closes the guest list when focus moves to the title', async () => {
+    const user = userEvent.setup();
+    renderInComposerDialog();
+
+    const trigger = screen.getByRole('button', { name: 'Guests' });
+    await user.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    await user.click(screen.getByLabelText('Title'));
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+});
