@@ -23,6 +23,7 @@ import type { GraphqlSoupInput } from '@service-storage/graphql-soup';
 import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
+  graphqlSoupProjectionSupported,
   mapGraphqlSoupItem,
   mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
@@ -189,6 +190,7 @@ export function createGraphqlSoupAstItemsQuery(
       revision === undefined ||
       networkAuthorityRevision() === revision ||
       !queryOptions.enabled ||
+      !graphqlSoupProjectionSupported() ||
       !input ||
       !host ||
       !('initial' in input)

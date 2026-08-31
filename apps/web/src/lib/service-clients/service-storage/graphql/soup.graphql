@@ -35,6 +35,7 @@ query SoupBackfill($input: SoupInput!) {
 
 fragment SoupItemFields on GraphqlSoupEntity {
 	__typename
+	cacheProjection @cacheOnly
 	...SoupEntityCoreFields
 	frecencyScore
 					... on GraphqlSoupDocument {

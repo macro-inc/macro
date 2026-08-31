@@ -1,6 +1,14 @@
-# iOS: dev-facing, for testing in Simulator
+# iOS: dev-facing, for testing in Simulator. Honors PORT like the web dev
+# server (`PORT=3001 just ios-dev`): the vite server picks PORT up through
+# beforeDevCommand's environment, and the --config merge points the webview's
+# devUrl at the same port.
 ios-dev: ios-prepare
-    cd tauri/src-tauri && cargo tauri ios dev --open -- --no-default-features
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PORT="${PORT:-3000}"
+    cd tauri/src-tauri && cargo tauri ios dev --open \
+      --config "{\"build\":{\"devUrl\":\"http://localhost:${PORT}\"}}" \
+      -- --no-default-features
 
 # iOS: prod-facing build, with bundle auto-update turned off, for testing locally on actual iPhone
 ios-build-no-update: ios-prepare

@@ -63,6 +63,30 @@ fn pending_projection(key: &str, owner: &str, updated_at: i64) -> PendingOptimis
     }
 }
 
+fn authoritative_projection(key: &str, owner: &str) -> predicate_index::IndexDocument {
+    let token = |value| Token::new(value).unwrap();
+    predicate_index::IndexDocument {
+        record_key: PredicateRecordKey::new(key).unwrap(),
+        profile: Profile::new(token("profile-v1")),
+        partition: token("thing"),
+        exact_facts: vec![
+            predicate_index::ExactFact {
+                attribute: token("owner"),
+                value: predicate_index::ExactValue::utf8(owner).unwrap(),
+            },
+            predicate_index::ExactFact {
+                attribute: token("server-relation"),
+                value: predicate_index::ExactValue::new([1]).unwrap(),
+            },
+        ],
+        integer_facts: vec![],
+        sort_facts: vec![predicate_index::IntegerFact {
+            attribute: token("updated-at"),
+            value: 1,
+        }],
+    }
+}
+
 fn token(owner: &str, generation: u64) -> MutationClaimToken {
     MutationClaimToken {
         owner: owner.into(),
@@ -1504,6 +1528,65 @@ fn operation_reset_classes_survive_successful_rollback_and_latching() {
                 TursoStorageCloseOutcome::ResetRequired(reason)
             );
         }
+    });
+}
+
+#[test]
+fn record_and_projection_patch_roll_back_together_on_storage_fault() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("atomic-record-projection-patch").unwrap();
+        let projection_key = PredicateRecordKey::new("Thing:1").unwrap();
+        storage
+            .put_batch_with_projections(
+                vec![(key("Thing:1"), record("old"))],
+                vec![ProjectionMutation::Replace(authoritative_projection(
+                    "Thing:1", "owner-1",
+                ))],
+            )
+            .await
+            .unwrap();
+
+        storage.arm_fault(TestFault::After {
+            site: TestFaultSite::Put,
+            index: 0,
+        });
+        storage
+            .put_batch_with_projections(
+                vec![(key("Thing:1"), record("new"))],
+                vec![ProjectionMutation::Patch {
+                    record_key: projection_key.clone(),
+                    profile: Profile::new(Token::new("profile-v1").unwrap()),
+                    partition: Token::new("thing").unwrap(),
+                    exact: vec![predicate_index::ExactAttributePatch {
+                        attribute: Token::new("owner").unwrap(),
+                        values: vec![predicate_index::ExactValue::utf8("owner-2").unwrap()],
+                    }],
+                    integers: vec![],
+                    sorts: vec![],
+                }],
+            )
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            storage.get_batch(&[key("Thing:1")]).await.unwrap(),
+            vec![Some(record("old"))]
+        );
+        let states = storage
+            .load_projection_states(&[projection_key])
+            .await
+            .unwrap();
+        let [Some(ProjectionState::Complete(projection))] = states.as_slice() else {
+            panic!("old complete projection survives the failed transaction");
+        };
+        assert!(projection.exact_facts.iter().any(|fact| {
+            fact.attribute == Token::new("owner").unwrap()
+                && fact.value == predicate_index::ExactValue::utf8("owner-1").unwrap()
+        }));
+        assert!(projection.exact_facts.iter().any(|fact| {
+            fact.attribute == Token::new("server-relation").unwrap()
+                && fact.value == predicate_index::ExactValue::new([1]).unwrap()
+        }));
     });
 }
 

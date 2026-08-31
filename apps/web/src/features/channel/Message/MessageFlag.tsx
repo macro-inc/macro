@@ -8,37 +8,36 @@ type MessageFlagProps = {
 };
 
 /**
- * Horizontal list divider with a centered label pill — used for day
- * boundaries and the unread marker. The hairline's left end lines up with
- * the thread rail column.
+ * Horizontal list divider with a centered label — used for day boundaries
+ * and the unread marker.
  */
 export function MessageFlag(props: MessageFlagProps) {
   return (
     <div
-      class={cn(
-        'relative flex h-14 mobile:h-16 items-center justify-center px-2',
-        props.class
-      )}
+      class={cn('flex h-14 mobile:h-16 items-center gap-2.5 px-2', props.class)}
     >
-      {/* One hairline at an integer y-offset (flex-centering a 1px line in a
-          56px row lands on a half pixel and renders soft/fat). Border-drawn
-          like the rail so both strokes share one paint path. The label's
-          background masks its middle. */}
-      <div
+      <span
+        aria-hidden="true"
         class={cn(
-          'absolute top-7 mobile:top-8 h-0 border-t inset-x-0',
-          props.highlight ? 'border-accent/40' : 'border-thread-rail'
+          'h-px grow',
+          props.highlight ? 'bg-accent/40' : 'bg-thread-rail'
         )}
       />
-      {/* Plain label; its surface background carves the gap in the line. */}
       <span
         class={cn(
-          'relative text-xs font-medium px-2.5 bg-surface',
+          'text-xs font-medium',
           props.highlight ? 'text-accent' : 'text-ink-muted'
         )}
       >
         {props.text}
       </span>
+      <span
+        aria-hidden="true"
+        class={cn(
+          'h-px grow',
+          props.highlight ? 'bg-accent/40' : 'bg-thread-rail'
+        )}
+      />
     </div>
   );
 }
