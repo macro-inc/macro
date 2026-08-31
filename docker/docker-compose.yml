@@ -642,10 +642,12 @@ services:
           - otel-collector
 
   # ============================================================================
-  # headless-chrome (CDP port 9222) — profile: chrome
-  # Remote headless Chrome for agents: connect over the Chrome DevTools
-  # Protocol at http://localhost:9222 (chrome-devtools-mcp, Playwright
-  # connectOverCDP, raw CDP). Runs on the host network so pages can load the
+  # headless-chrome (CDP port 9222, noVNC 6080) — profile: chrome
+  # Remote Chrome for agents: connect over the Chrome DevTools Protocol at
+  # http://localhost:9222 (chrome-devtools-mcp, Playwright connectOverCDP,
+  # raw CDP), and WATCH what the agent does at http://localhost:6080/vnc.html
+  # (Chromium renders to an Xvfb display streamed over noVNC — see
+  # docker/headless-chrome/). Runs on the host network so pages can load the
   # host-run frontend dev server and proxy with plain localhost URLs — bridge
   # networking can't reach host ports on firewalled hosts (NixOS default).
   # Global and shared (one per machine), started automatically by
@@ -655,12 +657,11 @@ services:
   headless-chrome:
     profiles:
       - chrome
-    image: chromedp/headless-shell:latest
+    build:
+      context: .
+      dockerfile: docker/headless-chrome/Dockerfile
+    image: macro-local-headless-chrome:dev
     restart: unless-stopped
-    # Do NOT override command/entrypoint: the image's run.sh starts Chrome on
-    # an internal port and its own socat on 0.0.0.0:9222 (Chrome itself only
-    # binds loopback), and duplicate --remote-debugging-port flags break that
-    # forwarding. Extra Chrome flags would be appended via `command`.
     network_mode: host
 
   # ============================================================================

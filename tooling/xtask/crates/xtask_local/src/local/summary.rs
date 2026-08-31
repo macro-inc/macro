@@ -184,6 +184,10 @@ pub fn print(
     if port_open(9222) {
         row("chrome (cdp)", "http://localhost:9222".into());
     }
+    if port_open(6080) {
+        // Watch what an agent is doing in the shared browser, live.
+        row("chrome (watch)", "http://localhost:6080/vnc.html".into());
+    }
 
     row("logs", logs_command(instance, &env.generated_path));
     row("stop", stop_command(instance));
