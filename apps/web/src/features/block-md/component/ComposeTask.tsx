@@ -471,6 +471,16 @@ export function ComposeTask(props: ComposeTaskProps) {
     });
   });
 
+  // A title-mode pill that ends a picker session with no tags left has nothing
+  // to show, so drop it back to the property row instead of leaving an empty
+  // "Tags" chip beside the title. Collapsing on the session end rather than on
+  // the tag removal itself keeps the open picker from unmounting under the user.
+  const handleTitleTagPickerActive = (active: boolean) => {
+    if (active) return;
+    if (composerTags.appliedTags().length > 0) return;
+    setTagLayoutMode('bottom');
+  };
+
   const deleteTitleTagsAtStart = () => {
     if (tagLayoutMode() !== 'title') return false;
     clearComposerTags();
@@ -844,6 +854,7 @@ export function ComposeTask(props: ComposeTaskProps) {
                 docTags={composerTags}
                 showPlaceholder
                 class="shrink-0"
+                onActiveChange={handleTitleTagPickerActive}
               />
             </div>
           </Show>
