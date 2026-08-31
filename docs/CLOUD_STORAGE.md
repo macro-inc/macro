@@ -13,19 +13,31 @@ libraries in `crates/`, and deployment definitions in `infra/`.
 
 # Testing
 
-To run tests locally, run the following commands:
+To run tests locally, run the following commands from the repository root:
 
 ```bash
 just create_networks
 just run_dbs -d
 just setup_test_envs
 just initialize_dbs
-cargo test # NB: SQLX_OFFLINE should NOT be set
+crate=macro_db_client  # replace with the crate under test
+cargo test -p "$crate"
 ```
+
+Leave `SQLX_OFFLINE` unset for `cargo test`. `SQLX_OFFLINE=true` is only for
+`cargo check` / `cargo build` / `cargo clippy`. If SQLx reports missing cached
+query data, run `just prepare_db` from the repo root inside `nix develop` — do
+not flip offline mode on for tests. After SQL or db-crate changes, run
+`just prepare_db` and update tests.
+
+`just setup_macrodb` and `just initialize_dbs` are the same recipe. Some MacroDB
+table and column names are camelCase; cast them when reading
+(`SELECT "userId" AS user_id`). Schemas live in
+`crates/macro_db_client/migrations/`.
 
 ## clean up
 
-To reset the local database, use the repository-root database recipes rather than deleting unrelated containers: `just crates/macro_db_client/drop_db -y -f`, then `just setup_macrodb`.
+To reset the local database, use the repository-root database recipes rather than deleting unrelated containers: `just crates/macro_db_client/drop_db -y -f`, then `just setup_macrodb`. If `just setup_macrodb` still fails, run `just force_drop_db` from `crates/macro_db_client`, then `just setup_macrodb` from the repository root.
 
 ## Deployment
 

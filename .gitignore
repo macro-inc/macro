@@ -40,3 +40,4 @@ infra/local/generated/
 # Raw SSE captures from CURSOR_ACP_RECORD_DIR; sanitize into
 # crates/cursor_acp/fixtures/real/ before committing one.
 /recordings/
+.cursor/hooks/state/continual-learning.json

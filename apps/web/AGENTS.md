@@ -7,6 +7,12 @@
 - `bun run knip`: to check for dead code
 - Email rendering snapshots (Playwright HTML fixtures, not inbox e2e) live in `src/lib/core/email/tests`. Run `just test-email-rendering`. Add a fixture under `fixtures/` then `just test-email-rendering-update`.
 
+## Pointers
+
+- Vitest and TanStack Query: `docs/testing-best-practices.md`
+- Playwright MCP: `docs/playwright-debugging.md`
+- Local e2e and Tauri: `README.md`
+
 ## Development Patterns
 
 ### General
@@ -31,6 +37,7 @@
 
 ## TS
 - For exhaustive switch statements use `match` from `ts-pattern`.
+- No `any`. Use a proper type, or `unknown` plus a type guard.
 
 ### Misc
 - If you create a Lexical Node or make breaking changes to a Lexical Node, you must increment the lexical version counter (in src/lib/core/component/LexicalMarkdown/version.ts) along with a brief note about changes.

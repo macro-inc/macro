@@ -18,7 +18,7 @@ The app is http://localhost:3000/app. Open it in the VM browser. The user's lapt
 
 The `.cursor` scripts re-enter the pinned nix shell. For any other `docker`, `just`, `bun`, or `doppler` command, prefix with `nix develop /workspace --command`.
 
-Do not run `just run_local`. That is the laptop TUI.
+Do not run `just run_local`. That is the laptop TUI. On a laptop, use `docs/RUNNING_LOCALLY.md`.
 
 ## Start
 
@@ -73,6 +73,16 @@ Wait until the container is healthy.
 If the page loads and API calls fail, the backend is down. Run `just stack status --json`, then `bash .cursor/stack.sh`.
 
 Do not chase `agent_harness_service` restart loops when `DOPPLER_TOKEN` is absent. That loop is expected.
+
+## Secrets
+
+Set `NIX_CACHE_AWS_ACCESS_KEY_ID` and `NIX_CACHE_AWS_SECRET_ACCESS_KEY` as Cursor environment secrets (read-only on the Nix cache bucket). Set `DOPPLER_TOKEN` as a Cursor **runtime** secret: a Doppler service token for the `local` project's `lcl_preview` config (`DOPPLER_PREVIEW_TOKEN` also works). Do not paste the token into chat. With that token, `bash .cursor/stack.sh` pulls secrets instead of `--no-doppler`. Install/bake stays on stubs. Existing agents do not pick up newly added secrets — start a new agent after adding one.
+
+These three secrets are bootstrap-only. `ensure_nix_daemon` reads the Nix cache keys before Doppler is available, and `stack_doppler_args` maps `DOPPLER_PREVIEW_TOKEN` to `DOPPLER_TOKEN`. They intentionally bypass the `macro_env_var` / Doppler application-variable flow.
+
+## Infra and tests
+
+Nothing runs after boot. Before DB-backed `cargo test -p <crate>`, run `bash .cursor/infra.sh` once (Docker, Postgres, Redis), then `just setup_test_envs` and `just initialize_dbs`. Pure-logic crate tests need nothing. `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures.
 
 ## Status
 

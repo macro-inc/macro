@@ -1,6 +1,6 @@
 # Running locally
 
-This guide covers two ways to run Macro on your machine.
+This guide covers two ways to run Macro on your machine. Cursor Cloud uses `.claude/skills/run-app/SKILL.md`, not this file.
 
 If you only change the frontend, run the frontend against hosted services. You do not need Docker or the local stack.
 

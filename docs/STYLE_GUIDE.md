@@ -44,10 +44,10 @@ TypeScript · `[ui]` UI / UX conventions
   already fixed per durable object / per tenant). (#3961)
 - **CS-08** `[db]` Use `sqlx::query!` / `query_as!` (compile-time checked) by default;
   the non-macro form is only for queries that genuinely cannot be statically known.
-  (#4156 · enforced: clippy `disallowed-methods` · also: CLAUDE.md)
+  (#4156 · enforced: clippy `disallowed-methods`)
 - **CS-09** `[db]` The `.sqlx` cache lives at the workspace root — run `just prepare_db`
   from the repository root; never commit a `.sqlx` directory inside an individual
-  crate. (#4577 · also: CLAUDE.md)
+  crate. (#4577 · also: AGENTS.md)
 - **CS-10** `[types]` Newtype your identifiers and tokens — wrap raw `String`
   ids/tokens/model-ids in a validated newtype that checks shape at construction.
   (#4020, #4077, #4276)
@@ -61,7 +61,7 @@ TypeScript · `[ui]` UI / UX conventions
   `std::env::var`, never hand-rolled wrappers; use `MaybeEnvVar` for optional vars. The
   same goes for AWS config instantiation (`macro_aws_config`) and tracing subscriber
   setup (`macro_entrypoint`): use the shared crates.
-  (#4306, #4334, #4380 · enforced: clippy `disallowed-methods` · also: CLAUDE.md)
+  (#4306, #4334, #4380 · enforced: clippy `disallowed-methods` · also: AGENTS.md)
 - **CS-15** `[cfg]` Fail fast: validate config at service instantiation, not deep inside
   request handling — a missing env var should kill startup, not a request. (#4077, #4156)
 - **CS-16** `[cfg]` Don't add `.context()` to env-var macro errors — the macro error
@@ -77,9 +77,10 @@ TypeScript · `[ui]` UI / UX conventions
   (fallback model, retry story, or documented degradation). (#4296)
 - **CS-21** `[err]` Wire usage metering on every invocation path — MCP-triggered tool
   calls count too, not just the primary path. (#4296)
-- **CS-22** `[err]` Tracing: `#[instrument(err)]` only on `Result` functions; log errors
-  as structured fields (`tracing::error!(error=?e, "msg")`); prefer `.inspect_err` over
-  `if let Err(e)` for logging. (also: CLAUDE.md)
+- **CS-22** `[err]` Tracing: `#[instrument(err)]` only on `Result` functions; omit `err`
+  on `Option`, `()`, and other non-`Result` returns. Do not set `level = "info"`. Log
+  errors as structured fields (`tracing::error!(error=?e, "msg")`); prefer
+  `.inspect_err` over `if let Err(e)` for logging.
 - **CS-23** `[arch]` Do not grow `macro_db_client` — new domain logic gets a new crate;
   the catch-all crates must shrink, not accumulate. (#4380)
 - **CS-24** `[arch]` Keep source files under ~1000 lines — split before a reviewer has
@@ -99,7 +100,7 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-29** `[arch]` Group proliferating root files (e.g. Dockerfiles) into a dedicated
   folder. (#4380)
 - **CS-30** `[api]` Axum handlers take shared services via `State`, not `Extension`.
-  (#4556 · enforced: ast-grep `rust-no-axum-extension-param`, warning · also: CLAUDE.md)
+  (#4556 · enforced: ast-grep `rust-no-axum-extension-param`, warning)
 - **CS-31** `[api]` Attach cross-cutting services to the owning domain service, not ad
   hoc at the router/handler layer — e.g. `EntityAccessManagementService` hangs off the
   email/document service itself, the way the documents crate does. (#4572)
@@ -132,16 +133,16 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-45** `[rust]` CLI binaries use `clap`, not hand-rolled arg parsing. (#3678)
 - **CS-46** `[rust]` Use `rootcause` for error handling in new code — it's preferred
   over `anyhow` these days. In code that's still on anyhow, prefer `bail!` for early
-  error returns. (also: CLAUDE.md)
+  error returns.
 - **CS-47** `[perf]` Keep latency-critical services thin: push bytes directly instead of
   round-tripping through presigned URLs or extra services; dispatch non-blocking
   background work with `wait_until`. (#3781)
 - **CS-48** `[perf]` Don't do per-message work on hot websocket paths — accumulate and
   flush on a timer/alarm. (#3961)
 - **CS-49** `[test]` Tests live in a sibling `test.rs`, not inline `#[cfg(test)]` blocks
-  in the implementation file. (#4647 · also: CLAUDE.md)
+  in the implementation file. (#4647 · also: AGENTS.md)
 - **CS-50** `[test]` Update tests and run `just prepare_db` with any db-crate change.
-  (also: CLAUDE.md)
+  (also: AGENTS.md)
 - **CS-51** `[arch]` Domain modules reference no infrastructure or transport: no AWS
   SDKs, redis, reqwest, opensearch, kafka, axum, or http types under `src/domain/**` —
   wrap clients in outbound adapters behind ports; response mapping lives in inbound.
@@ -156,13 +157,16 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-53** `[arch]` Inbound adapters run no database queries — handlers, tools, and
   listeners call a domain service backed by an outbound repository, never sqlx
   directly. (enforced: ast-grep `rust-no-sqlx-in-inbound`, warning)
+- **CS-54** `[rust]` New crates put `#![deny(missing_docs)]` on `lib.rs` so every public
+  item has a doc comment.
+- **CS-55** `[test]` Do not mark rustdoc examples `ignore` unless the user asked.
 
 ## Frontend and shared TypeScript (`apps/web`, `packages/`)
 
 - **FE-01** `[data]` Never call a service client outside the `queries` package — UI code
   calling an endpoint directly is usually re-fetching data an existing query already
   caches. (#3750, #3961 · enforced: ast-grep `ts-no-service-client-outside-queries` +
-  `tsx-no-service-client-outside-queries`, warning · also: AGENTS.md)
+  `tsx-no-service-client-outside-queries`, warning · also: apps/web/AGENTS.md)
 - **FE-02** `[data]` Every query module has a `keys.ts` structured like the existing
   ones. (#3710)
 - **FE-03** `[data]` Conditional fetching uses a debounced signal passed to TanStack
@@ -178,15 +182,15 @@ TypeScript · `[ui]` UI / UX conventions
   bot config) — fetch it dynamically or generate types from the backend source of
   truth. (#3692)
 - **FE-08** `[solid]` No ad-hoc global state modules — shared state for a subtree lives
-  in a Context scoped to a clear ownership boundary. (#3750 · also: AGENTS.md)
+  in a Context scoped to a clear ownership boundary. (#3750 · also: apps/web/AGENTS.md)
 - **FE-09** `[solid]` Derive, don't sync — an effect that only copies one signal into
   another similarly-shaped signal should be a derived signal at the appropriate level.
   (#3898)
 - **FE-10** `[solid]` `createEffect` is for external/imperative systems only (DOM APIs,
   third-party libs, navigation events) — never for deriving state; use `on()` to make
-  dependencies explicit when an effect is warranted. (#3750, #3898 · also: AGENTS.md)
+  dependencies explicit when an effect is warranted. (#3750, #3898 · also: apps/web/AGENTS.md)
 - **FE-11** `[solid]` Check `solid-primitives` before writing a custom reactive utility.
-  (also: AGENTS.md)
+  (also: apps/web/AGENTS.md)
 - **FE-12** `[async]` `async`/`await` with `try`/`catch`, not `.then()`/`.catch()`
   chains. (#3716, #3781 · enforced: oxlint `promise/prefer-await-to-then` —
   `bun run lint:oxlint` from the repository root)
@@ -204,14 +208,14 @@ TypeScript · `[ui]` UI / UX conventions
   of core business logic. (#3750, #3781, #3947)
 - **FE-17** `[arch]` Reuse existing shared utilities and primitives before hand-rolling
   (`removeNodeAndRestoreSelection`, Kobalte components) — re-implementations
-  reintroduce bugs that were already fixed. (#4281, #4321 · also: AGENTS.md)
+  reintroduce bugs that were already fixed. (#4281, #4321 · also: apps/web/AGENTS.md)
 - **FE-18** `[arch]` Within a package, use relative imports — don't route through the
   package's own barrel file; it adds indirection and invites circular dependencies.
   (#3692)
 - **FE-19** `[ts]` Trust `match` narrowing — an exhaustive `ts-pattern` match already
   narrows the type inside each closure; a manual `Extract<>` alias is redundant. (#4201)
-- **FE-20** `[ts]` Exhaustive branching uses `match` from `ts-pattern`. (also: AGENTS.md)
-- **FE-21** `[ts]` No `any` — proper types or `unknown` + type guards. (also: AGENTS.md)
+- **FE-20** `[ts]` Exhaustive branching uses `match` from `ts-pattern`. (also: apps/web/AGENTS.md)
+- **FE-21** `[ts]` No `any` — proper types or `unknown` + type guards. (also: apps/web/AGENTS.md)
 - **FE-22** `[ui]` Pending or permission-gated actions render as a dimmed version of the
   real UI with inline accept/reject controls — not a generic placeholder icon. (#4201)
 - **FE-23** `[ui]` Disclosure carets rotate 180° to point down when expanded, matching
@@ -221,11 +225,11 @@ TypeScript · `[ui]` UI / UX conventions
 - **FE-25** `[ui]` Semantic color tokens, not raw Tailwind palette classes — the default
   palette is disabled via `--color-*: initial` in `apps/web/src/index.css`, so
   classes like `text-red-500` silently render nothing. (enforced: ast-grep
-  `tsx-no-raw-tailwind-palette`, CI error · also: AGENTS.md)
+  `tsx-no-raw-tailwind-palette`, CI error · also: apps/web/AGENTS.md)
 - **FE-26** `[ui]` Prefer composition over configurability; keep reusable components
-  small and free of queries/complex state. (also: AGENTS.md)
+  small and free of queries/complex state. (also: apps/web/AGENTS.md)
 - **FE-27** `[ui]` Don't add `cursor-pointer` to clickable elements. (enforced: ast-grep
-  `tsx-no-cursor-pointer`, warning · also: AGENTS.md)
+  `tsx-no-cursor-pointer`, warning · also: apps/web/AGENTS.md)
 - **FE-28** `[ui]` Dialogs rely on Kobalte's default autofocus: make the intended
   target the first tabbable element and preserve focus ownership for restoration.
   Override `onOpenAutoFocus` only for a proven lifecycle requirement, and verify
