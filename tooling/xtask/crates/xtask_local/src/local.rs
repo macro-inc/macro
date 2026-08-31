@@ -979,6 +979,51 @@ fn connect_tracing_network(instance: &Instance) {
         .output();
 }
 
+/// Undo [`connect_tracing_network`] before teardown. The collector lives in a
+/// different compose project, and Docker refuses to remove a network with a
+/// foreign container still attached — without this, every `compose down`
+/// leaves the instance's `services` network behind ("active endpoints",
+/// silently swallowed). Best-effort like its counterpart.
+fn disconnect_tracing_network(instance: &Instance) {
+    let network = format!("{}_services", instance.project_name());
+    let Some(attached) = Command::new("docker")
+        .args([
+            "network",
+            "inspect",
+            &network,
+            "--format",
+            "{{range .Containers}}{{.Name}}\n{{end}}",
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+    else {
+        return;
+    };
+    // Foreign means "not this compose project". Decide by the compose project
+    // label, not the container name: the global collector `macro-lgtm-1`
+    // (project `macro`, service `lgtm`) is name-indistinguishable from a
+    // container of an instance literally named `lgtm` (project `macro-lgtm`).
+    for name in attached.lines().map(str::trim).filter(|n| !n.is_empty()) {
+        let project = Command::new("docker")
+            .args([
+                "inspect",
+                name,
+                "--format",
+                r#"{{index .Config.Labels "com.docker.compose.project"}}"#,
+            ])
+            .output()
+            .ok()
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
+        if project.as_deref() != Some(instance.project_name()) {
+            let _ = Command::new("docker")
+                .args(["network", "disconnect", "-f", &network, name])
+                .output();
+        }
+    }
+}
+
 /// Restart the given services' containers so they re-exec their freshly built
 /// binaries (bind-mounted at `/app/out`). Uses plain `docker restart -t 0` by
 /// container name — no `docker compose` config parse, no graceful-stop grace,
@@ -1041,6 +1086,9 @@ fn instance_networks(instance: &Instance) -> [String; 2] {
 /// containers/volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     sdk_webhook::stop(instance);
+    // Detach the global trace collector first or `down` can't remove the
+    // instance's `services` network (foreign container = active endpoint).
+    disconnect_tracing_network(instance);
     let project = instance.project_name();
     // `-t 0`: SIGKILL immediately, no graceful-shutdown grace. The default 10s
     // SIGTERM timeout per container (Postgres' smart shutdown, OpenSearch, …)
