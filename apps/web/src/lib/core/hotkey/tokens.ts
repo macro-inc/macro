@@ -90,6 +90,7 @@ export const TOKENS = {
       next: 'calendar.period.next',
       today: 'calendar.period.today',
     },
+    search: 'calendar.search',
   },
 
   // global
