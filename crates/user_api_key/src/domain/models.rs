@@ -3,20 +3,19 @@
 use std::fmt;
 use std::str::FromStr;
 
-use chrono::{DateTime, Utc};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-/// Prefix written onto every newly minted key, and onto display prefixes.
+/// Prefix written onto every newly minted key.
 pub const KEY_PREFIX: &str = "mak_";
 
 /// Entropy used when minting a key (32 bytes → 64 hex characters).
 const KEY_SECRET_BYTES: usize = 32;
 
-/// Hex characters of the SHA-256 digest used as the public display prefix.
-const DISPLAY_PREFIX_HEX_CHARS: usize = 8;
+/// Maximum length of a user-facing key name.
+pub const MAX_KEY_NAME_LEN: usize = 100;
 
 /// Opaque identifier for a stored user API key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -55,6 +54,13 @@ impl FromStr for UserApiKeyId {
     }
 }
 
+/// SHA-256 of a raw user API key's UTF-8 bytes.
+///
+/// Same SHA-256 UTF-8 digest used for bot tokens: persist this, never the secret.
+pub fn hash_key(key: &str) -> [u8; 32] {
+    Sha256::digest(key.as_bytes()).into()
+}
+
 /// A user API key secret.
 ///
 /// [`Debug`] redacts to `mak_…` plus the last four characters so
@@ -83,16 +89,9 @@ impl UserApiKey {
         &self.0
     }
 
-    /// Public display prefix derived from the secret.
-    ///
-    /// Uses the first eight hex characters of SHA-256 so the value is never a
-    /// raw substring of the secret.
-    pub fn display_prefix(&self) -> String {
-        let digest = Sha256::digest(self.0.as_bytes());
-        format!(
-            "{KEY_PREFIX}{}",
-            hex::encode(&digest[..DISPLAY_PREFIX_HEX_CHARS / 2])
-        )
+    /// SHA-256 of the secret, for persistence and lookup.
+    pub fn hash(&self) -> [u8; 32] {
+        hash_key(self.expose())
     }
 }
 
@@ -110,17 +109,15 @@ impl fmt::Debug for UserApiKey {
     }
 }
 
-/// Safe metadata for a stored key. Never contains the secret.
+/// Safe metadata for a stored key. Never contains the secret or its hash.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct UserApiKeyInfo {
     /// Opaque identifier used to address the key after create.
     pub id: UserApiKeyId,
-    /// Public display prefix; not a substring of the secret.
-    pub prefix: String,
-    /// When the key was created.
-    pub created_at: DateTime<Utc>,
+    /// User-facing name.
+    pub name: String,
 }
 
 /// A newly minted key: safe metadata plus the secret, shown only once.
@@ -130,10 +127,8 @@ pub struct UserApiKeyInfo {
 pub struct CreatedUserApiKey {
     /// Opaque identifier used to address the key after create.
     pub id: UserApiKeyId,
-    /// Public display prefix; not a substring of the secret.
-    pub prefix: String,
-    /// When the key was created.
-    pub created_at: DateTime<Utc>,
+    /// User-facing name.
+    pub name: String,
     /// The newly minted secret. Shown only on create.
     pub key: String,
 }
@@ -142,8 +137,7 @@ impl fmt::Debug for CreatedUserApiKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CreatedUserApiKey")
             .field("id", &self.id)
-            .field("prefix", &self.prefix)
-            .field("created_at", &self.created_at)
+            .field("name", &self.name)
             .field("key", &UserApiKey::from_raw(&self.key))
             .finish()
     }
@@ -154,11 +148,26 @@ impl CreatedUserApiKey {
     pub fn new(info: UserApiKeyInfo, key: &UserApiKey) -> Self {
         Self {
             id: info.id,
-            prefix: info.prefix,
-            created_at: info.created_at,
+            name: info.name,
             key: key.expose().to_string(),
         }
     }
+}
+
+/// Normalize and validate a user-facing key name.
+pub fn normalize_key_name(name: &str) -> Result<String, UserApiKeyError> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(UserApiKeyError::BadRequest(
+            "api key name must not be empty".to_string(),
+        ));
+    }
+    if name.chars().count() > MAX_KEY_NAME_LEN {
+        return Err(UserApiKeyError::BadRequest(format!(
+            "api key name must be at most {MAX_KEY_NAME_LEN} characters"
+        )));
+    }
+    Ok(name.to_string())
 }
 
 /// Errors returned by the user API key service.

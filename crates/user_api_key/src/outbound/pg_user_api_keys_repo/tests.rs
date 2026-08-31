@@ -4,7 +4,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::PgUserApiKeysRepo;
-use crate::domain::models::{UserApiKey, UserApiKeyId};
+use crate::domain::models::UserApiKey;
+use crate::domain::models::UserApiKeyId;
 use crate::domain::ports::UserApiKeysRepo;
 
 const USER_A: &str = "macro|user-a@macro.com";
@@ -33,28 +34,49 @@ async fn insert_user(pool: &PgPool, id: &str) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn insert_and_list_return_safe_metadata_scoped_per_user(pool: PgPool) {
+async fn insert_and_list_return_id_and_name_scoped_per_user(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
-    let repo = PgUserApiKeysRepo::new(pool);
+    let repo = PgUserApiKeysRepo::new(pool.clone());
     let key = UserApiKey::from_raw(
         "mak_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     );
     let id = UserApiKeyId::generate();
 
     let inserted = repo
-        .insert_key(&user(USER_A), id, &key)
+        .insert_key(&user(USER_A), id, "Laptop", &key.hash())
         .await
         .expect("insert should succeed");
     assert_eq!(inserted.id, id);
-    assert_eq!(inserted.prefix, key.display_prefix());
+    assert_eq!(inserted.name, "Laptop");
 
     let a_keys = repo.list_keys(&user(USER_A)).await.expect("list A");
     let b_keys = repo.list_keys(&user(USER_B)).await.expect("list B");
     assert_eq!(a_keys.len(), 1);
     assert_eq!(a_keys[0].id, id);
-    assert_eq!(a_keys[0].prefix, key.display_prefix());
+    assert_eq!(a_keys[0].name, "Laptop");
     assert!(b_keys.is_empty());
+
+    let stored_hash: Vec<u8> = sqlx::query_scalar(r#"SELECT hash FROM "UserApiKey" WHERE id = $1"#)
+        .bind(id.as_uuid())
+        .fetch_one(&pool)
+        .await
+        .expect("hash should persist");
+    assert_eq!(stored_hash, key.hash());
+
+    let key_column_exists: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'UserApiKey' AND column_name = 'key'
+        )
+        "#,
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("column probe should run");
+    assert!(!key_column_exists);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -66,21 +88,24 @@ async fn count_keys_counts_only_caller_rows(pool: PgPool) {
     repo.insert_key(
         &user(USER_A),
         UserApiKeyId::generate(),
-        &UserApiKey::from_raw("key-a-1"),
+        "a-1",
+        &UserApiKey::from_raw("key-a-1").hash(),
     )
     .await
     .expect("insert A");
     repo.insert_key(
         &user(USER_A),
         UserApiKeyId::generate(),
-        &UserApiKey::from_raw("key-a-2"),
+        "a-2",
+        &UserApiKey::from_raw("key-a-2").hash(),
     )
     .await
     .expect("insert A again");
     repo.insert_key(
         &user(USER_B),
         UserApiKeyId::generate(),
-        &UserApiKey::from_raw("key-b-1"),
+        "b-1",
+        &UserApiKey::from_raw("key-b-1").hash(),
     )
     .await
     .expect("insert B");
@@ -100,32 +125,6 @@ async fn count_keys_counts_only_caller_rows(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_key_by_id_is_scoped_to_owner(pool: PgPool) {
-    insert_user(&pool, USER_A).await;
-    insert_user(&pool, USER_B).await;
-    let repo = PgUserApiKeysRepo::new(pool);
-    let key = UserApiKey::from_raw("owned-by-a");
-    let id = UserApiKeyId::generate();
-
-    repo.insert_key(&user(USER_A), id, &key)
-        .await
-        .expect("insert should succeed");
-
-    let found = repo
-        .find_key_by_id(&user(USER_A), id)
-        .await
-        .expect("lookup as A")
-        .expect("key should exist");
-    assert_eq!(found.expose(), key.expose());
-    assert!(
-        repo.find_key_by_id(&user(USER_B), id)
-            .await
-            .expect("lookup as B")
-            .is_none()
-    );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_key_is_scoped_to_owner(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
@@ -133,24 +132,24 @@ async fn delete_key_is_scoped_to_owner(pool: PgPool) {
     let key = UserApiKey::from_raw("shared-looking-but-owned-by-a");
     let id = UserApiKeyId::generate();
 
-    repo.insert_key(&user(USER_A), id, &key)
+    repo.insert_key(&user(USER_A), id, "owned", &key.hash())
         .await
         .expect("insert should succeed");
 
     assert!(
         !repo
-            .delete_key(&user(USER_B), &key)
+            .delete_key(&user(USER_B), id)
             .await
             .expect("delete as B should run")
     );
     assert!(
         !repo
-            .delete_key(&user(USER_A), &UserApiKey::from_raw("unknown"))
+            .delete_key(&user(USER_A), UserApiKeyId::generate())
             .await
             .expect("delete unknown should run")
     );
     assert!(
-        repo.delete_key(&user(USER_A), &key)
+        repo.delete_key(&user(USER_A), id)
             .await
             .expect("delete as A should run")
     );
@@ -163,14 +162,19 @@ async fn delete_key_is_scoped_to_owner(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_user_id_by_key_returns_owner_or_none(pool: PgPool) {
+async fn find_user_id_by_key_looks_up_hash(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = PgUserApiKeysRepo::new(pool);
     let key = UserApiKey::from_raw("lookup-key");
 
-    repo.insert_key(&user(USER_A), UserApiKeyId::generate(), &key)
-        .await
-        .expect("insert should succeed");
+    repo.insert_key(
+        &user(USER_A),
+        UserApiKeyId::generate(),
+        "lookup",
+        &key.hash(),
+    )
+    .await
+    .expect("insert should succeed");
 
     let owner = repo
         .find_user_id_by_key(&key)
@@ -188,18 +192,19 @@ async fn find_user_id_by_key_returns_owner_or_none(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn insert_same_key_for_second_user_is_rejected(pool: PgPool) {
+async fn insert_same_hash_for_second_user_is_rejected(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
     let repo = PgUserApiKeysRepo::new(pool);
     let key = UserApiKey::from_raw("globally-unique-key");
+    let hash = key.hash();
 
-    repo.insert_key(&user(USER_A), UserApiKeyId::generate(), &key)
+    repo.insert_key(&user(USER_A), UserApiKeyId::generate(), "a", &hash)
         .await
         .expect("first insert should succeed");
     let err = repo
-        .insert_key(&user(USER_B), UserApiKeyId::generate(), &key)
+        .insert_key(&user(USER_B), UserApiKeyId::generate(), "b", &hash)
         .await
-        .expect_err("duplicate key should fail");
+        .expect_err("duplicate hash should fail");
     assert!(matches!(err, super::UserApiKeysRepoErr::Db(_)));
 }

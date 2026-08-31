@@ -3,7 +3,6 @@
 #[cfg(test)]
 mod tests;
 
-use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -37,16 +36,14 @@ pub enum UserApiKeysRepoErr {
 
 struct UserApiKeyInfoRow {
     id: Uuid,
-    prefix: String,
-    created_at: DateTime<Utc>,
+    name: String,
 }
 
 impl From<UserApiKeyInfoRow> for UserApiKeyInfo {
     fn from(row: UserApiKeyInfoRow) -> Self {
         Self {
             id: UserApiKeyId::from_uuid(row.id),
-            prefix: row.prefix,
-            created_at: row.created_at,
+            name: row.name,
         }
     }
 }
@@ -59,20 +56,20 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
         &self,
         user_id: &MacroUserIdStr<'_>,
         id: UserApiKeyId,
-        key: &UserApiKey,
+        name: &str,
+        hash: &[u8; 32],
     ) -> Result<UserApiKeyInfo, Self::Err> {
-        let prefix = key.display_prefix();
         let row = sqlx::query_as!(
             UserApiKeyInfoRow,
             r#"
-            INSERT INTO "UserApiKey" (id, user_id, key, prefix)
+            INSERT INTO "UserApiKey" (id, name, user_id, hash)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, prefix, created_at
+            RETURNING id, name
             "#,
             id.as_uuid(),
+            name,
             user_id.as_ref(),
-            key.expose(),
-            prefix,
+            &hash[..],
         )
         .fetch_one(&self.pool)
         .await?;
@@ -98,10 +95,10 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
         let rows = sqlx::query_as!(
             UserApiKeyInfoRow,
             r#"
-            SELECT id, prefix, created_at
+            SELECT id, name
             FROM "UserApiKey"
             WHERE user_id = $1
-            ORDER BY created_at DESC, id DESC
+            ORDER BY id DESC
             "#,
             user_id.as_ref(),
         )
@@ -111,38 +108,18 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
     }
 
     #[tracing::instrument(err, skip_all)]
-    async fn find_key_by_id(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: UserApiKeyId,
-    ) -> Result<Option<UserApiKey>, Self::Err> {
-        let row = sqlx::query!(
-            r#"
-            SELECT key
-            FROM "UserApiKey"
-            WHERE user_id = $1 AND id = $2
-            "#,
-            user_id.as_ref(),
-            id.as_uuid(),
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(row.map(|row| UserApiKey::from_raw(row.key)))
-    }
-
-    #[tracing::instrument(err, skip_all)]
     async fn delete_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        key: &UserApiKey,
+        id: UserApiKeyId,
     ) -> Result<bool, Self::Err> {
         let result = sqlx::query!(
             r#"
             DELETE FROM "UserApiKey"
-            WHERE user_id = $1 AND key = $2
+            WHERE user_id = $1 AND id = $2
             "#,
             user_id.as_ref(),
-            key.expose(),
+            id.as_uuid(),
         )
         .execute(&self.pool)
         .await?;
@@ -154,13 +131,14 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
         &self,
         key: &UserApiKey,
     ) -> Result<Option<MacroUserIdStr<'static>>, Self::Err> {
+        let hash = key.hash();
         let row = sqlx::query!(
             r#"
             SELECT user_id
             FROM "UserApiKey"
-            WHERE key = $1
+            WHERE hash = $1
             "#,
-            key.expose(),
+            &hash[..],
         )
         .fetch_optional(&self.pool)
         .await?;

@@ -136,7 +136,7 @@ use soup::inbound::axum_router::{
     SoupPage,
 };
 use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
-use user_api_key::inbound::axum_router::UserApiKeysList;
+use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -464,6 +464,7 @@ use utoipa::OpenApi;
             Favorite,
             FavoritesList,
             CreatedUserApiKey,
+            CreateUserApiKeyRequest,
             UserApiKeyInfo,
             UserApiKeysList,
             AddFavoriteRequest,

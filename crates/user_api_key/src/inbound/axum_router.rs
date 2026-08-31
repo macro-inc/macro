@@ -58,7 +58,7 @@ impl<S, Auth> FromRef<UserApiKeyRouterState<S, Auth>> for MacroAuthorizationStat
 ///
 /// Routes:
 /// - `POST /` — mint a key for the caller.
-/// - `GET /` — list the caller's keys as safe metadata.
+/// - `GET /` — list the caller's keys as id + name.
 /// - `DELETE /{id}` — delete one of the caller's keys by opaque id.
 pub fn user_api_key_router<S, Auth, T>(state: UserApiKeyRouterState<S, Auth>) -> Router<T>
 where
@@ -73,11 +73,19 @@ where
         .with_state(state)
 }
 
-/// The caller's API keys as safe metadata.
+/// Request body for minting a key.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateUserApiKeyRequest {
+    /// User-facing name for the key.
+    pub name: String,
+}
+
+/// The caller's API keys as id + name.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserApiKeysList {
-    /// The caller's keys. Never includes the raw secret.
+    /// The caller's keys. Never includes the raw secret or hash.
     pub keys: Vec<UserApiKeyInfo>,
 }
 
@@ -95,6 +103,7 @@ pub struct DeleteUserApiKeyParams {
     tag = "user-api-keys",
     operation_id = "create_user_api_key",
     path = "/user-api-keys",
+    request_body = CreateUserApiKeyRequest,
     responses(
         (status = 201, body = CreatedUserApiKey),
         (status = 400, body = ErrorResponse),
@@ -106,6 +115,7 @@ pub struct DeleteUserApiKeyParams {
 pub async fn create_user_api_key_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(body): Json<CreateUserApiKeyRequest>,
 ) -> Result<(StatusCode, Json<CreatedUserApiKey>), UserApiKeyError>
 where
     S: UserApiKeyService,
@@ -113,7 +123,7 @@ where
 {
     let created = state
         .service
-        .create_key(&user.authorization.user.macro_user_id)
+        .create_key(&user.authorization.user.macro_user_id, &body.name)
         .await?;
     Ok((StatusCode::CREATED, Json(created)))
 }

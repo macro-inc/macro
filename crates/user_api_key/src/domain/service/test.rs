@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::{MAX_KEYS_PER_USER, UserApiKeyServiceImpl};
+use sha2::Digest;
+
 use crate::domain::models::{
-    CreatedUserApiKey, UserApiKey, UserApiKeyError, UserApiKeyId, UserApiKeyInfo,
+    CreatedUserApiKey, MAX_KEY_NAME_LEN, UserApiKey, UserApiKeyError, UserApiKeyId, UserApiKeyInfo,
+    hash_key,
 };
 use crate::domain::ports::{UserApiKeyService, UserApiKeysRepo};
 
@@ -20,8 +22,8 @@ fn user(id: &str) -> MacroUserIdStr<'_> {
 #[derive(Clone)]
 struct StoredKey {
     id: UserApiKeyId,
-    key: String,
-    prefix: String,
+    name: String,
+    hash: [u8; 32],
 }
 
 #[derive(Clone, Default)]
@@ -41,23 +43,22 @@ impl FakeUserApiKeysRepo {
             let mut keys = repo.keys.lock().expect("keys lock poisoned");
             let set = keys.entry(user_id.to_string()).or_default();
             for i in 0..count {
-                let key = UserApiKey::from_raw(format!("seed-key-{i}"));
                 set.push(StoredKey {
                     id: UserApiKeyId::generate(),
-                    prefix: key.display_prefix(),
-                    key: key.expose().to_string(),
+                    name: format!("seed-{i}"),
+                    hash: hash_key(&format!("seed-key-{i}")),
                 });
             }
         }
         repo
     }
 
-    fn stored_secrets_for(&self, user_id: &str) -> Vec<String> {
+    fn stored_hashes_for(&self, user_id: &str) -> Vec<[u8; 32]> {
         self.keys
             .lock()
             .expect("keys lock poisoned")
             .get(user_id)
-            .map(|keys| keys.iter().map(|k| k.key.clone()).collect())
+            .map(|keys| keys.iter().map(|k| k.hash).collect())
             .unwrap_or_default()
     }
 }
@@ -69,15 +70,15 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
         &self,
         user_id: &MacroUserIdStr<'_>,
         id: UserApiKeyId,
-        key: &UserApiKey,
+        name: &str,
+        hash: &[u8; 32],
     ) -> Result<UserApiKeyInfo, Self::Err> {
         if self.fail {
             return Err(FakeRepoError);
         }
         let info = UserApiKeyInfo {
             id,
-            prefix: key.display_prefix(),
-            created_at: Utc::now(),
+            name: name.to_string(),
         };
         self.keys
             .lock()
@@ -86,8 +87,8 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
             .or_default()
             .push(StoredKey {
                 id,
-                key: key.expose().to_string(),
-                prefix: info.prefix.clone(),
+                name: name.to_string(),
+                hash: *hash,
             });
         Ok(info)
     }
@@ -96,7 +97,7 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
         if self.fail {
             return Err(FakeRepoError);
         }
-        Ok(self.stored_secrets_for(user_id.as_ref()).len() as i64)
+        Ok(self.stored_hashes_for(user_id.as_ref()).len() as i64)
     }
 
     async fn list_keys(
@@ -115,35 +116,17 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
                 keys.iter()
                     .map(|k| UserApiKeyInfo {
                         id: k.id,
-                        prefix: k.prefix.clone(),
-                        created_at: Utc::now(),
+                        name: k.name.clone(),
                     })
                     .collect()
             })
             .unwrap_or_default())
     }
 
-    async fn find_key_by_id(
-        &self,
-        user_id: &MacroUserIdStr<'_>,
-        id: UserApiKeyId,
-    ) -> Result<Option<UserApiKey>, Self::Err> {
-        if self.fail {
-            return Err(FakeRepoError);
-        }
-        Ok(self
-            .keys
-            .lock()
-            .expect("keys lock poisoned")
-            .get(user_id.as_ref())
-            .and_then(|keys| keys.iter().find(|k| k.id == id))
-            .map(|k| UserApiKey::from_raw(k.key.clone())))
-    }
-
     async fn delete_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        key: &UserApiKey,
+        id: UserApiKeyId,
     ) -> Result<bool, Self::Err> {
         if self.fail {
             return Err(FakeRepoError);
@@ -153,7 +136,7 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
             return Ok(false);
         };
         let before = set.len();
-        set.retain(|stored| stored.key != key.expose());
+        set.retain(|stored| stored.id != id);
         Ok(set.len() < before)
     }
 
@@ -164,9 +147,10 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
         if self.fail {
             return Err(FakeRepoError);
         }
+        let hash = key.hash();
         let keys = self.keys.lock().expect("keys lock poisoned");
         for (user_id, set) in keys.iter() {
-            if set.iter().any(|stored| stored.key == key.expose()) {
+            if set.iter().any(|stored| stored.hash == hash) {
                 return Ok(Some(
                     MacroUserIdStr::try_from(user_id.clone()).expect("valid user id"),
                 ));
@@ -183,20 +167,20 @@ fn looks_like_generated_key(key: &str) -> bool {
 }
 
 #[tokio::test]
-async fn create_key_returns_secret_once_with_safe_metadata() {
+async fn create_key_returns_secret_once_and_stores_hash() {
     let repo = FakeUserApiKeysRepo::default();
     let service = UserApiKeyServiceImpl::new(repo.clone());
 
     let created = service
-        .create_key(&user(USER_A))
+        .create_key(&user(USER_A), " Laptop ")
         .await
         .expect("create should succeed");
+    assert_eq!(created.name, "Laptop");
     assert!(looks_like_generated_key(&created.key));
-    assert_eq!(
-        created.prefix,
-        UserApiKey::from_raw(&created.key).display_prefix()
+    assert!(
+        repo.stored_hashes_for(USER_A)
+            .contains(&UserApiKey::from_raw(&created.key).hash())
     );
-    assert!(repo.stored_secrets_for(USER_A).contains(&created.key));
 }
 
 #[tokio::test]
@@ -204,15 +188,33 @@ async fn create_key_returns_distinct_secrets() {
     let service = UserApiKeyServiceImpl::new(FakeUserApiKeysRepo::default());
 
     let first = service
-        .create_key(&user(USER_A))
+        .create_key(&user(USER_A), "one")
         .await
         .expect("first create");
     let second = service
-        .create_key(&user(USER_A))
+        .create_key(&user(USER_A), "two")
         .await
         .expect("second create");
     assert_ne!(first.key, second.key);
     assert_ne!(first.id, second.id);
+}
+
+#[tokio::test]
+async fn create_key_rejects_empty_or_too_long_name() {
+    let service = UserApiKeyServiceImpl::new(FakeUserApiKeysRepo::default());
+
+    let empty = service
+        .create_key(&user(USER_A), "   ")
+        .await
+        .expect_err("empty name should reject");
+    assert!(matches!(empty, UserApiKeyError::BadRequest(_)));
+
+    let too_long = "x".repeat(MAX_KEY_NAME_LEN + 1);
+    let err = service
+        .create_key(&user(USER_A), &too_long)
+        .await
+        .expect_err("long name should reject");
+    assert!(matches!(err, UserApiKeyError::BadRequest(_)));
 }
 
 #[tokio::test]
@@ -221,7 +223,7 @@ async fn create_key_rejects_at_cap() {
         UserApiKeyServiceImpl::new(FakeUserApiKeysRepo::with_count(USER_A, MAX_KEYS_PER_USER));
 
     let err = service
-        .create_key(&user(USER_A))
+        .create_key(&user(USER_A), "overflow")
         .await
         .expect_err("cap should reject");
     match err {
@@ -233,15 +235,15 @@ async fn create_key_rejects_at_cap() {
 }
 
 #[tokio::test]
-async fn list_keys_returns_safe_metadata_scoped_to_caller() {
+async fn list_keys_returns_id_and_name_only() {
     let service = UserApiKeyServiceImpl::new(FakeUserApiKeysRepo::default());
 
     let created_a = service
-        .create_key(&user(USER_A))
+        .create_key(&user(USER_A), "A key")
         .await
         .expect("create for A");
     let created_b = service
-        .create_key(&user(USER_B))
+        .create_key(&user(USER_B), "B key")
         .await
         .expect("create for B");
 
@@ -250,17 +252,18 @@ async fn list_keys_returns_safe_metadata_scoped_to_caller() {
     assert_eq!(a_keys.len(), 1);
     assert_eq!(b_keys.len(), 1);
     assert_eq!(a_keys[0].id, created_a.id);
-    assert_eq!(a_keys[0].prefix, created_a.prefix);
+    assert_eq!(a_keys[0].name, "A key");
     assert_ne!(a_keys[0].id, created_b.id);
-    let listed = format!("{:?}", a_keys[0]);
+    let listed = serde_json::to_string(&a_keys[0]).expect("list json");
     assert!(!listed.contains(&created_a.key));
+    assert!(!listed.contains("hash"));
 }
 
 #[tokio::test]
-async fn delete_key_resolves_id_then_removes_secret() {
+async fn delete_key_removes_by_id() {
     let service = UserApiKeyServiceImpl::new(FakeUserApiKeysRepo::default());
     let created = service
-        .create_key(&user(USER_A))
+        .create_key(&user(USER_A), "to-delete")
         .await
         .expect("create should succeed");
 
@@ -280,7 +283,7 @@ async fn delete_key_resolves_id_then_removes_secret() {
 async fn delete_key_does_not_remove_another_users_id() {
     let service = UserApiKeyServiceImpl::new(FakeUserApiKeysRepo::default());
     let created = service
-        .create_key(&user(USER_A))
+        .create_key(&user(USER_A), "owned-by-a")
         .await
         .expect("create for A");
 
@@ -299,7 +302,7 @@ async fn repo_failure_is_internal() {
     });
 
     let err = service
-        .create_key(&user(USER_A))
+        .create_key(&user(USER_A), "fail")
         .await
         .expect_err("failure should surface");
     assert!(matches!(err, UserApiKeyError::Internal(_)));
@@ -317,23 +320,29 @@ fn debug_does_not_contain_full_secret() {
 }
 
 #[test]
-fn list_metadata_json_omits_the_secret() {
+fn hash_key_matches_sha256_of_utf8_bytes() {
+    let key = UserApiKey::from_raw("mak_secret");
+    let expected: [u8; 32] = sha2::Sha256::digest(b"mak_secret").into();
+    assert_eq!(key.hash(), expected);
+    assert_ne!(hash_key("mak_secret"), hash_key("mak_other"));
+}
+
+#[test]
+fn list_metadata_json_is_only_id_and_name() {
     let key = UserApiKey::from_raw(
         "mak_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     );
     let info = UserApiKeyInfo {
         id: UserApiKeyId::generate(),
-        prefix: key.display_prefix(),
-        created_at: Utc::now(),
+        name: "CI".to_string(),
     };
     let json = serde_json::to_value(&info).expect("serialize info");
     assert!(json.get("key").is_none());
+    assert!(json.get("hash").is_none());
+    assert!(json.get("prefix").is_none());
+    assert!(json.get("createdAt").is_none());
     assert!(json.get("id").is_some());
-    assert_eq!(
-        json.get("prefix").and_then(|v| v.as_str()),
-        Some(info.prefix.as_str())
-    );
-    assert!(json.get("createdAt").is_some());
+    assert_eq!(json.get("name").and_then(|v| v.as_str()), Some("CI"));
     assert!(
         !serde_json::to_string(&info)
             .expect("info string")
@@ -346,15 +355,8 @@ fn list_metadata_json_omits_the_secret() {
         created_json.get("key").and_then(|v| v.as_str()),
         Some(key.expose())
     );
-}
-
-#[test]
-fn display_prefix_is_not_a_secret_substring() {
-    let key = UserApiKey::from_raw(
-        "mak_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    assert_eq!(
+        created_json.get("name").and_then(|v| v.as_str()),
+        Some("CI")
     );
-    let prefix = key.display_prefix();
-    assert!(prefix.starts_with("mak_"));
-    assert_eq!(prefix.len(), "mak_".len() + 8);
-    assert!(!key.expose().contains(&prefix[4..]));
 }

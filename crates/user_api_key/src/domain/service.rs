@@ -7,6 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::{
     CreatedUserApiKey, UserApiKey, UserApiKeyError, UserApiKeyId, UserApiKeyInfo,
+    normalize_key_name,
 };
 use crate::domain::ports::{UserApiKeyService, UserApiKeysRepo};
 
@@ -37,7 +38,9 @@ where
     async fn create_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        name: &str,
     ) -> Result<CreatedUserApiKey, UserApiKeyError> {
+        let name = normalize_key_name(name)?;
         let count = self
             .repo
             .count_keys(user_id)
@@ -50,9 +53,10 @@ where
         }
         let id = UserApiKeyId::generate();
         let key = UserApiKey::generate();
+        let hash = key.hash();
         let info = self
             .repo
-            .insert_key(user_id, id, &key)
+            .insert_key(user_id, id, &name, &hash)
             .await
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
         Ok(CreatedUserApiKey::new(info, &key))
@@ -76,15 +80,9 @@ where
         user_id: &MacroUserIdStr<'_>,
         id: UserApiKeyId,
     ) -> Result<(), UserApiKeyError> {
-        let key = self
-            .repo
-            .find_key_by_id(user_id, id)
-            .await
-            .map_err(|e| rootcause::Report::new(e).into_dynamic())?
-            .ok_or(UserApiKeyError::NotFound)?;
         let removed = self
             .repo
-            .delete_key(user_id, &key)
+            .delete_key(user_id, id)
             .await
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
         if removed {
