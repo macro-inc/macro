@@ -367,7 +367,7 @@ async fn team_scope_requires_team_membership() {
 }
 
 #[tokio::test]
-async fn open_stream_caches_access_decisions_per_entity() {
+async fn open_stream_checks_access_for_each_matching_event() {
     let factory = FakeSourceFactory::with_candidates(vec![
         document_candidate("document.updated", DOCUMENT_ID),
         document_candidate("document.updated", DOCUMENT_ID),
@@ -389,7 +389,7 @@ async fn open_stream_caches_access_decisions_per_entity() {
     let delivered: Vec<NormalizedWebhookEvent> = stream.collect().await;
 
     assert_eq!(delivered.len(), 3);
-    assert_eq!(*call_count.lock().unwrap(), 1);
+    assert_eq!(*call_count.lock().unwrap(), 3);
 }
 
 #[tokio::test]

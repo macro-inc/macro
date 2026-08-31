@@ -25,10 +25,9 @@ use entity_access::domain::ports::EntityAccessService;
 use futures::StreamExt as _;
 use futures::stream::BoxStream;
 use macro_user_id::user_id::MacroUserIdStr;
-use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use uuid::Uuid;
 
 /// Furthest back a reconnecting subscriber may resume; older cursors are
@@ -38,14 +37,6 @@ use uuid::Uuid;
 /// database load a resume can cause.
 pub const MAX_REPLAY_WINDOW: Duration = Duration::from_secs(10 * 60);
 
-/// How long one connection trusts a per-entity access decision.
-///
-/// Bounds access-lookup load for busy entities; also the staleness window in
-/// which a subscriber can still see events for an entity whose access was just
-/// revoked.
-const ACCESS_CACHE_TTL: Duration = Duration::from_secs(30);
-/// Hard bound on per-connection entity authorization cache entries.
-const MAX_ACCESS_CACHE_ENTRIES: usize = 10_000;
 /// Producer clock skew tolerated when validating UUIDv7 resume cursors.
 const MAX_CURSOR_CLOCK_SKEW: Duration = Duration::from_secs(60);
 
@@ -245,7 +236,6 @@ struct StreamState<Src, A> {
     subscriber: MacroUserIdStr<'static>,
     workspace_id: String,
     filters: WebhookFilters,
-    access_cache: HashMap<String, (Instant, bool)>,
 }
 
 impl<Src, A> StreamState<Src, A>
@@ -265,30 +255,12 @@ where
             StreamAudience::Entity {
                 entity_id,
                 entity_type,
-            } => {
-                let cache_key = format!("{entity_type:?}:{entity_id}");
-                if let Some((decided_at, allowed)) = self.access_cache.get(&cache_key)
-                    && decided_at.elapsed() < ACCESS_CACHE_TTL
-                {
-                    return Ok(*allowed);
-                }
-                if self.access_cache.len() >= MAX_ACCESS_CACHE_ENTRIES {
-                    self.access_cache
-                        .retain(|_, (decided_at, _)| decided_at.elapsed() < ACCESS_CACHE_TTL);
-                    if self.access_cache.len() >= MAX_ACCESS_CACHE_ENTRIES {
-                        self.access_cache.clear();
-                    }
-                }
-                let allowed = self
-                    .entity_access_service
-                    .get_access_level(Some(&self.subscriber), entity_id, *entity_type)
-                    .await
-                    .map_err(|error| rootcause::report!(error))?
-                    .is_some();
-                self.access_cache
-                    .insert(cache_key, (Instant::now(), allowed));
-                Ok(allowed)
-            }
+            } => Ok(self
+                .entity_access_service
+                .get_access_level(Some(&self.subscriber), entity_id, *entity_type)
+                .await
+                .map_err(|error| rootcause::report!(error))?
+                .is_some()),
         }
     }
 
@@ -386,7 +358,6 @@ where
             subscriber,
             workspace_id,
             filters,
-            access_cache: HashMap::new(),
         };
         Ok(futures::stream::unfold(state, |mut state| async move {
             state.next_delivered().await.map(|event| (event, state))
