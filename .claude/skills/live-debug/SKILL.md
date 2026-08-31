@@ -58,12 +58,16 @@ Typical calls — service names are the binary names (`email_service`,
 Timing quirks: Tempo's search index flushes every ~30s — a trace you just
 produced is fetchable by ID immediately but may not show in search yet.
 
-Fallback without MCP (pi, or the server is down) — everything above is also
-plain HTTP: TraceQL search at `http://localhost:3200/api/search?q=<traceql>`,
-trace fetch at `/api/traces/<id>`, LogQL at
+Everything above is also plain HTTP: TraceQL search at
+`http://localhost:3200/api/search?q=<traceql>`, trace fetch at
+`/api/traces/<id>`, LogQL at
 `http://localhost:3100/loki/api/v1/query_range?query=<logql>` (`start`/`end`
-are unix epoch **nanoseconds**). `docker compose -p macro logs -f <service>`
-still works for raw stdout, but Loki is queryable and survives restarts.
+are unix epoch **nanoseconds**). Use the HTTP form when there is no MCP (pi),
+and for bulk retrieval you want to reduce before reading — a full trace can
+be 50+ spans, so `curl /api/traces/<id> | jq` (filter to slow spans, compute
+offsets) beats dumping `tempo_get-trace` output into context. `docker compose
+-p macro logs -f <service>` still works for raw stdout, but Loki is queryable
+and survives restarts.
 
 Verbosity knobs (set in the shell before `just run_local`, or per service in
 Doppler): `RUST_LOG` filters console + Loki output; `OTEL_TRACE_FILTER`
