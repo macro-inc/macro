@@ -4,15 +4,15 @@
 
 import { recipientEntityMapper } from '@core/user';
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { Dialog } from '@ui';
 import userEvent from '@testing-library/user-event';
+import { Dialog } from '@ui';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EventComposerGuestsPill } from './EventPropertyPills';
 import type {
   EventEditorGuestOption,
   SelectedEventEditorGuest,
 } from './event-form-model';
-import { EventComposerGuestsPill } from './EventPropertyPills';
 
 vi.mock('@core/component/UserIcon', () => ({
   UserIcon: () => <div data-testid="user-avatar" />,
