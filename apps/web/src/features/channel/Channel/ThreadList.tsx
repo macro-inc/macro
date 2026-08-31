@@ -121,8 +121,11 @@ const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 const SCROLL_TO_BOTTOM_SETTLE_MS = 1000;
 
 // How long the kept-mounted target row gets to put the target on screen before
-// the virtualizer positions it instead. Longer than the target scroller's own
-// retry budget, so the precise element scroll always wins when it works.
+// the virtualizer positions it instead. Longer than the target scroller's
+// retry budget for a measured viewport, so the precise element scroll always
+// wins when it can run at all. While the viewport is still unmeasured the
+// fallback re-arms instead of firing: the scroller is legitimately waiting for
+// a box, and an index scroll would be computed against the same zero viewport.
 const TARGET_ELEMENT_FALLBACK_MS = 1500;
 
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
@@ -591,6 +594,14 @@ export function ThreadList(props: ThreadListProps) {
       // rescue, and moving the viewport now would be a yank.
       if (!props.initialScrollHandledByTargetElement) return;
       if (scrollIntent.isUserInteracting()) return;
+      // No viewport to position against yet. The element scroller is still
+      // waiting for one (it holds the target for longer than this), and an
+      // index scroll here would land against the same zero viewport — so wait
+      // for a box rather than move somewhere meaningless.
+      if (handle.viewportSize <= 0) {
+        armTargetElementFallback(handle, target);
+        return;
+      }
       if (isScrollPositionCorrect(handle, target)) return;
       console.debug('ThreadList: target element never landed, falling back', {
         target,
