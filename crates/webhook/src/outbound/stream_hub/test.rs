@@ -30,7 +30,6 @@ fn candidate_at(unix_ms: i64, entity_id: &str) -> StreamCandidateEvent {
 #[tokio::test]
 async fn cursor_source_replays_full_history_then_live_events() {
     let hub = WebhookStreamHub::new();
-    hub.begin_loading();
     hub.publish(candidate_at(1_000, "before"));
     let cursor = candidate_at(2_000, "cursor");
     let cursor_id = Uuid::parse_str(&cursor.event.event_id).unwrap();
@@ -53,7 +52,6 @@ async fn cursor_source_replays_full_history_then_live_events() {
 #[tokio::test]
 async fn latest_source_receives_only_events_published_after_open() {
     let hub = WebhookStreamHub::new();
-    hub.begin_loading();
     hub.publish(candidate_at(1_000, "old"));
     hub.mark_ready();
     let mut source = hub.open(StreamStart::Latest).await.unwrap();
@@ -84,7 +82,6 @@ async fn push_evicts_expired_events_from_the_front() {
 #[tokio::test]
 async fn source_terminates_when_the_kafka_generation_fails() {
     let hub = WebhookStreamHub::new();
-    hub.begin_loading();
     hub.mark_ready();
     let mut source = hub.open(StreamStart::Latest).await.unwrap();
 
@@ -94,9 +91,31 @@ async fn source_terminates_when_the_kafka_generation_fails() {
 }
 
 #[tokio::test]
+async fn retained_history_survives_a_source_reconnect() {
+    let hub = WebhookStreamHub::new();
+    let retained = candidate_at(1_000, "retained");
+    let retained_id = Uuid::parse_str(&retained.event.event_id).unwrap();
+    hub.publish(retained);
+    hub.mark_ready();
+
+    hub.mark_unavailable();
+    hub.mark_ready();
+
+    let mut source = hub
+        .open(StreamStart::AtEvent {
+            event_id: retained_id,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        source.next_event().await.unwrap().event.entity_id,
+        "retained"
+    );
+}
+
+#[tokio::test]
 async fn duplicate_event_ids_are_published_once() {
     let hub = WebhookStreamHub::new();
-    hub.begin_loading();
     let candidate = candidate_at(1_000, "document");
     hub.publish(candidate.clone());
     hub.publish(candidate);
@@ -118,7 +137,6 @@ async fn open_rejects_unavailable_or_truncated_history() {
         Err(WebhookStreamSourceOpenError::Unavailable)
     ));
 
-    hub.begin_loading();
     hub.publish(candidate_at(2_000, "document"));
     hub.mark_ready();
     let missing_id = Uuid::parse_str(&candidate_at(1_000, "missing").event.event_id).unwrap();
@@ -129,24 +147,4 @@ async fn open_rejects_unavailable_or_truncated_history() {
         .await,
         Err(WebhookStreamSourceOpenError::ReplayUnavailable)
     ));
-}
-
-#[tokio::test]
-async fn planned_reload_blocks_new_streams_without_terminating_existing_ones() {
-    let hub = WebhookStreamHub::new();
-    hub.begin_loading();
-    hub.mark_ready();
-    let mut existing = hub.open(StreamStart::Latest).await.unwrap();
-
-    hub.begin_loading();
-    assert!(matches!(
-        hub.open(StreamStart::Latest).await,
-        Err(WebhookStreamSourceOpenError::Unavailable)
-    ));
-    hub.publish(candidate_at(1_000, "during-reload"));
-
-    assert_eq!(
-        existing.next_event().await.unwrap().event.entity_id,
-        "during-reload"
-    );
 }

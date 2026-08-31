@@ -8,7 +8,7 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::time::Duration;
 
@@ -174,34 +174,6 @@ pub enum InitialOffset {
     Earliest,
     /// Consume only records published after the partition assignment begins.
     Latest,
-    /// Consume from the earliest record whose timestamp is at or after this
-    /// Unix-epoch millisecond timestamp. Partitions with no such record start
-    /// at the end, matching [`InitialOffset::Latest`] for caught-up partitions.
-    AtTimestampMs(i64),
-}
-
-/// Assigned offset range captured when an ungrouped partition is positioned.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssignedPartitionRange {
-    /// Kafka topic name.
-    pub topic: String,
-    /// Kafka partition number.
-    pub partition: i32,
-    /// First offset assigned to this consumer.
-    pub start_offset: i64,
-    /// Exclusive partition high watermark captured during assignment.
-    pub end_offset: i64,
-}
-
-/// Current consumed position for one assigned Kafka partition.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssignedPartitionPosition {
-    /// Kafka topic name.
-    pub topic: String,
-    /// Kafka partition number.
-    pub partition: i32,
-    /// Next offset the consumer will read, once librdkafka has established it.
-    pub next_offset: Option<i64>,
 }
 
 /// Shared Kafka consumer with environment-aware transport and type-safe group behavior.
@@ -370,51 +342,6 @@ where
             build_assignment(consumer, topics, Offset::Beginning, metadata_timeout)
         }
         InitialOffset::Latest => build_assignment(consumer, topics, Offset::End, metadata_timeout),
-        InitialOffset::AtTimestampMs(timestamp_ms) => {
-            let requested = build_assignment(
-                consumer,
-                topics,
-                Offset::Offset(timestamp_ms),
-                metadata_timeout,
-            )?;
-            // Capture each end before resolving timestamps. If a partition has
-            // no matching record, this preserves records that arrive while the
-            // offset lookup is in flight.
-            let fallback_offsets: HashMap<(String, i32), i64> = requested
-                .elements()
-                .iter()
-                .map(|element| {
-                    element.error()?;
-                    let (_, high) = consumer.fetch_watermarks(
-                        element.topic(),
-                        element.partition(),
-                        metadata_timeout,
-                    )?;
-                    Ok(((element.topic().to_string(), element.partition()), high))
-                })
-                .collect::<KafkaResult<_>>()?;
-            let resolved = consumer.offsets_for_times(requested, metadata_timeout)?;
-            let mut assignment = TopicPartitionList::new();
-            for element in resolved.elements() {
-                element.error()?;
-                let offset = match element.offset() {
-                    offset @ Offset::Offset(_) => offset,
-                    _ => Offset::Offset(
-                        *fallback_offsets
-                            .get(&(element.topic().to_string(), element.partition()))
-                            .ok_or_else(|| {
-                                KafkaError::Subscription(format!(
-                                    "missing timestamp fallback for {} partition {}",
-                                    element.topic(),
-                                    element.partition()
-                                ))
-                            })?,
-                    ),
-                };
-                assignment.add_partition_offset(element.topic(), element.partition(), offset)?;
-            }
-            Ok(assignment)
-        }
     }
 }
 
@@ -504,12 +431,9 @@ impl KafkaEventConsumer<Ungrouped> {
 
     /// Manually assigns every current partition of `topics` at `initial_offset`.
     ///
-    /// [`InitialOffset::AtTimestampMs`] costs an extra broker round trip to
-    /// resolve the timestamp to per-partition offsets.
-    ///
     /// Manual assignment does not join a consumer group, persist offsets, or
-    /// automatically discover partitions added after this call. Callers that
-    /// support partition-count changes must refresh the assignment themselves.
+    /// automatically discover partitions added after this call. Reconnect to
+    /// discover partition-count changes.
     pub fn assign_topics(
         &self,
         topics: &[&str],
@@ -521,214 +445,6 @@ impl KafkaEventConsumer<Ungrouped> {
             let assignment =
                 initial_assignment(consumer, topics, initial_offset, metadata_timeout)?;
             consumer.assign(&assignment)
-        })
-    }
-
-    /// Assign every current partition and return its initial offset range.
-    ///
-    /// The captured exclusive high watermarks let a caller consume a stable
-    /// startup snapshot before switching to live delivery.
-    pub fn assign_topics_with_watermarks(
-        &self,
-        topics: &[&str],
-        initial_offset: InitialOffset,
-        metadata_timeout: Duration,
-    ) -> KafkaResult<Vec<AssignedPartitionRange>> {
-        either::for_both!(&self.consumer.0, consumer => {
-            prime_oauth_token(consumer);
-            let assignment =
-                initial_assignment(consumer, topics, initial_offset, metadata_timeout)?;
-            let mut ranges = Vec::with_capacity(assignment.count());
-            let mut concrete_assignment = TopicPartitionList::new();
-            for element in assignment.elements() {
-                element.error()?;
-                let (low, high) = consumer.fetch_watermarks(
-                    element.topic(),
-                    element.partition(),
-                    metadata_timeout,
-                )?;
-                let start_offset = match element.offset() {
-                    Offset::Beginning => low,
-                    Offset::End => high,
-                    Offset::Offset(offset) => offset.clamp(low, high),
-                    offset => {
-                        return Err(KafkaError::Subscription(format!(
-                            "unsupported initial offset {offset:?} for {} partition {}",
-                            element.topic(),
-                            element.partition()
-                        )));
-                    }
-                };
-                ranges.push(AssignedPartitionRange {
-                    topic: element.topic().to_string(),
-                    partition: element.partition(),
-                    start_offset,
-                    end_offset: high,
-                });
-                concrete_assignment.add_partition_offset(
-                    element.topic(),
-                    element.partition(),
-                    Offset::Offset(start_offset),
-                )?;
-            }
-            consumer.assign(&concrete_assignment)?;
-            Ok(ranges)
-        })
-    }
-
-    /// Return the current positions of all manually assigned partitions.
-    pub fn assigned_partition_positions(&self) -> KafkaResult<Vec<AssignedPartitionPosition>> {
-        either::for_both!(&self.consumer.0, consumer => {
-            let positions = consumer.position()?;
-            positions
-                .elements()
-                .iter()
-                .map(|element| {
-                    element.error()?;
-                    let next_offset = match element.offset() {
-                        Offset::Offset(next_offset) => Some(next_offset),
-                        Offset::Invalid => None,
-                        offset => {
-                            return Err(KafkaError::Subscription(format!(
-                                "unsupported partition position {offset:?} for {} partition {}",
-                                element.topic(),
-                                element.partition()
-                            )));
-                        }
-                    };
-                    Ok(AssignedPartitionPosition {
-                        topic: element.topic().to_string(),
-                        partition: element.partition(),
-                        next_offset,
-                    })
-                })
-                .collect()
-        })
-    }
-
-    /// Refresh topic metadata while preserving positions of existing partitions.
-    ///
-    /// Newly discovered partitions begin at `new_partition_offset`. Returned
-    /// ranges describe only those new partitions so callers can catch them up
-    /// before reopening new subscriptions.
-    pub fn refresh_topics_with_watermarks(
-        &self,
-        topics: &[&str],
-        new_partition_offset: InitialOffset,
-        metadata_timeout: Duration,
-    ) -> KafkaResult<Vec<AssignedPartitionRange>> {
-        either::for_both!(&self.consumer.0, consumer => {
-            let current_assignment = consumer.assignment()?;
-            let current_keys: HashSet<(String, i32)> = current_assignment
-                .elements()
-                .iter()
-                .map(|element| (element.topic().to_string(), element.partition()))
-                .collect();
-            let current_positions: HashMap<(String, i32), i64> = consumer
-                .position()?
-                .elements()
-                .iter()
-                .filter_map(|element| match element.offset() {
-                    Offset::Offset(offset) => Some((
-                        (element.topic().to_string(), element.partition()),
-                        offset,
-                    )),
-                    _ => None,
-                })
-                .collect();
-            for (topic, partition) in &current_keys {
-                if !current_positions.contains_key(&(topic.clone(), *partition)) {
-                    return Err(KafkaError::Subscription(format!(
-                        "current position unavailable for {topic} partition {partition}"
-                    )));
-                }
-            }
-
-            let desired = build_assignment(consumer, topics, Offset::End, metadata_timeout)?;
-            let desired_keys: HashSet<(String, i32)> = desired
-                .elements()
-                .iter()
-                .map(|element| (element.topic().to_string(), element.partition()))
-                .collect();
-            if desired_keys == current_keys {
-                return Ok(Vec::new());
-            }
-
-            let new_keys: HashSet<(String, i32)> =
-                desired_keys.difference(&current_keys).cloned().collect();
-            let new_topics: Vec<&str> = topics
-                .iter()
-                .copied()
-                .filter(|topic| new_keys.iter().any(|(new_topic, _)| new_topic == topic))
-                .collect();
-            let requested_new = if new_topics.is_empty() {
-                TopicPartitionList::new()
-            } else {
-                initial_assignment(
-                    consumer,
-                    &new_topics,
-                    new_partition_offset,
-                    metadata_timeout,
-                )?
-            };
-            let requested_new: HashMap<(String, i32), Offset> = requested_new
-                .elements()
-                .iter()
-                .filter(|element| {
-                    new_keys.contains(&(element.topic().to_string(), element.partition()))
-                })
-                .map(|element| {
-                    (
-                        (element.topic().to_string(), element.partition()),
-                        element.offset(),
-                    )
-                })
-                .collect();
-
-            let mut assignment = TopicPartitionList::new();
-            let mut new_ranges = Vec::with_capacity(new_keys.len());
-            for element in desired.elements() {
-                let key = (element.topic().to_string(), element.partition());
-                let (low, high) = consumer.fetch_watermarks(
-                    element.topic(),
-                    element.partition(),
-                    metadata_timeout,
-                )?;
-                let start_offset = if let Some(offset) = current_positions.get(&key) {
-                    if *offset < low || *offset > high {
-                        low
-                    } else {
-                        *offset
-                    }
-                } else {
-                    let start = match requested_new.get(&key).copied().unwrap_or(Offset::End) {
-                        Offset::Beginning => low,
-                        Offset::End => high,
-                        Offset::Offset(offset) => offset.clamp(low, high),
-                        offset => {
-                            return Err(KafkaError::Subscription(format!(
-                                "unsupported refreshed offset {offset:?} for {} partition {}",
-                                element.topic(),
-                                element.partition()
-                            )));
-                        }
-                    };
-                    new_ranges.push(AssignedPartitionRange {
-                        topic: key.0.clone(),
-                        partition: key.1,
-                        start_offset: start,
-                        end_offset: high,
-                    });
-                    start
-                };
-                assignment.add_partition_offset(
-                    element.topic(),
-                    element.partition(),
-                    Offset::Offset(start_offset),
-                )?;
-            }
-            consumer.assign(&assignment)?;
-            Ok(new_ranges)
         })
     }
 }
