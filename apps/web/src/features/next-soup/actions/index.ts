@@ -26,5 +26,11 @@ export { makeRemoveFromProjectAction } from './make-remove-from-project-action';
 export { makeRenameAction } from './make-rename-action';
 export { makeSetCompanyPropertyAction } from './make-set-company-property-action';
 export { makeShareAction } from './make-share-action';
+export {
+  type EntityActionListFocusTarget,
+  type EntityActionListState,
+  type ToEntityActionListStateOptions,
+  toEntityActionListState,
+} from './to-entity-action-list-state';
 export { useBlockEntityCommands } from './use-block-entity-commands';
 export { useEntityActionHotkeys } from './use-entity-action-hotkeys';
