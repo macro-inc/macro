@@ -176,7 +176,9 @@ async function isLegacyProjectionValidationError(
           typeof error === 'object' &&
           'message' in error &&
           typeof error.message === 'string' &&
-          /Cannot query field ["']cacheProjection["']/.test(error.message)
+          /(?:Cannot query|Unknown) field ["']cacheProjection["']/.test(
+            error.message
+          )
       )
     );
   } catch {

@@ -216,47 +216,46 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.graphqlSoupProjectionSupported()).toBe(true);
   });
 
-  it('retries a new client against an old server without projection local authority', async () => {
-    mocks.platformFetch
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            errors: [
-              {
-                message:
-                  'Cannot query field "cacheProjection" on type "GraphqlSoupEntity".',
-              },
-            ],
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } }
+  it.each([
+    'Cannot query field "cacheProjection" on type "GraphqlSoupEntity".',
+    'Unknown field "cacheProjection" on type "GraphqlSoupEntity".',
+  ])(
+    'retries a new client against an old server without projection local authority: %s',
+    async (validationMessage) => {
+      mocks.platformFetch
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ errors: [{ message: validationMessage }] }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
         )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ data: { user: { soup: { items: [] } } } }),
-          {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          }
-        )
-      );
-    const soup = await import('./graphql-soup');
-    const query = `query Soup {
-      user { soup { items { __typename id cacheProjection @cacheOnly } } }
-    }`;
-    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
-      method: 'POST',
-      body: JSON.stringify({ query }),
-    });
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        );
+      const soup = await import('./graphql-soup');
+      const query = `query Soup {
+        user { soup { items { __typename id cacheProjection @cacheOnly } } }
+      }`;
+      const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+        method: 'POST',
+        body: JSON.stringify({ query }),
+      });
 
-    expect(response.status).toBe(200);
-    expect(mocks.platformFetch).toHaveBeenCalledTimes(2);
-    const retry = mocks.platformFetch.mock.calls[1]?.[1] as RequestInit;
-    expect(JSON.parse(retry.body as string).query).not.toContain(
-      'cacheProjection'
-    );
-    expect(soup.graphqlSoupProjectionSupported()).toBe(false);
-  });
+      expect(response.status).toBe(200);
+      expect(mocks.platformFetch).toHaveBeenCalledTimes(2);
+      const retry = mocks.platformFetch.mock.calls[1]?.[1] as RequestInit;
+      expect(JSON.parse(retry.body as string).query).not.toContain(
+        'cacheProjection'
+      );
+      expect(soup.graphqlSoupProjectionSupported()).toBe(false);
+    }
+  );
 
   it('keeps GraphQL notification subscriptions active when the cache is disabled', async () => {
     mocks.enabled = false;
