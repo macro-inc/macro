@@ -42,8 +42,9 @@ pub trait BotDirectory: Send + Sync + 'static {
 ///
 /// Routes follow-up mentions in the thread to this session and feeds the
 /// announcement - the magic-chip message the session's bot posts back into
-/// the thread. The mention's text is quoted there for display only; the
-/// runtime still delivers it as the first prompt through the session
+/// the thread. The mention's text is quoted there when it is already inside
+/// a thread; a top-level mention posts the chip alone. The runtime still
+/// delivers it as the first prompt through the session
 /// control endpoint. Because all of this is claimed by the caller rather
 /// than observed by the trigger pipeline, it never grants the thread's
 /// channel any access to the session, and the announcement stands only
@@ -56,7 +57,8 @@ pub struct SessionThread {
     pub thread_id: Uuid,
     /// The mentioning message itself.
     pub message_id: Uuid,
-    /// The mention's text, quoted in the announcement.
+    /// The mention's text. Quoted in the announcement when the message is
+    /// already inside a thread; a top-level mention is posted as the chip alone.
     pub content: String,
 }
 

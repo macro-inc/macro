@@ -1,5 +1,8 @@
 //! Commands and values used by the harness domain.
 
+#[cfg(test)]
+mod test;
+
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::McpServerSlug;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
@@ -8,6 +11,15 @@ use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+
+/// Same rule as a human channel reply: quote the prompt only when it is
+/// already inside a thread. A top-level mention is the thread root and
+/// stays visible without a quote.
+#[must_use]
+pub fn quotes_prompt(thread_id: Uuid, message_id: Uuid) -> bool {
+    thread_id != message_id
+}
+
 /// Where a mention happened.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
@@ -21,6 +33,14 @@ pub struct MentionOrigin {
     pub sender: MacroUserIdStr<'static>,
     /// The message text, verbatim; becomes the session's first prompt.
     pub content: String,
+}
+
+impl MentionOrigin {
+    /// Whether the announcement should quote this mention.
+    #[must_use]
+    pub fn quotes_prompt(&self) -> bool {
+        quotes_prompt(self.thread_id, self.message_id)
+    }
 }
 
 /// Open a new session for a mention.
@@ -115,6 +135,14 @@ pub struct AnnounceOrigin {
     pub message_id: Uuid,
 }
 
+impl AnnounceOrigin {
+    /// Whether the announcement should quote this prompt.
+    #[must_use]
+    pub fn quotes_prompt(&self) -> bool {
+        quotes_prompt(self.thread_id, self.message_id)
+    }
+}
+
 /// One channel message supplied as untrusted prompt context.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PriorChannelMessage {
@@ -206,7 +234,7 @@ pub struct AnnouncePrompt {
     pub bot_id: BotId,
     /// Where the mention was posted.
     pub origin: AnnounceOrigin,
-    /// The mention's text, quoted in the announcement.
+    /// The mention's text, quoted in the announcement when already in a thread.
     pub content: String,
     /// Who mentioned the bot.
     pub sender: MacroUserIdStr<'static>,
@@ -225,10 +253,16 @@ pub struct SessionAnnouncement {
     pub origin_thread_id: Uuid,
     /// Folded user message that prompts the anchored agent response.
     pub prompted_message_id: MessageId,
-    /// Text of the prompting message, quoted back in the announcement.
+    /// Text of the prompting message. Quoted above the chip when [`Self::quote`]
+    /// is set; otherwise the announcement is the chip alone.
     pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,
+    /// Whether to frame the prompt as a quote-reply above the magic chip.
+    ///
+    /// Same as a human channel reply: true when the prompt is already inside
+    /// a thread, false when it is the top-level mention that opened the thread.
+    pub quote: bool,
 }
 
 /// Values required to provision a new session container.

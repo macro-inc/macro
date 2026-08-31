@@ -83,6 +83,7 @@ pub struct AgentAnnouncementChip {
 struct AgentAnnouncementRequest<'a> {
     prompt_markdown: &'a str,
     chip: &'a AgentAnnouncementChip,
+    quote: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -297,14 +298,18 @@ impl LexicalClient {
         Ok(data.mentions)
     }
 
-    /// Composes the channel message announcing an agent session — the prompt
-    /// quoted back as a blockquote above the session's Magic Chip — via the
+    /// Composes the channel message announcing an agent session via the
     /// lexical service, so the markdown is built from real Lexical nodes.
+    ///
+    /// When `quote` is set, the prompt is framed as a quote-reply above the
+    /// Magic Chip — the same shape a human reply uses inside a thread.
+    /// Top-level replies pass `quote = false` and get only the chip.
     #[tracing::instrument(skip(self, prompt_markdown, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
         prompt_markdown: &str,
         chip: &AgentAnnouncementChip,
+        quote: bool,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
         let response = check_response(
@@ -313,6 +318,7 @@ impl LexicalClient {
                 .json(&AgentAnnouncementRequest {
                     prompt_markdown,
                     chip,
+                    quote,
                 })
                 .send()
                 .await?,

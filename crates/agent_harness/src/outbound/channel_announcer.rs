@@ -6,10 +6,11 @@
 //! through the channel API. The composition root decides which
 //! `ChannelService` implementation (and side-effect stack) this wraps.
 //!
-//! The announcement quotes the prompting message above the session's magic
-//! chip. The content is composed by the lexical service — the one place that
-//! builds message markdown from real Lexical nodes — so this adapter never
-//! formats markdown itself.
+//! The announcement is the session's magic chip, optionally framed as a
+//! quote-reply of the prompting message — the same rule as a human channel
+//! reply. The content is composed by the lexical service — the one place
+//! that builds message markdown from real Lexical nodes — so this adapter
+//! never formats markdown itself.
 
 #[cfg(test)]
 mod test;
@@ -58,7 +59,7 @@ where
         let chip = announcement_chip(&announcement);
         let content = self
             .lexical
-            .compose_agent_announcement(&announcement.prompted_content, &chip)
+            .compose_agent_announcement(&announcement.prompted_content, &chip, announcement.quote)
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
 

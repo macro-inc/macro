@@ -16,6 +16,7 @@ fn chip_carries_the_announcement_identity() {
         ),
         prompted_content: "@claude fix the failing test".to_owned(),
         triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+        quote: true,
     };
 
     assert_eq!(

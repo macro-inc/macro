@@ -23,7 +23,7 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
-    OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
+    OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff, quotes_prompt,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
@@ -294,6 +294,7 @@ where
                     .await?,
                 prompted_content: prompt.content,
                 triggered_by: prompt.sender,
+                quote: prompt.origin.quotes_prompt(),
             })
             .await
     }
@@ -462,6 +463,7 @@ where
                 prompted_message_id: MessageId::first(AuthorKind::User),
                 prompted_content: thread.content,
                 triggered_by: request.owner,
+                quote: quotes_prompt(thread.thread_id, thread.message_id),
             };
             if let Err(error) = self.inner.announcer.announce(announcement).await {
                 tracing::warn!(
@@ -866,6 +868,7 @@ where
                 prompted_message_id: MessageId::first(AuthorKind::User),
                 prompted_content: origin.content.clone(),
                 triggered_by: origin.sender.clone(),
+                quote: origin.quotes_prompt(),
             })
             .await?;
 
@@ -1070,6 +1073,7 @@ where
             prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,
             prompted_content: prompt.prompt.clone(),
             triggered_by: triggered_by.clone(),
+            quote: origin.quotes_prompt(),
         }))
     }
 }

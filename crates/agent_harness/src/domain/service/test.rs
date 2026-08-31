@@ -381,13 +381,54 @@ async fn open_creates_announces_and_delivers_the_mention() {
     );
 
     // The announcement retains the raw trigger while only the agent prompt is
-    // enriched, including the required node for empty history.
+    // enriched, including the required node for empty history. A top-level
+    // mention is the thread root, so it is not quoted — same as a human reply.
     assert_eq!(announced[0].prompted_content, origin.content);
+    assert!(!announced[0].quote);
     assert_eq!(
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(
             "@claude fix the failing test"
         ))]]
+    );
+}
+
+#[tokio::test]
+async fn an_in_thread_mention_quotes_the_prompt() {
+    let (service, _repo, containers, announcer, _runtimes) = harness();
+    let mut command = open_command();
+    command.origin.message_id = macro_uuid::Uuid::from_u128(0x22);
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if !announcer.announced().is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        complete_handshake(
+            &containers
+                .container(session_of(&containers))
+                .expect("the spawned container is findable"),
+        )
+        .await;
+    };
+    let (opened, ()) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+
+    let announced = announcer.announced();
+    assert_eq!(announced.len(), 1);
+    assert!(
+        announced[0].quote,
+        "@mentioning inside a thread quotes, same as a human reply"
     );
 }
 
@@ -598,6 +639,10 @@ async fn forward_to_a_live_session_reuses_the_transport() {
     assert_eq!(
         announced[1].prompted_content, "and add a regression test",
         "the announcement must retain the raw triggering message"
+    );
+    assert!(
+        announced[1].quote,
+        "a follow-up inside the thread is quoted, same as a human reply"
     );
     assert_eq!(
         announced[1].prompted_message_id,
@@ -1556,6 +1601,34 @@ async fn an_external_open_with_a_mention_announces_as_the_sessions_bot() {
         announced[0].prompted_content,
         "@opencode fix the flaky test"
     );
+    assert!(
+        !announced[0].quote,
+        "a top-level mention is the thread root and is not quoted"
+    );
+}
+
+#[tokio::test]
+async fn an_external_open_from_an_in_thread_mention_quotes() {
+    let (service, _repo, _containers, announcer, _runtimes) = harness();
+    let mut request = open_external_request("/srv/agent");
+    request.thread = Some(agent_session::domain::ports::SessionThread {
+        channel_id: macro_uuid::Uuid::from_u128(0xC1),
+        thread_id: macro_uuid::Uuid::from_u128(0xC2),
+        message_id: macro_uuid::Uuid::from_u128(0xC3),
+        content: "@opencode look at this reply".to_owned(),
+    });
+
+    service
+        .open_external_session(request)
+        .await
+        .expect("open with an in-thread mention");
+
+    let announced = announcer.announced();
+    assert_eq!(announced.len(), 1);
+    assert!(
+        announced[0].quote,
+        "an in-thread mention quotes, same as a human reply"
+    );
 }
 
 #[tokio::test]
@@ -1600,6 +1673,10 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
         macro_uuid::Uuid::from_u128(0xAB)
     );
     assert_eq!(announced[0].prompted_content, "follow-up from the channel");
+    assert!(
+        announced[0].quote,
+        "a follow-up inside the thread is quoted"
+    );
 }
 
 #[tokio::test]

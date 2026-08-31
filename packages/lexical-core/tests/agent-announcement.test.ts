@@ -42,6 +42,7 @@ describe('composeAgentSessionAnnouncement', () => {
     const markdown = composeAgentSessionAnnouncement({
       promptMarkdown: '@claude fix the failing test\nit broke on main',
       chip,
+      quote: true,
     });
 
     expect(markdown).toBe(
@@ -49,9 +50,23 @@ describe('composeAgentSessionAnnouncement', () => {
     );
   });
 
+  it('emits only the chip when quote framing is off', () => {
+    expect(
+      composeAgentSessionAnnouncement({
+        promptMarkdown: '@claude fix the failing test',
+        chip,
+        quote: false,
+      })
+    ).toBe(chipMarkdown);
+  });
+
   it('emits only the chip for a blank prompt', () => {
     expect(
-      composeAgentSessionAnnouncement({ promptMarkdown: '   ', chip })
+      composeAgentSessionAnnouncement({
+        promptMarkdown: '   ',
+        chip,
+        quote: true,
+      })
     ).toBe(chipMarkdown);
   });
 
@@ -61,6 +76,7 @@ describe('composeAgentSessionAnnouncement', () => {
         promptMarkdown:
           'visible\n\n<m-agent-context>{"version":1,"text":"private"}</m-agent-context>',
         chip,
+        quote: true,
       })
     ).toBe(
       `> visible\n> \n> <m-agent-context>{"version":1,"text":"private"}</m-agent-context>\n\n${chipMarkdown}`
@@ -72,6 +88,7 @@ describe('composeAgentSessionAnnouncement', () => {
       composeAgentSessionAnnouncement({
         promptMarkdown: 'please look at this',
         chip: channelLessChip,
+        quote: true,
       })
     ).toBe(
       '> please look at this\n\n<m-magic-chip>{"agentSessionId":"session-2","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>'
@@ -82,6 +99,7 @@ describe('composeAgentSessionAnnouncement', () => {
     const markdown = composeAgentSessionAnnouncement({
       promptMarkdown: 'please look at this',
       chip,
+      quote: true,
     });
     const state = markdownToSerializedEditorStateWithIds(markdown);
 

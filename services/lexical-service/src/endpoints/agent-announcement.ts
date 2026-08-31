@@ -20,6 +20,7 @@ const agentAnnouncementRequest = z.object({
 		}),
 		status: z.enum(MAGIC_CHIP_STATUSES),
 	}),
+	quote: z.boolean(),
 });
 
 const agentAnnouncementResponse = z.object({
@@ -30,7 +31,7 @@ export class AgentAnnouncementEndpoint extends OpenAPIRoute {
 	schema = {
 		summary: "Compose a agent-harness bot respose",
 		description:
-			"Builds a response from the agent harness bot. Usually a simple quote + magic chip.",
+			"Builds a response from the agent harness bot. A magic chip, optionally framed as a quote-reply of the prompting message.",
 		request: {
 			body: {
 				content: {
