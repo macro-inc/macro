@@ -772,21 +772,16 @@ async fn run() -> anyhow::Result<()> {
                 let result = tokio::select! {
                     biased;
                     _ = cancellation_token.cancelled() => break,
-                    result = async {
-                        let consumer = webhook::inbound::kafka_stream_consumer::KafkaWebhookStreamConsumer::connect(
-                            brokers.clone(),
-                        )
-                        .await?;
-                        hub.mark_ready();
-                        consumer.run(&hub).await
-                    } => result,
+                    result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
+                        &brokers,
+                        &hub,
+                    ) => result,
                 };
 
                 if cancellation_token.is_cancelled() {
                     break;
                 }
                 if let Err(error) = result {
-                    hub.mark_unavailable();
                     tracing::error!(
                         error = ?error,
                         "webhook SSE Kafka consumer stopped"
