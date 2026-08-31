@@ -497,6 +497,17 @@ pub trait CalendarRepository: Send + Sync + 'static {
         event_id: Uuid,
     ) -> impl Future<Output = Result<Vec<CalendarAttendee>, Report>> + Send;
 
+    /// The override attendees of one occurrence, when it carries its own list.
+    /// `None` means the occurrence inherits the series attendees; `Some` (even
+    /// empty) is the occurrence's authoritative list, whose per-instance RSVPs
+    /// must win over the series when an occurrence-scoped mutation replaces the
+    /// attendee list.
+    fn get_occurrence_override_attendees(
+        &self,
+        event_id: Uuid,
+        recurrence_id: &str,
+    ) -> impl Future<Output = Result<Option<Vec<CalendarAttendee>>, Report>> + Send;
+
     /// Resolve the calendar a requester-created event lands in: the exact
     /// calendar when one is supplied, otherwise the supplied inbox's primary
     /// calendar, otherwise the requester's primary inbox's primary calendar.

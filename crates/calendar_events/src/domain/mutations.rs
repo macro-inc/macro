@@ -234,11 +234,23 @@ where
             return Err(CalendarMutationError::ReadOnly);
         }
         if let Some(attendees) = patch.attendees.as_mut() {
-            let stored = self
+            // The series attendees are the baseline; an occurrence-scoped patch
+            // overlays that occurrence's overrides on top, so a retained guest's
+            // per-instance RSVP wins over their series status.
+            let mut stored = self
                 .repository
                 .get_event_attendees(event_id)
                 .await
                 .map_err(internal)?;
+            if let CalendarUpdateScope::ThisEvent { recurrence_id } = &scope
+                && let Some(overrides) = self
+                    .repository
+                    .get_occurrence_override_attendees(event_id, recurrence_id)
+                    .await
+                    .map_err(internal)?
+            {
+                stored.extend(overrides);
+            }
             preserve_retained_attendee_state(attendees, &stored);
         }
         let access_token = self.fetch_token(&target.token_identity).await?;
@@ -596,14 +608,17 @@ fn ensure_organizer_attendee(attendees: &mut Vec<CalendarAttendeeInput>, organiz
 /// `needs_action` — so without this, adding or dropping one guest would reset
 /// everyone else's RSVP and clear their optional flag. The caller's own values
 /// still win when supplied (a set `response_status`, an explicit `optional`).
+///
+/// `stored` is matched by email, later entries winning — so an occurrence's
+/// override attendees, appended after the series attendees, take precedence.
 fn preserve_retained_attendee_state(
     attendees: &mut [CalendarAttendeeInput],
     stored: &[CalendarAttendee],
 ) {
-    let by_email: HashMap<String, &CalendarAttendee> = stored
-        .iter()
-        .map(|attendee| (attendee.email.to_lowercase(), attendee))
-        .collect();
+    let mut by_email: HashMap<String, &CalendarAttendee> = HashMap::new();
+    for attendee in stored {
+        by_email.insert(attendee.email.to_lowercase(), attendee);
+    }
     for attendee in attendees.iter_mut() {
         let Some(existing) = by_email.get(&attendee.email.to_lowercase()) else {
             continue;
