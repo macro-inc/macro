@@ -226,6 +226,12 @@ fn api_router(state: ApiContext) -> Router {
             favorites::inbound::axum_router::favorites_router(state.favorites_state.clone()),
         )
         .nest(
+            "/user-api-keys",
+            user_api_key::inbound::axum_router::user_api_key_router(
+                state.user_api_key_state.clone(),
+            ),
+        )
+        .nest(
             "/reminders",
             reminders::inbound::axum_router::reminders_router(state.reminders_state.clone()),
         )

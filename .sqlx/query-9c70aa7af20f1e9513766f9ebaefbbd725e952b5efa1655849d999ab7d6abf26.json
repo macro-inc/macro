@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT key\n            FROM \"UserApiKey\"\n            WHERE user_id = $1\n            ORDER BY key\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9c70aa7af20f1e9513766f9ebaefbbd725e952b5efa1655849d999ab7d6abf26"
+}
