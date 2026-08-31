@@ -27017,15 +27017,35 @@ export const editThreadV2Response = zod.object({
  */
 export const listUserApiKeysResponse = zod
   .object({
-    keys: zod.array(zod.string()).describe("The caller's keys."),
+    keys: zod
+      .array(
+        zod
+          .object({
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the key was created.'),
+            id: zod
+              .uuid()
+              .describe('Opaque identifier for a stored user API key.'),
+            prefix: zod
+              .string()
+              .describe(
+                'Public display prefix; not a substring of the secret.'
+              ),
+          })
+          .describe(
+            'Safe metadata for a stored key. Never contains the secret.'
+          )
+      )
+      .describe("The caller's keys. Never includes the raw secret."),
   })
-  .describe("The caller's API keys.");
+  .describe("The caller's API keys as safe metadata.");
 
 /**
  * @summary Delete one of the caller's API keys.
  */
 export const deleteUserApiKeyParams = zod.object({
-  key: zod.string().describe('The full key value.'),
+  id: zod.uuid().describe('Opaque key identifier.'),
 });
 
 /**

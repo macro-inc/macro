@@ -10846,7 +10846,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateUserApiKeyResponse"
+                  "$ref": "#/components/schemas/CreatedUserApiKey"
                 }
               }
             }
@@ -10884,19 +10884,19 @@
         }
       }
     },
-    "/user-api-keys/{key}": {
+    "/user-api-keys/{id}": {
       "delete": {
         "tags": ["user-api-keys"],
         "summary": "Delete one of the caller's API keys.",
         "operationId": "delete_user_api_key",
         "parameters": [
           {
-            "name": "key",
+            "name": "id",
             "in": "path",
-            "description": "The full key value.",
+            "description": "Opaque key identifier.",
             "required": true,
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/UserApiKeyId"
             }
           }
         ],
@@ -16239,17 +16239,6 @@
           }
         ]
       },
-      "CreateUserApiKeyResponse": {
-        "type": "object",
-        "description": "Response body for minting a key.",
-        "required": ["key"],
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "The newly minted secret. Shown only on create."
-          }
-        }
-      },
       "CreateViewRequest": {
         "type": "object",
         "required": ["name", "config"],
@@ -16375,6 +16364,30 @@
           "workspace_id": {
             "type": "string",
             "description": "Owning workspace id."
+          }
+        }
+      },
+      "CreatedUserApiKey": {
+        "type": "object",
+        "description": "A newly minted key: safe metadata plus the secret, shown only once.",
+        "required": ["id", "prefix", "createdAt", "key"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was created."
+          },
+          "id": {
+            "$ref": "#/components/schemas/UserApiKeyId",
+            "description": "Opaque identifier used to address the key after create."
+          },
+          "key": {
+            "type": "string",
+            "description": "The newly minted secret. Shown only on create."
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Public display prefix; not a substring of the secret."
           }
         }
       },
@@ -24848,17 +24861,42 @@
           }
         }
       },
+      "UserApiKeyId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Opaque identifier for a stored user API key."
+      },
+      "UserApiKeyInfo": {
+        "type": "object",
+        "description": "Safe metadata for a stored key. Never contains the secret.",
+        "required": ["id", "prefix", "createdAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was created."
+          },
+          "id": {
+            "$ref": "#/components/schemas/UserApiKeyId",
+            "description": "Opaque identifier used to address the key after create."
+          },
+          "prefix": {
+            "type": "string",
+            "description": "Public display prefix; not a substring of the secret."
+          }
+        }
+      },
       "UserApiKeysList": {
         "type": "object",
-        "description": "The caller's API keys.",
+        "description": "The caller's API keys as safe metadata.",
         "required": ["keys"],
         "properties": {
           "keys": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/UserApiKeyInfo"
             },
-            "description": "The caller's keys."
+            "description": "The caller's keys. Never includes the raw secret."
           }
         }
       },

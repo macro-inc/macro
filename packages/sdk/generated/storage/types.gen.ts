@@ -3237,16 +3237,6 @@ export type CreateUnthreadedPdfAnchorRequest = PdfHighlightAnchorRequest & {
     anchorType: 'highlight';
 };
 
-/**
- * Response body for minting a key.
- */
-export type CreateUserApiKeyResponse = {
-    /**
-     * The newly minted secret. Shown only on create.
-     */
-    key: string;
-};
-
 export type CreateViewRequest = {
     config: unknown;
     name: string;
@@ -3345,6 +3335,28 @@ export type CreateWebhookResponse = {
      * Owning workspace id.
      */
     workspace_id: string;
+};
+
+/**
+ * A newly minted key: safe metadata plus the secret, shown only once.
+ */
+export type CreatedUserApiKey = {
+    /**
+     * When the key was created.
+     */
+    createdAt: string;
+    /**
+     * Opaque identifier used to address the key after create.
+     */
+    id: UserApiKeyId;
+    /**
+     * The newly minted secret. Shown only on create.
+     */
+    key: string;
+    /**
+     * Public display prefix; not a substring of the secret.
+     */
+    prefix: string;
 };
 
 /**
@@ -8318,13 +8330,36 @@ export type UpsertUserDocumentViewLocationRequest = {
 };
 
 /**
- * The caller's API keys.
+ * Opaque identifier for a stored user API key.
+ */
+export type UserApiKeyId = string;
+
+/**
+ * Safe metadata for a stored key. Never contains the secret.
+ */
+export type UserApiKeyInfo = {
+    /**
+     * When the key was created.
+     */
+    createdAt: string;
+    /**
+     * Opaque identifier used to address the key after create.
+     */
+    id: UserApiKeyId;
+    /**
+     * Public display prefix; not a substring of the secret.
+     */
+    prefix: string;
+};
+
+/**
+ * The caller's API keys as safe metadata.
  */
 export type UserApiKeysList = {
     /**
-     * The caller's keys.
+     * The caller's keys. Never includes the raw secret.
      */
-    keys: Array<string>;
+    keys: Array<UserApiKeyInfo>;
 };
 
 /**
@@ -13109,21 +13144,21 @@ export type CreateUserApiKeyErrors = {
 export type CreateUserApiKeyError = CreateUserApiKeyErrors[keyof CreateUserApiKeyErrors];
 
 export type CreateUserApiKeyResponses = {
-    201: CreateUserApiKeyResponse;
+    201: CreatedUserApiKey;
 };
 
-export type CreateUserApiKeyResponse2 = CreateUserApiKeyResponses[keyof CreateUserApiKeyResponses];
+export type CreateUserApiKeyResponse = CreateUserApiKeyResponses[keyof CreateUserApiKeyResponses];
 
 export type DeleteUserApiKeyData = {
     body?: never;
     path: {
         /**
-         * The full key value.
+         * Opaque key identifier.
          */
-        key: string;
+        id: UserApiKeyId;
     };
     query?: never;
-    url: '/user-api-keys/{key}';
+    url: '/user-api-keys/{id}';
 };
 
 export type DeleteUserApiKeyErrors = {

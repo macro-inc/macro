@@ -1826,7 +1826,7 @@ export class Sdk extends HeyApiClient {
      * Delete one of the caller's API keys.
      */
     public deleteUserApiKey<ThrowOnError extends boolean = false>(options: Options<DeleteUserApiKeyData, ThrowOnError>): RequestResult<DeleteUserApiKeyResponses, DeleteUserApiKeyErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteUserApiKeyResponses, DeleteUserApiKeyErrors, ThrowOnError>({ url: '/user-api-keys/{key}', ...options });
+        return (options.client ?? this.client).delete<DeleteUserApiKeyResponses, DeleteUserApiKeyErrors, ThrowOnError>({ url: '/user-api-keys/{id}', ...options });
     }
     
     /**

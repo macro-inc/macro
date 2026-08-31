@@ -4,11 +4,12 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { UserApiKeyInfo } from './userApiKeyInfo';
 
 /**
- * The caller's API keys.
+ * The caller's API keys as safe metadata.
  */
 export interface UserApiKeysList {
-  /** The caller's keys. */
-  keys: string[];
+  /** The caller's keys. Never includes the raw secret. */
+  keys: UserApiKeyInfo[];
 }
