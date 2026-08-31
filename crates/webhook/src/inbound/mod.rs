@@ -7,6 +7,9 @@ pub mod axum_router;
 pub mod kafka_consumer;
 
 #[cfg(feature = "stream")]
+pub mod kafka_stream_consumer;
+
+#[cfg(feature = "stream")]
 pub mod stream_router;
 
 #[cfg(feature = "worker")]
