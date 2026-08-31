@@ -133,7 +133,7 @@ function PreviewPanelContent(
         blockType: 'calendar',
         blockId: CALENDAR_BLOCK_ID,
         aliasContext: undefined,
-        params: calendarBlockParamsForEntity(calendarEvent),
+        params: untrack(() => calendarBlockParamsForEntity(calendarEvent)),
       }))
       .with({ type: 'reminder' }, (reminder) => {
         const reminderTarget = reminderSplitTarget(reminder);
