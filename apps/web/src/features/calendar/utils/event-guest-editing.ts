@@ -15,18 +15,20 @@ function emailListsEqual(first: readonly string[], second: readonly string[]) {
 }
 
 /**
- * Whether the viewer may change the guest list of an existing event. Only the
- * organizer can: the editor's replacement attendee list would otherwise drop
- * the viewer, whose own email is seeded only when they organize the event.
+ * Whether the viewer may change the guest list of an existing event. A
+ * read-only event never qualifies. Otherwise only the organizer can: the
+ * editor's replacement attendee list would otherwise drop the viewer, whose
+ * own email is seeded only when they organize the event.
  *
  * A writable event with no attendees at all is treated as the viewer's own
  * (a solo event they created), so the first guest can still be added — there
  * is no attendee to drop in that case.
  */
 export function viewerCanEditGuests(event: CalendarEvent): boolean {
+  if (event.isReadOnly) return false;
   const organizer = event.attendees.find((attendee) => attendee.isOrganizer);
   if (organizer) return organizer.isSelf;
-  return event.attendees.length === 0 && !event.isReadOnly;
+  return event.attendees.length === 0;
 }
 
 /**

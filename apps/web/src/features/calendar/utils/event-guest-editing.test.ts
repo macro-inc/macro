@@ -72,6 +72,24 @@ describe('viewerCanEditGuests', () => {
       viewerCanEditGuests(event({ attendees: [], isReadOnly: true }))
     ).toBe(false);
   });
+
+  it('blocks editing a read-only event even when self organizes it', () => {
+    expect(
+      viewerCanEditGuests(
+        event({
+          isReadOnly: true,
+          attendees: [
+            attendee({
+              email: 'me@example.com',
+              isOrganizer: true,
+              isSelf: true,
+            }),
+            attendee({ email: 'teo@example.com' }),
+          ],
+        })
+      )
+    ).toBe(false);
+  });
 });
 
 describe('guestListChanged', () => {
