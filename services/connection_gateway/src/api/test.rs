@@ -73,6 +73,7 @@ fn test_state() -> TestState {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        macro_authorization::NoUserApiKeyAuthorizer,
     );
 
     TestState {

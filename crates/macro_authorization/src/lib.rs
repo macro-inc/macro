@@ -1,12 +1,18 @@
 #![deny(missing_docs)]
 //! Transport-independent authorization services and optional transport adapters.
 //!
-//! The domain layer validates user, bot, and internal service credentials and
-//! returns a typed principal with any authenticated or verified acting user.
-//! [`MacroAuthorizationServiceImpl::new`] requires bot authorization to be
-//! configured explicitly, just like internal authorization. Services backed by
-//! MacroDB should use `PgBotAuthorizer`; services that intentionally reject
-//! bot credentials must pass [`NoBotAuthorizer`].
+//! The domain layer validates user, bot, internal service, and user API key
+//! credentials and returns a typed principal with any authenticated or
+//! verified acting user. [`MacroAuthorizationServiceImpl::new`] requires bot
+//! and user API key authorization to be configured explicitly, just like
+//! internal authorization. Services backed by MacroDB should use
+//! `PgBotAuthorizer` and, when they accept user API keys,
+//! `PgUserApiKeyAuthorizer`. Services that intentionally reject bot
+//! credentials must pass [`NoBotAuthorizer`]. User API key authorization is
+//! wired with [`PgUserApiKeyAuthorizer`] in every service that already has a
+//! MacroDB pool. Services without MacroDB (`image_proxy_service`,
+//! `static_file_service`), tests, and schema-only composition roots keep
+//! [`NoUserApiKeyAuthorizer`].
 //!
 //! # Choosing an Axum extractor
 //!
@@ -30,12 +36,12 @@
 //! only a team-owned bot may request team scope. Successful bot authorization
 //! includes the owning team ID when the bot is team-owned.
 //! Both extractors reject requests that combine explicit credential types
-//! (internal key, bot token, or user query/bearer) with `400 Bad Request` rather
-//! than choosing a principal. Query and bearer credentials are one user type,
-//! while access-token cookies are ambient; an explicit credential wins over a
-//! cookie. Local-auth fallback and cookies are considered only when no explicit
-//! credential is present. A valid principal not admitted by the selected policy
-//! is rejected with `403 Forbidden`.
+//! (internal key, bot token, user API key, or user query/bearer) with
+//! `400 Bad Request` rather than choosing a principal. Query and bearer
+//! credentials are one user type, while access-token cookies are ambient; an
+//! explicit credential wins over a cookie. Local-auth fallback and cookies are
+//! considered only when no explicit credential is present. A valid principal
+//! not admitted by the selected policy is rejected with `403 Forbidden`.
 //!
 //! These extractors authenticate the caller; they do not decide whether that
 //! caller may act on a particular entity. Entity authorization and business
@@ -55,13 +61,15 @@ pub use domain::{
     models::{
         BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotScope,
         BotTokenAuthorization, InternalAuthConfig, InternalIdentityClaims, MacroAuthorization,
-        MacroAuthorizationError, MacroUserAuthentication, ResolvedBotActingUser, ValidatedIdentity,
+        MacroAuthorizationError, MacroUserAuthentication, ResolvedApiKeyUser,
+        ResolvedBotActingUser, ValidatedIdentity,
     },
     ports::{
         BotAuthorizationRepo, BotAuthorizer, JwtValidator, MacroAuthorizationService,
-        NoBotAuthorizer,
+        NoBotAuthorizer, NoUserApiKeyAuthorizer, UserApiKeyAuthorizationRepo, UserApiKeyAuthorizer,
     },
     service::MacroAuthorizationServiceImpl,
+    user_api_key_authorizer::UserApiKeyAuthorizerService,
 };
 /// Service-backed Axum authorization extractors, state, headers, and rejection type.
 #[allow(deprecated)]
@@ -75,13 +83,15 @@ pub use inbound::{
     InternalEntity, InternalOnly, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
     LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
     MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity, UserOrInternal,
-    UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
-    UserOrInternalServiceAuthorization,
+    USER_API_KEY_HEADER, UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity,
+    UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity,
+    UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]
 pub use outbound::{MacroAuthJwtValidator, NoopMacroAuthJwtValidator};
 /// PostgreSQL bot authorization repository and concrete authorizer.
 #[cfg(feature = "postgres")]
-pub use outbound::{PgBotAuthorizationRepo, PgBotAuthorizer};
+pub use outbound::{
+    PgBotAuthorizationRepo, PgBotAuthorizer, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};

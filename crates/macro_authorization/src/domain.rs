@@ -8,3 +8,5 @@ pub mod models;
 pub mod ports;
 /// Authorization service implementation.
 pub mod service;
+/// User API key credential authorization policy.
+pub mod user_api_key_authorizer;

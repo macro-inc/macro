@@ -384,13 +384,16 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     callCtx.syncCallPageTab(channelId, false);
   });
 
-  // Once the call actually mounts for this channel, replace the URL so a
-  // reload doesn't re-trigger auto-join after the user has left. Waiting for
-  // the call to mount (instead of running on adapter mount) preserves the
-  // deep link if the join fails so the user can retry by refreshing.
+  // Once the auto-join attempt settles — joined, failed, or calls disabled —
+  // replace the URL so the deep link cannot fire a second time. This used to
+  // wait for the call to mount, which left `join_call=true` in the URL forever
+  // when the join failed; any later reload (the browser discarding this tab
+  // overnight and restoring it on wake, say) then re-ran the join — and since
+  // the join API is a get-or-create, that starts a brand-new call in the
+  // channel. Retrying a failed join is the Call tab's "Try again", not a
+  // refresh.
   createComputed(() => {
-    if (!callCtx) return;
-    if (!callCtx.isInCall() || callCtx.activeChannelId() !== channelId) return;
+    if (pendingJoinCall()) return;
     if (searchParams[CHANNEL_URL_PARAMS.joinCall] === undefined) return;
     setSearchParams(
       { [CHANNEL_URL_PARAMS.joinCall]: undefined },

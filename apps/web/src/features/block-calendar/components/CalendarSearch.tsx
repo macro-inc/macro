@@ -124,6 +124,7 @@ function CalendarEventPreviewContent(props: {
   const organizer = () =>
     props.event.organizer?.name || props.event.organizer?.email || '';
   const detail = () => {
+    if (previewQuery.isPending) return '';
     const preview = previewQuery.data;
     if (!preview) return '';
     const guests =
@@ -389,7 +390,10 @@ function CalendarSearchControl() {
                             moveActive(-1);
                           } else if (event.key === 'Enter') {
                             const active = results()[activeIndex()];
-                            if (active) openResult(active);
+                            if (active) {
+                              event.preventDefault();
+                              openResult(active);
+                            }
                           }
                         }}
                         placeholder="Search by event name"
