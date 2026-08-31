@@ -6,7 +6,7 @@ import {
 } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
-import { isShareableEntityType } from '@app/features/sharing/global-share-modal/GlobalShareModal';
+import { isShareableEntityType } from '@app/features/sharing/global-share-modal/shareable-entity';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { useUserId } from '@core/context/user';

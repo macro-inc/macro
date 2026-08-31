@@ -1,8 +1,8 @@
+import { openGlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import {
   isShareableEntityType,
-  openGlobalShareModal,
   type ShareableEntityData,
-} from '@app/features/sharing/global-share-modal/GlobalShareModal';
+} from '@app/features/sharing/global-share-modal/shareable-entity';
 import type { EntityData } from '@entity';
 import type { SoupState } from '../create-soup-state';
 
