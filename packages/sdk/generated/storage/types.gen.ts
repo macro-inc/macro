@@ -1224,7 +1224,7 @@ export type CalendarAttendee = {
      */
     isOrganizer: boolean;
     /**
-     * Whether this attendee represents the connected account.
+     * Whether this attendee is one of the viewing requester's inboxes.
      */
     isSelf: boolean;
     /**
@@ -1256,9 +1256,26 @@ export type CalendarEvent = {
      */
     createdAt: string;
     /**
+     * Provider-reported creator email. Distinct from the organizer when
+     * someone writes onto a calendar they do not own. Omitted from stored
+     * projections when unknown so events ingested before this field still
+     * compare equal.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
      * Optional event body.
      */
     description?: string | null;
+    /**
+     * Provider event type. Skipped when it is the regular type so
+     * projections stored before event types were modeled still compare
+     * equal.
+     */
+    eventType?: EventType;
     /**
      * RFC 5545 UID used to reconcile provider and email sources.
      */
@@ -4756,6 +4773,13 @@ export type EventTime = {
  * Whether an event blocks availability.
  */
 export type EventTransparency = 'opaque' | 'transparent';
+
+/**
+ * Google's event type: ordinary meetings versus the status-style entries
+ * (working location, out of office, focus time, birthdays) Google renders
+ * and notifies differently. Immutable at the provider after creation.
+ */
+export type EventType = 'default' | 'out_of_office' | 'focus_time' | 'working_location' | 'birthday' | 'from_gmail';
 
 /**
  * Visibility of event details.

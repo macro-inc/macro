@@ -1,7 +1,7 @@
 import { Message } from '@channel/Message/Message';
 import type { MessageData } from '@channel/Message/types';
 import { Thread } from '@channel/Thread/Thread';
-import { ThreadRail } from '@channel/Thread/ThreadRail';
+import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
 import MacroLogo from '@icon/macro-logo.svg';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
@@ -229,15 +229,12 @@ export function GithubMessageView(props: {
       <GithubCommentMessage comment={props.comment} />
       <Show when={replies().length > 0}>
         <div class="relative w-full">
-          <Thread.ReplyRailDecorations
-            isReplying={() => false}
-            firstThreadReplyNewMessage={false}
-          />
+          <Thread.ReplyRailDecorations />
           <Thread.RepliesContainer>
             <Key each={replies()} by="id">
               {(reply) => (
                 <div class="relative">
-                  <ThreadRail />
+                  <ThreadReplyRail />
                   <GithubCommentMessage comment={reply()} isReply />
                 </div>
               )}

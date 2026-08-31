@@ -306,7 +306,7 @@ export const MobileSearchFilterDrawer = (props: { class?: string }) => {
             <div class="shrink-0 border-t border-edge-muted p-2">
               <Button
                 onClick={resetAll}
-                variant="base"
+                variant="outline"
                 size="sm"
                 class="min-h-10 rounded-lg bg-active!"
               >

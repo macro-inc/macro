@@ -6,6 +6,8 @@ use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use super::acting::ActorInboxes;
+
 /// Read and write events on every calendar the user can access. Covers the
 /// event list, get, instances, insert, patch, and watch calls.
 pub const GOOGLE_CALENDAR_EVENTS_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
@@ -259,6 +261,58 @@ impl EventTransparency {
     }
 }
 
+/// Google's event type: ordinary meetings versus the status-style entries
+/// (working location, out of office, focus time, birthdays) Google renders
+/// and notifies differently. Immutable at the provider after creation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum EventType {
+    /// Regular event; also the fallback for provider types Macro does not
+    /// know, so a new Google type never breaks ingestion.
+    #[default]
+    Default,
+    /// Out-of-office status event.
+    OutOfOffice,
+    /// Focus-time status event.
+    FocusTime,
+    /// Working-location status event.
+    WorkingLocation,
+    /// Annual all-day birthday event.
+    Birthday,
+    /// Event Google generated from a Gmail message.
+    FromGmail,
+}
+
+impl EventType {
+    /// Database representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::OutOfOffice => "out_of_office",
+            Self::FocusTime => "focus_time",
+            Self::WorkingLocation => "working_location",
+            Self::Birthday => "birthday",
+            Self::FromGmail => "from_gmail",
+        }
+    }
+
+    /// Whether this is the regular event type. Kept out of serialized
+    /// projections so projections stored before event types were modeled
+    /// still compare equal to fresh ones.
+    pub fn is_default(&self) -> bool {
+        *self == Self::Default
+    }
+
+    /// Whether `useDefault` reminders resolve to the calendar's defaults.
+    /// Google never notifies for status-style events — its clients offer no
+    /// notification setting on them — so their `useDefault` resolves to no
+    /// reminders. Explicit overrides still apply on every type.
+    pub fn uses_calendar_default_reminders(self) -> bool {
+        matches!(self, Self::Default | Self::FromGmail)
+    }
+}
+
 /// The conferencing system backing an event's join URL.
 ///
 /// Macro generates only Google Meet conferences, so this distinguishes one it
@@ -319,7 +373,7 @@ pub struct CalendarAttendee {
     pub is_organizer: bool,
     /// Whether attendance is optional.
     pub is_optional: bool,
-    /// Whether this attendee represents the connected account.
+    /// Whether this attendee is one of the viewing requester's inboxes.
     pub is_self: bool,
     /// Optional attendee comment.
     pub comment: Option<String>,
@@ -457,6 +511,11 @@ pub struct CalendarEvent {
     pub visibility: EventVisibility,
     /// Availability behavior.
     pub transparency: EventTransparency,
+    /// Provider event type. Skipped when it is the regular type so
+    /// projections stored before event types were modeled still compare
+    /// equal.
+    #[serde(default, skip_serializing_if = "EventType::is_default")]
+    pub event_type: EventType,
     /// Timed or all-day shape.
     pub time: EventTime,
     /// Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
@@ -465,6 +524,15 @@ pub struct CalendarEvent {
     pub organizer_email: Option<String>,
     /// Organizer display name.
     pub organizer_name: Option<String>,
+    /// Provider-reported creator email. Distinct from the organizer when
+    /// someone writes onto a calendar they do not own. Omitted from stored
+    /// projections when unknown so events ingested before this field still
+    /// compare equal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator_email: Option<String>,
+    /// Provider-reported creator display name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator_name: Option<String>,
     /// Direct join URL when known.
     pub conference_url: Option<String>,
     /// Which conferencing system backs `conference_url`. `None` whenever no
@@ -899,8 +967,10 @@ pub struct CalendarEventMutationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
-    /// Token identity of the connected inbox.
+    /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
+    /// The clicker's owned inboxes. `None` when they own none.
+    pub actor: Option<ActorInboxes>,
 }
 
 impl CalendarEventMutationTarget {
@@ -964,8 +1034,10 @@ pub struct CalendarCreationTarget {
     pub provider_calendar_id: String,
     /// Whether the provider role prohibits event creation.
     pub is_read_only: bool,
-    /// Token identity of the connected inbox.
+    /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
+    /// The clicker's owned inboxes. `None` when they own none.
+    pub actor: Option<ActorInboxes>,
 }
 
 impl CalendarCreationTarget {

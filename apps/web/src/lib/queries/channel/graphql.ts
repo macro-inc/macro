@@ -51,7 +51,7 @@ export async function materializeCachedGraphqlChannels(
     channelDocuments.map((document) => document.recordKey)
   );
 
-  return records.flatMap(({ recordKey, record }) => {
+  return records.records.flatMap(({ recordKey, record }) => {
     const channel = record as GraphqlChannelQuickAccessFieldsFragment;
     if (channel.__typename !== 'GraphqlSoupChannel') return [];
     const separator = recordKey.indexOf(':');

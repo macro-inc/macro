@@ -165,6 +165,10 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         static_frontend,
         infra_only,
         infra_only,
+        // Headless stacks serve agents on Cursor Cloud dev boxes, which have
+        // no cloudflared and no @cursor sessions to feed; the egress stays
+        // in-network.
+        None,
     )?;
 
     // Build + stage the frontend bundle in the background: it's pure host-side
@@ -278,7 +282,7 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     } else {
         mailpit::direct_ui_url(&instance)
     };
-    summary::print(mode, &instance, &env, &frontend_url, &mailpit_url);
+    summary::print(mode, &instance, &env, &frontend_url, &mailpit_url, None);
     stage.note(&format!(
         "  headless: `just stack status`, `just stack update`, `just stack down`{}",
         instance_suffix(&instance)
@@ -313,8 +317,10 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
                 binaries_dir: args.binaries_dir.clone(),
             },
             no_frontend: false,
+            enable_onboarding: false,
             verbose: args.verbose,
             traces: None,
+            with_cf_tunnel: false,
         },
         no_snapshot: false,
         infra_only: false,
@@ -340,6 +346,7 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         args.env.no_doppler,
         args.env.env_file.as_deref(),
         state.frontend == "static",
+        None,
     )?;
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;

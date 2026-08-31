@@ -1,11 +1,11 @@
 use super::*;
 use crate::domain::error::SessionError;
-use crate::domain::event::{CursorEvent, InteractionUpdate};
+use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent, Truncation};
 use crate::domain::model::{
     McpHeader, McpServer, McpTransport, RepoUrl, RunListing, RunOutcome, RunStatus,
 };
 use crate::testing::{CursorCall, FakeCursor, FixedRepos, RecordingNotifier};
-use agent_client_protocol::schema::v1::{SessionUpdate, StopReason};
+use agent_client_protocol::schema::v1::{SessionUpdate, StopReason, ToolCallStatus};
 use std::path::Path;
 
 type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedRepos>;
@@ -25,6 +25,15 @@ fn finished(run: &str) -> CursorEvent {
     CursorEvent::Result {
         run_id: CursorRunId::new(run),
         status: RunStatus::Finished,
+        text: None,
+        duration_ms: Some(1),
+    }
+}
+
+fn cancelled(run: &str) -> CursorEvent {
+    CursorEvent::Result {
+        run_id: CursorRunId::new(run),
+        status: RunStatus::Cancelled,
         text: None,
         duration_ms: Some(1),
     }
@@ -121,15 +130,63 @@ async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
     );
 }
 
-/// The turn ends on the client's cancel alone, with the run's stream still
-/// wide open and still delivering.
+/// A stop must not lose an answer the run had already produced.
 ///
-/// This is the shape seen live: Cursor accepts the cancel and keeps streaming
-/// anyway, so a turn that waits for the stream to end waits for the agent to
-/// finish of its own accord — which is the whole bug. Note what this test does
-/// *not* do: drop `events`.
+/// The race: the run finishes, its stream is truncated before the `result`
+/// frame, and the stop lands. Get A Run is the only place that answer exists,
+/// so the poll reads it and delivers its text — a stopped turn ends on the
+/// record it can reach, not on the token alone.
+#[tokio::test(start_paused = true)]
+async fn a_stop_still_delivers_a_finished_run_the_stream_never_reported() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    events
+        .send(CursorEvent::Thinking {
+            text: "hmm".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("here is the answer".to_owned()),
+    });
+    service.cancel(&session).await.expect("cancel works");
+    drop(events);
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    let texts: Vec<String> = notifier
+        .updates()
+        .iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
+                    Some(text.text.clone())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, vec!["here is the answer".to_owned()]);
+}
+
+/// Cancel is a notification: POST it, keep reading until Cursor's `result`.
+///
+/// Chunks that land after the POST are still the run — the Cloud Agents stream
+/// is scoped to that run through `result` then `done`. Dropping the stream at
+/// the POST used to resolve the ACP prompt while Cursor was still emitting.
 #[tokio::test]
-async fn cancel_ends_the_turn_while_the_stream_stays_open() {
+async fn cancel_keeps_reading_until_the_result_frame() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
 
@@ -147,21 +204,84 @@ async fn cancel_ends_the_turn_while_the_stream_stays_open() {
         .expect("stream open");
     notifier.wait_for_updates(1).await;
 
-    // The stream is live and mid-turn at the moment the cancel lands: no
-    // terminal event has been sent, and none ever will be.
     assert!(!events.is_closed());
     service.cancel(&session).await.expect("cancel works");
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..)))
+    );
+
+    events
+        .send(CursorEvent::Assistant {
+            text: " winding down".to_owned(),
+        })
+        .expect("stream still open after cancel");
+    notifier.wait_for_updates(2).await;
+
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
 
     let stop = turn.await.expect("task joins").expect("prompt resolves");
     assert_eq!(stop, StopReason::Cancelled);
-    // Only the one chunk from before the cancel: nothing arrived to end the
-    // turn, so the turn ended itself. The sender reads as closed from here on
-    // precisely because the turn dropped the stream rather than draining it.
-    assert_eq!(notifier.updates().len(), 1);
+    assert_eq!(notifier.updates().len(), 2);
 }
 
-/// A cancel while the prompt is still queued behind someone else's run ends the
-/// wait, rather than sitting out the full busy timeout.
+/// A cancelled `result` does not always complete in-flight tool calls, so the
+/// turn must fail them locally when that frame arrives — otherwise they stay
+/// "running" in the transcript forever.
+#[tokio::test]
+async fn cancel_mid_tool_call_closes_it_as_failed() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    events
+        .send(CursorEvent::ToolCall(ToolCallEvent {
+            call_id: "call-1".to_owned(),
+            name: "run_terminal_cmd".to_owned(),
+            status: Some("running".to_owned()),
+            args: None,
+            result: None,
+            truncated: Truncation::default(),
+        }))
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    service.cancel(&session).await.expect("cancel works");
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+
+    let closing = notifier
+        .updates()
+        .into_iter()
+        .rev()
+        .find_map(|(_, update)| match update {
+            SessionUpdate::ToolCallUpdate(update) if &*update.tool_call_id.0 == "call-1" => {
+                Some(update)
+            }
+            _ => None,
+        })
+        .expect("the open call was closed out");
+    assert_eq!(closing.fields.status, Some(ToolCallStatus::Failed));
+}
+
+/// A cancel while the prompt is still queued behind someone else's run ends
+/// the wait, rather than sitting out the full busy timeout — and reports it as
+/// the stop it is. The wait itself fails, but a failure the client asked for
+/// is a stop reason: an ACP error would surface in the transcript as a red
+/// "the prompt was cancelled while waiting for the agent to be free" instead
+/// of a stopped turn.
 #[tokio::test]
 async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
     let (service, cursor, _notifier) = service(None);
@@ -186,11 +306,105 @@ async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
 
     service.cancel(&session).await.expect("cancel works");
 
-    let outcome = turn.await.expect("task joins");
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    // Nothing was ever created, so there is no run to have cancelled.
     assert!(
-        outcome.is_err(),
-        "a cancelled wait is an error, not a silent success: {outcome:?}"
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..)))
     );
+}
+
+/// A stop while the fallback poll is running.
+///
+/// The poll only exists because the stream is gone, so a stop ends it at the
+/// first wait rather than re-reading a record nobody is waiting on: one read,
+/// then the turn is over.
+#[tokio::test(start_paused = true)]
+async fn a_stop_ends_the_fallback_poll_at_its_first_wait() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // Plenty scripted, so what ends the poll is the stop and not the script.
+    for _ in 0..10 {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+    events
+        .send(CursorEvent::Thinking {
+            text: "hmm".to_owned(),
+        })
+        .expect("stream open");
+    notifier.wait_for_updates(1).await;
+
+    service.cancel(&session).await.expect("cancel works");
+    drop(events); // no result frame, so the turn falls back to polling
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
+    let polls = cursor
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, CursorCall::RunResult(..)))
+        .count();
+    assert_eq!(polls, 1, "one read of the record, then the stop ends it");
+}
+
+/// A stop that beats the run into existence.
+///
+/// `cancel` has no run id to POST while the first prompt is still creating the
+/// agent — ten seconds, live — so the stop is sent the moment the run has one.
+/// Left unsent, Cursor keeps working and this turn reads the stream to the
+/// agent's own natural end, which is the stop button doing nothing at all.
+#[tokio::test]
+async fn a_stop_before_the_run_exists_is_sent_once_it_does() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let finish_creating = cursor.script_create_gate();
+    let events = cursor.script_stream();
+    let turn = tokio::spawn({
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        async move { service.prompt(&session, "long job").await }
+    });
+
+    // Mid-create: the turn has neither agent nor run for a cancel to name.
+    cursor
+        .wait_for_calls(1, |call| matches!(call, CursorCall::CreateAgent(..)))
+        .await;
+    service.cancel(&session).await.expect("cancel works");
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(..))),
+        "there was no run to cancel yet"
+    );
+
+    finish_creating.send(()).expect("the create is waiting");
+
+    // The run exists now, so the stop it missed is sent for it, and the turn
+    // ends on Cursor's cancelled result like any other cancelled run.
+    cursor
+        .wait_for_calls(1, |call| matches!(call, CursorCall::CancelRun(..)))
+        .await;
+    events.send(cancelled("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+
+    let stop = turn.await.expect("task joins").expect("prompt resolves");
+    assert_eq!(stop, StopReason::Cancelled);
 }
 
 #[tokio::test]
@@ -545,6 +759,118 @@ async fn a_restored_session_prompts_its_existing_agent() {
             None
         )]
     );
+}
+
+/// A restored session has no in-memory `active_run` — this process never
+/// drove the run itself — so cancelling it must fall back to asking Cursor
+/// which run is current instead of silently skipping the remote cancel.
+#[tokio::test]
+async fn cancel_on_a_restored_session_finds_the_run_from_cursor() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-7"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+    );
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-in-flight"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-7"))
+        .await
+        .expect("cancel works");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![CursorCall::CancelRun(
+            CursorAgentId::new("bc-restored"),
+            CursorRunId::new("run-in-flight"),
+        )]
+    );
+}
+
+/// The fallback lookup cancels every run it finds in progress, not just the
+/// first — Cursor documents one active run per agent, but that invariant is
+/// not enforced client-side, and cancelling one leaked run is cheaper than
+/// missing it.
+#[tokio::test]
+async fn cancel_on_a_restored_session_cancels_every_run_in_progress() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-10"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+    );
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-creating"),
+            status: RunStatus::Creating,
+        },
+        RunListing {
+            id: CursorRunId::new("run-running"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-10"))
+        .await
+        .expect("cancel works");
+
+    assert_eq!(
+        cursor.calls(),
+        vec![
+            CursorCall::CancelRun(
+                CursorAgentId::new("bc-restored"),
+                CursorRunId::new("run-creating"),
+            ),
+            CursorCall::CancelRun(
+                CursorAgentId::new("bc-restored"),
+                CursorRunId::new("run-running"),
+            ),
+        ]
+    );
+}
+
+/// A restored session with no run currently going is a no-op, not an error —
+/// the fallback lookup found nothing to cancel.
+#[tokio::test]
+async fn cancel_on_a_restored_session_with_no_run_going_is_a_no_op() {
+    let (service, cursor, _notifier) = service(None);
+    service.restore_session(
+        SessionId::new("cursor-acp-8"),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+    );
+
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-old"),
+        status: RunStatus::Finished,
+    }]);
+
+    service
+        .cancel(&SessionId::new("cursor-acp-8"))
+        .await
+        .expect("cancel works");
+
+    assert!(cursor.calls().is_empty());
 }
 
 /// Fresh ids skip over restored ones instead of replacing a live session.

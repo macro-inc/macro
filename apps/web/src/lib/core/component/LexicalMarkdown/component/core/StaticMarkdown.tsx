@@ -11,6 +11,7 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AgentContextNode,
   type AwaitNode,
   type ClassedBlockNode,
   type ContactMentionNode,
@@ -74,6 +75,7 @@ import { getCachedItemPreview } from '@queries/preview';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { Await as AwaitDecorator } from '../decorator/Await';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
@@ -494,6 +496,18 @@ const Await: TypedRenderableEntity<AwaitNode> = {
   },
 };
 
+const AgentContext: TypedRenderableEntity<AgentContextNode> = {
+  guard: (node: LexicalNode): node is AgentContextNode =>
+    node.__type === 'agent-context',
+  render: (props) => (
+    <AgentContextDecorator
+      {...props.node.exportComponentProps()}
+      key={props.node.getKey()}
+      theme={props.theme}
+    />
+  ),
+};
+
 const MagicChip: TypedRenderableEntity<MagicChipNode> = {
   guard: (node: LexicalNode): node is MagicChipNode =>
     node.__type === 'magic-chip',
@@ -799,8 +813,12 @@ const TableRow: TypedRenderableElement<TableRowNode> = {
     node.__type === 'tablerow',
   render: (props) => {
     const isFirstRow = props.node.getIndexWithinParent() === 0;
+    const height = props.node.getHeight();
     return (
-      <tr class={cn(props.theme.tableRow, isFirstRow && 'font-bold')}>
+      <tr
+        class={cn(props.theme.tableRow, isFirstRow && 'font-bold')}
+        style={height ? { height: `${height}px` } : undefined}
+      >
         {props.children}
       </tr>
     );
@@ -854,6 +872,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(DateMention),
   eraseRenderableEntity(GroupMention),
   eraseRenderableEntity(Await),
+  eraseRenderableEntity(AgentContext),
   eraseRenderableEntity(MagicChip),
   eraseRenderableEntity(Snapshot),
   eraseRenderableEntity(Image),

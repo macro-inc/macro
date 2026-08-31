@@ -153,7 +153,7 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
               if (!signaledFailure) {
                 signaledFailure = true;
                 toast.failure('Live updates disconnected', {
-                  subtext: 'Refresh the app to reconnect.',
+                  subtext: 'Refresh to reconnect.',
                 });
               }
             }

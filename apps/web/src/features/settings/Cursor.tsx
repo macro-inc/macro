@@ -2,11 +2,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
 import {
   useCursorApiKeyStatusQuery,
+  useCursorModelsQuery,
   useDisconnectCursorApiKey,
   useSaveCursorApiKey,
+  useSetCursorDefaultModel,
 } from '@queries/auth/cursor-api-key';
 import { Button } from '@ui';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { ConnectAction, StatusDot } from './integration-ui';
 import { IntegrationRow, SettingsCard, SettingsRow } from './primitives';
 
@@ -34,6 +36,19 @@ export function CursorCard() {
 
   const [apiKey, setApiKey] = createSignal('');
   const registered = () => status.data?.registered ?? false;
+
+  // Only worth fetching once there is a key to ask Cursor through.
+  const models = useCursorModelsQuery(registered);
+  const setDefaultModel = useSetCursorDefaultModel();
+
+  const handleModelChange = async (modelId: string) => {
+    try {
+      await setDefaultModel.mutateAsync(modelId);
+      toast.success('Default model updated');
+    } catch (error) {
+      toast.failure(failureMessage(error, 'Failed to set your default model'));
+    }
+  };
 
   const handleSave = async () => {
     const key = apiKey().trim();
@@ -107,7 +122,7 @@ export function CursorCard() {
                   }}
                 />
                 <Button
-                  variant="base"
+                  variant="outline"
                   size="sm"
                   depth={3}
                   disabled={apiKey().length === 0 || saveKey.isPending}
@@ -129,6 +144,26 @@ export function CursorCard() {
           </Switch>
         </Show>
       </SettingsRow>
+
+      <Show when={registered()}>
+        <SettingsRow
+          label="Default model"
+          description="The model new @cursor sessions start on. You can still switch it per session."
+        >
+          <select
+            class="settings-input w-56"
+            value={status.data?.defaultModelId ?? ''}
+            disabled={setDefaultModel.isPending}
+            onChange={(event) =>
+              void handleModelChange(event.currentTarget.value)
+            }
+          >
+            <For each={models.data?.models ?? []}>
+              {(model) => <option value={model.id}>{model.displayName}</option>}
+            </For>
+          </select>
+        </SettingsRow>
+      </Show>
     </SettingsCard>
   );
 }

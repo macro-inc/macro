@@ -13271,7 +13271,7 @@
           },
           "isSelf": {
             "type": "boolean",
-            "description": "Whether this attendee represents the connected account."
+            "description": "Whether this attendee is one of the viewing requester's inboxes."
           },
           "responseStatus": {
             "$ref": "#/components/schemas/AttendeeResponseStatus",
@@ -13331,9 +13331,21 @@
             "format": "date-time",
             "description": "Entity creation time."
           },
+          "creatorEmail": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator email. Distinct from the organizer when\nsomeone writes onto a calendar they do not own. Omitted from stored\nprojections when unknown so events ingested before this field still\ncompare equal."
+          },
+          "creatorName": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator display name."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "Optional event body."
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType",
+            "description": "Provider event type. Skipped when it is the regular type so\nprojections stored before event types were modeled still compare\nequal."
           },
           "icalUid": {
             "type": "string",
@@ -18472,6 +18484,18 @@
         "type": "string",
         "description": "Whether an event blocks availability.",
         "enum": ["opaque", "transparent"]
+      },
+      "EventType": {
+        "type": "string",
+        "description": "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation.",
+        "enum": [
+          "default",
+          "out_of_office",
+          "focus_time",
+          "working_location",
+          "birthday",
+          "from_gmail"
+        ]
       },
       "EventVisibility": {
         "type": "string",

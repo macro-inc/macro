@@ -339,6 +339,15 @@ impl ContainerManager for MockContainerManager {
         Ok(container)
     }
 
+    /// The fixed token every mock container "holds", for sessions that were
+    /// spawned; `None` otherwise, like a provider that finds no container.
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>, HarnessError> {
+        Ok(self
+            .lock()
+            .contains_key(&session)
+            .then(|| "test-session-token".to_owned()))
+    }
+
     async fn teardown(&self, session: AgentSessionId) -> Result<(), HarnessError> {
         self.teardowns.fetch_add(1, Ordering::Relaxed);
         self.lock().remove(&session);

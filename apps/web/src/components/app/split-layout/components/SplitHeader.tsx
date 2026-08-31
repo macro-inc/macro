@@ -45,6 +45,7 @@ import { Portal } from 'solid-js/web';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
+import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
@@ -94,6 +95,8 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
+      square
+      size="sm"
       class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
@@ -103,7 +106,7 @@ function SplitBackButton() {
         context.handle.goBack();
       }}
     >
-      <CaretLeft class="h-4" />
+      <CaretLeft />
     </Button>
   );
 }
@@ -113,13 +116,15 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
+      square
+      size="sm"
+      class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Forward"
       hotkey={TOKENS.split.go.forward}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
-      class={cn('p-1 rounded-lg')}
     >
-      <CaretRight class="h-4" />
+      <CaretRight />
     </Button>
   );
 }
@@ -145,7 +150,9 @@ function SidebarExpandButton() {
       aria-hidden={!visible()}
     >
       <Button
-        class="p-1 rounded-lg"
+        class="rounded-lg"
+        square
+        size="sm"
         label="Expand Sidebar"
         hotkey={TOKENS.global.toggleSidebar}
         disabled={!visible()}
@@ -198,29 +205,17 @@ function SplitCloseButton() {
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 
-  // A Viewer has no close affordance or close hotkey: it closes with its
-  // Controller, when its Preview Pair dissolves (external navigation or the
-  // Controller leaving its list view), or via the preview toggle.
-  const isPreviewViewer = () => context.handle.isViewerSplit();
-
-  // A Preview Pair occupies two split slots but is a single logical split: its
-  // Viewer isn't independently closable. Subtract one slot per pair so that
-  // when the only splits open are a single Preview Pair, the Controller hides
-  // its close button — just like a lone split does.
-  const hasMultipleSplits = createMemo(
-    () =>
-      layout.manager.splits().length - layout.manager.previewPairs().length > 1
-  );
-
   return (
-    <Show when={hasMultipleSplits() && !isPreviewViewer()}>
+    <Show when={shouldShowSplitCloseButton(layout.manager, context.handle)}>
       <Button
-        class="p-1 rounded-lg"
+        square
+        size="sm"
+        class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={context.handle.close}
       >
-        <CloseIcon class="size-4" />
+        <CloseIcon />
       </Button>
     </Show>
   );

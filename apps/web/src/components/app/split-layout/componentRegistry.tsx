@@ -88,12 +88,15 @@ function mergeClientFilters(
   };
 }
 
-export type UnifiedListMeta = {
+export type ComponentMeta = {
+  kind?: string;
+  splitPanelLayout?: 'legacy' | 'composable';
+};
+
+export type UnifiedListMeta = ComponentMeta & {
   kind: 'unified-list';
   viewId: ViewId;
 };
-
-export type ComponentMeta = UnifiedListMeta | { kind?: undefined };
 
 export type ComponentMetaMap = {
   'unified-list': UnifiedListMeta;
@@ -106,13 +109,16 @@ type ComponentRegistration = {
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-function registerComponent<T extends Omit<ComponentMeta, 'kind'>>(
+function registerComponent<TMeta extends Record<string, unknown>>(
   name: string,
   factory: ComponentFactory,
-  initialMeta?: T
+  initialMeta?: TMeta
 ) {
   const metaWithKind = initialMeta ? { kind: name, ...initialMeta } : undefined;
-  REGISTRY.set(name, { factory, initialMeta: metaWithKind as ComponentMeta });
+  REGISTRY.set(name, {
+    factory,
+    initialMeta: metaWithKind as ComponentMeta,
+  });
 }
 
 type ResolvedComponent = {

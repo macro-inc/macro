@@ -102,7 +102,7 @@ where
         return Ok(None);
     };
 
-    match GraphqlSoupEntity::<Edges>::new(item) {
+    match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
         GraphqlSoupEntity::EmailThread(thread) => Ok(Some(thread)),
         _ => Err(async_graphql::Error::new(
             "Soup returned a non-email entity for an email-thread request",
@@ -171,11 +171,15 @@ where
 
     if include_frecency {
         let page = service
-            .get_user_soup_with_frecency(request, team_receipt)
+            .get_user_soup_with_frecency_and_projection(request, team_receipt)
             .await?;
-        Ok(SoupPage::new_from_enriched(page.type_erase()))
+        Ok(SoupPage::new_from_enriched_with_projection(
+            page.type_erase(),
+        ))
     } else {
-        let page = service.get_user_soup(request, team_receipt).await?;
-        Ok(SoupPage::new(page.type_erase()))
+        let page = service
+            .get_user_soup_with_projection(request, team_receipt)
+            .await?;
+        Ok(SoupPage::new_with_projection(page.type_erase()))
     }
 }

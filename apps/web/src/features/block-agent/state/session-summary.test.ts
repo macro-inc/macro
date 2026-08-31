@@ -30,6 +30,8 @@ function edit(
     label: 'Edit',
     status: 'completed',
     detail: { kind: 'edit', diffs },
+    rawInput: null,
+    rawOutput: null,
   };
 }
 
@@ -40,6 +42,8 @@ function tool(detail: Extract<MessagePart, { kind: 'tool_use' }>['detail']) {
     label: 'Tool',
     status: 'completed' as const,
     detail,
+    rawInput: null,
+    rawOutput: null,
   };
 }
 

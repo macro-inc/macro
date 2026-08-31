@@ -3597,6 +3597,10 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -3688,6 +3692,10 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible call name.
 	"""
@@ -3815,6 +3823,10 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -3922,6 +3934,10 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	Channel messages do not have a separate display name.
 	"""
@@ -4067,6 +4083,10 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Server-only projection facts are unavailable for chats.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -4146,6 +4166,10 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible company name.
 	"""
@@ -4230,6 +4254,10 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque authoritative server-only projection facts.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible display name.
 	"""
@@ -4683,6 +4711,10 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -4827,6 +4859,10 @@ interface GraphqlSoupEntity {
 	"""
 	id: ID!
 	"""
+	Opaque supplement containing authoritative server-only projection facts.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	The canonical entity type.
 	"""
 	entityType: GraphqlSoupEntityType!
@@ -4927,6 +4963,10 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	Foreign entities do not expose a common display name.
 	"""
 	displayName: String
@@ -5003,6 +5043,10 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Server-only projection facts are unavailable for projects.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -5078,6 +5122,10 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible display name — a reminder's description is its name.
 	"""
@@ -5489,6 +5537,11 @@ input SetEntityPropertyInput {
 	"""
 	value: GraphqlSetPropertyValue
 }
+
+"""
+Opaque versioned supplement containing authoritative server-only facts.
+"""
+scalar SoupCacheProjection
 
 """
 Input for continuing a Soup query.

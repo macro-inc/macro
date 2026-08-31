@@ -19,6 +19,7 @@ import {
   blockErrorSignal,
   blockFileSignal,
   blockHandleSignal,
+  blockLoadRetrySignal,
   blockLoroManagerSignal,
   blockMetadataSignal,
   blockSourceSignal,
@@ -72,7 +73,11 @@ export function BlockLoader<
   setLiveTrackingEnabled(props.definition.liveTrackingEnabled ?? false);
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
 
+  const retryToken = blockLoadRetrySignal.get;
+
   const getResult = createAsync(async () => {
+    // Tracked before the first await so a failure view can re-run the load.
+    retryToken();
     const result = await loadBlockDataAfterComponentPreload(
       () => props.definition.load(props.source, 'initial'),
       props.definition.component.preload

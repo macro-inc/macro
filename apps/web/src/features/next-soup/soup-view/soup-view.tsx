@@ -15,8 +15,12 @@ import type { Query } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
+import { DateGroupHeader } from '@app/features/next-soup/soup-view/date-group-header';
 import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
-import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
+import {
+  EmptyState,
+  shouldShowLoadError,
+} from '@app/features/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
@@ -43,7 +47,6 @@ import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
 import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
-import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
@@ -71,6 +74,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
@@ -93,6 +97,7 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
+import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
@@ -206,6 +211,36 @@ const MobileTabLoadingBar = () => (
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
 const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
+/** The row components a soup view can render. */
+type SoupRowComponent =
+  | typeof ListEntity
+  | typeof InboxListEntity
+  | typeof TaskListEntity
+  | typeof CompanyListEntity;
+
+type SoupRowEntry = {
+  component: SoupRowComponent;
+  /**
+   * The --soup-row-* geometry the component renders with (ListEntity.css).
+   * SoupList stamps it on the list container so group headers can line their
+   * label up with row content.
+   */
+  family: SoupRowFamily;
+};
+
+/**
+ * Per-view row config. A view absent from the table gets DEFAULT_SOUP_ROW.
+ * Adding a row component means adding it here — the entry can't omit its
+ * geometry family, so the two can't drift apart.
+ */
+const SOUP_ROW_BY_VIEW: Partial<Record<ListView, SoupRowEntry>> = {
+  inbox: { component: InboxListEntity, family: 'card' },
+  tasks: { component: TaskListEntity, family: 'row' },
+  companies: { component: CompanyListEntity, family: 'row' },
+};
+
+const DEFAULT_SOUP_ROW: SoupRowEntry = { component: ListEntity, family: 'row' };
+
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
 ]);
@@ -665,7 +700,7 @@ export const SoupView = (props: SoupViewProps) => {
                       fallback={
                         <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                           <Button
-                            variant="base"
+                            variant="outline"
                             class="p-1 size-7 rounded-lg ml-2 bg-surface"
                             onClick={() => setNarrowSearchExpanded(true)}
                             depth={2}
@@ -897,14 +932,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
 
-  const isInboxView = useIsInboxView();
-
-  // The per-row component depends on the active view.
-  const listEntityComponent = () => {
-    if (currentView() === 'tasks') return TaskListEntity;
-    if (currentView() === 'companies') return CompanyListEntity;
-    if (isInboxView()) return InboxListEntity;
-    return ListEntity;
+  // The row component and its geometry family both come from one per-view
+  // lookup, so the list container can't disagree with the rows it renders.
+  const rowEntry = (): SoupRowEntry => {
+    const view = currentView();
+    return (view && SOUP_ROW_BY_VIEW[view]) ?? DEFAULT_SOUP_ROW;
   };
 
   const groupHeaderComponent = () => {
@@ -1072,16 +1104,27 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    const newEntitiesForSelection = [];
     const sign = Math.sign(params.entityIndex - anchorIndex);
+
+    // Shift-clicking the anchor itself has zero range. Stepping the loop by
+    // `sign` (0) would spin forever, so just toggle the single entity.
+    if (sign === 0) {
+      soup.selection.toggle(params.entity);
+      lastClickedEntityId = params.entityIndex;
+      return;
+    }
+
+    const newEntitiesForSelection = [];
 
     for (
       let i = anchorIndex;
       sign > 0 ? i <= params.entityIndex : i >= params.entityIndex;
       i += sign
     ) {
+      // The anchor can be stale (rows changed since the last click), so guard
+      // against indexing past the current list.
       const entity = entityList[i];
-      if (!entity.isSelected()) {
+      if (entity && !entity.isSelected()) {
         newEntitiesForSelection.push(entity.original);
       }
     }
@@ -1128,6 +1171,17 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   const showEmptyState = () =>
     ((!source.isFetching() || isPullRefreshing()) && !rows().length) ||
     forceEmptyState();
+
+  const showLoadError = () =>
+    !!source.error() &&
+    shouldShowLoadError({
+      hasData: source.hasData(),
+      forceEmptyState: forceEmptyState(),
+    });
+
+  const retryLoad = () => {
+    void source.refresh().catch(() => undefined);
+  };
 
   const entityById = createMemo(
     () => {
@@ -1241,7 +1295,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       >
         <SoupViewFileDropzone>
           <div class="@container/u-list size-full unified-list-root flex flex-col relative no-select-children">
-            <Show when={isTouchDevice() && source.isPlaceholderData()}>
+            <Show
+              when={
+                isTouchDevice() && source.isPlaceholderData() && !source.error()
+              }
+            >
               <MobileTabLoadingBar />
             </Show>
             <Show when={isTouchDevice()}>
@@ -1254,6 +1312,14 @@ const SoupViewListContent = (props: SoupViewListProps) => {
             </Show>
             <StaticMarkdownContext>
               <Switch>
+                <Match when={showLoadError()}>
+                  <div
+                    ref={setEmptyStateRef}
+                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                  >
+                    <LoadErrorPanel onRetry={retryLoad} />
+                  </div>
+                </Match>
                 <Match
                   when={
                     source.isFetching() && !rows().length && !isPullRefreshing()
@@ -1389,6 +1455,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                       }
                                       group={group()}
                                       highlighted={row.isFocused()}
+                                      isFirst={row.index === 0}
+                                      rowFamily={rowEntry().family}
                                     />
                                   )}
                                 </Match>
@@ -1418,7 +1486,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                           fallback={
                                             <Button
-                                              variant="base"
+                                              variant="outline"
                                               size="sm"
                                               depth={2}
                                               class={cn({
@@ -1434,7 +1502,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                         >
                                           <Button
-                                            variant="base"
+                                            variant="outline"
                                             size="sm"
                                             depth={2}
                                             class={cn({
@@ -1461,7 +1529,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 >
                                   <SoupEntityContextMenu entity={row.original}>
                                     <Dynamic
-                                      component={listEntityComponent()}
+                                      component={rowEntry().component}
                                       entity={row.original}
                                       timestamp={timestamp()}
                                       highlighted={row.isFocused()}
@@ -1617,6 +1685,7 @@ const SoupList = (props: SoupListProps) => {
     createSignal<VirtualizerHandle>();
 
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
+
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
 
@@ -1657,8 +1726,11 @@ const SoupList = (props: SoupListProps) => {
   return (
     <div
       ref={props.ref}
+      // `soup-list` scopes the --soup-inbox-* metrics (ListEntity.css) for
+      // everything in the list; the row geometry itself travels with the rows
+      // and the group headers, which each carry their own family class.
       class={cn(
-        'unified-table-body w-full flex-1 min-h-0 relative',
+        'soup-list unified-table-body w-full flex-1 min-h-0 relative',
         props.class
       )}
     >

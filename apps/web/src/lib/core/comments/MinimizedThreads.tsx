@@ -105,7 +105,7 @@ export function MinimizedThread(props: {
             <div
               class={cn('inline-flex items-center gap-1 px-1 rounded-lg', {
                 'group-hover:bg-hover': !props.isActive,
-                'bg-yellow/10 group-hover:bg-yellow/20': props.isActive,
+                'bg-comment/10 group-hover:bg-comment/20': props.isActive,
               })}
             >
               <ChatTeardrop class="size-4" onClick={clickHandler} />

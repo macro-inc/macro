@@ -3,7 +3,7 @@ import { createSignal, Show } from 'solid-js';
 import { MobileDrawer } from './MobileDrawer';
 
 const TONE_VARIANT = {
-  default: 'active',
+  default: 'accent',
   danger: 'danger',
   success: 'success',
 } as const;
@@ -64,7 +64,7 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
             <MobileDrawer.Close
               as={Button}
               type="button"
-              variant="base"
+              variant="ghost"
               size="lg"
               class="w-full rounded-lg"
             >

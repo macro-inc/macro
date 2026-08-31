@@ -1,7 +1,11 @@
 import { isMacroAgentId, MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { macroIdToEmail, tryMacroId } from '@core/user';
+import { getHashedPaletteColor } from '@ui/utils/palette';
 
-export { diffAuthorColor as userColor } from '@macro-inc/lexical-core';
+export function userColor(userId: string): string {
+  const color = getHashedPaletteColor(userId);
+  return `var(--color-${color}, var(--color-pink))`;
+}
 
 export function userLabel(userId: string): string {
   if (userId === 'unknown') return 'Unknown';

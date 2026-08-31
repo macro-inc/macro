@@ -1,14 +1,18 @@
 /**
- * @file Column resize logic for tables, driven by the TableCellResizer
- * component. A drag captures a snapshot up front (which column, the rendered
- * widths, and the stored widths to restore on cancel), then applies its
+ * @file Column and row resize logic for tables, driven by the TableCellResizer
+ * component. A drag captures a snapshot up front (which column/row, the
+ * rendered size, and the stored size to restore on cancel), then applies its
  * running delta against that snapshot on every frame.
+ *
+ * Row height is optional: unset rows stay content-sized and serialize without
+ * a `height` attribute. Dragging a row writes height only on that row.
  */
 import {
   $computeTableMapSkipCellCheck,
   $getTableNodeFromLexicalNodeOrThrow,
   $isTableCellNode,
   $isTableNode,
+  $isTableRowNode,
 } from '@lexical/table';
 import {
   $getNearestNodeFromDOMNode,
@@ -17,6 +21,7 @@ import {
 } from 'lexical';
 
 export const MIN_COLUMN_WIDTH = 120;
+export const MIN_ROW_HEIGHT = 33;
 
 // Which vertical edge of the cell is being dragged. Both name a column
 // border: 'right' resizes the cell's own (last spanned) column, 'left' the
@@ -99,4 +104,62 @@ export function $revertResizeDrag(drag: ResizeDragSnapshot): void {
   const tableNode = $getNodeByKey(drag.tableKey);
   if (!$isTableNode(tableNode) || !tableNode.isAttached()) return;
   tableNode.setColWidths(drag.revertWidths);
+}
+
+export type RowResizeDragSnapshot = {
+  rowKey: string;
+  // Rendered row height at drag start; the drag applies its delta to this
+  // so the grabbed edge stays under the pointer even when the stored height
+  // is unset (content-sized) or disagrees with layout.
+  baseHeight: number;
+  revertHeight: number | undefined;
+};
+
+export function $captureRowResizeDrag(
+  editor: LexicalEditor,
+  cellElem: HTMLElement,
+  zoom: number
+): RowResizeDragSnapshot | undefined {
+  const cellNode = $getNearestNodeFromDOMNode(cellElem);
+  if (!$isTableCellNode(cellNode)) return;
+  const tableNode = $getTableNodeFromLexicalNodeOrThrow(cellNode);
+
+  const [tableMap] = $computeTableMapSkipCellCheck(tableNode, null, null);
+  const position = tableMap.flat().find((value) => value.cell === cellNode);
+  if (!position) return;
+  // A merged cell's bottom edge belongs to the last row it spans.
+  const rowIndex = position.startRow + cellNode.getRowSpan() - 1;
+  const rows = tableNode.getChildren().filter($isTableRowNode);
+  const rowNode = rows[rowIndex];
+  if (!rowNode) return;
+
+  const revertHeight = rowNode.getHeight();
+  const rect = editor
+    .getElementByKey(rowNode.getKey())
+    ?.getBoundingClientRect();
+  const baseHeight =
+    rect && rect.height > 0
+      ? rect.height / zoom
+      : (revertHeight ?? MIN_ROW_HEIGHT);
+
+  return {
+    rowKey: rowNode.getKey(),
+    baseHeight,
+    revertHeight,
+  };
+}
+
+export function $applyRowResizeDrag(
+  drag: RowResizeDragSnapshot,
+  delta: number
+): void {
+  const rowNode = $getNodeByKey(drag.rowKey);
+  if (!$isTableRowNode(rowNode) || !rowNode.isAttached()) return;
+  rowNode.setHeight(Math.max(MIN_ROW_HEIGHT, drag.baseHeight + delta));
+}
+
+export function $revertRowResizeDrag(drag: RowResizeDragSnapshot): void {
+  const rowNode = $getNodeByKey(drag.rowKey);
+  if (!$isTableRowNode(rowNode) || !rowNode.isAttached()) return;
+  rowNode.setHeight(drag.revertHeight);
 }

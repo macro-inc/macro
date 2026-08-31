@@ -36,12 +36,12 @@ fn durable_bake_covers_every_repository_built_local_image() {
             .as_mapping()
             .unwrap()
             .iter()
-            .filter_map(|(name, service)| {
+            .filter(|(_, service)| {
                 service
                     .as_mapping()
                     .is_some_and(|service| service.contains_key("build"))
-                    .then(|| name.as_str().unwrap().to_string())
             })
+            .map(|(name, _)| name.as_str().unwrap().to_string())
             .collect()
     }
 

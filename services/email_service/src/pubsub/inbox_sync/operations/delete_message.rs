@@ -98,15 +98,14 @@ pub async fn delete_message(
     })?;
 
     let result = async {
-        let result =
-            email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message, true)
-                .await
-                .map_err(|e| {
-                    ProcessingError::Retryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e.context("Failed to delete message with transaction".to_string()),
-                    })
-                })?;
+        let result = email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to delete message with transaction".to_string()),
+                })
+            })?;
         Ok::<Option<Uuid>, ProcessingError>(result)
     }
     .await;

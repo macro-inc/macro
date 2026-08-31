@@ -4,6 +4,7 @@ import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   loadSoupBackfillCheckpoint,
+  runSoupBackfill,
   runSoupBackfills,
   type SoupBackfillParams,
   useSoupBackfills,
@@ -94,6 +95,30 @@ describe('runSoupBackfills', () => {
     );
     expect(loadSoupBackfillCheckpoint('user-1', 'second-lane').completed).toBe(
       true
+    );
+  });
+
+  it('does not checkpoint a page whose required v2 capsule ingestion fails', async () => {
+    const projectionFailure = new Error(
+      'SoupBackfill page contains an incomplete required cache projection'
+    );
+    const fetchPage = vi.fn(async () => {
+      throw projectionFailure;
+    });
+
+    await expect(
+      Effect.runPromise(
+        runSoupBackfill('user-1', lane('projection-v2', fetchPage))
+      )
+    ).rejects.toMatchObject({ cause: projectionFailure });
+
+    expect(fetchPage).toHaveBeenCalledOnce();
+    expect(loadSoupBackfillCheckpoint('user-1', 'projection-v2')).toMatchObject(
+      {
+        nextCursor: null,
+        pagesFetched: 0,
+        completed: false,
+      }
     );
   });
 

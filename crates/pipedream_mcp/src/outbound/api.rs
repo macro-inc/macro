@@ -4,12 +4,14 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{ConnectorDirectory, McpConnection, PipedreamConnect};
 use anyhow::Context;
+use reqwest::header::{HeaderMap, HeaderValue};
 use rmcp::service::ServiceExt;
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use serde::Deserialize;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use url::Url;
 
 /// Default base URL of the Pipedream REST API.
 pub const DEFAULT_API_URL: &str = "https://api.pipedream.com";
@@ -94,6 +96,7 @@ impl PipedreamClient {
         {
             return Ok(cached.token.clone());
         }
+        tracing::debug!("pipedream api token absent or near expiry; requesting a fresh one");
 
         let response = self
             .http
@@ -289,30 +292,85 @@ impl ConnectorDirectory for PipedreamClient {
     }
 }
 
-impl McpConnection for PipedreamClient {
-    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
-    async fn connect(&self, record: &PipedreamConnection) -> anyhow::Result<McpServer> {
-        let token = self.access_token().await?;
+/// How to address Pipedream's remote MCP server on behalf of one user's
+/// connected app.
+///
+/// The bearer is our project-level API token and the headers are what scope a
+/// request to the user and app - Pipedream injects the account's own
+/// credentials server-side from nothing but these. That is why this exists as
+/// a value handed to a proxy rather than only inside a client: whoever holds
+/// the bearer can claim to be any user, so the caller is expected to keep it
+/// away from anything user-controlled.
+///
+/// An outbound vocabulary, not a domain one, typed accordingly: headers are a
+/// validated `HeaderMap` and the destination a parsed `Url`, so an injectable
+/// value fails here, where it originates, and consumers have nothing left to
+/// re-validate.
+#[derive(Clone, Debug)]
+pub struct McpUpstreamCall {
+    /// URL of Pipedream's remote MCP server.
+    pub url: Url,
+    /// Our project API token, for `Authorization: Bearer`.
+    pub bearer_token: String,
+    /// The `x-pd-*` headers scoping the call to the record's user and app.
+    pub headers: HeaderMap,
+}
 
-        let mut headers = reqwest::header::HeaderMap::new();
-        let mut auth = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-            .map_err(|e| anyhow::anyhow!("invalid bearer token: {e}"))?;
-        auth.set_sensitive(true);
-        headers.insert(reqwest::header::AUTHORIZATION, auth);
-        let header = |v: &str| reqwest::header::HeaderValue::from_str(v);
+/// Port for addressing Pipedream's remote MCP server without opening a
+/// session on it.
+///
+/// What [`McpConnection`] uses under the hood, exposed for callers that
+/// proxy raw MCP-over-HTTP traffic instead of speaking MCP themselves: they
+/// need the URL, bearer, and scoping headers to stamp onto a request that
+/// already exists. The returned call carries our project-level bearer, so it
+/// must never travel anywhere user-controlled.
+pub trait McpUpstream: Send + Sync + 'static {
+    /// The upstream call scoped to `record`'s app for `record.user_id`.
+    fn upstream(
+        &self,
+        record: &PipedreamConnection,
+    ) -> impl Future<Output = anyhow::Result<McpUpstreamCall>> + Send;
+}
+
+impl McpUpstream for PipedreamClient {
+    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
+    async fn upstream(&self, record: &PipedreamConnection) -> anyhow::Result<McpUpstreamCall> {
+        let mut headers = HeaderMap::new();
+        let header = |value: &str| {
+            HeaderValue::from_str(value).with_context(|| format!("{value:?} is not a header value"))
+        };
         headers.insert("x-pd-project-id", header(&self.config.project_id)?);
         headers.insert("x-pd-environment", header(&self.config.environment)?);
         headers.insert("x-pd-external-user-id", header(record.user_id.as_ref())?);
         headers.insert("x-pd-app-slug", header(&record.app_slug)?);
         // Flat per-app tools; no configuration meta-tools.
-        headers.insert("x-pd-tool-mode", header("tools-only")?);
+        headers.insert("x-pd-tool-mode", HeaderValue::from_static("tools-only"));
+
+        Ok(McpUpstreamCall {
+            url: Url::parse(&self.config.mcp_url).context("PIPEDREAM_MCP_URL is not a url")?,
+            bearer_token: self.access_token().await?,
+            headers,
+        })
+    }
+}
+
+impl McpConnection for PipedreamClient {
+    #[tracing::instrument(skip_all, err, fields(app = %record.app_slug, user_id = %record.user_id))]
+    async fn connect(&self, record: &PipedreamConnection) -> anyhow::Result<McpServer> {
+        let upstream = self.upstream(record).await?;
+
+        let mut headers = upstream.headers;
+        let mut auth = HeaderValue::from_str(&format!("Bearer {}", upstream.bearer_token))
+            .map_err(|e| anyhow::anyhow!("invalid bearer token: {e}"))?;
+        auth.set_sensitive(true);
+        headers.insert(reqwest::header::AUTHORIZATION, auth);
 
         let client = reqwest::Client::builder()
             .default_headers(headers)
             .build()
             .context("building Pipedream MCP HTTP client")?;
 
-        let config = StreamableHttpClientTransportConfig::with_uri(&*self.config.mcp_url.clone());
+        let config = StreamableHttpClientTransportConfig::with_uri(upstream.url.as_str());
         let transport = StreamableHttpClientTransport::with_client(client, config);
         Ok(client_info().serve(transport).await?)
     }

@@ -43,7 +43,7 @@ fn local_compose_flavor(instance: &Instance, mode: Mode, static_frontend: bool) 
     // Resolve first: the gmail_forwarder sidecar is gated on the resolved env
     // exactly as `prepare` gates it, so the validated compose matches what a
     // real bring-up with this env would generate.
-    let resolved = env_layer::resolve(mode, instance, true, None, static_frontend)?;
+    let resolved = env_layer::resolve(mode, instance, true, None, static_frontend, None)?;
     let gmail_forwarder = resolved
         .merged
         .get("GMAIL_FORWARDER_SA_KEY")
@@ -177,7 +177,7 @@ fn local_env_flavor(
     env_file: Option<&std::path::Path>,
     static_frontend: bool,
 ) -> Result<()> {
-    let resolved = env_layer::resolve(mode, instance, no_doppler, env_file, static_frontend)?;
+    let resolved = env_layer::resolve(mode, instance, no_doppler, env_file, static_frontend, None)?;
     let env = &resolved.merged;
     let mut failures: Vec<String> = Vec::new();
 

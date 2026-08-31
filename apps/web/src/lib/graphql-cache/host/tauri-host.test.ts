@@ -6,6 +6,7 @@ const listenMock = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
 
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import { createTauriCacheHost } from './tauri-host';
 
 type EventCallback = (event: { payload: Record<string, unknown> }) => void;
@@ -91,7 +92,9 @@ describe('createTauriCacheHost', () => {
     ];
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(
-        command === 'graphql_cache_read_records_by_keys' ? records : null
+        command === 'graphql_cache_read_records_by_keys'
+          ? { revision: INITIAL_CACHE_REVISION, records }
+          : null
       )
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
@@ -102,7 +105,7 @@ describe('createTauriCacheHost', () => {
         fragmentName: 'Item',
         keys: ['GraphqlSoupDocument:item-1'],
       })
-    ).resolves.toEqual(records);
+    ).resolves.toEqual({ revision: INITIAL_CACHE_REVISION, records });
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_read_records_by_keys',
       {
@@ -366,7 +369,9 @@ describe('createTauriCacheHost', () => {
     host.onCacheChanged(() => calls++);
     await Promise.resolve();
 
-    eventCallbacks.get('graphql-cache://cache-changed')?.({ payload: {} });
+    eventCallbacks.get('graphql-cache://cache-changed')?.({
+      payload: { revision: INITIAL_CACHE_REVISION },
+    });
     expect(calls).toBe(1);
   });
 

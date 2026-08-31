@@ -240,7 +240,7 @@ export function EventForm(props: EventFormProps) {
         </Button>
         <Button
           type="submit"
-          variant={controller.canSave() ? 'active' : 'ghost'}
+          variant={controller.canSave() ? 'accent' : 'ghost'}
           depth={3}
           class="rounded-lg border-0"
           disabled={!controller.canSave() || formIsDisabled()}

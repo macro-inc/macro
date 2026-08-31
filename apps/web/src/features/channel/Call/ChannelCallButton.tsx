@@ -34,7 +34,7 @@ export function ChannelCallButton(props: { channelId: string }) {
   const variant = () => {
     if (isTouchDevice()) return 'ghost';
     if (isCallInProgress()) return 'success';
-    return 'base';
+    return 'outline';
   };
 
   const confirmTitle = () => {

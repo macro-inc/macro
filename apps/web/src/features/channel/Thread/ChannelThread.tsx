@@ -24,6 +24,7 @@ import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadProps } from './types';
+import { channelReplyInputOffsetX } from './utils/thread-rail-geometry';
 import {
   DEFAULT_VISIBLE_REPLY_COUNT,
   getCollapsedRepliesCount,
@@ -176,16 +177,6 @@ export function ChannelThread(props: ThreadProps) {
     setIsReplying: (v) => props.setIsReplying(v),
   });
 
-  // NOTE: Intentionally reads from `thread().preview` instead of `activeReplies()`.
-  // `activeReplies()` can access `repliesQuery.data` which triggers Suspense.
-  // Preview data is always available synchronously and is sufficient here
-  // since this only controls the reply rail connector color.
-  const firstReplyIsNewMessage = () => {
-    const preview = thread().preview ?? [];
-    const first = preview[0];
-    return first ? props.isNewMessage?.(first) : false;
-  };
-
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(thread().reply_count, DEFAULT_VISIBLE_REPLY_COUNT);
   const collapsedRepliesContainsNewMessages = () =>
@@ -299,38 +290,54 @@ export function ChannelThread(props: ThreadProps) {
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}
       >
         <div class="flex flex-col w-full">
-          <MarkMessageNotifications
-            messageId={props.data().id}
-            channelId={props.channelId()}
-          >
-            <DebugSuspense name="ChannelThread.message">
-              <ChannelMessage
-                channelId={props.channelId()}
-                message={props.data()}
-                actions={props.getMessageActions?.(props.data())}
-                listMeta={props.listMeta}
-                messageEditor={props.messageEditor}
-                participants={props.participants}
-                onClick={selectThreadMessage}
-                selected={isSelected() && !isThreadFocused()}
-                targeted={
-                  // The unified input's reply is bound to this root, or
-                  // channel navigation landed on it.
-                  unifiedReplyBinding()?.boundToRoot || isRootNavTargeted()
-                }
-              />
-            </DebugSuspense>
-          </MarkMessageNotifications>
+          {/* Rail segment along the root message: from the avatar's center
+              (masked by the avatar's fill until its lower edge) to the
+              message's bottom, where the reply-branch elbow takes over. A
+              grouped root has no avatar — its segment enters from the row
+              top (fed by the run's pass-through rails) and a fork node on
+              the spine marks which message the thread replies to. Plain
+              messages carry no rail. */}
+          <div class="relative">
+            <Thread.RootRail
+              visible={hasReplies() || isReplyingToThread()}
+              grouped={props.listMeta?.isGroupedWithPrevious}
+            />
+            <MarkMessageNotifications
+              messageId={props.data().id}
+              channelId={props.channelId()}
+            >
+              <DebugSuspense name="ChannelThread.message">
+                <ChannelMessage
+                  channelId={props.channelId()}
+                  message={props.data()}
+                  actions={props.getMessageActions?.(props.data())}
+                  listMeta={props.listMeta}
+                  messageEditor={props.messageEditor}
+                  participants={props.participants}
+                  onClick={selectThreadMessage}
+                  selected={isSelected() && !isThreadFocused()}
+                  targeted={
+                    // The unified input's reply is bound to this root, or
+                    // channel navigation landed on it.
+                    unifiedReplyBinding()?.boundToRoot || isRootNavTargeted()
+                  }
+                />
+              </DebugSuspense>
+            </MarkMessageNotifications>
+          </div>
           <Show
             when={hasReplies() || (props.isReplying() && !isUnifiedInputMode())}
           >
             <div class="relative w-full">
-              <DebugSuspense name="ChannelThread.reply-rail">
-                <Thread.ReplyRailDecorations
-                  isReplying={isReplyingToThread}
-                  firstThreadReplyNewMessage={firstReplyIsNewMessage()}
-                />
-              </DebugSuspense>
+              <Thread.RepliesBridgeRail />
+              {/* Terminal branch: the spine's final curve into the footer
+                  button's left edge. Its vertical part starts exactly at the
+                  last reply row's bottom (button h-8 + mb-2 + container pb). */}
+              <Show
+                when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
+              >
+                <Thread.TerminalRail />
+              </Show>
               <DebugSuspense name="ChannelThread.replies">
                 <Thread.RepliesContainer>
                   <DebugSuspense name="ChannelThread.ReplyList">
@@ -360,8 +367,26 @@ export function ChannelThread(props: ThreadProps) {
                         attachReplyInputRef(el);
                         replyInputContainerRef = el;
                       }}
-                      class="ph-no-capture"
+                      class="ph-no-capture relative"
                     >
+                      {/* The first reply has an author avatar before its
+                          composer, so this branch turns at the avatar's
+                          center. Once replies exist, it instead joins the
+                          composer at its vertical center. */}
+                      <div
+                        class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
+                        style={{
+                          left: 'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)',
+                          width:
+                            'calc(var(--thread-shift) - var(--user-icon-width) / 2 - var(--channel-rail-clearance))',
+                          ...(hasReplies()
+                            ? { bottom: '50%' }
+                            : {
+                                height:
+                                  'calc(var(--message-padding-x) + var(--user-icon-width) / 2)',
+                              }),
+                        }}
+                      />
                       <Show when={!hasReplies()}>
                         <Thread.ReplyAuthor
                           userId={replyUserId()}
@@ -369,6 +394,8 @@ export function ChannelThread(props: ThreadProps) {
                         />
                       </Show>
                       <Thread.ReplyInput
+                        connector={false}
+                        offsetX={channelReplyInputOffsetX}
                         channelId={props.channelId()}
                         messageId={props.data().id}
                         replyInputState={props.replyInputState}

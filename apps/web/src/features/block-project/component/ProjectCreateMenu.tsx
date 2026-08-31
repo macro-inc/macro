@@ -222,7 +222,7 @@ function ProjectCreateDialog(props: {
       <Surface depth={2} class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <div class="p-2">
-            <Dialog.Title class="text-md font-semibold text-ink pb-3">
+            <Dialog.Title class="text-base font-semibold text-ink pb-3">
               Create in {props.name}
             </Dialog.Title>
             <For each={BLOCK_CREATE_SPECS}>
@@ -324,7 +324,7 @@ export function ProjectCreateMenu(props: { id: string }) {
     <Dropdown open={open()} onOpenChange={setOpen}>
       <div class="flex items-center">
         <Dropdown.Trigger
-          variant="base"
+          variant="outline"
           size="sm"
           class="bg-surface py-3"
           depth={2}

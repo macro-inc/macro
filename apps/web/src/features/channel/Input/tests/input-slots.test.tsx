@@ -6,7 +6,13 @@ import { render as renderBare, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { Portal } from 'solid-js/web';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const editorMocks = vi.hoisted(() => ({
+  clear: vi.fn(),
+  focus: vi.fn(),
+}));
 
 vi.hoisted(() => {
   Object.defineProperty(window, 'matchMedia', {
@@ -114,12 +120,17 @@ vi.mock('@core/component/VideoPreview', () => ({
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: { placeholder?: string; initialValue?: string }) => (
-    <div
-      data-testid="markdown-shell"
-      data-initial-value={props.initialValue ?? ''}
-    >
-      {props.placeholder}
-    </div>
+    <>
+      <div
+        data-testid="markdown-shell"
+        data-initial-value={props.initialValue ?? ''}
+      >
+        {props.placeholder}
+      </div>
+      <Portal>
+        <input data-testid="markdown-portal-input" />
+      </Portal>
+    </>
   ),
 }));
 
@@ -128,8 +139,8 @@ vi.mock(
   () => ({
     buildConfig: () => {
       const controls = {
-        clear: vi.fn(),
-        focus: vi.fn(),
+        clear: editorMocks.clear,
+        focus: editorMocks.focus,
       };
       const lexical = {
         focus: vi.fn(),
@@ -229,6 +240,24 @@ function render(ui: () => JSX.Element) {
 }
 
 describe('Input slots', () => {
+  beforeEach(() => {
+    editorMocks.clear.mockClear();
+    editorMocks.focus.mockClear();
+  });
+
+  it('does not refocus the editor when a portaled editor control is clicked', async () => {
+    const user = userEvent.setup();
+    render(() => <ChannelInput input={baseInput} />);
+
+    await user.click(screen.getByTestId('markdown-shell'));
+    expect(editorMocks.focus).toHaveBeenCalledOnce();
+
+    editorMocks.focus.mockClear();
+    await user.click(screen.getByTestId('markdown-portal-input'));
+
+    expect(editorMocks.focus).not.toHaveBeenCalled();
+  });
+
   it('renders the default action composition and wires handlers through context', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();

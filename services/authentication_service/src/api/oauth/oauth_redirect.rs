@@ -85,12 +85,16 @@ pub async fn handler(
     // Obviously this is not ideal, but will work for now.
     sleep(Duration::from_millis(500)).await;
 
-    let (access_token, refresh_token) = match ctx
+    let fusionauth::oauth::OAuth2Grant {
+        access_token,
+        refresh_token,
+        ..
+    } = match ctx
         .auth_client
         .complete_authorization_code_grant(&code)
         .await
     {
-        Ok(tokens) => tokens,
+        Ok(grant) => grant,
         Err(e) => {
             tracing::error!(
                 auth_handoff_failure = "code_grant_failed",

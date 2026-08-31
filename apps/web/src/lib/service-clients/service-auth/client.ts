@@ -16,6 +16,7 @@ import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
   CursorApiKeyStatus,
+  CursorModelsResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
@@ -598,6 +599,39 @@ export const authServiceClient = {
         `${authHost}/cursor-api-key`,
         {
           method: 'DELETE',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * The models the signed-in user's Cursor account offers, for the settings
+   * dropdown. Asks Cursor live through the stored key, so it needs a connected
+   * account — a caller with none gets the endpoint's own `409` message.
+   */
+  async listCursorModels() {
+    return (
+      await fetchWithAuth<CursorModelsResponse, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key/models`,
+        {
+          method: 'GET',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Chooses the model the user's sessions start on.
+   */
+  async putCursorDefaultModel(modelId: string) {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key/default-model`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ modelId }),
           errorResponseHandler: cursorApiKeyErrorResponseHandler,
         }
       )

@@ -12,14 +12,12 @@
 
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@phosphor/git-branch.svg';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createMemo, For, onCleanup, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import {
   activityCounts,
@@ -29,35 +27,13 @@ import {
 import {
   CountSummary,
   DiffChanges,
-  type SandboxSize,
-  SandboxSizeSelector,
   SessionStatusPill,
   TodoList,
 } from '../../ui';
 import { harnessTitle } from '../AgentSplitHeader';
 
 export function AgentSidePanelSections() {
-  const { session, sessionId, bot, metadata, messages, status, loadFailed } =
-    useAgentSession();
-  const [pendingSize, setPendingSize] = createSignal<SandboxSize>();
-  const [resizing, setResizing] = createSignal(false);
-  const size = () => pendingSize() ?? session()?.sandboxSize ?? 'default';
-
-  const setSandboxSize = async (next: SandboxSize) => {
-    const id = sessionId();
-    if (!id || next === size() || resizing()) return;
-    const previous = size();
-    setPendingSize(next);
-    setResizing(true);
-    const result = await agentHarnessServiceClient
-      .setSessionSandboxSize(id, next)
-      .catch(() => undefined);
-    setResizing(false);
-    if (result === undefined || result.isErr()) {
-      setPendingSize(previous);
-      toast.failure('Could not resize the sandbox');
-    }
-  };
+  const { session, bot, metadata, messages, status } = useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
   const files = createMemo(() => changedFiles(messages()));
@@ -108,13 +84,6 @@ export function AgentSidePanelSections() {
               <span class="truncate">{harnessTitle(session()?.harness)}</span>
             </SidePanel.Pill>
           </SidePanel.Row>
-          <SidePanel.Row label="Sandbox size">
-            <SandboxSizeSelector
-              size={size()}
-              disabled={loadFailed() || resizing() || !sessionId()}
-              onSelect={setSandboxSize}
-            />
-          </SidePanel.Row>
           <Show when={metadata()?.model ?? session()?.model}>
             {(model) => (
               <SidePanel.Row label="Model">
@@ -129,7 +98,7 @@ export function AgentSidePanelSections() {
               <SidePanel.Row label="Repository">
                 <button
                   type="button"
-                  class={`${SidePanel.pillClass} hover:bg-hover cursor-pointer`}
+                  class={`${SidePanel.pillClass} hover:bg-hover`}
                   onClick={() => openExternalUrl(url())}
                 >
                   <GitBranch class="size-3 shrink-0" />

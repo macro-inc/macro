@@ -752,6 +752,57 @@ fn reminder_body_is_bounded_for_the_push_payload() {
     assert!(body.len() < 4_096, "must fit inside the APNS payload limit");
 }
 
+fn new_email_metadata() -> NewEmailMetadata {
+    NewEmailMetadata {
+        sender: Some("Ada Lovelace".to_string()),
+        to_email: "teo@macro.com".to_string(),
+        thread_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".to_string(),
+        subject: "Quarterly plan".to_string(),
+        snippet: "Here is the draft".to_string(),
+    }
+}
+
+#[test]
+fn new_email_apns_uses_subject_and_snippet() {
+    let metadata = new_email_metadata();
+    let entity = EntityType::EmailThread.with_entity_str(&metadata.thread_id);
+    let notification_id = Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap();
+
+    let apns = metadata
+        .as_apns(None, &entity, notification_id)
+        .expect("new_email should build an APNS alert");
+
+    match apns.aps.alert {
+        Some(notification::domain::models::apple::Alert::Dictionary(alert)) => {
+            assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+            assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+        }
+        other => panic!("expected dictionary alert, got {other:?}"),
+    }
+    assert_eq!(
+        apns.aps.thread_id.as_deref(),
+        Some(metadata.thread_id.as_str())
+    );
+    assert_eq!(apns.push_notification_data.notification_id, notification_id);
+}
+
+#[test]
+fn new_email_collapse_key_is_per_thread() {
+    let entity = EntityType::EmailThread.with_entity_str("ignored");
+    let first = new_email_metadata();
+    let mut second = first.clone();
+    second.thread_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb".to_string();
+
+    assert_ne!(
+        first.collapse_key(&entity).into_hashed().into_inner(),
+        second.collapse_key(&entity).into_hashed().into_inner()
+    );
+    assert_eq!(
+        first.collapse_key(&entity).into_hashed().into_inner(),
+        first.collapse_key(&entity).into_hashed().into_inner()
+    );
+}
+
 /// A reminder metadata collapse key, hashed for comparison.
 fn reminder_key(id: &str, scheduled_for: Option<DateTime<Utc>>) -> String {
     let entity = EntityType::Document.with_entity_str("doc-1");

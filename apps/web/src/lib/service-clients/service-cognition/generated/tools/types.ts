@@ -209,6 +209,10 @@ export type UserToolResponseForToolCalendarEvent =
       UserAction: ToolCalendarEvent;
     };
 /**
+ * Channel types an agent may create.
+ */
+export type NewChannelType = 'private' | 'team';
+/**
  * External systems items can be imported from.
  */
 export type ImportSource = 'linear' | 'notion' | 'slack';
@@ -511,6 +515,10 @@ export type NotificationEntityType =
  */
 export type BotChannelAccessAction = 'grant' | 'revoke';
 /**
+ * Membership change to apply.
+ */
+export type ParticipantAction = 'add' | 'remove';
+/**
  * The kind of entity to move.
  */
 export type MoveableEntityType = 'document' | 'chat' | 'email' | 'project';
@@ -744,6 +752,10 @@ export type ToolEntityType =
   | 'call'
   | 'user'
   | 'company';
+/**
+ * Where future mail from this sender lands: `signal`, `noise`, or `block`.
+ */
+export type ToolSenderPolicy = 'signal' | 'noise' | 'block';
 /**
  * Content of a text editor code execution response - either a result or an error
  */
@@ -1634,6 +1646,15 @@ export interface CalendarEventMetadata {
    * Whether the canonical source prohibits mutation.
    */
   isReadOnly: boolean;
+  /**
+   * The event's organizer (creator), when the source names one.
+   */
+  organizer?: CalendarEventOrganizer | null;
+  /**
+   * Free-text description, when the event carries one. May contain HTML from
+   * the source; clients render a plain-text preview.
+   */
+  description?: string | null;
 }
 /**
  * The instance a search row points at.
@@ -1650,6 +1671,20 @@ export interface CalendarEventSearchOccurrence {
    */
   occurrenceKey: string;
   time: CalendarEventSearchTime;
+}
+/**
+ * The event's organizer — its creator, in Google's model. Either field can be
+ * absent when the source does not name it.
+ */
+export interface CalendarEventOrganizer {
+  /**
+   * Display name, when the source provided one.
+   */
+  name?: string | null;
+  /**
+   * Organizer email address, when known.
+   */
+  email?: string | null;
 }
 export interface CalendarEventSearchResult {
   highlight: SearchHighlight;
@@ -1934,6 +1969,42 @@ export interface ToolEventAttendee {
    * Whether attendance is optional.
    */
   isOptional: boolean;
+}
+/**
+ * Create a private or team channel and add its first members. Use `private` for an invite-only channel and `team` for a channel owned by the current user's team. Do not use this for a direct message — those are created separately. Team id is resolved from the current user; do not invent one. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Creating a team channel when the user has no team fails; create a private channel instead. Creating a team channel with no participants adds the current user so the channel is valid. Use only when the user asks to create a channel.
+ */
+export interface CreateChannel {
+  /**
+   * Display name for the new channel.
+   */
+  name: string;
+  channelType: NewChannelType;
+  /**
+   * People to add, as `macro|<email>` ids or bare emails. Defaults to none. A team channel with an empty list adds the current user.
+   */
+  participants?: string[];
+}
+/**
+ * Response from [`CreateChannel`].
+ */
+export interface CreateChannelResponse {
+  /**
+   * Created channel id.
+   */
+  channelId: string;
+  /**
+   * Trimmed channel name.
+   */
+  name: string;
+  channelType: NewChannelType;
+  /**
+   * Canonical participant ids sent with the create request.
+   */
+  participants: string[];
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
 }
 /**
  * Create a plaintext document.
@@ -3658,6 +3729,38 @@ export interface ManageBotChannelAccessResponse {
   summary: string;
 }
 /**
+ * Add or remove members of an existing channel. Requires the current user to be a channel member. Direct-message channels cannot change membership. The channel owner cannot be removed. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Use `add` to invite people and `remove` to take them out. Use only when the user asks to change who is in a channel.
+ */
+export interface ManageChannelParticipants {
+  /**
+   * Channel id whose membership should change.
+   */
+  channelId: string;
+  action: ParticipantAction;
+  /**
+   * People to add or remove, as `macro|<email>` ids or bare emails. Must not be empty.
+   */
+  participants: string[];
+}
+/**
+ * Response from [`ManageChannelParticipants`].
+ */
+export interface ManageChannelParticipantsResponse {
+  /**
+   * Channel whose membership changed.
+   */
+  channelId: string;
+  action: ParticipantAction;
+  /**
+   * Canonical participant ids that were requested.
+   */
+  participants: string[];
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
  * Mark one or more notifications as done or not done for the current user. Use this when the user has completed the action associated with a notification.
  */
 export interface MarkNotificationsDone {
@@ -4667,6 +4770,40 @@ export interface ProjectItem {
   updatedAt?: string | null;
 }
 /**
+ * Rename an existing channel. Requires the current user to be a channel admin or owner. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
+ */
+export interface RenameChannel {
+  /**
+   * Channel id to rename.
+   */
+  channelId: string;
+  /**
+   * New display name for the channel.
+   */
+  name: string;
+}
+/**
+ * Response from [`RenameChannel`].
+ */
+export interface RenameChannelResponse {
+  /**
+   * Channel that was renamed.
+   */
+  channelId: string;
+  /**
+   * New trimmed name.
+   */
+  name: string;
+  /**
+   * Previous display name when it could be read.
+   */
+  previousName?: string | null;
+  /**
+   * Human-readable result summary.
+   */
+  summary: string;
+}
+/**
  * Rename a document. Requires edit access to the document.
  */
 export interface RenameDocument {
@@ -4919,6 +5056,52 @@ export interface ToolEntityRef {
 export interface SetEntityPropertyResponse {
   success: boolean;
   message: string;
+}
+/**
+ * Set where future mail from a sender lands in one of the user's inboxes. This is the same control a human has in the inbox menus: Sender → Signal, Sender → Noise, and Block Sender.
+ *
+ * Policies:
+ * - `signal`: the sender's future mail shows in the Signal view. Use for senders the user says are important.
+ * - `noise`: the sender's future mail shows in the Noise view. Mail still arrives and stays searchable. Use for newsletters, promos, and other low-value senders.
+ * - `block`: ALL future mail from the sender is sent straight to trash and never reaches the inbox. This is much stronger than noise. Only use it when the user explicitly asks to block a sender; when they just call mail unwanted or spammy, prefer `noise`.
+ *
+ * Policies are per inbox. When acting on a specific thread (e.g. after GetThread), pass `thread_id` so the policy applies to the inbox that owns that thread, which matters for delegated or secondary inboxes. Otherwise pass `inbox` (an inbox email address from ListInboxes) to name one, or omit both to use the primary inbox.
+ *
+ * Get `sender_email` from GetThread (`from.email`) or ListEntities (`sender_email`); do not guess addresses. Calling again with a different policy overwrites the previous one. Repeating a call with the same arguments is safe.
+ */
+export interface SetSenderPolicy {
+  /**
+   * The sender's email address, e.g. `from.email` on a GetThread message or
+   * `sender_email` on a ListEntities email row. Exact address, not a domain.
+   */
+  sender_email: string;
+  policy: ToolSenderPolicy;
+  /**
+   * Apply the policy to the inbox that owns this thread (same UUID returned
+   * by ListEntities, search, or GetThread). Takes precedence over `inbox`.
+   */
+  thread_id?: string | null;
+  /**
+   * Apply the policy to a specific inbox by its email address (from
+   * ListInboxes). Ignored when `thread_id` is set. Omit both to use the
+   * primary inbox.
+   */
+  inbox?: string | null;
+}
+export interface SetSenderPolicyResponse {
+  /**
+   * The sender the policy now applies to.
+   */
+  senderEmail: string;
+  policy: ToolSenderPolicy;
+  /**
+   * The email address of the inbox the policy was applied to.
+   */
+  inbox: string;
+  /**
+   * A human-readable summary of the change.
+   */
+  summary: string;
 }
 /**
  * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.

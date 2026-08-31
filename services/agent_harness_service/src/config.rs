@@ -6,11 +6,39 @@ use database_env_vars::DatabaseUrl;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
+use secretsmanager_client::LocalOrRemoteSecret;
+
 macro_env_var::env_vars!(
     /// Comma-separated Kafka bootstrap servers.
     #[derive(Clone)]
     pub struct KafkaBrokers;
+    /// PEM private key of the GitHub App installation tokens are minted with.
+    pub struct GithubSyncAppPemSecretKey;
+    /// RSA key Macro API tokens are signed with - the same one
+    /// `authentication_service` signs with. The egress proxy mints
+    /// short-lived tokens for session owners inline.
+    pub struct MacroApiTokenPrivateSecretKey;
+    /// Issuer stamped into minted Macro API tokens; must match what the
+    /// validators expect.
+    pub struct MacroApiTokenIssuer;
+    /// OAuth client ID for the Pipedream API. The same credentials
+    /// `document_cognition_service` uses: the connections a sandbox spends
+    /// are the ones the person connected in Macro, in the same rows.
+    pub struct PipedreamClientId;
+    /// OAuth client secret for the Pipedream API.
+    pub struct PipedreamClientSecret;
+    /// The Pipedream Connect project ID (`proj_...`).
+    pub struct PipedreamProjectId;
 );
+
+/// The Pipedream project environment matching this deployment: production in
+/// prd, development everywhere else.
+fn default_pipedream_environment() -> String {
+    match Environment::new_or_prod() {
+        Environment::Production => "production".to_owned(),
+        _ => "development".to_owned(),
+    }
+}
 
 /// The configuration parameters for the agent harness service.
 #[derive(macro_config::MacroConfig)]
@@ -36,11 +64,6 @@ pub struct Config {
     /// keeping image builds off the first-prompt critical path.
     #[macro_config_default(String::from("macro-agent-harness"))]
     pub daytona_snapshot: String,
-    /// Token with read access to the repo cloned into sandboxes. Empty
-    /// means managed sandboxes cannot clone; external sessions are
-    /// unaffected.
-    #[macro_config_default(String::new())]
-    pub github_token: String,
     /// API key sandboxes run Anthropic models with. Injected into the
     /// sandbox environment at creation, where it activates opencode's
     /// `anthropic` provider — the only provider
@@ -109,6 +132,48 @@ pub struct Config {
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,
+    /// Port the sandbox-facing egress proxy is served on.
+    ///
+    /// A second listener rather than more routes on `port`: the control routes
+    /// are authenticated as Macro users and reached from inside the platform,
+    /// and the egress routes are authenticated by session token and reached
+    /// from a sandbox running model-authored code. Separate ports keep the two
+    /// separable at the network as well as in the code.
+    #[macro_config_default(8102)]
+    pub egress_port: u16,
+    /// Where a sandbox should dial the egress proxy.
+    ///
+    /// Not derivable from `egress_port`: the sandbox reaches this through
+    /// whatever ingress fronts the deployment, not on the container's own port.
+    pub egress_base_url: String,
+    /// OAuth client ID for the Pipedream API.
+    pub pipedream_client_id: PipedreamClientId,
+    /// OAuth client secret for the Pipedream API.
+    pub pipedream_client_secret: PipedreamClientSecret,
+    /// The Pipedream Connect project ID.
+    pub pipedream_project_id: PipedreamProjectId,
+    /// The Pipedream project environment (`development` or `production`).
+    #[macro_config_default(default_pipedream_environment())]
+    pub pipedream_environment: String,
+    /// Base URL of the Pipedream API.
+    #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_API_URL))]
+    pub pipedream_api_url: String,
+    /// URL of Pipedream's remote MCP server.
+    #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_MCP_URL))]
+    pub pipedream_mcp_url: String,
+    /// Where the egress proxy reaches Macro's own MCP server (`mcp_service`),
+    /// endpoint path included - e.g. `https://mcp.macro.com/mcp`, or the
+    /// in-network `http://mcp-service:8080/mcp` on a local stack. Cleartext is
+    /// refused at boot unless `ENVIRONMENT=local`.
+    pub macro_mcp_url: String,
+    /// RSA key Macro API tokens are signed with.
+    pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
+    /// Issuer stamped into minted Macro API tokens.
+    pub macro_api_token_issuer: MacroApiTokenIssuer,
+    /// Client id of the GitHub App installation tokens are minted for.
+    pub github_sync_app_client_id: String,
+    /// PEM private key of that App.
+    pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
 }
 
 impl Config {

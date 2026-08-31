@@ -184,74 +184,74 @@ pub async fn handle_retryable_error(
 
     match &data.backfill_operation {
         BackfillOperation::Init(_) => {
-            tracing::debug!("Retryable error in Init")
+            tracing::warn!("Retryable error in Init")
         }
         BackfillOperation::ListThreads(_) => {
-            tracing::debug!("Retryable error listing threads")
+            tracing::warn!("Retryable error listing threads")
         }
         BackfillOperation::BackfillThread(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 thread_id = %scope.payload.thread_provider_id,
                 "Retryable error backfilling thread"
             );
         }
         BackfillOperation::BackfillMessage(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 thread_id = %scope.payload.thread_provider_id,
                 message_id = %scope.payload.message_provider_id,
                 "Retryable error backfilling message"
             );
         }
         BackfillOperation::UpdateThreadMetadata(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 thread_id = %scope.payload.thread_provider_id,
                 "Retryable error updating thread metadata"
             );
         }
         BackfillOperation::BackfillAttachment(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 attachment_db_id = %scope.payload.metadata.attachment_metadata.attachment_db_id,
                 "Retryable error backfilling attachment"
             )
         }
         BackfillOperation::FinalizeBackfill(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 job_id = %scope.job_id,
                 "Retryable error finalizing completed backfill"
             )
         }
         BackfillOperation::CalendarGoogleBackfill(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 calendar_job_id = %scope.payload.calendar_job_id,
                 "Retryable error backfilling Google Calendar"
             )
         }
         BackfillOperation::SeedSentContact(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 message_id = %scope.payload.message_provider_id,
                 "Retryable error seeding contact from sent message"
             )
         }
         BackfillOperation::PopulateCrmContact(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 contact_email = %scope.payload.contact_email,
                 "Retryable error populating CRM contact"
             )
         }
         BackfillOperation::DepopulateCrmContact(scope) => {
-            tracing::debug!(
+            tracing::warn!(
                 contact_email = %scope.payload.contact_email,
                 "Retryable error depopulating CRM contact"
             )
         }
         BackfillOperation::PopulateCrmForUser(payload) => {
-            tracing::debug!(
+            tracing::warn!(
                 macro_id = %payload.macro_id,
                 "Retryable error populating CRM for user"
             )
         }
         BackfillOperation::DepopulateCrmForUser(payload) => {
-            tracing::debug!(
+            tracing::warn!(
                 macro_id = %payload.macro_id,
                 "Retryable error depopulating CRM for user"
             )

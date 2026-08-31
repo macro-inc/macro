@@ -27,7 +27,11 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
                 (StatusCode::UNAUTHORIZED, "unauthenticated")
             }
             crate::domain::models::GithubError::Forbidden
-            | crate::domain::models::GithubError::SetupUserNotLinked => {
+            | crate::domain::models::GithubError::SetupUserNotLinked
+            // Deliberately the same answer as any other refusal: whether the
+            // App is uninstalled or installed somewhere the caller has no
+            // claim to is a fact about other people's accounts.
+            | crate::domain::models::GithubError::RepositoryUnavailable => {
                 (StatusCode::FORBIDDEN, "forbidden")
             }
             crate::domain::models::GithubError::InvalidInstallationState

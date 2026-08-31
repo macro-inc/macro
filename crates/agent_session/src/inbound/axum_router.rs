@@ -248,6 +248,20 @@ impl From<AgentSessionError> for AgentSessionApiError {
 impl IntoResponse for AgentSessionApiError {
     fn into_response(self) -> Response {
         match self {
+            // A session whose runtime is not attached is the everyday state of
+            // a self-hosted agent: the operator's daemon dials on a trigger and
+            // its bridge ends when the session goes quiet. Nothing is wrong
+            // here, and nothing the caller does again right now will land, so it
+            // answers 409 with a reason rather than a 500 that reads as a bug
+            // and buries the one fact worth showing a user.
+            Self::Domain(AgentSessionError::Disconnected(session_id)) => {
+                tracing::info!(%session_id, "action refused: the session's runtime is not connected");
+                (
+                    StatusCode::CONFLICT,
+                    "the agent's runtime is not connected to this session",
+                )
+                    .into_response()
+            }
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
             }
@@ -353,6 +367,10 @@ pub struct AgentSessionResponse {
     pub workspace: String,
     /// Compute tier of the managed sandbox.
     pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, when any were stated
+    /// at creation. Absent otherwise, so existing payloads are unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
     /// The ACP session id, if one exists.
     pub acp_session_id: Option<String>,
     /// The session's status.
@@ -406,6 +424,7 @@ impl From<AgentSession> for AgentSessionResponse {
             repo_url: session.repo_url,
             workspace: session.workspace,
             sandbox_size: session.sandbox_size,
+            instructions: session.instructions,
             acp_session_id: session.acp_session_id.map(|id| id.to_string()),
             external: session.external.map(Into::into),
             status: session.status.into(),
@@ -920,6 +939,12 @@ pub struct CreateAgentSessionRequest {
     /// Linkage only - the mention's text is delivered by the runtime as the
     /// first prompt through the control endpoint, never through here.
     pub thread: Option<CreateSessionThread>,
+    /// Instructions the session's runtime works under, for its whole life.
+    ///
+    /// Recorded on the session whichever runtime serves it. Only the
+    /// in-process one acts on them today; `agent_harness`'s `AgentKind`
+    /// records what each of the others will need to.
+    pub instructions: Option<String>,
 }
 
 /// The triggering mention on a create request.
@@ -1158,6 +1183,11 @@ pub async fn create_agent_session_handler<
     caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
     Json(request): Json<CreateAgentSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
+    // Blank instructions are "none" stated clumsily; normalized once here so
+    // the row, the response and every runtime see one representation of
+    // absence, whichever shape the request turns out to be.
+    let instructions = request.instructions.filter(|text| !text.trim().is_empty());
+
     // No workspace means the managed shape. It shares this route but not its
     // authorization: nothing about which bot runs the session is the caller's
     // to say, so the bot-ownership checks below have nothing to check and are
@@ -1177,6 +1207,7 @@ pub async fn create_agent_session_handler<
             .open_managed_session(OpenManagedSession {
                 owner,
                 prompt: request.prompt,
+                instructions,
             })
             .await?;
         return Ok((
@@ -1235,6 +1266,7 @@ pub async fn create_agent_session_handler<
             repo_url: request.repo_url,
             owner,
             thread: thread.clone(),
+            instructions,
         })
         .await
     {

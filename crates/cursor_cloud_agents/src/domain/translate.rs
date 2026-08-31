@@ -24,6 +24,9 @@
 //! of a sized window. Inventing a size would misrender in any client that
 //! shows a percentage, so usage is deliberately not translated.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent};
 use agent_client_protocol::schema::v1::{
     ContentBlock, ContentChunk, Diff, SessionUpdate, TextContent, ToolCall, ToolCallContent,
@@ -35,8 +38,12 @@ use std::collections::{HashMap, HashSet};
 /// time.
 #[derive(Debug, Default)]
 pub struct TranslateMachine {
-    /// Call ids already announced, so repeats become `tool_call_update`.
-    announced: HashSet<String>,
+    /// Call ids announced and not yet terminal, so repeats become
+    /// `tool_call_update` and a turn that ends early knows what it left
+    /// open. A call id leaves this set the moment it reports `Completed` or
+    /// `Failed` — it re-entering would mean Cursor reused a finished id,
+    /// which has never been observed.
+    open: HashSet<String>,
     /// Kinds learned from Cursor's typed tool descriptor, keyed by call id.
     learned_kinds: HashMap<String, ToolKind>,
 }
@@ -100,7 +107,15 @@ impl TranslateMachine {
         // new file would claim everything else was deleted.
         let diff = call.result.as_ref().and_then(edit_diff);
 
-        if self.announced.insert(call_id.clone()) {
+        // Captured before the status below can remove it: a call id is only
+        // ever a fresh announcement the first time it is seen, even when
+        // that first frame already reports it terminal.
+        let is_new = self.open.insert(call_id.clone());
+        if matches!(status, ToolCallStatus::Completed | ToolCallStatus::Failed) {
+            self.open.remove(&call_id);
+        }
+
+        if is_new {
             let mut announcement = ToolCall::new(call_id, call.name)
                 .kind(kind)
                 .status(status)
@@ -130,6 +145,29 @@ impl TranslateMachine {
             }
             SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(call_id, fields))
         }
+    }
+
+    /// Force every call still open to a terminal status, for a turn that
+    /// ended without Cursor ever reporting one.
+    ///
+    /// A cancelled run's `result` frame is the turn's terminal signal; it
+    /// does not always carry a completed `tool_call` for work that was
+    /// mid-flight. A call still running at that moment would otherwise never
+    /// receive one — the client is left rendering it in progress forever.
+    /// `Failed` is the honest status to close it with: ACP v1 has no
+    /// `cancelled` tool-call status, and Cursor never actually reported an
+    /// outcome for these, so `Completed` would claim a success nobody
+    /// witnessed.
+    pub fn close_open_calls(&mut self) -> Vec<SessionUpdate> {
+        self.open
+            .drain()
+            .map(|call_id| {
+                SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+                    call_id,
+                    ToolCallUpdateFields::new().status(ToolCallStatus::Failed),
+                ))
+            })
+            .collect()
     }
 
     /// Record what the envelope teaches; it never emits an update itself.

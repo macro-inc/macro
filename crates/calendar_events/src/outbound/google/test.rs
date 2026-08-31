@@ -38,6 +38,109 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
 }
 
 #[test]
+fn event_type_is_mapped_with_an_unknown_fallback() {
+    let range = OccurrenceRange {
+        starts_at: DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        ends_at: DateTime::parse_from_rfc3339("2026-09-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        start_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
+    };
+    let target = GoogleCalendarTarget {
+        owner_id: "macro|office@example.com".to_string(),
+        email_link_id: Uuid::now_v7(),
+        account_id: Uuid::now_v7(),
+        calendar_id: Uuid::now_v7(),
+        provider_calendar_id: "primary".to_string(),
+        is_read_only: false,
+        range,
+    };
+    let master = |event_type: Option<&str>| -> GoogleEvent {
+        let mut value = serde_json::json!({
+            "id": "provider-event",
+            "iCalUID": "office@example.com",
+            "summary": "Office",
+            "start": {"date": "2026-08-26"},
+            "end": {"date": "2026-08-27"},
+            "created": "2026-08-01T00:00:00Z",
+            "updated": "2026-08-01T00:00:00Z"
+        });
+        if let Some(event_type) = event_type {
+            value["eventType"] = event_type.into();
+        }
+        serde_json::from_value(value).unwrap()
+    };
+
+    for (provider, expected) in [
+        (None, EventType::Default),
+        (Some("default"), EventType::Default),
+        (Some("workingLocation"), EventType::WorkingLocation),
+        (Some("outOfOffice"), EventType::OutOfOffice),
+        (Some("focusTime"), EventType::FocusTime),
+        (Some("birthday"), EventType::Birthday),
+        (Some("fromGmail"), EventType::FromGmail),
+        (Some("someFutureType"), EventType::Default),
+    ] {
+        let upsert = map_upsert(&target, master(provider), Vec::new(), Vec::new()).unwrap();
+        assert_eq!(upsert.event.event_type, expected, "provider {provider:?}");
+    }
+}
+
+#[test]
+fn creator_is_mapped_separately_from_the_organizer() {
+    let master: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-event",
+        "iCalUID": "created@example.com",
+        "summary": "On someone else's calendar",
+        "start": {"dateTime": "2026-08-27T19:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-08-27T20:45:00Z", "timeZone": "UTC"},
+        "organizer": {"email": "jackson@example.com", "displayName": "Jackson Kustec"},
+        "creator": {"email": "teo@example.com", "displayName": "Teo Nys"},
+        "created": "2026-08-27T01:00:00Z",
+        "updated": "2026-08-27T01:00:00Z"
+    }))
+    .unwrap();
+    let range = OccurrenceRange {
+        starts_at: DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        ends_at: DateTime::parse_from_rfc3339("2026-09-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        start_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
+    };
+    let target = GoogleCalendarTarget {
+        owner_id: "macro|jackson@example.com".to_string(),
+        email_link_id: Uuid::now_v7(),
+        account_id: Uuid::now_v7(),
+        calendar_id: Uuid::now_v7(),
+        provider_calendar_id: "primary".to_string(),
+        is_read_only: false,
+        range,
+    };
+
+    let upsert = map_upsert(&target, master, Vec::new(), Vec::new()).unwrap();
+
+    assert_eq!(
+        upsert.event.organizer_email.as_deref(),
+        Some("jackson@example.com")
+    );
+    assert_eq!(
+        upsert.event.organizer_name.as_deref(),
+        Some("Jackson Kustec")
+    );
+    assert_eq!(
+        upsert.event.creator_email.as_deref(),
+        Some("teo@example.com")
+    );
+    assert_eq!(upsert.event.creator_name.as_deref(), Some("Teo Nys"));
+}
+
+#[test]
 fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
     let master: GoogleEvent = serde_json::from_value(serde_json::json!({
         "id": "provider-master",
@@ -557,6 +660,38 @@ fn rsvp_patch_updates_only_the_connected_attendee() {
     assert_eq!(attendees[0]["email"], "self@example.com");
     assert_eq!(attendees[0]["responseStatus"], "declined");
     assert_eq!(attendees[0]["comment"], "unrelated state that must survive");
+}
+
+fn google_attendee(email: &str, is_self: bool) -> GoogleAttendee {
+    serde_json::from_value(serde_json::json!({
+        "email": email,
+        "self": is_self,
+        "responseStatus": "needsAction",
+    }))
+    .unwrap()
+}
+
+#[test]
+fn rsvp_patches_the_actor_row_not_the_google_self_flag() {
+    let attendees = vec![
+        google_attendee("jacob@example.com", true),
+        google_attendee("jackson@example.com", false),
+    ];
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
+    let found = find_actor_attendee(&attendees, &actor);
+    assert_eq!(
+        found.and_then(|attendee| attendee.email.as_deref()),
+        Some("jackson@example.com")
+    );
+}
+
+#[test]
+fn rsvp_does_not_patch_another_attendee_when_the_requester_is_absent() {
+    let attendees = vec![google_attendee("jacob@example.com", true)];
+    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
+        .expect("owned addresses remain after normalize");
+    assert!(find_actor_attendee(&attendees, &actor).is_none());
 }
 
 #[test]

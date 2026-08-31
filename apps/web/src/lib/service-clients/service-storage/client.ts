@@ -6,7 +6,6 @@ import {
   modificationDataReplacer,
   type PdfSegment as TSegment,
 } from '@coparse/document-processing-types';
-import type { BlockAlias, BlockName } from '@core/block';
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import {
@@ -165,6 +164,12 @@ import { saveDocumentHandlerResponse } from './generated/zod';
 import type { ItemType } from './itemType';
 
 export type { ItemType } from './itemType';
+export {
+  blockNameToItemType,
+  DEFAULT_ITEM_TYPE,
+  itemTypeToReferenceEntityType,
+  stringToItemType,
+} from './itemType';
 
 import type {
   CollabSurfaceResponse,
@@ -234,8 +239,6 @@ type Success = {
   success: boolean;
 };
 type SuccessResponse = { data: Success };
-
-export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 export type { ApiAttachmentChannelReference } from './generated/schemas/apiAttachmentChannelReference';
 export type { ApiAttachmentEntityReference } from './generated/schemas/apiAttachmentEntityReference';
@@ -318,72 +321,6 @@ export const ChannelTypeEnum = {
   DirectMessage: ChannelType.direct_message,
   Team: ChannelType.team,
 } as const satisfies Record<string, ChannelType>;
-
-const itemTypeSet = new Set([
-  'document',
-  'chat',
-  'project',
-  'channel',
-  'email',
-  'channel_message',
-  'call',
-  'automation',
-  'calendar_event',
-  'thread',
-  'crm_company',
-  'crm_contact',
-]);
-
-function _isItemType(str: string): str is ItemType {
-  return itemTypeSet.has(str);
-}
-
-export function blockNameToItemType(
-  blockName: BlockName | BlockAlias
-): ItemType {
-  switch (blockName) {
-    case 'chat':
-      return 'chat';
-    case 'call':
-      return 'call';
-    case 'calendar':
-      return 'calendar_event';
-    case 'channel':
-      return 'channel';
-    case 'project':
-      return 'project';
-    case 'email':
-      return 'email';
-    case 'automation':
-      return 'automation';
-    case 'company':
-      return 'crm_company';
-    case 'contact':
-      return 'crm_contact';
-    default:
-      return DEFAULT_ITEM_TYPE;
-  }
-}
-
-export function stringToItemType(str: string): ItemType | undefined {
-  switch (str) {
-    case 'email':
-    case 'thread':
-    case 'email_thread': {
-      return 'email';
-    }
-    case 'call':
-    case 'calendar_event':
-    case 'chat':
-    case 'document':
-    case 'project':
-    case 'channel':
-    case 'crm_company':
-      return str;
-    default:
-      return undefined;
-  }
-}
 
 export function isCloudStorageItem(
   item: ItemType
@@ -478,6 +415,7 @@ export const storageServiceClient = {
   async getSoupAstItems(args: {
     params: { cursor?: string | null };
     body: PostSoupAstRequest;
+    signal?: AbortSignal;
   }) {
     const searchParams = args.params.cursor
       ? `?cursor=${args.params.cursor}`
@@ -486,6 +424,7 @@ export const storageServiceClient = {
     return await dssFetch<SoupPage>(`/items/soup/ast${searchParams}`, {
       method: 'POST',
       body: JSON.stringify(args.body),
+      signal: args.signal,
     });
   },
 
@@ -496,6 +435,7 @@ export const storageServiceClient = {
       sort_method?: GroupedSoupSort;
     };
     body: PostSoupAstRequest;
+    signal?: AbortSignal;
   }) {
     const { limit: _limit, ...filters } = args.body;
     const body = {
@@ -511,6 +451,7 @@ export const storageServiceClient = {
     return await dssFetch<GroupedSoupInitialPage>(`/items/soup/ast/grouped`, {
       method: 'POST',
       body: JSON.stringify(body),
+      signal: args.signal,
     });
   },
 

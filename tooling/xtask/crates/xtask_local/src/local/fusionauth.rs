@@ -27,10 +27,15 @@ fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
 /// FusionAuth container mounts. The kickstart is pure identity-provider config:
 /// run_local pre-seeds no users — passwordless login auto-creates any user on
 /// demand. `google` (from the resolved run env) additionally configures the
-/// `google`/`google_gmail` OIDC IdPs so the email connect flows work locally;
-/// the generated file is gitignored, and the init-snapshot key hashes it, so
-/// adding/removing the Google client re-inits the stack automatically.
-pub fn write_kickstart(instance: &Instance, google: Option<&kickstart::GoogleIdp>) -> Result<()> {
+/// `google`/`google_gmail` OIDC IdPs so the email connect flows work locally,
+/// and `github` the `github` IdP that `POST /link/github` resolves; the
+/// generated file is gitignored, and the init-snapshot key hashes it, so
+/// adding/removing either client re-inits the stack automatically.
+pub fn write_kickstart(
+    instance: &Instance,
+    google: Option<&kickstart::GoogleIdp>,
+    github: Option<&kickstart::GithubIdp>,
+) -> Result<()> {
     let dir = gen_compose::kickstart_dir(instance);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
@@ -41,6 +46,7 @@ pub fn write_kickstart(instance: &Instance, google: Option<&kickstart::GoogleIdp
         &read_lambda(POPULATE_JWT_LAMBDA)?,
         &read_lambda(RECONCILE_LAMBDA)?,
         google,
+        github,
     );
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)

@@ -12,7 +12,10 @@ export class AgentSessionNamespace {
   }
 
   /** Create a managed agent session. */
-  createManaged(opts?: { prompt?: string }): Promise<AgentSession> {
+  createManaged(opts?: {
+    prompt?: string;
+    instructions?: string;
+  }): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
   }
 

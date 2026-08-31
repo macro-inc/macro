@@ -23,7 +23,9 @@ mod test;
 
 pub(in crate::api) mod delete_cursor_api_key;
 pub(in crate::api) mod get_cursor_api_key;
+pub(in crate::api) mod list_cursor_models;
 pub(in crate::api) mod put_cursor_api_key;
+pub(in crate::api) mod put_cursor_default_model;
 
 /// Routes for the settings surface's Cursor connection.
 pub fn router() -> Router<ApiContext> {
@@ -31,6 +33,10 @@ pub fn router() -> Router<ApiContext> {
         .route("/", get(get_cursor_api_key::handler))
         .route("/", put(put_cursor_api_key::handler))
         .route("/", delete(delete_cursor_api_key::handler))
+        // The models this account may pick from, for the settings dropdown.
+        .route("/models", get(list_cursor_models::handler))
+        // The model new sessions start on.
+        .route("/default-model", put(put_cursor_default_model::handler))
 }
 
 fn require_macro_staff(user_id: &MacroUserIdStr<'_>) -> Result<(), CursorApiKeyError> {
@@ -54,6 +60,10 @@ fn require_macro_staff(user_id: &MacroUserIdStr<'_>) -> Result<(), CursorApiKeyE
 pub struct CursorApiKeyStatus {
     /// Whether this user has a key stored.
     pub registered: bool,
+    /// The Cursor model id this user's sessions start on, when they have
+    /// chosen one. `None` means the deployment default is in effect — the
+    /// settings dropdown shows that as its resting value.
+    pub default_model_id: Option<String>,
     /// When the stored key was last replaced, if there is one.
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -67,6 +77,15 @@ pub enum CursorApiKeyError {
     /// Cursor agents are currently restricted to Macro staff.
     #[error("Cursor agents are only available to Macro staff")]
     NotMacroStaff,
+    /// An operation that needs a connected account was attempted without one —
+    /// e.g. choosing a model before pasting a key.
+    #[error("connect a Cursor API key first")]
+    NotConnected,
+    /// Cursor's own API could not be reached or refused the request — listing
+    /// models, say. Distinct from [`Self::Internal`] so the client can tell
+    /// "Cursor is having a moment" from "we broke".
+    #[error("Cursor's API is unavailable right now")]
+    CursorUnavailable,
     /// Encryption or persistence failed.
     #[error("internal error")]
     Internal,
@@ -79,6 +98,8 @@ impl axum::response::IntoResponse for CursorApiKeyError {
             // A shape this service cannot use is the client's mistake.
             Self::MalformedKey => StatusCode::BAD_REQUEST,
             Self::NotMacroStaff => StatusCode::FORBIDDEN,
+            Self::NotConnected => StatusCode::CONFLICT,
+            Self::CursorUnavailable => StatusCode::BAD_GATEWAY,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
         // `to_string` and nothing else: every variant's message is written to

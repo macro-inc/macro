@@ -169,6 +169,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_egress"
+version = "0.1.0"
+dependencies = [
+ "agent_fold",
+ "agent_runtime_protocol",
+ "agent_session",
+ "anyhow",
+ "axum",
+ "axum-extra",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "github",
+ "http 1.4.0",
+ "http-body-util",
+ "lru",
+ "macro_auth",
+ "macro_db_client",
+ "macro_user_id",
+ "pipedream_mcp",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_fold"
 version = "0.1.0"
 dependencies = [
@@ -199,6 +235,7 @@ name = "agent_harness"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_egress",
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
@@ -213,6 +250,7 @@ dependencies = [
  "cursor_api_key",
  "cursor_cloud_agents",
  "dashmap",
+ "entity_access",
  "futures",
  "kafka_util",
  "lexical_client",
@@ -223,6 +261,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mockall",
+ "pipedream_mcp",
  "reqwest 0.13.4",
  "rootcause",
  "rustls 0.23.40",
@@ -242,6 +281,7 @@ dependencies = [
 name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
+ "agent_egress",
  "agent_fold",
  "agent_harness",
  "agent_inmem",
@@ -264,6 +304,7 @@ dependencies = [
  "cursor_cloud_agents",
  "database_env_vars",
  "entity_access",
+ "github",
  "kafka_util",
  "lexical_client",
  "macro_auth",
@@ -281,6 +322,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "notification",
+ "pipedream_mcp",
  "rdkafka",
  "secretsmanager_client",
  "serde",
@@ -289,6 +331,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "url",
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
@@ -1470,6 +1513,7 @@ dependencies = [
  "cookie",
  "cool_asserts",
  "cursor_api_key",
+ "cursor_cloud_agents",
  "database_env_vars",
  "decode_jwt",
  "document_storage_service_client",
@@ -2912,6 +2956,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "soup-filter-cache-adapter",
+ "soup-filter-projection",
  "turso-opfs",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -5017,6 +5062,7 @@ dependencies = [
  "cal",
  "calendar_events",
  "call",
+ "channel_bots",
  "channels",
  "chat",
  "chrono",
@@ -7088,12 +7134,15 @@ dependencies = [
  "models_pagination",
  "models_properties",
  "models_soup",
+ "predicate-index",
  "rootcause",
  "serde",
  "serde_json",
  "soup",
+ "soup-filter-projection",
  "soup_realtime",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -8436,6 +8485,7 @@ name = "item-filter-index"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "document_sub_type",
  "filter_ast",
  "item_filters",
  "predicate-index",
@@ -9824,6 +9874,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.18",
+ "tokio",
  "tower 0.5.3",
  "tower-http",
  "tracing",
@@ -12024,6 +12075,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "url",
  "utoipa",
  "workspace-hack",
 ]
@@ -14158,6 +14210,7 @@ dependencies = [
  "clap",
  "comms_db_client",
  "email_db_client",
+ "email_utils",
  "entity_access",
  "entity_access_db_utils",
  "fusionauth",
@@ -14986,11 +15039,14 @@ name = "soup-filter-cache-adapter"
 version = "0.1.0"
 dependencies = [
  "cache-core",
+ "cache-turso",
  "chrono",
  "graphql_soup_filter_input",
  "indexmap 2.14.0",
  "item-filter-index",
+ "pollster",
  "predicate-index",
+ "serde",
  "serde_json",
  "soup-filter-projection",
  "thiserror 2.0.18",
@@ -15001,12 +15057,17 @@ dependencies = [
 name = "soup-filter-projection"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
+ "document_sub_type",
  "item-filter-index",
  "macro_user_id",
  "model_file_type",
  "models_soup",
+ "postcard",
  "predicate-index",
+ "serde",
+ "soup",
  "thiserror 2.0.18",
  "uuid",
  "workspace-hack",

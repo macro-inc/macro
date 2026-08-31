@@ -7,11 +7,7 @@ import {
   ENABLE_GRAPHQL_SOUP_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import {
-  catchToResult,
-  ThrownResultError,
-  throwOnErr,
-} from '@core/util/result';
+import { catchToResult, throwOnErr } from '@core/util/result';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -21,20 +17,10 @@ import type {
   UpsertScheduledResponse,
 } from '@service-email/generated/schemas';
 import {
-  EmailThreadPageDocument,
-  type EmailThreadPageQuery,
-  type EmailThreadPageQueryVariables,
-} from '@service-storage/graphql/generated/graphql';
-import {
-  getGraphqlSoupClient,
-  graphqlCacheEnabled,
-} from '@service-storage/graphql-soup';
-import {
   type InfiniteData,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
-import type { CombinedError } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
@@ -42,8 +28,11 @@ import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
-import { mapGraphqlEmailThreadPage } from './graphql/mapper';
-import { createGraphqlEmailThreadQuery } from './graphql/thread';
+import {
+  createGraphqlEmailThreadQuery,
+  fetchGraphqlEmailThread,
+  mapGraphqlThreadError,
+} from './graphql/thread';
 import { emailKeys } from './keys';
 
 const THREAD_STALE_TIME = 5 * 60 * 1000;
@@ -109,45 +98,7 @@ export async function fetchAndCacheThread(
     return ok({ thread });
   }
 
-  const result = await catchToResult(async () => {
-    const client = getGraphqlSoupClient();
-    const variables: EmailThreadPageQueryVariables = {
-      threadId,
-      offset: 0,
-      limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-    };
-    let queryResult = await client
-      .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
-        EmailThreadPageDocument,
-        variables,
-        { requestPolicy: 'cache-and-network' }
-      )
-      .toPromise();
-
-    if (queryResult.error?.networkError && graphqlCacheEnabled()) {
-      const cached = await client
-        .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
-          EmailThreadPageDocument,
-          variables,
-          { requestPolicy: 'cache-only' }
-        )
-        .toPromise();
-      if (cached.data) queryResult = cached;
-    }
-
-    if (queryResult.error) {
-      throw mapGraphqlThreadError(queryResult.error);
-    }
-
-    const thread = queryResult.data?.user.emailThread;
-    if (!thread) {
-      throw new ThrownResultError([
-        { code: 'NOT_FOUND', message: 'Email thread not found' },
-      ]);
-    }
-
-    return mapGraphqlEmailThreadPage(thread);
-  });
+  const result = await catchToResult(() => fetchGraphqlEmailThread(threadId));
 
   if (result.isErr()) return err(result.error as any);
   return ok({ thread: result.value });
@@ -214,31 +165,6 @@ function selectThreadQueryData(
   };
 }
 
-function mapGraphqlThreadError(
-  error: CombinedError | null
-): ThrownResultError | null {
-  if (!error) return null;
-
-  const resultErrors = error.graphQLErrors.map((graphqlError) => ({
-    ...graphqlError.extensions,
-    code:
-      typeof graphqlError.extensions?.code === 'string'
-        ? graphqlError.extensions.code
-        : 'UNKNOWN',
-    message: graphqlError.message,
-  }));
-  return new ThrownResultError(
-    resultErrors.length > 0
-      ? resultErrors
-      : [
-          {
-            code: 'UNKNOWN',
-            message: error.networkError?.message ?? error.message,
-          },
-        ]
-  );
-}
-
 /**
  * Transport-neutral live query for a thread and its paginated messages.
  * GraphQL uses urql-solid while the rollout flag is enabled; REST remains the
@@ -284,9 +210,10 @@ export function useThreadQuery<TData = ThreadQueryData>(
         : (restQuery.data as TData | undefined);
     },
     get error() {
-      return usesGraphql()
+      if (!usesGraphql()) return (restQuery.error as Error | null) ?? null;
+      return graphqlQuery.error
         ? mapGraphqlThreadError(graphqlQuery.error)
-        : ((restQuery.error as Error | null) ?? null);
+        : null;
     },
     get isLoading() {
       return usesGraphql() ? graphqlQuery.isLoading : restQuery.isLoading;
@@ -452,6 +379,13 @@ type ArchiveThreadParams = {
   archive: boolean;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
+  /** Suppress the success toast, e.g. for a send-triggered archive where the
+   *  "Email sent" toast (with its undo-send action) is already up and this
+   *  toast's own Undo would reverse only the archive, not the send. */
+  silent?: boolean;
+  /** Receives the undo handle once the archive is pushed onto the undo
+   *  stack, so callers (e.g. undo-send) can reverse it programmatically. */
+  onUndoHandle?: (handle: UndoHandle) => void;
 };
 type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;

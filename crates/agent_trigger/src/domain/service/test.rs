@@ -57,6 +57,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         repo_url: Some("https://example.com/repo".to_owned()),
         workspace: "/workspace".to_owned(),
         sandbox_size: agent_session::domain::model::SandboxSize::Default,
+        instructions: None,
         acp_session_id: None,
         external: None,
         status: SessionStatus::NoMessages,

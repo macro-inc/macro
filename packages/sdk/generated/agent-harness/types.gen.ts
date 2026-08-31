@@ -123,6 +123,11 @@ export type AgentSessionResponse = {
      */
     id: string;
     /**
+     * Instructions the session's runtime works under, when any were stated
+     * at creation. Absent otherwise, so existing payloads are unchanged.
+     */
+    instructions?: string | null;
+    /**
      * Model slug.
      */
     model: string;
@@ -208,6 +213,14 @@ export type CreateAgentSessionRequest = {
      * bot its deployment is configured for.
      */
     botId?: string | null;
+    /**
+     * Instructions the session's runtime works under, for its whole life.
+     *
+     * Recorded on the session whichever runtime serves it. Only the
+     * in-process one acts on them today; `agent_harness`'s `AgentKind`
+     * records what each of the others will need to.
+     */
+    instructions?: string | null;
     /**
      * The user who owns the session. Ignored for user callers, who always
      * own their own sessions; required for bot callers without verified

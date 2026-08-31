@@ -87,6 +87,8 @@ cargo test -p {crate}
 
 `just test` does not exist. Leave `SQLX_OFFLINE` unset when you run `cargo test`. Run `just prepare_db` only if you changed SQL queries.
 
+Email rendering snapshots (Playwright HTML fixtures, not inbox e2e) live in `apps/web/src/lib/core/email/tests`. Run `just test-email-rendering`. Add a fixture under `fixtures/` then `just test-email-rendering-update`.
+
 ### Pre Commit
 ```bash
 cargo fmt                   # format

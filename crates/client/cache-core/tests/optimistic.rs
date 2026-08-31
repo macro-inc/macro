@@ -12,7 +12,9 @@ use cache_core::queue::{
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
+use predicate_index::PendingOptimisticProjection;
 use serde_json::{Value as Json, json};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 const QUERY: &str = r#"
 query Soup($input: SoupInput!) {
@@ -58,6 +60,7 @@ const PROPERTY_KEY: &str = "GraphqlProperty:prop-1";
 struct ClaimFailingStorage {
     inner: InMemoryStorage,
     fail_next_claim: bool,
+    fail_next_queue_load: AtomicBool,
 }
 
 impl ClaimFailingStorage {
@@ -65,7 +68,20 @@ impl ClaimFailingStorage {
         Self {
             inner: InMemoryStorage::new(),
             fail_next_claim: true,
+            fail_next_queue_load: AtomicBool::new(false),
         }
+    }
+
+    fn reconciliation_failing() -> Self {
+        Self {
+            inner: InMemoryStorage::new(),
+            fail_next_claim: false,
+            fail_next_queue_load: AtomicBool::new(false),
+        }
+    }
+
+    fn fail_next_queue_load(&self) {
+        self.fail_next_queue_load.store(true, Ordering::Relaxed);
     }
 }
 
@@ -101,14 +117,24 @@ impl Storage for ClaimFailingStorage {
         Ok(())
     }
 
-    async fn enqueue_mutation(
+    async fn enqueue_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
+        projections: Vec<PendingOptimisticProjection>,
     ) -> Result<MutationId, Self::Error> {
-        Ok(self.inner.enqueue_mutation(entry).await.unwrap())
+        Ok(self
+            .inner
+            .enqueue_mutation_with_shadow(entry, projections)
+            .await
+            .unwrap())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        if self.fail_next_queue_load.swap(false, Ordering::Relaxed) {
+            return Err(std::io::Error::other(
+                "injected reconciliation queue load failure",
+            ));
+        }
         Ok(self.inner.load_mutation_queue().await.unwrap())
     }
 
@@ -252,6 +278,53 @@ async fn engine_with_base(display_name: &str, value: &str) -> Engine<InMemorySto
         .await
         .unwrap();
     engine
+}
+
+async fn reconciliation_engine() -> (Engine<ClaimFailingStorage>, MutationId) {
+    let mut engine = Engine::new(ClaimFailingStorage::reconciliation_failing());
+    engine
+        .write_query(
+            None,
+            QUERY,
+            Some("Soup"),
+            &query_vars(),
+            &soup_page("Status", "todo"),
+            None,
+        )
+        .await
+        .unwrap();
+    let (transaction, _) = engine
+        .begin_optimistic_write(
+            None,
+            BeginOptimisticWrite {
+                query: MUTATION,
+                operation_name: Some("SetEntityProperty"),
+                variables: &mutation_vars("doing"),
+                data: &mutation_response("Status", "doing"),
+                link_patches: &[],
+                revalidations: &[],
+                created_at_ms: 123,
+            },
+        )
+        .await
+        .unwrap();
+    (engine, transaction)
+}
+
+async fn claim_reconciliation_head(engine: &mut Engine<ClaimFailingStorage>) -> MutationClaimToken {
+    let claimed = engine
+        .claim_next_mutation(MutationClaimRequest {
+            owner: "runner".into(),
+            now_ms: 123,
+            lease_expires_at_ms: 1_123,
+        })
+        .await
+        .unwrap()
+        .expect("queue head");
+    MutationClaimToken {
+        owner: "runner".into(),
+        generation: claimed.lease_generation,
+    }
 }
 
 async fn read_hit(engine: &mut Engine<InMemoryStorage>, op: Option<u64>) -> Json {
@@ -529,6 +602,11 @@ fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
             .await
             .unwrap();
 
+        assert_eq!(
+            result.write_result.revision,
+            engine.current_revision(),
+            "the failed lease claim must not add a second revision"
+        );
         assert!(matches!(
             result.initial_claim,
             InitialClaimOutcome::Failed(EngineError::Storage(ref error))
@@ -547,6 +625,63 @@ fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
             ReadResult::Miss => panic!("expected optimistic hit"),
         };
         assert_eq!(property_of(&data)["value"]["stringValue"], json!("doing"));
+    });
+}
+
+#[test]
+fn durable_mutations_advance_revision_before_reconciliation() {
+    block_on(async {
+        let (mut write_engine, _) = reconciliation_engine().await;
+        write_engine.storage().fail_next_queue_load();
+        let write_result = write_engine
+            .write_query(
+                None,
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &soup_page("Status (server)", "done"),
+                None,
+            )
+            .await;
+        assert!(matches!(
+            write_result,
+            Err(EngineError::Storage(ref error))
+                if error.to_string() == "injected reconciliation queue load failure"
+        ));
+        assert_eq!(write_engine.current_revision().to_string(), "3");
+
+        let (mut commit_engine, transaction) = reconciliation_engine().await;
+        let claim = claim_reconciliation_head(&mut commit_engine).await;
+        commit_engine.storage().fail_next_queue_load();
+        let commit_result = commit_engine
+            .commit_optimistic_write(
+                transaction,
+                claim,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_vars("done"),
+                &mutation_response("Status (server)", "done"),
+            )
+            .await;
+        assert!(matches!(
+            commit_result,
+            Err(EngineError::Storage(ref error))
+                if error.to_string() == "injected reconciliation queue load failure"
+        ));
+        assert_eq!(commit_engine.current_revision().to_string(), "3");
+
+        let (mut rollback_engine, transaction) = reconciliation_engine().await;
+        let claim = claim_reconciliation_head(&mut rollback_engine).await;
+        rollback_engine.storage().fail_next_queue_load();
+        let rollback_result = rollback_engine
+            .rollback_optimistic_write(transaction, claim)
+            .await;
+        assert!(matches!(
+            rollback_result,
+            Err(EngineError::Storage(ref error))
+                if error.to_string() == "injected reconciliation queue load failure"
+        ));
+        assert_eq!(rollback_engine.current_revision().to_string(), "3");
     });
 }
 
@@ -732,6 +867,7 @@ fn stale_claim_cannot_settle_mutation() {
             )
             .await
             .unwrap();
+        let revision_before_stale_settlement = engine.current_revision();
         let error = engine
             .rollback_optimistic_write(
                 transaction,
@@ -743,6 +879,7 @@ fn stale_claim_cannot_settle_mutation() {
             .await
             .unwrap_err();
         assert!(matches!(error, EngineError::StaleMutationClaim(id) if id == transaction));
+        assert_eq!(engine.current_revision(), revision_before_stale_settlement);
         assert_eq!(
             engine.storage().load_mutation_queue().await.unwrap().len(),
             1

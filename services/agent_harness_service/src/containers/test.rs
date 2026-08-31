@@ -1,6 +1,6 @@
 use super::*;
 use agent_fold::domain::service::FoldedMessageService;
-use agent_harness::outbound::daytona::{AnthropicApiKey, GithubToken};
+use agent_harness::outbound::daytona::AnthropicApiKey;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
@@ -13,7 +13,6 @@ fn unreachable_sandbox() -> HarnessContainers {
         docker_binary: "false".to_owned(),
         image: "unused".to_owned(),
         network: "unused".to_owned(),
-        github_token: GithubToken::new(String::new()),
         anthropic_api_key: AnthropicApiKey::new(String::new()),
     }))
 }
@@ -29,12 +28,12 @@ fn sessions_with(bot: BotId) -> (AgentSessionId, impl AgentSessionService + use<
     (id, service)
 }
 
-/// The whole point of the refusal: `@macro`'s sessions have no repository to
+/// The whole point of the refusal: `@macro-new`'s sessions have no repository to
 /// clone, so a deployment that cannot run them in-process must not quietly
 /// bill a sandbox for one.
 #[tokio::test]
 async fn refuses_the_in_process_bot_when_no_in_memory_runtime_is_configured() {
-    let (id, sessions) = sessions_with(bot_id::MACRO_AI_BOT_ID);
+    let (id, sessions) = sessions_with(bot_id::MACRO_NEW_BOT_ID);
     let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions);
 
     let error = containers

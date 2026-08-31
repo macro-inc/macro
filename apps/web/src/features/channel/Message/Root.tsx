@@ -112,7 +112,6 @@ export function Root(props: RootProps) {
       }}
       {...rest}
     >
-      <div class="absolute h-full w-1 left-0 top-0 bg-accent opacity-0 message-accent-bar" />
       <MessageProvider value={() => local.message}>
         <MessageActionsProvider value={local.actions}>
           <MessageActionMenuVisibilityProvider value={actionMenuVisibility}>

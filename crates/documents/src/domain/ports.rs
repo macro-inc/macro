@@ -142,10 +142,9 @@ pub trait DocumentRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
 
     /// Import an email attachment: link it to a reusable live email document
-    /// owned by the same user, or insert a new document and link it.
-    ///
-    /// Lookup, possible insert, and the `document_email` write happen in one
-    /// transaction under an advisory lock on `(owner, sha)`.
+    /// owned by the same user (matching latest-instance sha), or insert a new
+    /// document and link it. Concurrent first-time creates for the same
+    /// `(owner, sha)` are serialized so two imports cannot insert duplicates.
     fn import_email_attachment_document(
         &self,
         args: ImportEmailAttachmentRepoArgs,

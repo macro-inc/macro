@@ -162,6 +162,7 @@ pub fn run() {
         builder = builder
             .plugin(tauri_plugin_haptics::init())
             .plugin(tauri_plugin_input_accessory::init())
+            .plugin(tauri_plugin_network_status::init())
             .plugin(tauri_plugin_pasteboard::init())
             .plugin(tauri_plugin_photo_library::init())
             .plugin(tauri_plugin_call_kit::init());
@@ -251,6 +252,7 @@ pub fn run() {
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
+            graphql_cache_plugin::commands::graphql_cache_current_revision,
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
