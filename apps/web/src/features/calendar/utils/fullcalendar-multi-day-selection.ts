@@ -15,6 +15,8 @@ const PREVIEW_INSTANCE_ID = '__calendar-multi-day-selection-preview-instance__';
 const PREVIEW_EXTENDED_PROP = 'calendarMultiDaySelectionPreview';
 
 const previewUi: EventUi = {
+  // Block + all-day only. Background all-day events are also painted through
+  // the timed columns, which stretches the preview down the hour grid.
   display: 'block',
   startEditable: false,
   durationEditable: false,
@@ -27,11 +29,26 @@ const previewUi: EventUi = {
   classNames: ['calendar-multi-day-selection-preview-event'],
 };
 
-/** Whether a rendered FullCalendar event is the multi-day selection preview. */
+/** Whether a rendered FullCalendar event is the date-selection preview. */
 export function isMultiDaySelectionPreview(
   event: Pick<EventApi, 'extendedProps'>
 ) {
   return event.extendedProps[PREVIEW_EXTENDED_PROP] === true;
+}
+
+/**
+ * Whether a date selection should render as an all-day preview chip
+ * rather than FullCalendar's cell highlight overlay.
+ */
+export function shouldRenderSelectionAsAllDayPreview(selection: {
+  allDay: boolean;
+  start: Date;
+  end: Date;
+}) {
+  return (
+    selection.allDay ||
+    multiDayTimedDisplayRange(selection.start, selection.end) !== undefined
+  );
 }
 
 function createPreviewStore(range: EventInstance['range']): EventStore {
@@ -68,21 +85,17 @@ function createPreviewStore(range: EventInstance['range']): EventStore {
 class MultiDaySelectionViewPropsTransformer implements ViewPropsTransformer {
   transform(viewProps: ViewProps, calendarProps: CalendarContentProps) {
     const selection = viewProps.dateSelection;
-    if (!selection || selection.allDay) return {};
+    if (!selection) return {};
 
-    const displayRange = multiDayTimedDisplayRange(
-      calendarProps.dateEnv.toDate(selection.range.start),
-      calendarProps.dateEnv.toDate(selection.range.end)
-    );
-    if (!displayRange) return {};
+    const previewRange = selection.allDay
+      ? selection.range
+      : timedSelectionPreviewRange(selection.range, calendarProps);
+    if (!previewRange) return {};
 
-    const previewStore = createPreviewStore({
-      start: calendarProps.dateEnv.createMarker(displayRange.start),
-      end: calendarProps.dateEnv.createMarker(displayRange.end),
-    });
+    const previewStore = createPreviewStore(previewRange);
 
     // Replace only the view projection. FullCalendar's canonical selection and
-    // select callback retain the exact timed range used by the event composer.
+    // select callback retain the exact range used by the event composer.
     return {
       dateSelection: null,
       eventStore: {
@@ -99,7 +112,23 @@ class MultiDaySelectionViewPropsTransformer implements ViewPropsTransformer {
   }
 }
 
-/** Renders multi-day timed selections as foreground all-day preview events. */
+function timedSelectionPreviewRange(
+  range: EventInstance['range'],
+  calendarProps: CalendarContentProps
+) {
+  const displayRange = multiDayTimedDisplayRange(
+    calendarProps.dateEnv.toDate(range.start),
+    calendarProps.dateEnv.toDate(range.end)
+  );
+  if (!displayRange) return undefined;
+
+  return {
+    start: calendarProps.dateEnv.createMarker(displayRange.start),
+    end: calendarProps.dateEnv.createMarker(displayRange.end),
+  };
+}
+
+/** Renders all-day and multi-day selections as a chip above existing all-day events. */
 export const multiDaySelectionRenderingPlugin = createPlugin({
   name: 'calendar-multi-day-selection-rendering',
   viewPropsTransformers: [MultiDaySelectionViewPropsTransformer],

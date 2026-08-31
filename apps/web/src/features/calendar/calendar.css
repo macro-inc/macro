@@ -281,16 +281,28 @@
 	pointer-events: none;
 }
 
+.calendar-view
+	.fc
+	.fc-timegrid-col-events
+	.calendar-multi-day-selection-preview-event,
+.calendar-view
+	.fc
+	.fc-timegrid-bg
+	.calendar-multi-day-selection-preview-event,
+.calendar-view
+	.fc
+	.fc-timegrid-col-bg
+	.calendar-multi-day-selection-preview-event {
+	display: none;
+}
+
 .calendar-view .fc .fc-highlight {
 	inset: 2px;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-highlight {
-	top: 1.5rem;
-	right: 0.375rem;
-	bottom: auto;
-	left: 0.375rem;
-	height: 1rem;
+/* All-day and month selections render as a stacked preview chip. */
+.calendar-view .fc .fc-daygrid-body .fc-highlight {
+	display: none;
 }
 
 /* Timed selections already render an event mirror; hide its backing fill. */
