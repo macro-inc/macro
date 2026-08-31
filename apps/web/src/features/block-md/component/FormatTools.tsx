@@ -51,11 +51,11 @@ import TextSuper from '@lucide/superscript.svg';
 import TextT from '@lucide/type.svg';
 import TextUnderline from '@lucide/underline.svg';
 import BrokenLinkIcon from '@lucide/unlink.svg';
+import type { ElementName } from '@macro-inc/lexical-core';
 // Lucide ships no bare digit, so the numbered-list preview mark stays on
 // Phosphor: this is the literal '1' that pairs with the bullet dot and the
 // checklist tick, not a symbol standing in for one.
 import One from '@phosphor/number-one.svg';
-import type { ElementName } from '@macro-inc/lexical-core';
 import { Button, Dropdown, Hotkey, SingleSelectCheck } from '@ui';
 import {
   $getSelection,
