@@ -7,15 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationKeys } from '../keys';
 import { useMuteItemMutation, useUnmuteItemMutation } from '../unsubscribes';
 
-const {
-  getUnsubscribesMock,
-  unsubscribeItemMock,
-  removeUnsubscribeItemMock,
-} = vi.hoisted(() => ({
-  getUnsubscribesMock: vi.fn(),
-  unsubscribeItemMock: vi.fn(),
-  removeUnsubscribeItemMock: vi.fn(),
-}));
+const { getUnsubscribesMock, unsubscribeItemMock, removeUnsubscribeItemMock } =
+  vi.hoisted(() => ({
+    getUnsubscribesMock: vi.fn(),
+    unsubscribeItemMock: vi.fn(),
+    removeUnsubscribeItemMock: vi.fn(),
+  }));
 
 vi.mock('@service-notification/client', () => ({
   notificationServiceClient: {
@@ -43,14 +40,17 @@ const cached = () =>
     notificationKeys.unsubscribes.queryKey
   );
 
-const cachedIds = () => cached()?.map((entry) => entry.item_id).sort();
+const cachedIds = () =>
+  cached()
+    ?.map((entry) => entry.item_id)
+    .sort();
 
 const hasUnsubscribesQuery = () =>
-  testQueryClient.getQueryState(notificationKeys.unsubscribes.queryKey) !=
-  null;
+  testQueryClient.getQueryState(notificationKeys.unsubscribes.queryKey) != null;
 
-const httpError = () =>
-  err([{ code: 'HTTP_ERROR' as const, message: 'nope' }]);
+const httpError = () => err([{ code: 'HTTP_ERROR' as const, message: 'nope' }]);
+
+const httpOk = () => ok(undefined as void);
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -131,7 +131,7 @@ describe('useMuteItemMutation', () => {
       item('existing'),
     ]);
     const fail = deferred<ReturnType<typeof httpError>>();
-    const succeed = deferred<ReturnType<typeof ok>>();
+    const succeed = deferred<ReturnType<typeof httpOk>>();
     unsubscribeItemMock.mockImplementation((arg: UserUnsubscribe) =>
       arg.item_id === 'doc-1' ? fail.promise : succeed.promise
     );
@@ -147,14 +147,14 @@ describe('useMuteItemMutation', () => {
     await expect(failed).rejects.toThrow();
     expect(cachedIds()).toEqual(['doc-2', 'existing']);
 
-    succeed.resolve(ok({}));
+    succeed.resolve(httpOk());
     await succeeded;
     expect(cachedIds()).toEqual(['doc-2', 'existing']);
   });
 
   it('does not drop a sibling mute when a no-cache mute fails', async () => {
     const fail = deferred<ReturnType<typeof httpError>>();
-    const hang = deferred<ReturnType<typeof ok>>();
+    const hang = deferred<ReturnType<typeof httpOk>>();
     unsubscribeItemMock.mockImplementation((arg: UserUnsubscribe) =>
       arg.item_id === 'doc-1' ? fail.promise : hang.promise
     );
@@ -213,7 +213,7 @@ describe('useUnmuteItemMutation', () => {
       item('doc-2'),
     ]);
     const fail = deferred<ReturnType<typeof httpError>>();
-    const succeed = deferred<ReturnType<typeof ok>>();
+    const succeed = deferred<ReturnType<typeof httpOk>>();
     removeUnsubscribeItemMock.mockImplementation((arg: UserUnsubscribe) =>
       arg.item_id === 'doc-1' ? fail.promise : succeed.promise
     );
@@ -229,7 +229,7 @@ describe('useUnmuteItemMutation', () => {
     await expect(failed).rejects.toThrow();
     expect(cachedIds()).toEqual(['doc-1']);
 
-    succeed.resolve(ok({}));
+    succeed.resolve(httpOk());
     await succeeded;
     expect(cachedIds()).toEqual(['doc-1']);
   });
