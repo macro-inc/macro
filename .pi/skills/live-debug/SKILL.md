@@ -33,10 +33,16 @@ stack to pick it up.
 
 ## Query telemetry (prefer APIs over the Grafana UI)
 
-You are faster with `curl` than with screenshots. Two timing quirks: Loki
-time params are unix epoch **nanoseconds**, and Tempo's search index flushes
-every ~30s — a trace you just produced is fetchable by ID immediately but may
-not show in search yet.
+The `grafana` MCP server (`.mcp.json` / `opencode.json`, Docker `mcp/grafana`
+on the host network) is pointed at this Grafana. Prefer its tools for logs
+and metrics: `query_loki_logs`, `list_loki_label_values`,
+`find_error_pattern_logs`, `query_prometheus`, `search_dashboards`.
+Datasource UIDs are stable: `loki`, `prometheus`, `tempo`, `pyroscope`.
+
+It has no Tempo query tool, so for traces use `curl` against the Tempo API
+(below). Two timing quirks: Loki/Tempo time params are unix epoch
+**nanoseconds**, and Tempo's search index flushes every ~30s — a trace you
+just produced is fetchable by ID immediately but may not show in search yet.
 
 Find traces (TraceQL — service names are the binary names, e.g.
 `email_service`, `document-storage-service`):
@@ -52,7 +58,8 @@ curl -s http://localhost:3200/api/traces/<traceID>
 Match on route, duration, or any span attribute:
 `{span.http.route="/documents" && duration>500ms}`.
 
-Read logs (Loki; events carry `trace_id` for correlation):
+Read logs with `query_loki_logs`, or by `curl` when the MCP is unavailable
+(events carry `trace_id` for correlation):
 
 ```bash
 curl -sG http://localhost:3100/loki/api/v1/query_range \
