@@ -11,7 +11,7 @@ Macro's SDK: a Typescript library for harnessing the power of Macro
 To get started, make a Macro client
 
 ```ts
-import { Macro } from '@macro/sdk';
+import { Macro } from '@macro-inc/sdk';
 
 const macro = new Macro({ }); // uses MACRO_API_KEY env var
 ```
@@ -106,7 +106,7 @@ Use the `msg` tagged template to build rich message bodies for channel messages
 or documents.
 
 ```ts
-import { msg, here } from '@macro/sdk';
+import { msg, here } from '@macro-inc/sdk';
 
 const channel = macro.channels.byId('chan_1');
 const user = macro.users.byId('user_1');

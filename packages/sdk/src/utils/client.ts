@@ -172,7 +172,7 @@ function resolveEnv(opts: MacroOpts): Env {
   if (opts.env) return opts.env;
   const fromEnv =
     typeof process !== 'undefined' ? process.env.MACRO_ENV : undefined;
-  if (!fromEnv) return 'dev';
+  if (!fromEnv) return 'prod';
   if (!(fromEnv in HOSTS)) {
     throw new Error(
       `invalid MACRO_ENV "${fromEnv}" — expected local, dev, or prod`,

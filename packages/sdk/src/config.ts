@@ -100,7 +100,7 @@ export interface MacroOpts {
   /** Shorthand for `auth: { type: 'user', token }`. */
   token?: TokenSource;
   /** Which Macro environment to talk to. Falls back to the MACRO_ENV env
-   * var, then `'dev'`. */
+   * var, then `'prod'`. */
   env?: Env;
   /** Override individual service hosts (e.g. point one at localhost). */
   hosts?: Partial<Record<ServiceName, string>>;

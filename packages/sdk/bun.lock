@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@macro/sdk",
+      "name": "@macro-inc/sdk",
       "dependencies": {
         "ts-pattern": "^5.8.0",
       },

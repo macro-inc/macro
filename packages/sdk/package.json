@@ -1,5 +1,5 @@
 {
-  "name": "@macro/sdk",
+  "name": "@macro-inc/sdk",
   "version": "0.0.1",
   "type": "module",
   "description": "Libary for interacting with Macro.com",
