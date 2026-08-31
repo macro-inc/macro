@@ -1,3 +1,4 @@
+import { watchTouchDrag } from '@channel/touch-drag';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import {
   createScrollIntentTracker,
@@ -119,6 +120,11 @@ const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 // re-pin window absorbs that late growth so a single action lands fully down.
 const SCROLL_TO_BOTTOM_SETTLE_MS = 1000;
 
+// How long the kept-mounted target row gets to put the target on screen before
+// the virtualizer positions it instead. Longer than the target scroller's own
+// retry budget, so the precise element scroll always wins when it works.
+const TARGET_ELEMENT_FALLBACK_MS = 1500;
+
 export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
   tag: 'bottom',
   align: 'end',
@@ -184,11 +190,19 @@ export function ThreadList(props: ThreadListProps) {
   let initialScrollStarted = false;
   let initialScrollRetried = false;
   let initialScrollTarget: InitialScrollTarget = DEFAULT_INITIAL_SCROLL_TARGET;
+  let targetElementFallbackTimer: number | undefined;
+
+  const clearTargetElementFallback = () => {
+    if (targetElementFallbackTimer === undefined) return;
+    window.clearTimeout(targetElementFallbackTimer);
+    targetElementFallbackTimer = undefined;
+  };
 
   const resetInitialScroll = () => {
     initialScrollStarted = false;
     initialScrollRetried = false;
     initialScrollTarget = DEFAULT_INITIAL_SCROLL_TARGET;
+    clearTargetElementFallback();
   };
 
   const resolveTargetIndex = (target: ThreadListScrollTarget): number => {
@@ -353,7 +367,7 @@ export function ThreadList(props: ThreadListProps) {
       if (rafId) cancelAnimationFrame(rafId);
       resizeObserver?.disconnect();
       el.removeEventListener('wheel', onWheel);
-      el.removeEventListener('pointerdown', onPointerDown);
+      unwatchDrag();
       if (cancelPinToBottom === stop) cancelPinToBottom = undefined;
     };
 
@@ -361,14 +375,10 @@ export function ThreadList(props: ThreadListProps) {
       if (event.deltaY < 0) stop();
     }
 
+    el.addEventListener('wheel', onWheel, { passive: true });
     // A press on a message, reply button, or reaction is not a scroll and must
     // not cancel pinning. Only a wheel-up or a touch drag is the user scrolling.
-    function onPointerDown(event: PointerEvent) {
-      if (event.pointerType === 'touch') stop();
-    }
-
-    el.addEventListener('wheel', onWheel, { passive: true });
-    el.addEventListener('pointerdown', onPointerDown, { passive: true });
+    const unwatchDrag = watchTouchDrag(el, stop);
     cancelPinToBottom = stop;
 
     const tick = () => {
@@ -427,6 +437,10 @@ export function ThreadList(props: ThreadListProps) {
     scrollToElementInItem: (id, itemElement, targetElement) => {
       const index = props.keys().indexOf(id);
       if (index === -1) return false;
+      // Nothing has been measured yet (an app launched into a squished
+      // viewport). Every offset below would be computed against a zero
+      // viewport, so report failure instead of moving to a meaningless place.
+      if (handle.viewportSize <= 0) return false;
 
       cancelPinToBottom?.();
       const itemRect = itemElement.getBoundingClientRect();
@@ -544,10 +558,47 @@ export function ThreadList(props: ThreadListProps) {
     if (initialScrollStarted) return;
     initialScrollStarted = true;
     if (props.initialScrollHandledByTargetElement) {
+      // The kept-mounted target row owns the viewport movement, so nothing is
+      // scrolled here and the list is still sitting where it mounted — the top
+      // of the loaded window. Arm a fallback in case that element scroll never
+      // lands (a row that never mounts, a scroller that gives up on an
+      // unmeasured viewport): a channel opened at a message must never be left
+      // at the top of its history.
+      initialScrollTarget = getInitialScrollTarget();
       completeInitialScroll(handle);
+      armTargetElementFallback(handle, initialScrollTarget);
       return;
     }
     beginInitialTargetScroll(handle, getInitialScrollTarget());
+  }
+
+  /**
+   * Positions the initial target through the virtualizer if the target element
+   * has not put it on screen by `TARGET_ELEMENT_FALLBACK_MS`. Deliberately
+   * coarse: landing on the target's row beats staying at the top.
+   */
+  function armTargetElementFallback(
+    handle: VirtualizerHandle,
+    target: InitialScrollTarget
+  ) {
+    clearTargetElementFallback();
+    if (target.tag !== 'id' && target.tag !== 'index') return;
+    targetElementFallbackTimer = window.setTimeout(() => {
+      targetElementFallbackTimer = undefined;
+      if (disposed) return;
+      // The target is no longer pending: it either landed or the user took the
+      // scroll over (a drag releases it). Either way there is nothing to
+      // rescue, and moving the viewport now would be a yank.
+      if (!props.initialScrollHandledByTargetElement) return;
+      if (scrollIntent.isUserInteracting()) return;
+      if (isScrollPositionCorrect(handle, target)) return;
+      console.debug('ThreadList: target element never landed, falling back', {
+        target,
+        scrollOffset: handle.scrollOffset,
+        viewportSize: handle.viewportSize,
+      });
+      scrollToTarget(handle, target);
+    }, TARGET_ELEMENT_FALLBACK_MS);
   }
 
   const handleScrollEnd = () => {
@@ -679,6 +730,7 @@ export function ThreadList(props: ThreadListProps) {
   onCleanup(() => {
     disposed = true;
     cancelPinToBottom?.();
+    clearTargetElementFallback();
   });
 
   return (
