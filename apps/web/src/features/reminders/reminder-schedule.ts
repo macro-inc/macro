@@ -79,14 +79,6 @@ export function repeatPartsFromDate(
 }
 
 /**
- * What the repeat picker starts from for a brand-new recurrence: weekly on
- * today, at the same morning time a bare date would resolve to.
- */
-export function defaultRepeatParts(now: Date = new Date()): CronParts {
-  return repeatPartsFromDate(atDefaultTime(now));
-}
-
-/**
  * The schedule a soup row is on, rebuilt as the tagged union the API speaks.
  *
  * A row carries the schedule flattened into `scheduleType` plus the fields that
@@ -196,18 +188,6 @@ export function sameSchedule(
     return new Date(a.remindAt).getTime() === new Date(b.remindAt).getTime();
   }
   return false;
-}
-
-/** The same instant, at `REMINDER_DEFAULT_TIME`. */
-function atDefaultTime(date: Date): Date {
-  const result = new Date(date);
-  result.setHours(
-    REMINDER_DEFAULT_TIME.hours,
-    REMINDER_DEFAULT_TIME.minutes,
-    0,
-    0
-  );
-  return result;
 }
 
 /**

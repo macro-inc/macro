@@ -1,5 +1,4 @@
 import { isListViewID } from '@app/constants/list-views';
-import { openReminderEditorForEntity } from '@app/features/reminders/open-reminder-editor';
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCalendarBlockRange } from '@block-calendar/calendar-range';
@@ -641,14 +640,6 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  // A reminder has no block of its own — clicking one opens the panel where its
-  // title and time are edited, whether or not it points at anything. What it is
-  // about stays reachable from the row's reference chip and from the panel.
-  if (entity.type === 'reminder') {
-    openReminderEditorForEntity(entity);
-    return;
-  }
-
   // Calendar is a singleton block. Event opens retarget that one instance
   // with a locator range, including repeat clicks on an already-open split.
   if (entity.type === 'calendar_event') {
@@ -905,12 +896,14 @@ function getEntitySplitContent(entity: EntityData) {
         return { type: 'contact' as const, id: entity.id };
       })
       .with({ type: 'reminder' }, (entity) => {
-        return (
-          reminderSplitTarget(entity) ?? {
-            type: 'unknown' as const,
-            id: entity.id,
-          }
-        );
+        // A reminder has no block of its own; it opens its editor as a
+        // component split. The reminder id rides in the content id (component
+        // params are dropped on URL restore, and split identity is keyed on the
+        // id, so each reminder needs a distinct one) — see `resolveComponent`.
+        return {
+          type: 'component' as const,
+          id: `reminder-view~${entity.id}`,
+        };
       })
       // Calendar events open the singleton calendar block; the open path
       // branches before reaching here, so this only serves duplicate checks.

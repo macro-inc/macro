@@ -1,0 +1,412 @@
+import { toast } from '@core/component/Toast/Toast';
+import {
+  type CronParts,
+  describeCron,
+  isValidCronParts,
+  type ScheduleFrequency,
+  WEEKDAY_OPTIONS,
+} from '@core/util/cron';
+import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
+import { Button, cn } from '@ui';
+import {
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
+import {
+  isRecurring,
+  onceSchedule,
+  REMINDER_DEFAULT_TIME,
+  REMINDER_DESCRIPTION_MAX_LENGTH,
+  recurringSchedule,
+  repeatPartsFromDate,
+  repeatPartsFromSchedule,
+} from './reminder-schedule';
+
+/** How a reminder repeats: not at all (a one-shot), or on a weekly/monthly cron. */
+type RepeatKind = 'once' | ScheduleFrequency;
+
+/** What the form hands back on submit: the raw title and the chosen schedule. */
+export interface ReminderFormValues {
+  /** The raw title input; the caller resolves and clamps it per its mode. */
+  description: string;
+  /**
+   * The schedule to store. On an unchanged edit this is the reminder's original
+   * schedule verbatim, so the caller's diff omits it — which is what lets an
+   * overdue reminder be renamed without being rejected as in the past.
+   */
+  schedule: ReminderSchedule;
+}
+
+export interface ReminderFormProps {
+  /** Prefilled title. Absent when creating. */
+  initialDescription?: string;
+  /**
+   * The reminder's current schedule, when editing one. Its presence marks the
+   * form as an edit: only then can an untouched schedule be sent back unchanged.
+   */
+  initialSchedule?: ReminderSchedule;
+  placeholder: string;
+  /** A standalone reminder has no entity to name it after, so it needs a title. */
+  descriptionRequired?: boolean;
+  /** A card or chip for the entity this reminder is about, shown above the title. */
+  reference?: JSX.Element;
+  submitLabel: string;
+  pending?: boolean;
+  autofocus?: boolean;
+  onCancel: () => void;
+  onSubmit: (values: ReminderFormValues) => void;
+}
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+/** `YYYY-MM-DD` for a date in local time — the value a `<input type="date">` takes. */
+function toDateInput(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/** `HH:MM` for a date in local time — the value a `<input type="time">` takes. */
+function toTimeInput(date: Date): string {
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** Whether two picker recurrences say the same thing, ignoring day order. */
+function samePartsShape(a: CronParts, b: CronParts): boolean {
+  return (
+    a.frequency === b.frequency &&
+    a.time === b.time &&
+    a.dayOfMonth === b.dayOfMonth &&
+    a.daysOfWeek.length === b.daysOfWeek.length &&
+    a.daysOfWeek.every((day) => b.daysOfWeek.includes(day))
+  );
+}
+
+/** The same instant, at `REMINDER_DEFAULT_TIME`, one day out — the create default. */
+function atDefault(now: Date): Date {
+  const result = new Date(now);
+  result.setDate(result.getDate() + 1);
+  result.setHours(
+    REMINDER_DEFAULT_TIME.hours,
+    REMINDER_DEFAULT_TIME.minutes,
+    0,
+    0
+  );
+  return result;
+}
+
+/** The control values to open with, derived from the reminder (or the defaults). */
+function deriveSeed(
+  description: string | undefined,
+  schedule: ReminderSchedule | undefined
+) {
+  const now = new Date();
+  const recurring = schedule !== undefined && isRecurring(schedule);
+  const onceSeedDate =
+    schedule && !recurring ? new Date(schedule.remindAt) : atDefault(now);
+  const parts = recurring
+    ? repeatPartsFromSchedule(schedule)
+    : repeatPartsFromDate(onceSeedDate);
+  const kind: RepeatKind = recurring ? parts.frequency : 'once';
+
+  return {
+    description: description ?? '',
+    repeat: kind,
+    onceDate: toDateInput(onceSeedDate),
+    onceTime: toTimeInput(onceSeedDate),
+    parts,
+    // What an untouched edit sends back unchanged. For a create the controls
+    // are always rebuilt (and past-checked), so this is only read on edit.
+    originalSchedule: schedule ?? onceSchedule(onceSeedDate),
+  };
+}
+
+/**
+ * The reminder editor's fields — title, how it repeats, and when — shared by the
+ * create modal and the edit split.
+ *
+ * It owns the controls and their validity and hands back the resolved
+ * `{ description, schedule }` on submit; the caller decides whether that is a
+ * create or an update. The title and schedule sit together, laid out like the
+ * calendar event editor, so either can be changed in one pass.
+ */
+export function ReminderForm(props: ReminderFormProps) {
+  const seed = deriveSeed(props.initialDescription, props.initialSchedule);
+  const isEdit = props.initialSchedule !== undefined;
+
+  const [description, setDescription] = createSignal(seed.description);
+  const [repeat, setRepeat] = createSignal<RepeatKind>(seed.repeat);
+  const [onceDate, setOnceDate] = createSignal(seed.onceDate);
+  const [onceTime, setOnceTime] = createSignal(seed.onceTime);
+  const [repeatParts, setRepeatParts] = createSignal<CronParts>(seed.parts);
+
+  // What the schedule controls were seeded to, so an untouched edit can be told
+  // from a real change without depending on second-level precision the pickers
+  // do not carry.
+  const initialRepeat = seed.repeat;
+  const initialOnceDate = seed.onceDate;
+  const initialOnceTime = seed.onceTime;
+  const initialParts = seed.parts;
+
+  let titleRef: HTMLInputElement | undefined;
+  onMount(() => {
+    if (props.autofocus) titleRef?.focus();
+  });
+
+  const onceDateTime = () => new Date(`${onceDate()}T${onceTime()}`);
+
+  /** Whether the schedule controls still hold exactly what they were seeded to. */
+  const scheduleUntouched = () => {
+    if (repeat() !== initialRepeat) return false;
+    return repeat() === 'once'
+      ? onceDate() === initialOnceDate && onceTime() === initialOnceTime
+      : samePartsShape(repeatParts(), initialParts);
+  };
+
+  const setRepeatKind = (kind: RepeatKind) => {
+    setRepeat(kind);
+    if (kind !== 'once') {
+      setRepeatParts((parts) => ({ ...parts, frequency: kind }));
+    }
+  };
+
+  const updateParts = (patch: Partial<CronParts>) =>
+    setRepeatParts((parts) => ({ ...parts, ...patch }));
+
+  const toggleDay = (value: string) => {
+    const days = repeatParts().daysOfWeek;
+    // Never empty: an empty selection builds an every-day cron, which is not
+    // what unticking your last day is asking for.
+    const next = days.includes(value)
+      ? days.filter((day) => day !== value)
+      : [...days, value];
+    if (next.length > 0) updateParts({ daysOfWeek: next });
+  };
+
+  const submit = () => {
+    // Editing without touching the schedule keeps the stored one verbatim, so
+    // the caller's diff omits it — which is what lets an overdue reminder be
+    // renamed, and keeps a description-only edit from clearing its done flag.
+    // A create always rebuilds (and past-checks) its schedule.
+    if (isEdit && scheduleUntouched()) {
+      props.onSubmit({
+        description: description(),
+        schedule: seed.originalSchedule,
+      });
+      return;
+    }
+
+    if (repeat() === 'once') {
+      const date = onceDateTime();
+      if (Number.isNaN(date.getTime())) return;
+      // The controls can sit open long enough for a picked time to slip into the
+      // past; re-check rather than let the API reject it with an opaque failure.
+      if (date.getTime() <= Date.now()) {
+        toast.failure('That time has already passed — pick another');
+        return;
+      }
+      props.onSubmit({
+        description: description(),
+        schedule: onceSchedule(date),
+      });
+      return;
+    }
+
+    const parts = repeatParts();
+    // No past-date check: a recurrence has no single instant to have passed, and
+    // the backend derives its first firing from the cron itself.
+    if (!isValidCronParts(parts)) return;
+    props.onSubmit({
+      description: description(),
+      schedule: recurringSchedule(parts),
+    });
+  };
+
+  /**
+   * Whether Save may fire. A standalone reminder needs a description; every
+   * schedule needs to be one the backend will accept. The past-date check lives
+   * in `submit` (as a toast) rather than here, so the button reads as an
+   * affordance rather than blinking disabled as the clock passes a chosen time.
+   */
+  const canSubmit = () => {
+    if (props.descriptionRequired && !description().trim()) return false;
+    if (props.pending) return false;
+    return repeat() === 'once'
+      ? !Number.isNaN(onceDateTime().getTime())
+      : isValidCronParts(repeatParts());
+  };
+
+  return (
+    <form
+      class="flex flex-col gap-4 text-sm"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <Show when={props.reference}>{(node) => node()}</Show>
+
+      <input
+        ref={titleRef}
+        type="text"
+        value={description()}
+        onInput={(event) => setDescription(event.currentTarget.value)}
+        placeholder={props.placeholder}
+        aria-label="Reminder description"
+        // Counts UTF-16 code units where the service counts characters, so this
+        // only ever stops short of the real limit, never past it. The
+        // description resolvers apply the exact cap.
+        maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
+        class="w-full rounded-md border border-edge-muted bg-surface px-2 py-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
+      />
+
+      <div class="flex flex-col gap-2">
+        <span class="text-xs font-medium text-ink-muted">Repeat</span>
+        <div class="flex gap-1">
+          <For
+            each={
+              [
+                { value: 'once', label: 'Does not repeat' },
+                { value: 'week', label: 'Weekly' },
+                { value: 'month', label: 'Monthly' },
+              ] as const
+            }
+          >
+            {(option) => (
+              <button
+                type="button"
+                class={cn(
+                  'flex-1 rounded border px-2 py-1.5 text-xs',
+                  repeat() === option.value
+                    ? 'border-edge bg-active text-ink'
+                    : 'border-edge-muted text-ink-muted hover:text-ink'
+                )}
+                onClick={() => setRepeatKind(option.value)}
+              >
+                {option.label}
+              </button>
+            )}
+          </For>
+        </div>
+      </div>
+
+      <Switch>
+        <Match when={repeat() === 'once'}>
+          <div class="flex items-center gap-2">
+            <input
+              type="date"
+              aria-label="Date"
+              value={onceDate()}
+              onInput={(event) => setOnceDate(event.currentTarget.value)}
+              class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+            />
+            <input
+              type="time"
+              aria-label="Time"
+              value={onceTime()}
+              onInput={(event) => setOnceTime(event.currentTarget.value)}
+              class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+            />
+          </div>
+        </Match>
+        <Match when={repeat() === 'week'}>
+          <div class="flex flex-col gap-3">
+            <div class="flex gap-1">
+              <For each={WEEKDAY_OPTIONS}>
+                {(day) => (
+                  <button
+                    type="button"
+                    class={cn(
+                      'flex-1 rounded border px-1 py-1.5 text-xs',
+                      repeatParts().daysOfWeek.includes(day.value)
+                        ? 'border-edge bg-active text-ink'
+                        : 'border-edge-muted text-ink-muted hover:text-ink'
+                    )}
+                    aria-pressed={repeatParts().daysOfWeek.includes(day.value)}
+                    onClick={() => toggleDay(day.value)}
+                  >
+                    {day.label}
+                  </button>
+                )}
+              </For>
+            </div>
+            <TimeField
+              value={repeatParts().time}
+              onChange={(time) => updateParts({ time })}
+            />
+          </div>
+        </Match>
+        <Match when={repeat() === 'month'}>
+          <div class="flex items-center gap-3">
+            <label class="flex items-center gap-2 text-sm text-ink-muted">
+              Day
+              <input
+                type="number"
+                min="1"
+                max="31"
+                value={repeatParts().dayOfMonth}
+                onInput={(event) =>
+                  updateParts({ dayOfMonth: event.currentTarget.value })
+                }
+                class="w-16 rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+              />
+            </label>
+            <TimeField
+              value={repeatParts().time}
+              onChange={(time) => updateParts({ time })}
+            />
+          </div>
+        </Match>
+      </Switch>
+
+      <Show when={repeat() !== 'once'}>
+        <span class="truncate text-xs text-ink-muted">
+          {describeCron(repeatParts())}
+        </span>
+      </Show>
+
+      <div class="flex items-center justify-end gap-3 pt-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="rounded-lg"
+          onClick={props.onCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          variant="accent"
+          size="sm"
+          depth={3}
+          class="rounded-lg border-0"
+          disabled={!canSubmit()}
+        >
+          {props.submitLabel}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** A time-of-day field for the recurring schedule. `At HH:MM`. */
+function TimeField(props: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label class="flex items-center gap-2 text-sm text-ink-muted">
+      At
+      <input
+        type="time"
+        value={props.value}
+        onInput={(event) => props.onChange(event.currentTarget.value)}
+        class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+      />
+    </label>
+  );
+}

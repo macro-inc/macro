@@ -2,7 +2,6 @@ import type { EntityData } from '@entity';
 import { describe, expect, it } from 'vitest';
 
 import {
-  defaultRepeatParts,
   describeReminderSchedule,
   describeReminderWhen,
   isRecurring,
@@ -436,18 +435,6 @@ describe('repeatPartsFromDate', () => {
   it('defaults to weekly', () => {
     expect(repeatPartsFromDate(new Date('2026-08-17T09:00:00')).frequency).toBe(
       'week'
-    );
-  });
-});
-
-describe('defaultRepeatParts', () => {
-  it('starts a new recurrence at the reminder morning default', () => {
-    // Not the current time: a repeat picked at 4pm should still default to the
-    // morning, the same way a bare date does.
-    const parts = defaultRepeatParts(new Date('2026-08-17T16:42:00'));
-
-    expect(parts.time).toBe(
-      `${String(REMINDER_DEFAULT_TIME.hours).padStart(2, '0')}:${String(REMINDER_DEFAULT_TIME.minutes).padStart(2, '0')}`
     );
   });
 });
