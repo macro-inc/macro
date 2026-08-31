@@ -602,6 +602,20 @@ export function ThreadList(props: ThreadListProps) {
         armTargetElementFallback(handle, target);
         return;
       }
+      if (resolveTargetIndex(target) < 0) {
+        // The target never made it into the loaded window. No scroll can reach it, and staying where
+        // the list mounted means the top of history, so show the latest
+        // instead — the same answer the missing-message path gives.
+        console.debug(
+          'ThreadList: target never loaded, falling back to latest',
+          {
+            target,
+            scrollOffset: handle.scrollOffset,
+          }
+        );
+        pinToBottom(handle);
+        return;
+      }
       if (isScrollPositionCorrect(handle, target)) return;
       console.debug('ThreadList: target element never landed, falling back', {
         target,
