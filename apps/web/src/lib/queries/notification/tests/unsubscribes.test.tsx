@@ -1,6 +1,6 @@
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -42,6 +42,8 @@ const cached = () =>
   testQueryClient.getQueryData<UserUnsubscribe[]>(
     notificationKeys.unsubscribes.queryKey
   );
+
+const cachedIds = () => cached()?.map((entry) => entry.item_id).sort();
 
 const hasUnsubscribesQuery = () =>
   testQueryClient.getQueryState(notificationKeys.unsubscribes.queryKey) !=
@@ -123,6 +125,53 @@ describe('useMuteItemMutation', () => {
     expect(cached()).toBeUndefined();
     expect(hasUnsubscribesQuery()).toBe(false);
   });
+
+  it('keeps a sibling optimistic mute when one mute fails', async () => {
+    testQueryClient.setQueryData(notificationKeys.unsubscribes.queryKey, [
+      item('existing'),
+    ]);
+    const fail = deferred<ReturnType<typeof httpError>>();
+    const succeed = deferred<ReturnType<typeof ok>>();
+    unsubscribeItemMock.mockImplementation((arg: UserUnsubscribe) =>
+      arg.item_id === 'doc-1' ? fail.promise : succeed.promise
+    );
+    const mute = renderHook(() => useMuteItemMutation());
+    const failed = mute.mutateAsync(item('doc-1'));
+    const succeeded = mute.mutateAsync(item('doc-2'));
+
+    await vi.waitFor(() => {
+      expect(cachedIds()).toEqual(['doc-1', 'doc-2', 'existing']);
+    });
+
+    fail.resolve(httpError());
+    await expect(failed).rejects.toThrow();
+    expect(cachedIds()).toEqual(['doc-2', 'existing']);
+
+    succeed.resolve(ok({}));
+    await succeeded;
+    expect(cachedIds()).toEqual(['doc-2', 'existing']);
+  });
+
+  it('does not drop a sibling mute when a no-cache mute fails', async () => {
+    const fail = deferred<ReturnType<typeof httpError>>();
+    const hang = deferred<ReturnType<typeof ok>>();
+    unsubscribeItemMock.mockImplementation((arg: UserUnsubscribe) =>
+      arg.item_id === 'doc-1' ? fail.promise : hang.promise
+    );
+    const mute = renderHook(() => useMuteItemMutation());
+    const failed = mute.mutateAsync(item('doc-1'));
+    void mute.mutateAsync(item('doc-2'));
+
+    await vi.waitFor(() => {
+      expect(cachedIds()).toEqual(['doc-1', 'doc-2']);
+    });
+
+    fail.resolve(httpError());
+    await expect(failed).rejects.toThrow();
+
+    expect(cachedIds()).toEqual(['doc-2']);
+    expect(hasUnsubscribesQuery()).toBe(true);
+  });
 });
 
 describe('useUnmuteItemMutation', () => {
@@ -156,5 +205,32 @@ describe('useUnmuteItemMutation', () => {
 
     expect(cached()).toBeUndefined();
     expect(hasUnsubscribesQuery()).toBe(false);
+  });
+
+  it('keeps a sibling unmute when one unmute fails', async () => {
+    testQueryClient.setQueryData(notificationKeys.unsubscribes.queryKey, [
+      item('doc-1'),
+      item('doc-2'),
+    ]);
+    const fail = deferred<ReturnType<typeof httpError>>();
+    const succeed = deferred<ReturnType<typeof ok>>();
+    removeUnsubscribeItemMock.mockImplementation((arg: UserUnsubscribe) =>
+      arg.item_id === 'doc-1' ? fail.promise : succeed.promise
+    );
+    const unmute = renderHook(() => useUnmuteItemMutation());
+    const failed = unmute.mutateAsync(item('doc-1'));
+    const succeeded = unmute.mutateAsync(item('doc-2'));
+
+    await vi.waitFor(() => {
+      expect(cachedIds()).toEqual([]);
+    });
+
+    fail.resolve(httpError());
+    await expect(failed).rejects.toThrow();
+    expect(cachedIds()).toEqual(['doc-1']);
+
+    succeed.resolve(ok({}));
+    await succeeded;
+    expect(cachedIds()).toEqual(['doc-1']);
   });
 });
