@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        CreateDraftInput, CreatedDraft, EmailErr, Link, ParsedAddresses, ResolvedDraftInput,
-        SimpleMessageInfo, ThreadRow,
+        CreateDraftInput, CreatedDraft, DeletedUserDraft, EmailErr, Link, ParsedAddresses,
+        ResolvedDraftInput, SavedUserDraft, SimpleMessageInfo, ThreadRow,
     },
     ports::EmailRepo,
 };
@@ -34,6 +34,85 @@ where
             .await
     }
 
+    #[tracing::instrument(err, skip(self, input))]
+    pub(crate) async fn save_draft_for_user_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        link_id: Option<Uuid>,
+        input: CreateDraftInput,
+    ) -> Result<SavedUserDraft, EmailErr> {
+        let accessible_inboxes = self
+            .email_repo
+            .inboxes_for_macro_id(macro_id.clone())
+            .await
+            .map_err(anyhow::Error::from)?;
+        let link = resolve_target_link(&accessible_inboxes, link_id, &macro_id)?.clone();
+        let draft = self
+            .create_draft_impl(&link, &accessible_inboxes, input)
+            .await?;
+        Ok(SavedUserDraft { draft, link })
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    pub(crate) async fn delete_draft_for_user_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        draft_id: Uuid,
+    ) -> Result<DeletedUserDraft, EmailErr> {
+        let accessible_link_ids: Vec<Uuid> = self
+            .email_repo
+            .inboxes_for_macro_id(macro_id)
+            .await
+            .map_err(anyhow::Error::from)?
+            .iter()
+            .map(|link| link.id)
+            .collect();
+
+        // Advisory read: classifies the ID for error reporting. Enforcement
+        // is the guarded DELETE below, whose WHERE clause re-checks ownership
+        // and draft state, so a raced read can at worst turn the delete into
+        // a no-op — never remove a row the caller doesn't own.
+        let Some(msg) = self
+            .email_repo
+            .get_simple_message(draft_id, &accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+        else {
+            // Absent or someone else's (reported identically so the delete is
+            // no existence oracle): an idempotent no-op, so a delete queued
+            // offline lands cleanly even when it replays after the draft is
+            // already gone.
+            return Ok(DeletedUserDraft {
+                deleted: false,
+                thread_deleted: false,
+            });
+        };
+
+        if msg.is_sent || !msg.is_draft {
+            return Err(EmailErr::MessageAlreadySent(draft_id));
+        }
+
+        let deletion = self
+            .email_repo
+            .delete_draft_message(msg.db_id, msg.thread_db_id, &accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        // `None` means the guarded delete matched nothing: the draft was
+        // concurrently deleted or sent. The row is gone from the caller's
+        // perspective either way, so report the raced case as the no-op.
+        Ok(match deletion {
+            Some(deletion) => DeletedUserDraft {
+                deleted: true,
+                thread_deleted: deletion.thread_deleted,
+            },
+            None => DeletedUserDraft {
+                deleted: false,
+                thread_deleted: false,
+            },
+        })
+    }
+
     /// Shared pipeline for creating a draft or a sent message.
     ///
     /// Validates existing message / reply-to, decodes and sanitizes the HTML
@@ -56,6 +135,8 @@ where
 
         self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
             .await?;
+
+        let new_thread_id = self.validate_thread_hint(link_id, &mut input).await?;
 
         decode_and_sanitize_html_body(&mut input)?;
 
@@ -84,7 +165,8 @@ where
             .map_err(anyhow::Error::from)?;
 
         // Build new thread if one doesn't already exist
-        let (thread_db_id, new_thread) = self.build_new_thread_if_needed(link_id, &input);
+        let (thread_db_id, new_thread) =
+            self.build_new_thread_if_needed(link_id, &input, new_thread_id);
 
         // Resolve all IDs and build the insert-ready struct
         let message_db_id = input.db_id.unwrap_or_else(macro_uuid::generate_uuid_v7);
@@ -107,10 +189,17 @@ where
             actor_id: input.actor.as_ref().map(|actor| actor.as_ref().to_owned()),
         };
 
-        self.email_repo
+        let applied = self
+            .email_repo
             .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
             .await
             .map_err(anyhow::Error::from)?;
+        if !applied {
+            // The upsert's owner guard rejected the write: the ID exists under
+            // another inbox or stopped being an unsent draft since validation.
+            // Opaque not-found, matching the validation read's failure mode.
+            return Err(EmailErr::MessageNotFound(resolved.db_id));
+        }
 
         Ok(CreatedDraft {
             db_id: resolved.db_id,
@@ -206,12 +295,37 @@ where
             return Ok(());
         };
 
-        let msg = self
+        let Some(msg) = self
             .email_repo
             .get_simple_message(db_id, accessible_link_ids)
             .await
             .map_err(anyhow::Error::from)?
-            .ok_or(EmailErr::MessageNotFound(db_id))?;
+        else {
+            // The scoped lookup missed: either the ID is free — a
+            // client-generated draft ID, created below with that ID so offline
+            // saves replayed out of session stay idempotent — or it belongs to
+            // a message outside the caller's inboxes, reported as the same
+            // opaque not-found the scoped read always produced. The probe can
+            // be raced by a concurrent create; the upsert's owner guard is the
+            // enforcement either way.
+            if self
+                .email_repo
+                .message_exists(db_id)
+                .await
+                .map_err(anyhow::Error::from)?
+            {
+                return Err(EmailErr::MessageNotFound(db_id));
+            }
+            // For replies, client-supplied thread hints may be stale (or
+            // fabricated); creation derives linkage from the reply target
+            // instead. For compose drafts (no reply target) the thread ID is
+            // client-minted on purpose — validate_thread_hint owns it.
+            if input.replying_to_id.is_some() {
+                input.thread_db_id = None;
+                input.provider_thread_id = None;
+            }
+            return Ok(());
+        };
 
         if msg.is_sent || !msg.is_draft {
             return Err(EmailErr::MessageAlreadySent(db_id));
@@ -221,12 +335,16 @@ where
             // The sender was switched to a different inbox. A draft belongs to a
             // single inbox, so discard it (and its now-empty thread) and create a
             // fresh draft in the sending inbox; validate_replying_to re-derives
-            // the thread from the reply target.
+            // the thread from the reply target. The draft keeps its ID across
+            // the move: clients (and queued offline saves) keep referencing it,
+            // so an ID churn here would orphan their handle and let a follow-up
+            // save recreate the old ID as a duplicate. A raced delete (`None`)
+            // is fine — the row is gone either way, and a raced send is caught
+            // by the insert's owner guard.
             self.email_repo
-                .delete_draft_message(msg.db_id, msg.thread_db_id)
+                .delete_draft_message(msg.db_id, msg.thread_db_id, accessible_link_ids)
                 .await
                 .map_err(anyhow::Error::from)?;
-            input.db_id = None;
             input.provider_id = None;
             input.thread_db_id = None;
             input.provider_thread_id = None;
@@ -315,12 +433,49 @@ where
         Ok(())
     }
 
-    /// If the input already has a thread_db_id, return it with no new thread.
-    /// Otherwise, build a ThreadRow for creation inside the transaction.
+    /// Validate a client-supplied thread hint on the no-reply-target path.
+    /// Reply drafts never reach the decision: their linkage was already
+    /// re-derived from the reply target. Returns the thread ID to create
+    /// when the hint names a thread that does not exist yet — compose drafts
+    /// mint their thread ID client-side so saves queued offline replay as
+    /// idempotent upserts against one thread.
+    async fn validate_thread_hint(
+        &self,
+        link_id: Uuid,
+        input: &mut CreateDraftInput,
+    ) -> Result<Option<Uuid>, EmailErr> {
+        if input.replying_to_id.is_some() {
+            return Ok(None);
+        }
+        let Some(thread_db_id) = input.thread_db_id else {
+            return Ok(None);
+        };
+        let existing = self
+            .email_repo
+            .thread_by_id(thread_db_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        match resolve_thread_hint(existing.as_ref(), link_id, thread_db_id)? {
+            ThreadHintOutcome::Attach { provider_thread_id } => {
+                input.provider_thread_id = provider_thread_id;
+                Ok(None)
+            }
+            ThreadHintOutcome::CreateWithId(id) => {
+                input.thread_db_id = None;
+                input.provider_thread_id = None;
+                Ok(Some(id))
+            }
+        }
+    }
+
+    /// If the input already has a (validated) thread_db_id, return it with no
+    /// new thread. Otherwise, build a ThreadRow for creation inside the
+    /// transaction — with the client-requested ID when the save carried one.
     fn build_new_thread_if_needed(
         &self,
         link_id: Uuid,
         input: &CreateDraftInput,
+        requested_thread_id: Option<Uuid>,
     ) -> (Uuid, Option<ThreadRow>) {
         if let Some(id) = input.thread_db_id {
             return (id, None);
@@ -328,7 +483,7 @@ where
 
         let now = chrono::Utc::now();
         let thread = ThreadRow {
-            db_id: macro_uuid::generate_uuid_v7(),
+            db_id: requested_thread_id.unwrap_or_else(macro_uuid::generate_uuid_v7),
             provider_id: None,
             link_id,
             inbox_visible: false,
@@ -344,6 +499,55 @@ where
         let thread_db_id = thread.db_id;
         (thread_db_id, Some(thread))
     }
+}
+
+/// The decision for a compose draft's client-supplied thread hint.
+enum ThreadHintOutcome {
+    /// The thread exists in the sending inbox — attach, adopting its
+    /// provider thread ID.
+    Attach { provider_thread_id: Option<String> },
+    /// The ID is unclaimed — create the thread with it, so replayed offline
+    /// saves converge on one client-minted thread.
+    CreateWithId(Uuid),
+}
+
+/// Pure decision for a client-supplied thread hint: attach when the thread
+/// exists in the sending inbox, reject a thread owned elsewhere with the
+/// same opaque error an invalid thread has always produced, and create with
+/// the client ID when it is unclaimed. A create raced by another claimant is
+/// enforced by the thread insert's uniqueness, not this read.
+fn resolve_thread_hint(
+    existing: Option<&ThreadRow>,
+    link_id: Uuid,
+    hint: Uuid,
+) -> Result<ThreadHintOutcome, EmailErr> {
+    match existing {
+        Some(thread) if thread.link_id == link_id => Ok(ThreadHintOutcome::Attach {
+            provider_thread_id: thread.provider_id.clone(),
+        }),
+        Some(_) => Err(EmailErr::ThreadNotFound),
+        None => Ok(ThreadHintOutcome::CreateWithId(hint)),
+    }
+}
+
+/// Resolve the single inbox a draft save targets from the caller's accessible
+/// `links`. With an explicit `link_id`, the matching accessible link is used;
+/// without one, the caller's own `is_primary` link. The `macro_id` guard
+/// matters: the links list includes delegated inboxes, which are primary for
+/// *their* account. Mirrors the `X-Email-Link-Id` axum extractor's semantics
+/// for transports that carry the inbox by value instead of a header.
+fn resolve_target_link<'a>(
+    links: &'a [Link],
+    link_id: Option<Uuid>,
+    caller: &macro_user_id::user_id::MacroUserIdStr<'_>,
+) -> Result<&'a Link, EmailErr> {
+    match link_id {
+        Some(id) => links.iter().find(|link| link.id == id),
+        None => links
+            .iter()
+            .find(|link| link.is_primary && &link.macro_id == caller),
+    }
+    .ok_or(EmailErr::InboxNotFound)
 }
 
 /// Decodes the base64 `body_html` and sanitizes it against the shared email

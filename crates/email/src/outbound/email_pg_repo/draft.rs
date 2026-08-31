@@ -7,7 +7,9 @@ use uuid::Uuid;
 /// Insert a draft message within a transaction.
 /// Includes: thread insert (if new), message upsert, scheduled message, recipients,
 /// thread metadata update, and user history.
-/// Returns the thread DB ID.
+/// Returns `false` (rolling everything back) when the upsert's owner guard
+/// rejected the write — the message ID exists under another inbox or is no
+/// longer an unsent draft.
 #[tracing::instrument(skip(pool, input, contacts, new_thread), err)]
 pub(crate) async fn insert_message(
     pool: &PgPool,
@@ -16,7 +18,7 @@ pub(crate) async fn insert_message(
     link_id: Uuid,
     new_thread: Option<ThreadRow>,
     is_draft: bool,
-) -> Result<(), sqlx::Error> {
+) -> Result<bool, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
     let message_db_id = input.db_id;
@@ -26,7 +28,7 @@ pub(crate) async fn insert_message(
         thread::insert_thread(&mut tx, &thread, link_id).await?;
     }
 
-    upsert_draft(
+    let applied = upsert_draft(
         &mut tx,
         input,
         message_db_id,
@@ -36,6 +38,10 @@ pub(crate) async fn insert_message(
         is_draft,
     )
     .await?;
+    if !applied {
+        tx.rollback().await?;
+        return Ok(false);
+    }
 
     // Only touch scheduling if send_time is explicitly provided.
     // Scheduling is managed via the dedicated /drafts/scheduled endpoints.
@@ -57,10 +63,16 @@ pub(crate) async fn insert_message(
     thread::upsert_user_history(&mut tx, link_id, thread_db_id).await?;
 
     tx.commit().await?;
-    Ok(())
+    Ok(true)
 }
 
 /// Upsert a draft message row.
+///
+/// The conflict clause is owner-guarded: an existing row is only updated when
+/// it is an unsent draft in the sending inbox. Draft IDs can be
+/// client-generated, so without this a caller could name another inbox's
+/// message ID and overwrite it — validation reads race, this clause cannot.
+/// Returns `false` when the guard rejected the write.
 pub(crate) async fn upsert_draft(
     tx: &mut sqlx::PgConnection,
     input: &ResolvedDraftInput,
@@ -69,10 +81,10 @@ pub(crate) async fn upsert_draft(
     from_contact_id: Option<Uuid>,
     link_id: Uuid,
     is_draft: bool,
-) -> Result<(), sqlx::Error> {
+) -> Result<bool, sqlx::Error> {
     let now = Utc::now();
 
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"
         INSERT INTO email_messages (
             id, provider_id, link_id, thread_id, provider_thread_id,
@@ -100,6 +112,9 @@ pub(crate) async fn upsert_draft(
             body_macro = EXCLUDED.body_macro,
             headers_jsonb = EXCLUDED.headers_jsonb,
             updated_at = NOW()
+        WHERE email_messages.link_id = EXCLUDED.link_id
+            AND email_messages.is_draft
+            AND NOT email_messages.is_sent
         "#,
         message_db_id,
         input.provider_id,
@@ -125,5 +140,5 @@ pub(crate) async fn upsert_draft(
     .execute(&mut *tx)
     .await?;
 
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }

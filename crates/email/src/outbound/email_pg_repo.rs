@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
-        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, EmailErr,
-        EmailFilter, EmailInboxDetails, EmailThreadMetadata, EmailThreadPreview, Label, Link,
-        LinkLabel, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
+        Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, DraftDeletion,
+        EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata, EmailThreadPreview, Label,
+        Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
         PreviewCursorQuery, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, ThreadRow,
         UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
@@ -241,6 +241,10 @@ impl EmailRepo for EmailPgRepo {
         message::get_simple_message(&self.pool, message_id, link_ids).await
     }
 
+    async fn message_exists(&self, message_id: Uuid) -> Result<bool, Self::Err> {
+        message::message_exists(&self.pool, message_id).await
+    }
+
     async fn get_draft_replying_to(
         &self,
         link_id: Uuid,
@@ -253,8 +257,9 @@ impl EmailRepo for EmailPgRepo {
         &self,
         message_id: Uuid,
         thread_db_id: Uuid,
-    ) -> Result<(), Self::Err> {
-        message::delete_draft_message(&self.pool, message_id, thread_db_id).await
+        link_ids: &[Uuid],
+    ) -> Result<Option<DraftDeletion>, Self::Err> {
+        message::delete_draft_message(&self.pool, message_id, thread_db_id, link_ids).await
     }
 
     async fn upsert_contacts(
@@ -272,7 +277,7 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<bool, Self::Err> {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 

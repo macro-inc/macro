@@ -181,7 +181,14 @@ async fn test_delete_draft_message_keeps_nonempty_thread(
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
-    repo.delete_draft_message(draft_id, thread_id).await?;
+    let deletion = repo
+        .delete_draft_message(draft_id, thread_id, &[link_id])
+        .await?
+        .expect("the draft should be deleted");
+    assert!(
+        !deletion.thread_deleted,
+        "a thread that still has messages should not be reported deleted"
+    );
 
     assert!(
         repo.get_simple_message(draft_id, &[link_id])
@@ -208,8 +215,16 @@ async fn test_delete_draft_message_removes_empty_thread(
 
     let draft_id = Uuid::parse_str("ee000004-0000-0000-0000-000000000004")?;
     let thread_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
-    repo.delete_draft_message(draft_id, thread_id).await?;
+    let deletion = repo
+        .delete_draft_message(draft_id, thread_id, &[link_id])
+        .await?
+        .expect("the draft should be deleted");
+    assert!(
+        deletion.thread_deleted,
+        "emptying the thread should be reported"
+    );
 
     assert!(
         repo.thread_by_id(thread_id).await?.is_none(),
@@ -231,14 +246,56 @@ async fn test_delete_draft_message_rejects_sent_message(
     // ee000003 is a sent message, not a draft; deleting it must not succeed.
     let sent_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     assert!(
-        repo.delete_draft_message(sent_id, thread_id).await.is_err(),
-        "deleting a non-draft should error and leave it intact"
+        repo.delete_draft_message(sent_id, thread_id, &[link_id])
+            .await?
+            .is_none(),
+        "deleting a non-draft should match nothing and leave it intact"
+    );
+    assert!(
+        repo.get_simple_message(sent_id, &[link_id])
+            .await?
+            .is_some(),
+        "the sent message must survive"
     );
     assert!(
         repo.thread_by_id(thread_id).await?.is_some(),
         "the thread of a non-draft must be untouched"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_delete_draft_message_rejects_foreign_link_scope(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    // The draft exists, but the caller's link scope doesn't include its
+    // inbox: the WHERE-clause guard must match nothing and leave the row —
+    // this is the enforcement a raced validation read falls back on.
+    let draft_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let owner_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let foreign_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+
+    assert!(
+        repo.delete_draft_message(draft_id, thread_id, &[foreign_link])
+            .await?
+            .is_none(),
+        "a delete outside the caller's inboxes must match nothing"
+    );
+    assert!(
+        repo.get_simple_message(draft_id, &[owner_link])
+            .await?
+            .is_some(),
+        "the draft must survive a foreign-scoped delete"
     );
 
     Ok(())
@@ -861,6 +918,157 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
         !row.get::<bool, _>("is_draft"),
         "Message should have is_draft = false"
     );
+
+    Ok(())
+}
+
+// ── message_exists / owner-guarded upsert ───────────────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_message_exists_probe(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let known = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    assert!(repo.message_exists(known).await?);
+
+    let unknown = Uuid::parse_str("dd0000ff-0000-0000-0000-0000000000ff")?;
+    assert!(!repo.message_exists(unknown).await?);
+
+    Ok(())
+}
+
+fn attack_input(db_id: Uuid, thread_db_id: Uuid) -> ResolvedDraftInput {
+    ResolvedDraftInput {
+        db_id,
+        provider_id: None,
+        replying_to_id: None,
+        provider_thread_id: None,
+        thread_db_id,
+        subject: "Overwritten".to_string(),
+        to: vec![],
+        cc: vec![],
+        bcc: vec![],
+        body_text: Some("attacker content".to_string()),
+        body_html: Some("<p>attacker content</p>".to_string()),
+        body_macro: None,
+        headers_json: None,
+        send_time: None,
+        actor_id: None,
+    }
+}
+
+async fn message_snapshot(
+    pool: &Pool<Postgres>,
+    id: Uuid,
+) -> anyhow::Result<(Uuid, Option<String>, Option<String>, bool, bool)> {
+    let row = sqlx::query(
+        "SELECT link_id, subject, body_text, is_sent, is_draft FROM email_messages WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+    Ok((
+        row.get::<Uuid, _>("link_id"),
+        row.get::<Option<String>, _>("subject"),
+        row.get::<Option<String>, _>("body_text"),
+        row.get::<bool, _>("is_sent"),
+        row.get::<bool, _>("is_draft"),
+    ))
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_upsert_guard_rejects_cross_inbox_overwrite(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    // A draft owned by the cccc inbox; the write is issued from aaaa. Draft
+    // IDs are client-generated, so a caller can name any UUID — the conflict
+    // clause, not the validation read, is what must hold the line.
+    let victim = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
+    let attacker_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let attacker_thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+
+    let before = message_snapshot(&pool, victim).await?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let applied = repo
+        .insert_message(
+            &attack_input(victim, attacker_thread),
+            &contacts,
+            attacker_link,
+            None,
+            true,
+        )
+        .await?;
+
+    assert!(!applied, "owner guard must reject a cross-inbox overwrite");
+    let after = message_snapshot(&pool, victim).await?;
+    assert_eq!(before, after, "victim row must be untouched");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_upsert_guard_rejects_sent_message_overwrite(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    // Same inbox, but the row is a sent message — no draft save may rewrite it.
+    let victim = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+
+    let before = message_snapshot(&pool, victim).await?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let applied = repo
+        .insert_message(&attack_input(victim, thread), &contacts, link, None, true)
+        .await?;
+
+    assert!(!applied, "owner guard must reject rewriting a sent message");
+    let after = message_snapshot(&pool, victim).await?;
+    assert_eq!(before, after, "sent message must be untouched");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let fresh_id = Uuid::parse_str("dd000002-0000-0000-0000-000000000002")?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let applied = repo
+        .insert_message(&attack_input(fresh_id, thread), &contacts, link, None, true)
+        .await?;
+
+    assert!(applied, "a fresh client-generated id inserts normally");
 
     Ok(())
 }

@@ -4,6 +4,7 @@ use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use super::contact::{ContactInfo, RecipientType};
+use super::link::Link;
 
 /// Input for creating a draft message. Mirrors the fields from `MessageToSend`.
 #[derive(Debug, Clone)]
@@ -102,6 +103,35 @@ pub struct SimpleMessageInfo {
     pub is_sent: bool,
     /// Whether the message is a draft.
     pub is_draft: bool,
+}
+
+/// A draft saved on behalf of a user, paired with the sending inbox the save
+/// resolved into — transports that build a message representation of the
+/// draft (the GraphQL payload) need the inbox's address for the sender.
+#[derive(Clone)]
+pub struct SavedUserDraft {
+    /// The created or updated draft.
+    pub draft: CreatedDraft,
+    /// The inbox the draft was saved into.
+    pub link: Link,
+}
+
+/// The rows removed by one guarded draft delete.
+#[derive(Debug, Clone, Copy)]
+pub struct DraftDeletion {
+    /// Whether deleting the draft emptied its thread and removed it too.
+    pub thread_deleted: bool,
+}
+
+/// Outcome of a user-scoped draft deletion. Deletes are idempotent: a replay
+/// after the row is already gone reports `deleted: false` instead of failing,
+/// so a queued offline delete lands cleanly no matter how late it arrives.
+#[derive(Debug, Clone, Copy)]
+pub struct DeletedUserDraft {
+    /// Whether a draft row was actually deleted.
+    pub deleted: bool,
+    /// Whether the delete emptied the draft's thread and removed it too.
+    pub thread_deleted: bool,
 }
 
 /// The result of creating a draft.

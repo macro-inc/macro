@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        AttachmentDraft, AttachmentForwarded, ContactInfo, MessageAttachment, MessageLabel,
-        RecipientType, SimpleMessageInfo, UpsertedContacts,
+        AttachmentDraft, AttachmentForwarded, ContactInfo, DraftDeletion, MessageAttachment,
+        MessageLabel, RecipientType, SimpleMessageInfo, UpsertedContacts,
     },
     ports::RecipientsByMessageId,
 };
@@ -303,6 +303,18 @@ pub(crate) async fn get_simple_message(
     Ok(row.map(SimpleMessageInfo::from))
 }
 
+/// Whether any message row exists with this ID, in any inbox.
+pub(crate) async fn message_exists(pool: &PgPool, message_id: Uuid) -> Result<bool, sqlx::Error> {
+    let row = sqlx::query_scalar!(
+        r#"SELECT EXISTS(SELECT 1 FROM email_messages WHERE id = $1) AS "exists!""#,
+        message_id,
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(row)
+}
+
 /// Find an existing draft that replies to the given message, identified by
 /// the "Macro-In-Reply-To" header value.
 #[tracing::instrument(skip(pool), err)]
@@ -343,31 +355,39 @@ pub(crate) async fn get_draft_replying_to(
 }
 
 /// Delete an unsent draft in the given thread (dependent rows cascade) and, if
-/// the thread is left empty, delete the thread too. Errors if no matching unsent
-/// draft exists in that thread, so sent mail or a mismatched thread is never
-/// touched.
-#[tracing::instrument(skip(pool), err)]
+/// the thread is left empty, delete the thread too. The WHERE clause is the
+/// ownership enforcement: the row must belong to one of `link_ids`, so sent
+/// mail, a mismatched thread, or someone else's row is never touched even
+/// when the caller's validation read was raced. No matching row is `None`,
+/// not an error — deletes are idempotent.
+#[tracing::instrument(skip(pool, link_ids), err)]
 pub(crate) async fn delete_draft_message(
     pool: &PgPool,
     message_id: Uuid,
     thread_db_id: Uuid,
-) -> Result<(), sqlx::Error> {
+    link_ids: &[Uuid],
+) -> Result<Option<DraftDeletion>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
     let deleted_link_id = sqlx::query_scalar!(
         r#"
         DELETE FROM email_messages
-        WHERE id = $1 AND thread_id = $2 AND is_draft = true AND is_sent = false
+        WHERE id = $1
+            AND thread_id = $2
+            AND link_id = ANY($3)
+            AND is_draft = true
+            AND is_sent = false
         RETURNING link_id
         "#,
         message_id,
         thread_db_id,
+        link_ids,
     )
     .fetch_optional(&mut *tx)
     .await?;
 
     let Some(link_id) = deleted_link_id else {
-        return Err(sqlx::Error::RowNotFound);
+        return Ok(None);
     };
 
     let messages_remain = sqlx::query_scalar!(
@@ -390,7 +410,9 @@ pub(crate) async fn delete_draft_message(
     }
 
     tx.commit().await?;
-    Ok(())
+    Ok(Some(DraftDeletion {
+        thread_deleted: !messages_remain,
+    }))
 }
 
 /// Upsert or delete a scheduled message based on send_time.

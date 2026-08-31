@@ -119,6 +119,21 @@ type CompleteMutationRoot {
 	Add or remove one label from an accessible email thread and return its authoritative cache record.
 	"""
 	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
+	"""
+	Create or update an email draft and return its thread's authoritative
+	cache record. The upsert is keyed by the client-generated draft ID, so
+	a save replayed from the offline mutation queue converges instead of
+	duplicating.
+	"""
+	saveEmailDraft(input: SaveEmailDraftInput!): SaveEmailDraftPayload!
+	"""
+	Delete an email draft. Idempotent: deleting an ID that is already
+	gone succeeds with `deleted: false`, so a delete replayed from the
+	offline mutation queue lands cleanly however late it arrives.
+	Deleting a draft that has since been sent fails with
+	`DRAFT_ALREADY_SENT`.
+	"""
+	deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!
 }
 
 """
@@ -133,6 +148,39 @@ type CompleteSubscriptionRoot {
 	Subscribe to realtime notifications for the authenticated user.
 	"""
 	notificationUpdates: GraphqlNotificationPatch!
+}
+
+"""
+Input for deleting an email draft.
+"""
+input DeleteEmailDraftInput {
+	"""
+	Draft to delete. An ID that is already gone (or was never created —
+	a discard can replay before its draft's first save ever committed)
+	deletes nothing and still succeeds, so a delete queued offline lands
+	cleanly however late it replays.
+	"""
+	draftId: ID!
+}
+
+"""
+Result of deleting an email draft.
+"""
+type DeleteEmailDraftPayload {
+	"""
+	The requested draft ID, echoed for client cache bookkeeping.
+	"""
+	draftId: ID!
+	"""
+	Whether a draft row was actually deleted. `false` means the ID was
+	already gone and the delete was an idempotent no-op.
+	"""
+	deleted: Boolean!
+	"""
+	Whether deleting the draft emptied its thread and removed the thread
+	too (a discarded compose draft that never gained other messages).
+	"""
+	threadDeleted: Boolean!
 }
 
 """
@@ -5466,6 +5514,120 @@ input RenameEntityInput {
 	New user-visible display name.
 	"""
 	displayName: String!
+}
+
+"""
+One recipient of an email draft.
+"""
+input SaveEmailDraftContactInput {
+	"""
+	Recipient email address.
+	"""
+	email: String!
+	"""
+	Recipient display name, when known.
+	"""
+	name: String
+	"""
+	Recipient photo URL, when known.
+	"""
+	photoUrl: String
+}
+
+"""
+Input for creating or updating an email draft.
+
+The draft ID is client-generated so a save queued offline stays an
+idempotent upsert when it replays later — possibly after an app restart,
+possibly more than once. Thread identifiers are hints: the server derives
+authoritative thread linkage from the reply target or the existing draft.
+"""
+input SaveEmailDraftInput {
+	"""
+	Client-generated draft ID; the upsert key for this draft's lifetime.
+	"""
+	draftId: ID!
+	"""
+	Sending inbox. Absent means the caller's primary inbox. Carried as a
+	variable (not a header) so queued offline saves replay with it.
+	"""
+	linkId: ID
+	"""
+	Message this draft replies to, when it is a reply.
+	"""
+	replyingToId: ID
+	"""
+	Provider-assigned draft ID, when the draft already exists upstream.
+	"""
+	providerId: String
+	"""
+	Provider-assigned thread ID hint.
+	"""
+	providerThreadId: String
+	"""
+	Thread ID. For replies this is a hint the server may override. For
+	compose drafts (no reply target) it is client-generated: an unclaimed
+	ID creates the thread with it, so saves queued offline replay as
+	idempotent upserts against one thread; an ID owned by another inbox
+	is rejected.
+	"""
+	threadDbId: ID
+	"""
+	Draft subject line.
+	"""
+	subject: String!
+	"""
+	To recipients.
+	"""
+	to: [SaveEmailDraftContactInput!]
+	"""
+	Cc recipients.
+	"""
+	cc: [SaveEmailDraftContactInput!]
+	"""
+	Bcc recipients.
+	"""
+	bcc: [SaveEmailDraftContactInput!]
+	"""
+	Plain text body.
+	"""
+	bodyText: String
+	"""
+	HTML body, base64 URL-safe (no padding) encoded; the server decodes
+	and sanitizes it before storing.
+	"""
+	bodyHtml: String
+	"""
+	Macro body.
+	"""
+	bodyMacro: String
+	"""
+	Scheduled send time (RFC 3339), when the draft is scheduled.
+	"""
+	sendTime: String
+}
+
+"""
+Result of creating or updating an email draft.
+"""
+type SaveEmailDraftPayload {
+	"""
+	Server-confirmed draft ID. Matches the input's client-generated ID
+	unless the save converged onto an existing draft for the same reply
+	target.
+	"""
+	draftId: ID!
+	"""
+	The saved draft as a full message record — selected with the thread
+	page's message fragment so the client cache can hold the draft as a
+	complete entity (its optimistic layer must satisfy every field the
+	thread page reads, or the whole page read misses).
+	"""
+	draft: GraphqlSoupEmailMessage!
+	"""
+	The draft's thread, reloaded as its authoritative cache record.
+	"""
+	thread: GraphqlSoupEmailThread!
 }
 
 """

@@ -63,6 +63,12 @@ import {
   useDeleteDraftMutation,
   useSaveDraftMutation,
 } from '@queries/email/draft';
+import {
+  cancelPendingDraftSave,
+  onDraftSaveSettlement,
+  submitDraftDelete,
+  submitDraftSave,
+} from '@queries/email/draft-save-coalescer';
 import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
@@ -75,7 +81,7 @@ import {
   useSendMessageMutation,
   useUnscheduleMessageMutation,
 } from '@queries/email/thread';
-import { refetchSoupEntity } from '@queries/soup/cache';
+import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import type { UndoHandle } from '@queries/undo';
 import { emailClient } from '@service-email/client';
 import type {
@@ -83,6 +89,11 @@ import type {
   ApiDraftOutputDbId,
   ApiMessage,
 } from '@service-email/generated/schemas';
+import {
+  draftContactInput,
+  type SaveEmailDraftFailureCode,
+} from '@service-storage/graphql-email-draft';
+import { graphqlCacheEnabled } from '@service-storage/graphql-soup';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
 import { $addUpdateTag, $getRoot } from 'lexical';
@@ -102,6 +113,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
@@ -750,6 +762,12 @@ export function BaseInput(props: {
   let draftSaveTimer: number | undefined;
   let pendingDeletion = false;
   let pendingSend = false;
+  // Mirrors the coalescer's per-draft latch: the content stays in the
+  // editor, but a save that the server rejected must never redispatch on its
+  // own — through the durable queue it would block every other queued
+  // mutation. This copy only spares the debounce loop a round trip through
+  // the coalescer; the latch that survives unmount lives with the draft id.
+  let autosaveDisabled = false;
   const DRAFT_DEBOUNCE_MS = 500;
 
   function collectDraft() {
@@ -782,20 +800,39 @@ export function BaseInput(props: {
     };
   }
 
-  async function executeSaveDraft(skipSoupRefetch = false) {
-    if (sendMutation.isPending || pendingDeletion || pendingSend) {
+  async function executeSaveDraft(
+    skipSoupRefetch = false,
+    saveOptions: { forceDispatch?: boolean } = {}
+  ) {
+    if (
+      sendMutation.isPending ||
+      pendingDeletion ||
+      pendingSend ||
+      autosaveDisabled
+    ) {
       return;
     }
     const draftToSave = collectDraft();
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteDraftMutation.mutateAsync({
-          draftId,
-          threadId: ctx.thread()?.db_id,
-          linkId: headerLinkId(),
-          skipSoupRefetch,
-        });
+        cancelPendingDraftSave(draftId);
+        const threadDbId = ctx.thread()?.db_id;
+        if (graphqlCacheEnabled() && threadDbId) {
+          const deleted = await executeQueuedGraphqlDelete(
+            draftId,
+            threadDbId,
+            skipSoupRefetch
+          );
+          if (!deleted) return;
+        } else {
+          await deleteDraftMutation.mutateAsync({
+            draftId,
+            threadId: ctx.thread()?.db_id,
+            linkId: headerLinkId(),
+            skipSoupRefetch,
+          });
+        }
         refetchThreadMessages();
       }
       setSavedDraftId(undefined);
@@ -818,6 +855,28 @@ export function BaseInput(props: {
       return;
     }
 
+    // Reply drafts go through the durable GraphQL queue: offline saves
+    // persist locally and replay on reconnect as idempotent upserts keyed by
+    // the client-generated draft id. (Compose has its own queued path, in
+    // Compose.tsx.) Drafts with no reply target, and any session whose cache
+    // fell back to the uncached client — which has no queue — stay on REST;
+    // both transports accept the same draft id, so a mid-session transport
+    // flip still converges on one server draft.
+    if (
+      graphqlCacheEnabled() &&
+      !newMessage &&
+      currentThread?.db_id &&
+      draftToSave.replying_to_id
+    ) {
+      return await executeQueuedGraphqlSave(
+        draftToSave,
+        currentThread.db_id,
+        currentThread.provider_id ?? undefined,
+        skipSoupRefetch,
+        saveOptions.forceDispatch === true
+      );
+    }
+
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
         ...draftToSave,
@@ -831,55 +890,209 @@ export function BaseInput(props: {
 
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
-      // If the email draft saved successfully, we want to upload the
-      // attachments as well. We should grab only the attachments that
-      // haven't been uploaded yet
-      const attachments = form()
-        .attachments.list()
-        .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
-        DraftFormAttachment,
-        { type: 'local' }
-      >[];
-
-      if (attachments.length) {
-        const uploaded = await uploadAttachmentMutation.mutateAsync({
-          draftID: draftId,
-          attachments: attachments.map((a) => a.file),
-          linkId: headerLinkId(),
-        });
-
-        // Assign the attachment ids to attachments for later use
-        for (const attachment of uploaded.attachments) {
-          form().attachments.assignAttachmentID(
-            attachment.file,
-            attachment.attachmentID
-          );
-        }
-      }
-
-      // Sync forwarded attachments
-      const forwardedAttachments = form()
-        .attachments.list()
-        .filter((a) => a.type === 'forwarded') as Extract<
-        DraftFormAttachment,
-        { type: 'forwarded' }
-      >[];
-
-      if (forwardedAttachments.length) {
-        await addForwardedAttachmentsMutation.mutateAsync({
-          draftID: draftId,
-          attachments: forwardedAttachments.map((a) => ({
-            attachmentID: a.attachmentID,
-          })),
-          linkId: headerLinkId(),
-        });
-      }
-
+      await uploadPendingAttachments(draftId);
       setSavedDraftId(draftId);
       refetchThreadMessages();
       return draftId;
     }
   }
+
+  async function executeQueuedGraphqlSave(
+    draftToSave: NonNullable<ReturnType<typeof collectDraft>>,
+    threadDbId: string,
+    providerThreadId: string | undefined,
+    skipSoupRefetch: boolean,
+    force: boolean
+  ) {
+    // Identity is local-first: minted before the first dispatch and never
+    // learned from a response, so every queued save for this composer
+    // session upserts one server row — even when the responses arrive after
+    // an app restart with no caller alive.
+    const draftId = savedDraftId() ?? crypto.randomUUID();
+    setSavedDraftId(draftId);
+
+    const outcome = await submitDraftSave(
+      {
+        draftId,
+        threadDbId,
+        linkId: headerLinkId(),
+        replyingToId: draftToSave.replying_to_id,
+        providerId: draftToSave.provider_id,
+        providerThreadId,
+        subject: draftToSave.subject,
+        to: draftToSave.to.map(draftContactInput),
+        cc: draftToSave.cc.map(draftContactInput),
+        bcc: draftToSave.bcc.map(draftContactInput),
+        bodyHtml: draftToSave.body_html,
+        // Client-only: feed the optimistic draft entity so the thread shows
+        // this save while it is still queued. Responses carry
+        // bodyHtmlSanitized unencoded, so decode the prepared base64 body.
+        senderLinkId: activeLinkId() ?? ctx.thread()?.link_id ?? '',
+        senderEmail: activeInboxEmail() ?? '',
+        optimisticBodyHtml: draftToSave.body_html
+          ? decodeBase64Utf8(draftToSave.body_html)
+          : null,
+      },
+      { force }
+    );
+
+    if (outcome.kind === 'buffered' || outcome.kind === 'queued') {
+      // Durably accepted locally. Attachments and cache refetches wait for a
+      // committed save — offline neither could succeed anyway, and the
+      // queue's persisted revalidation reconciles the thread on commit.
+      return draftId;
+    }
+    if (outcome.kind === 'latched') {
+      // The coalescer refused: an earlier save for this draft already failed
+      // permanently. The settlement observer below owns the user-facing
+      // message, so only mirror the latch — the debounce loop stops here.
+      autosaveDisabled = true;
+      return;
+    }
+    if (outcome.kind === 'failed') {
+      handleQueuedSaveFailure(outcome.code);
+      return;
+    }
+
+    // The server may converge the save onto an existing draft for the same
+    // reply target (another device created one first) — adopt its id.
+    if (outcome.draftId !== draftId) setSavedDraftId(outcome.draftId);
+    await uploadPendingAttachments(outcome.draftId);
+    // Keep the REST-facade caches honest during the transport rollout,
+    // matching useSaveDraftMutation's onSuccess effects.
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    if (!skipSoupRefetch) refetchSoupEntity(threadDbId, 'emailThread');
+    queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(threadDbId).queryKey,
+    });
+    refetchThreadMessages();
+    return outcome.draftId;
+  }
+
+  function handleQueuedSaveFailure(code: SaveEmailDraftFailureCode) {
+    if (code === 'DRAFT_ALREADY_SENT') {
+      // Sent from another device: the server outcome supersedes the local
+      // draft. Drop it and show the thread's real state.
+      toast.alert('This reply was already sent');
+      clearDraftState();
+      ctx.query.refetch();
+      return;
+    }
+    // Permanent failure: keep the user's content in the editor, but never
+    // auto-re-dispatch — a failing save replayed forever would block every
+    // queued mutation in the app behind it.
+    autosaveDisabled = true;
+    console.error('Failed to save draft', code);
+    toast.failure('Failed to save draft');
+  }
+
+  /**
+   * Discard the draft through the durable queue. Returns whether the caller
+   * may proceed with its local reset — a queued delete counts as success
+   * (the optimistic removal already hides the draft, and the replay is
+   * idempotent however late it lands).
+   */
+  async function executeQueuedGraphqlDelete(
+    draftId: string,
+    threadDbId: string,
+    skipSoupRefetch: boolean
+  ): Promise<boolean> {
+    const outcome = await submitDraftDelete({ draftId, threadDbId });
+    if (outcome.kind === 'queued') {
+      // Refetches wait for reconnect, where the persisted revalidation
+      // reconciles the thread.
+      return true;
+    }
+    if (outcome.kind === 'failed') {
+      if (outcome.code === 'DRAFT_ALREADY_SENT') {
+        // Sent from another device: it is no longer a draft to discard.
+        toast.alert('This reply was already sent');
+        clearDraftState();
+        ctx.query.refetch();
+        return false;
+      }
+      console.error('Failed to delete draft', outcome.code);
+      toast.failure('Failed to delete draft');
+      return false;
+    }
+    // Keep the REST-facade caches honest during the transport rollout,
+    // matching useDeleteDraftMutation's onSuccess effects.
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    if (!skipSoupRefetch) {
+      refetchSoupEntity(threadDbId, 'emailThread');
+      invalidateAllSoup();
+    }
+    return true;
+  }
+
+  async function uploadPendingAttachments(draftId: string) {
+    // Grab only the attachments that haven't been uploaded yet.
+    const attachments = form()
+      .attachments.list()
+      .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
+      DraftFormAttachment,
+      { type: 'local' }
+    >[];
+
+    if (attachments.length) {
+      const uploaded = await uploadAttachmentMutation.mutateAsync({
+        draftID: draftId,
+        attachments: attachments.map((a) => a.file),
+        linkId: headerLinkId(),
+      });
+
+      // Assign the attachment ids to attachments for later use
+      for (const attachment of uploaded.attachments) {
+        form().attachments.assignAttachmentID(
+          attachment.file,
+          attachment.attachmentID
+        );
+      }
+    }
+
+    // Sync forwarded attachments
+    const forwardedAttachments = form()
+      .attachments.list()
+      .filter((a) => a.type === 'forwarded') as Extract<
+      DraftFormAttachment,
+      { type: 'forwarded' }
+    >[];
+
+    if (forwardedAttachments.length) {
+      await addForwardedAttachmentsMutation.mutateAsync({
+        draftID: draftId,
+        attachments: forwardedAttachments.map((a) => ({
+          attachmentID: a.attachmentID,
+        })),
+        linkId: headerLinkId(),
+      });
+    }
+  }
+
+  // A queued save settles long after its promise resolved, possibly while
+  // this composer still edits the draft — and possibly while no composer is
+  // mounted at all, in which case the coalescer replays the failure to this
+  // subscription on mount. Commits are handled inside the coalescer (it
+  // dispatches any buffered newer content); only permanent failures need the
+  // composer: keep the content, stop autosaving, tell the user. The
+  // settlement channel carries only the resolver's message, not the
+  // machine-readable code, so deferred failures get the generic path.
+  createEffect(() => {
+    const draftId = savedDraftId();
+    if (!draftId) return;
+    onCleanup(
+      onDraftSaveSettlement(draftId, (settlement) => {
+        if (settlement.status !== 'failed') return;
+        autosaveDisabled = true;
+        Telemetry.error(
+          new Error(
+            `Queued draft save permanently failed: ${settlement.message}`
+          )
+        );
+        toast.failure('Failed to save draft');
+      })
+    );
+  });
 
   // The reply target the pending debounced save was scheduled against.
   // Captured at schedule time — a live interactive context — because the
@@ -919,8 +1132,10 @@ export function BaseInput(props: {
         ) {
           // The mutation's own onError reports the failure (toast + console);
           // this catch only keeps the post-disposal rejection from surfacing
-          // as unhandled.
-          executeSaveDraft().catch(() => {});
+          // as unhandled. Unmount is a lifecycle edge: force-dispatch past
+          // the coalescer's one-unsettled-save hold so the durable queue
+          // carries the final content.
+          executeSaveDraft(false, { forceDispatch: true }).catch(() => {});
         }
       } catch {
         // Props already disposed; the next mount's autosave persists it.
@@ -935,7 +1150,9 @@ export function BaseInput(props: {
     props.onEngaged?.();
     form().setSelectedFromLink(linkId);
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
-    void executeSaveDraft();
+    // A sender switch is a lifecycle edge: the draft must move inboxes now,
+    // not after an unsettled earlier save happens to settle.
+    void executeSaveDraft(false, { forceDispatch: true });
   };
 
   // After a send, the bottom input stays mounted and its replyingTo flips to
@@ -1134,6 +1351,13 @@ export function BaseInput(props: {
     // Ensure draft is saved before sending so undo-send always has a draft to restore
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     await executeSaveDraft(willMarkDone);
+    // A buffered stale save must not replay over the sent message — the
+    // send flips is_sent, and the queue-side owner guard would reject the
+    // replay anyway, but dropping it here keeps the queue clean.
+    {
+      const currentDraftId = savedDraftId();
+      if (currentDraftId) cancelPendingDraftSave(currentDraftId);
+    }
 
     // Snapshot editor state before watermark so undo-send can restore it.
     // Stored in undoSendSnapshot (not undoReplySnapshot) so it persists across
@@ -1261,13 +1485,25 @@ export function BaseInput(props: {
     pendingDeletion = true;
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     const draftId = savedDraftId();
+    // A buffered save replaying after the discard would resurrect the draft.
+    if (draftId) cancelPendingDraftSave(draftId);
     try {
       if (draftId) {
-        await deleteDraftMutation.mutateAsync({
-          draftId,
-          threadId: ctx.thread()?.db_id,
-          linkId: headerLinkId(),
-        });
+        const threadDbId = ctx.thread()?.db_id;
+        if (graphqlCacheEnabled() && threadDbId) {
+          const deleted = await executeQueuedGraphqlDelete(
+            draftId,
+            threadDbId,
+            false
+          );
+          if (!deleted) return;
+        } else {
+          await deleteDraftMutation.mutateAsync({
+            draftId,
+            threadId: ctx.thread()?.db_id,
+            linkId: headerLinkId(),
+          });
+        }
         refetchThreadMessages();
       }
       resetState();

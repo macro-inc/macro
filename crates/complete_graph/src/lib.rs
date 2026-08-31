@@ -27,13 +27,14 @@ pub use graphql_channel::{
 };
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
-    EmailContentKey, EmailContentLoad, EmailContentLoader, EmailMutationService,
-    EmailServiceEmailContentReader, EmailThreadMetadataLoad, EmailThreadMetadataLoader,
-    GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings, GraphqlEmailMutation,
-    GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus, MarkEmailThreadSeenInput,
-    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
-    SoupEmailThreadMetadataEdgeReader, UpdateEmailThreadLabelInput, email_content_loader,
-    email_thread_metadata_loader,
+    DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailContentKey, EmailContentLoad,
+    EmailContentLoader, EmailMutationService, EmailServiceEmailContentReader,
+    EmailThreadMetadataLoad, EmailThreadMetadataLoader, GraphqlEmailLabel, GraphqlEmailLink,
+    GraphqlEmailLinkSettings, GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery,
+    GraphqlEmailSyncStatus, MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader,
+    SaveEmailDraftContactInput, SaveEmailDraftInput, SaveEmailDraftPayload,
+    SoupEmailContentEdgeReader, SoupEmailEdgeReader, SoupEmailThreadMetadataEdgeReader,
+    UpdateEmailThreadLabelInput, email_content_loader, email_thread_metadata_loader,
 };
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,

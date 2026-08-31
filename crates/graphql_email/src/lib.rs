@@ -15,8 +15,10 @@ pub use loaders::{
     SoupEmailThreadMetadataEdgeReader, email_content_loader, email_thread_metadata_loader,
 };
 pub use mutation::{
-    EmailMutationService, EmailThreadMutationLoadFuture, EmailThreadMutationOutput,
-    GraphqlEmailMutation, MarkEmailThreadSeenInput, UpdateEmailThreadLabelInput,
+    DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailMutationService,
+    EmailThreadMutationLoadFuture, EmailThreadMutationOutput, GraphqlEmailMutation,
+    MarkEmailThreadSeenInput, SaveEmailDraftContactInput, SaveEmailDraftInput,
+    SaveEmailDraftPayload, UpdateEmailThreadLabelInput,
 };
 pub use objects::{
     GraphqlSoupEmailMessage, email_message_selection_requires_full_payload, load_email_messages,
