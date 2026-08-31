@@ -41,7 +41,11 @@ export function useViewTabHotkeys<TTab extends string>(
     if (ids.length < 2) return false;
 
     const currentIndex = ids.indexOf(options.activeId());
-    const origin = currentIndex < 0 ? 0 : currentIndex;
+    let origin = currentIndex;
+    if (origin === -1) {
+      origin = offset === 1 ? -1 : 0;
+    }
+
     const nextIndex = (origin + offset + ids.length) % ids.length;
     const next = ids[nextIndex];
     if (!next) return false;
