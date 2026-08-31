@@ -2,6 +2,7 @@ import { useCalendarView } from '@app/features/calendar/components/CalendarViewC
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import type { CalendarTimeFormat } from '@app/features/calendar/types';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { formatCalendarTime } from '@app/features/calendar/utils/time-format';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -12,11 +13,29 @@ import { debouncedDependent } from '@core/util/debounce';
 import type { EntityData, WithSearch } from '@entity';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { Popover } from '@kobalte/core/popover';
+import CaretLeftIcon from '@phosphor/caret-left.svg';
+import RepeatIcon from '@phosphor/repeat.svg';
+import {
+  type CalendarMentionPreviewInput,
+  useCalendarMentionPreviewQuery,
+} from '@queries/calendar/mention-preview';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityFilters } from '@service-search/generated/models';
 import { Button, cn, Layer } from '@ui';
-import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
-import { openCalendarEventSplit } from '../open-calendar-event';
+import {
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
+import { createCalendarBlockRange } from '../calendar-range';
+import {
+  eventTimeFromOccurrenceKey,
+  openCalendarEventSplit,
+} from '../open-calendar-event';
 
 type CalendarSearchResult = WithSearch<
   Extract<EntityData, { type: 'calendar_event' }>
@@ -78,6 +97,117 @@ function formatEventWhen(
 }
 
 /**
+ * Read-only card for a result the calendar cannot navigate to: occurrences
+ * older than the backend's rolling materialized window aren't fetchable, so
+ * there is nothing to focus and no editable event to open. Shows the viewer's
+ * own preview of the meeting — the same projection a calendar mention uses —
+ * with a way back to the results.
+ */
+function CalendarEventPreviewContent(props: {
+  target: CalendarMentionPreviewInput;
+  timeFormat: CalendarTimeFormat;
+  onBack: () => void;
+}) {
+  const previewQuery = useCalendarMentionPreviewQuery(() => props.target);
+
+  const when = () => {
+    const event = previewQuery.data;
+    if (!event) return '';
+    const time: EventTime =
+      event.time.kind === 'timed'
+        ? {
+            kind: 'timed',
+            startsAt: event.time.startsAt,
+            endsAt: event.time.endsAt,
+          }
+        : {
+            kind: 'allDay',
+            startDate: event.time.startDate,
+            endDate: event.time.endDate,
+          };
+    return formatEventWhen(time, props.timeFormat);
+  };
+  const organizer = () =>
+    previewQuery.data?.organizerName || previewQuery.data?.organizerEmail || '';
+  const detail = () => {
+    const event = previewQuery.data;
+    if (!event) return '';
+    const guests =
+      event.attendeeCount > 0
+        ? `${event.attendeeCount} guest${event.attendeeCount === 1 ? '' : 's'}`
+        : '';
+    return [event.location, guests].filter(Boolean).join(' · ');
+  };
+
+  return (
+    <div class="p-1">
+      <button
+        type="button"
+        onClick={props.onBack}
+        class="flex items-center gap-0.5 rounded-md px-2 py-1 text-xs text-ink-muted outline-none hover:text-ink"
+      >
+        <CaretLeftIcon class="size-3" />
+        Back to search
+      </button>
+      <Switch>
+        <Match when={previewQuery.isLoading}>
+          <div class="px-3 py-4 text-center text-xs text-ink-muted">
+            Loading…
+          </div>
+        </Match>
+        <Match when={previewQuery.data}>
+          {(event) => (
+            <div class="flex flex-col gap-1 px-2 pb-2">
+              <div class="flex items-center gap-2">
+                <span class="flex size-4 shrink-0 items-center justify-center">
+                  <EntityIcon
+                    targetType="calendar"
+                    size="xs"
+                    theme="monochrome"
+                  />
+                </span>
+                <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+                  {event().title || 'Untitled event'}
+                </span>
+                <Show when={event().isRecurring}>
+                  <RepeatIcon
+                    class="size-3 shrink-0 text-ink-muted"
+                    aria-label="Repeats"
+                  />
+                </Show>
+              </div>
+              <Show when={when()}>
+                {(label) => (
+                  <span class="truncate text-xs text-ink-muted">{label()}</span>
+                )}
+              </Show>
+              <Show when={organizer()}>
+                {(name) => (
+                  <span class="truncate text-xs text-ink-muted">{name()}</span>
+                )}
+              </Show>
+              <Show when={detail()}>
+                {(text) => (
+                  <span class="truncate text-xs text-ink-muted">{text()}</span>
+                )}
+              </Show>
+              <span class="mt-1 border-t border-edge-muted pt-1.5 text-[11px] text-ink-extra-muted">
+                Outside the calendar's navigable range
+              </span>
+            </div>
+          )}
+        </Match>
+        <Match when={!previewQuery.isLoading}>
+          <div class="px-3 py-4 text-center text-xs text-ink-muted">
+            Couldn't load this event
+          </div>
+        </Match>
+      </Switch>
+    </div>
+  );
+}
+
+/**
  * Keyword search over the caller's calendar events, opened from the calendar
  * header. Selecting a result re-aims the singleton calendar block at that
  * occurrence, the same navigation an event mention or soup row performs.
@@ -99,6 +229,10 @@ function CalendarSearchControl() {
   let inputRef: HTMLInputElement | undefined;
   let listRef: HTMLDivElement | undefined;
   const [activeRow, setActiveRow] = createSignal(0);
+  // Set when a chosen result falls outside the navigable range: the popover
+  // then floats a read-only preview in place of the search body.
+  const [previewTarget, setPreviewTarget] =
+    createSignal<CalendarMentionPreviewInput | null>(null);
 
   const query = createMemo(() => rawQuery().trim());
   const debouncedQuery = debouncedDependent(query, 250);
@@ -152,15 +286,37 @@ function CalendarSearchControl() {
   };
 
   const openResult = (event: CalendarSearchResult) => {
-    setOpen(false);
-    setRawQuery('');
-    // An occurrence key anchors the locator range on its own; without one the
-    // master span stands in (a series with no occurrence in the window).
-    void openCalendarEventSplit({
+    // Resolve the same locator range a go-to would build: the occurrence key
+    // anchors it on its own; without one the master's own time stands in.
+    const time = event.occurrenceKey
+      ? eventTimeFromOccurrenceKey(event.occurrenceKey)
+      : event.time;
+    const range = time ? createCalendarBlockRange(time) : undefined;
+
+    if (range && isCalendarRangeSupported(range)) {
+      setOpen(false);
+      setRawQuery('');
+      void openCalendarEventSplit({
+        eventId: event.id,
+        occurrenceKey: event.occurrenceKey,
+        time: event.occurrenceKey ? undefined : event.time,
+      });
+      return;
+    }
+
+    // Older than the backend's rolling window: the calendar can't navigate to
+    // this occurrence, so float a read-only preview instead of a dead click.
+    setPreviewTarget({
       eventId: event.id,
       occurrenceKey: event.occurrenceKey,
-      time: event.occurrenceKey ? undefined : event.time,
     });
+  };
+
+  const closePreview = () => {
+    // The <Show> swaps the input back in synchronously, so the ref is live by
+    // the next line — no rAF needed to refocus.
+    setPreviewTarget(null);
+    focusInput();
   };
 
   const focusInput = () => {
@@ -208,6 +364,7 @@ function CalendarSearchControl() {
         if (!next) {
           setRawQuery('');
           setActiveRow(0);
+          setPreviewTarget(null);
         }
       }}
       placement="bottom-end"
@@ -235,96 +392,111 @@ function CalendarSearchControl() {
             onKeyDown={handleContentKeyDown}
           >
             <div class="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
-              <div class="flex items-center gap-2 px-3 py-2">
-                <SearchIcon class="size-4 shrink-0 text-ink-muted" />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={rawQuery()}
-                  onInput={(event) => {
-                    setRawQuery(event.currentTarget.value);
-                    setActiveRow(0);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'ArrowDown') {
-                      event.preventDefault();
-                      moveActive(1);
-                    } else if (event.key === 'ArrowUp') {
-                      event.preventDefault();
-                      moveActive(-1);
-                    } else if (event.key === 'Enter') {
-                      const active = results()[activeIndex()];
-                      if (active) openResult(active);
-                    }
-                  }}
-                  placeholder="Search by event name"
-                  class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
-                />
-              </div>
+              <Show
+                when={previewTarget()}
+                fallback={
+                  <>
+                    <div class="flex items-center gap-2 px-3 py-2">
+                      <SearchIcon class="size-4 shrink-0 text-ink-muted" />
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={rawQuery()}
+                        onInput={(event) => {
+                          setRawQuery(event.currentTarget.value);
+                          setActiveRow(0);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'ArrowDown') {
+                            event.preventDefault();
+                            moveActive(1);
+                          } else if (event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            moveActive(-1);
+                          } else if (event.key === 'Enter') {
+                            const active = results()[activeIndex()];
+                            if (active) openResult(active);
+                          }
+                        }}
+                        placeholder="Search by event name"
+                        class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
+                      />
+                    </div>
 
-              <Show when={query().length >= MIN_QUERY_LENGTH}>
-                <div
-                  ref={listRef}
-                  class="max-h-80 overflow-y-auto border-t border-edge-muted p-1"
-                >
-                  <Show
-                    when={!isLoading()}
-                    fallback={
-                      <div class="px-2 py-3 text-center text-xs text-ink-muted">
-                        Searching…
-                      </div>
-                    }
-                  >
-                    <Show
-                      when={results().length > 0}
-                      fallback={
-                        <div class="px-2 py-3 text-center text-xs text-ink-muted">
-                          No events found
-                        </div>
-                      }
-                    >
-                      <For each={results()}>
-                        {(event, index) => (
-                          <button
-                            type="button"
-                            data-result-index={index()}
-                            class={cn(
-                              'flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left outline-none',
-                              index() === activeIndex() && 'bg-ink/5'
-                            )}
-                            onMouseMove={() => setActiveRow(index())}
-                            onClick={() => openResult(event)}
+                    <Show when={query().length >= MIN_QUERY_LENGTH}>
+                      <div
+                        ref={listRef}
+                        class="max-h-80 overflow-y-auto border-t border-edge-muted p-1"
+                      >
+                        <Show
+                          when={!isLoading()}
+                          fallback={
+                            <div class="px-2 py-3 text-center text-xs text-ink-muted">
+                              Searching…
+                            </div>
+                          }
+                        >
+                          <Show
+                            when={results().length > 0}
+                            fallback={
+                              <div class="px-2 py-3 text-center text-xs text-ink-muted">
+                                No events found
+                              </div>
+                            }
                           >
-                            <span class="flex size-4 shrink-0 items-center justify-center">
-                              <EntityIcon
-                                targetType="calendar"
-                                size="xs"
-                                theme="monochrome"
-                              />
-                            </span>
-                            <span class="min-w-0 flex-1">
-                              <span class="block truncate text-sm text-ink">
-                                {event.name || 'Untitled event'}
-                              </span>
-                              <Show
-                                when={formatEventWhen(
-                                  event.time,
-                                  calendarView.displaySettings.timeFormat
-                                )}
-                              >
-                                {(label) => (
-                                  <span class="block truncate text-xs text-ink-muted">
-                                    {label()}
+                            <For each={results()}>
+                              {(event, index) => (
+                                <button
+                                  type="button"
+                                  data-result-index={index()}
+                                  class={cn(
+                                    'flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left outline-none',
+                                    index() === activeIndex() && 'bg-ink/5'
+                                  )}
+                                  onMouseMove={() => setActiveRow(index())}
+                                  onClick={() => openResult(event)}
+                                >
+                                  <span class="flex size-4 shrink-0 items-center justify-center">
+                                    <EntityIcon
+                                      targetType="calendar"
+                                      size="xs"
+                                      theme="monochrome"
+                                    />
                                   </span>
-                                )}
-                              </Show>
-                            </span>
-                          </button>
-                        )}
-                      </For>
+                                  <span class="min-w-0 flex-1">
+                                    <span class="block truncate text-sm text-ink">
+                                      {event.name || 'Untitled event'}
+                                    </span>
+                                    <Show
+                                      when={formatEventWhen(
+                                        event.time,
+                                        calendarView.displaySettings.timeFormat
+                                      )}
+                                    >
+                                      {(label) => (
+                                        <span class="block truncate text-xs text-ink-muted">
+                                          {label()}
+                                        </span>
+                                      )}
+                                    </Show>
+                                  </span>
+                                </button>
+                              )}
+                            </For>
+                          </Show>
+                        </Show>
+                      </div>
                     </Show>
-                  </Show>
-                </div>
+                  </>
+                }
+              >
+                {(target) => (
+                  <CalendarEventPreviewContent
+                    target={target()}
+                    timeFormat={calendarView.displaySettings.timeFormat}
+                    onBack={closePreview}
+                  />
+                )}
               </Show>
             </div>
           </Popover.Content>
