@@ -1,8 +1,10 @@
 import type { ListDataSource } from '@app/components/list';
 import {
   buildFlatSoupRows,
+  buildGroupedSoupRows,
   createSearchState,
   createSoupLoadMoreRow,
+  isSoupRowVisible,
   type SoupRow,
   testFacets,
   useSearchContext,
@@ -45,6 +47,7 @@ import {
   type InboxQueryCapabilities,
   type InboxViewContext,
 } from './inbox-query';
+import { groupInboxEntitiesByDate } from './inbox-results';
 import { buildInboxSearchRequest } from './inbox-search';
 
 export type InboxDataSourceItem = SoupRow<WithNotification<EntityData>>;
@@ -235,7 +238,12 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
   };
 
   const items = createMemo<InboxDataSourceItem[]>(() => {
-    const result: InboxDataSourceItem[] = buildFlatSoupRows(entities().items);
+    let result: InboxDataSourceItem[];
+    if (state.groupBy() === 'date' && !search.isSearching()) {
+      result = buildGroupedSoupRows(groupInboxEntitiesByDate(entities().items));
+    } else {
+      result = buildFlatSoupRows(entities().items);
+    }
 
     if (hasMore()) {
       result.push(
@@ -246,7 +254,9 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
       );
     }
 
-    return result;
+    return result.filter((row) =>
+      isSoupRowVisible(row, state.groups.isExpanded)
+    );
   });
 
   const isLoading = () => {

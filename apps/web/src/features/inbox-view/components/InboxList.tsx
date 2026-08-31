@@ -45,6 +45,7 @@ import {
   type InboxListStateSnapshot,
 } from '../persistence';
 import type { InboxDataSource } from '../queries/use-inbox-query';
+import { InboxDateGroupHeader } from './InboxDateGroupHeader';
 import { InboxEmptyState } from './InboxEmptyState';
 
 type DrawerRow = {
@@ -365,6 +366,27 @@ export function InboxList(props: InboxListProps) {
                 >
                   {(row) => (
                     <Switch>
+                      <Match
+                        when={row.kind === 'group-header' ? row : undefined}
+                      >
+                        {(group) => (
+                          <InboxDateGroupHeader
+                            row={group()}
+                            expanded={props.state.groups.isExpanded(
+                              group().groupId
+                            )}
+                            focused={list.focus.key() === group().id}
+                            onFocus={() =>
+                              list.focus.set(group().id, { reason: 'hover' })
+                            }
+                            onToggle={() =>
+                              list.activate.key(group().id, {
+                                reason: 'pointer',
+                              })
+                            }
+                          />
+                        )}
+                      </Match>
                       <Match when={row.kind === 'entity' ? row : undefined}>
                         {(entityRow) => (
                           <div id={entityRow().id} role="row" data-soup-entity>
