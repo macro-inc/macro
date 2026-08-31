@@ -118,8 +118,11 @@ type DataSource<T> = {
   hasNextPage: Accessor<boolean>;
   fetchNextPage: VoidFunction;
   /**
-   * Full refresh (e.g. mobile pull-to-refresh): invalidate every soup query
-   * plus notification state. Resolves once the active refetches settle.
+   * Full refresh (e.g. mobile pull-to-refresh): starts invalidation of every
+   * soup query plus notification state, then resolves once the refetch of the
+   * list currently on screen settles — rejecting when that refetch fails. The
+   * invalidations are not awaited, so another panel's queries can neither
+   * delay this refresh nor report it as failed.
    */
   refresh: () => Promise<void>;
 };
@@ -1506,6 +1509,15 @@ export const SoupViewContextProvider: FlowComponent<
         // Only the visible list decides the outcome. It throws on refetch
         // failure, so pull-to-refresh can tell "nothing came back" apart from
         // "still on its way" instead of retracting as if it had succeeded.
+
+        // Search renders its own results and disables the items query, whose
+        // refresh then no-ops — awaiting that would settle as success without
+        // anything on screen having been refetched.
+        if (search.isSearching()) {
+          await search.refresh();
+          return;
+        }
+
         // This covers both transports: urql pages sit outside the TanStack
         // invalidation above, and the REST refetch dedupes against it.
         await itemsQuery.refresh();

@@ -414,6 +414,15 @@ export const createSearchState = ({
     return false;
   });
 
+  // Refetches the on-screen search results, throwing on failure so a caller
+  // (mobile pull-to-refresh) can report the outcome. Resolves without a
+  // request when the service query is disabled — a short or paused query
+  // renders local fuzzy matches, which have no network source to refetch.
+  const refresh = async () => {
+    if (!searchQuery.isEnabled) return;
+    await searchQuery.refetch({ throwOnError: true });
+  };
+
   return {
     searchText,
     setSearchText,
@@ -424,5 +433,6 @@ export const createSearchState = ({
     searchQuery,
     isSearchServiceLoading,
     isLocalSearchSettling,
+    refresh,
   };
 };

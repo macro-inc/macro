@@ -77,6 +77,22 @@ export function PullToRefresh(props: {
     settleTimer = window.setTimeout(() => setPhase('idle'), SETTLE_MS);
   };
 
+  /** The refresh still running, if any. The spin cap retracts the badge
+   * without cancelling it, so the gesture can return to idle first. */
+  let attempt: Promise<'ok' | 'failed'> | undefined;
+
+  const startRefresh = () => {
+    const started = props.onRefresh().then(
+      () => 'ok' as const,
+      () => 'failed' as const
+    );
+    attempt = started;
+    void started.then(() => {
+      if (attempt === started) attempt = undefined;
+    });
+    return started;
+  };
+
   const triggerRefresh = () => {
     setPhase('refreshing');
     setPull(PULL_THRESHOLD);
@@ -87,12 +103,14 @@ export function PullToRefresh(props: {
     const cap = new Promise<'pending'>((resolve) =>
       window.setTimeout(() => resolve('pending'), REFRESH_SPIN_CAP_MS)
     );
-    const attempt = props.onRefresh().then(
-      () => 'ok' as const,
-      () => 'failed' as const
-    );
+    // A pull released while the previous refresh is still running re-attaches
+    // the badge to it instead of starting a second one: overlapping calls
+    // would clear the caller's in-flight state (which the list reads to keep
+    // the empty state mounted) as soon as the first settled, swapping the
+    // gesture's own target element out from under it.
+    const pending = attempt ?? startRefresh();
 
-    void Promise.all([Promise.race([attempt, cap]), minSpin]).then(
+    void Promise.all([Promise.race([pending, cap]), minSpin]).then(
       ([outcome]) => {
         // Report a failure only when nothing reached the wire. A refresh
         // still running at the cap says nothing either way, so it stays
@@ -100,7 +118,10 @@ export function PullToRefresh(props: {
         // — that case is indistinguishable from success otherwise.
         if (outcome === 'failed') {
           toast.failure('Failed to refresh');
-        } else if (outcome === 'pending' && nativeNetworkStatus() === 'offline') {
+        } else if (
+          outcome === 'pending' &&
+          nativeNetworkStatus() === 'offline'
+        ) {
           toast.failure("You're offline");
         }
         retract();
