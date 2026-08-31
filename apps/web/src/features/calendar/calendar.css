@@ -646,11 +646,16 @@
 
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-frame,
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
-	min-height: 1.5rem;
+	min-height: 3rem;
 }
 
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
 	margin-bottom: 0;
+}
+
+/* Empty create strip after the chip stack, including when events already exist. */
+.calendar-view .fc .fc-timegrid .fc-daygrid-day-bottom {
+	min-height: 1.5rem;
 }
 
 .calendar-view .fc .fc-timegrid-divider {
