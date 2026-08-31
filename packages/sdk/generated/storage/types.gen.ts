@@ -13345,10 +13345,6 @@ export type StreamEventsErrors = {
      */
     403: ErrorResponse;
     /**
-     * Too many concurrent streams
-     */
-    429: ErrorResponse;
-    /**
      * Internal server error
      */
     500: ErrorResponse;
