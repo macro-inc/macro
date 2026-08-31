@@ -1599,6 +1599,14 @@ impl CalendarRepository for PgCalendarRepository {
         }))
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn get_event_attendees(&self, event_id: Uuid) -> Result<Vec<CalendarAttendee>, Report> {
+        Ok(fetch_attendees(&self.pool, &[event_id])
+            .await?
+            .remove(&event_id)
+            .unwrap_or_default())
+    }
+
     #[tracing::instrument(skip(self, requester_id), err)]
     async fn get_creation_target(
         &self,
