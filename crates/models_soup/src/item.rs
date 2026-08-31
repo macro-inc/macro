@@ -100,7 +100,11 @@ impl<T> SoupItem<T> {
             SoupItem::ChannelThread(thread) => thread.effective_updated_at(),
             // Calls intentionally lack `updated_at`; recency follows their lifecycle timestamps.
             SoupItem::Call(record) => record.ended_at.unwrap_or(record.started_at),
-            SoupItem::CalendarEvent(event) => event.updated_at,
+            // Includes the fired-reminder timestamp so the frecency fallback
+            // cursor agrees with the GREATEST-based recency sort.
+            SoupItem::CalendarEvent(event) => event
+                .last_reminder_fired_at
+                .map_or(event.updated_at, |fired| fired.max(event.updated_at)),
             SoupItem::CrmCompany(company) => company.updated_at,
             SoupItem::ForeignEntity(foreign_entity) => foreign_entity.updated_at,
             SoupItem::Reminder(reminder) => reminder.updated_at,
