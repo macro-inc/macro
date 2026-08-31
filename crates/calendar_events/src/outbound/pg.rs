@@ -3734,6 +3734,29 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
 
         Ok(())
     }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn record_reminder_fired(
+        &self,
+        event_id: Uuid,
+        fired_at: DateTime<Utc>,
+    ) -> Result<(), Report> {
+        // GREATEST also covers the first delivery: it ignores the NULL.
+        sqlx::query!(
+            r#"
+            UPDATE calendar_events
+            SET last_reminder_fired_at = GREATEST(last_reminder_fired_at, $2)
+            WHERE id = $1
+            "#,
+            event_id,
+            fired_at,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
+
+        Ok(())
+    }
 }
 
 fn event_reconciliation_lock(source_link_id: Uuid, ical_uid: &str) -> i64 {

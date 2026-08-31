@@ -166,7 +166,14 @@ impl<T> SoupItem<T> {
             (SoupItem::Call(record), _) => record.ended_at.unwrap_or(record.started_at),
             (SoupItem::CalendarEvent(event), SimpleSortMethod::CreatedAt) => event.created_at,
             (SoupItem::CalendarEvent(_), SimpleSortMethod::ViewedAt) => DateTime::<Utc>::default(),
-            (SoupItem::CalendarEvent(event), _) => event.updated_at,
+            // A fired alarm is the event's latest activity: without it the row
+            // a reminder surfaces in the inbox would sort at the event's Google
+            // last-modified time, i.e. into the past. Must mirror the SQL sort
+            // expression GREATEST(updated_at, last_reminder_fired_at) or keyset
+            // pagination breaks.
+            (SoupItem::CalendarEvent(event), _) => event
+                .last_reminder_fired_at
+                .map_or(event.updated_at, |fired| fired.max(event.updated_at)),
             (SoupItem::CrmCompany(company), SimpleSortMethod::CreatedAt) => company.created_at,
             (SoupItem::CrmCompany(company), SimpleSortMethod::ViewedAt) => {
                 company.viewed_at.unwrap_or_default()
@@ -377,6 +384,7 @@ impl<T> SoupItem<T> {
                 is_read_only,
                 created_at,
                 updated_at,
+                last_reminder_fired_at,
                 extra,
             }) => SoupItem::CalendarEvent(SoupCalendarEvent {
                 id,
@@ -396,6 +404,7 @@ impl<T> SoupItem<T> {
                 is_read_only,
                 created_at,
                 updated_at,
+                last_reminder_fired_at,
                 extra: f(extra),
             }),
             SoupItem::CrmCompany(SoupCrmCompany {

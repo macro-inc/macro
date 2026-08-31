@@ -777,6 +777,15 @@ pub trait CalendarReminderDispatchRepo: Send + Sync + 'static {
         &self,
         firing: &CalendarReminderFiring,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Record when the event's latest reminder notification was delivered, so
+    /// recency-sorted listings surface the event at delivery time instead of
+    /// its last-modified time.
+    fn record_reminder_fired(
+        &self,
+        event_id: Uuid,
+        fired_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Notification egress for due calendar reminders.

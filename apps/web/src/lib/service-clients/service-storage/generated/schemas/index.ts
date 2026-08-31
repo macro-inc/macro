@@ -1009,6 +1009,7 @@ export * from './soupCalendarEventSoupPropertiesFieldConferenceProvider';
 export * from './soupCalendarEventSoupPropertiesFieldConferenceUrl';
 export * from './soupCalendarEventSoupPropertiesFieldDescription';
 export * from './soupCalendarEventSoupPropertiesFieldExtra';
+export * from './soupCalendarEventSoupPropertiesFieldLastReminderFiredAt';
 export * from './soupCalendarEventSoupPropertiesFieldLocation';
 export * from './soupCalendarEventSoupPropertiesFieldOrganizerEmail';
 export * from './soupCalendarEventSoupPropertiesFieldOrganizerName';

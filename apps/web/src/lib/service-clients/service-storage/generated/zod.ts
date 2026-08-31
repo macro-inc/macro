@@ -10363,6 +10363,12 @@ export const getItemsSoupResponse = zod
                     .describe(
                       'Whether the selected canonical source is read-only.'
                     ),
+                  lastReminderFiredAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "When this event's most recent reminder notification was delivered."
+                    ),
                   location: zod
                     .string()
                     .nullish()
@@ -14006,6 +14012,12 @@ export const postItemsSoupResponse = zod
                     .describe(
                       'Whether the selected canonical source is read-only.'
                     ),
+                  lastReminderFiredAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "When this event's most recent reminder notification was delivered."
+                    ),
                   location: zod
                     .string()
                     .nullish()
@@ -17114,6 +17126,12 @@ export const postItemsSoupAstResponse = zod
                     .boolean()
                     .describe(
                       'Whether the selected canonical source is read-only.'
+                    ),
+                  lastReminderFiredAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      "When this event's most recent reminder notification was delivered."
                     ),
                   location: zod
                     .string()
@@ -20559,6 +20577,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           .describe(
                             'Whether the selected canonical source is read-only.'
                           ),
+                        lastReminderFiredAt: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            "When this event's most recent reminder notification was delivered."
+                          ),
                         location: zod
                           .string()
                           .nullish()
@@ -23668,6 +23692,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           .boolean()
                           .describe(
                             'Whether the selected canonical source is read-only.'
+                          ),
+                        lastReminderFiredAt: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            "When this event's most recent reminder notification was delivered."
                           ),
                         location: zod
                           .string()
