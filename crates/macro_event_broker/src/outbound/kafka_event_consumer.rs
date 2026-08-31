@@ -3,7 +3,10 @@
 
 use std::{marker::PhantomData, time::Duration};
 
-use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, Ungrouped};
+use kafka_util::{
+    AssignedPartitionPosition, AssignedPartitionRange, GroupName, InitialOffset,
+    KafkaEventConsumer, Ungrouped,
+};
 use rdkafka::{
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
@@ -37,6 +40,46 @@ impl<M: MacroEventCollection> KafkaConsumerAdapter<Ungrouped, M> {
             inner: consumer,
             topics: PhantomData,
         })
+    }
+
+    /// Creates an ungrouped adapter and returns the captured partition ranges.
+    pub fn new_with_assignment(
+        consumer: KafkaEventConsumer<Ungrouped>,
+        initial_offset: InitialOffset,
+        metadata_timeout: Duration,
+    ) -> Result<(Self, Vec<AssignedPartitionRange>), rootcause::Report> {
+        let ranges = consumer.assign_topics_with_watermarks(
+            M::topics(),
+            initial_offset,
+            metadata_timeout,
+        )?;
+        Ok((
+            KafkaConsumerAdapter {
+                inner: consumer,
+                topics: PhantomData,
+            },
+            ranges,
+        ))
+    }
+
+    /// Return current positions for every manually assigned partition.
+    pub fn assigned_partition_positions(
+        &self,
+    ) -> Result<Vec<AssignedPartitionPosition>, rootcause::Report> {
+        Ok(self.inner.assigned_partition_positions()?)
+    }
+
+    /// Refresh declared topics while preserving existing partition positions.
+    pub fn refresh_topics_with_watermarks(
+        &self,
+        new_partition_offset: InitialOffset,
+        metadata_timeout: Duration,
+    ) -> Result<Vec<AssignedPartitionRange>, rootcause::Report> {
+        Ok(self.inner.refresh_topics_with_watermarks(
+            M::topics(),
+            new_partition_offset,
+            metadata_timeout,
+        )?)
     }
 }
 
