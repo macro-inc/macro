@@ -3,7 +3,10 @@ import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calend
 import type { CalendarTimeFormat } from '@app/features/calendar/types';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { formatCalendarTime } from '@app/features/calendar/utils/time-format';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { debouncedDependent } from '@core/util/debounce';
 import type { EntityData, WithSearch } from '@entity';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
@@ -11,7 +14,7 @@ import { Popover } from '@kobalte/core/popover';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityFilters } from '@service-search/generated/models';
 import { Button, Layer } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { openCalendarEventSplit } from '../open-calendar-event';
 
 type CalendarSearchResult = WithSearch<
@@ -79,8 +82,17 @@ function formatEventWhen(
  * occurrence, the same navigation an event mention or soup row performs.
  */
 export function CalendarSearch() {
-  const calendarView = useCalendarView();
   const searchEnabled = useCalendarSearchUiFlag();
+  return (
+    <Show when={searchEnabled()}>
+      <CalendarSearchControl />
+    </Show>
+  );
+}
+
+function CalendarSearchControl() {
+  const calendarView = useCalendarView();
+  const panel = useSplitPanelOrThrow();
   const [open, setOpen] = createSignal(false);
   const [rawQuery, setRawQuery] = createSignal('');
   let inputRef: HTMLInputElement | undefined;
@@ -133,124 +145,135 @@ export function CalendarSearch() {
     });
   };
 
+  // Cmd+F opens the search, matching the channel block's find-bar. Registered
+  // only while this control is mounted, which the calendar-search flag gates.
+  const searchHotkey = registerHotkey({
+    hotkey: 'cmd+f',
+    scopeId: panel.splitHotkeyScope,
+    hotkeyToken: TOKENS.calendar.search,
+    description: 'Search events',
+    runWithInputFocused: true,
+    keyDownHandler: () => {
+      if (open()) {
+        inputRef?.focus();
+        inputRef?.select();
+      } else {
+        setOpen(true);
+      }
+      return true;
+    },
+  });
+  onCleanup(searchHotkey.dispose);
+
   return (
-    <Show when={searchEnabled()}>
-      <Popover
-        open={open()}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) setRawQuery('');
-        }}
-        placement="bottom-end"
-        gutter={6}
-        flip
+    <Popover
+      open={open()}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setRawQuery('');
+      }}
+      placement="bottom-end"
+      gutter={6}
+      flip
+    >
+      <Popover.Trigger
+        as={Button}
+        variant="ghost"
+        size="icon-sm"
+        class="rounded-lg"
+        aria-label="Search events"
       >
-        <Popover.Trigger
-          as={Button}
-          variant="ghost"
-          size="icon-sm"
-          class="rounded-lg"
-          aria-label="Search events"
-        >
-          <SearchIcon class="size-4" />
-        </Popover.Trigger>
+        <SearchIcon class="size-4" />
+      </Popover.Trigger>
 
-        <Popover.Portal>
-          <Layer depth={3}>
-            <Popover.Content
-              class="portal-scope z-modal outline-none"
-              onOpenAutoFocus={(event) => {
-                event.preventDefault();
-                inputRef?.focus();
-              }}
-            >
-              <div class="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
-                <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
-                  <SearchIcon class="size-4 shrink-0 text-ink-muted" />
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={rawQuery()}
-                    onInput={(event) => setRawQuery(event.currentTarget.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        const first = results()[0];
-                        if (first) openResult(first);
-                      }
-                    }}
-                    placeholder="Search events"
-                    class="min-w-0 flex-1 rounded-sm bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder focus-visible:ring-1 focus-visible:ring-accent"
-                  />
-                </div>
+      <Popover.Portal>
+        <Layer depth={3}>
+          <Popover.Content
+            class="portal-scope z-modal outline-none"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              inputRef?.focus();
+            }}
+          >
+            <div class="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
+              <div class="flex items-center gap-2 px-3 py-2">
+                <SearchIcon class="size-4 shrink-0 text-ink-muted" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={rawQuery()}
+                  onInput={(event) => setRawQuery(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      const first = results()[0];
+                      if (first) openResult(first);
+                    }
+                  }}
+                  placeholder="Search by event name"
+                  class="min-w-0 flex-1 bg-transparent text-sm caret-accent outline-none placeholder:text-ink-placeholder"
+                />
+              </div>
 
-                <div class="max-h-80 overflow-y-auto p-1">
+              <Show when={query().length >= MIN_QUERY_LENGTH}>
+                <div class="max-h-80 overflow-y-auto border-t border-edge-muted p-1">
                   <Show
-                    when={query().length >= MIN_QUERY_LENGTH}
+                    when={!isLoading()}
                     fallback={
                       <div class="px-2 py-3 text-center text-xs text-ink-muted">
-                        Type at least {MIN_QUERY_LENGTH} characters to search
+                        Searching…
                       </div>
                     }
                   >
                     <Show
-                      when={!isLoading()}
+                      when={results().length > 0}
                       fallback={
                         <div class="px-2 py-3 text-center text-xs text-ink-muted">
-                          Searching…
+                          No events found
                         </div>
                       }
                     >
-                      <Show
-                        when={results().length > 0}
-                        fallback={
-                          <div class="px-2 py-3 text-center text-xs text-ink-muted">
-                            No events found
-                          </div>
-                        }
-                      >
-                        <For each={results()}>
-                          {(event) => (
-                            <button
-                              type="button"
-                              class="flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left outline-none hover:bg-ink/5 focus-visible:bg-ink/5 focus-visible:ring-1 focus-visible:ring-accent"
-                              onClick={() => openResult(event)}
-                            >
-                              <span class="flex size-4 shrink-0 items-center justify-center">
-                                <EntityIcon
-                                  targetType="calendar"
-                                  size="xs"
-                                  theme="monochrome"
-                                />
+                      <For each={results()}>
+                        {(event) => (
+                          <button
+                            type="button"
+                            class="flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left outline-none hover:bg-ink/5 focus-visible:bg-ink/5"
+                            onClick={() => openResult(event)}
+                          >
+                            <span class="flex size-4 shrink-0 items-center justify-center">
+                              <EntityIcon
+                                targetType="calendar"
+                                size="xs"
+                                theme="monochrome"
+                              />
+                            </span>
+                            <span class="min-w-0 flex-1">
+                              <span class="block truncate text-sm text-ink">
+                                {event.name || 'Untitled event'}
                               </span>
-                              <span class="min-w-0 flex-1">
-                                <span class="block truncate text-sm text-ink">
-                                  {event.name || 'Untitled event'}
-                                </span>
-                                <Show
-                                  when={formatEventWhen(
-                                    event.time,
-                                    calendarView.displaySettings.timeFormat
-                                  )}
-                                >
-                                  {(label) => (
-                                    <span class="block truncate text-xs text-ink-muted">
-                                      {label()}
-                                    </span>
-                                  )}
-                                </Show>
-                              </span>
-                            </button>
-                          )}
-                        </For>
-                      </Show>
+                              <Show
+                                when={formatEventWhen(
+                                  event.time,
+                                  calendarView.displaySettings.timeFormat
+                                )}
+                              >
+                                {(label) => (
+                                  <span class="block truncate text-xs text-ink-muted">
+                                    {label()}
+                                  </span>
+                                )}
+                              </Show>
+                            </span>
+                          </button>
+                        )}
+                      </For>
                     </Show>
                   </Show>
                 </div>
-              </div>
-            </Popover.Content>
-          </Layer>
-        </Popover.Portal>
-      </Popover>
-    </Show>
+              </Show>
+            </div>
+          </Popover.Content>
+        </Layer>
+      </Popover.Portal>
+    </Popover>
   );
 }
