@@ -16,13 +16,7 @@ import {
   type FloatingStyle,
   getFloatingSearchHighlightPosition,
 } from './getFloatingSearchHighlightStyle';
-
-function getFirstChild(htmlEl: ChildNode | null | undefined) {
-  if (htmlEl?.firstChild) {
-    return getFirstChild(htmlEl.firstChild);
-  }
-  return htmlEl;
-}
+import { getSearchHighlightRects } from './getSearchHighlightRects';
 
 function registerEventListener<K extends keyof HTMLElementEventMap>(
   target: HTMLElement | null,
@@ -52,20 +46,18 @@ export function SearchHighlight({
   const updateTextFormatFloatingToolbar = createCallback(
     (listOffset: NodekeyOffset[]) => {
       const newStyles: { style: FloatingStyle; idx: number | undefined }[] = [];
-      let matches = 0;
       listOffset.map((offset: NodekeyOffset) => {
         const editorInstance = editor();
         if (!editorInstance) return;
-        const htmlEl = getFirstChild(
-          editorInstance.getElementByKey(offset.key)?.firstChild
-        );
-        if (!htmlEl) return;
-        const range = document.createRange();
+        const element = editorInstance.getElementByKey(offset.key);
+        if (!element) return;
         try {
-          range.setStart(htmlEl, offset.offset.start);
-          range.setEnd(htmlEl, offset.offset.end);
-          const rects = range.getClientRects();
-          [...rects].map((rect) => {
+          const rects = getSearchHighlightRects(
+            element,
+            offset.offset,
+            offset.highlightEntire
+          );
+          rects.map((rect) => {
             const newStyle = getFloatingSearchHighlightPosition(
               rect,
               anchorElem
@@ -77,7 +69,6 @@ export function SearchHighlight({
               ) !== 4
             ) {
               newStyles.push({ style: newStyle, idx: offset.pairKey });
-              matches = Math.max(matches, offset.pairKey ?? 0);
             }
           });
         } catch (error) {
@@ -86,7 +77,6 @@ export function SearchHighlight({
       });
 
       FindAndReplaceStore.set('styles', newStyles);
-      FindAndReplaceStore.set('matches', matches);
     }
   );
 

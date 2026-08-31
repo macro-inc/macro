@@ -87,6 +87,7 @@ import {
 import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
 import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import {
+  countFindMatches,
   DO_SEARCH_COMMAND,
   FloatingSearchHighlight,
   findAndReplacePlugin,
@@ -445,6 +446,7 @@ export function MarkdownEditor(props: {
 
   const onSetListOffset = (listOffset: NodekeyOffset[]) => {
     setFindAndReplaceStore('listOffset', listOffset);
+    setFindAndReplaceStore('matches', countFindMatches(listOffset));
     if (findAndReplaceStore.currentMatch >= listOffset.length) {
       setFindAndReplaceStore('currentMatch', 0);
     }

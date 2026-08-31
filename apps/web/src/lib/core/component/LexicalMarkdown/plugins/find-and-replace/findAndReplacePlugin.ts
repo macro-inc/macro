@@ -26,6 +26,8 @@ export interface NodekeyOffset {
   key: string;
   offset: SplitOffset;
   pairKey: number | undefined;
+  /** Decorator chips have no text-node range; highlight the whole node. */
+  highlightEntire?: boolean;
 }
 
 export interface SplitOffset {
@@ -70,13 +72,9 @@ function isBetween(target: number, a: number, b: number) {
   return (a - target) * (b - target) <= 0;
 }
 
+/** Skip nodes with no user-visible searchable label (chips are included). */
 function shouldIgnoreNodeType(type: string) {
-  const ignoredTypes = [
-    'document-mention',
-    'user-mention',
-    'horizontalrule',
-    'equation',
-  ];
+  const ignoredTypes = ['horizontalrule', 'equation'];
   return ignoredTypes.includes(type);
 }
 
@@ -440,11 +438,13 @@ function buildNodeKeyOffsetList(
     mainIndex
   );
   if (nodeOffsets.length > 0) {
+    const highlightEntire = !$isTextNode(hNode.node);
     nodeOffsets.map((offset) => {
       nodeKeyOffsetList.push({
         key: hNode.node.__key,
         offset: offset,
         pairKey: undefined,
+        highlightEntire,
       });
     });
   }
@@ -469,8 +469,75 @@ function areListOffsetsEqual(left: NodekeyOffset[], right: NodekeyOffset[]) {
     if (leftItem.offset.isReplace !== rightItem.offset.isReplace) {
       return false;
     }
+    if (
+      (leftItem.highlightEntire ?? false) !==
+      (rightItem.highlightEntire ?? false)
+    ) {
+      return false;
+    }
   }
   return true;
+}
+
+export function countFindMatches(listOffset: NodekeyOffset[]): number {
+  return listOffset.reduce((max, item) => Math.max(max, item.pairKey ?? 0), 0);
+}
+
+export function $collectFindMatches(searchString: string): NodekeyOffset[] {
+  if (!searchString) return [];
+
+  const root = $getRoot();
+  const regex = new RegExp(preg_quote(searchString, '/'), 'gi');
+  let rootText = traverseNodeGetText(root);
+  rootText = rootText.replace(/\n+/g, '\n').replace(/^(\n)+/, '');
+
+  const indexes: number[] = [];
+  let found = regex.exec(rootText);
+  while (found) {
+    indexes.push(found.index);
+    found = regex.exec(rootText);
+  }
+  const nodes = getNoneBreakNodes(root, searchString, indexes, {
+    currentMatchIndex: 0,
+    previousLength: 0,
+  });
+
+  const nodeKeyOffsetList: NodekeyOffset[] = [];
+  nodes.map((node) => {
+    const hightlightTarget = highlightMultipleNode(node.node, searchString, {
+      startIndex: 0,
+      totalLength: node.node.getTextContent().length,
+    });
+    const originalLocations: StringLocation[] = node.realLocations.map(
+      (rLocation) => {
+        return {
+          searchStart: rLocation.location,
+          searchLength: rLocation.matched.length,
+        };
+      }
+    );
+    const additionLocations: StringLocation[] = [];
+    const mainIndex = { currentIndex: 0 };
+    hightlightTarget.map((hNode) => {
+      buildNodeKeyOffsetList(
+        hNode,
+        additionLocations,
+        originalLocations,
+        mainIndex,
+        nodeKeyOffsetList
+      );
+    });
+  });
+  let previousPairKey = 0;
+  nodeKeyOffsetList.map(function (item) {
+    if (item.offset.isReplace) {
+      previousPairKey += 1;
+      item.pairKey = previousPairKey;
+    } else {
+      item.pairKey = previousPairKey;
+    }
+  });
+  return nodeKeyOffsetList;
 }
 
 function registerFindAndReplacePlugin(
@@ -588,59 +655,7 @@ function registerFindAndReplacePlugin(
     editor.registerCommand(
       DO_SEARCH_COMMAND,
       (searchString: string) => {
-        const root = $getRoot();
-        const regex = new RegExp(preg_quote(searchString, '/'), 'gi');
-        var rootText = traverseNodeGetText(root);
-        rootText = rootText.replace(/\n+/g, '\n').replace(/^(\n)+/, '');
-
-        const indexes: number[] = [];
-        let found = regex.exec(rootText);
-        while (found) {
-          indexes.push(found.index);
-          found = regex.exec(rootText);
-        }
-        const nodes = getNoneBreakNodes(root, searchString, indexes, {
-          currentMatchIndex: 0,
-          previousLength: 0,
-        });
-
-        const nodeKeyOffsetList: NodekeyOffset[] = [];
-        nodes.map((node) => {
-          const hightlightTarget = highlightMultipleNode(
-            node.node,
-            searchString,
-            { startIndex: 0, totalLength: node.node.getTextContent().length }
-          );
-          const originalLocations: StringLocation[] = node.realLocations.map(
-            (rLocation) => {
-              return {
-                searchStart: rLocation.location,
-                searchLength: rLocation.matched.length,
-              };
-            }
-          );
-          const additionLocations: StringLocation[] = [];
-          const mainIndex = { currentIndex: 0 };
-          hightlightTarget.map((hNode) => {
-            buildNodeKeyOffsetList(
-              hNode,
-              additionLocations,
-              originalLocations,
-              mainIndex,
-              nodeKeyOffsetList
-            );
-          });
-        });
-        let previousPairKey = 0;
-        nodeKeyOffsetList.map(function (item) {
-          if (item.offset.isReplace) {
-            previousPairKey += 1;
-            item.pairKey = previousPairKey;
-          } else {
-            item.pairKey = previousPairKey;
-          }
-        });
-        updateListOffset(nodeKeyOffsetList);
+        updateListOffset($collectFindMatches(searchString));
         return true;
       },
       COMMAND_PRIORITY_HIGH

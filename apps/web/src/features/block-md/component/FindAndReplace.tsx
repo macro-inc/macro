@@ -41,6 +41,7 @@ export function FindAndReplace() {
     setFindAndReplaceStore('replaceInputText', '');
     setFindAndReplaceStore('listOffset', []);
     setFindAndReplaceStore('styles', []);
+    setFindAndReplaceStore('matches', 0);
     setFindAndReplaceStore('currentMatch', -1);
     setFindAndReplaceStore('currentQuery', '');
   };
@@ -160,6 +161,7 @@ export function FindAndReplace() {
     if (!query) {
       setFindAndReplaceStore('listOffset', []);
       setFindAndReplaceStore('styles', []);
+      setFindAndReplaceStore('matches', 0);
       setFindAndReplaceStore('currentQuery', '');
       setFindAndReplaceStore('currentMatch', -1);
       setFindAndReplaceStore('isSearching', false);
@@ -184,6 +186,7 @@ export function FindAndReplace() {
       );
       setFindAndReplaceStore('listOffset', []);
       setFindAndReplaceStore('styles', []);
+      setFindAndReplaceStore('matches', 0);
     }
     clearTimeout(performSearchTimeout);
     performSearchTimeout = setTimeout(
