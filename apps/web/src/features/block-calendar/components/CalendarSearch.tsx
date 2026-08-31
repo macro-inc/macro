@@ -5,6 +5,7 @@ import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { formatCalendarTime } from '@app/features/calendar/utils/time-format';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { IS_MAC } from '@core/constant/isMac';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { debouncedDependent } from '@core/util/debounce';
@@ -189,8 +190,11 @@ function CalendarSearchControl() {
   // The portal content lives outside the split hotkey scope, so a second Cmd+F
   // never reaches the split-scoped opener above — handle it here so it
   // re-selects the query instead of falling through to the browser find dialog.
+  // Match the app's `cmd+f` semantics: the platform modifier (Cmd on Mac, not
+  // Ctrl) and a case-insensitive key so Caps Lock still hits.
   const handleContentKeyDown = (event: KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'f') {
+    const cmdPressed = IS_MAC ? event.metaKey : event.ctrlKey;
+    if (cmdPressed && event.key.toLowerCase() === 'f') {
       event.preventDefault();
       focusInput();
     }
