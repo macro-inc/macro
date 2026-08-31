@@ -1666,6 +1666,10 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	importance: Boolean
 	"""
+	The Feed surface option.
+	"""
+	feed: Boolean
+	"""
 	The notification done option.
 	"""
 	notificationDone: Boolean

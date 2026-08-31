@@ -282,6 +282,20 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('Unsupported GraphQL Soup AST');
   });
 
+  it('maps emailFeed to the GraphQL Feed literal', () => {
+    const input = makeInput({
+      include: { emailFeed: true },
+    });
+
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: { tree: { literal: { feed: true } } },
+        },
+      },
+    });
+  });
+
   it('maps calendar event id filters', () => {
     const input = makeGraphqlSoupInput({
       params: { limit: 100, sort_method: 'updated_at' },
