@@ -386,12 +386,14 @@ export function createSoupEntityActions(): {
     }
 
     if (entities.length === 1) {
-      middleItems.push({
-        id: 'copy-link',
-        label: 'Copy Link',
-        hotkeyToken: TOKENS.entity.action.copyLink,
-        onClick: handle(copyLinkAction.executeWithSoup),
-      });
+      if (copyLinkAction.canExecute(entities[0])) {
+        middleItems.push({
+          id: 'copy-link',
+          label: 'Copy Link',
+          hotkeyToken: TOKENS.entity.action.copyLink,
+          onClick: handle(copyLinkAction.executeWithSoup),
+        });
+      }
 
       if (copyBranchNameAction.canExecute(entities[0])) {
         middleItems.push({

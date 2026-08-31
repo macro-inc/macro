@@ -1,5 +1,5 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import type { EntityData } from '@entity';
+import type { EntityData, ReminderEntity } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import { batch } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -39,6 +39,12 @@ export interface ReminderDraft {
    * cached; blanking the field then leaves the description alone.
    */
   fallbackDescription?: string;
+  /**
+   * The entity this reminder is about, so the editor can show and link it —
+   * the way the attached entity stays reachable now that a row click opens the
+   * editor rather than that entity. Absent for a standalone reminder.
+   */
+  referencedEntity?: ReminderEntity['referencedEntity'];
 }
 
 interface ReminderComposerState {

@@ -1,4 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
+import { openReminderEditorForEntity } from '@app/features/reminders/open-reminder-editor';
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCalendarBlockRange } from '@block-calendar/calendar-range';
@@ -640,8 +641,13 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  // A standalone reminder points at nothing, so there is nothing to open.
-  if (entity.type === 'reminder' && !entity.referencedEntity) return;
+  // A reminder has no block of its own — clicking one opens the panel where its
+  // title and time are edited, whether or not it points at anything. What it is
+  // about stays reachable from the row's reference chip and from the panel.
+  if (entity.type === 'reminder') {
+    openReminderEditorForEntity(entity);
+    return;
+  }
 
   // Calendar is a singleton block. Event opens retarget that one instance
   // with a locator range, including repeat clicks on an already-open split.

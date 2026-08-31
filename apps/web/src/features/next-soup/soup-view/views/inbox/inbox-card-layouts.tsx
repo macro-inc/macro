@@ -1,4 +1,5 @@
 import { ListPropertyValue } from '@app/features/next-soup/soup-view/views/tasks/list-property-value';
+import { describeReminderWhen } from '@app/features/reminders/reminder-schedule';
 import { formatCallDuration } from '@block-call/utils';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
@@ -1476,6 +1477,13 @@ export function ReminderCardLayout(props: InboxCardLayoutProps) {
       ? props.item.entity.referencedEntity
       : undefined;
 
+  // When it next comes due — a one-shot's firing time, or a recurring one's
+  // cadence — so the row says when as well as what.
+  const when = () =>
+    props.item.entity.type === 'reminder'
+      ? describeReminderWhen(props.item.entity)
+      : undefined;
+
   return (
     <BaseCard
       item={props.item}
@@ -1497,20 +1505,31 @@ export function ReminderCardLayout(props: InboxCardLayoutProps) {
         </Show>
       }
     >
-      {/* A reminder only says one thing, so the body reserves the two lines
-          its three-line neighbors use to keep the list rhythm even. The chip
-          replaces the description when there's something to point at. */}
+      {/* A reminder fills the two body lines its three-line neighbors use, so
+          the list rhythm stays even: what it is about on top (the chip when
+          there's something to point at, else its description), when it fires
+          below. */}
       <div class="min-h-[2lh] min-w-0">
         <InboxCard.Content class="truncate">
           <Show when={referenced()} fallback={description()}>
             {(reference) => (
-              <ReminderReferenceChip
-                id={reference().id}
-                type={reference().type}
-              />
+              // Its own click target: the chip opens what the reminder is
+              // about, while a click anywhere else on the row opens the editor.
+              // `ItemPreview` navigates but does not stop propagation itself.
+              <span onClick={(event) => event.stopPropagation()}>
+                <ReminderReferenceChip
+                  id={reference().id}
+                  type={reference().type}
+                />
+              </span>
             )}
           </Show>
         </InboxCard.Content>
+        <Show when={when()}>
+          {(text) => (
+            <InboxCard.Content class="truncate">{text()}</InboxCard.Content>
+          )}
+        </Show>
       </div>
     </BaseCard>
   );
