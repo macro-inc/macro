@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests;
 
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -37,6 +38,7 @@ pub enum UserApiKeysRepoErr {
 struct UserApiKeyInfoRow {
     id: Uuid,
     name: String,
+    created_at: DateTime<Utc>,
 }
 
 impl From<UserApiKeyInfoRow> for UserApiKeyInfo {
@@ -44,6 +46,7 @@ impl From<UserApiKeyInfoRow> for UserApiKeyInfo {
         Self {
             id: UserApiKeyId::from_uuid(row.id),
             name: row.name,
+            created_at: row.created_at,
         }
     }
 }
@@ -64,7 +67,7 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
             r#"
             INSERT INTO "UserApiKey" (id, name, user_id, hash)
             VALUES ($1, $2, $3, $4)
-            RETURNING id, name
+            RETURNING id, name, created_at
             "#,
             id.as_uuid(),
             name,
@@ -95,10 +98,10 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
         let rows = sqlx::query_as!(
             UserApiKeyInfoRow,
             r#"
-            SELECT id, name
+            SELECT id, name, created_at
             FROM "UserApiKey"
             WHERE user_id = $1
-            ORDER BY id DESC
+            ORDER BY created_at DESC, id DESC
             "#,
             user_id.as_ref(),
         )

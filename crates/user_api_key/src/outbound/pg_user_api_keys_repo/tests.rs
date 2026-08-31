@@ -34,7 +34,7 @@ async fn insert_user(pool: &PgPool, id: &str) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn insert_and_list_return_id_and_name_scoped_per_user(pool: PgPool) {
+async fn insert_and_list_return_id_name_and_created_at_scoped_per_user(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
     let repo = PgUserApiKeysRepo::new(pool.clone());
@@ -49,12 +49,14 @@ async fn insert_and_list_return_id_and_name_scoped_per_user(pool: PgPool) {
         .expect("insert should succeed");
     assert_eq!(inserted.id, id);
     assert_eq!(inserted.name, "Laptop");
+    assert!(inserted.created_at <= chrono::Utc::now());
 
     let a_keys = repo.list_keys(&user(USER_A)).await.expect("list A");
     let b_keys = repo.list_keys(&user(USER_B)).await.expect("list B");
     assert_eq!(a_keys.len(), 1);
     assert_eq!(a_keys[0].id, id);
     assert_eq!(a_keys[0].name, "Laptop");
+    assert_eq!(a_keys[0].created_at, inserted.created_at);
     assert!(b_keys.is_empty());
 
     let stored_hash: Vec<u8> = sqlx::query_scalar(r#"SELECT hash FROM "UserApiKey" WHERE id = $1"#)

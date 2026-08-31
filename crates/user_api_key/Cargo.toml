@@ -19,6 +19,7 @@ postgres = ["dep:sqlx", "outbound"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
 hex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }

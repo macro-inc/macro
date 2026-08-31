@@ -3,6 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+use chrono::{DateTime, Utc};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -118,6 +119,8 @@ pub struct UserApiKeyInfo {
     pub id: UserApiKeyId,
     /// User-facing name.
     pub name: String,
+    /// When the key was created.
+    pub created_at: DateTime<Utc>,
 }
 
 /// A newly minted key: safe metadata plus the secret, shown only once.
@@ -129,6 +132,8 @@ pub struct CreatedUserApiKey {
     pub id: UserApiKeyId,
     /// User-facing name.
     pub name: String,
+    /// When the key was created.
+    pub created_at: DateTime<Utc>,
     /// The newly minted secret. Shown only on create.
     pub key: String,
 }
@@ -138,6 +143,7 @@ impl fmt::Debug for CreatedUserApiKey {
         f.debug_struct("CreatedUserApiKey")
             .field("id", &self.id)
             .field("name", &self.name)
+            .field("created_at", &self.created_at)
             .field("key", &UserApiKey::from_raw(&self.key))
             .finish()
     }
@@ -149,6 +155,7 @@ impl CreatedUserApiKey {
         Self {
             id: info.id,
             name: info.name,
+            created_at: info.created_at,
             key: key.expose().to_string(),
         }
     }

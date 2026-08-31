@@ -58,7 +58,7 @@ impl<S, Auth> FromRef<UserApiKeyRouterState<S, Auth>> for MacroAuthorizationStat
 ///
 /// Routes:
 /// - `POST /` — mint a key for the caller.
-/// - `GET /` — list the caller's keys as id + name.
+/// - `GET /` — list the caller's keys as id, name, and created_at.
 /// - `DELETE /{id}` — delete one of the caller's keys by opaque id.
 pub fn user_api_key_router<S, Auth, T>(state: UserApiKeyRouterState<S, Auth>) -> Router<T>
 where
@@ -81,7 +81,7 @@ pub struct CreateUserApiKeyRequest {
     pub name: String,
 }
 
-/// The caller's API keys as id + name.
+/// The caller's API keys as id, name, and created_at.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserApiKeysList {

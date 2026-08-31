@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::{MAX_KEYS_PER_USER, UserApiKeyServiceImpl};
@@ -23,6 +24,7 @@ fn user(id: &str) -> MacroUserIdStr<'_> {
 struct StoredKey {
     id: UserApiKeyId,
     name: String,
+    created_at: chrono::DateTime<Utc>,
     hash: [u8; 32],
 }
 
@@ -46,6 +48,7 @@ impl FakeUserApiKeysRepo {
                 set.push(StoredKey {
                     id: UserApiKeyId::generate(),
                     name: format!("seed-{i}"),
+                    created_at: Utc::now(),
                     hash: hash_key(&format!("seed-key-{i}")),
                 });
             }
@@ -79,6 +82,7 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
         let info = UserApiKeyInfo {
             id,
             name: name.to_string(),
+            created_at: Utc::now(),
         };
         self.keys
             .lock()
@@ -88,6 +92,7 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
             .push(StoredKey {
                 id,
                 name: name.to_string(),
+                created_at: info.created_at,
                 hash: *hash,
             });
         Ok(info)
@@ -117,6 +122,7 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
                     .map(|k| UserApiKeyInfo {
                         id: k.id,
                         name: k.name.clone(),
+                        created_at: k.created_at,
                     })
                     .collect()
             })
@@ -176,6 +182,7 @@ async fn create_key_returns_secret_once_and_stores_hash() {
         .await
         .expect("create should succeed");
     assert_eq!(created.name, "Laptop");
+    assert!(created.created_at <= Utc::now());
     assert!(looks_like_generated_key(&created.key));
     assert!(
         repo.stored_hashes_for(USER_A)
@@ -235,7 +242,7 @@ async fn create_key_rejects_at_cap() {
 }
 
 #[tokio::test]
-async fn list_keys_returns_id_and_name_only() {
+async fn list_keys_returns_id_name_and_created_at() {
     let service = UserApiKeyServiceImpl::new(FakeUserApiKeysRepo::default());
 
     let created_a = service
@@ -253,6 +260,7 @@ async fn list_keys_returns_id_and_name_only() {
     assert_eq!(b_keys.len(), 1);
     assert_eq!(a_keys[0].id, created_a.id);
     assert_eq!(a_keys[0].name, "A key");
+    assert_eq!(a_keys[0].created_at, created_a.created_at);
     assert_ne!(a_keys[0].id, created_b.id);
     let listed = serde_json::to_string(&a_keys[0]).expect("list json");
     assert!(!listed.contains(&created_a.key));
@@ -328,21 +336,22 @@ fn hash_key_matches_sha256_of_utf8_bytes() {
 }
 
 #[test]
-fn list_metadata_json_is_only_id_and_name() {
+fn list_metadata_json_is_id_name_and_created_at() {
     let key = UserApiKey::from_raw(
         "mak_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     );
     let info = UserApiKeyInfo {
         id: UserApiKeyId::generate(),
         name: "CI".to_string(),
+        created_at: Utc::now(),
     };
     let json = serde_json::to_value(&info).expect("serialize info");
     assert!(json.get("key").is_none());
     assert!(json.get("hash").is_none());
     assert!(json.get("prefix").is_none());
-    assert!(json.get("createdAt").is_none());
     assert!(json.get("id").is_some());
     assert_eq!(json.get("name").and_then(|v| v.as_str()), Some("CI"));
+    assert!(json.get("createdAt").is_some());
     assert!(
         !serde_json::to_string(&info)
             .expect("info string")
@@ -359,4 +368,5 @@ fn list_metadata_json_is_only_id_and_name() {
         created_json.get("name").and_then(|v| v.as_str()),
         Some("CI")
     );
+    assert!(created_json.get("createdAt").is_some());
 }

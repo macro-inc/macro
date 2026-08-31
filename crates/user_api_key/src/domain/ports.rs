@@ -29,7 +29,7 @@ pub trait UserApiKeysRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
 
-    /// List the user's keys as id + name, newest first (UUIDv7 order).
+    /// List the user's keys as id, name, and created_at, newest first.
     fn list_keys(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -62,7 +62,7 @@ pub trait UserApiKeyService: Send + Sync + 'static {
         name: &str,
     ) -> impl Future<Output = Result<CreatedUserApiKey, UserApiKeyError>> + Send;
 
-    /// List the user's keys as id + name.
+    /// List the user's keys as id, name, and created_at.
     fn list_keys(
         &self,
         user_id: &MacroUserIdStr<'_>,
