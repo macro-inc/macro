@@ -137,11 +137,10 @@ const getNotificationSenderFallbackName = (
 };
 
 const getTimestamp = (entity: EntityData, notification?: Notification) => {
-  // Reminders sort on when they fire, so the row has to show that field too.
-  // The notification's time drifts from it for anything recurring, retried, or
-  // dispatched late, and the list then reads as unsorted.
+  // The reminder's body already says when it fires, so the timestamp says when
+  // it was set instead — the way other rows show when they arrived.
   if (entity.type === 'reminder') {
-    return entity.nextRunAt != null ? String(entity.nextRunAt) : undefined;
+    return entity.createdAt != null ? String(entity.createdAt) : undefined;
   }
 
   const messageTime =
