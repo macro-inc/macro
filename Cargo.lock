@@ -9869,6 +9869,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.18",
+ "tokio",
  "tower 0.5.3",
  "tower-http",
  "tracing",
