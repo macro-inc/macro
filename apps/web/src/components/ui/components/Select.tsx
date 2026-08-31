@@ -114,8 +114,13 @@ function SelectContent(props: SelectContentProps) {
             {/* The scroll lives on an inner box, never on the glass node: the
                 rim is an absolutely positioned ::after, and absolute children
                 of a scroll container are translated with the content, so a
-                scrolling glass node slides its own rim out of frame. */}
-            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+                scrolling glass node slides its own rim out of frame.
+
+                The box bleeds back through this surface's p-1.5 and re-pads its
+                own children, because overflow-y-auto computes overflow-x to
+                auto: a bare scroller would clip a child's -mx bleed (menu
+                separators) rather than let it reach the pane edge. */}
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto -mx-1.5 w-[calc(100%+0.75rem)] px-1.5">
               {local.children}
             </div>
           </KobalteSelect.Content>

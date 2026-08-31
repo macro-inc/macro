@@ -305,9 +305,13 @@ const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
 /* The menu surface carries the glass, so the scroll has to live on an inner
    box: the rim is an absolutely positioned ::after, and absolute children of
    a scroll container are translated with the content, which would slide the
-   rim off a menu taller than its max height. */
+   rim off a menu taller than its max height.
+
+   The box bleeds back through the surface's p-1.5 and re-pads its children,
+   because overflow-y-auto computes overflow-x to auto: a bare scroller would
+   clip MenuSeparator's -mx-1.5 instead of letting it reach the pane edge. */
 export const MENU_SCROLL_CLASS =
-  'flex min-h-0 w-full flex-col items-start overflow-y-auto';
+  'flex min-h-0 flex-col items-start overflow-y-auto -mx-1.5 w-[calc(100%+0.75rem)] px-1.5';
 
 export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu-glass ${MENU_SURFACE_SCOPE} glass-lg rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] z-modal menu-open-animation`;
 
