@@ -18263,6 +18263,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Deleted`].",
         "required": ["document_id"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically deleted the document. Absent on events published\nbefore attribution, and on user-receipt writes (ingest then uses\n[`Self::actor_user_id`])."
+          },
           "actor_user_id": {
             "oneOf": [
               {
@@ -18277,6 +18281,17 @@
           "document_id": {
             "type": "string",
             "description": "The id of the deleted document."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this delete belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
           },
           "project_id": {
             "type": ["string", "null"],
@@ -18993,6 +19008,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Updated`].",
         "required": ["document_id", "owner", "share_permission_updated"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically updated the document. Absent on events published\nbefore attribution, and on user-receipt writes (ingest then uses\n[`Self::actor_user_id`])."
+          },
           "actor_user_id": {
             "oneOf": [
               {
@@ -19020,6 +19039,17 @@
               {
                 "$ref": "#/components/schemas/FileTypeUpdate",
                 "description": "Requested file type change; `None` when unchanged."
+              }
+            ]
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this update belongs on, when different from\n[`Self::actor`]."
               }
             ]
           },
