@@ -168,14 +168,9 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
   const [search, setSearch] = createSignal('');
   const [comboboxDisabled, setComboboxDisabled] = createSignal(false);
   const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>();
-  const [portalSearchRef, setPortalSearchRef] = createSignal<HTMLDivElement>();
 
   let input: HTMLInputElement | undefined;
   let control: HTMLDivElement | undefined;
-  let content: HTMLElement | undefined;
-
-  const portalMount = () =>
-    portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined;
 
   const propertyLabel = () => guestPropertyLabel(props.selected);
 
@@ -303,7 +298,6 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       placement="bottom-start"
       disabled={props.disabled || comboboxDisabled()}
     >
-      <div class="hidden" ref={setPortalSearchRef} />
       <Combobox.Control<GuestPickerItem>
         ref={(element) => {
           control = element;
@@ -346,27 +340,16 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
         </Tooltip>
       </Combobox.Control>
 
-      <Combobox.Portal mount={portalMount()}>
+      <Combobox.Portal>
         <Layer depth={3}>
           <Combobox.Content
-            ref={(element) => {
-              content = element;
-            }}
-            class="z-action-menu flex w-96 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge bg-menu p-0 text-sm shadow-menu menu-open-animation"
+            class="z-action-menu flex w-96 max-h-[var(--kb-popper-content-available-height)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge bg-menu p-0 text-sm shadow-menu menu-open-animation"
             onPointerDown={(event) => event.preventDefault()}
             onFocusOutside={(event) => {
-              // Modal dialogs steal focus back onto an ancestor; don't treat
-              // that as dismiss. Clicks on other fields still close the list.
-              const focused = event.detail.originalEvent.target;
-              if (!(focused instanceof Node)) return;
-              if (control?.contains(focused)) {
-                event.preventDefault();
-                return;
-              }
-              if (content && focused.contains(content)) {
-                event.preventDefault();
-                input?.focus();
-              }
+              // Portal to body so flip/dropup is not clipped by the dialog.
+              // The modal focus trap then moves focus onto the title/dialog;
+              // ignore that steal. Pointer/interact-outside still closes.
+              event.preventDefault();
             }}
             onPointerDownOutside={keepListOpenOnControlPress}
             onInteractOutside={keepListOpenOnControlPress}
