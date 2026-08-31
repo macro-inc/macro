@@ -94,7 +94,10 @@ export class SyncServiceSource implements LiveSyncSource {
   private hasEverHadListener = false;
   /** Pending request/response waiters, matched against each incoming message. */
   private readonly waiters = new Set<MessageWaiter>();
-  private initialSyncReceived = false;
+  /** Gates pushUpdate. Protected so a subclass that bootstraps the initial
+   *  state through another exchange (the AI editing worker's snapshot
+   *  fallback) can unlock updates without duplicating the gate. */
+  protected initialSyncReceived = false;
   private readonly initialSyncPromise: ResultAsync<InitialSync, TimeoutError>;
 
   public constructor(
