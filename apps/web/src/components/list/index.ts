@@ -14,6 +14,10 @@ export {
   createSelectionState,
   type SelectionState,
 } from './create-selection-state';
+export {
+  createStaticListDataSource,
+  type ListDataSource,
+} from './list-data-source';
 export type {
   ListActivateOptions,
   ListActivation,

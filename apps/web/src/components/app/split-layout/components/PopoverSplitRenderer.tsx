@@ -134,6 +134,10 @@ function PopoverSplitModal(props: {
     setTitleFileMenuTrigger,
     titleFileMenuActions,
     setTitleFileMenuActions,
+    list: () => undefined,
+    setList: () => {
+      throw new Error('Popover splits do not support lists');
+    },
     headerCollapser: { register: () => () => {} },
     toolbarCollapser: { register: () => () => {} },
   };
