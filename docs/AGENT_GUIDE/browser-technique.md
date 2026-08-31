@@ -3,8 +3,8 @@
 ## Snapshot-first loop
 
 - `take_snapshot` after every navigation or pane change; act only on uids from the latest
-  snapshot. Uid prefixes bump (`7_x` → `9_x`) whenever React re-renders a region; stale uids
-  fail loudly — re-snapshot rather than guess.
+  snapshot. Uid prefixes bump (`7_x` → `9_x`) whenever the UI re-renders a region (the app
+  is SolidJS); stale uids fail loudly — re-snapshot rather than guess.
 - Macro snapshots are huge (split panes duplicate the whole doc text; the Activity heatmap
   adds ~400 nodes). Save with `filePath:` and grep the file via Bash instead of dumping the
   snapshot into context. Strip lines matching `Notifications (alt` when reading.

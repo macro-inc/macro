@@ -258,6 +258,10 @@ The migration included comprehensive indexes:
 - New code uses `rootcause` for error handling — it's preferred over `anyhow` (see docs/STYLE_GUIDE.md CS-46)
 - In code still on anyhow: prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))` for early returns - it's more concise and idiomatic
 
+### Agent Guide Maintenance
+
+`docs/AGENT_GUIDE/` documents how agents drive the web app through a browser (routes, UI affordances, interaction patterns, completion signals). When you change how a part of the app works or how users/agents interact with it — routes, creation flows, editor behavior, AI surfaces, composer semantics — update the corresponding guide file in the same change.
+
 ### Documentation Requirements
 
 - Add `#![deny(missing_docs)]` to `lib.rs` in new crates to enforce documentation on all public items

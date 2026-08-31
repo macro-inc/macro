@@ -44,8 +44,8 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
 - `Details` → Owner, Created, Last updated.
 - `Tags` → `Add tags` (dialog). `Properties` → `Add property`.
 - Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
-- Header: `Share`, `Copy Share Link`, overflow menu. Documents are public-by-default; use
-  Share to change permissions.
+- Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
+  doc's visibility/permissions.
 
 ## Known failure: "expected instance of LoroDoc"
 
