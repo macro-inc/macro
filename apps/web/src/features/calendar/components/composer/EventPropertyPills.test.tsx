@@ -3,7 +3,7 @@
  */
 
 import { recipientEntityMapper } from '@core/user';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { Dialog } from '@ui';
 import { createSignal } from 'solid-js';
@@ -72,7 +72,9 @@ describe('EventComposerGuestsPill', () => {
     await user.click(trigger);
 
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByRole('listbox')).toBeTruthy();
+    expect(
+      within(screen.getByRole('dialog')).getByRole('listbox')
+    ).toBeTruthy();
     expect(
       screen.getByRole('combobox', { name: 'Search for guests' })
     ).toBeTruthy();

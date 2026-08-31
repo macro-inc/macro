@@ -165,7 +165,8 @@ function PopoverSplitModal(props: {
         <SplitPanelContext.Provider value={stubPanelContext}>
           <SoupContextProvider>
             <Show when={props.popover.mount}>
-              <Panel.Body>
+              {/* Escape Panel.Body's default overflow-hidden so flipped menus are not clipped. */}
+              <Panel.Body class="overflow-visible">
                 <Dynamic component={props.popover.mount.element} />
               </Panel.Body>
             </Show>
