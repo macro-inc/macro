@@ -49,21 +49,33 @@ cancels; only the former counts as an error here.
 
 // Emitted by ReqwestEditingWorkerClient::edit when the worker answers non-2xx
 // or is unreachable (crates/documents/src/outbound/editing_worker_client.rs).
+//
+// The callers are document-cognition-service (the EditDocument tool, 174 of
+// these in the 30 days to 2026-08-31) and cloud-storage-service (7). Note the
+// service tags carry no `-prod` suffix and the status is `warn`, unlike the
+// older log monitors in logs.ts — matching on `service:*-prod` here finds
+// nothing. agent-schedule-service is excluded: its hits are agent transcripts
+// that quote the error text rather than reports of it.
+//
+// Thresholds come from that 30-day window: the worst normal hour was 12, so
+// 25/hour is roughly double the known-bad baseline rather than a guess.
 export const aiEditingRequestsFailing = new datadog.Monitor(
   'ai-editing-requests-failing',
   {
-    name: '[PROD] AI editing requests failing from document storage',
+    name: '[PROD] AI editing requests failing for callers',
     type: 'log alert',
     query:
-      'logs("service:cloud-storage-service-prod \\"editing worker returned\\"").index("*").rollup("count").last("15m") > 5',
-    message: `document-storage is getting errors back from the AI editing worker.
+      'logs("env:prod service:(document-cognition-service OR cloud-storage-service) \\"editing worker returned\\"").index("*").rollup("count").last("1h") > 25',
+    message: `Callers are getting errors back from the AI editing worker.
 
 Unlike the APM monitor this fires even when the worker is unreachable, since it
-reads the caller's logs rather than the worker's telemetry.
+reads the callers' logs rather than the worker's telemetry. The common cause
+historically is \`initial sync failed: timeout\` — the worker could not open the
+document over the sync service.
 
 @slack-monitoring`,
     tags: ['env:prod', 'service:ai-editing-worker'],
-    monitorThresholds: { critical: '5', warning: '1' },
+    monitorThresholds: { critical: '25', warning: '12' },
     onMissingData: 'default',
     includeTags: false,
     notifyAudit: false,
