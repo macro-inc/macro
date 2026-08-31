@@ -61,8 +61,14 @@ export {
 export { createEntityDraggable } from './utils/draggable';
 export { unreadFilterFn } from './utils/filter';
 export {
+  entityIsMuted,
   filterNotDoneNotifications,
   filterValidNotifications,
+  isMutedItem,
+  type MuteItem,
+  muteItemForEntity,
+  muteItemForRef,
+  normalizeMuteItemType,
   toNotificationEntity,
 } from './utils/notification';
 export { useIsShared } from './utils/shared';

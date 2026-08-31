@@ -58,6 +58,84 @@ export function toNotificationEntity(entity: EntityData): Entity {
 }
 
 /**
+ * Item types the notification service can mute. Keep aligned with
+ * `MUTED_ENTITY_TYPE_LABELS` and the events that actually fan out.
+ */
+const MUTEABLE_ITEM_TYPES = new Set([
+  'calendar_event',
+  'call',
+  'channel',
+  'chat',
+  'document',
+  'email_thread',
+  'foreign_entity',
+  'project',
+  'reminder',
+]);
+
+export type MuteItem = {
+  item_id: string;
+  item_type: string;
+};
+
+/**
+ * Canonical unsubscribe `item_type`. Frontend rows use `email` / `foreign`;
+ * notifications and the mute API store `email_thread` / `foreign_entity`.
+ */
+export function normalizeMuteItemType(type: string): string {
+  switch (type) {
+    case 'email':
+      return 'email_thread';
+    case 'foreign':
+      return 'foreign_entity';
+    default:
+      return type;
+  }
+}
+
+/**
+ * The unsubscribe row that mutes notifications for this entity.
+ *
+ * Uses {@link toNotificationEntity} so the stored item matches the
+ * notification's primary entity — outbound delivery filters unsubscribes by
+ * that entity's `item_id`. Channel threads therefore mute the parent
+ * channel, which is also how their notifications are attached.
+ */
+export function muteItemForEntity(entity: EntityData): MuteItem | undefined {
+  return muteItemForRef(toNotificationEntity(entity));
+}
+
+/** Same mapping for a bare id/type (favorites, already-canonical refs). */
+export function muteItemForRef(entity: {
+  id: string;
+  type: string;
+}): MuteItem | undefined {
+  const item_type = normalizeMuteItemType(entity.type);
+  if (!MUTEABLE_ITEM_TYPES.has(item_type)) return undefined;
+  return { item_id: entity.id, item_type };
+}
+
+export function isMutedItem(
+  muted: readonly MuteItem[],
+  item: MuteItem
+): boolean {
+  const type = normalizeMuteItemType(item.item_type);
+  return muted.some(
+    (entry) =>
+      entry.item_id === item.item_id &&
+      normalizeMuteItemType(entry.item_type) === type
+  );
+}
+
+export function entityIsMuted(
+  muted: readonly MuteItem[],
+  entity: EntityData
+): boolean {
+  const item = muteItemForEntity(entity);
+  return item !== undefined && isMutedItem(muted, item);
+}
+
+/**
  * Filters out invalid notification types that shouldn't be displayed
  */
 export function filterValidNotifications(

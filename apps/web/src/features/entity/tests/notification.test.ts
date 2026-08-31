@@ -3,14 +3,20 @@ import type {
   GithubPrStatusChanged,
 } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
+import type { EntityData } from '../types/entity';
 import type { Notification } from '../types/notification';
 import {
+  entityIsMuted,
   extractMessageContent,
   extractNotificationSenderIds,
   filterNotDoneNotifications,
   filterValidNotifications,
   getNotificationActionText,
+  isMutedItem,
   isNotificationUnread,
+  muteItemForEntity,
+  muteItemForRef,
+  normalizeMuteItemType,
 } from '../utils/notification';
 
 const GITHUB_PR_FOREIGN_ENTITY_ID = '123e4567-e89b-12d3-a456-426614174000';
@@ -603,5 +609,51 @@ describe('notification utils', () => {
         expect(isNotificationUnread(stack)).toBe(false);
       });
     });
+  });
+});
+
+describe('mute item mapping', () => {
+  const entity = (type: EntityData['type'], id = 'e1') =>
+    ({ type, id, name: 'Thing' }) as EntityData;
+
+  it('normalizes frontend aliases to notification item types', () => {
+    expect(normalizeMuteItemType('email')).toBe('email_thread');
+    expect(normalizeMuteItemType('foreign')).toBe('foreign_entity');
+    expect(normalizeMuteItemType('channel')).toBe('channel');
+  });
+
+  it('maps an email row to the email_thread unsubscribe item', () => {
+    expect(muteItemForEntity(entity('email'))).toEqual({
+      item_id: 'e1',
+      item_type: 'email_thread',
+    });
+  });
+
+  it('maps a channel thread to its parent channel', () => {
+    expect(
+      muteItemForEntity({
+        type: 'channel_thread',
+        id: 'msg-1',
+        channelId: 'chan-1',
+        name: 'Thread',
+      } as EntityData)
+    ).toEqual({
+      item_id: 'chan-1',
+      item_type: 'channel',
+    });
+  });
+
+  it('rejects entity types that do not produce notifications', () => {
+    expect(muteItemForEntity(entity('automation'))).toBeUndefined();
+    expect(muteItemForRef({ type: 'crm_company', id: 'c1' })).toBeUndefined();
+  });
+
+  it('matches muted items across type aliases', () => {
+    const muted = [{ item_id: 'e1', item_type: 'email_thread' }];
+    expect(isMutedItem(muted, { item_id: 'e1', item_type: 'email' })).toBe(
+      true
+    );
+    expect(entityIsMuted(muted, entity('email'))).toBe(true);
+    expect(entityIsMuted(muted, entity('email', 'other'))).toBe(false);
   });
 });

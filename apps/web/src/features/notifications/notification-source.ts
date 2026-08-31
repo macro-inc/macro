@@ -3,6 +3,7 @@ import {
   ENABLE_GRAPHQL_SOUP,
 } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
+import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
   useMuteItemMutation,
@@ -410,17 +411,19 @@ export function createNotificationSource(
   };
 
   const muteEntity = async (entity: Entity) => {
-    await muteItem.mutateAsync({
+    const item = muteItemForRef(entity) ?? {
       item_id: entity.id,
       item_type: entity.type,
-    });
+    };
+    await muteItem.mutateAsync(item);
   };
 
   const unmuteEntity = async (entity: Entity) => {
-    await unmuteItem.mutateAsync({
+    const item = muteItemForRef(entity) ?? {
       item_id: entity.id,
       item_type: entity.type,
-    });
+    };
+    await unmuteItem.mutateAsync(item);
   };
 
   const subscribe = (subscribeFn: SubscribeFn) => {

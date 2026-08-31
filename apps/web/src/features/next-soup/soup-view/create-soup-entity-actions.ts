@@ -30,6 +30,7 @@ import {
   makeMarkSenderSignalAction,
   makeMarkUnreadAction,
   makeMoveToProjectAction,
+  makeMuteAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
   makeSetCompanyPropertyAction,
@@ -126,6 +127,9 @@ export function createSoupEntityActions(): {
 
   const copyAction = makeCopyAction();
   const favoriteAction = makeFavoriteAction();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
   const moveToProjectAction = makeMoveToProjectAction();
   const removeFromProjectAction = makeRemoveFromProjectAction();
   const copyLinkAction = makeCopyLinkAction();
@@ -339,6 +343,15 @@ export function createSoupEntityActions(): {
         label: allFavorited ? 'Unfavorite' : 'Favorite',
         hotkeyToken: TOKENS.entity.action.favorite,
         onClick: handle(favoriteAction.executeWithSoup),
+      });
+    }
+
+    if (canExecuteAll(muteAction.canExecute)) {
+      const allMuted = entities.every((entity) => muteAction.isMuted(entity));
+      middleItems.push({
+        id: 'mute',
+        label: allMuted ? 'Unmute notifications' : 'Mute notifications',
+        onClick: handle(muteAction.executeWithSoup),
       });
     }
 

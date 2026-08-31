@@ -1,5 +1,6 @@
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
+import { isMutedItem } from '@entity/utils/notification';
 import { queryClient } from '@queries/client';
 import {
   toNotificationEntityRef,
@@ -222,9 +223,9 @@ export function useNotificationsMutedForEntity(
   entity: Entity
 ): Accessor<boolean> {
   return createMemo(() =>
-    notificationSource.mutedEntities().includes({
-      item_type: entity.type,
+    isMutedItem(notificationSource.mutedEntities(), {
       item_id: entity.id,
+      item_type: entity.type,
     })
   );
 }
