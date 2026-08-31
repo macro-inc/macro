@@ -172,6 +172,7 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
 
   let input: HTMLInputElement | undefined;
   let control: HTMLDivElement | undefined;
+  let content: HTMLElement | undefined;
 
   // Mount on the dialog, not the inner composer `.portal-scope`. The composer
   // sits in a Panel.Body with overflow-hidden, which clips a flipped list —
@@ -360,12 +361,30 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       <Combobox.Portal mount={portalMount()}>
         <Layer depth={3}>
           <Combobox.Content
+            ref={(element) => {
+              content = element;
+            }}
             class="z-action-menu flex w-96 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-xl border border-edge bg-menu p-0 text-sm shadow-menu menu-open-animation"
-            onPointerDown={(event) => event.preventDefault()}
-            onFocusOutside={(event) => {
-              // Dialog focus trap can land on the title; don't treat that as
-              // dismiss. Clicks on other fields still close via interact-outside.
+            onPointerDown={(event) => {
+              const target = event.target;
+              // Keep row clicks from stealing input focus, but allow the
+              // search field itself to take focus if the dialog stole it.
+              if (target instanceof Node && input?.contains(target)) return;
               event.preventDefault();
+            }}
+            onFocusOutside={(event) => {
+              // Dialog trap focuses the dialog (an ancestor of this list).
+              // Veto that dismiss and put caret back in search. Focus that
+              // lands on another field (title, description) still dismisses.
+              const focused = event.detail.originalEvent.target;
+              if (
+                content &&
+                focused instanceof Node &&
+                focused.contains(content)
+              ) {
+                event.preventDefault();
+                input?.focus({ preventScroll: true });
+              }
             }}
             onPointerDownOutside={keepListOpenOnControlPress}
             onInteractOutside={keepListOpenOnControlPress}

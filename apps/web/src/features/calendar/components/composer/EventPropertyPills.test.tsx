@@ -75,9 +75,27 @@ describe('EventComposerGuestsPill', () => {
     expect(
       within(screen.getByRole('dialog')).getByRole('listbox')
     ).toBeTruthy();
-    expect(
+    const search = screen.getByRole('combobox', { name: 'Search for guests' });
+    expect(document.activeElement).toBe(search);
+
+    await user.click(search);
+    expect(document.activeElement).toBe(search);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('restores search focus when the dialog steals focus', async () => {
+    const user = userEvent.setup();
+    renderInComposerDialog();
+
+    const trigger = screen.getByRole('button', { name: 'Guests' });
+    await user.click(trigger);
+
+    screen.getByRole('dialog').focus();
+
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(
       screen.getByRole('combobox', { name: 'Search for guests' })
-    ).toBeTruthy();
+    );
   });
 
   it('closes the guest list when focus moves to the title', async () => {
