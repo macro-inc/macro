@@ -125,6 +125,19 @@ fn actor_attribution_from_meta<'a>(
         .unwrap_or((None, None))
 }
 
+/// Flush pending AI edits only when the leaving socket is the actor.
+///
+/// A human disconnect while the AI stays must not flush: the next alarm still
+/// has the actor. Flushing then would `mark_exported`, and last-leave would
+/// publish a second attributed snapshot for the same content.
+fn should_flush_actor_edits_on_close(
+    is_last_leave: bool,
+    leaving_socket_has_actor: bool,
+    should_save: bool,
+) -> bool {
+    leaving_socket_has_actor && !is_last_leave && should_save
+}
+
 #[durable_object]
 pub struct DocumentSyncSession {
     state: State,
@@ -186,7 +199,10 @@ mod u64_serde_strings {
 
 #[cfg(test)]
 mod actor_attribution_test {
-    use super::{AccessLevel, WebSocketMetadata, actor_attribution_from_meta};
+    use super::{
+        AccessLevel, WebSocketMetadata, actor_attribution_from_meta,
+        should_flush_actor_edits_on_close,
+    };
 
     fn meta(actor: Option<&str>, user_id: Option<&str>) -> WebSocketMetadata {
         WebSocketMetadata {
@@ -219,6 +235,23 @@ mod actor_attribution_test {
                 Some("macro|first@example.com".to_string())
             )
         );
+    }
+
+    #[test]
+    fn flush_only_when_the_leaving_socket_is_the_actor() {
+        assert!(
+            should_flush_actor_edits_on_close(false, true, true),
+            "AI leave while a human stays must flush pending edits"
+        );
+        assert!(
+            !should_flush_actor_edits_on_close(false, false, true),
+            "human leave while the AI stays must not flush"
+        );
+        assert!(
+            !should_flush_actor_edits_on_close(true, true, true),
+            "last-leave already reports an attributed snapshot"
+        );
+        assert!(!should_flush_actor_edits_on_close(false, true, false));
     }
 }
 
@@ -390,6 +423,16 @@ impl DocumentSyncSession {
             .collect();
         let map = self.ws_meta_map.lock("actor_attribution");
         actor_attribution_from_meta(connected.iter().filter_map(|ws_id| map.get(ws_id)))
+    }
+
+    fn websocket_has_actor(&self, ws: &WebSocket) -> bool {
+        let Ok(ws_id) = get_ws_id(&self.state, ws) else {
+            return false;
+        };
+        self.ws_meta_map
+            .lock("DocumentSyncSession::websocket_has_actor")
+            .get(&ws_id)
+            .is_some_and(|meta| meta.actor.is_some())
     }
 
     async fn forget_websocket_metadata(&self, ws: &WebSocket) {
@@ -1228,15 +1271,18 @@ impl DurableObject for DocumentSyncSession {
             }
 
             // Attribution still includes this closing socket. Flush now when
-            // this is last-leave, or when an actor (AI) is leaving while
+            // this is last-leave, or when the leaving socket is the actor and
             // others stay — otherwise the next alarm has no actor and ingest
-            // drops the pending bot edit.
+            // drops the pending bot edit. A human leave while the AI stays
+            // must not flush: the next alarm still has the actor.
             let is_last_leave = self.state.get_websockets().len() == 1;
             let (actor, on_behalf_of) = self.actor_attribution();
             let state = self.document_state().await.ok();
-            let flush_actor_edits = actor.is_some()
-                && !is_last_leave
-                && state.as_ref().is_some_and(|s| s.should_save());
+            let flush_actor_edits = should_flush_actor_edits_on_close(
+                is_last_leave,
+                self.websocket_has_actor(&ws),
+                state.as_ref().is_some_and(|s| s.should_save()),
+            );
             if (is_last_leave || flush_actor_edits)
                 && let Some(state) = state
                 && let Ok(document_id) = self.document_id().await
