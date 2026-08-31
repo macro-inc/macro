@@ -13,7 +13,6 @@ import BellSimpleIcon from '@lucide/bell.svg';
 import CalendarBlankIcon from '@lucide/calendar.svg';
 import CheckIcon from '@lucide/check.svg';
 import CaretDownIcon from '@lucide/chevron-down.svg';
-import QuestionMarkIcon from '@lucide/circle-help.svg';
 import ArrowSquareOutIcon from '@lucide/external-link.svg';
 import GlobeIcon from '@lucide/globe.svg';
 import MapPinIcon from '@lucide/map-pin.svg';
@@ -22,6 +21,10 @@ import PersonIcon from '@lucide/user.svg';
 import UsersIcon from '@lucide/users.svg';
 import VideoCameraIcon from '@lucide/video.svg';
 import XIcon from '@lucide/x.svg';
+// Lucide encloses every question mark (circle-, badge-, shield-...), and the
+// RSVP marks are a bare set — check, x, and this. Staying on Phosphor keeps
+// the three reading as one row.
+import QuestionMarkIcon from '@phosphor/question-mark.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
