@@ -3,9 +3,9 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import {
   makeMarkDoneAction,
+  resolveEntityActionViewContext,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
-import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
 import type {
   GroupHeaderProps,
   SoupRow,
@@ -908,6 +908,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
   const scopeId = createMemo(() => props.scopeId ?? panel.splitHotkeyScope);
+  const entityActionViewContext = () =>
+    resolveEntityActionViewContext({
+      activeListView: panel.handle.content().id,
+      activeTab: activeTab(),
+    });
 
   // Register navigation hotkeys on the active list scope (usually the split
   // scope). Most handlers are disposed with SoupViewList, but j/k intentionally
@@ -931,7 +936,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     selectedEntities: soup.selection.selected,
     focusedEntity: soup.focus.item,
     restoreFocus: restoreSoupFocus,
-    activeSoupViewTab: activeTab,
+    viewContext: entityActionViewContext,
     splitHandle: panel.handle,
   });
 
@@ -1207,7 +1212,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   );
 
   const isProjectList = panel.handle.content().type === 'project';
-  const contentId = panel.handle.content().id;
 
   const readListEntryState = () =>
     panel.handle.currentEntryState()?.[SOUP_LIST_STATE_ENTRY_KEY] as
@@ -1383,13 +1387,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         const entity = entityById().get(entityId);
                         if (!entity) return false;
 
-                        const tab = activeTab();
-
-                        if (
-                          !isListViewID(contentId) ||
-                          (tab && !canExecuteMarkDoneOnView(contentId, tab))
-                        )
+                        if (!entityActionViewContext().supportsMarkDone) {
                           return false;
+                        }
 
                         return markDoneAction.canExecute(entity.original);
                       }}
@@ -1537,7 +1537,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                     entity={row.original}
                                     list={soup}
                                     selectedEntities={soup.selection.selected}
-                                    activeTab={activeTab}
+                                    viewContext={entityActionViewContext()}
                                   >
                                     <Dynamic
                                       component={rowEntry().component}

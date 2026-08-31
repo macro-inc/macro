@@ -1,3 +1,4 @@
+import { resolveEntityActionViewContext } from '@app/features/next-soup/actions';
 import { NO_STAGE } from '@app/features/next-soup/filters/configs/';
 import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
@@ -61,6 +62,11 @@ type StageColumn = {
 export function CompanyKanban() {
   const { source, soup, stageFilter, searchText, activeTab } = useSoupView();
   const panel = useSplitPanelOrThrow();
+  const entityActionViewContext = () =>
+    resolveEntityActionViewContext({
+      activeListView: panel.handle.content().id,
+      activeTab: activeTab(),
+    });
 
   // Stage moves made while the board is fed by search results. Search rows
   // bypass the normalized soup cache, so the mutation's optimistic update
@@ -357,7 +363,7 @@ export function CompanyKanban() {
                             entity={entity}
                             list={soup}
                             selectedEntities={soup.selection.selected}
-                            activeTab={activeTab}
+                            viewContext={entityActionViewContext()}
                           >
                             <CompanyKanbanCard
                               entity={entity}

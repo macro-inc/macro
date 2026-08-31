@@ -1,5 +1,6 @@
 import {
   type EntityActionListState,
+  type EntityActionViewContext,
   makeAddTagAction,
 } from '@app/features/next-soup/actions';
 import { ContextMenuContent } from '@core/component/ContextMenu';
@@ -29,7 +30,7 @@ interface SoupEntityContextMenuProps {
   entity: EntityData;
   list: EntityActionListState;
   selectedEntities: Accessor<EntityData[]>;
-  activeTab: Accessor<string | undefined>;
+  viewContext: EntityActionViewContext;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -96,7 +97,7 @@ export const SoupEntityContextMenu: FlowComponent<
                 drawerManager?.open({
                   entity: props.entity,
                   list: props.list,
-                  activeTab: props.activeTab,
+                  viewContext: props.viewContext,
                 });
               },
             }));
@@ -121,7 +122,7 @@ export const SoupEntityContextMenu: FlowComponent<
                 <SoupEntityActionsMenu
                   entities={menuEntities()}
                   list={props.list}
-                  activeTab={props.activeTab}
+                  viewContext={props.viewContext}
                   onEditTags={
                     canEditTags()
                       ? () => setTimeout(() => setTagPickerOpen(true), 0)

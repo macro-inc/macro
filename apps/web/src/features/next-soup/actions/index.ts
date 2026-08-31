@@ -1,3 +1,8 @@
+export {
+  type EntityActionSenderBucket,
+  type EntityActionViewContext,
+  resolveEntityActionViewContext,
+} from './entity-action-view-context';
 export { makeAddTagAction } from './make-add-tag-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
 export { makeCopyAction } from './make-copy-action';

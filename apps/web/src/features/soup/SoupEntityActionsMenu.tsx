@@ -1,8 +1,11 @@
-import type { EntityActionListState } from '@app/features/next-soup/actions';
+import type {
+  EntityActionListState,
+  EntityActionViewContext,
+} from '@app/features/next-soup/actions';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
-import { type Accessor, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import {
   createSoupEntityActions,
   viewedProjectIdFromContent,
@@ -11,7 +14,7 @@ import {
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
   list: EntityActionListState;
-  activeTab: Accessor<string | undefined>;
+  viewContext: EntityActionViewContext;
   onActionComplete?: () => void;
   onEditTags?: () => void;
 }
@@ -23,8 +26,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const groups = () => {
     const content = panel.handle.content();
     return buildActionGroups(props.list, props.entities, {
-      activeTab: props.activeTab(),
-      activeListView: content.id,
+      viewContext: props.viewContext,
       viewedProjectId: viewedProjectIdFromContent(content),
       openTagPicker: props.onEditTags,
       splitHandle: panel.handle,

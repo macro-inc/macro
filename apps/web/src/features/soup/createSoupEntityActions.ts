@@ -1,6 +1,6 @@
-import { isListViewID } from '@app/constants/list-views';
 import {
   type EntityActionListState,
+  type EntityActionViewContext,
   makeBlockSenderAction,
   makeCopyAction,
   makeCopyBranchNameAction,
@@ -25,7 +25,6 @@ import {
   makeShareAction,
   markReminderTargetDone,
 } from '@app/features/next-soup/actions';
-import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
 import {
   markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
@@ -42,13 +41,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
 import type { Component, JSX } from 'solid-js';
-
-const SIGNAL_TABS = new Set<string | undefined>([
-  undefined,
-  'signal',
-  'important',
-]);
-const NOISE_TABS = new Set(['noise']);
 
 type SoupEntityActionItem = {
   id: string;
@@ -69,8 +61,7 @@ type BuildActionGroups = (
   soup: EntityActionListState,
   entities: EntityData[],
   context: {
-    activeListView: string;
-    activeTab: string | undefined;
+    viewContext: EntityActionViewContext;
     /** Set when the list is a folder's contents (project block view) */
     viewedProjectId?: string;
     // Provided only where the menu host can anchor a tag picker for the
@@ -150,7 +141,7 @@ export function createSoupEntityActions(): {
   const buildActionGroups: BuildActionGroups = (
     soup,
     entities,
-    { activeTab, activeListView, viewedProjectId, openTagPicker, splitHandle }
+    { viewContext, viewedProjectId, openTagPicker, splitHandle }
   ) => {
     const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
       entities.length > 0 && entities.every(canExecute);
@@ -169,10 +160,7 @@ export function createSoupEntityActions(): {
     const topItems: SoupEntityActionItem[] = [];
 
     // Also what the reminder's own mark-done advances on, further down.
-    const marksDoneOnThisView =
-      !!activeTab &&
-      isListViewID(activeListView) &&
-      canExecuteMarkDoneOnView(activeListView, activeTab);
+    const marksDoneOnThisView = viewContext.supportsMarkDone;
 
     if (marksDoneOnThisView) {
       // A fully-done selection (e.g. archived threads in mail "All") gets the
@@ -432,7 +420,7 @@ export function createSoupEntityActions(): {
     const senderItems: SoupEntityActionItem[] = [];
 
     if (
-      NOISE_TABS.has(activeTab ?? '') &&
+      viewContext.senderBucket === 'noise' &&
       canExecuteAll(markSenderSignalAction.canExecute)
     ) {
       senderItems.push({
@@ -443,7 +431,7 @@ export function createSoupEntityActions(): {
     }
 
     if (
-      SIGNAL_TABS.has(activeTab) &&
+      viewContext.senderBucket === 'signal' &&
       canExecuteAll(markSenderNoiseAction.canExecute)
     ) {
       senderItems.push({

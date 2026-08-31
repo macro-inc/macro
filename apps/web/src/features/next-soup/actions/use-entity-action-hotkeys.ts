@@ -1,5 +1,3 @@
-import { isListViewID } from '@app/constants/list-views';
-import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
@@ -14,6 +12,7 @@ import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { type Accessor, onCleanup } from 'solid-js';
+import type { EntityActionViewContext } from './entity-action-view-context';
 import {
   makeAddTagAction,
   makeCopyAction,
@@ -42,7 +41,7 @@ type UseEntityActionHotkeysOptions = {
   selectedEntities: Accessor<EntityData[]>;
   focusedEntity: Accessor<EntityData | undefined>;
   restoreFocus: (entityId?: string) => void | Promise<void>;
-  activeSoupViewTab?: () => string | undefined;
+  viewContext: Accessor<EntityActionViewContext>;
   splitHandle?: SplitHandle;
   condition?: () => boolean;
 };
@@ -134,10 +133,7 @@ export const useEntityActionHotkeys = (
    * that follows setting a reminder advances on the same answer.
    */
   const marksDoneOnThisView = (): boolean => {
-    const contentId = splitHandle?.content().id;
-    if (!isListViewID(contentId)) return false;
-    const soupViewTab = options.activeSoupViewTab?.();
-    return !soupViewTab || canExecuteMarkDoneOnView(contentId, soupViewTab);
+    return options.viewContext().supportsMarkDone;
   };
 
   // Declared here rather than with the other actions above because its
@@ -208,16 +204,7 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
-
-      const contentId = splitHandle?.content().id;
-
-      const soupViewTab = options.activeSoupViewTab?.();
-
-      if (
-        !isListViewID(contentId) ||
-        (soupViewTab && !canExecuteMarkDoneOnView(contentId, soupViewTab))
-      )
-        return false;
+      if (!marksDoneOnThisView()) return false;
 
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(markNotDone.canExecute);

@@ -31,8 +31,7 @@ function ConfiguredSoupEntityActionDrawer() {
 
     const content = panel.handle.content();
     return buildActionGroups(entry.list, [entry.entity], {
-      activeTab: entry.activeTab(),
-      activeListView: content.id,
+      viewContext: entry.viewContext,
       viewedProjectId: viewedProjectIdFromContent(content),
       splitHandle: panel.handle,
     });
