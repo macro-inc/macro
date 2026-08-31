@@ -44,38 +44,26 @@ on the host network) is pointed at this Grafana. Prefer its tools:
 
 Datasource UIDs are stable: `loki`, `prometheus`, `tempo`, `pyroscope`.
 
-The raw HTTP APIs below are the fallback when the MCP is unavailable. Two
-timing quirks either way: Loki/Tempo time params are unix epoch
-**nanoseconds**, and Tempo's search index flushes every ~30s — a trace you
-just produced is fetchable by ID immediately but may not show in search yet.
+Typical calls — service names are the binary names (`email_service`,
+`document-storage-service`); match on route, duration, or any span attribute:
 
-Find traces (TraceQL — service names are the binary names, e.g.
-`email_service`, `document-storage-service`):
+- `tempo_traceql-search` `{datasourceUid: "tempo", query: '{resource.service.name="email_service" && status=error}'}`
+  (also `'{span.http.route="/documents" && duration>500ms}'`), then
+  `tempo_get-trace` with the returned trace ID. Searches default to the past
+  hour; widen with RFC3339 `start`/`end`.
+- `query_loki_logs` `{datasourceUid: "loki", logql: '{service_name="email_service"} |= "error"'}`
+  — log lines carry `trace_id`/`span_id` for correlation. Discover services
+  with `list_loki_label_values` on `service_name`.
 
-```bash
-curl -sG http://localhost:3200/api/search \
-  --data-urlencode 'q={resource.service.name="email_service" && status=error}' \
-  --data-urlencode 'limit=20'
-# then fetch one:
-curl -s http://localhost:3200/api/traces/<traceID>
-```
+Timing quirks: Tempo's search index flushes every ~30s — a trace you just
+produced is fetchable by ID immediately but may not show in search yet.
 
-Match on route, duration, or any span attribute:
-`{span.http.route="/documents" && duration>500ms}`.
-
-Read logs with `query_loki_logs`, or by `curl` when the MCP is unavailable
-(events carry `trace_id` for correlation):
-
-```bash
-curl -sG http://localhost:3100/loki/api/v1/query_range \
-  --data-urlencode 'query={service_name="email_service"} |= "error"' \
-  --data-urlencode "start=$(date -d '15 minutes ago' +%s)000000000" | jq '.data.result'
-# discover services:
-curl -s http://localhost:3100/loki/api/v1/label/service_name/values
-```
-
-`docker compose -p macro logs -f <service>` still works for raw stdout, but
-Loki is queryable and survives container restarts.
+Fallback without MCP (pi, or the server is down) — everything above is also
+plain HTTP: TraceQL search at `http://localhost:3200/api/search?q=<traceql>`,
+trace fetch at `/api/traces/<id>`, LogQL at
+`http://localhost:3100/loki/api/v1/query_range?query=<logql>` (`start`/`end`
+are unix epoch **nanoseconds**). `docker compose -p macro logs -f <service>`
+still works for raw stdout, but Loki is queryable and survives restarts.
 
 Verbosity knobs (set in the shell before `just run_local`, or per service in
 Doppler): `RUST_LOG` filters console + Loki output; `OTEL_TRACE_FILTER`
