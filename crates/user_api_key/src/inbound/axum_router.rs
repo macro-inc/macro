@@ -16,7 +16,7 @@ use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{
-    models::{UserApiKey, UserApiKeyError},
+    models::{CreatedUserApiKey, UserApiKeyError, UserApiKeyId, UserApiKeyInfo},
     ports::UserApiKeyService,
 };
 
@@ -58,8 +58,8 @@ impl<S, Auth> FromRef<UserApiKeyRouterState<S, Auth>> for MacroAuthorizationStat
 ///
 /// Routes:
 /// - `POST /` — mint a key for the caller.
-/// - `GET /` — list the caller's keys.
-/// - `DELETE /{key}` — delete one of the caller's keys.
+/// - `GET /` — list the caller's keys as safe metadata.
+/// - `DELETE /{id}` — delete one of the caller's keys by opaque id.
 pub fn user_api_key_router<S, Auth, T>(state: UserApiKeyRouterState<S, Auth>) -> Router<T>
 where
     S: UserApiKeyService,
@@ -69,32 +69,24 @@ where
     Router::new()
         .route("/", post(create_user_api_key_handler::<S, Auth>))
         .route("/", get(list_user_api_keys_handler::<S, Auth>))
-        .route("/{key}", delete(delete_user_api_key_handler::<S, Auth>))
+        .route("/{id}", delete(delete_user_api_key_handler::<S, Auth>))
         .with_state(state)
 }
 
-/// Response body for minting a key.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateUserApiKeyResponse {
-    /// The newly minted secret. Shown only on create.
-    pub key: String,
-}
-
-/// The caller's API keys.
+/// The caller's API keys as safe metadata.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserApiKeysList {
-    /// The caller's keys.
-    pub keys: Vec<String>,
+    /// The caller's keys. Never includes the raw secret.
+    pub keys: Vec<UserApiKeyInfo>,
 }
 
 /// Path params for deleting a key.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Path)]
 pub struct DeleteUserApiKeyParams {
-    /// The full key value.
-    pub key: String,
+    /// Opaque key identifier.
+    pub id: UserApiKeyId,
 }
 
 /// Mint a new API key for the caller.
@@ -104,7 +96,7 @@ pub struct DeleteUserApiKeyParams {
     operation_id = "create_user_api_key",
     path = "/user-api-keys",
     responses(
-        (status = 201, body = CreateUserApiKeyResponse),
+        (status = 201, body = CreatedUserApiKey),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
@@ -114,21 +106,16 @@ pub struct DeleteUserApiKeyParams {
 pub async fn create_user_api_key_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-) -> Result<(StatusCode, Json<CreateUserApiKeyResponse>), UserApiKeyError>
+) -> Result<(StatusCode, Json<CreatedUserApiKey>), UserApiKeyError>
 where
     S: UserApiKeyService,
     Auth: MacroAuthorizationService,
 {
-    let key = state
+    let created = state
         .service
         .create_key(&user.authorization.user.macro_user_id)
         .await?;
-    Ok((
-        StatusCode::CREATED,
-        Json(CreateUserApiKeyResponse {
-            key: key.expose().to_string(),
-        }),
-    ))
+    Ok((StatusCode::CREATED, Json(created)))
 }
 
 /// List the caller's API keys.
@@ -156,9 +143,7 @@ where
         .service
         .list_keys(&user.authorization.user.macro_user_id)
         .await?;
-    Ok(Json(UserApiKeysList {
-        keys: keys.iter().map(|key| key.expose().to_string()).collect(),
-    }))
+    Ok(Json(UserApiKeysList { keys }))
 }
 
 /// Delete one of the caller's API keys.
@@ -166,7 +151,7 @@ where
     delete,
     tag = "user-api-keys",
     operation_id = "delete_user_api_key",
-    path = "/user-api-keys/{key}",
+    path = "/user-api-keys/{id}",
     params(DeleteUserApiKeyParams),
     responses(
         (status = 204, description = "API key deleted"),
@@ -187,10 +172,7 @@ where
 {
     state
         .service
-        .delete_key(
-            &user.authorization.user.macro_user_id,
-            &UserApiKey::from_raw(params.key),
-        )
+        .delete_key(&user.authorization.user.macro_user_id, params.id)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

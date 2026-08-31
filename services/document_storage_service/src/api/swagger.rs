@@ -135,7 +135,8 @@ use soup::inbound::axum_router::{
     PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
     SoupPage,
 };
-use user_api_key::inbound::axum_router::{CreateUserApiKeyResponse, UserApiKeysList};
+use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
+use user_api_key::inbound::axum_router::UserApiKeysList;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -462,7 +463,8 @@ use utoipa::OpenApi;
             ForeignEntity,
             Favorite,
             FavoritesList,
-            CreateUserApiKeyResponse,
+            CreatedUserApiKey,
+            UserApiKeyInfo,
             UserApiKeysList,
             AddFavoriteRequest,
             FavoriteEntityRef,

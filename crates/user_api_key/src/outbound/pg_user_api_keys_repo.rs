@@ -3,10 +3,12 @@
 #[cfg(test)]
 mod tests;
 
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
+use uuid::Uuid;
 
-use crate::domain::models::UserApiKey;
+use crate::domain::models::{UserApiKey, UserApiKeyId, UserApiKeyInfo};
 use crate::domain::ports::UserApiKeysRepo;
 
 /// Postgres-backed user API key repository.
@@ -33,6 +35,22 @@ pub enum UserApiKeysRepoErr {
     InvalidUserId,
 }
 
+struct UserApiKeyInfoRow {
+    id: Uuid,
+    prefix: String,
+    created_at: DateTime<Utc>,
+}
+
+impl From<UserApiKeyInfoRow> for UserApiKeyInfo {
+    fn from(row: UserApiKeyInfoRow) -> Self {
+        Self {
+            id: UserApiKeyId::from_uuid(row.id),
+            prefix: row.prefix,
+            created_at: row.created_at,
+        }
+    }
+}
+
 impl UserApiKeysRepo for PgUserApiKeysRepo {
     type Err = UserApiKeysRepoErr;
 
@@ -40,19 +58,25 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
     async fn insert_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        id: UserApiKeyId,
         key: &UserApiKey,
-    ) -> Result<(), Self::Err> {
-        sqlx::query!(
+    ) -> Result<UserApiKeyInfo, Self::Err> {
+        let prefix = key.display_prefix();
+        let row = sqlx::query_as!(
+            UserApiKeyInfoRow,
             r#"
-            INSERT INTO "UserApiKey" (user_id, key)
-            VALUES ($1, $2)
+            INSERT INTO "UserApiKey" (id, user_id, key, prefix)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id, prefix, created_at
             "#,
+            id.as_uuid(),
             user_id.as_ref(),
             key.expose(),
+            prefix,
         )
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
-        Ok(())
+        Ok(row.into())
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -67,22 +91,43 @@ impl UserApiKeysRepo for PgUserApiKeysRepo {
     }
 
     #[tracing::instrument(err, skip_all)]
-    async fn list_keys(&self, user_id: &MacroUserIdStr<'_>) -> Result<Vec<UserApiKey>, Self::Err> {
-        let rows = sqlx::query!(
+    async fn list_keys(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<UserApiKeyInfo>, Self::Err> {
+        let rows = sqlx::query_as!(
+            UserApiKeyInfoRow,
             r#"
-            SELECT key
+            SELECT id, prefix, created_at
             FROM "UserApiKey"
             WHERE user_id = $1
-            ORDER BY key
+            ORDER BY created_at DESC, id DESC
             "#,
             user_id.as_ref(),
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok(rows
-            .into_iter()
-            .map(|row| UserApiKey::from_raw(row.key))
-            .collect())
+        Ok(rows.into_iter().map(UserApiKeyInfo::from).collect())
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn find_key_by_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        id: UserApiKeyId,
+    ) -> Result<Option<UserApiKey>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT key
+            FROM "UserApiKey"
+            WHERE user_id = $1 AND id = $2
+            "#,
+            user_id.as_ref(),
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|row| UserApiKey::from_raw(row.key)))
     }
 
     #[tracing::instrument(err, skip_all)]

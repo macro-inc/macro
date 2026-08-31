@@ -1,15 +1,59 @@
 //! Domain models for user API keys.
 
 use std::fmt;
+use std::str::FromStr;
 
+use chrono::{DateTime, Utc};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use uuid::Uuid;
 
-/// Prefix written onto every newly minted key.
+/// Prefix written onto every newly minted key, and onto display prefixes.
 pub const KEY_PREFIX: &str = "mak_";
 
 /// Entropy used when minting a key (32 bytes → 64 hex characters).
 const KEY_SECRET_BYTES: usize = 32;
+
+/// Hex characters of the SHA-256 digest used as the public display prefix.
+const DISPLAY_PREFIX_HEX_CHARS: usize = 8;
+
+/// Opaque identifier for a stored user API key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(transparent)]
+pub struct UserApiKeyId(Uuid);
+
+impl UserApiKeyId {
+    /// Mint a new UUIDv7 identifier.
+    pub fn generate() -> Self {
+        Self(Uuid::now_v7())
+    }
+
+    /// Wrap an already-persisted id.
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    /// The inner UUID.
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for UserApiKeyId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromStr for UserApiKeyId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Uuid::parse_str(s)?))
+    }
+}
 
 /// A user API key secret.
 ///
@@ -38,6 +82,18 @@ impl UserApiKey {
     pub fn expose(&self) -> &str {
         &self.0
     }
+
+    /// Public display prefix derived from the secret.
+    ///
+    /// Uses the first eight hex characters of SHA-256 so the value is never a
+    /// raw substring of the secret.
+    pub fn display_prefix(&self) -> String {
+        let digest = Sha256::digest(self.0.as_bytes());
+        format!(
+            "{KEY_PREFIX}{}",
+            hex::encode(&digest[..DISPLAY_PREFIX_HEX_CHARS / 2])
+        )
+    }
 }
 
 impl AsRef<str> for UserApiKey {
@@ -51,6 +107,57 @@ impl fmt::Debug for UserApiKey {
         let raw = self.expose();
         let suffix = raw.get(raw.len().saturating_sub(4)..).unwrap_or("");
         write!(f, "mak_…{suffix}")
+    }
+}
+
+/// Safe metadata for a stored key. Never contains the secret.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct UserApiKeyInfo {
+    /// Opaque identifier used to address the key after create.
+    pub id: UserApiKeyId,
+    /// Public display prefix; not a substring of the secret.
+    pub prefix: String,
+    /// When the key was created.
+    pub created_at: DateTime<Utc>,
+}
+
+/// A newly minted key: safe metadata plus the secret, shown only once.
+#[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedUserApiKey {
+    /// Opaque identifier used to address the key after create.
+    pub id: UserApiKeyId,
+    /// Public display prefix; not a substring of the secret.
+    pub prefix: String,
+    /// When the key was created.
+    pub created_at: DateTime<Utc>,
+    /// The newly minted secret. Shown only on create.
+    pub key: String,
+}
+
+impl fmt::Debug for CreatedUserApiKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CreatedUserApiKey")
+            .field("id", &self.id)
+            .field("prefix", &self.prefix)
+            .field("created_at", &self.created_at)
+            .field("key", &UserApiKey::from_raw(&self.key))
+            .finish()
+    }
+}
+
+impl CreatedUserApiKey {
+    /// Build a create response from persisted metadata and the raw secret.
+    pub fn new(info: UserApiKeyInfo, key: &UserApiKey) -> Self {
+        Self {
+            id: info.id,
+            prefix: info.prefix,
+            created_at: info.created_at,
+            key: key.expose().to_string(),
+        }
     }
 }
 

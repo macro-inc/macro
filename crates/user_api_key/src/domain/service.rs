@@ -5,7 +5,9 @@ mod test;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::models::{UserApiKey, UserApiKeyError};
+use crate::domain::models::{
+    CreatedUserApiKey, UserApiKey, UserApiKeyError, UserApiKeyId, UserApiKeyInfo,
+};
 use crate::domain::ports::{UserApiKeyService, UserApiKeysRepo};
 
 /// Upper bound on keys per user.
@@ -35,7 +37,7 @@ where
     async fn create_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<UserApiKey, UserApiKeyError> {
+    ) -> Result<CreatedUserApiKey, UserApiKeyError> {
         let count = self
             .repo
             .count_keys(user_id)
@@ -46,19 +48,21 @@ where
                 "cannot have more than {MAX_KEYS_PER_USER} api keys"
             )));
         }
+        let id = UserApiKeyId::generate();
         let key = UserApiKey::generate();
-        self.repo
-            .insert_key(user_id, &key)
+        let info = self
+            .repo
+            .insert_key(user_id, id, &key)
             .await
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
-        Ok(key)
+        Ok(CreatedUserApiKey::new(info, &key))
     }
 
     #[tracing::instrument(err, skip_all)]
     async fn list_keys(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Vec<UserApiKey>, UserApiKeyError> {
+    ) -> Result<Vec<UserApiKeyInfo>, UserApiKeyError> {
         Ok(self
             .repo
             .list_keys(user_id)
@@ -70,11 +74,17 @@ where
     async fn delete_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        key: &UserApiKey,
+        id: UserApiKeyId,
     ) -> Result<(), UserApiKeyError> {
+        let key = self
+            .repo
+            .find_key_by_id(user_id, id)
+            .await
+            .map_err(|e| rootcause::Report::new(e).into_dynamic())?
+            .ok_or(UserApiKeyError::NotFound)?;
         let removed = self
             .repo
-            .delete_key(user_id, key)
+            .delete_key(user_id, &key)
             .await
             .map_err(|e| rootcause::Report::new(e).into_dynamic())?;
         if removed {

@@ -2,7 +2,9 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::models::{UserApiKey, UserApiKeyError};
+use crate::domain::models::{
+    CreatedUserApiKey, UserApiKey, UserApiKeyError, UserApiKeyId, UserApiKeyInfo,
+};
 
 /// Outbound persistence port for user API keys.
 ///
@@ -16,8 +18,9 @@ pub trait UserApiKeysRepo: Send + Sync + 'static {
     fn insert_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        id: UserApiKeyId,
         key: &UserApiKey,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<UserApiKeyInfo, Self::Err>> + Send;
 
     /// Count the keys currently in the user's collection.
     fn count_keys(
@@ -25,11 +28,18 @@ pub trait UserApiKeysRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
 
-    /// List the user's keys, ordered by `key` for a stable response.
+    /// List the user's keys as safe metadata, newest first.
     fn list_keys(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Vec<UserApiKey>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<UserApiKeyInfo>, Self::Err>> + Send;
+
+    /// Resolve the stored secret for one of the user's keys.
+    fn find_key_by_id(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        id: UserApiKeyId,
+    ) -> impl Future<Output = Result<Option<UserApiKey>, Self::Err>> + Send;
 
     /// Remove one of the user's keys. Returns `true` when a row was removed.
     fn delete_key(
@@ -50,23 +60,23 @@ pub trait UserApiKeysRepo: Send + Sync + 'static {
 /// Inbound service port: the user API key API used by drivers (HTTP).
 pub trait UserApiKeyService: Send + Sync + 'static {
     /// Mint a new key for the user. The full secret is returned here and
-    /// nowhere else once hashing lands.
+    /// nowhere else.
     fn create_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<UserApiKey, UserApiKeyError>> + Send;
+    ) -> impl Future<Output = Result<CreatedUserApiKey, UserApiKeyError>> + Send;
 
-    /// List the user's keys.
+    /// List the user's keys as safe metadata.
     fn list_keys(
         &self,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Vec<UserApiKey>, UserApiKeyError>> + Send;
+    ) -> impl Future<Output = Result<Vec<UserApiKeyInfo>, UserApiKeyError>> + Send;
 
-    /// Delete one of the user's keys. [UserApiKeyError::NotFound] when the
-    /// key does not exist in the caller's collection.
+    /// Delete one of the user's keys by opaque id. [UserApiKeyError::NotFound]
+    /// when the key does not exist in the caller's collection.
     fn delete_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        key: &UserApiKey,
+        id: UserApiKeyId,
     ) -> impl Future<Output = Result<(), UserApiKeyError>> + Send;
 }
