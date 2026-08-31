@@ -511,11 +511,13 @@ describe('describeReminderSchedule', () => {
 describe('describeReminderWhen', () => {
   it('reads a one-shot as its firing date and time', () => {
     // Built from local components and formatted in local time, so the string is
-    // the same wherever the test runs.
+    // the same wherever the test runs. The current year keeps it in
+    // `formatDateAndTime`'s same-year "MMM d" branch rather than the numeric one.
+    const year = new Date().getFullYear();
     expect(
       describeReminderWhen({
         scheduleType: 'once',
-        nextRunAt: new Date(2026, 7, 10, 9, 0),
+        nextRunAt: new Date(year, 7, 10, 9, 0),
       })
     ).toBe('Aug 10, 9:00 AM');
   });

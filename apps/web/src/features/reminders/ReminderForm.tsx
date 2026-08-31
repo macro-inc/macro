@@ -51,6 +51,12 @@ export interface ReminderFormProps {
    * form as an edit: only then can an untouched schedule be sent back unchanged.
    */
   initialSchedule?: ReminderSchedule;
+  /**
+   * The reminder's next firing, when editing one. Seeds the one-shot date/time
+   * so switching a recurring reminder to "Does not repeat" defaults to its next
+   * occurrence rather than a generic tomorrow-morning slot.
+   */
+  initialRemindAt?: Date | string;
   placeholder: string;
   /** A standalone reminder has no entity to name it after, so it needs a title. */
   descriptionRequired?: boolean;
@@ -115,12 +121,15 @@ function atDefault(now: Date): Date {
 /** The control values to open with, derived from the reminder (or the defaults). */
 function deriveSeed(
   description: string | undefined,
-  schedule: ReminderSchedule | undefined
+  schedule: ReminderSchedule | undefined,
+  remindAt: Date | string | undefined
 ) {
   const now = new Date();
   const recurring = schedule !== undefined && isRecurring(schedule);
-  const onceSeedDate =
-    schedule && !recurring ? new Date(schedule.remindAt) : atDefault(now);
+  // The reminder's next firing seeds the one-shot fields — for a recurring
+  // reminder that is its next occurrence, so switching to "Does not repeat"
+  // lands there rather than on a generic tomorrow-morning slot.
+  const onceSeedDate = remindAt ? new Date(remindAt) : atDefault(now);
   const parts = recurring
     ? repeatPartsFromSchedule(schedule)
     : repeatPartsFromDate(onceSeedDate);
@@ -132,6 +141,10 @@ function deriveSeed(
     onceDate: toDateInput(onceSeedDate),
     onceTime: toTimeInput(onceSeedDate),
     parts,
+    // The zone a recurring reminder was built in, so re-sending an edited
+    // recurrence keeps firing at the same wall-clock time even when the editor
+    // sits in a different timezone. Absent for a one-shot or a new recurrence.
+    recurringTimezone: recurring ? schedule.timezone : undefined,
     // What an untouched edit sends back unchanged. For a create the controls
     // are always rebuilt (and past-checked), so this is only read on edit.
     originalSchedule: schedule ?? onceSchedule(onceSeedDate),
@@ -148,7 +161,11 @@ function deriveSeed(
  * calendar event editor, so either can be changed in one pass.
  */
 export function ReminderForm(props: ReminderFormProps) {
-  const seed = deriveSeed(props.initialDescription, props.initialSchedule);
+  const seed = deriveSeed(
+    props.initialDescription,
+    props.initialSchedule,
+    props.initialRemindAt
+  );
   const isEdit = props.initialSchedule !== undefined;
 
   const [description, setDescription] = createSignal(seed.description);
@@ -253,11 +270,13 @@ export function ReminderForm(props: ReminderFormProps) {
 
     const parts = repeatParts();
     // No past-date check: a recurrence has no single instant to have passed, and
-    // the backend derives its first firing from the cron itself.
+    // the backend derives its first firing from the cron itself. Keep the
+    // reminder's own zone when it had one; a brand-new recurrence takes the
+    // viewer's default (recurringSchedule's fallback).
     if (!isValidCronParts(parts)) return;
     props.onSubmit({
       description: description(),
-      schedule: recurringSchedule(parts),
+      schedule: recurringSchedule(parts, seed.recurringTimezone),
     });
   };
 

@@ -5,6 +5,10 @@ import type { ReminderEntity } from '@entity';
 import BellIcon from '@phosphor/bell-simple.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
+  getCachedItemPreview,
+  isAccessiblePreviewItem,
+} from '@queries/preview';
+import {
   reminderSoupPatch,
   useReminderQuery,
   useUpdateReminderMutation,
@@ -17,6 +21,7 @@ import type { Reminder } from '@service-storage/generated/schemas/reminder';
 import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
 import { ReminderForm, type ReminderFormValues } from './ReminderForm';
 import {
+  reminderDescriptionForReference,
   reminderEditPatch,
   resolveEditedDescription,
 } from './reminder-schedule';
@@ -53,6 +58,19 @@ function referenceMention(
             ? reminder.entityType
             : undefined;
   return type ? { id: reminder.entityId, type } : undefined;
+}
+
+/**
+ * What a blanked title falls back to — the referenced entity's name, as
+ * creating the reminder would have derived it. Read from the preview cache the
+ * mention chip has already populated; a miss keeps the current description.
+ */
+function fallbackDescriptionFor(reminder: Reminder): string | undefined {
+  const reference = referenceMention(reminder);
+  if (!reference) return undefined;
+  const cached = getCachedItemPreview(reference.id);
+  if (!cached || !isAccessiblePreviewItem(cached)) return undefined;
+  return reminderDescriptionForReference(cached.rawName, reference.type);
 }
 
 /**
@@ -98,11 +116,12 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
       },
       {
         // Blank means the same here as it does when creating: name it after
-        // whatever it is about. Without a resolved reference name to fall back
-        // to, a blank field keeps the current description.
+        // whatever it is about, falling back to the current description when
+        // there is nothing to derive from.
         description: resolveEditedDescription(
           values.description,
-          reminder.description
+          reminder.description,
+          fallbackDescriptionFor(reminder)
         ),
         schedule: values.schedule,
       }
@@ -130,6 +149,7 @@ export function ReminderEditorSplit(props: { reminderId: string }) {
               <ReminderForm
                 initialDescription={reminder().description}
                 initialSchedule={reminder().schedule}
+                initialRemindAt={reminder().nextRunAt}
                 placeholder="Reminder description"
                 submitLabel="Save"
                 pending={updateReminder.isPending}
