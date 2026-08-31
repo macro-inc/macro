@@ -124,6 +124,7 @@ function CalendarEventPreviewContent(props: {
   const organizer = () =>
     props.event.organizer?.name || props.event.organizer?.email || '';
   const detail = () => {
+    if (previewQuery.isPending) return '';
     const preview = previewQuery.data;
     if (!preview) return '';
     const guests =
