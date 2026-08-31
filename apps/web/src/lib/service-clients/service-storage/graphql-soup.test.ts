@@ -216,6 +216,37 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.graphqlSoupProjectionSupported()).toBe(true);
   });
 
+  it('strips client-only directives from GraphQL transport documents', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { user: { id: 'user-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    const query = `query Soup($includeId: Boolean!) {
+      user {
+        id @include(if: $includeId)
+        soup { items { cacheProjection @cacheOnly } }
+      }
+    }`;
+    await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query, variables: { includeId: true } }),
+    });
+
+    expect(mocks.platformFetch).toHaveBeenCalledOnce();
+    const transport = mocks.platformFetch.mock.calls[0]?.[1] as RequestInit;
+    const payload = JSON.parse(transport.body as string) as {
+      query: string;
+      variables: { includeId: boolean };
+    };
+    expect(payload.query).not.toContain('@cacheOnly');
+    expect(payload.query).toContain('cacheProjection');
+    expect(payload.query).toContain('@include');
+    expect(payload.variables).toEqual({ includeId: true });
+  });
+
   it.each([
     'Cannot query field "cacheProjection" on type "GraphqlSoupEntity".',
     'Unknown field "cacheProjection" on type "GraphqlSoupEntity".',
