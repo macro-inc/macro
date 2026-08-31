@@ -9,8 +9,9 @@ import { HoverCard } from '@core/component/HoverCard';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
-import Question from '@lucide/circle-help.svg';
 import LockKey from '@lucide/lock-keyhole.svg';
+// Bare '?' on a rounded-full chip; see DSSMedia.
+import Question from '@phosphor-icons/core/regular/question.svg';
 import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
 import {
   createEffect,

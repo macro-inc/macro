@@ -2,11 +2,12 @@ import { clamp } from '@block-canvas/util/math';
 import { LoadErrors } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { staticFileIdEndpoint } from '@core/constant/servers';
-import Question from '@lucide/circle-help.svg?component-solid';
 import LockKey from '@lucide/lock-keyhole.svg?component-solid';
 import PauseIcon from '@lucide/pause.svg';
 import PlayIcon from '@lucide/play.svg';
 import ArrowCounterClockwise from '@lucide/rotate-ccw.svg?component-solid';
+// Bare '?' on a rounded-full chip; circle-help would nest a circle in it.
+import Question from '@phosphor-icons/core/regular/question.svg?component-solid';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import {
