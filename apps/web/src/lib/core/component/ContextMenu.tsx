@@ -309,7 +309,10 @@ const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
 
    The box bleeds back through the surface's p-1.5 and re-pads its children,
    because overflow-y-auto computes overflow-x to auto: a bare scroller would
-   clip MenuSeparator's -mx-1.5 instead of letting it reach the pane edge. */
+   clip MenuSeparator's -mx-1.5 instead of letting it reach the pane edge.
+   That cancellation is hard-coded, so it only holds while the surface keeps
+   p-1.5 — no caller overrides it today. Don't copy the bleed onto a surface
+   whose padding callers set (see Select, which stays a plain scroller). */
 export const MENU_SCROLL_CLASS =
   'flex min-h-0 flex-col items-start overflow-y-auto -mx-1.5 w-[calc(100%+0.75rem)] px-1.5';
 
