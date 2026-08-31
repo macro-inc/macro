@@ -14013,7 +14013,11 @@ export type EditProjectV2Response = EditProjectV2Responses[keyof EditProjectV2Re
 export type StreamEventsData = {
     body?: never;
     path?: never;
-    query?: {
+    query: {
+        /**
+         * Personal or team workspace whose webhook lifecycle events are delivered.
+         */
+        scope: WebhookScope;
         /**
          * URL-encoded JSON array of webhook filters, identical to the persisted
          * webhook `filters` field.

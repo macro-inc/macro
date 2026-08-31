@@ -27790,6 +27790,11 @@ export const editProjectV2Response = zod.object({
  * @summary Stream matching broker events to the caller over Server-Sent Events.
  */
 export const streamEventsQueryParams = zod.object({
+  scope: zod
+    .enum(['user', 'team'])
+    .describe(
+      'Personal or team workspace whose webhook lifecycle events are delivered.'
+    ),
   filters: zod
     .string()
     .optional()

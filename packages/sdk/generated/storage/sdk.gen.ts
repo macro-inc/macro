@@ -2021,8 +2021,8 @@ export class Sdk extends HeyApiClient {
     /**
      * Stream matching broker events to the caller over Server-Sent Events.
      */
-    public streamEvents<ThrowOnError extends boolean = false>(options?: Options<StreamEventsData, ThrowOnError, StreamEventsResponse>): Promise<ServerSentEventsResult<StreamEventsResponses>> {
-        return (options?.client ?? this.client).sse.get<StreamEventsResponses, StreamEventsErrors, ThrowOnError>({ url: '/webhook/events/stream', ...options });
+    public streamEvents<ThrowOnError extends boolean = false>(options: Options<StreamEventsData, ThrowOnError, StreamEventsResponse>): Promise<ServerSentEventsResult<StreamEventsResponses>> {
+        return (options.client ?? this.client).sse.get<StreamEventsResponses, StreamEventsErrors, ThrowOnError>({ url: '/webhook/events/stream', ...options });
     }
     
     /**

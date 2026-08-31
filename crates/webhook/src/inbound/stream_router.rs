@@ -9,7 +9,7 @@
 //! window is rejected with 400, in which case clients must resync out of band
 //! and reconnect without the header. Clients must deduplicate by event id.
 
-use crate::domain::models::WebhookFilters;
+use crate::domain::models::{WebhookFilters, WebhookScope};
 use crate::domain::stream::{WebhookEventStreamService, WebhookStreamError};
 use axum::{
     Json, Router,
@@ -82,17 +82,19 @@ where
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
 pub struct StreamEventsQuery {
+    /// Personal or team workspace whose webhook lifecycle events are delivered.
+    pub scope: WebhookScope,
     /// URL-encoded JSON array of webhook filters, identical to the persisted
     /// webhook `filters` field.
     pub filters: Option<String>,
 }
 
 /// Parse the query's filters into the typed filter model.
-fn parse_filters(query: StreamEventsQuery) -> Result<WebhookFilters, WebhookStreamHandlerError> {
+fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStreamHandlerError> {
     let bad_request =
         |message: String| WebhookStreamHandlerError(WebhookStreamError::BadRequest(message));
 
-    let Some(filters) = query.filters else {
+    let Some(filters) = filters else {
         return Err(bad_request("`filters` is required".to_string()));
     };
     serde_json::from_str(&filters)
@@ -139,13 +141,14 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
     Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
     WebhookStreamHandlerError,
 > {
-    let filters = parse_filters(query)?;
+    let filters = parse_filters(query.filters)?;
     let last_event_id = parse_last_event_id(&headers)?;
 
     let events = state
         .stream_service
         .open_stream(
             authorization.authorization.user.macro_user_id,
+            query.scope,
             filters,
             last_event_id,
         )

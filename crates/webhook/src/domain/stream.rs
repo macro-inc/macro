@@ -17,7 +17,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{NormalizedWebhookEvent, WebhookFilters};
+use crate::domain::models::{NormalizedWebhookEvent, WebhookFilters, WebhookScope};
 use crate::domain::ports::WebhookWorkspaceResolver;
 use chrono::Utc;
 use entity_access::domain::models::EntityType;
@@ -157,6 +157,9 @@ pub trait WebhookStreamSourceFactory: Clone + Send + Sync + 'static {
 pub trait WebhookEventStreamService: Clone + Send + Sync + 'static {
     /// Open an event stream for `subscriber`.
     ///
+    /// `scope` selects the subscriber's personal or current team workspace for
+    /// webhook lifecycle events. Entity events remain gated by entity access.
+    ///
     /// `last_event_id` is the UUIDv7 broker event id of the last event the
     /// subscriber saw; when present, the source verifies that event is retained
     /// and conservatively replays its retained history. An unavailable cursor
@@ -165,6 +168,7 @@ pub trait WebhookEventStreamService: Clone + Send + Sync + 'static {
     fn open_stream(
         &self,
         subscriber: MacroUserIdStr<'static>,
+        scope: WebhookScope,
         filters: WebhookFilters,
         last_event_id: Option<Uuid>,
     ) -> impl Future<Output = Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError>>
@@ -306,23 +310,20 @@ impl<F, A, R> WebhookEventStreamServiceImpl<F, A, R> {
 }
 
 /// Owned per-stream state advanced by the unfold loop.
-struct StreamState<Src, A, R> {
+struct StreamState<Src, A> {
     source: Src,
     entity_access_service: Arc<A>,
-    workspace_resolver: R,
     subscriber: MacroUserIdStr<'static>,
-    workspace_ids: Vec<String>,
-    workspace_ids_resolved_at: Instant,
+    workspace_id: String,
     filters: WebhookFilters,
     access_cache: HashMap<String, (Instant, bool)>,
     _slot: StreamSlot,
 }
 
-impl<Src, A, R> StreamState<Src, A, R>
+impl<Src, A> StreamState<Src, A>
 where
     Src: WebhookStreamSource,
     A: EntityAccessService,
-    R: WebhookWorkspaceResolver,
 {
     /// Whether the subscriber may see an event with this audience.
     async fn subscriber_in_audience(
@@ -331,18 +332,7 @@ where
     ) -> Result<bool, rootcause::Report> {
         match audience {
             StreamAudience::Workspace { workspace_id } => {
-                if self.workspace_ids_resolved_at.elapsed() >= ACCESS_CACHE_TTL {
-                    self.workspace_ids = self
-                        .workspace_resolver
-                        .resolve_workspace_ids(vec![self.subscriber.clone()])
-                        .await
-                        .map_err(|error| {
-                            let error: anyhow::Error = error.into();
-                            rootcause::report!("failed to refresh subscriber workspaces: {error:?}")
-                        })?;
-                    self.workspace_ids_resolved_at = Instant::now();
-                }
-                Ok(self.workspace_ids.contains(workspace_id))
+                Ok(self.workspace_id.as_str() == workspace_id.as_str())
             }
             StreamAudience::Entity {
                 entity_id,
@@ -430,6 +420,7 @@ where
     async fn open_stream(
         &self,
         subscriber: MacroUserIdStr<'static>,
+        scope: WebhookScope,
         filters: WebhookFilters,
         last_event_id: Option<Uuid>,
     ) -> Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError> {
@@ -437,16 +428,26 @@ where
         let slot = self.slots.acquire(&subscriber)?;
         let start = stream_start(last_event_id, Utc::now().timestamp_millis())?;
 
-        let workspace_ids = self
-            .workspace_resolver
-            .resolve_workspace_ids(vec![subscriber.clone()])
-            .await
-            .map_err(|error| {
-                let error: anyhow::Error = error.into();
-                WebhookStreamError::Internal(rootcause::report!(
-                    "failed to resolve subscriber workspaces: {error:?}"
-                ))
-            })?;
+        let workspace_id = match scope {
+            WebhookScope::User => subscriber.as_ref().to_string(),
+            WebhookScope::Team => self
+                .workspace_resolver
+                .resolve_workspace_ids(vec![subscriber.clone()])
+                .await
+                .map_err(|error| {
+                    let error: anyhow::Error = error.into();
+                    WebhookStreamError::Internal(rootcause::report!(
+                        "failed to resolve subscriber team workspace: {error:?}"
+                    ))
+                })?
+                .into_iter()
+                .find(|workspace_id| workspace_id != subscriber.as_ref())
+                .ok_or_else(|| {
+                    WebhookStreamError::BadRequest(
+                        "team scope requires the user to belong to a team".to_string(),
+                    )
+                })?,
+        };
 
         let source = self
             .source_factory
@@ -457,10 +458,8 @@ where
         let state = StreamState {
             source,
             entity_access_service: self.entity_access_service.clone(),
-            workspace_resolver: self.workspace_resolver.clone(),
             subscriber,
-            workspace_ids,
-            workspace_ids_resolved_at: Instant::now(),
+            workspace_id,
             filters,
             access_cache: HashMap::new(),
             _slot: slot,

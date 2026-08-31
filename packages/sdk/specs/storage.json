@@ -12005,6 +12005,15 @@
         "operationId": "stream_events",
         "parameters": [
           {
+            "name": "scope",
+            "in": "query",
+            "description": "Personal or team workspace whose webhook lifecycle events are delivered.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WebhookScope"
+            }
+          },
+          {
             "name": "filters",
             "in": "query",
             "description": "URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.",

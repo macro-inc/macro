@@ -4,8 +4,13 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { WebhookScope } from './webhookScope';
 
 export type StreamEventsParams = {
+  /**
+   * Personal or team workspace whose webhook lifecycle events are delivered.
+   */
+  scope: WebhookScope;
   /**
  * URL-encoded JSON array of webhook filters, identical to the persisted
 webhook `filters` field.
