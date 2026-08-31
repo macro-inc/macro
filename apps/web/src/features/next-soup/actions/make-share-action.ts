@@ -4,7 +4,7 @@ import {
   type ShareableEntityData,
 } from '@app/features/sharing/global-share-modal/shareable-entity';
 import type { EntityData } from '@entity';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeShareAction = () => {
   /**

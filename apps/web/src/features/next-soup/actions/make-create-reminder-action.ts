@@ -2,8 +2,8 @@ import { openReminderComposer } from '@app/features/reminders/reminder-composer'
 import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { reminderTarget } from '@queries/reminders/reminders';
+import type { EntityActionListState } from './entity-action-context';
 import type { makeMarkDoneAction } from './make-mark-done-action';
-import type { EntityActionListState } from './to-entity-action-list-state';
 
 /**
  * The list the action was driven from, when it was driven from one.

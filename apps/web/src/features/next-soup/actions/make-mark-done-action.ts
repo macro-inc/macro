@@ -20,7 +20,7 @@ import {
   toNotificationEntityRef,
 } from '@queries/notification/entity-mutations';
 import { type UndoHandle, useUndoableMutation } from '@queries/undo';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [

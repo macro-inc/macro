@@ -1,6 +1,6 @@
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { type EntityData, isTaskEntity } from '@entity';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeCopyBranchNameAction = () => {
   const canExecute = (entity: EntityData): boolean => {

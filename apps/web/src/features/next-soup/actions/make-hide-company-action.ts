@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { restoreSoupFocus } from '../utils';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeHideCompanyOptions = {
   // Available to all team members; the backend enforces

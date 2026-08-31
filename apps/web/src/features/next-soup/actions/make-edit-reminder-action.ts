@@ -9,7 +9,7 @@ import {
   getCachedItemPreview,
   isAccessiblePreviewItem,
 } from '@queries/preview';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * The description this reminder would get if it were being created now, for a

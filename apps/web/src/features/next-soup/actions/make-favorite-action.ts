@@ -6,7 +6,7 @@ import {
   useFavoritesData,
   useRemoveFavoriteMutation,
 } from '@queries/favorites/favorites';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Toggle an entity in the user's favorites.

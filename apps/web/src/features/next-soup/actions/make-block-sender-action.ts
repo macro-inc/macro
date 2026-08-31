@@ -1,7 +1,7 @@
 import type { EntityData } from '@entity';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
 import { blockSenderWithToast } from '@queries/email/thread';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeBlockSenderAction = () => {
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();

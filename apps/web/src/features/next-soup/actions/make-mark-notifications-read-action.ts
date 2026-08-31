@@ -13,7 +13,7 @@ import {
   toNotificationEntityRef,
   updateNotificationsForEntities,
 } from '@queries/notification/entity-mutations';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotificationsReadOptions = {
   notificationSource: () => NotificationSource;

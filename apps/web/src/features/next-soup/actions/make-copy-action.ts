@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { createBulkCopyDssEntityMutation } from '@entity';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeCopyAction = () => {
   const bulkCopyMutation = createBulkCopyDssEntityMutation();

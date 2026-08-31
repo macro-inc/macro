@@ -1,8 +1,17 @@
 import type { ListController } from '@app/components/list';
+import { isListViewID } from '@app/constants/list-views';
 import type { EntityData } from '@entity';
 import type { SoupRow, SoupState } from '../create-soup-state';
+import { canExecuteMarkDoneOnView } from './make-mark-done-action';
 
 type MaybePromise<T> = T | Promise<T>;
+
+export type EntityActionSenderBucket = 'signal' | 'noise';
+
+export type EntityActionViewContext = {
+  supportsMarkDone: boolean;
+  senderBucket: EntityActionSenderBucket | undefined;
+};
 
 /** Soup list capabilities used by entity actions. */
 export type EntityActionListState = {
@@ -39,6 +48,37 @@ type AdaptedRow = {
   controllerIndex: number;
   entity: EntityData;
 };
+
+function resolveSenderBucket(
+  activeTab: string | undefined
+): EntityActionSenderBucket | undefined {
+  if (activeTab === 'noise') return 'noise';
+
+  if (
+    activeTab === undefined ||
+    activeTab === 'signal' ||
+    activeTab === 'important'
+  ) {
+    return 'signal';
+  }
+
+  return undefined;
+}
+
+export function resolveEntityActionViewContext(options: {
+  activeListView: string;
+  activeTab: string | undefined;
+}): EntityActionViewContext {
+  const { activeListView, activeTab } = options;
+
+  return {
+    supportsMarkDone:
+      activeTab !== undefined &&
+      isListViewID(activeListView) &&
+      canExecuteMarkDoneOnView(activeListView, activeTab),
+    senderBucket: resolveSenderBucket(activeTab),
+  };
+}
 
 /**
  * Adapts a generic list controller to the narrow Soup-shaped state consumed by

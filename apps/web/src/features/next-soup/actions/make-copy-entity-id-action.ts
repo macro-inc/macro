@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeCopyEntityIdAction = () => {
   const canExecute = (_entity: EntityData): boolean => {

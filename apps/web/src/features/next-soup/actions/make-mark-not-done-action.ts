@@ -9,7 +9,7 @@ import type { NotificationSource } from '@notifications';
 import { threadCanBeMarkedNotDone } from '@queries/email/thread';
 import { fetchDoneNotificationIdsByEventItemIds } from '@queries/notification/user-notifications';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotDoneOptions = {
   notificationSource: () => NotificationSource;

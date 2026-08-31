@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { createBulkRemoveFromProjectDssEntityMutation } from '@entity';
 import { restoreSoupFocus } from '../utils';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /** Clear the entities' folder (set their project to none). */
 export const makeRemoveFromProjectAction = () => {

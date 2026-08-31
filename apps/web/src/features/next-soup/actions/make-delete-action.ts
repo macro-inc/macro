@@ -5,7 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { createBulkDeleteDssItemsMutation, type EntityData } from '@entity';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { restoreSoupFocus, trashEmails } from '../utils';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;

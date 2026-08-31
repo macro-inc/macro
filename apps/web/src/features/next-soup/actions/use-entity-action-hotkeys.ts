@@ -12,7 +12,10 @@ import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { type Accessor, onCleanup } from 'solid-js';
-import type { EntityActionViewContext } from './entity-action-view-context';
+import type {
+  EntityActionListState,
+  EntityActionViewContext,
+} from './entity-action-context';
 import {
   makeAddTagAction,
   makeCopyAction,
@@ -33,7 +36,6 @@ import {
   makeShareAction,
   markReminderTargetDone,
 } from './index';
-import type { EntityActionListState } from './to-entity-action-list-state';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;

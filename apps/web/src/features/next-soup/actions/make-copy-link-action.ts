@@ -5,7 +5,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { calendarEventLinkTarget } from '../utils';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Get the URL type/path segment for an entity

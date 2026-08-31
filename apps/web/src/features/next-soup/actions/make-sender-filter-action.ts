@@ -1,6 +1,6 @@
 import type { EntityData } from '@entity';
 import { useNonPrimaryEmailLinkIdHeader } from '@queries/email/link';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 export const makeSenderFilterAction = (
   action: (email: string, linkId?: string) => Promise<void>

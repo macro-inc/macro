@@ -6,7 +6,7 @@ import {
   useMarkThreadAsUnreadMutation,
 } from '@queries/email/thread';
 import { refetchSoupEntity } from '@queries/soup/cache';
-import type { EntityActionListState } from './to-entity-action-list-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Marks read email threads as unread. Rows stay in place — only the soup
