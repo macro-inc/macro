@@ -212,6 +212,10 @@ export default function SignatureEditor(props: {
       const href = pastedHyperlinkHref({
         clipboardPlainText: event.clipboardData?.getData('text/plain') ?? '',
         selectionCollapsed: range == null || range.length === 0,
+        selectionOps:
+          range == null
+            ? []
+            : (quill.getContents(range.index, range.length).ops ?? []),
       });
       if (href == null || range == null) return;
       event.preventDefault();

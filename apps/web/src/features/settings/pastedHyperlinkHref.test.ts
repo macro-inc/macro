@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { pastedHyperlinkHref } from './pastedHyperlinkHref.ts';
 
+const textSelection = [{ insert: 'word' }];
+
 describe('pastedHyperlinkHref', function () {
   it('applies a selected https URL as the hyperlink href', function () {
     expect(
       pastedHyperlinkHref({
         clipboardPlainText: 'https://lunchflow.app',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBe('https://lunchflow.app');
   });
@@ -16,6 +19,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'https://lunchflow.app',
         selectionCollapsed: true,
+        selectionOps: textSelection,
       })
     ).toBeNull();
   });
@@ -25,6 +29,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: '  https://lunchflow.app \n',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBe('https://lunchflow.app');
   });
@@ -34,6 +39,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'http://lunchflow.app',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBe('http://lunchflow.app');
   });
@@ -43,6 +49,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'HTTPS://lunchflow.app',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBe('HTTPS://lunchflow.app');
   });
@@ -52,6 +59,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'https://example.com/a?b=1#c',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBe('https://example.com/a?b=1#c');
   });
@@ -61,6 +69,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'example.com',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBeNull();
   });
@@ -70,6 +79,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'Faith.tools',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBeNull();
   });
@@ -79,6 +89,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'https://example.com\nhttps://other.com',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBeNull();
   });
@@ -88,6 +99,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'https://example.com extra words',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBeNull();
   });
@@ -97,6 +109,7 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: '/pricing',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBeNull();
   });
@@ -106,12 +119,14 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: 'mailto:amr@lunchflow.app',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBeNull();
     expect(
       pastedHyperlinkHref({
         clipboardPlainText: 'javascript:alert(1)',
         selectionCollapsed: false,
+        selectionOps: textSelection,
       })
     ).toBeNull();
   });
@@ -121,6 +136,30 @@ describe('pastedHyperlinkHref', function () {
       pastedHyperlinkHref({
         clipboardPlainText: '',
         selectionCollapsed: false,
+        selectionOps: textSelection,
+      })
+    ).toBeNull();
+  });
+
+  it('applies nothing when the selection is an image embed', function () {
+    expect(
+      pastedHyperlinkHref({
+        clipboardPlainText: 'https://example.com',
+        selectionCollapsed: false,
+        selectionOps: [{ insert: { image: 'https://cdn.example/sig.png' } }],
+      })
+    ).toBeNull();
+  });
+
+  it('applies nothing when the selection mixes text and an image', function () {
+    expect(
+      pastedHyperlinkHref({
+        clipboardPlainText: 'https://example.com',
+        selectionCollapsed: false,
+        selectionOps: [
+          { insert: 'caption' },
+          { insert: { image: 'https://cdn.example/sig.png' } },
+        ],
       })
     ).toBeNull();
   });
