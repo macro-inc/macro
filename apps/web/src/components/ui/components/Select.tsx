@@ -122,7 +122,7 @@ function SelectContent(props: SelectContentProps) {
                 would only cancel the default p-1.5 and would push every other
                 caller's content past the pane. Nothing inside a Select bleeds
                 with a negative margin, so there is none to preserve. */}
-            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
               {local.children}
             </div>
           </KobalteSelect.Content>

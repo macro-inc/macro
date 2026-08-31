@@ -181,7 +181,7 @@ export function EventTimeInput(props: EventTimeInputProps) {
               Choose {props.label.toLowerCase()}
             </Popover.Title>
             {/* Scroll on an inner box, not on the glass node — see Select. */}
-            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
               <Listbox<EventTimeOption>
                 ref={(element) => {
                   listbox = element;

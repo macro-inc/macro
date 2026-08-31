@@ -314,7 +314,7 @@ const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
    p-1.5 — no caller overrides it today. Don't copy the bleed onto a surface
    whose padding callers set (see Select, which stays a plain scroller). */
 export const MENU_SCROLL_CLASS =
-  'flex min-h-0 flex-col items-start overflow-y-auto -mx-1.5 w-[calc(100%+0.75rem)] px-1.5';
+  'flex min-h-0 flex-col items-start overflow-y-auto [&>*]:shrink-0 -mx-1.5 w-[calc(100%+0.75rem)] px-1.5';
 
 export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu-glass ${MENU_SURFACE_SCOPE} glass-lg rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] z-modal menu-open-animation`;
 
