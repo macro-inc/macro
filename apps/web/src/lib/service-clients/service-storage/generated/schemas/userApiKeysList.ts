@@ -7,9 +7,9 @@
 import type { UserApiKeyInfo } from './userApiKeyInfo';
 
 /**
- * The caller's API keys as safe metadata.
+ * The caller's API keys as id + name.
  */
 export interface UserApiKeysList {
-  /** The caller's keys. Never includes the raw secret. */
+  /** The caller's keys. Never includes the raw secret or hash. */
   keys: UserApiKeyInfo[];
 }

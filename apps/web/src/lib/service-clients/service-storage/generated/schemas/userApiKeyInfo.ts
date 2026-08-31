@@ -7,13 +7,11 @@
 import type { UserApiKeyId } from './userApiKeyId';
 
 /**
- * Safe metadata for a stored key. Never contains the secret.
+ * Safe metadata for a stored key. Never contains the secret or its hash.
  */
 export interface UserApiKeyInfo {
-  /** When the key was created. */
-  createdAt: string;
   /** Opaque identifier used to address the key after create. */
   id: UserApiKeyId;
-  /** Public display prefix; not a substring of the secret. */
-  prefix: string;
+  /** User-facing name. */
+  name: string;
 }

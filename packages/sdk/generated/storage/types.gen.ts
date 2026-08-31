@@ -3237,6 +3237,16 @@ export type CreateUnthreadedPdfAnchorRequest = PdfHighlightAnchorRequest & {
     anchorType: 'highlight';
 };
 
+/**
+ * Request body for minting a key.
+ */
+export type CreateUserApiKeyRequest = {
+    /**
+     * User-facing name for the key.
+     */
+    name: string;
+};
+
 export type CreateViewRequest = {
     config: unknown;
     name: string;
@@ -3342,10 +3352,6 @@ export type CreateWebhookResponse = {
  */
 export type CreatedUserApiKey = {
     /**
-     * When the key was created.
-     */
-    createdAt: string;
-    /**
      * Opaque identifier used to address the key after create.
      */
     id: UserApiKeyId;
@@ -3354,9 +3360,9 @@ export type CreatedUserApiKey = {
      */
     key: string;
     /**
-     * Public display prefix; not a substring of the secret.
+     * User-facing name.
      */
-    prefix: string;
+    name: string;
 };
 
 /**
@@ -8335,29 +8341,25 @@ export type UpsertUserDocumentViewLocationRequest = {
 export type UserApiKeyId = string;
 
 /**
- * Safe metadata for a stored key. Never contains the secret.
+ * Safe metadata for a stored key. Never contains the secret or its hash.
  */
 export type UserApiKeyInfo = {
-    /**
-     * When the key was created.
-     */
-    createdAt: string;
     /**
      * Opaque identifier used to address the key after create.
      */
     id: UserApiKeyId;
     /**
-     * Public display prefix; not a substring of the secret.
+     * User-facing name.
      */
-    prefix: string;
+    name: string;
 };
 
 /**
- * The caller's API keys as safe metadata.
+ * The caller's API keys as id + name.
  */
 export type UserApiKeysList = {
     /**
-     * The caller's keys. Never includes the raw secret.
+     * The caller's keys. Never includes the raw secret or hash.
      */
     keys: Array<UserApiKeyInfo>;
 };
@@ -13129,7 +13131,7 @@ export type ListUserApiKeysResponses = {
 export type ListUserApiKeysResponse = ListUserApiKeysResponses[keyof ListUserApiKeysResponses];
 
 export type CreateUserApiKeyData = {
-    body?: never;
+    body: CreateUserApiKeyRequest;
     path?: never;
     query?: never;
     url: '/user-api-keys';

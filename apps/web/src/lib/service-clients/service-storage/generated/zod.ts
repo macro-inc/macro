@@ -27021,25 +27021,27 @@ export const listUserApiKeysResponse = zod
       .array(
         zod
           .object({
-            createdAt: zod.iso
-              .datetime({})
-              .describe('When the key was created.'),
             id: zod
               .uuid()
               .describe('Opaque identifier for a stored user API key.'),
-            prefix: zod
-              .string()
-              .describe(
-                'Public display prefix; not a substring of the secret.'
-              ),
+            name: zod.string().describe('User-facing name.'),
           })
           .describe(
-            'Safe metadata for a stored key. Never contains the secret.'
+            'Safe metadata for a stored key. Never contains the secret or its hash.'
           )
       )
-      .describe("The caller's keys. Never includes the raw secret."),
+      .describe("The caller's keys. Never includes the raw secret or hash."),
   })
-  .describe("The caller's API keys as safe metadata.");
+  .describe("The caller's API keys as id + name.");
+
+/**
+ * @summary Mint a new API key for the caller.
+ */
+export const createUserApiKeyBody = zod
+  .object({
+    name: zod.string().describe('User-facing name for the key.'),
+  })
+  .describe('Request body for minting a key.');
 
 /**
  * @summary Delete one of the caller's API keys.

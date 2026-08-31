@@ -395,6 +395,7 @@ export * from './createUnthreadedPdfAnchorRequest';
 export * from './createUnthreadedPdfAnchorRequestOneOf';
 export * from './createUnthreadedPdfAnchorRequestOneOfAllOf';
 export * from './createUnthreadedPdfAnchorRequestOneOfAllOfAnchorType';
+export * from './createUserApiKeyRequest';
 export * from './createViewRequest';
 export * from './createWebhookRequest';
 export * from './createWebhookRequestHeaders';

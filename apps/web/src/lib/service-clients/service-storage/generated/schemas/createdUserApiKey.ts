@@ -10,12 +10,10 @@ import type { UserApiKeyId } from './userApiKeyId';
  * A newly minted key: safe metadata plus the secret, shown only once.
  */
 export interface CreatedUserApiKey {
-  /** When the key was created. */
-  createdAt: string;
   /** Opaque identifier used to address the key after create. */
   id: UserApiKeyId;
   /** The newly minted secret. Shown only on create. */
   key: string;
-  /** Public display prefix; not a substring of the secret. */
-  prefix: string;
+  /** User-facing name. */
+  name: string;
 }

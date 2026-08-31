@@ -1818,8 +1818,15 @@ export class Sdk extends HeyApiClient {
     /**
      * Mint a new API key for the caller.
      */
-    public createUserApiKey<ThrowOnError extends boolean = false>(options?: Options<CreateUserApiKeyData, ThrowOnError>): RequestResult<CreateUserApiKeyResponses, CreateUserApiKeyErrors, ThrowOnError> {
-        return (options?.client ?? this.client).post<CreateUserApiKeyResponses, CreateUserApiKeyErrors, ThrowOnError>({ url: '/user-api-keys', ...options });
+    public createUserApiKey<ThrowOnError extends boolean = false>(options: Options<CreateUserApiKeyData, ThrowOnError>): RequestResult<CreateUserApiKeyResponses, CreateUserApiKeyErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateUserApiKeyResponses, CreateUserApiKeyErrors, ThrowOnError>({
+            url: '/user-api-keys',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
