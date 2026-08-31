@@ -1,4 +1,7 @@
-import { ComposeTaskTitleEditor } from '@block-md/component/ComposeTask';
+import {
+  COMPOSER_TITLE_LINE_CLASS,
+  ComposeTaskTitleEditor,
+} from '@block-md/component/ComposeTask';
 import { InlinePropertyValue } from '@block-md/component/InlinePropertyValue';
 import {
   createTaskComposerProperties,
@@ -279,13 +282,15 @@ export function TaskComposer(props: {
       data-input-task-composer
     >
       <div class="flex flex-col gap-4 px-3 pt-2">
-        <div class="shrink-0 flex gap-2 items-center">
+        <div class="shrink-0 flex gap-2 items-start">
           <Show when={tagLayoutMode() === 'title'}>
-            <InlineTagsPill
-              docTags={composerTags}
-              showPlaceholder
-              class="shrink-0"
-            />
+            <div class={COMPOSER_TITLE_LINE_CLASS}>
+              <InlineTagsPill
+                docTags={composerTags}
+                showPlaceholder
+                class="shrink-0"
+              />
+            </div>
           </Show>
           <ComposeTaskTitleEditor
             value={title}
