@@ -15,7 +15,20 @@ import type {
 } from './event-form-model';
 
 vi.mock('@core/component/UserIcon', () => ({
-  UserIcon: () => <div data-testid="user-avatar" />,
+  UserIcon: () => {
+    const el = document.createElement('div');
+    el.setAttribute('data-testid', 'user-avatar');
+    return el;
+  },
+}));
+
+vi.mock('@property/editors/selectors/PropertyEntitySelector', () => ({
+  PropertyEntitySelector: () => {
+    const input = document.createElement('input');
+    input.setAttribute('aria-label', 'Search for guests');
+    input.setAttribute('placeholder', 'Add guests...');
+    return input;
+  },
 }));
 
 function guest(email: string, name: string): EventEditorGuestOption {
@@ -47,8 +60,17 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
+class WebSocketStub {
+  close() {}
+  send() {}
+  addEventListener() {}
+  removeEventListener() {}
+}
+
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+  vi.stubGlobal('IntersectionObserver', ResizeObserverStub);
+  vi.stubGlobal('WebSocket', WebSocketStub);
   vi.stubGlobal('scrollTo', vi.fn() as unknown as typeof window.scrollTo);
 });
 
@@ -63,9 +85,12 @@ describe('EventComposerGuestsPill', () => {
     renderInComposerDialog();
 
     screen.getByLabelText('Title').focus();
-    const trigger = screen.getByRole('button', { name: 'Guests' });
-    await user.click(trigger);
+    const guests = screen.getByRole('button', { name: 'Guests' });
+    await user.click(guests);
 
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    // The property dropdown is modal, so the composer dialog (and this
+    // trigger) is aria-hidden while the list is open.
+    expect(guests.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByPlaceholderText('Add guests...')).toBeTruthy();
   });
 });
