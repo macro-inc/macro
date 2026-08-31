@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.email,\n                u.macro_user_id AS \"fusion_user_id?\",\n                u.\"organizationId\" AS \"organization_id?\"\n            FROM \"UserApiKey\" k\n            JOIN \"User\" u\n                ON u.id = k.user_id\n                OR u.email = split_part(k.user_id, '|', 2)\n            WHERE k.hash = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "fusion_user_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "organization_id?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "401afac4e4f5ff255f324f6ccab7f0b9ddb5c308e9bfc7905b1d179fd55a8e5c"
+}

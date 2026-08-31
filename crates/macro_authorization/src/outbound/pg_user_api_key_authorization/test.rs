@@ -1,5 +1,6 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use super::*;
 use crate::domain::ports::UserApiKeyAuthorizationRepo as _;
@@ -8,8 +9,8 @@ const API_KEY: &str = "mak_authorization_test_secret";
 const USER_EMAIL: &str = "user-api-key-authorization@example.com";
 const FUSION_USER_ID: &str = "fusion-user-api-key-authorization";
 
-async fn insert_user_and_key(pool: &PgPool, user_id: &str, email: &str, key: &str) {
-    let macro_user_id = uuid::Uuid::new_v4();
+async fn insert_user_and_key(pool: &PgPool, user_id: &str, email: &str, key: &str) -> Uuid {
+    let macro_user_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO macro_user (id, username, email, stripe_customer_id)
@@ -39,7 +40,7 @@ async fn insert_user_and_key(pool: &PgPool, user_id: &str, email: &str, key: &st
         INSERT INTO "UserApiKey" (id, name, user_id, hash)
         VALUES ($1, $2, $3, $4)
         "#,
-        uuid::Uuid::new_v4(),
+        Uuid::new_v4(),
         "test key",
         user_id,
         &hash_user_api_key(key)[..],
@@ -47,11 +48,12 @@ async fn insert_user_and_key(pool: &PgPool, user_id: &str, email: &str, key: &st
     .execute(pool)
     .await
     .unwrap();
+    macro_user_id
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn finds_owner_when_user_id_is_fusion_id(pool: PgPool) {
-    insert_user_and_key(&pool, FUSION_USER_ID, USER_EMAIL, API_KEY).await;
+async fn finds_owner_when_key_user_id_is_fusion_id(pool: PgPool) {
+    let macro_user_id = insert_user_and_key(&pool, FUSION_USER_ID, USER_EMAIL, API_KEY).await;
     let repo = PgUserApiKeyAuthorizationRepo::new(pool);
 
     let owner = repo
@@ -64,14 +66,15 @@ async fn finds_owner_when_user_id_is_fusion_id(pool: PgPool) {
         owner.macro_user_id.as_ref(),
         "macro|user-api-key-authorization@example.com"
     );
-    assert_eq!(owner.fusion_user_id, FUSION_USER_ID);
+    assert_eq!(owner.fusion_user_id, macro_user_id.to_string());
     assert_eq!(owner.organization_id, None);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn finds_owner_when_user_id_is_macro_user_id(pool: PgPool) {
-    let macro_user_id = "macro|user-api-key-authorization@example.com";
-    insert_user_and_key(&pool, macro_user_id, USER_EMAIL, "mak_macro_id_key").await;
+async fn finds_owner_when_key_user_id_is_macro_user_id(pool: PgPool) {
+    let key_user_id = "macro|user-api-key-authorization@example.com";
+    let macro_user_id =
+        insert_user_and_key(&pool, key_user_id, USER_EMAIL, "mak_macro_id_key").await;
     let repo = PgUserApiKeyAuthorizationRepo::new(pool);
 
     let owner = repo
@@ -80,8 +83,8 @@ async fn finds_owner_when_user_id_is_macro_user_id(pool: PgPool) {
         .unwrap()
         .expect("valid key");
 
-    assert_eq!(owner.macro_user_id.as_ref(), macro_user_id);
-    assert_eq!(owner.fusion_user_id, macro_user_id);
+    assert_eq!(owner.macro_user_id.as_ref(), key_user_id);
+    assert_eq!(owner.fusion_user_id, macro_user_id.to_string());
     assert_eq!(owner.organization_id, None);
 }
 

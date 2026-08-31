@@ -49,9 +49,8 @@ pub enum PgUserApiKeyAuthorizationRepoError {
 
 #[derive(Debug)]
 struct ApiKeyUserRow {
-    user_id: String,
-    fusion_user_id: String,
     email: String,
+    fusion_user_id: Option<uuid::Uuid>,
     organization_id: Option<i32>,
 }
 
@@ -59,13 +58,16 @@ impl TryFrom<ApiKeyUserRow> for ResolvedApiKeyUser {
     type Error = PgUserApiKeyAuthorizationRepoError;
 
     fn try_from(row: ApiKeyUserRow) -> Result<Self, Self::Error> {
-        let macro_user_id = MacroUserIdStr::try_from(row.user_id)
-            .or_else(|_| MacroUserIdStr::try_from_email(&row.email))
+        let macro_user_id = MacroUserIdStr::try_from_email(&row.email)
             .map_err(|_| PgUserApiKeyAuthorizationRepoError::InvalidUserIdentity)?;
+        let fusion_user_id = row
+            .fusion_user_id
+            .ok_or(PgUserApiKeyAuthorizationRepoError::InvalidUserIdentity)?
+            .to_string();
 
         Ok(Self {
             macro_user_id,
-            fusion_user_id: row.fusion_user_id,
+            fusion_user_id,
             organization_id: row.organization_id,
         })
     }
@@ -76,16 +78,20 @@ impl UserApiKeyAuthorizationRepo for PgUserApiKeyAuthorizationRepo {
 
     async fn find_key_owner(&self, api_key: &str) -> Result<Option<ResolvedApiKeyUser>, Self::Err> {
         let key_hash = hash_user_api_key(api_key);
+        // Keys store a Macro user id (`macro|email`). `User.id` is the FusionAuth
+        // identifier, so join by that id or by the email suffix. `fusion_user_id`
+        // in UserContext is the JWT `root_macro_id`, which is `User.macro_user_id`.
         let row = sqlx::query_as!(
             ApiKeyUserRow,
             r#"
             SELECT
-                k.user_id,
-                u.id AS fusion_user_id,
                 u.email,
+                u.macro_user_id AS "fusion_user_id?",
                 u."organizationId" AS "organization_id?"
             FROM "UserApiKey" k
-            JOIN "User" u ON u.id = k.user_id
+            JOIN "User" u
+                ON u.id = k.user_id
+                OR u.email = split_part(k.user_id, '|', 2)
             WHERE k.hash = $1
             "#,
             &key_hash[..],
