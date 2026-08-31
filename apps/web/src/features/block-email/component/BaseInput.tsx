@@ -1707,7 +1707,14 @@ export function BaseInput(props: {
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
         isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input'
+        props.unframed ? 'rounded-lg' : 'rounded-xl',
+        // The drawer path makes this Surface its own scroll container, and the
+        // glass rim is an absolutely positioned ::after — absolute children of
+        // a scroller travel with the content, so the rim would slide out of the
+        // frame on a long compose. The sheet fills the viewport anyway, so
+        // floating-pane chrome has nothing to float over. Same reasoning as
+        // ChannelInput, which drops the glass on touch for its island chrome.
+        !props.unframed && !isMobileDrawer() && 'bg-menu-glass glass-input'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
       hideBorder={props.unframed}
