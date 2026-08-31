@@ -18,7 +18,7 @@ export function InboxTabs(props: { state: InboxViewState }) {
   };
 
   return (
-    <div class="mx-4 mt-3 h-9 shrink-0">
+    <div class="mx-4 mt-3 h-9 shrink-0 touch:mx-0">
       <TabsInset
         aria-label="Inbox views"
         list={INBOX_TABS}

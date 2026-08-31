@@ -17,8 +17,6 @@ export type CreateInboxViewStateOptions = {
   groupBy?: InboxGroupBy;
   facets?: FacetSelection;
   collapsedGroupIds?: readonly string[];
-  focusKey?: string;
-  selectedKeys?: readonly string[];
 };
 
 export type InboxViewSnapshot = {
@@ -27,8 +25,6 @@ export type InboxViewSnapshot = {
   groupBy: InboxGroupBy;
   facets: FacetSelection;
   collapsedGroupIds: string[];
-  focusKey: string | undefined;
-  selectedKeys: string[];
 };
 
 export type CreateInboxViewStateContext = Pick<
@@ -54,8 +50,6 @@ export function createInboxViewState(
     groupBy: initial.groupBy ?? defaultGroupBy(initialTab),
     facets: normalizeFacetSelection(initial.facets),
     collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
-    focusKey: initial.focusKey,
-    selectedKeys: [...(initial.selectedKeys ?? [])],
   });
   const persisted = context
     ? makePersistedState(
@@ -83,8 +77,6 @@ export function createInboxViewState(
         draft.groupBy = defaultGroupBy(tab);
         draft.facets = {};
         draft.collapsedGroupIds = [];
-        draft.focusKey = undefined;
-        draft.selectedKeys = [];
       })
     );
 
@@ -128,21 +120,12 @@ export function createInboxViewState(
 
     groups,
 
-    listFocusKey: () => state.focusKey,
-    setListFocusKey: (focusKey: string | undefined) =>
-      setState('focusKey', focusKey),
-    listSelectedKeys: () => state.selectedKeys,
-    setListSelectedKeys: (selectedKeys: string[]) =>
-      setState('selectedKeys', [...selectedKeys]),
-
     snapshot: (): InboxViewSnapshot => ({
       tab: state.tab,
       search: state.search,
       groupBy: state.groupBy,
       facets: normalizeFacetSelection(state.facets),
       collapsedGroupIds: [...state.collapsedGroupIds],
-      focusKey: state.focusKey,
-      selectedKeys: [...state.selectedKeys],
     }),
 
     activeFacetCount: () =>

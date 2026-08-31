@@ -12,6 +12,7 @@ import type { EntityData } from '@entity';
 import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
 import type { Component, JSX } from 'solid-js';
 import {
+  type EntityActionListState,
   makeBlockSenderAction,
   makeCopyAction,
   makeCopyBranchNameAction,
@@ -36,7 +37,6 @@ import {
   makeShareAction,
   markReminderTargetDone,
 } from '../actions';
-import type { SoupState } from '../create-soup-state';
 import {
   markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
@@ -66,7 +66,7 @@ type SoupEntityActionGroup = {
 };
 
 type BuildActionGroups = (
-  soup: SoupState,
+  soup: EntityActionListState,
   entities: EntityData[],
   context: {
     activeListView: string;
@@ -156,7 +156,12 @@ export function createSoupEntityActions(): {
       entities.length > 0 && entities.every(canExecute);
 
     const handle =
-      (execute: (entities: EntityData[], soup: SoupState) => Promise<void>) =>
+      (
+        execute: (
+          entities: EntityData[],
+          soup: EntityActionListState
+        ) => Promise<void>
+      ) =>
       () =>
         execute(entities, soup);
 

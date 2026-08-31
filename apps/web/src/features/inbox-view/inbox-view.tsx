@@ -1,22 +1,38 @@
 import {
+  createListController,
+  type ListActivation,
+} from '@app/components/list';
+import {
   useViewShell,
   useViewTabHotkeys,
   ViewShell,
 } from '@app/components/view-shell';
-import { buildFlatSoupRows } from '@app/features/soup';
-import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import type {
+  SplitListActivationMetadata,
+  SplitListRow,
+} from '@components/app/split-layout/context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   type EntityData,
+  isNonMemberChannelEntity,
   ListEntityMetadataQueryProvider,
   type WithNotification,
 } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createEffect, onMount, Show, Suspense } from 'solid-js';
-import { openEntityInSplitFromUnifiedList } from '../next-soup/utils';
+import { persistSoupNavigationTouchHighlight } from '../next-soup/soup-view/soup-navigation-touch-highlight';
+import {
+  markChannelTargetSeenOnOpen,
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+} from '../next-soup/utils';
 import { InboxHeader } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
 import { InboxTabs } from './components/InboxTabs';
@@ -25,7 +41,7 @@ import {
   createInboxViewState,
   type InboxViewState,
 } from './create-inbox-view-state';
-import { type InboxQuery, useInboxQuery } from './queries/use-inbox-query';
+import { useInboxDataSource } from './queries/use-inbox-query';
 import type { InboxTab } from './types';
 
 const INBOX_TAB_IDS: readonly InboxTab[] = ['signal', 'noise', 'all'];
@@ -37,7 +53,6 @@ export type InboxViewProps = {
 
 type InboxWorkspaceProps = {
   state: InboxViewState;
-  source: InboxQuery;
 };
 
 function InboxFallback() {
@@ -52,6 +67,51 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
   const orchestrator = useGlobalBlockOrchestrator();
+  const notificationSource = useGlobalNotificationSource();
+
+  const list = panel.setList(() => {
+    const dataSource = useInboxDataSource(props.state);
+    const controller = createListController<
+      SplitListRow,
+      SplitListActivationMetadata
+    >({
+      items: dataSource.items,
+      getKey: (row) => row.id,
+      selection: {
+        getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
+      },
+      isNavigable: (row) => row.kind === 'entity',
+      isSelectable: (row) => row.kind === 'entity',
+      onActivate: ({
+        item,
+        metadata,
+      }: ListActivation<SplitListRow, SplitListActivationMetadata>) => {
+        if (item.kind === 'load-more') {
+          if (!item.isLoading) void dataSource.loadMore();
+          return;
+        }
+
+        if (item.kind !== 'entity') return;
+
+        const sourceRow = dataSource.items().find((row) => row.id === item.id);
+        if (sourceRow?.kind !== 'entity') return;
+
+        const newSplit =
+          metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+        void open(sourceRow.entity, {
+          event: metadata?.event,
+          newSplit,
+          replacePair: false,
+        });
+      },
+    });
+
+    return {
+      viewId: 'inbox',
+      dataSource,
+      controller,
+    };
+  });
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -62,25 +122,44 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
   });
 
   function focusedEntity() {
-    const focusKey = props.state.listFocusKey();
+    const focusKey = list.controller.focus.key();
     if (!focusKey) return undefined;
 
-    return buildFlatSoupRows([...props.source.entities()]).find(
-      (row) => row.id === focusKey
-    )?.entity;
+    const row = list.dataSource.items().find((item) => item.id === focusKey);
+    if (row?.kind !== 'entity') return undefined;
+
+    return row.entity;
   }
 
-  function open(
+  async function open(
     entity: WithNotification<EntityData>,
-    options: { newSplit: boolean; replacePair: boolean }
+    options: {
+      event?: MouseEvent;
+      newSplit: boolean;
+      replacePair: boolean;
+    }
   ) {
+    markReminderSeenOnOpen(entity, notificationSource);
+    if (!isNonMemberChannelEntity(entity)) {
+      markChannelTargetSeenOnOpen(entity, notificationSource);
+    }
+
     if (!options.newSplit && shell.detail.placement() === 'inline') return;
 
-    void openEntityInSplitFromUnifiedList(entity, {
-      openInNewSplit: options.newSplit,
-      splitHandle: panel.handle,
-      referredFrom: 'inbox',
-    });
+    const finishTouchHighlight = options.event
+      ? persistSoupNavigationTouchHighlight(options.event)
+      : undefined;
+
+    try {
+      await openEntityInSplitFromUnifiedList(entity, {
+        openInNewSplit: options.newSplit,
+        replacePreview: options.replacePair,
+        splitHandle: panel.handle,
+        referredFrom: 'inbox',
+      });
+    } finally {
+      finishTouchHighlight?.();
+    }
   }
 
   return (
@@ -89,7 +168,11 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
         <InboxHeader />
         <InboxTabs state={props.state} />
         <Suspense fallback={<InboxFallback />}>
-          <InboxList state={props.state} source={props.source} onOpen={open} />
+          <InboxList
+            state={props.state}
+            source={list.dataSource}
+            list={list.controller}
+          />
         </Suspense>
       </ViewShell.Main>
       <ViewShell.Detail class="overflow-hidden bg-surface">
@@ -121,8 +204,6 @@ export function InboxView(props: InboxViewProps) {
     handle: panel.handle,
   });
 
-  const source = useInboxQuery(state);
-
   createEffect(() => {
     if (state.tab() !== 'reminders') return;
 
@@ -149,7 +230,7 @@ export function InboxView(props: InboxViewProps) {
               }}
               detailOpen
             >
-              <InboxWorkspace state={state} source={source} />
+              <InboxWorkspace state={state} />
             </ViewShell.Root>
           </SplitPanel.Body>
         </SplitPanel.Root>

@@ -1,10 +1,7 @@
+import type { ListDataSource } from '@app/components/list';
 import {
   buildFlatSoupRows,
-  buildGroupedSoupRows,
   createSoupLoadMoreRow,
-  dateBucket,
-  groupSoupEntities,
-  isSoupRowVisible,
   type SoupRow,
   testFacets,
 } from '@app/features/soup';
@@ -30,7 +27,7 @@ import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo } from 'solid-js';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 import {
   explicitNoiseFilter,
   noiseFilter,
@@ -46,24 +43,9 @@ import type { InboxTab } from '../types';
 import { buildInboxQuery, type InboxQueryCapabilities } from './inbox-query';
 import { buildInboxSearchRequest } from './inbox-search';
 
-function groupLabel(entity: EntityData): string {
-  return match(entity.type)
-    .with('document', () => 'Documents')
-    .with('email', () => 'Email')
-    .with(
-      P.union('channel', 'channel_message', 'channel_thread'),
-      () => 'Channels'
-    )
-    .with('chat', () => 'Agents')
-    .with('project', () => 'Projects')
-    .with('foreign', () => 'GitHub')
-    .with('reminder', () => 'Reminders')
-    .with('calendar_event', () => 'Calendar')
-    .with('call', () => 'Calls')
-    .with(P.union('crm_company', 'crm_contact'), () => 'CRM')
-    .with('automation', () => 'Automations')
-    .exhaustive();
-}
+export type InboxDataSourceItem = SoupRow<WithNotification<EntityData>>;
+
+export type InboxDataSource = ListDataSource<InboxDataSourceItem>;
 
 function matchesCapabilities(
   entity: EntityData,
@@ -106,7 +88,7 @@ function matchesTab(
     .exhaustive();
 }
 
-export function useInboxQuery(state: InboxViewState) {
+export function useInboxDataSource(state: InboxViewState): InboxDataSource {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
@@ -229,72 +211,45 @@ export function useInboxQuery(state: InboxViewState) {
     );
   });
 
-  const hasNextPage = () => {
+  const hasMore = () => {
     if (usesServiceSearch()) return searchQuery.hasNextPage ?? false;
     return query.hasNextPage;
   };
-  const loadingMore = () => {
+
+  const isLoadingMore = () => {
     if (usesServiceSearch()) return searchQuery.isFetchingNextPage;
     return query.isFetchingNextPage;
   };
 
-  const rows = createMemo<SoupRow<WithNotification<EntityData>>[]>(() => {
-    const entities = searchedEntities();
-    let result: SoupRow<WithNotification<EntityData>>[];
+  const items = createMemo<InboxDataSourceItem[]>(() => {
+    const result: InboxDataSourceItem[] = buildFlatSoupRows(searchedEntities());
 
-    if (state.groupBy() === 'none') {
-      result = buildFlatSoupRows(entities);
-    } else if (state.groupBy() === 'date') {
-      const groups = groupSoupEntities(entities, {
-        getGroupId: (entity) =>
-          dateBucket(entity.sortTs ?? entity.updatedAt ?? entity.createdAt).key,
-        getGroupLabel: (_groupId, entity) =>
-          dateBucket(entity.sortTs ?? entity.updatedAt ?? entity.createdAt)
-            .label,
-      });
-      result = buildGroupedSoupRows(groups);
-    } else {
-      const groups = groupSoupEntities(entities, {
-        getGroupId: groupLabel,
-        getGroupLabel: (_groupId, entity) => groupLabel(entity),
-      });
-      result = buildGroupedSoupRows(groups);
-    }
-
-    if (hasNextPage()) {
+    if (hasMore()) {
       result.push(
         createSoupLoadMoreRow({
           scopeId: `inbox:${state.tab()}`,
-          isLoading: loadingMore(),
+          isLoading: isLoadingMore(),
         })
       );
     }
 
-    return result.filter((row) =>
-      isSoupRowVisible(row, state.groups.isExpanded)
-    );
+    return result;
   });
 
   return {
-    rows,
-    entities: searchedEntities,
-    loading: () =>
+    items,
+    isLoading: () =>
       usesServiceSearch()
         ? searchQuery.isLoading
         : query.isLoading || query.isPlaceholderData,
-    fetching: () =>
+    isFetching: () =>
       usesServiceSearch() ? searchQuery.isFetching : query.isFetching,
-    refreshing: () =>
-      usesServiceSearch()
-        ? searchQuery.isFetching && !searchQuery.isFetchingNextPage
-        : query.isFetching && !query.isFetchingNextPage,
-    placeholder: usesPlaceholderData,
     error: () => {
-      if (!usesServiceSearch()) return query.error;
-      return searchQuery.error instanceof Error ? searchQuery.error : null;
+      if (!usesServiceSearch()) return query.error ?? undefined;
+      return searchQuery.error instanceof Error ? searchQuery.error : undefined;
     },
-    hasNextPage,
-    loadingMore,
+    hasMore,
+    isLoadingMore,
     loadMore: async () => {
       if (usesServiceSearch()) {
         await searchQuery.fetchNextPage();
@@ -309,7 +264,5 @@ export function useInboxQuery(state: InboxViewState) {
       }
       await query.refresh();
     },
-  };
+  } satisfies InboxDataSource;
 }
-
-export type InboxQuery = ReturnType<typeof useInboxQuery>;

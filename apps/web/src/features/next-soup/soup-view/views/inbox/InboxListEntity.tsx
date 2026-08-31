@@ -18,7 +18,12 @@ import { scopeThreadNotifications } from './utils';
  * from the focused row (which is what the preview shows).
  *
  */
-export function InboxListEntity(props: BaseListEntityProps) {
+type InboxListEntityProps = BaseListEntityProps & {
+  focusable?: boolean;
+  occurrenceKey?: string;
+};
+
+export function InboxListEntity(props: InboxListEntityProps) {
   const channels = useChannelsContext();
 
   // A channel_thread soup entity comes back with a generic name ("Channel
@@ -43,11 +48,15 @@ export function InboxListEntity(props: BaseListEntityProps) {
       ref={props.ref}
       onMouseMove={props.onMouseMove}
     >
-      <MaybeEntityRow entityId={props.entity.id} config={props.entityRowConfig}>
+      <MaybeEntityRow
+        entityId={props.occurrenceKey ?? props.entity.id}
+        config={props.entityRowConfig}
+      >
         <InboxCardLayout
           item={item()}
           selected={props.checked}
           highlighted={props.highlighted}
+          focusable={props.focusable}
           onClick={props.onClick}
         />
       </MaybeEntityRow>

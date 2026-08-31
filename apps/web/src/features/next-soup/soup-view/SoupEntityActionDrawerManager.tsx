@@ -1,12 +1,63 @@
+import { SoupEntityActionDrawer } from '@app/features/soup';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
 import type { SoupState } from '../create-soup-state';
-import { SoupEntityActionDrawer } from './SoupEntityActionDrawer';
+import {
+  createSoupEntityActions,
+  viewedProjectIdFromContent,
+} from './create-soup-entity-actions';
 import {
   SoupEntityActionDrawerContextProvider,
   type SoupEntityActionDrawerState,
+  useSoupEntityActionDrawer,
 } from './soup-entity-action-drawer-context';
+import { useSoupView } from './soup-view-context';
+
+function ConfiguredSoupEntityActionDrawer() {
+  const panel = useSplitPanelOrThrow();
+  const drawerState = useSoupEntityActionDrawer();
+  const { activeTab } = useSoupView();
+  const { buildActionGroups } = createSoupEntityActions();
+
+  if (!drawerState) {
+    console.warn('SoupEntityActionDrawer: no drawer state');
+    return null;
+  }
+
+  const groups = () => {
+    const entity = drawerState.entity();
+    const soup = drawerState.soup();
+    if (!entity || !soup) return [];
+
+    const content = panel.handle.content();
+    return buildActionGroups(soup, [entity], {
+      activeTab: activeTab(),
+      activeListView: content.id,
+      viewedProjectId: viewedProjectIdFromContent(content),
+      splitHandle: panel.handle,
+    });
+  };
+
+  return (
+    <SoupEntityActionDrawer
+      entity={drawerState.entity()}
+      groups={groups()}
+      open={drawerState.isOpen()}
+      onOpenChange={(open) => {
+        if (!open) drawerState.close();
+      }}
+      beforeAction={(action, trigger) => {
+        if (action.id !== 'share') return;
+
+        triggerFocusInput(getShareDrawerRecipientInput, trigger);
+      }}
+    />
+  );
+}
 
 /**
  * On mobile: provides drawer context and renders the SoupEntityActionDrawer
@@ -57,7 +108,7 @@ export function MaybeSoupEntityActionDrawerManager(props: {
       <div class="size-full" ref={wrapperEl}>
         {props.children}
       </div>
-      <SoupEntityActionDrawer />
+      <ConfiguredSoupEntityActionDrawer />
     </SoupEntityActionDrawerContextProvider>
   );
 }
