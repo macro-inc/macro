@@ -21,7 +21,8 @@ type ListInteractionConditions = Partial<
     | 'open'
     | 'toggleSelection'
     | 'toggleAllVisible'
-    | 'clearSelection',
+    | 'clearSelection'
+    | 'disclosure',
     () => boolean
   >
 >;
@@ -52,6 +53,13 @@ export type ListInteractionActivation<TMetadata> = {
   alternateDescription?: string;
 };
 
+export type ListInteractionDisclosure<TItem> = {
+  getKey: (item: TItem) => string | undefined;
+  isExpanded: (key: string) => boolean;
+  setExpanded: (key: string, expanded: boolean) => void;
+  getFocusKey?: (key: string, item: TItem) => string | undefined;
+};
+
 export type UseListInteractionsOptions<TItem, TMetadata> = {
   controller: ListController<TItem, TMetadata>;
   scopeId: string;
@@ -61,6 +69,7 @@ export type UseListInteractionsOptions<TItem, TMetadata> = {
   conditions?: ListInteractionConditions;
   navigation?: ListInteractionNavigation<TItem>;
   activation?: ListInteractionActivation<TMetadata>;
+  disclosure?: ListInteractionDisclosure<TItem>;
 };
 
 /**
@@ -166,6 +175,53 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   const clearSelection = () => list.selection.clear();
 
   const group = createHotkeyGroup();
+
+  if (options.disclosure) {
+    const disclosure = options.disclosure;
+    const setExpanded = (expanded: boolean) => {
+      const item = list.focus.item();
+      if (item === undefined) return false;
+
+      const key = disclosure.getKey(item);
+      if (key === undefined || disclosure.isExpanded(key) === expanded) {
+        return false;
+      }
+
+      disclosure.setExpanded(key, expanded);
+      if (expanded) return true;
+
+      const focusKey = disclosure.getFocusKey?.(key, item);
+      if (focusKey === undefined) return true;
+
+      list.focus.set(focusKey, { reason: 'keyboard' });
+      scrollFocusedIntoView();
+      return true;
+    };
+
+    registerHotkey({
+      hotkey: ['h', 'arrowleft'],
+      hotkeyToken: TOKENS.unifiedList.navigation.parent,
+      scopeId: options.scopeId,
+      description: 'Collapse item',
+      condition: () => canHandle(options.conditions?.disclosure),
+      keyDownHandler: () => setExpanded(false),
+      registrationType: 'add',
+      handlerPriority: 4,
+      hide: true,
+    }).withGroup(group);
+
+    registerHotkey({
+      hotkey: ['l', 'arrowright'],
+      hotkeyToken: TOKENS.unifiedList.navigation.child,
+      scopeId: options.scopeId,
+      description: 'Expand item',
+      condition: () => canHandle(options.conditions?.disclosure),
+      keyDownHandler: () => setExpanded(true),
+      registrationType: 'add',
+      handlerPriority: 4,
+      hide: true,
+    }).withGroup(group);
+  }
 
   registerHotkey({
     hotkey: ['arrowdown', 'j'],

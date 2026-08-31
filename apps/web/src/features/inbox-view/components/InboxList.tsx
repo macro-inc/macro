@@ -136,7 +136,18 @@ export function InboxList(props: InboxListProps) {
       createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
       alternateDescription: 'Open in new split',
     },
+    disclosure: {
+      getKey: (row) =>
+        row.kind === 'section-header' ? undefined : row.groupId,
+      isExpanded: props.state.groups.isExpanded,
+      setExpanded: props.state.groups.setExpanded,
+      getFocusKey: (groupId) =>
+        rows().find(
+          (row) => row.kind === 'group-header' && row.groupId === groupId
+        )?.id,
+    },
   });
+
   // TODO: Attach shared entity-action hotkeys once their list aftermath
   // (selection clearing, adjacent focus, and undo restoration) is Soup-agnostic.
 
