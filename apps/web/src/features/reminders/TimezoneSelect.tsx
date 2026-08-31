@@ -123,7 +123,7 @@ export function TimezoneSelect(props: {
 
       <Combobox.Portal>
         <Layer depth={2}>
-          <Combobox.Content class="z-action-menu w-65 max-w-[90vw] overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-md">
+          <Combobox.Content class="z-action-menu w-[24rem] max-w-[90vw] overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-md">
             <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
               <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
               <Combobox.Input
