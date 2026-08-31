@@ -15,10 +15,7 @@ import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { Popover } from '@kobalte/core/popover';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import RepeatIcon from '@phosphor/repeat.svg';
-import {
-  type CalendarMentionPreviewInput,
-  useCalendarMentionPreviewQuery,
-} from '@queries/calendar/mention-preview';
+import { useCalendarMentionPreviewQuery } from '@queries/calendar/mention-preview';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityFilters } from '@service-search/generated/models';
 import { Button, cn, Layer } from '@ui';
@@ -26,10 +23,9 @@ import {
   createMemo,
   createSignal,
   For,
-  Match,
   onCleanup,
+  onMount,
   Show,
-  Switch,
 } from 'solid-js';
 import { createCalendarBlockRange } from '../calendar-range';
 import {
@@ -99,49 +95,48 @@ function formatEventWhen(
 /**
  * Read-only card for a result the calendar cannot navigate to: occurrences
  * older than the backend's rolling materialized window aren't fetchable, so
- * there is nothing to focus and no editable event to open. Shows the viewer's
- * own preview of the meeting — the same projection a calendar mention uses —
- * with a way back to the results.
+ * there is nothing to focus and no editable event to open. The card's identity
+ * — title, when, organizer, recurrence — comes from the selected row so it
+ * always describes the instance the user picked; the mention preview only
+ * supplements the meeting-level location and guest count the row lacks.
  */
 function CalendarEventPreviewContent(props: {
-  target: CalendarMentionPreviewInput;
+  event: CalendarSearchResult;
   timeFormat: CalendarTimeFormat;
   onBack: () => void;
 }) {
-  const previewQuery = useCalendarMentionPreviewQuery(() => props.target);
+  let backRef: HTMLButtonElement | undefined;
+  // Pull focus into the card as it replaces the search body. A non-modal
+  // Kobalte popover dismisses on focus-outside, and the vacated input would
+  // otherwise drop focus to <body> and close the popover before it shows.
+  onMount(() => backRef?.focus());
 
-  const when = () => {
-    const event = previewQuery.data;
-    if (!event) return '';
-    const time: EventTime =
-      event.time.kind === 'timed'
-        ? {
-            kind: 'timed',
-            startsAt: event.time.startsAt,
-            endsAt: event.time.endsAt,
-          }
-        : {
-            kind: 'allDay',
-            startDate: event.time.startDate,
-            endDate: event.time.endDate,
-          };
-    return formatEventWhen(time, props.timeFormat);
-  };
+  // Supplemental meeting-level detail only. The preview's own `time` is
+  // deliberately unused: for an out-of-range hit the requested occurrence
+  // isn't materialized, so the endpoint resolves a DIFFERENT instance — the
+  // row already carries the occurrence the user selected.
+  const previewQuery = useCalendarMentionPreviewQuery(() => ({
+    eventId: props.event.id,
+    occurrenceKey: props.event.occurrenceKey,
+  }));
+
+  const when = () => formatEventWhen(props.event.time, props.timeFormat);
   const organizer = () =>
-    previewQuery.data?.organizerName || previewQuery.data?.organizerEmail || '';
+    props.event.organizer?.name || props.event.organizer?.email || '';
   const detail = () => {
-    const event = previewQuery.data;
-    if (!event) return '';
+    const preview = previewQuery.data;
+    if (!preview) return '';
     const guests =
-      event.attendeeCount > 0
-        ? `${event.attendeeCount} guest${event.attendeeCount === 1 ? '' : 's'}`
+      preview.attendeeCount > 0
+        ? `${preview.attendeeCount} guest${preview.attendeeCount === 1 ? '' : 's'}`
         : '';
-    return [event.location, guests].filter(Boolean).join(' · ');
+    return [preview.location, guests].filter(Boolean).join(' · ');
   };
 
   return (
     <div class="p-1">
       <button
+        ref={backRef}
         type="button"
         onClick={props.onBack}
         class="flex items-center gap-0.5 rounded-md px-2 py-1 text-xs text-ink-muted outline-none hover:text-ink"
@@ -149,60 +144,40 @@ function CalendarEventPreviewContent(props: {
         <CaretLeftIcon class="size-3" />
         Back to search
       </button>
-      <Switch>
-        <Match when={previewQuery.isLoading}>
-          <div class="px-3 py-4 text-center text-xs text-ink-muted">
-            Loading…
-          </div>
-        </Match>
-        <Match when={previewQuery.data}>
-          {(event) => (
-            <div class="flex flex-col gap-1 px-2 pb-2">
-              <div class="flex items-center gap-2">
-                <span class="flex size-4 shrink-0 items-center justify-center">
-                  <EntityIcon
-                    targetType="calendar"
-                    size="xs"
-                    theme="monochrome"
-                  />
-                </span>
-                <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
-                  {event().title || 'Untitled event'}
-                </span>
-                <Show when={event().isRecurring}>
-                  <RepeatIcon
-                    class="size-3 shrink-0 text-ink-muted"
-                    aria-label="Repeats"
-                  />
-                </Show>
-              </div>
-              <Show when={when()}>
-                {(label) => (
-                  <span class="truncate text-xs text-ink-muted">{label()}</span>
-                )}
-              </Show>
-              <Show when={organizer()}>
-                {(name) => (
-                  <span class="truncate text-xs text-ink-muted">{name()}</span>
-                )}
-              </Show>
-              <Show when={detail()}>
-                {(text) => (
-                  <span class="truncate text-xs text-ink-muted">{text()}</span>
-                )}
-              </Show>
-              <span class="mt-1 border-t border-edge-muted pt-1.5 text-[11px] text-ink-extra-muted">
-                Outside the calendar's navigable range
-              </span>
-            </div>
+      <div class="flex flex-col gap-1 px-2 pb-2">
+        <div class="flex items-center gap-2">
+          <span class="flex size-4 shrink-0 items-center justify-center">
+            <EntityIcon targetType="calendar" size="xs" theme="monochrome" />
+          </span>
+          <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+            {props.event.name || 'Untitled event'}
+          </span>
+          <Show when={props.event.isRecurring}>
+            <RepeatIcon
+              class="size-3 shrink-0 text-ink-muted"
+              aria-label="Repeats"
+            />
+          </Show>
+        </div>
+        <Show when={when()}>
+          {(label) => (
+            <span class="truncate text-xs text-ink-muted">{label()}</span>
           )}
-        </Match>
-        <Match when={!previewQuery.isLoading}>
-          <div class="px-3 py-4 text-center text-xs text-ink-muted">
-            Couldn't load this event
-          </div>
-        </Match>
-      </Switch>
+        </Show>
+        <Show when={organizer()}>
+          {(name) => (
+            <span class="truncate text-xs text-ink-muted">{name()}</span>
+          )}
+        </Show>
+        <Show when={detail()}>
+          {(text) => (
+            <span class="truncate text-xs text-ink-muted">{text()}</span>
+          )}
+        </Show>
+        <span class="mt-1 border-t border-edge-muted pt-1.5 text-[11px] text-ink-extra-muted">
+          Outside the calendar's navigable range
+        </span>
+      </div>
     </div>
   );
 }
@@ -229,10 +204,10 @@ function CalendarSearchControl() {
   let inputRef: HTMLInputElement | undefined;
   let listRef: HTMLDivElement | undefined;
   const [activeRow, setActiveRow] = createSignal(0);
-  // Set when a chosen result falls outside the navigable range: the popover
-  // then floats a read-only preview in place of the search body.
+  // Set to the chosen result when it falls outside the navigable range: the
+  // popover then floats a read-only preview of it in place of the search body.
   const [previewTarget, setPreviewTarget] =
-    createSignal<CalendarMentionPreviewInput | null>(null);
+    createSignal<CalendarSearchResult | null>(null);
 
   const query = createMemo(() => rawQuery().trim());
   const debouncedQuery = debouncedDependent(query, 250);
@@ -306,10 +281,7 @@ function CalendarSearchControl() {
 
     // Older than the backend's rolling window: the calendar can't navigate to
     // this occurrence, so float a read-only preview instead of a dead click.
-    setPreviewTarget({
-      eventId: event.id,
-      occurrenceKey: event.occurrenceKey,
-    });
+    setPreviewTarget(event);
   };
 
   const closePreview = () => {
@@ -352,7 +324,9 @@ function CalendarSearchControl() {
     const cmdPressed = IS_MAC ? event.metaKey : event.ctrlKey;
     if (cmdPressed && event.key.toLowerCase() === 'f') {
       event.preventDefault();
-      focusInput();
+      // The input is unmounted while the preview shows, so go back to it first.
+      if (previewTarget()) closePreview();
+      else focusInput();
     }
   };
 
@@ -490,9 +464,9 @@ function CalendarSearchControl() {
                   </>
                 }
               >
-                {(target) => (
+                {(event) => (
                   <CalendarEventPreviewContent
-                    target={target()}
+                    event={event()}
                     timeFormat={calendarView.displaySettings.timeFormat}
                     onBack={closePreview}
                   />
