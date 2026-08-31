@@ -1227,16 +1227,33 @@ impl DurableObject for DocumentSyncSession {
                 .context("failed to broadcast awareness")?;
             }
 
-            if self.state.get_websockets().len() == 1
+            // Attribution still includes this closing socket. Flush now when
+            // this is last-leave, or when an actor (AI) is leaving while
+            // others stay — otherwise the next alarm has no actor and ingest
+            // drops the pending bot edit.
+            let is_last_leave = self.state.get_websockets().len() == 1;
+            let (actor, on_behalf_of) = self.actor_attribution();
+            let state = self.document_state().await.ok();
+            let flush_actor_edits = actor.is_some()
+                && !is_last_leave
+                && state.as_ref().is_some_and(|s| s.should_save());
+            if (is_last_leave || flush_actor_edits)
+                && let Some(state) = state
                 && let Ok(document_id) = self.document_id().await
-                && let Ok(state) = self.document_state().await
                 && let Ok(snapshot) = state.export_shallow_snapshot()
             {
+                if flush_actor_edits {
+                    state.mark_exported();
+                }
                 let env = self.env.clone();
-                let (actor, on_behalf_of) = self.actor_attribution();
                 self.state.wait_until(async move {
                     report_new_doc_state(&document_id, &snapshot, &env, actor, on_behalf_of).await;
-                    report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
+                    let reason = if is_last_leave {
+                        InteractionReason::LastLeave
+                    } else {
+                        InteractionReason::Edited
+                    };
+                    report_interaction(&document_id, &env, reason).await;
                 });
             }
             self.forget_websocket_metadata(&ws).await;
