@@ -76,7 +76,7 @@ pub fn wait_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     // maintenance-mode 302 (e.g. after a boot-time DB connect failure) would
     // otherwise pass as ready and every later login would 500.
     let script = format!(
-        "for i in $(seq 1 120); do [ \"$(curl -sS -o /dev/null -w '%{{http_code}}' --max-time 3 -H 'Authorization: {key}' {url} 2>/dev/null)\" = 200 ] && exit 0; sleep 2; done; \
+        "for i in $(seq 1 480); do [ \"$(curl -sS -o /dev/null -w '%{{http_code}}' --max-time 3 -H 'Authorization: {key}' {url} 2>/dev/null)\" = 200 ] && exit 0; sleep 0.5; done; \
          echo 'timed out waiting for the FusionAuth kickstart (a 302 here means maintenance mode: FusionAuth could not reach its db)'; exit 1",
         key = identity::FUSIONAUTH_API_KEY,
     );

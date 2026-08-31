@@ -24,6 +24,9 @@ path = "src/doppler_config.rs"
 [features]
 default = ["rate_limit"]
 local = []
+# Local opt-out for the throttles `rate_limit` installs — additive, so local
+# builds stay in the one unified `cargo` invocation. See `RATE_LIMIT_ENABLED`.
+no_rate_limit = []
 rate_limit = []
 return_passwordless_code = []
 

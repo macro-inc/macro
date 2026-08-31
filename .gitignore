@@ -22,6 +22,10 @@ run-local.fish
 **/.cache
 **/.vite
 **/build
+# `**/build` is for JS build output. This is a Rust source module that happens
+# to be named `build`, and the rule was silently dropping new files added to it
+# (a new `test.rs` there is ignored, and `git status` stays clean about it).
+!/tooling/xtask/crates/xtask_local/src/local/build/
 **/*.tsbuildinfo
 **/*.log
 **/result
