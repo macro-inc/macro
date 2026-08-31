@@ -35,3 +35,10 @@ ALTER TABLE "UserApiKey"
 ALTER TABLE "UserApiKey" ADD CONSTRAINT "UserApiKey_pkey" PRIMARY KEY (id);
 
 CREATE UNIQUE INDEX "UserApiKey_hash_key" ON "UserApiKey" (hash);
+
+-- List filters by user_id and orders by created_at DESC, id DESC. Count
+-- filters by user_id. This composite covers both; the old user_id-only
+-- index is redundant.
+DROP INDEX IF EXISTS "UserApiKey_user_id_idx";
+CREATE INDEX "UserApiKey_user_id_created_at_id_idx"
+    ON "UserApiKey" (user_id, created_at DESC, id DESC);
