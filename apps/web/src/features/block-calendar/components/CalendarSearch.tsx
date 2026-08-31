@@ -13,7 +13,7 @@ import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import { Popover } from '@kobalte/core/popover';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityFilters } from '@service-search/generated/models';
-import { Button, Layer } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import { openCalendarEventSplit } from '../open-calendar-event';
 
@@ -96,6 +96,8 @@ function CalendarSearchControl() {
   const [open, setOpen] = createSignal(false);
   const [rawQuery, setRawQuery] = createSignal('');
   let inputRef: HTMLInputElement | undefined;
+  let listRef: HTMLDivElement | undefined;
+  const [activeRow, setActiveRow] = createSignal(0);
 
   const query = createMemo(() => rawQuery().trim());
   const debouncedQuery = debouncedDependent(query, 250);
@@ -132,6 +134,21 @@ function CalendarSearchControl() {
   });
 
   const isLoading = () => query().length >= MIN_QUERY_LENGTH && !isCurrent();
+
+  // Keyboard-highlighted result, clamped so it stays valid as results change.
+  const activeIndex = () => {
+    const len = results().length;
+    return len === 0 ? -1 : Math.min(Math.max(activeRow(), 0), len - 1);
+  };
+  const moveActive = (delta: number) => {
+    const len = results().length;
+    if (len === 0) return;
+    const next = Math.min(Math.max(activeIndex() + delta, 0), len - 1);
+    setActiveRow(next);
+    listRef
+      ?.querySelector(`[data-result-index="${next}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  };
 
   const openResult = (event: CalendarSearchResult) => {
     setOpen(false);
@@ -170,7 +187,10 @@ function CalendarSearchControl() {
       open={open()}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setRawQuery('');
+        if (!next) {
+          setRawQuery('');
+          setActiveRow(0);
+        }
       }}
       placement="bottom-end"
       gutter={6}
@@ -202,11 +222,20 @@ function CalendarSearchControl() {
                   ref={inputRef}
                   type="text"
                   value={rawQuery()}
-                  onInput={(event) => setRawQuery(event.currentTarget.value)}
+                  onInput={(event) => {
+                    setRawQuery(event.currentTarget.value);
+                    setActiveRow(0);
+                  }}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      const first = results()[0];
-                      if (first) openResult(first);
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      moveActive(1);
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      moveActive(-1);
+                    } else if (event.key === 'Enter') {
+                      const active = results()[activeIndex()];
+                      if (active) openResult(active);
                     }
                   }}
                   placeholder="Search by event name"
@@ -215,7 +244,10 @@ function CalendarSearchControl() {
               </div>
 
               <Show when={query().length >= MIN_QUERY_LENGTH}>
-                <div class="max-h-80 overflow-y-auto border-t border-edge-muted p-1">
+                <div
+                  ref={listRef}
+                  class="max-h-80 overflow-y-auto border-t border-edge-muted p-1"
+                >
                   <Show
                     when={!isLoading()}
                     fallback={
@@ -233,10 +265,15 @@ function CalendarSearchControl() {
                       }
                     >
                       <For each={results()}>
-                        {(event) => (
+                        {(event, index) => (
                           <button
                             type="button"
-                            class="flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left outline-none hover:bg-ink/5 focus-visible:bg-ink/5"
+                            data-result-index={index()}
+                            class={cn(
+                              'flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left outline-none',
+                              index() === activeIndex() && 'bg-ink/5'
+                            )}
+                            onMouseEnter={() => setActiveRow(index())}
                             onClick={() => openResult(event)}
                           >
                             <span class="flex size-4 shrink-0 items-center justify-center">
