@@ -9,6 +9,7 @@ import {
   type WebsocketConnectionState,
   type WebsocketEvent,
   type WebsocketEventListener,
+  type WebsocketSerializer,
 } from '../websocket';
 import { FromPeer, FromRemote, type IFromPeer } from './generated/schema';
 
@@ -43,13 +44,17 @@ export interface SyncSocket {
  *
  * `factory` optionally overrides how the underlying native socket is created
  * (the AI editing worker wraps the default to observe raw frames).
+ *
+ * `serializer` optionally overrides the default Bebop serializer (the AI
+ * editing worker wraps it to survive frames that fail to deserialize).
  */
 export function createSyncSocket(
   getUrl: UrlResolver,
-  factory?: WebSocketFactory
+  factory?: WebSocketFactory,
+  serializer?: WebsocketSerializer<IFromPeer, FromRemote>
 ): SyncWebsocket {
   let builder = new WebsocketBuilder(getUrl).withSerializer(
-    new BebopSerializer(FromPeer, FromRemote)
+    serializer ?? new BebopSerializer(FromPeer, FromRemote)
   );
   if (factory) builder = builder.withFactory(factory);
   return (

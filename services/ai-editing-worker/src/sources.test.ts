@@ -1,6 +1,7 @@
-import type {
-  FromRemote,
-  IFromPeer,
+import {
+  FromRemote as FromRemoteSchema,
+  type FromRemote,
+  type IFromPeer,
 } from '@macro-inc/collaboration/sync-service/generated/schema';
 import type { SyncWebsocket } from '@macro-inc/collaboration/sync-service/socket';
 import {
@@ -9,7 +10,7 @@ import {
   type WebsocketEventListener,
 } from '@macro-inc/collaboration/websocket';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WorkerSyncSource } from './sources';
+import { createTolerantSerializer, WorkerSyncSource } from './sources';
 
 type AnyListener = WebsocketEventListener<
   WebsocketEvent,
@@ -179,5 +180,38 @@ describe('WorkerSyncSource snapshot fallback', () => {
 
     expect(ws.sent).toHaveLength(0);
     expect(ws.closed).toBe(true);
+  });
+});
+
+describe('createTolerantSerializer', () => {
+  it('decodes a valid frame', () => {
+    const onFailure = vi.fn();
+    const serializer = createTolerantSerializer(onFailure);
+    const encoded = FromRemoteSchema.encode(
+      FromRemoteSchema.fromRemoteSnapshot({ snapshot: new Uint8Array([7, 8]) })
+    );
+    const buffer = encoded.buffer.slice(
+      encoded.byteOffset,
+      encoded.byteOffset + encoded.byteLength
+    ) as ArrayBuffer;
+
+    const message = serializer.deserialize(buffer);
+    expect(message.isRemoteSnapshot()).toBe(true);
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  it('returns an inert message instead of throwing on garbage bytes', () => {
+    const onFailure = vi.fn();
+    const serializer = createTolerantSerializer(onFailure);
+    const garbage = new Uint8Array([0xff, 0xff, 0xff, 0xff, 0x01]).buffer;
+
+    const message = serializer.deserialize(garbage);
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(message.isRemoteInitialSync()).toBe(false);
+    expect(message.isRemoteUpdate()).toBe(false);
+    expect(message.isRemoteAwareness()).toBe(false);
+    expect(message.isRemoteSnapshot()).toBe(false);
+    expect(message.isRemoteUpdateAck()).toBe(false);
+    expect(message.isRemoteUpdateSince()).toBe(false);
   });
 });

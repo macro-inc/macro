@@ -97,6 +97,38 @@ describe('createSyncSocketDiagnostics', () => {
     });
   });
 
+  it('records hex prefix and probe decode for the first binary frame', () => {
+    const { diagnostics, sockets } = createDiagnosticsWithSocket();
+    diagnostics.factory('wss://example', undefined);
+    const socket = sockets[0];
+    socket.binaryType = 'arraybuffer';
+    socket.fire('open', {});
+    socket.fire('message', {
+      data: new Uint8Array([0xff, 0xfe, 0xfd]).buffer,
+    });
+
+    const attrs = diagnostics.attrs();
+    expect(attrs['sync.ws.first_frame.hex']).toBe('fffefd');
+    expect(String(attrs['sync.ws.first_frame.probe'])).toMatch(/^err:/);
+    expect(String(attrs['sync.ws.events'])).toMatch(
+      /^connect\+\d+ms,open\+\d+ms,frame\(3\)\+\d+ms$/
+    );
+    expect(diagnostics.summary()).toContain('probe=err:');
+  });
+
+  it('tracks deserialize failures reported by the serializer', () => {
+    const { diagnostics, sockets } = createDiagnosticsWithSocket();
+    diagnostics.factory('wss://example', undefined);
+    sockets[0].fire('open', {});
+    diagnostics.recordDecodeFailure(new Error('unexpected end of buffer'));
+
+    expect(diagnostics.attrs()).toMatchObject({
+      'sync.ws.decode_failures': 1,
+      'sync.ws.first_decode_error': 'unexpected end of buffer',
+    });
+    expect(diagnostics.summary()).toContain('decode_failures=1');
+  });
+
   it('counts retries as separate connect attempts and errors', () => {
     const { diagnostics, sockets } = createDiagnosticsWithSocket();
     diagnostics.factory('wss://example', undefined);
