@@ -36,9 +36,7 @@ export function LinkHoverCard(props: LinkHoverCardProps) {
   const title = () => props.unfurled.title || domain;
 
   return (
-    <div
-      class="flex w-80 max-w-[calc(100vw-1rem)] items-start gap-1 rounded-xl border border-edge p-2 text-left shadow-menu bg-menu"
-    >
+    <div class="flex w-80 max-w-[calc(100vw-1rem)] items-start gap-1 rounded-xl border border-edge p-2 text-left shadow-menu bg-menu">
       <div class="flex size-6 shrink-0 items-center justify-center">
         <Show
           when={props.unfurled.favicon_url}
@@ -63,9 +61,7 @@ export function LinkHoverCard(props: LinkHoverCardProps) {
         </Show>
       </div>
       <div class="min-w-0 flex-1">
-        <div class="truncate text-sm/6 font-medium text-ink">
-          {title()}
-        </div>
+        <div class="truncate text-sm/6 font-medium text-ink">{title()}</div>
         <div class="truncate text-xs text-ink-muted">{domain}</div>
       </div>
     </div>
