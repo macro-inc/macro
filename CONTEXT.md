@@ -20,7 +20,6 @@ _Avoid_: Newsletters tab, Reader, magazine, mode of Noise, second inbox, row lis
 The visible stream of Feed mail. Recent items only. Older Feed mail is searchable and not deleted.
 _Avoid_: Full history, recycle, Paper Trail
 
-
 **Noise**:
 Mail the user does not need to see now, and may need to reference later. Receipts, alerts, and promotions.
 _Avoid_: Unimportant, spam, Paper Trail, leftover
@@ -32,7 +31,6 @@ _Avoid_: Updates, Promotions
 **Unassigned mail**:
 Mail with no sender assignment. Need lands in Signal. A Newsletter guess lands in Feed. Everything else lands in Noise. Gmail leftover labels are not a Newsletter guess.
 _Avoid_: Unclassified, unscreened
-
 
 **Sender assignment**:
 The user assigns a sender to a surface. Existing and future mail from that sender follow that surface. A one-message move is an exception. It does not change the sender, and a later sender assignment does not move that message.

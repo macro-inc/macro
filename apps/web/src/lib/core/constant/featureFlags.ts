@@ -417,8 +417,13 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
 );
 
 export const ENABLE_EMAIL_FEED_FLAG = 'enable-email-feed';
-export const ENABLE_EMAIL_FEED_OVERRIDE =
-  getFeatureFlagOverride('ENABLE_EMAIL_FEED');
+const FEED_ENV_OVERRIDE = import.meta.env.VITE_ENABLE_EMAIL_FEED;
+export const ENABLE_EMAIL_FEED_OVERRIDE: boolean | undefined =
+  FEED_ENV_OVERRIDE === 'true'
+    ? true
+    : FEED_ENV_OVERRIDE === 'false'
+      ? false
+      : undefined;
 
 export function ENABLE_EMAIL_FEED(): boolean {
   if (ENABLE_EMAIL_FEED_OVERRIDE !== undefined) {

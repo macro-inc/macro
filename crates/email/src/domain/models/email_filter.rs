@@ -22,7 +22,7 @@ impl EmailSurface {
         if important { Self::Signal } else { Self::Noise }
     }
 
-    /// True only for Signal.
+    /// Mute/promote still stores `is_important`. Only Signal is important.
     pub fn is_important(self) -> bool {
         matches!(self, Self::Signal)
     }
