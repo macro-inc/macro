@@ -73,6 +73,8 @@ pub struct OpenExternalAgentSession {
     pub owner: MacroUserIdStr<'static>,
     /// The thread whose mention triggered the session, when one did.
     pub thread: Option<SessionThread>,
+    /// Instructions the session's runtime works under, when any were stated.
+    pub instructions: Option<String>,
 }
 
 /// Everything needed to open a session the server hosts itself.
@@ -88,6 +90,9 @@ pub struct OpenManagedSession {
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
     pub prompt: Option<String>,
+    /// Instructions the session's runtime works under, for its whole life.
+    /// `None` runs the runtime's own default.
+    pub instructions: Option<String>,
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which
@@ -141,6 +146,23 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// The session a sandbox's egress token stands for, if any still does.
+    ///
+    /// `egress_token_hash` is the SHA-256 hex of the token as presented, never
+    /// the token: implementations match on the stored hash, so the comparison
+    /// happens in an index rather than over secret-derived bytes in memory.
+    ///
+    /// `None` rather than an error when nothing matches - a token we never
+    /// minted and a token whose session has since been deleted are the same
+    /// fact, and the caller refuses both the same way. The whole session comes
+    /// back because everything the token entitles its holder to is on the row:
+    /// the owner whose credentials it spends, the repository its git traffic is
+    /// pinned to, and whether the session is still open.
+    fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
 
     /// Find the session associated with an incoming channel context.
     ///

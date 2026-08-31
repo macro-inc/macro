@@ -10,9 +10,9 @@ use cache_core::{
 };
 use cache_turso::TursoStorage;
 use predicate_index::{
-    ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerFact, OptimisticProjectionMutation,
-    PartitionPredicate, PredicateExpr, Profile, RangeBound, RecordKey, SortDirection, Token,
-    ValidatedIndexQuery, evaluate_reference,
+    ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IndexQuery, IntegerAttributePatch,
+    IntegerFact, OptimisticProjectionMutation, PartitionPredicate, PredicateExpr, Profile,
+    RangeBound, RecordKey, SortDirection, Token, ValidatedIndexQuery, evaluate_reference,
 };
 
 fn token(value: &str) -> Token {
@@ -81,6 +81,59 @@ fn query() -> ValidatedIndexQuery {
     .unwrap()
 }
 
+async fn begin_optimistic_projection(
+    engine: &mut Engine<TursoStorage>,
+    projection_mutations: Vec<OptimisticProjectionMutation>,
+) {
+    let data = serde_json::json!({
+        "setEntityProperty": {
+            "id": "prop-1",
+            "displayName": "Status",
+            "value": {
+                "__typename": "GraphqlStringPropertyValue",
+                "stringValue": "doing"
+            }
+        }
+    });
+    let serde_json::Value::Object(variables) = serde_json::json!({
+        "input": {
+            "entityType": "DOCUMENT",
+            "entityId": "doc-1",
+            "propertyDefinitionId": "def-1",
+            "value": { "string": "doing" }
+        }
+    }) else {
+        unreachable!()
+    };
+    engine
+        .begin_optimistic_write_with_projections(
+            None,
+            BeginOptimisticWrite {
+                query: r#"
+                    mutation SetEntityProperty($input: SetEntityPropertyInput!) {
+                      setEntityProperty(input: $input) {
+                        id
+                        displayName
+                        value {
+                          __typename
+                          ... on GraphqlStringPropertyValue { stringValue: value }
+                        }
+                      }
+                    }
+                "#,
+                operation_name: Some("SetEntityProperty"),
+                variables: &variables,
+                data: &data,
+                link_patches: &[],
+                revalidations: &[],
+                created_at_ms: 1,
+            },
+            projection_mutations,
+        )
+        .await
+        .unwrap();
+}
+
 #[test]
 fn turso_matches_reference_and_lifecycle_is_exact() {
     pollster::block_on(async {
@@ -114,7 +167,7 @@ fn turso_matches_reference_and_lifecycle_is_exact() {
         let repeated_key = documents[0].record_key.clone();
         assert_eq!(
             storage
-                .get_index_documents(&[repeated_key.clone(), repeated_key])
+                .load_projection_states(&[repeated_key.clone(), repeated_key])
                 .await
                 .unwrap()
                 .iter()
@@ -183,6 +236,190 @@ fn turso_matches_reference_and_lifecycle_is_exact() {
         assert_eq!(
             storage.query_predicate_index(&query).await.unwrap(),
             PredicateQueryResult::Complete(vec![])
+        );
+    });
+}
+
+#[test]
+fn effective_sql_matches_reference_for_create_patch_delete_and_boolean_sorting() {
+    pollster::block_on(async {
+        let storage = TursoStorage::open_in_memory("predicate-effective-sql").unwrap();
+        let mut engine = Engine::new(storage);
+        let first = document("GraphqlSoupDocument:1", "owner-1", 10, None);
+        let second = document("GraphqlSoupDocument:2", "owner-1", 20, Some("included"));
+        let excluded = document("GraphqlSoupDocument:3", "owner-1", 25, Some("excluded"));
+        engine
+            .put_records_with_projections(
+                None,
+                vec![
+                    (
+                        EntityKey::entity("GraphqlSoupDocument", &["1"]),
+                        Record::default(),
+                    ),
+                    (
+                        EntityKey::entity("GraphqlSoupDocument", &["2"]),
+                        Record::default(),
+                    ),
+                    (
+                        EntityKey::entity("GraphqlSoupDocument", &["3"]),
+                        Record::default(),
+                    ),
+                ],
+                vec![
+                    ProjectionMutation::Replace(first.clone()),
+                    ProjectionMutation::Replace(second.clone()),
+                    ProjectionMutation::Replace(excluded.clone()),
+                ],
+            )
+            .await
+            .unwrap();
+
+        let created = document("GraphqlSoupDocument:4", "owner-1", 15, None);
+        begin_optimistic_projection(
+            &mut engine,
+            vec![
+                OptimisticProjectionMutation::Patch {
+                    record_key: first.record_key.clone(),
+                    profile: profile(),
+                    partition: token("document"),
+                    exact: vec![ExactAttributePatch {
+                        attribute: token("project-id"),
+                        values: vec![ExactValue::utf8("included").unwrap()],
+                    }],
+                    integers: vec![IntegerAttributePatch {
+                        attribute: token("updated-at"),
+                        values: vec![22],
+                    }],
+                    sorts: vec![IntegerFact {
+                        attribute: token("updated-at"),
+                        value: 22,
+                    }],
+                },
+                OptimisticProjectionMutation::Delete {
+                    record_key: second.record_key.clone(),
+                    profile: profile(),
+                    partition: token("document"),
+                },
+                OptimisticProjectionMutation::Replace(created.clone()),
+            ],
+        )
+        .await;
+
+        let mut patched = first;
+        patched.exact_facts.push(ExactFact {
+            attribute: token("project-id"),
+            value: ExactValue::utf8("included").unwrap(),
+        });
+        patched.integer_facts[0].value = 22;
+        patched.sort_facts[0].value = 22;
+        patched.canonicalize();
+        let expected = evaluate_reference(&query(), &[patched, excluded, created])
+            .into_iter()
+            .map(|hit| hit.record_key)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            engine.query_predicate_index(&query()).await.unwrap(),
+            PredicateQueryResult::Optimistic(expected)
+        );
+    });
+}
+
+#[test]
+fn effective_sql_handles_uncertainty_and_shadow_suppression_exactly() {
+    pollster::block_on(async {
+        let storage = TursoStorage::open_in_memory("predicate-effective-uncertainty").unwrap();
+        let mut engine = Engine::new(storage);
+        let key = RecordKey::new("GraphqlSoupDocument:1").unwrap();
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(document(
+                    key.as_str(),
+                    "owner-1",
+                    10,
+                    None,
+                ))],
+            )
+            .await
+            .unwrap();
+        begin_optimistic_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Unknown {
+                record_key: key.clone(),
+                profile: profile(),
+                partition: token("document"),
+                affected_attributes: vec![],
+            }],
+        )
+        .await;
+        assert_eq!(
+            engine.query_predicate_index(&query()).await.unwrap(),
+            PredicateQueryResult::Incomplete
+        );
+
+        begin_optimistic_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Patch {
+                record_key: key.clone(),
+                profile: profile(),
+                partition: token("document"),
+                exact: vec![
+                    ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![ExactValue::utf8("owner-1").unwrap()],
+                    },
+                    ExactAttributePatch {
+                        attribute: token("project-id"),
+                        values: vec![],
+                    },
+                ],
+                integers: vec![IntegerAttributePatch {
+                    attribute: token("updated-at"),
+                    values: vec![10],
+                }],
+                sorts: vec![IntegerFact {
+                    attribute: token("updated-at"),
+                    value: 10,
+                }],
+            }],
+        )
+        .await;
+        assert_eq!(
+            engine.query_predicate_index(&query()).await.unwrap(),
+            PredicateQueryResult::Optimistic(vec![key.clone()])
+        );
+
+        let missing = RecordKey::new("GraphqlSoupDocument:missing").unwrap();
+        engine
+            .mark_projections_incomplete(vec![ProjectionMutation::MarkIncomplete {
+                record_key: missing.clone(),
+                profile: profile(),
+                partition: token("document"),
+                kind: ProjectionIncompleteKind::Missing,
+            }])
+            .await
+            .unwrap();
+        assert_eq!(
+            engine.query_predicate_index(&query()).await.unwrap(),
+            PredicateQueryResult::Incomplete
+        );
+        begin_optimistic_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Replace(document(
+                missing.as_str(),
+                "owner-2",
+                12,
+                None,
+            ))],
+        )
+        .await;
+        assert_eq!(
+            engine.query_predicate_index(&query()).await.unwrap(),
+            PredicateQueryResult::Optimistic(vec![key])
         );
     });
 }

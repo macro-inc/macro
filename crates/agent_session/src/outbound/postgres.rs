@@ -106,6 +106,7 @@ struct AgentSessionRow {
     repo_url: Option<String>,
     workspace: String,
     sandbox_size: String,
+    instructions: Option<String>,
     acp_session_id: Option<String>,
     external_provider: Option<String>,
     external_id: Option<String>,
@@ -136,6 +137,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             repo_url: row.repo_url,
             workspace: row.workspace,
             sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
+            instructions: row.instructions,
             acp_session_id: row.acp_session_id.map(Into::into),
             external: row
                 .external_provider
@@ -166,6 +168,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             repo_url,
             workspace,
             sandbox_size,
+            instructions,
+            egress_token_hash,
         } = params;
 
         // The session row and its access grants land together: a crash between
@@ -183,13 +187,14 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             INSERT INTO agent_session (
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
-                harness, repo_url, workspace, sandbox_size, acp_session_id, status,
-                status_event_name
+                harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status, status_event_name, egress_token_hash
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -207,9 +212,11 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             repo_url,
             workspace,
             sandbox_size.as_str(),
+            instructions,
             None::<String>,
             status,
             status_event_name,
+            egress_token_hash,
         )
         .fetch_one(&mut *transaction)
         .await
@@ -277,7 +284,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -297,6 +305,41 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(row.try_into()?)
     }
 
+    async fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> Result<Option<AgentSession>> {
+        // Matched in SQL rather than fetched and compared: the unique partial
+        // index on this column does the work, and nothing secret-derived is
+        // compared byte by byte in this process.
+        let row = sqlx::query_as!(
+            AgentSessionRow,
+            r#"
+            SELECT
+                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
+                status_event_name, agent_session.created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?",
+                ext.provider AS "external_provider?", ext.external_id AS "external_id?",
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?"
+            FROM agent_session
+            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
+            WHERE egress_token_hash = $1
+            "#,
+            egress_token_hash,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to find agent session by egress token hash")?;
+
+        Ok(match row {
+            Some(row) => Some(row.try_into()?),
+            None => None,
+        })
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,
@@ -313,7 +356,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -344,7 +388,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, acp_session_id, status,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",

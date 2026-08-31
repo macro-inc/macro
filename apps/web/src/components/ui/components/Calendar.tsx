@@ -457,7 +457,7 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
         <div class="flex pt-3">
           <Button
             fullWidth
-            variant="base"
+            variant="outline"
             size="sm"
             depth={3}
             class="rounded-full bg-surface px-3 text-ink shadow-menu"

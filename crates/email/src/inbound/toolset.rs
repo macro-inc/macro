@@ -4,6 +4,7 @@ mod get_thread;
 mod list_inboxes;
 mod list_labels;
 mod send_email;
+mod set_sender_policy;
 mod update_thread_labels;
 
 #[cfg(test)]
@@ -22,6 +23,7 @@ pub use get_thread::{GetThread, GetThreadResponse};
 pub use list_inboxes::{ListInboxes, ListInboxesResponse, ToolInbox};
 pub use list_labels::{ListLabels, ListLabelsResponse, ToolLabel};
 pub use send_email::{SendEmail, SendEmailResponse};
+pub use set_sender_policy::{SetSenderPolicy, SetSenderPolicyResponse, ToolSenderPolicy};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
 
 /// The caller's default inbox: the primary link they own. Falls back to any
@@ -167,4 +169,5 @@ where
         .add_tool::<GetThread, EmailToolContext<T, G, E>>()
         .add_tool::<ListLabels, EmailToolContext<T, G, E>>()
         .add_tool::<ListInboxes, EmailToolContext<T, G, E>>()
+        .add_tool::<SetSenderPolicy, EmailToolContext<T, G, E>>()
 }

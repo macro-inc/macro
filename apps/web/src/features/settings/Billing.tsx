@@ -154,7 +154,7 @@ export const Billing = () => {
                   class="ml-auto rounded-full bg-active"
                   size="sm"
                   depth={2}
-                  variant="base"
+                  variant="outline"
                   onClick={handleManage}
                 >
                   Manage

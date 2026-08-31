@@ -432,7 +432,7 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
 );
 
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
-const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : true;
+const ENABLE_CALLS_OVERRIDE = true;
 
 export function ENABLE_CALLS(): boolean {
   if (ENABLE_CALLS_OVERRIDE !== undefined) {
@@ -581,13 +581,13 @@ export const BOT_MANAGEMENT_OVERRIDE =
 
 // Onboarding v4: the full-screen stepper new users land in after signup
 // (unified with /login), driving the import machinery with auto-import.
-// PostHog-gated with a dev-mode default; override with
-// VITE_ENABLE_ONBOARDING_V4. Read it through `useOnboardingV4Flag()` so the
-// gate reacts when PostHog answers (and so callers can wait instead of
-// treating "flags not loaded yet" as "off").
+// PostHog-gated; override with VITE_ENABLE_ONBOARDING_V4. Read it through
+// `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
+// callers can wait instead of treating "flags not loaded yet" as "off").
 export const ENABLE_ONBOARDING_V4_FLAG = 'enable-onboarding-v4';
 // Honor an explicit VITE_ENABLE_ONBOARDING_V4=false (don't coerce it to
 // undefined), else default on in dev and defer to PostHog in prod.
+// `just run_local` sets the env to false unless `--enable-onboarding`.
 export const ENABLE_ONBOARDING_V4_OVERRIDE =
   getFeatureFlagOverride('ENABLE_ONBOARDING_V4') ??
   (DEV_MODE_ENV ? true : undefined);
@@ -610,6 +610,32 @@ export function ENABLE_CALENDAR_UI(): boolean {
     return ENABLE_CALENDAR_UI_OVERRIDE;
   }
   return analytics.posthog.isFeatureEnabled(ENABLE_CALENDAR_UI_FLAG) ?? false;
+}
+
+// Calendar event search UI: the Search view's Calendar type (and calendar
+// rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
+// — opening a hit needs the calendar block — so it only takes effect where
+// `enable-calendar-ui` is also on. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_CALENDAR_SEARCH_UI.
+export const ENABLE_CALENDAR_SEARCH_UI_FLAG = 'enable-calendar-search-ui';
+export const ENABLE_CALENDAR_SEARCH_UI_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CALENDAR_SEARCH_UI') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites (soup filter presets). Gated by
+ * the calendar UI too. For reactive UI, prefer `useCalendarSearchUiFlag()`.
+ */
+export function ENABLE_CALENDAR_SEARCH_UI(): boolean {
+  if (!ENABLE_CALENDAR_UI()) {
+    return false;
+  }
+  if (ENABLE_CALENDAR_SEARCH_UI_OVERRIDE !== undefined) {
+    return ENABLE_CALENDAR_SEARCH_UI_OVERRIDE;
+  }
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_CALENDAR_SEARCH_UI_FLAG) ?? false
+  );
 }
 
 // The "Enable calendar" prompt on phones. Off by default everywhere,

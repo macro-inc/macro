@@ -12,6 +12,7 @@ use cache_core::queue::{
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
+use predicate_index::PendingOptimisticProjection;
 use serde_json::{Value as Json, json};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -116,11 +117,16 @@ impl Storage for ClaimFailingStorage {
         Ok(())
     }
 
-    async fn enqueue_mutation(
+    async fn enqueue_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
+        projections: Vec<PendingOptimisticProjection>,
     ) -> Result<MutationId, Self::Error> {
-        Ok(self.inner.enqueue_mutation(entry).await.unwrap())
+        Ok(self
+            .inner
+            .enqueue_mutation_with_shadow(entry, projections)
+            .await
+            .unwrap())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

@@ -4,12 +4,79 @@ import {
   type ButtonRootProps,
   Button as KobalteButton,
 } from '@kobalte/core/button';
-import { themeReactive } from '@theme/signals/themeReactive';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
+import { CONTROL_SIZE_VARIANTS } from '../utils/controlSizes';
+import { createVariants, type VariantProps } from '../utils/variants';
 import { useButtonGroupContext } from './ButtonGroup';
 import { Layer } from './Layer';
 import { Tooltip } from './Tooltip';
+
+const BUTTON_TOUCH_STYLES =
+  "touch:min-h-9 touch:min-w-9 touch:[&>svg:not([class*='size-'])]:size-6";
+
+// Hover/press feedback is painted as a translucent scrim *on top of* each
+// variant's base background-color (via the `overlay-*` background-image utility)
+// rather than replacing/thinning the base color, so buttons keep their full
+// color on hover. The `cta`/`contrast` variants use a surface scrim so their
+// solid backgrounds lighten toward the text color instead of washing out.
+/** Canonical variant classes for buttons and button-like elements. */
+export const buttonVariants = createVariants(
+  cn(
+    'relative inline-flex shrink-0 items-center justify-center whitespace-nowrap text-sm',
+    'rounded-md border border-transparent font-medium outline-none select-none transition-colors',
+    'data-disabled:cursor-not-allowed data-disabled:opacity-30',
+    '[&_svg]:pointer-events-none [&_svg]:shrink-0'
+  ),
+  {
+    variant: {
+      danger:
+        'bg-failure-bg text-failure dark:bg-failure-bg not-disabled:hover:bg-failure/25 not-disabled:active:bg-failure/30',
+      outline:
+        'bg-transparent text-ink-muted border-edge-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink not-disabled:active:bg-active',
+      accent: 'bg-accent-bg not-disabled:hover:overlay-accent-bg text-accent',
+      success:
+        'bg-success-bg not-disabled:hover:overlay-success-bg text-success',
+      ghost:
+        'bg-transparent text-ink-muted not-disabled:hover:overlay-hover not-disabled:hover:text-ink not-disabled:active:overlay-active',
+      strong:
+        'bg-ink text-surface-4 focus-visible:ring-surface-4/70 not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface-4)_12%,transparent)] not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface-4)_22%,transparent)]',
+      cta: 'bg-accent text-accent-contrast focus-visible:ring-accent-contrast/70 [--color-edge:var(--color-accent-contrast-muted)] [--color-edge-muted:var(--color-accent-contrast-muted)] not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
+    },
+    size: {
+      xs: "h-5 gap-1 px-1 text-xs [&>svg:not([class*='size-'])]:size-3",
+      'icon-xs': "size-5 p-0.5 [&>svg:not([class*='size-'])]:size-4",
+      sm: CONTROL_SIZE_VARIANTS.sm,
+      md: CONTROL_SIZE_VARIANTS.md,
+      lg: `${CONTROL_SIZE_VARIANTS.lg} rounded-lg`,
+      xl: "h-12 gap-2 px-4 text-base rounded-lg [&>svg:not([class*='size-'])]:size-5",
+      'icon-lg':
+        "size-11 aspect-square p-2 [&>svg:not([class*='size-'])]:size-7",
+      'icon-md':
+        "size-9 aspect-square p-1.5 [&>svg:not([class*='size-'])]:size-6",
+      'icon-sm':
+        "size-6 aspect-square p-1 [&>svg:not([class*='size-'])]:size-4",
+    },
+  },
+  {
+    variant: 'ghost',
+    size: 'md',
+  }
+);
+
+/** Variant props inferred from the canonical button variant definition. */
+export type ButtonVariantProps = VariantProps<typeof buttonVariants>;
+export type ButtonVariant = NonNullable<ButtonVariantProps['variant']>;
+export type ButtonSize = NonNullable<ButtonVariantProps['size']>;
+
+export type ButtonClassOptions = {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  fullWidth?: boolean;
+  noTouchResize?: boolean;
+  square?: boolean;
+  class?: string;
+};
 
 export type ButtonProps = ButtonRootProps<'button'> &
   ComponentProps<'button'> & {
@@ -22,10 +89,19 @@ export type ButtonProps = ButtonRootProps<'button'> &
      */
     fullWidth?: boolean;
     noTouchResize?: boolean;
+    square?: boolean;
     variant?: ButtonVariant;
     children?: JSX.Element;
-    tooltip?: string;
+    /**
+     * Accessible name for the button. Also used as the tooltip unless
+     * `tooltip` provides different content.
+     */
     label?: string;
+    /**
+     * Tooltip content. For icon buttons, this is also used as a backwards-
+     * compatible accessible-name fallback when no label is provided.
+     */
+    tooltip?: string;
     hotkey?: HotkeyToken | HotkeyToken[];
     /**
      * Raw shortcut string(s) shown in the tooltip when no `hotkey` token is available.
@@ -36,56 +112,29 @@ export type ButtonProps = ButtonRootProps<'button'> &
     tooltipDisabled?: boolean;
   };
 
-export type ButtonSize =
-  | 'xs'
-  | 'icon-xs'
-  | 'sm'
-  | 'icon-sm'
-  | 'md'
-  | 'icon-md'
-  | 'lg'
-  | 'icon-lg';
+/** Returns the canonical classes for a button-like element. */
+export function buttonClasses(options: ButtonClassOptions = {}): string {
+  const {
+    variant,
+    size,
+    fullWidth = false,
+    noTouchResize = false,
+    square = false,
+    class: className,
+  } = options;
 
-export type ButtonVariant =
-  | 'ghost'
-  | 'base'
-  | 'active'
-  | 'success'
-  | 'danger'
-  | 'contrast'
-  | 'cta';
+  return cn(
+    buttonVariants({ variant, size }),
+    fullWidth && 'w-full',
+    !noTouchResize && BUTTON_TOUCH_STYLES,
+    square && 'aspect-square p-0',
+    className
+  );
+}
 
-// Hover/press feedback is painted as a translucent scrim *on top of* each
-// variant's base background-color (via the `overlay-*` background-image utility)
-// rather than replacing/thinning the base color, so buttons keep their full
-// color on hover. The `cta`/`contrast` variants use a surface scrim so their
-// solid backgrounds lighten toward the text color instead of washing out.
-const variantStyles: Record<ButtonVariant, string> = {
-  danger:
-    'bg-failure/10 text-failure dark:bg-failure/15 focus-visible:bg-failure/25 focus-visible:border focus-visible:border-failure/50 not-disabled:hover:bg-failure/25 not-disabled:active:bg-failure/30 disabled:opacity-30 ',
-  base: 'bg-transparent text-ink-muted border border-edge-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink active:bg-active disabled:opacity-30 ',
-  active:
-    'bg-accent-bg not-disabled:hover:overlay-accent-bg text-accent disabled:opacity-30 ',
-  success:
-    'bg-success-bg not-disabled:hover:overlay-success-bg text-success disabled:opacity-30 ',
-  ghost:
-    'bg-transparent text-ink-muted not-disabled:hover:overlay-hover not-disabled:hover:text-ink active:overlay-active disabled:opacity-30 ',
-  contrast:
-    'bg-ink text-surface border border-transparent not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)] disabled:opacity-30 focus-visible:bg-ink/90',
-  cta: 'bg-accent text-surface border border-transparent not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)] disabled:opacity-30 focus-visible:bg-accent/90',
-};
-
-const sizeStyles: Record<ButtonSize, string> = {
-  xs: '          p-1  [&_:where(svg)]:size-3 gap-1   text-xs',
-  'icon-xs': 'size-5    p-0.5  [&_:where(svg)]:size-4                  ',
-  lg: '          p-2.5  [&_:where(svg)]:size-5 gap-2   text-base',
-  md: '          p-2                           gap-1.5 text-sm  ' /* scuffed */,
-  sm: 'h-6       px-2   [&_:where(svg)]:size-4 gap-1   text-xs  ',
-  'icon-lg':
-    'size-11   p-2    [&_:where(svg)]:size-7                  ' /* unused */,
-  'icon-md': 'size-9    p-1.5  [&_:where(svg)]:size-6                  ',
-  'icon-sm': 'size-6    p-0.5  [&_:where(svg)]:size-5                  ',
-};
+function isIconSize(size: ButtonSize): boolean {
+  return size.startsWith('icon-');
+}
 
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
@@ -100,49 +149,49 @@ export const Button = (props: ButtonProps) => {
     'label',
     'size',
     'fullWidth',
+    'noTouchResize',
+    'square',
     'tooltipDisabled',
+    'aria-label',
   ]);
 
   const group = useButtonGroupContext();
 
+  const variant = () => local.variant ?? group?.variant ?? 'ghost';
+  const size = () => local.size ?? group?.size ?? 'md';
+
   const cls = () =>
-    cn(
-      'relative inline-flex items-center justify-center font-medium leading-none border border-transparent rounded-sm whitespace-nowrap',
-      local.fullWidth && 'w-full',
-      {
-        'touch:min-h-9 touch:min-w-9 touch:[&_svg]:size-6':
-          !props.noTouchResize,
-      },
-      'outline-none focus-visible:bg-active',
-      'data-disabled:cursor-not-allowed',
-      variantStyles[local.variant ?? group?.variant ?? 'ghost'],
-      sizeStyles[local.size ?? group?.size ?? 'md'],
-      local.class
-    );
+    buttonClasses({
+      variant: variant(),
+      size: size(),
+      fullWidth: local.fullWidth,
+      noTouchResize: local.noTouchResize,
+      square: local.square,
+      class: local.class,
+    });
 
   const placement = () => local.tooltipPlacement ?? 'bottom';
 
-  const variantStyle = (): JSX.CSSProperties | string | undefined => {
-    const variant = local.variant ?? group?.variant;
-    if (variant === 'cta') {
-      // TODO (seamus): this is scuffed but better than what we had.
-      const textL = themeReactive.a0.l[0]() < 0.72 ? 0.97 : 0.2;
-      return {
-        color: `oklch(${textL} var(--c0c) var(--c0h))`,
-        '--color-edge': `oklch(${textL} var(--c0c) var(--c0h) / 0.7)`,
-        '--color-edge-muted': `oklch(${textL} var(--c0c) var(--c0h) / 0.7)`,
-      };
-    }
-    return others.style;
-  };
+  const accessibleLabel = () =>
+    local['aria-label'] ??
+    local.label ??
+    (isIconSize(size()) || local.square ? local.tooltip : undefined);
 
   const button = () => (
-    <KobalteButton data-button class={cls()} {...others} style={variantStyle()}>
+    <KobalteButton
+      data-button
+      data-slot="button"
+      data-variant={variant()}
+      data-size={size()}
+      class={cls()}
+      aria-label={accessibleLabel()}
+      {...others}
+    >
       {local.children}
     </KobalteButton>
   );
 
-  const tooltipLabel = () => local.label ?? local.tooltip;
+  const tooltipLabel = () => local.tooltip ?? local.label;
 
   // Skip Layer when inside a ButtonGroup (the group already provides one)
   // unless the button has its own explicit depth

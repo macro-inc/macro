@@ -90,6 +90,28 @@ struct AgentAnnouncementResponse {
     markdown: String,
 }
 
+/// A channel message included as context for an agent prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextMessage<'a> {
+    /// Display name of the message sender.
+    pub sender: &'a str,
+    /// Markdown content of the message.
+    pub content: &'a str,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentContextRequest<'a> {
+    prompt_markdown: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    messages: Option<&'a [AgentContextMessage<'a>]>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct AgentContextResponse {
+    markdown: String,
+}
+
 /// Rendering target supported by the lexical service `/markdown` endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarkdownTarget {
@@ -298,6 +320,31 @@ impl LexicalClient {
         .await?;
         let data: AgentAnnouncementResponse =
             response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Sanitizes an agent prompt and optionally composes it with prior-message
+    /// context via the lexical service, so internal nodes and escaping are
+    /// handled by Lexical rather than assembled manually by the caller.
+    #[tracing::instrument(skip(self, prompt_markdown, messages), err)]
+    pub async fn compose_agent_context(
+        &self,
+        prompt_markdown: &str,
+        messages: Option<&[AgentContextMessage<'_>]>,
+    ) -> Result<String> {
+        let url = format!("{}/agent-context", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentContextRequest {
+                    prompt_markdown,
+                    messages,
+                })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentContextResponse = response.json().await.context("unexpected response")?;
         Ok(data.markdown)
     }
 

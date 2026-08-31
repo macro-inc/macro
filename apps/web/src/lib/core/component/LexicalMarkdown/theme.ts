@@ -72,7 +72,7 @@ export const theme: EditorThemeClasses = {
   code: 'bg-code-buffer font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
   static: {
     'code-container': 'bg-code-buffer rounded',
-    'table-container': 'my-4 max-w-full',
+    'table-container': 'my-4 max-w-full overflow-x-auto pb-2',
   },
   codeHighlight,
   'inline-search': 'md-inline-search bg-hover text-ink-muted rounded-sm p-0.5',
@@ -150,7 +150,7 @@ export const aiChatTheme = createTheme(
     heading: {
       h1: 'text-2xl font-semibold mb-5',
       h2: 'text-xl font-semibold mb-4',
-      h3: 'text-l font-semibold mb-3',
+      h3: 'text-lg font-semibold mb-3',
       h4: 'text-base font-medium',
       h5: 'text-base font-medium',
       h6: 'text-base font-medium',
@@ -180,7 +180,7 @@ export const channelThemeSender = createTheme(
   {
     text: {
       base: 'text-current',
-      code: 'chat-blue font-mono rounded md-inline-code border pt-0.5 bg-[navy]/20 border border-[navy]/23',
+      code: 'chat-blue font-mono rounded md-inline-code pt-0.5 bg-[navy]/20 border border-[navy]/23',
     },
     quote: 'border-l-2 border-current/20 pl-4 py-2 italic text-current/80 my-4',
     list: {

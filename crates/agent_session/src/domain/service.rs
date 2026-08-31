@@ -354,6 +354,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             id,
             session.acp_session_id,
             session.workspace,
+            attachment.mcp_servers,
             attachment.connector,
             logs,
             command_rx,
@@ -390,6 +391,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             "agent.session.command",
             agent.session.id = %id,
             agent.action.name = action.as_ref(),
+            agent.command.queue_wait_ms = tracing::field::Empty,
+            agent.session.runtime_phase_at_dequeue = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
@@ -400,6 +403,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                 action_id,
                 completed,
                 span,
+                enqueued_at: tokio::time::Instant::now(),
             })
             .await
             .is_err()
@@ -652,7 +656,7 @@ where
         })
         .ok()
         .filter(|turn| *turn == MessageId::first(AuthorKind::User).turn)
-        .map(|_| prompt.prompt.clone())
+        .map(|_| prompt.name_source().to_owned())
 }
 
 fn spawn_initial_agent_session_rename<R, Rt, Namer>(
@@ -842,6 +846,13 @@ where
         self.repo.get(id).await
     }
 
+    async fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> Result<Option<AgentSession>> {
+        self.repo.find_by_egress_token_hash(egress_token_hash).await
+    }
+
     async fn session_bot(
         &self,
         id: bots::domain::models::BotId,
@@ -908,6 +919,12 @@ where
     Rt: AgentSessionRealtime,
 {
     /// Push the frame just appended out to whoever is watching the session.
+    #[tracing::instrument(
+        name = "agent.session.realtime.publish",
+        err,
+        skip(self, agent_session_id, entry),
+        fields(agent.session.id = %agent_session_id)
+    )]
     async fn stream(
         &mut self,
         agent_session_id: AgentSessionId,

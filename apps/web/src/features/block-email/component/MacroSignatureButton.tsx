@@ -18,7 +18,7 @@ export const MacroSignatureButton = (props: MacroSignatureButtonProps) => {
       <Tooltip label="Subscribe to remove watermark">
         <button
           type="button"
-          class="hover:bg-hover pointer-events-all"
+          class="hover:bg-hover pointer-events-auto"
           tabindex={-1}
           // The text area uses non delegated events to capture on click and restore focus
           // to the editor. We want to capture the click here so we can open the paywall.

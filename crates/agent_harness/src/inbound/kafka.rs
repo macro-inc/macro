@@ -111,6 +111,7 @@ pub fn route_agent_trigger(
             let origin = AnnounceOrigin {
                 channel_id: message.channel_id,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
+                message_id: message.message_id,
             };
             let kind = AgentKind::of(bot_id);
             if kind.is_managed() {

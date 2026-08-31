@@ -49,6 +49,7 @@ import { NarrowCondensedLayout } from './list-entity/narrow-condensed-layout';
 import { NarrowInboxLayout } from './list-entity/narrow-inbox-layout';
 import { NarrowLayout } from './list-entity/narrow-layout';
 import { NarrowSingleLineLayout } from './list-entity/narrow-single-line-layout';
+import { SOUP_ROW_CLASS } from './list-entity/row-geometry';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
@@ -188,10 +189,16 @@ export function ListEntity(props: ListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
+        // The row family class carries the --soup-row-* geometry (ListEntity.css)
+        // that the layouts below and the soup group headers both read, so it has
+        // to track which layout the Switch actually renders.
+        isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
         'soup-list-entity rounded-lg @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5',
         {
-          'min-h-10 mx-1': !isMobile() && !usesCondensedNarrowLayout(),
-          'min-h-9 mx-1': !isMobile() && usesCondensedNarrowLayout(),
+          'min-h-10 mx-(--soup-row-gutter)':
+            !isMobile() && !usesCondensedNarrowLayout(),
+          'min-h-9 mx-(--soup-row-gutter)':
+            !isMobile() && usesCondensedNarrowLayout(),
           'bg-list-selected': props.checked,
           'bg-list-selected-highlighted': props.checked && props.highlighted,
           'bg-list-highlighted':

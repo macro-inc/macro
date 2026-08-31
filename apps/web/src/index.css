@@ -53,6 +53,9 @@
 @property --c4c { syntax: "<number>"; inherits: true; initial-value:      0; }
 @property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
 
+/* Foreground lightness selected for readable content on the active accent. */
+@property --accent-contrast-l { syntax: "<number>"; inherits: true; initial-value: 0.2; }
+
 @property --safe-bottom { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-right  { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-left   { syntax: "<length>"; inherits: true; initial-value: 0px; }
@@ -89,11 +92,15 @@
   /* chat vars */
   --left-of-connector: calc(var(--message-padding-x) + var(--user-icon-width) * 0.5);
   --left-of-user-icon: calc(var(--left-of-connector) - var(--user-icon-width) * 0.5);
-  --regular-message-padding-t: .5rem;
+  --regular-message-padding-t: .625rem;
   --message-padding-x: .5rem;
   --thread-padding-y: .5rem;
-  --user-icon-width: 36px;
+  --user-icon-width: 32px;
   --thread-shift: 32px;
+  --channel-rail-width: 1px;
+  --channel-rail-clearance: .5rem;
+  --left-of-channel-rail: calc(var(--left-of-connector) - var(--channel-rail-width) / 2);
+  --channel-rail-center: calc(var(--left-of-channel-rail) + var(--channel-rail-width) / 2);
 
   /* accent - active, hover states, high chroma */
   --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
@@ -213,6 +220,8 @@ body.tauri-ios {
   --color-edge: var(--color-surface-4);
   --color-edge-muted: var(--color-surface-3);
   --color-accent: var(--a0);
+  --color-accent-contrast: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h));
+  --color-accent-contrast-muted: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h) / 0.7);
   --color-red: oklch(63.7% 0.237 25.331);
   --color-orange: oklch(70.5% 0.213 47.604);
   --color-amber: oklch(76.9% 0.188 70.08);
@@ -313,11 +322,11 @@ body.tauri-ios {
   --color-alert-ink: var(--color-warning-ink);
 
   /* Utility outputs. */
-  --color-channel-rail: color-mix(in oklch, var(--color-edge) 90%, var(--color-ink));
-  --color-channel-rail-active: var(--color-accent);
+  /* Thread rail segments overlap to form continuous paths, so this must stay
+     opaque or their intersections render darker than the straight runs. */
+  --color-thread-rail: color-mix(in oklch, var(--color-surface) 90%, var(--color-ink));
   --color-modal-overlay: oklch(0 0 0 / 0.25);
   --color-drop-shadow: oklch(0.15 0 0 / 0.04);
-  --color-rail: var(--color-channel-rail);
   --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
   --color-list-hover: color-mix(in oklch, var(--color-hover) 65%, transparent);
   --color-list-highlighted: var(--color-hover);
@@ -352,19 +361,6 @@ body.tauri-ios {
   --color-default:     var(--color-content-1);
   --color-email:       var(--color-default);
 
-  /* Compatibility aliases for existing syntax-highlight classes. */
-  --color-accent-30:  var(--color-red);
-  --color-accent-60:  var(--color-orange);
-  --color-accent-90:  var(--color-yellow);
-  --color-accent-120: var(--color-lime);
-  --color-accent-150: var(--color-green);
-  --color-accent-180: var(--color-teal);
-  --color-accent-210: var(--color-cyan);
-  --color-accent-240: var(--color-blue);
-  --color-accent-270: var(--color-violet);
-  --color-accent-300: var(--color-purple);
-  --color-accent-330: var(--color-pink);
-
   /* Font families */
   --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-serif: "Playfair Display Variable", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
@@ -382,6 +378,8 @@ body.tauri-ios {
   --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
   --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
+  --animate-accordion-down: accordion-down 150ms ease-out;
+  --animate-accordion-up: accordion-up 150ms ease-out;
 
   /* Z-index scale — the single source of truth for stacking. Classes come
      from these tokens (`--z-index-foo` -> `z-foo`).
@@ -479,6 +477,11 @@ body.tauri-ios {
 @custom-variant light-mode (&:where(html[data-theme-light="true"] *));
 @custom-variant dark-mode (&:where(html[data-theme-light="false"] *));
 
+/* Dark surfaces need a larger ink step for the thread path to remain visible.
+   Both inputs stay opaque, so overlapping rail segments still render evenly. */
+html[data-theme-light='false'] {
+  --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
+}
 
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
    and other floating mobile controls. Consumers add their own shape classes
@@ -657,6 +660,16 @@ body.tauri-ios {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to   { height: var(--kb-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--kb-accordion-content-height); }
+  to   { height: 0; }
 }
 
 @keyframes typing-dot {
@@ -897,18 +910,28 @@ a {
   max-width: 100%;
   width: 100%;
   @media (min-width: 640px) {
-    max-width: 800px;
+    max-width: 920px;
     min-width: 250px;
   }
 }
 
+@utility channel-rail-left {
+  border-left-style: solid;
+  border-left-width: var(--channel-rail-width);
+}
+
+@utility channel-rail-bottom {
+  border-bottom-style: solid;
+  border-bottom-width: var(--channel-rail-width);
+}
+
 @utility macro-message-padding {
-  @container (width < 816px) { padding-inline: calc(var(--spacing) * 4); }
+  @container (width < 936px) { padding-inline: calc(var(--spacing) * 4); }
   @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
 }
 
 @utility macro-message-margin {
-  @container (width < 816px) { margin-inline: calc(var(--spacing) * 4); }
+  @container (width < 936px) { margin-inline: calc(var(--spacing) * 4); }
   @container (width < 640px) { margin-inline: calc(var(--spacing) * 2); }
 }
 
@@ -960,20 +983,33 @@ a {
   opacity: 0 !important;
 }
 
+/* Tighter channel message rhythm: the base markdown theme's first/last
+   paragraph margins (6px) read airy in a chat list. 2px puts grouped lines
+   4px apart while inter-paragraph spacing inside a message is unchanged. */
+.channel-markdown > .md-p:first-child { margin-top: --spacing(0.5); }
+.channel-markdown > .md-p:last-child { margin-bottom: --spacing(0.5); }
+
 /* Channel message hover + selection-cursor highlight */
 /* Suppressed on touch devices */
 /* Background-only — borders/rings are reserved for structural UI edges. */
-[data-message][data-selected],
-html:not([data-touch-device="true"]) [data-message]:hover{
-  @apply bg-ink/5 rounded-sm;
+/* Hover reads as the lighter neutral tint; the selection cursor reads as the
+   heavier neutral tint so the two states are visually distinct. Hover is
+   suppressed on the selected message so its selection tint always shows
+   through. */
+html:not([data-touch-device="true"]) [data-message]:not([data-selected]):hover {
+  @apply bg-hover rounded-md;
+}
+
+[data-message][data-selected] {
+  @apply bg-active rounded-md;
 }
 
 [data-message][data-targeted] {
-  @apply bg-accent/30 rounded-sm;
+  @apply bg-accent/30 rounded-md;
 }
 [data-message][data-selected][data-targeted],
 html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
-  @apply bg-accent/40 rounded-sm;
+  @apply bg-accent/40 rounded-md;
 }
 
 /* A released target fades its accent out instead of cutting off. Duration
@@ -983,7 +1019,7 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
 }
 
 /* A selected message keeps its selection after release, so its fade starts
-   from the selected accent and lands on the selection gray. */
+   from the targeted accent and lands on the selection tint. */
 [data-message][data-selected][data-targeted-fading] {
   animation-name: targeted-message-accent-fade-out-selected;
 }
@@ -1005,7 +1041,7 @@ html:not([data-touch-device="true"]) [data-message][data-targeted]:hover{
     border-radius: var(--radius-sm);
   }
   to {
-    background-color: oklch(from var(--color-ink) l c h / 5%);
+    background-color: var(--color-active);
     border-radius: var(--radius-sm);
   }
 }

@@ -266,6 +266,35 @@ describe('stop', () => {
     expect(control.calls.at(-1)?.action).toEqual({ type: 'stop' });
     dispose();
   });
+
+  // Each cancel the service accepts is its own Stopped line in the
+  // transcript, so a user clicking through a turn that takes a moment to
+  // settle would otherwise stack one per click.
+  it('posts one stop per turn, however many times it is clicked', async () => {
+    const { controller, setWorking, dispose } = setup({ working: true });
+    const isStop = (action: unknown) =>
+      typeof action === 'object' &&
+      action !== null &&
+      'type' in action &&
+      action.type === 'stop';
+    const stops = () => control.calls.filter((call) => isStop(call.action));
+
+    controller.stop();
+    controller.stop();
+    controller.stop();
+    await flush();
+    expect(stops()).toHaveLength(1);
+
+    // The next turn stops on its own click: the latch tracks the turn, not
+    // the session.
+    setWorking(false);
+    await flush();
+    setWorking(true);
+    controller.stop();
+    await flush();
+    expect(stops()).toHaveLength(2);
+    dispose();
+  });
 });
 
 describe('a session that does not exist yet', () => {

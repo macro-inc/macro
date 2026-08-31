@@ -25,6 +25,7 @@ import {
 import { EmojiReactionPopover } from './EmojiReactionPopover';
 import { HoverActions } from './HoverActions';
 import { renderIcon } from './render-icon';
+import { Timestamp } from './Timestamp';
 import type { MessageActionEvent, MessageActionHandler } from './types';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
@@ -50,6 +51,11 @@ type ActionItem = {
 
 type ActionMenuProps = {
   class?: string;
+  /**
+   * Lead the toolbar with the message's timestamp. Used by grouped rows,
+   * which have no header timestamp of their own.
+   */
+  showTimestamp?: boolean;
 };
 
 function ActionButton(props: {
@@ -117,28 +123,28 @@ function ActionMenuContent(props: ActionMenuProps) {
       label: 'Reply',
       icon: ReplyIcon,
       onClick: actions?.onReply,
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
     {
       id: 'copy-link',
       label: 'Copy Link',
       icon: LinkIcon,
       onClick: actions?.onCopyLink,
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
     {
       id: 'copy-message-text',
       label: 'Copy Text',
       icon: CopyIcon,
       onClick: actions?.onCopyMessageText,
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
     {
       id: 'edit',
       label: 'Edit',
       icon: EditIcon,
       onClick: actions?.onEdit,
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
     {
       id: 'delete',
@@ -147,7 +153,7 @@ function ActionMenuContent(props: ActionMenuProps) {
       onClick: actions?.onDelete,
       destructive: true,
       class: 'text-failure-ink',
-      iconClass: 'size-3.5',
+      iconClass: 'size-4',
     },
   ];
 
@@ -157,12 +163,22 @@ function ActionMenuContent(props: ActionMenuProps) {
 
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
-      <HoverActions class={props.class} persistentVisible={emojiMenuOpen()}>
+      <HoverActions
+        class={props.class}
+        persistentVisible={emojiMenuOpen()}
+        // Grouped rows (the ones carrying the toolbar timestamp) have text at
+        // the very top; float the toolbar fully above so it never covers it.
+        position={props.showTimestamp ? 'above' : 'straddle'}
+      >
         <Layer depth={2}>
           <div
-            class="flex flex-row bg-surface border border-edge p-1 shadow items-center rounded-md"
+            class="flex flex-row bg-surface ring-1 ring-ink/10 p-1 shadow-md items-center rounded-lg"
             onClick={(e) => e.stopPropagation()}
           >
+            <Show when={props.showTimestamp}>
+              <Timestamp format="time" class="px-1.5 whitespace-nowrap" />
+              <div class="w-px self-stretch bg-ink/10 mx-1" />
+            </Show>
             <Show when={hasReactAction()}>
               <For each={QUICK_REACTION_EMOJIS}>
                 {(emoji) => (
@@ -178,7 +194,7 @@ function ActionMenuContent(props: ActionMenuProps) {
                     data-message-action="react-quick"
                     data-emoji={emoji}
                   >
-                    <span class="text-md my-0">{emoji}</span>
+                    <span class="text-base my-0">{emoji}</span>
                   </Button>
                 )}
               </For>
@@ -190,7 +206,7 @@ function ActionMenuContent(props: ActionMenuProps) {
                 onEmojiSelect={(emoji) => {
                   handleReaction(emoji);
                 }}
-                trigger={renderIcon(AddEmojiIcon, 'size-3.5')}
+                trigger={renderIcon(AddEmojiIcon, 'size-4')}
                 triggerProps={{
                   title: 'More reactions',
                   'aria-label': 'More reactions',
@@ -200,7 +216,7 @@ function ActionMenuContent(props: ActionMenuProps) {
                 }}
               />
               <Show when={visibleActions.length > 0}>
-                <div class="w-px self-stretch bg-edge-muted mx-1" />
+                <div class="w-px self-stretch bg-ink/10 mx-1" />
               </Show>
             </Show>
 
@@ -215,7 +231,7 @@ function ActionMenuContent(props: ActionMenuProps) {
               )}
             </For>
             <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
-              <div class="w-px self-stretch bg-edge-muted mx-1" />
+              <div class="w-px self-stretch bg-ink/10 mx-1" />
             </Show>
             <For each={visibleOther}>
               {(action) => (

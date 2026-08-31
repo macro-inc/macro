@@ -58,7 +58,6 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import { queryClient } from '@queries/client';
 import {
   useRemoveDraftAttachmentMutation,
   useRemoveForwardedAttachmentMutation,
@@ -74,7 +73,6 @@ import {
   submitDraftDelete,
   submitDraftSave,
 } from '@queries/email/draft-save-coalescer';
-import { emailKeys } from '@queries/email/keys';
 import {
   useEmailLinksQuery,
   useEmailSignature,

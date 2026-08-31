@@ -103,8 +103,8 @@ export function EventRsvpSection(props: {
               <Button
                 variant={
                   selfAttendee()?.responseStatus === option.response
-                    ? 'active'
-                    : 'base'
+                    ? 'accent'
+                    : 'outline'
                 }
                 size={props.buttonSize ?? 'sm'}
                 depth={3}
@@ -154,7 +154,7 @@ export function EventRsvpSection(props: {
               >
                 Cancel
               </Button>
-              <Button variant="active" class="rounded-lg" onClick={confirm}>
+              <Button variant="accent" class="rounded-lg" onClick={confirm}>
                 OK
               </Button>
             </div>

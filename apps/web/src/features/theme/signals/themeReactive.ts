@@ -186,9 +186,15 @@ createEffect(
       jamTransition();
 
       if (themeReactive.a0.l[0]() !== previousTheme.a0.l) {
+        const accentContrastLightness =
+          themeReactive.a0.l[0]() < 0.72 ? 0.97 : 0.2;
         document.documentElement.style.setProperty(
           '--a0l',
           `${themeReactive.a0.l[0]()}`
+        );
+        document.documentElement.style.setProperty(
+          '--accent-contrast-l',
+          `${accentContrastLightness}`
         );
         previousTheme.a0.l = themeReactive.a0.l[0]();
       }

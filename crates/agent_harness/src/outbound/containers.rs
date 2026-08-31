@@ -80,6 +80,13 @@ impl ContainerManager for HarnessContainers {
         }
     }
 
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        match self {
+            Self::Daytona(manager) => manager.session_token(session).await,
+            Self::Local(manager) => manager.session_token(session).await,
+        }
+    }
+
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
         match self {
             Self::Daytona(manager) => manager.teardown(session).await,

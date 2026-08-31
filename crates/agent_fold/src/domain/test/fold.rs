@@ -60,6 +60,7 @@ fn folds_a_complete_turn() {
         label: run_label,
         status: run_status,
         detail: run_detail,
+        ..
     } = &parts[1]
     else {
         panic!("second part is the terminal call: {:?}", parts[1]);
@@ -214,6 +215,69 @@ fn folds_session_controls_as_typed_parts() {
     assert_eq!(messages[0].id, TurnId(0));
     assert_eq!(messages[1].id, TurnId(1));
     assert_eq!(messages[2].id, TurnId(2));
+}
+
+/// A stop pressed before the agent's first chunk - a window over ten seconds
+/// wide, since a session's first prompt spends that creating the Cursor agent.
+///
+/// The turn has no agent message to stamp, so the close has to mint one. Left
+/// unstamped, the newest turn message is the user's prompt, which every reader
+/// takes to mean the agent is still working: the composer keeps its stop
+/// affordance, and each further click stacks another Stopped line onto a
+/// session that can never settle.
+#[test]
+fn a_stop_before_the_agent_speaks_still_settles_the_turn() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"do a big job"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"cancelled"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3, "prompt, stop control, minted reply");
+    let reply = &messages[2];
+    assert!(matches!(reply.author, Author::Agent));
+    assert_eq!(
+        reply.id,
+        TurnId(0),
+        "the reply belongs to the prompt's turn"
+    );
+    assert_eq!(reply.stop, Some(StopReason::Cancelled));
+    assert_eq!(
+        reply.parts.as_slice(),
+        &[MessagePart::Text {
+            text: String::new()
+        }],
+        "nothing was said, so there is nothing to render but the stop"
+    );
+}
+
+/// The same stop once the agent has managed a single thought: the message
+/// already exists, so nothing is minted and the thought is kept.
+#[test]
+fn a_stop_after_the_agent_speaks_stamps_the_message_it_has() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"do a big job"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"hmm"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"cancelled"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3, "prompt, reply, stop control");
+    let reply = &messages[1];
+    assert_eq!(reply.stop, Some(StopReason::Cancelled));
+    assert_eq!(
+        reply.parts.as_slice(),
+        &[MessagePart::Thought {
+            text: "hmm".to_owned()
+        }]
+    );
 }
 
 #[test]

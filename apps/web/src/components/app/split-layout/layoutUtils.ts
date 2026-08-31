@@ -105,6 +105,19 @@ export function useSplitPanel() {
 }
 
 /**
+ * A Preview Pair occupies two slots but behaves as one logical split, and its
+ * Viewer is never independently closable.
+ */
+export function shouldShowSplitCloseButton(
+  manager: SplitManager,
+  handle: SplitHandle
+) {
+  const logicalSplitCount =
+    manager.splits().length - manager.previewPairs().length;
+  return logicalSplitCount > 1 && !handle.isViewerSplit();
+}
+
+/**
  * Whether content may claim focus automatically when it mounts in the current
  * split. Preview Pair Viewers stay passive until the user focuses them.
  *

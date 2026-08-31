@@ -1,8 +1,9 @@
-//! Versioned direct-field Soup projections for `soup-flat-v1`.
+//! Direct-field Soup projection helpers and typed server-fact supplements.
 #![deny(missing_docs)]
 
 use std::str::FromStr;
 
+pub use document_sub_type::DocumentSubType;
 use item_filter_index::vocabulary;
 use model_file_type::FileType;
 #[cfg(feature = "models")]
@@ -11,7 +12,20 @@ use predicate_index::{
     ExactAttributePatch, ExactFact, ExactValue, IndexDocument, IntegerAttributePatch, IntegerFact,
     OptimisticProjectionMutation, RecordKey, Token, ValidationError, utc_timestamp_micros,
 };
+#[cfg(feature = "models")]
+use soup::domain::models::SoupProjectionHydration;
 use thiserror::Error;
+
+mod profile;
+mod wire;
+
+pub use profile::{ProfileValidationError, validate_soup_flat_v2};
+pub use wire::{
+    MAX_SOUP_CACHE_PROJECTION_BYTES, MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES,
+    SOUP_CACHE_PROJECTION_WIRE_VERSION, SoupCacheProjectionCapsuleV1,
+    SoupCacheProjectionSupplement, SoupCacheProjectionWireError,
+    decode_cache_projection_supplement, encode_cache_projection_supplement,
+};
 
 #[cfg(test)]
 mod test;
@@ -22,9 +36,44 @@ pub enum ProjectionError {
     /// The authoritative document contained an unknown file-type value.
     #[error("invalid authoritative Soup document file type `{0}`")]
     InvalidFileType(String),
+    /// Document server facts do not match the accompanying item variant.
+    #[error("document server facts do not match Soup item variant")]
+    SourceMismatch,
     /// The generic projection violated bounded IR invariants.
     #[error(transparent)]
     Validation(#[from] ValidationError),
+}
+
+/// Failure to compose one complete `soup-flat-v2` projection.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum SoupFlatV2CompositionError {
+    /// A Document did not carry authoritative relation state.
+    #[error("missing authoritative Document projection supplement")]
+    MissingDocumentSupplement,
+    /// A direct-only Project or Chat unexpectedly received a supplement.
+    #[error("unexpected projection supplement for direct-only Soup entity")]
+    UnexpectedSupplement,
+    /// A non-Document projection was supplied a Document subtype.
+    #[error("unexpected Document subtype for Soup entity partition")]
+    UnexpectedDocumentSubType,
+    /// The supplement belongs to another normalized record.
+    #[error("projection supplement record key does not match the GraphQL entity")]
+    SupplementRecordKeyMismatch,
+    /// The supplement targets another complete projection profile.
+    #[error("projection supplement target profile does not match soup-flat-v2")]
+    SupplementTargetProfileMismatch,
+    /// The supplement belongs to another entity partition.
+    #[error("projection supplement partition does not match the GraphQL entity")]
+    SupplementPartitionMismatch,
+    /// Direct GraphQL fields could not be projected canonically.
+    #[error(transparent)]
+    Direct(#[from] ProjectionError),
+    /// A composed canonical fact violated generic IR bounds.
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
+    /// The final composed document violated the complete v2 profile.
+    #[error(transparent)]
+    Profile(#[from] ProfileValidationError),
 }
 
 /// Supported direct-field Soup entity kind.
@@ -84,8 +133,8 @@ pub struct DirectProjectionPatchInput {
     pub file_type: Option<Option<String>>,
     /// Replacement creation timestamp when supplied.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Effective optimistic update timestamp.
-    pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// Replacement update timestamp when supplied.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Generate a complete optimistic projection from direct Soup fields.
@@ -106,11 +155,68 @@ pub fn project_direct_fields(
     }
     projection(
         input.record_key,
+        vocabulary::profile(),
         input.kind.partition(),
         exact_facts,
         input.created_at,
         input.updated_at,
     )
+}
+
+/// Compose direct GraphQL facts and an optional server-only supplement into one
+/// canonical, validated `soup-flat-v2` projection.
+///
+/// Documents require exactly one supplement and obtain only their authoritative
+/// email-attachment fact from it. Projects and Chats are complete from direct
+/// fields alone and reject supplements.
+pub fn compose_soup_flat_v2(
+    input: DirectProjectionInput,
+    document_sub_type: Option<DocumentSubType>,
+    supplement: Option<&SoupCacheProjectionSupplement>,
+) -> Result<IndexDocument, SoupFlatV2CompositionError> {
+    let kind = input.kind;
+    let expected_record_key = input.record_key.clone();
+    let expected_partition = kind.partition();
+    let mut document = project_direct_fields(input)?;
+    document.profile = vocabulary::profile_v2();
+
+    match kind {
+        SoupFlatEntityKind::Document => {
+            let supplement =
+                supplement.ok_or(SoupFlatV2CompositionError::MissingDocumentSupplement)?;
+            if supplement.record_key() != &expected_record_key {
+                return Err(SoupFlatV2CompositionError::SupplementRecordKeyMismatch);
+            }
+            if supplement.target_profile() != &vocabulary::profile_v2() {
+                return Err(SoupFlatV2CompositionError::SupplementTargetProfileMismatch);
+            }
+            if supplement.partition() != &expected_partition {
+                return Err(SoupFlatV2CompositionError::SupplementPartitionMismatch);
+            }
+            if let Some(sub_type) = document_sub_type {
+                document.exact_facts.push(utf8_fact(
+                    vocabulary::document_sub_type(),
+                    sub_type.to_string(),
+                )?);
+            }
+            document.exact_facts.push(ExactFact {
+                attribute: vocabulary::email_attachment(),
+                value: ExactValue::new([u8::from(supplement.is_email_attachment())])?,
+            });
+        }
+        SoupFlatEntityKind::Project | SoupFlatEntityKind::Chat => {
+            if supplement.is_some() {
+                return Err(SoupFlatV2CompositionError::UnexpectedSupplement);
+            }
+            if document_sub_type.is_some() {
+                return Err(SoupFlatV2CompositionError::UnexpectedDocumentSubType);
+            }
+        }
+    }
+
+    document.canonicalize();
+    validate_soup_flat_v2(&document)?;
+    Ok(document)
 }
 
 /// Generate a generic optimistic patch from partial direct Soup fields.
@@ -166,15 +272,17 @@ pub fn patch_direct_fields(
             value,
         });
     }
-    let updated_at = utc_timestamp_micros(input.updated_at);
-    integers.push(IntegerAttributePatch {
-        attribute: vocabulary::updated_at(),
-        values: vec![updated_at],
-    });
-    sorts.push(IntegerFact {
-        attribute: vocabulary::updated_at(),
-        value: updated_at,
-    });
+    if let Some(updated_at) = input.updated_at {
+        let value = utc_timestamp_micros(updated_at);
+        integers.push(IntegerAttributePatch {
+            attribute: vocabulary::updated_at(),
+            values: vec![value],
+        });
+        sorts.push(IntegerFact {
+            attribute: vocabulary::updated_at(),
+            value,
+        });
+    }
 
     Ok(OptimisticProjectionMutation::Patch {
         record_key: input.record_key,
@@ -264,6 +372,30 @@ pub fn project_chat<T>(
     })
 }
 
+/// Compile an authorized item/server-facts pair into a typed supplement.
+///
+/// Only documents hydrated with authoritative `document_email` relation state
+/// produce a supplement. Direct entity fields, including document subtype,
+/// are deliberately excluded and must be projected from the same GraphQL
+/// response by the browser. A document supplement attached to another entity
+/// variant is rejected.
+#[cfg(feature = "models")]
+pub fn project_soup_cache_supplement(
+    record_key: RecordKey,
+    hydration: &SoupProjectionHydration,
+) -> Result<Option<SoupCacheProjectionSupplement>, ProjectionError> {
+    let Some(server_facts) = hydration.document_server_facts else {
+        return Ok(None);
+    };
+    if !matches!(&hydration.item, SoupItem::Document(_)) {
+        return Err(ProjectionError::SourceMismatch);
+    }
+    Ok(Some(SoupCacheProjectionSupplement::document(
+        record_key,
+        server_facts.is_email_attachment,
+    )))
+}
+
 fn common_exact_facts(id: uuid::Uuid, owner: String) -> Result<Vec<ExactFact>, ValidationError> {
     Ok(vec![
         uuid_fact(vocabulary::id(), id)?,
@@ -273,6 +405,7 @@ fn common_exact_facts(id: uuid::Uuid, owner: String) -> Result<Vec<ExactFact>, V
 
 fn projection(
     record_key: RecordKey,
+    profile: predicate_index::Profile,
     partition: Token,
     exact_facts: Vec<ExactFact>,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -288,7 +421,7 @@ fn projection(
     };
     let document = IndexDocument {
         record_key,
-        profile: vocabulary::profile(),
+        profile,
         partition,
         exact_facts,
         integer_facts: vec![created_at.clone(), updated_at.clone()],

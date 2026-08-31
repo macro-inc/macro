@@ -26,6 +26,9 @@ fn timed_series(id: Uuid) -> CalendarEventSearchInfo {
         time_zone: Some("America/New_York".to_string()),
         is_recurring: true,
         conference_url: None,
+        organizer_email: Some("jacob@example.com".to_string()),
+        organizer_name: Some("Jacob Beckerman".to_string()),
+        description: None,
         is_read_only: false,
         created_at: Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
         updated_at: Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
@@ -160,5 +163,42 @@ fn multiple_hits_for_one_event_collapse_into_one_row() {
         results[0].extra.calendar_event_search_results.len(),
         2,
         "both hits are kept on that row"
+    );
+}
+
+#[test]
+fn organizer_rides_on_the_row_when_named() {
+    let id = Uuid::new_v4();
+    let results = construct_search_result(
+        vec![hit(id)],
+        HashMap::from([(id, timed_series(id))]),
+        HashMap::new(),
+    );
+    let organizer = results[0]
+        .metadata
+        .as_ref()
+        .expect("metadata")
+        .organizer
+        .as_ref()
+        .expect("organizer");
+    assert_eq!(organizer.name.as_deref(), Some("Jacob Beckerman"));
+    assert_eq!(organizer.email.as_deref(), Some("jacob@example.com"));
+}
+
+#[test]
+fn organizer_absent_when_source_names_neither() {
+    let id = Uuid::new_v4();
+    let mut info = timed_series(id);
+    info.organizer_email = None;
+    info.organizer_name = None;
+    let results =
+        construct_search_result(vec![hit(id)], HashMap::from([(id, info)]), HashMap::new());
+    assert!(
+        results[0]
+            .metadata
+            .as_ref()
+            .expect("metadata")
+            .organizer
+            .is_none()
     );
 }

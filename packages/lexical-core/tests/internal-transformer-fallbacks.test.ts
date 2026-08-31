@@ -125,6 +125,19 @@ describe('internal transformer fallbacks', () => {
   );
 
   it.each([
+    '<m-agent-context>{bad}</m-agent-context>',
+    '<m-agent-context>{"version":2,"text":"private"}</m-agent-context>',
+    '<m-agent-context>{"version":1,"text":42}</m-agent-context>',
+    '<m-agent-context>{"version":1,"text":"private","extra":true}</m-agent-context>',
+  ])('rejects malformed trusted agent context %#', async (markdown) => {
+    const editor = await importMarkdown(markdown);
+
+    editor.getEditorState().read(() => {
+      expect(findUnknownMention()?.getName()).toBe('Unknown Agent Context');
+    });
+  });
+
+  it.each([
     ['<m-document-card>{bad}</m-document-card>', 'Unknown Item'],
     [
       '<m-document-card>{"documentName":"Doc"}</m-document-card>',

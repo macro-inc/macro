@@ -124,25 +124,32 @@ function LoginPicker(props: {
     <div class="flex flex-col gap-3">
       <Button
         variant="cta"
+        size="xl"
         autofocus
         onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
       >
-        <IconGoogle />
+        <IconGoogle class="size-fit" />
         Continue with Google
       </Button>
 
       <Show when={showApple}>
         <Button
-          variant="base"
+          variant="outline"
+          size="xl"
           class="bg-surface"
           onClick={() => startSsoLogin('Apple')}
         >
-          <IconApple />
+          <IconApple class="size-fit" />
           Continue with Apple
         </Button>
       </Show>
 
-      <Button variant="base" class="bg-surface" onClick={continueWithEmail}>
+      <Button
+        variant="outline"
+        size="xl"
+        class="bg-surface"
+        onClick={continueWithEmail}
+      >
         Continue with email
       </Button>
     </div>
@@ -264,12 +271,22 @@ function EmailFormNew(props: {
         />
       </Show>
       <FormError msg={submission.error?.message} />
-      <Button variant="cta" type="submit" disabled={submission.pending}>
+      <Button
+        variant="cta"
+        size="xl"
+        type="submit"
+        disabled={submission.pending}
+      >
         Continue
-        <ArrowRight class="size-4" />
+        <ArrowRight class="size-5" />
       </Button>
-      <Button variant="base" class="bg-surface" onClick={props.onBack}>
-        <ArrowLeft class="size-4" />
+      <Button
+        variant="outline"
+        size="xl"
+        class="bg-surface"
+        onClick={props.onBack}
+      >
+        <ArrowLeft class="size-5" />
         Back to sign in
       </Button>
     </form>
@@ -437,14 +454,20 @@ function VerifyFormNew(props: {
           gate submission here instead of round-tripping partial codes. */}
       <Button
         variant="cta"
+        size="xl"
         type="submit"
         disabled={submission.pending || code().length !== 6 || !email()}
       >
         Verify
-        <ArrowRight class="size-4" />
+        <ArrowRight class="size-5" />
       </Button>
-      <Button variant="base" class="bg-surface" onClick={props.onBack}>
-        <ArrowLeft class="size-4" />
+      <Button
+        variant="outline"
+        size="xl"
+        class="bg-surface"
+        onClick={props.onBack}
+      >
+        <ArrowLeft class="size-5" />
         Change email
       </Button>
     </form>

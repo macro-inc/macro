@@ -371,7 +371,7 @@ export function ColorPickerPopover(props: {
   return (
     <Popover placement="bottom-end" gutter={8}>
       <Popover.Trigger
-        class="block cursor-pointer appearance-none border-none bg-transparent p-0"
+        class="block appearance-none border-none bg-transparent p-0"
         aria-label={props.ariaLabel}
       >
         <Show

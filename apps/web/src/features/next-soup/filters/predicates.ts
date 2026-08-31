@@ -137,6 +137,10 @@ export function callsFilter(entity: EntityData): boolean {
   return entity.type === 'call';
 }
 
+export function calendarEventFilter(entity: EntityData): boolean {
+  return entity.type === 'calendar_event';
+}
+
 export function crmCompanyFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company';
 }

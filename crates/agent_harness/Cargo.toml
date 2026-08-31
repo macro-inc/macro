@@ -6,11 +6,15 @@ version = "0.1.0"
 
 [dependencies]
 agent-client-protocol = { workspace = true }
+# The session-token claim shape and its signing, so the harness and the proxy
+# cannot disagree about what a token says.
+agent_egress = { path = "../agent_egress" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
 cursor_api_key = { path = "../cursor_api_key" }
 cursor_cloud_agents = { path = "../cursor_cloud_agents" }
+entity_access = { path = "../entity_access" }
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["ws"] }
 base64 = { workspace = true }
@@ -23,6 +27,7 @@ dashmap = { workspace = true }
 futures = { workspace = true }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
+pipedream_mcp = { path = "../pipedream_mcp" }
 macro_event_broker = { path = "../macro_event_broker", features = ["outbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_tower_layers = { path = "../macro_tower_layers" }

@@ -68,7 +68,11 @@ const MAX_LIST_HEIGHT = 192;
 const tagActionButtonClass =
   'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [&_:where(svg)]:size-3.5';
 
-type TagPickerProps = {
+export type TagPickerSourceProps =
+  | { docTags: DocTags; createDocTags?: never }
+  | { docTags?: never; createDocTags: () => DocTags };
+
+export type TagPickerProps = {
   replaceTag?: ResolvedTag;
   triggerClass?: string;
   triggerLabel: string;
@@ -79,10 +83,7 @@ type TagPickerProps = {
    * behind it. This matches inline property editors rendered in soup rows.
    */
   withClickBlock?: boolean;
-} & (
-  | { docTags: DocTags; createDocTags?: never }
-  | { docTags?: never; createDocTags: () => DocTags }
-);
+} & TagPickerSourceProps;
 
 export function TagPicker(props: TagPickerProps) {
   const [open, setOpen] = createSignal(false);

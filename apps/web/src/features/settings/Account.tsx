@@ -221,7 +221,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 role="button"
                 aria-label="Upload profile picture"
                 onClick={pickProfilePicture}
-                class="flex size-full cursor-pointer items-center justify-center rounded-full bg-edge text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="flex size-full items-center justify-center rounded-full bg-edge text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <IconUpload class="size-5" />
               </span>
@@ -234,7 +234,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 as="div"
                 tabindex="0"
                 aria-label="Edit profile picture"
-                class="group block size-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="group block size-full rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <div class="size-full overflow-hidden rounded-full">
                   <UserIcon
@@ -287,7 +287,7 @@ function ProfilePictureRow(props: { userId: string }) {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 disabled={isRemoving()}
                 onClick={() => setShowRemoveConfirmModal(false)}
@@ -474,7 +474,7 @@ export function Account() {
             <div class="px-6 py-3.5">
               <Button
                 fullWidth
-                variant="active"
+                variant="accent"
                 depth={4}
                 onClick={() => logout()}
               >
@@ -577,7 +577,7 @@ export function Account() {
             </div>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 onClick={() => {
                   setShowDeleteModal(false);
@@ -622,7 +622,7 @@ export function Account() {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 disabled={isDeleting()}
                 onClick={() => {
@@ -872,7 +872,7 @@ function BundleUpdateRow() {
         </span>
         <Show when={action()}>
           {(a) => (
-            <Button variant="active" size="sm" depth={3} onClick={a().action}>
+            <Button variant="accent" size="sm" depth={3} onClick={a().action}>
               {a().label}
             </Button>
           )}

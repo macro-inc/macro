@@ -29,7 +29,7 @@ export type ConfirmDialogDisplayProps = {
 };
 
 const TONE_VARIANT = {
-  default: 'active',
+  default: 'accent',
   danger: 'danger',
   success: 'success',
 } as const;

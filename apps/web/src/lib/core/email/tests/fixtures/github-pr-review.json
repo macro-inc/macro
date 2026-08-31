@@ -1,0 +1,5 @@
+{
+  "name": "github-pr-review",
+  "description": "Unwrapped <pre> review diff. Without pre-wrap this inflates scrollWidth and used to zoom the whole letter.",
+  "body_html_sanitized": "<div><p>cam requested changes on this pull request.</p><p>apps/web/src/features/block-email/component/EmailMessageBody.tsx</p><pre>@@ -291,8 +291,20 @@ export function EmailMessageBody() {\n       const contentWidth = messageDiv.scrollWidth;\n-      messageDiv.style.zoom = `${container.clientWidth / contentWidth}`;\n+      const fit = fitToWidthZoom({ containerWidth: container.clientWidth, contentWidth });\n+      // One unwrapped pre line like this must not shrink the letter to dust: const leftoverWideCanvas = 'newsletter-table-width-836px-and-a-pathological-diff-hunk-that-would-be-two-thousand-pixels-if-white-space-were-pre';\n</pre></div>"
+}

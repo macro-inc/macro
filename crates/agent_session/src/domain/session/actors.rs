@@ -15,7 +15,7 @@
 use std::{collections::VecDeque, time::Duration};
 
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_client_protocol::schema::v1::SessionId;
+use agent_client_protocol::schema::v1::{McpServer, SessionId};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
@@ -45,6 +45,7 @@ pub(crate) struct SessionCommand {
     pub(crate) action_id: AgentActionId,
     pub(crate) completed: oneshot::Sender<Result<()>>,
     pub(crate) span: tracing::Span,
+    pub(crate) enqueued_at: Instant,
 }
 
 pub(crate) struct SessionCompletion {
@@ -87,10 +88,14 @@ where
     Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
 {
+    // One argument per fact the actor owns; a struct here would only move the
+    // same list one level down.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         id: AgentSessionId,
         acp_session_id: Option<SessionId>,
         workspace: String,
+        mcp_servers: Vec<McpServer>,
         connector: Connector,
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
@@ -116,8 +121,8 @@ where
             handshake_seen,
             handshake,
             machine: match acp_session_id {
-                None => SessionMachine::new(id, workspace),
-                Some(session_id) => SessionMachine::resume(id, session_id, workspace),
+                None => SessionMachine::new(id, workspace, mcp_servers),
+                Some(session_id) => SessionMachine::resume(id, session_id, workspace, mcp_servers),
             },
             logs,
             commands,
@@ -156,11 +161,21 @@ where
             let input = tokio::select! {
             () = handshake_timeout => Input::Closed(CloseReason::HandshakeTimedOut),
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, action_id, completed, span }) => Input::Command {
-                    from: user_id,
-                    action,
-                    action_id,
-                    token: SessionCompletion { completed, span },
+                Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
+                    span.record(
+                        "agent.command.queue_wait_ms",
+                        enqueued_at.elapsed().as_millis() as u64,
+                    );
+                    span.record(
+                        "agent.session.runtime_phase_at_dequeue",
+                        self.machine.status().as_ref(),
+                    );
+                    Input::Command {
+                        from: user_id,
+                        action,
+                        action_id,
+                        token: SessionCompletion { completed, span },
+                    }
                 },
                 // The service dropped every handle; nobody can reach us.
                 None => Input::Closed(CloseReason::Abandoned),

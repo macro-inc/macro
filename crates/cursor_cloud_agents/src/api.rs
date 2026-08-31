@@ -289,7 +289,7 @@ impl CursorClient {
 }
 
 impl CursorAgents for CursorClient {
-    #[tracing::instrument(skip(self, prompt), err)]
+    #[tracing::instrument(skip_all, err, fields(mcp_servers = mcp_servers.len()))]
     async fn create_agent(
         &self,
         prompt: &str,

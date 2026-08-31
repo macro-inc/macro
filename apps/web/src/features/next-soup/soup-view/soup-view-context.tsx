@@ -29,7 +29,6 @@ import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { createGroupedSoupQueries } from '@app/features/next-soup/soup-view/create-grouped-soup-queries';
 import { createSearchState } from '@app/features/next-soup/soup-view/create-search-state';
 import {
   createTagFilter,
@@ -41,10 +40,8 @@ import {
   registerInboxFilterSplit,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
-import {
-  deduplicateEntities,
-  scopeChannelNotificationsForEntity,
-} from '@app/features/next-soup/utils';
+import { deduplicateEntities } from '@app/features/next-soup/utils';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makeFlaggedPersisted } from '@app/preferences/make-flagged-persisted';
 import { useDealStages } from '@companies/crm/deal-stages';
@@ -69,14 +66,12 @@ import {
   type EntityData,
   getPropertyOptionLabel,
   isWithNotification,
-  type Notification,
-  toNotificationEntity,
   unreadFilterFn,
 } from '@entity';
-import { useNotificationsForEntity } from '@notifications';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useQueryClient } from '@queries/client';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
+import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
@@ -286,9 +281,7 @@ const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'viewed_updated',
 ];
 
-type EntityWithRawNotifications = EntityData & {
-  notifications?: Notification[];
-};
+const NATIVE_OFFLINE_LOAD_ERROR = new Error(NATIVE_OFFLINE_ERROR_MESSAGE);
 
 const NATIVE_OFFLINE_LOAD_ERROR = new Error(NATIVE_OFFLINE_ERROR_MESSAGE);
 
@@ -299,11 +292,11 @@ function nativeOfflineLoadError(hasData: () => boolean): Error | null {
     : null;
 }
 
-function rawEntityNotifications(
-  entity: EntityData
-): Notification[] | undefined {
-  const notifications = (entity as EntityWithRawNotifications).notifications;
-  return Array.isArray(notifications) ? notifications : undefined;
+/** Retryable load error for a data-less view once iOS reports no network path. */
+function nativeOfflineLoadError(hasData: () => boolean): Error | null {
+  return nativeNetworkStatus() === 'offline' && !hasData()
+    ? NATIVE_OFFLINE_LOAD_ERROR
+    : null;
 }
 
 export const SoupViewContextProvider: FlowComponent<
@@ -623,7 +616,7 @@ export const SoupViewContextProvider: FlowComponent<
     default: 'board',
   });
   const [readFilter, setReadFilter] = makeFlaggedPersisted(
-    useEntryState<ReadFilter>('soup.readFilter', { default: 'unread' }),
+    useEntryState<ReadFilter>('soup.readFilter', { default: 'all' }),
     {
       enabled: filterPersistenceEnabled,
       name: soupViewPersistenceKey('soup-view-read-filter'),
@@ -634,7 +627,10 @@ export const SoupViewContextProvider: FlowComponent<
   // backend date grouping is unreliable, and we'd rather keep paginating the
   // single flat list and regenerate buckets from whatever's loaded.
   const isClientDateGroup = createMemo(
-    () => soup.grouping.activeGroupId() === 'date'
+    () =>
+      soup.grouping.activeGroupId() === 'date' &&
+      // The inbox shouldn't have any date-grouping on mobile/tablet.
+      !(activeListView() === 'inbox' && isTouchDevice())
   );
 
   const groupByField = createMemo((): GroupByField | undefined => {
@@ -793,11 +789,20 @@ export const SoupViewContextProvider: FlowComponent<
     };
   };
 
+  // A row the status filter admitted stays admitted for the rest of the visit
+  // (see `admittedByStatusFilter`). The inbox opens rows in a preview pane, and
+  // previewing marks the row read — so without this the row the user just
+  // clicked drops out from under the preview they are still reading, taking the
+  // list position with it. The row re-renders in its read styling, it just keeps
+  // its place.
   const entityMatchesInboxReadFilter = (entity: EntityData): boolean => {
     const filter = readFilter();
     if (filter === 'all' || !isInboxView()) return true;
     const isUnread = unreadFilterFn(entity);
-    return filter === 'unread' ? isUnread : !isUnread;
+    return (
+      (filter === 'unread' ? isUnread : !isUnread) ||
+      admittedByStatusFilter().ids.has(entity.id)
+    );
   };
 
   const applyViewFilters = (state: QueryState): QueryState => {
@@ -914,37 +919,10 @@ export const SoupViewContextProvider: FlowComponent<
   // the migration to graphql. We should not need this since
   // the items themselves have the notifications on them. Remove
   // when completely migrated
-  const attachNotifications = (entity: EntityData) => {
-    const rawNotifications = rawEntityNotifications(entity);
-    if (rawNotifications) {
-      const {
-        notifications: _notifications,
-        ...entityWithoutRawNotifications
-      } = entity as EntityWithRawNotifications;
-      return {
-        ...entityWithoutRawNotifications,
-        notifications: () =>
-          isInboxView()
-            ? scopeChannelNotificationsForEntity(
-                entityWithoutRawNotifications,
-                rawNotifications
-              )
-            : rawNotifications,
-      };
-    }
-
-    const notifications = useNotificationsForEntity(
-      notificationSource,
-      toNotificationEntity(entity)
-    );
-    return {
-      ...entity,
-      notifications: () =>
-        isInboxView()
-          ? scopeChannelNotificationsForEntity(entity, notifications())
-          : notifications(),
-    };
-  };
+  const attachNotifications = (entity: EntityData) =>
+    withEntityNotifications(entity, notificationSource, {
+      scopeChannelThreads: isInboxView(),
+    });
 
   // Active tag option ids and combine mode, used to gate optimistic websocket
   // inserts so an active tag filter is honored even on the grouped render path.
@@ -992,6 +970,7 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
+        onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
           itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
         },
@@ -1080,6 +1059,32 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
+  // Ids that have matched the inbox status filter at some point during this
+  // visit, so `entityMatchesInboxReadFilter` can keep admitting a row after the
+  // user reads it.
+  //
+  // A visit is one view/tab/filter combination: changing any of them starts a
+  // new set, and returning a new object is what re-runs every consumer. An
+  // effect that emptied the set in place would not — a plain Set notifies
+  // nothing — and the list would keep rendering the previous visit's rows.
+  const admittedByStatusFilter = createMemo<{
+    scope: string;
+    ids: Set<string>;
+  }>((prev) => {
+    const filter = readFilter();
+    const scope = `${activeListView()}:${activeTab()}:${filter}`;
+    const ids = prev?.scope === scope ? new Set(prev.ids) : new Set<string>();
+
+    if (filter !== 'all' && isInboxView()) {
+      const wantUnread = filter === 'unread';
+      for (const entity of items()) {
+        if (unreadFilterFn(entity) === wantUnread) ids.add(entity.id);
+      }
+    }
+
+    return { scope, ids };
+  });
+
   const baseEntities = () => {
     let transformed = items();
     const ctx = getFilterContext();
@@ -1149,8 +1154,7 @@ export const SoupViewContextProvider: FlowComponent<
     groupByField: serverGroupByField,
     soupParams,
     soupBody,
-    graphqlReactive: () =>
-      itemsQuery.transport === 'graphql' && serverGroupByField() !== undefined,
+    transport: () => itemsQuery.transport,
     queryOptions: () => {
       const view = activeListView();
       return {

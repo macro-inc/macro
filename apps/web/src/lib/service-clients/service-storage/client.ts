@@ -6,7 +6,6 @@ import {
   modificationDataReplacer,
   type PdfSegment as TSegment,
 } from '@coparse/document-processing-types';
-import type { BlockAlias, BlockName } from '@core/block';
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import {
@@ -165,6 +164,12 @@ import { saveDocumentHandlerResponse } from './generated/zod';
 import type { ItemType } from './itemType';
 
 export type { ItemType } from './itemType';
+export {
+  blockNameToItemType,
+  DEFAULT_ITEM_TYPE,
+  itemTypeToReferenceEntityType,
+  stringToItemType,
+} from './itemType';
 
 import type {
   CollabSurfaceResponse,
@@ -234,8 +239,6 @@ type Success = {
   success: boolean;
 };
 type SuccessResponse = { data: Success };
-
-export const DEFAULT_ITEM_TYPE: ItemType = 'document';
 
 export type { ApiAttachmentChannelReference } from './generated/schemas/apiAttachmentChannelReference';
 export type { ApiAttachmentEntityReference } from './generated/schemas/apiAttachmentEntityReference';
@@ -318,72 +321,6 @@ export const ChannelTypeEnum = {
   DirectMessage: ChannelType.direct_message,
   Team: ChannelType.team,
 } as const satisfies Record<string, ChannelType>;
-
-const itemTypeSet = new Set([
-  'document',
-  'chat',
-  'project',
-  'channel',
-  'email',
-  'channel_message',
-  'call',
-  'automation',
-  'calendar_event',
-  'thread',
-  'crm_company',
-  'crm_contact',
-]);
-
-function _isItemType(str: string): str is ItemType {
-  return itemTypeSet.has(str);
-}
-
-export function blockNameToItemType(
-  blockName: BlockName | BlockAlias
-): ItemType {
-  switch (blockName) {
-    case 'chat':
-      return 'chat';
-    case 'call':
-      return 'call';
-    case 'calendar':
-      return 'calendar_event';
-    case 'channel':
-      return 'channel';
-    case 'project':
-      return 'project';
-    case 'email':
-      return 'email';
-    case 'automation':
-      return 'automation';
-    case 'company':
-      return 'crm_company';
-    case 'contact':
-      return 'crm_contact';
-    default:
-      return DEFAULT_ITEM_TYPE;
-  }
-}
-
-export function stringToItemType(str: string): ItemType | undefined {
-  switch (str) {
-    case 'email':
-    case 'thread':
-    case 'email_thread': {
-      return 'email';
-    }
-    case 'call':
-    case 'calendar_event':
-    case 'chat':
-    case 'document':
-    case 'project':
-    case 'channel':
-    case 'crm_company':
-      return str;
-    default:
-      return undefined;
-  }
-}
 
 export function isCloudStorageItem(
   item: ItemType
@@ -560,9 +497,12 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
-  // The channel list is still served by the comms hex, mounted at
-  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the
-  // list moves into the channels hex (alongside the comms teardown).
+  // The channel list is still served by the comms hex, mounted at,
+
+  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the,
+
+  // list moves into the channels hex (alongside the comms teardown).,
+
   async getChannels(args: {
     cursor?: string;
     limit?: number;
@@ -1127,6 +1067,7 @@ export const storageServiceClient = {
       });
     },
   },
+
   async getUsersHistory() {
     return (await dssFetch<{ data: Item[] }>(`/history`)).map((result) => ({
       data: result.data,
@@ -1181,7 +1122,8 @@ export const storageServiceClient = {
     }));
   },
 
-  /** Ids of the starter documents seeded at signup. */
+  /** Ids of the starter documents seeded at signup. */,
+
   async getStarterDocs() {
     return (
       await dssFetch<{
@@ -1347,7 +1289,8 @@ export const storageServiceClient = {
 
   /**
    * Creates a markdown document and initializes its sync-service content on the backend.
-   */
+   */,
+
   async createMarkdownDocument(request: CreateMarkdownDocumentRequest) {
     const result = await dssFetch<CreateMarkdownHandler200>(
       `/documents/create_markdown`,
@@ -1375,7 +1318,8 @@ export const storageServiceClient = {
 
   /**
    * Creates a task with properties and initializes its sync-service content on the backend.
-   */
+   */,
+
   async createTask(request: CreateTaskRequest) {
     const result = await dssFetch<CreateTaskHandler200>(
       `/documents/create_task`,
@@ -1401,7 +1345,8 @@ export const storageServiceClient = {
    * Creates a snippet and initializes its sync-service content on the backend.
    * Snippets are created personal; team sharing is toggled separately via
    * setDocumentTeamShare.
-   */
+   */,
+
   async createSnippet(request: CreateSnippetRequest) {
     const result = await dssFetch<CreateSnippetHandler200>(
       `/documents/create_snippet`,
@@ -1427,7 +1372,8 @@ export const storageServiceClient = {
    * Creates a skill and initializes its sync-service content on the backend.
    * Skills are markdown documents containing instructions that AI reads and
    * follows when the skill is referenced in an AI input.
-   */
+   */,
+
   async createSkill(request: CreateSkillRequest) {
     const result = await dssFetch<CreateSkillHandler200>(
       `/documents/create_skill`,
@@ -1453,7 +1399,8 @@ export const storageServiceClient = {
    * Lists the built-in system skills. System skills are static, code-defined
    * AI instructions with well-known ids; they surface like skill documents
    * but have no document behind them and must not be opened as documents.
-   */
+   */,
+
   async getSystemSkills() {
     return dssFetch<GetSystemSkillsHandler200>(`/documents/system_skills`, {
       method: 'GET',
@@ -1490,7 +1437,8 @@ export const storageServiceClient = {
 
   /**
    * Gets the team-share state of a document (resolved against the owner's team).
-   */
+   */,
+
   async getDocumentTeamShare(args: { documentId: string }) {
     return await dssFetch<DocumentTeamShareResponse>(
       `/documents/${args.documentId}/team_share`
@@ -1500,7 +1448,8 @@ export const storageServiceClient = {
   /**
    * Shares or unshares a document with the owner's team. Sharing grants the
    * team Edit access.
-   */
+   */,
+
   async setDocumentTeamShare(args: {
     documentId: string;
     shareWithTeam: boolean;
@@ -1768,6 +1717,7 @@ export const storageServiceClient = {
         ]);
     }
   },
+
   async getJobProcessingResult<T extends ProcessingResultType>(params: {
     jobId: string;
     documentId: string;
@@ -2353,6 +2303,7 @@ export const storageServiceClient = {
       ).map((result) => result.data);
     },
   },
+
   async getDeletedItems() {
     return (
       await dssFetch<TypedSuccessResponse>('/recents/deleted', {
@@ -2435,6 +2386,7 @@ export const storageServiceClient = {
       });
     },
   },
+
   reminders: {
     async createReminder(params: CreateReminderRequest) {
       return await dssFetch<Reminder>('/reminders', {
@@ -2469,6 +2421,7 @@ export const storageServiceClient = {
       return await dssFetch(`/reminders/${id}`, { method: 'DELETE' });
     },
   },
+
   async editThread(params) {
     const { threadId, ...body } = params;
 
@@ -2479,23 +2432,27 @@ export const storageServiceClient = {
       })
     ).map((result) => result.data);
   },
+
   async createCompany(body: CreateCrmCompanyRequest) {
     return await dssFetch<CrmCompanyResponse>('/crm/companies', {
       method: 'POST',
       body: JSON.stringify(body),
     });
   },
+
   async getCompany({ companyId }: { companyId: string }) {
     return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
       method: 'GET',
     });
   },
+
   async getCompanyContacts({ companyId }: { companyId: string }) {
     return await dssFetch<CrmContactResponse[]>(
       `/crm/companies/${companyId}/contacts`,
       { method: 'GET' }
     );
   },
+
   async createContact({
     companyId,
     ...body
@@ -2508,11 +2465,13 @@ export const storageServiceClient = {
       }
     );
   },
+
   async getContact({ contactId }: { contactId: string }) {
     return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
       method: 'GET',
     });
   },
+
   async getContactByEmail({
     email,
     signal,
@@ -2523,6 +2482,7 @@ export const storageServiceClient = {
       { method: 'GET', signal }
     );
   },
+
   async setContactName({
     contactId,
     ...body
@@ -2532,6 +2492,7 @@ export const storageServiceClient = {
       body: JSON.stringify(body),
     });
   },
+
   async setContactHidden({
     contactId,
     hidden,
@@ -2544,6 +2505,7 @@ export const storageServiceClient = {
       body: JSON.stringify({ hidden }),
     });
   },
+
   async setCompanyName({
     companyId,
     ...body
@@ -2553,6 +2515,7 @@ export const storageServiceClient = {
       body: JSON.stringify(body),
     });
   },
+
   async setCompanyHidden({
     companyId,
     hidden,
@@ -2565,6 +2528,7 @@ export const storageServiceClient = {
       body: JSON.stringify({ hidden }),
     });
   },
+
   async setEmailSync({
     companyId,
     emailSync,
@@ -2577,17 +2541,20 @@ export const storageServiceClient = {
       body: JSON.stringify({ email_sync: emailSync }),
     });
   },
+
   async getCrmTeamSettings() {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'GET',
     });
   },
+
   async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'PUT',
       body: JSON.stringify(body),
     });
   },
+
   crmComments: {
     async list({
       entityType,
@@ -2634,6 +2601,15 @@ export const storageServiceClient = {
       );
     },
   },
+
+  // The channel list is still served by the comms hex, mounted at,
+
+  // `/comms/channels` on the same DSS host. Repoint to `/channels` once the,
+
+  // list moves into the channels hex (alongside the comms teardown).,
+
+  /** Ids of the starter documents seeded at signup. */,
+
 } satisfies StorageServiceClient &
   typeof enhancements &
   Record<string, unknown>;

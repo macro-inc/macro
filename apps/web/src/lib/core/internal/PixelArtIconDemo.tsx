@@ -431,7 +431,7 @@ function GlyphGrid(props: GlyphGridProps) {
           </button>
         </div>
         <Button
-          variant="base"
+          variant="outline"
           onClick={() => {
             props.onNewGlyph();
           }}
@@ -490,10 +490,10 @@ function GlyphGrid(props: GlyphGridProps) {
                   class="items-center border relative group transition-colors justify-self-stretch"
                   classList={{
                     'border-edge bg-edge': isSelected(),
-                    'border-edge bg-background hover:bg-edge': !isSelected(),
+                    'border-edge bg-surface hover:bg-edge': !isSelected(),
                   }}
                 >
-                  <div class="size-20 flex items-center justify-center mx-auto m-2">
+                  <div class="size-20 flex items-center justify-center mx-auto my-2">
                     <Show when={pixels().length > 0}>
                       <PixelIcon
                         pixels={pixels()}
@@ -515,7 +515,7 @@ function GlyphGrid(props: GlyphGridProps) {
 
                   <div class="absolute top-1 right-1 flex gap-0 opacity-0 bg-surface group-hover:opacity-100">
                     <Button
-                      variant="base"
+                      variant="outline"
                       size="icon-md"
                       label="Edit"
                       onClick={(e) => {
@@ -874,7 +874,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                   <h3 class="font-mono text-ink-extra-muted text-xs">
                     [ PREVIEW ]
                   </h3>
-                  <div class="size-24 flex items-center justify-center border border-edge bg-background">
+                  <div class="size-24 flex items-center justify-center border border-edge bg-surface">
                     <PixelIcon
                       pixels={pixels()}
                       iconSize={iconSize()}
@@ -914,10 +914,10 @@ function GlyphEditor(props: GlyphEditorProps) {
                 </div>
 
                 <div class="grid grid-cols-2 gap-2 mb-4">
-                  <Button variant="base" onClick={clearAll}>
+                  <Button variant="outline" onClick={clearAll}>
                     <Erase /> Clear Grid
                   </Button>
-                  <Button variant="base" onClick={fillAll}>
+                  <Button variant="outline" onClick={fillAll}>
                     <Fill /> Fill Grid
                   </Button>
                 </div>
@@ -926,7 +926,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                   <h4 class="font-mono text-xs text-ink-muted">Transforms</h4>
                   <div class="flex gap-2">
                     <Button
-                      variant="base"
+                      variant="outline"
                       size="icon-md"
                       label="Mirror X"
                       onClick={handleMirrorX}
@@ -934,7 +934,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                       <MirrorX />
                     </Button>
                     <Button
-                      variant="base"
+                      variant="outline"
                       size="icon-md"
                       label="Mirror Y"
                       onClick={handleMirrorY}
@@ -942,7 +942,7 @@ function GlyphEditor(props: GlyphEditorProps) {
                       <MirrorY />
                     </Button>
                     <Button
-                      variant="base"
+                      variant="outline"
                       size="icon-md"
                       label="Rotate 90 CCW"
                       onClick={handleRotate90CC}
@@ -955,10 +955,10 @@ function GlyphEditor(props: GlyphEditorProps) {
 
               <div class="pt-4 border-t border-edge">
                 <div class="grid grid-cols-2 gap-2">
-                  <Button variant="base" onClick={props.onClose}>
+                  <Button variant="outline" onClick={props.onClose}>
                     Cancel
                   </Button>
-                  <Button variant="active" onClick={handleSave}>
+                  <Button variant="accent" onClick={handleSave}>
                     Save
                   </Button>
                 </div>
@@ -1057,16 +1057,16 @@ function GlyphSidebar(props: GlyphSidebarProps) {
         <div class="mt-6 space-y-2">
           <h4 class="font-mono text-xs text-ink-muted">Batch Operations</h4>
           <div class="grid grid-cols-1 gap-2">
-            <Button variant="base" onClick={props.onExportAll}>
+            <Button variant="outline" onClick={props.onExportAll}>
               <Copy /> Export to Clipboard
             </Button>
-            <Button variant="base" onClick={props.onImportAll}>
+            <Button variant="outline" onClick={props.onImportAll}>
               <Upload /> Import from Clipboard
             </Button>
-            <Button variant="base" onClick={props.onCopyAllSVGs}>
+            <Button variant="outline" onClick={props.onCopyAllSVGs}>
               <Copy /> Copy SVGs
             </Button>
-            <Button variant="base" onClick={props.onDownloadAllSVGs}>
+            <Button variant="outline" onClick={props.onDownloadAllSVGs}>
               <Download /> Download SVGs
             </Button>
           </div>
@@ -1095,7 +1095,7 @@ function GlyphSidebar(props: GlyphSidebarProps) {
               }}
               class="font-mono text-ink-muted text-sm text-left w-full border border-edge"
             />
-            <div class="size-32 flex items-center justify-center border border-edge bg-background">
+            <div class="size-32 flex items-center justify-center border border-edge bg-surface">
               <Show when={selectedPixels()}>
                 <PixelIcon
                   pixels={selectedPixels()!}

@@ -15,8 +15,14 @@ import {
 } from '../ui';
 
 export function AgentComposer() {
-  const { composer, loadFailed, metadata, pending, resuming } =
-    useAgentSession();
+  const {
+    composer,
+    loadFailed,
+    metadata,
+    pending,
+    resuming,
+    registerQuoteInsert,
+  } = useAgentSession();
 
   // A session still being created was created by this user, one action ago,
   // and has an empty transcript: the only thing to do with it is type. The
@@ -43,6 +49,7 @@ export function AgentComposer() {
         commands={() => metadata()?.availableCommands ?? []}
         onSend={composer.send}
         onStop={composer.stop}
+        registerQuoteInsert={registerQuoteInsert}
         modelControl={
           <AgentModelSelector
             model={metadata()?.model ?? null}

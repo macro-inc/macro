@@ -2,7 +2,7 @@ use anyhow::Context;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
-use macro_service_urls::AiEditingWorkerUrl;
+use macro_service_urls::{AiEditingWorkerUrl, DocumentCognitionServiceUrl};
 use secretsmanager_client::LocalOrRemoteSecret;
 
 use crate::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
@@ -107,6 +107,9 @@ pub struct Config {
     /// AI editing worker URL
     #[macro_config_default(AiEditingWorkerUrl::unwrap_new().to_string())]
     pub ai_editing_worker_url: String,
+    /// Browser-facing base URL used for MCP OAuth redirects and client metadata.
+    #[macro_config_default(DocumentCognitionServiceUrl::unwrap_new().to_string())]
+    pub mcp_public_url: String,
     /// JWT secret for minting document permission tokens for the editing worker.
     pub document_permission_jwt: DocumentPermissionJwt,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
@@ -165,6 +168,7 @@ impl Config {
             pipedream_allowed_origins: PipedreamAllowedOrigins::Unset,
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
+            mcp_public_url: DocumentCognitionServiceUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),
             kafka_brokers: KafkaBrokers::Comptime("localhost:9092"),
         }

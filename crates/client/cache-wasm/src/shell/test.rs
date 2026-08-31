@@ -1,5 +1,9 @@
 use super::*;
+use cache_core::predicate::{ProjectionIncompleteKind, ProjectionState};
+use cache_core::store::Storage;
+use predicate_index::{ExactValue, RecordKey, Token};
 use serde::de::DeserializeOwned;
+use soup_filter_projection::{SoupCacheProjectionSupplement, encode_cache_projection_supplement};
 use wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_test::*;
 
@@ -30,13 +34,42 @@ const PROPERTY_MUTATION: &str = r#"mutation SetEntityProperty($input: SetEntityP
     setEntityProperty(input: $input) { id displayName }
 }"#;
 
-const SOUP_UPDATES_SUBSCRIPTION: &str = r#"subscription SoupUpdates {
-    soupUpdates {
-        __typename
-        ... on SoupUpdated {
-            item {
+const OPTIMISTIC_DOCUMENT_MUTATION: &str = r#"mutation RenameEntities($inputs: [RenameEntityInput!]!) {
+    renameEntities(inputs: $inputs) {
+        results {
+            __typename
+            ... on GraphqlMutationSuccess {
+                effects {
+                    __typename
+                    ... on SoupUpdated {
+                        item {
+                            __typename
+                            id
+                            displayName
+                            ... on GraphqlSoupDocument {
+                                ownerId
+                                projectId
+                                fileType
+                                createdAt
+                                updatedAt
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}"#;
+
+const SOUP_WITH_PROJECTION_QUERY: &str = r#"query SoupWithProjection($input: SoupInput!) {
+    user {
+        id
+        soup(input: $input) {
+            nextCursor
+            items {
                 __typename
                 id
+                cacheProjection @cacheOnly
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -44,6 +77,73 @@ const SOUP_UPDATES_SUBSCRIPTION: &str = r#"subscription SoupUpdates {
                     fileType
                     createdAt
                     updatedAt
+                    subType { __typename }
+                }
+            }
+        }
+    }
+}"#;
+
+const SOUP_BACKFILL_WITH_PROJECTION_QUERY: &str = r#"query SoupBackfill($input: SoupInput!) {
+    user {
+        id
+        soup(input: $input) {
+            nextCursor
+            items {
+                __typename
+                id
+                cacheProjection @cacheOnly
+                displayName
+                ... on GraphqlSoupDocument {
+                    ownerId
+                    projectId
+                    fileType
+                    createdAt
+                    updatedAt
+                    subType { __typename }
+                }
+            }
+        }
+    }
+}"#;
+
+const SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION: &str = r#"subscription SoupUpdatesWithProjection {
+    soupUpdates {
+        __typename
+        ... on SoupUpdated {
+            item {
+                __typename
+                id
+                cacheProjection @cacheOnly
+                displayName
+                ... on GraphqlSoupDocument {
+                    ownerId
+                    projectId
+                    fileType
+                    createdAt
+                    updatedAt
+                    subType { __typename }
+                }
+            }
+        }
+    }
+}"#;
+
+const PARTIAL_DOCUMENT_MUTATION: &str = r#"mutation PartialRename($inputs: [RenameEntityInput!]!) {
+    renameEntities(inputs: $inputs) {
+        results {
+            __typename
+            ... on GraphqlMutationSuccess {
+                effects {
+                    __typename
+                    ... on SoupUpdated {
+                        item {
+                            __typename
+                            id
+                            displayName
+                            ... on GraphqlSoupDocument { ownerId }
+                        }
+                    }
                 }
             }
         }
@@ -152,21 +252,118 @@ fn mutation_variables() -> serde_json::Value {
     }})
 }
 
-fn realtime_document_data(document_id: &str) -> serde_json::Value {
+fn v2_document_supplement(document_id: &str, is_email_attachment: bool) -> String {
+    encode_cache_projection_supplement(&SoupCacheProjectionSupplement::document(
+        RecordKey::new(format!("GraphqlSoupDocument:{document_id}")).unwrap(),
+        is_email_attachment,
+    ))
+    .unwrap()
+}
+
+fn projected_document_item(
+    document_id: &str,
+    owner: &str,
+    is_email_attachment: bool,
+    sub_type: Option<&str>,
+    updated_at: i64,
+) -> serde_json::Value {
+    let sub_type = sub_type.map(|sub_type| {
+        let typename = match sub_type {
+            "task" => "GraphqlTaskSubType",
+            "snippet" => "GraphqlSnippetSubType",
+            "skill" => "GraphqlSkillSubType",
+            value => panic!("unsupported test subtype {value}"),
+        };
+        serde_json::json!({ "__typename": typename })
+    });
+    serde_json::json!({
+        "__typename": "GraphqlSoupDocument",
+        "id": document_id,
+        "cacheProjection": v2_document_supplement(document_id, is_email_attachment),
+        "displayName": format!("Document {document_id}"),
+        "ownerId": owner,
+        "projectId": null,
+        "fileType": "md",
+        "createdAt": format!("2025-01-01T00:00:00.{:06}Z", updated_at - 1),
+        "updatedAt": format!("2025-01-01T00:00:00.{updated_at:06}Z"),
+        "subType": sub_type,
+    })
+}
+
+fn projected_realtime_document_data(
+    document_id: &str,
+    is_email_attachment: bool,
+) -> serde_json::Value {
     serde_json::json!({
         "soupUpdates": [{
             "__typename": "SoupUpdated",
-            "item": {
-                "__typename": "GraphqlSoupDocument",
-                "id": document_id,
-                "displayName": "Realtime document",
-                "ownerId": "macro|user@example.com",
-                "projectId": null,
-                "fileType": "md",
-                "createdAt": "2026-01-01T00:00:00.000Z",
-                "updatedAt": "2026-01-02T00:00:00.000Z"
-            }
+            "item": projected_document_item(
+                document_id,
+                "macro|user@example.com",
+                is_email_attachment,
+                None,
+                2,
+            ),
         }]
+    })
+}
+
+fn partial_document_mutation_data(document_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "renameEntities": {
+            "results": [{
+                "__typename": "GraphqlMutationSuccess",
+                "effects": [{
+                    "__typename": "SoupUpdated",
+                    "item": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": document_id,
+                        "displayName": "Mutation document",
+                        "ownerId": "macro|user@example.com"
+                    }
+                }]
+            }]
+        }
+    })
+}
+
+async fn projection_state(engine: &CacheEngine, key: &str) -> ProjectionState {
+    let state = engine.state.lock().await;
+    let storage = state
+        .engine
+        .as_ref()
+        .expect("open cache has an engine")
+        .storage();
+    storage
+        .load_projection_states(&[RecordKey::new(key).unwrap()])
+        .await
+        .unwrap()
+        .into_iter()
+        .next()
+        .flatten()
+        .expect("projection state exists")
+}
+
+fn optimistic_document_data(document_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "renameEntities": {
+            "results": [{
+                "__typename": "GraphqlMutationSuccess",
+                "effects": [{
+                    "__typename": "SoupUpdated",
+                    "item": {
+                        "__typename": "GraphqlSoupDocument",
+                        "id": document_id,
+                        "displayName": "Optimistic document",
+                        "ownerId": "macro|user@example.com",
+                        "projectId": null,
+                        "fileType": "md",
+                        "createdAt": "2026-01-01T00:00:00.000Z",
+                        "updatedAt": "2026-01-03T00:00:00.000Z"
+                    }
+                }]
+            }]
+        }
     })
 }
 
@@ -189,6 +386,118 @@ fn exact_document_filter(document_id: &str) -> serde_json::Value {
         "sortDirection": "DESC",
         "limit": 20
     })
+}
+
+fn documents_preset_filter(document_filter: serde_json::Value) -> serde_json::Value {
+    const NIL_ID: &str = "00000000-0000-0000-0000-000000000000";
+    serde_json::json!({
+        "filters": {
+            "calendarEventFilter": { "literal": { "id": NIL_ID } },
+            "documentFilter": document_filter,
+            "projectFilter": { "literal": { "projectId": NIL_ID } },
+            "chatFilter": { "literal": { "chatId": NIL_ID } },
+            "emailFilter": { "tree": { "literal": { "threadId": NIL_ID } } },
+            "channelFilter": { "literal": { "channelId": NIL_ID } },
+            "channelThreadFilter": { "literal": { "threadId": NIL_ID } },
+            "callFilter": { "literal": { "callId": NIL_ID } },
+            "crmCompanyFilter": { "literal": { "id": NIL_ID } },
+            "foreignEntityFilter": { "literal": { "id": NIL_ID } }
+        },
+        "sortMethod": "UPDATED_AT",
+        "sortDirection": "DESC",
+        "limit": 100
+    })
+}
+
+fn production_documents_preset_filters() -> Vec<(&'static str, serde_json::Value)> {
+    let owner = "macro|user@example.com";
+    let not_task = serde_json::json!({
+        "not": { "literal": { "subType": "TASK" } }
+    });
+    let not_task_or_snippet = serde_json::json!({
+        "not": {
+            "or": {
+                "left": { "literal": { "subType": "TASK" } },
+                "right": { "literal": { "subType": "SNIPPET" } }
+            }
+        }
+    });
+
+    vec![
+        (
+            "owned/snippets-on",
+            documents_preset_filter(serde_json::json!({
+                "and": {
+                    "left": not_task.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "literal": { "owner": owner } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            })),
+        ),
+        (
+            "owned/snippets-off",
+            documents_preset_filter(serde_json::json!({
+                "and": {
+                    "left": not_task_or_snippet.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "literal": { "owner": owner } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            })),
+        ),
+        (
+            "shared/snippets-on",
+            documents_preset_filter(serde_json::json!({
+                "and": {
+                    "left": not_task.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "not": { "literal": { "owner": owner } } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            })),
+        ),
+        (
+            "shared/snippets-off",
+            documents_preset_filter(serde_json::json!({
+                "and": {
+                    "left": not_task_or_snippet.clone(),
+                    "right": {
+                        "and": {
+                            "left": { "not": { "literal": { "owner": owner } } },
+                            "right": { "literal": { "isEmailAttachment": false } }
+                        }
+                    }
+                }
+            })),
+        ),
+        (
+            "attachments/snippets-on",
+            documents_preset_filter(
+                serde_json::json!({ "literal": { "isEmailAttachment": true } }),
+            ),
+        ),
+        (
+            "attachments/snippets-off",
+            documents_preset_filter(
+                serde_json::json!({ "literal": { "isEmailAttachment": true } }),
+            ),
+        ),
+        ("all/snippets-on", documents_preset_filter(not_task)),
+        (
+            "all/snippets-off",
+            documents_preset_filter(not_task_or_snippet),
+        ),
+    ]
 }
 
 async fn fresh_engine(scope: &str) -> CacheEngine {
@@ -248,8 +557,11 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
         ))
         .await,
     );
-    assert_eq!(selected[0]["recordKey"], "GraphqlSoupDocument:doc-1");
-    assert_eq!(selected[0]["record"]["id"], "doc-1");
+    assert_eq!(
+        selected["records"][0]["recordKey"],
+        "GraphqlSoupDocument:doc-1"
+    );
+    assert_eq!(selected["records"][0]["record"]["id"], "doc-1");
 
     let variants: serde_json::Value = from_js(
         resolved(engine.inspect_query_variants(
@@ -298,9 +610,12 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
     );
     assert_eq!(read["kind"], "hit");
 
-    let affected: Vec<String> =
+    let affected: serde_json::Value =
         from_js(resolved(engine.invalidate_keys(vec!["GraphqlSoupDocument:doc-1".into()])).await);
-    assert_eq!(affected, ["tab:z", "tab:a"]);
+    assert_eq!(
+        affected["affectedOps"],
+        serde_json::json!(["tab:z", "tab:a"])
+    );
 
     resolved(engine.delete_keys(vec!["GraphqlSoupDocument:doc-1".into()])).await;
     let read: serde_json::Value = from_js(
@@ -319,51 +634,392 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
 }
 
 #[wasm_bindgen_test(async)]
-async fn realtime_soup_items_are_locally_filterable_without_a_query_fetch() {
-    const SCOPE: &str = "cache-wasm-realtime-local-filter";
-    const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000001";
+async fn soup_updated_v2_supplements_advance_revision_and_recompute_documents_presets_locally() {
+    const SCOPE: &str = "cache-wasm-realtime-documents-v2";
+    const OWNER: &str = "macro|user@example.com";
+    const OTHER_OWNER: &str = "macro|shared@example.com";
+    const INITIAL: &str = "00000000-0000-0000-0000-000000000001";
+    const ORDINARY: &str = "00000000-0000-0000-0000-000000000002";
+    const SHARED: &str = "00000000-0000-0000-0000-000000000003";
+    const ATTACHMENT: &str = "00000000-0000-0000-0000-000000000004";
+    const TASK: &str = "00000000-0000-0000-0000-000000000005";
+    const SNIPPET: &str = "00000000-0000-0000-0000-000000000006";
+    const SKILL: &str = "00000000-0000-0000-0000-000000000007";
+    let key = |id| format!("GraphqlSoupDocument:{id}");
     let engine = fresh_engine(SCOPE).await;
 
-    resolved(engine.write_query(
-        write_context(None),
-        SOUP_UPDATES_SUBSCRIPTION.into(),
-        Some("SoupUpdates".into()),
-        js(serde_json::json!({})),
-        js(realtime_document_data(DOCUMENT_ID)),
-        None,
-    ))
-    .await;
+    let network_write: serde_json::Value = from_js(
+        resolved(engine.write_query(
+            write_context(None),
+            SOUP_WITH_PROJECTION_QUERY.into(),
+            Some("SoupWithProjection".into()),
+            js(serde_json::json!({ "input": { "limit": 100 } })),
+            js(serde_json::json!({
+                "user": {
+                    "id": "user-1",
+                    "soup": {
+                        "nextCursor": null,
+                        "items": [projected_document_item(INITIAL, OWNER, false, None, 10)]
+                    }
+                }
+            })),
+            Some("user-1".into()),
+        ))
+        .await,
+    );
+    assert_eq!(network_write["revision"], "1");
 
-    // This asks only the local predicate index; no Soup query response has
-    // been fetched or written before the realtime item is returned.
-    let filtered: serde_json::Value =
-        from_js(resolved(engine.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
+    let updates = [
+        projected_document_item(ORDINARY, OWNER, false, None, 20),
+        projected_document_item(SHARED, OTHER_OWNER, false, None, 30),
+        projected_document_item(ATTACHMENT, OWNER, true, None, 40),
+        projected_document_item(TASK, OWNER, false, Some("task"), 50),
+        projected_document_item(SNIPPET, OWNER, false, Some("snippet"), 60),
+        projected_document_item(SKILL, OWNER, false, Some("skill"), 70),
+    ]
+    .into_iter()
+    .map(|item| serde_json::json!({ "__typename": "SoupUpdated", "item": item }))
+    .collect::<Vec<_>>();
+    let subscription_write: serde_json::Value = from_js(
+        resolved(engine.write_query(
+            write_context(None),
+            SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+            Some("SoupUpdatesWithProjection".into()),
+            js(serde_json::json!({})),
+            js(serde_json::json!({ "soupUpdates": updates })),
+            None,
+        ))
+        .await,
+    );
+    assert_eq!(subscription_write["revision"], "2");
+
+    // After the one initial Soup response, every membership result below is
+    // recomputed only through the real WASM/Turso predicate index. No second
+    // Soup query response is executed or written after the subscription.
+    for (name, request) in production_documents_preset_filters() {
+        let expected = match name {
+            "owned/snippets-on" => vec![key(SKILL), key(SNIPPET), key(ORDINARY), key(INITIAL)],
+            "owned/snippets-off" => vec![key(SKILL), key(ORDINARY), key(INITIAL)],
+            "shared/snippets-on" | "shared/snippets-off" => vec![key(SHARED)],
+            "attachments/snippets-on" | "attachments/snippets-off" => {
+                vec![key(ATTACHMENT)]
+            }
+            "all/snippets-on" => vec![
+                key(SKILL),
+                key(SNIPPET),
+                key(ATTACHMENT),
+                key(SHARED),
+                key(ORDINARY),
+                key(INITIAL),
+            ],
+            "all/snippets-off" => vec![
+                key(SKILL),
+                key(ATTACHMENT),
+                key(SHARED),
+                key(ORDINARY),
+                key(INITIAL),
+            ],
+            _ => panic!("unexpected Documents preset fixture {name}"),
+        };
+        let filtered: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request))).await);
+        assert_eq!(
+            filtered,
+            serde_json::json!({
+                "kind": "complete",
+                "revision": "2",
+                "keys": expected,
+                "optimistic": false,
+            }),
+            "{name}"
+        );
+    }
+
+    for (id, expected) in [(TASK, "task"), (SNIPPET, "snippet"), (SKILL, "skill")] {
+        let ProjectionState::Complete(document) = projection_state(&engine, &key(id)).await else {
+            panic!("GraphQL subtype {expected} must compose a complete projection");
+        };
+        assert!(document.exact_facts.iter().any(|fact| {
+            fact.attribute == Token::new("document-sub-type").unwrap()
+                && fact.value == ExactValue::utf8(expected).unwrap()
+        }));
+    }
+
+    let selected: serde_json::Value = from_js(
+        resolved(engine.read_records_by_keys(
+            REALTIME_DOCUMENT_FRAGMENT.into(),
+            "RealtimeDocument".into(),
+            js(serde_json::json!([key(ORDINARY)])),
+        ))
+        .await,
+    );
+    assert_eq!(selected["revision"], "2");
+    assert_eq!(selected["records"][0]["record"]["id"], ORDINARY);
+
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn backfill_supplement_failure_does_not_commit_or_advance_revision() {
+    const SCOPE: &str = "cache-wasm-backfill-supplement-checkpoint";
+    const FIRST: &str = "00000000-0000-0000-0000-000000000001";
+    const INVALID: &str = "00000000-0000-0000-0000-000000000002";
+    let engine = fresh_engine(SCOPE).await;
+
+    let hydrated: serde_json::Value = from_js(
+        resolved(engine.hydrate_query(
+            SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+            Some("SoupBackfill".into()),
+            js(serde_json::json!({ "input": { "initial": { "limit": 1 } } })),
+            js(serde_json::json!({
+                "user": {
+                    "id": "user-1",
+                    "soup": {
+                        "nextCursor": "next",
+                        "items": [projected_document_item(
+                            FIRST,
+                            "macro|user@example.com",
+                            false,
+                            None,
+                            10,
+                        )]
+                    }
+                }
+            })),
+            Some("user-1".into()),
+        ))
+        .await,
+    );
+    assert_eq!(hydrated["revision"], "1");
+
+    let error = JsFuture::from(engine.hydrate_query(
+        SOUP_BACKFILL_WITH_PROJECTION_QUERY.into(),
+        Some("SoupBackfill".into()),
+        js(serde_json::json!({ "input": { "initial": { "limit": 1 } } })),
+        js(serde_json::json!({
+            "user": {
+                "id": "user-1",
+                "soup": {
+                    "nextCursor": null,
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": INVALID,
+                        "cacheProjection": null,
+                        "displayName": "Invalid backfill item",
+                        "ownerId": "macro|user@example.com"
+                    }]
+                }
+            }
+        })),
+        Some("user-1".into()),
+    ))
+    .await
+    .expect_err("invalid required backfill supplement rejects before storage");
+    let message = js_sys::Reflect::get(&error, &JsValue::from_str("message"))
+        .expect("Error.message")
+        .as_string()
+        .expect("message is a string");
     assert_eq!(
-        filtered,
-        serde_json::json!({
-            "kind": "complete",
-            "revision": "1",
-            "keys": [format!("GraphqlSoupDocument:{DOCUMENT_ID}")],
-            "optimistic": false
-        })
+        message,
+        "SoupBackfill page contains an incomplete required cache projection"
+    );
+    assert_eq!(
+        resolved(engine.current_revision())
+            .await
+            .as_string()
+            .unwrap(),
+        "1"
     );
 
     let selected: serde_json::Value = from_js(
         resolved(engine.read_records_by_keys(
             REALTIME_DOCUMENT_FRAGMENT.into(),
             "RealtimeDocument".into(),
-            js(filtered["keys"].clone()),
+            js(serde_json::json!([format!(
+                "GraphqlSoupDocument:{INVALID}"
+            )])),
         ))
         .await,
     );
-    assert_eq!(selected["revision"], "1");
-    assert_eq!(selected["records"][0]["record"]["id"], DOCUMENT_ID);
-    assert_eq!(
-        selected["records"][0]["record"]["displayName"],
-        "Realtime document"
-    );
+    assert!(selected["records"].as_array().unwrap().is_empty());
 
     close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn supplement_and_partial_mutation_ordering_preserve_complete_server_facts() {
+    const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000001";
+    let key = format!("GraphqlSoupDocument:{DOCUMENT_ID}");
+    let mutation_variables = serde_json::json!({
+        "inputs": [{
+            "entity": { "type": "DOCUMENT", "id": DOCUMENT_ID },
+            "displayName": "Mutation document"
+        }]
+    });
+
+    let subscription_first = fresh_engine("cache-wasm-supplement-order-subscription-first").await;
+    let subscription_write: serde_json::Value = from_js(
+        resolved(subscription_first.write_query(
+            write_context(None),
+            SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+            Some("SoupUpdatesWithProjection".into()),
+            js(serde_json::json!({})),
+            js(projected_realtime_document_data(DOCUMENT_ID, true)),
+            None,
+        ))
+        .await,
+    );
+    assert_eq!(subscription_write["revision"], "1");
+    let mutation_write: serde_json::Value = from_js(
+        resolved(subscription_first.write_query(
+            write_context(None),
+            PARTIAL_DOCUMENT_MUTATION.into(),
+            Some("PartialRename".into()),
+            js(mutation_variables.clone()),
+            js(partial_document_mutation_data(DOCUMENT_ID)),
+            None,
+        ))
+        .await,
+    );
+    assert_eq!(mutation_write["revision"], "2");
+    let ProjectionState::Complete(after_patch) = projection_state(&subscription_first, &key).await
+    else {
+        panic!("a direct-field patch over a composed projection must stay complete");
+    };
+    assert!(after_patch.exact_facts.iter().any(|fact| {
+        fact.attribute == Token::new("email-attachment").unwrap()
+            && fact.value == ExactValue::new([1]).unwrap()
+    }));
+    close_and_destroy(
+        &subscription_first,
+        "cache-wasm-supplement-order-subscription-first",
+    )
+    .await;
+
+    let mutation_first = fresh_engine("cache-wasm-supplement-order-mutation-first").await;
+    resolved(mutation_first.write_query(
+        write_context(None),
+        PARTIAL_DOCUMENT_MUTATION.into(),
+        Some("PartialRename".into()),
+        js(mutation_variables),
+        js(partial_document_mutation_data(DOCUMENT_ID)),
+        None,
+    ))
+    .await;
+    assert!(matches!(
+        projection_state(&mutation_first, &key).await,
+        ProjectionState::Incomplete {
+            kind: ProjectionIncompleteKind::Missing,
+            ..
+        }
+    ));
+    let subscription_write: serde_json::Value = from_js(
+        resolved(mutation_first.write_query(
+            write_context(None),
+            SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+            Some("SoupUpdatesWithProjection".into()),
+            js(serde_json::json!({})),
+            js(projected_realtime_document_data(DOCUMENT_ID, true)),
+            None,
+        ))
+        .await,
+    );
+    assert_eq!(subscription_write["revision"], "2");
+    let ProjectionState::Complete(after_supplement) = projection_state(&mutation_first, &key).await
+    else {
+        panic!("a later supplement composition must restore complete authority");
+    };
+    assert!(after_supplement.exact_facts.iter().any(|fact| {
+        fact.attribute == Token::new("email-attachment").unwrap()
+            && fact.value == ExactValue::new([1]).unwrap()
+    }));
+    close_and_destroy(
+        &mutation_first,
+        "cache-wasm-supplement-order-mutation-first",
+    )
+    .await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
+    const SCOPE: &str = "cache-wasm-optimistic-local-filter";
+    const DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000002";
+    let engine = fresh_engine(SCOPE).await;
+
+    resolved(engine.write_query(
+        write_context(None),
+        SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+        Some("SoupUpdatesWithProjection".into()),
+        js(serde_json::json!({})),
+        js(projected_realtime_document_data(DOCUMENT_ID, false)),
+        None,
+    ))
+    .await;
+
+    let enqueue: serde_json::Value = from_js(
+        resolved(engine.enqueue_optimistic_mutation(
+            None,
+            OPTIMISTIC_DOCUMENT_MUTATION.into(),
+            Some("RenameEntities".into()),
+            js(serde_json::json!({
+                "inputs": [{
+                    "entity": { "type": "DOCUMENT", "id": DOCUMENT_ID },
+                    "displayName": "Optimistic document"
+                }]
+            })),
+            js(optimistic_document_data(DOCUMENT_ID)),
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            1.0,
+            "optimistic-filter-runner".into(),
+            0.0,
+            100.0,
+        ))
+        .await,
+    );
+    assert_eq!(enqueue["initialClaim"]["kind"], "claimed");
+    let transaction_id = enqueue["transactionId"].as_str().unwrap().to_owned();
+    let generation = enqueue["initialClaim"]["mutation"]["leaseGeneration"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let filtered: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
+    assert_eq!(filtered["kind"], "complete");
+    assert_eq!(
+        filtered["keys"],
+        serde_json::json!([format!("GraphqlSoupDocument:{DOCUMENT_ID}")])
+    );
+    assert_eq!(filtered["optimistic"], true);
+
+    resolved(engine.close()).await;
+    let reopened = open_cache(SCOPE.into(), None)
+        .await
+        .expect("reopen preserved optimistic shadow index");
+    let filtered: serde_json::Value =
+        from_js(resolved(reopened.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
+    assert_eq!(
+        filtered["keys"],
+        serde_json::json!([format!("GraphqlSoupDocument:{DOCUMENT_ID}")])
+    );
+    assert_eq!(filtered["optimistic"], true);
+
+    resolved(reopened.rollback_optimistic_write(
+        transaction_id,
+        "optimistic-filter-runner".into(),
+        generation,
+    ))
+    .await;
+    let filtered: serde_json::Value =
+        from_js(resolved(reopened.entity_filter(js(exact_document_filter(DOCUMENT_ID)))).await);
+    assert_eq!(
+        filtered["keys"],
+        serde_json::json!([format!("GraphqlSoupDocument:{DOCUMENT_ID}")])
+    );
+    assert_eq!(filtered["optimistic"], false);
+
+    close_and_destroy(&reopened, SCOPE).await;
 }
 
 #[wasm_bindgen_test(async)]
