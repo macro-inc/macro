@@ -35,6 +35,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
   ],
   mail: [
     { value: 'important', label: 'Signal' },
+    { value: 'feed', label: 'Feed' },
     { value: 'noise', label: 'Noise' },
     { value: 'sent', label: 'Sent' },
     { value: 'calendar', label: 'Calendar' },

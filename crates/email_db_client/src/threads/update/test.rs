@@ -84,6 +84,15 @@ async fn fetch_signal(pool: &Pool<Postgres>, thread_id: &str) -> anyhow::Result<
     .await?)
 }
 
+async fn fetch_feed(pool: &Pool<Postgres>, thread_id: &str) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar(
+        "SELECT is_feed FROM email_threads WHERE id = $1",
+    )
+    .bind(Uuid::parse_str(thread_id)?)
+    .fetch_one(pool)
+    .await?)
+}
+
 async fn sync_signal(pool: &Pool<Postgres>, thread_id: &str) -> anyhow::Result<()> {
     let mut conn = pool.acquire().await?;
     sync_thread_signal_flag(&mut conn, Uuid::parse_str(thread_id)?).await
@@ -98,6 +107,29 @@ async fn signal_set_for_unlabeled_message(pool: Pool<Postgres>) -> anyhow::Resul
     assert!(!fetch_signal(&pool, SIG_THREAD_UNLABELED).await?);
     sync_signal(&pool, SIG_THREAD_UNLABELED).await?;
     assert!(fetch_signal(&pool, SIG_THREAD_UNLABELED).await?);
+    assert!(!fetch_feed(&pool, SIG_THREAD_UNLABELED).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_signal_flag"))
+)]
+async fn feed_assignment_clears_signal_on_ingest_sync(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO email_filters (link_id, email_address, is_important, surface)
+         VALUES ($1, $2, false, 'feed')",
+    )
+    .bind(Uuid::parse_str("00000000-0000-0000-0000-000000000d01")?)
+    .bind("plain@example.com")
+    .execute(&pool)
+    .await?;
+
+    sync_signal(&pool, SIG_THREAD_UNLABELED).await?;
+    assert!(!fetch_signal(&pool, SIG_THREAD_UNLABELED).await?);
+    assert!(fetch_feed(&pool, SIG_THREAD_UNLABELED).await?);
     Ok(())
 }
 

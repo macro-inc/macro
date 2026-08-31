@@ -187,7 +187,8 @@ pub async fn sync_thread_signal_flag(
     sqlx::query!(
         r#"
         UPDATE email_threads t
-        SET is_signal = calc.sig
+        SET is_signal = (calc.sig AND NOT calc.feed),
+            is_feed = calc.feed
         FROM (
             SELECT EXISTS (
                 SELECT 1
@@ -275,10 +276,51 @@ pub async fn sync_thread_signal_flag(
                           )
                       )
                   )
-            ) AS sig
+            ) AS sig,
+            EXISTS (
+                SELECT 1
+                FROM email_messages m
+                WHERE m.thread_id = $1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM email_message_labels ml
+                      JOIN email_labels l ON ml.label_id = l.id
+                      WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                  )
+                  AND (
+                      EXISTS (
+                          SELECT 1
+                          FROM email_contacts sender_c
+                          JOIN email_filters ef
+                            ON ef.link_id = m.link_id
+                           AND ef.email_address IS NOT NULL
+                           AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
+                          WHERE sender_c.id = m.from_contact_id
+                            AND ef.surface = 'feed'
+                      )
+                      OR EXISTS (
+                          SELECT 1
+                          FROM email_contacts sender_c
+                          JOIN email_filters ef
+                            ON ef.link_id = m.link_id
+                           AND ef.email_domain IS NOT NULL
+                           AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
+                          WHERE sender_c.id = m.from_contact_id
+                            AND ef.surface = 'feed'
+                            AND NOT EXISTS (
+                                SELECT 1 FROM email_filters ef_addr
+                                WHERE ef_addr.link_id = m.link_id
+                                  AND ef_addr.email_address IS NOT NULL
+                                  AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
+                            )
+                      )
+                  )
+            ) AS feed
         ) calc
         WHERE t.id = $1
-          AND t.is_signal IS DISTINCT FROM calc.sig
+          AND (
+              t.is_signal IS DISTINCT FROM (calc.sig AND NOT calc.feed)
+              OR t.is_feed IS DISTINCT FROM calc.feed
+          )
         "#,
         thread_db_id
     )

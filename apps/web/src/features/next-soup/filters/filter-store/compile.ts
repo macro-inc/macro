@@ -99,6 +99,7 @@ const FIELD_CONFIG: Record<
   emailSeen: { target: 'ef', field: 'NotificationSeen' },
   emailDone: { target: 'ef', field: 'NotificationDone' },
   emailImportance: { target: 'ef', field: 'Importance' },
+  emailFeed: { target: 'ef', field: 'Feed' },
   emailProjectId: { target: 'ef', field: 'ProjectId' },
   emailSender: {
     target: 'ef',

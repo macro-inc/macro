@@ -416,6 +416,17 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   false
 );
 
+export const ENABLE_EMAIL_FEED_FLAG = 'enable-email-feed';
+export const ENABLE_EMAIL_FEED_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_EMAIL_FEED');
+
+export function ENABLE_EMAIL_FEED(): boolean {
+  if (ENABLE_EMAIL_FEED_OVERRIDE !== undefined) {
+    return ENABLE_EMAIL_FEED_OVERRIDE;
+  }
+  return analytics.posthog.isFeatureEnabled(ENABLE_EMAIL_FEED_FLAG) ?? false;
+}
+
 export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
   'ENABLE_APP_STORE_QR_CODE',
   true

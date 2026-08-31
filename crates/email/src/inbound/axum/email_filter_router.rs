@@ -13,7 +13,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::domain::{
-    models::{EmailErr, EmailFilter, UpsertEmailFilterInput},
+    models::{EmailErr, EmailFilter, EmailSurface, UpsertEmailFilterInput},
     ports::EmailService,
 };
 
@@ -30,6 +30,9 @@ pub struct UpsertEmailFilterRequest {
     pub email_domain: Option<String>,
     /// Whether matching senders should be considered important.
     pub is_important: bool,
+    /// Surface to assign. When omitted, Signal if `is_important`, otherwise Noise.
+    #[serde(default)]
+    pub surface: Option<EmailSurface>,
 }
 
 /// A single email filter in API responses.
@@ -39,6 +42,7 @@ pub struct ApiEmailFilter {
     pub email_address: Option<String>,
     pub email_domain: Option<String>,
     pub is_important: bool,
+    pub surface: EmailSurface,
     pub created_at: DateTime<Utc>,
 }
 
@@ -49,6 +53,7 @@ impl From<EmailFilter> for ApiEmailFilter {
             email_address: f.email_address,
             email_domain: f.email_domain,
             is_important: f.is_important,
+            surface: f.surface,
             created_at: f.created_at,
         }
     }
@@ -157,6 +162,7 @@ pub async fn upsert_email_filter_handler<T: EmailService, Auth: MacroAuthorizati
         email_address: body.email_address,
         email_domain: body.email_domain,
         is_important: body.is_important,
+        surface: body.surface,
     };
 
     let filter = state.inner.upsert_email_filter(&link, input).await?;

@@ -234,6 +234,12 @@ describe('compileToAst', () => {
     });
   });
 
+  it('compiles emailFeed to the Feed literal', () => {
+    expect(
+      compileToAst(queryStateFrom({ include: { emailFeed: true } })).ef
+    ).toEqual({ l: { Feed: true } });
+  });
+
   it('compiles tag filters as an AND group when tagFilterMode is all', () => {
     const ast = compileToAst(
       queryStateFrom({

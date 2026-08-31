@@ -16,4 +16,5 @@ export interface ApiEmailFilter {
   email_domain?: ApiEmailFilterEmailDomain;
   id: string;
   is_important: boolean;
+  surface: 'signal' | 'feed' | 'noise';
 }

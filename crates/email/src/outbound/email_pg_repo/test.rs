@@ -10,6 +10,7 @@ mod project;
 mod project_scope_dynamic_query;
 mod settings;
 mod signal_flag;
+mod surface;
 mod thread;
 mod thread_labels;
 

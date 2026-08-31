@@ -805,6 +805,8 @@ enum GraphqlEmailLiteral {
     ProjectId(String),
     /// The importance option.
     Importance(bool),
+    /// The Feed surface option.
+    Feed(bool),
     /// The notification done option.
     NotificationDone(bool),
     /// The notification seen option.
@@ -831,6 +833,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Owner(id) => EmailLiteral::Owner(parse_id(id, "owner")?),
             Self::ProjectId(id) => EmailLiteral::ProjectId(id),
             Self::Importance(importance) => EmailLiteral::Importance(importance),
+            Self::Feed(feed) => EmailLiteral::Feed(feed),
             Self::NotificationDone(done) => EmailLiteral::NotificationDone(done),
             Self::NotificationSeen(seen) => EmailLiteral::NotificationSeen(seen),
             Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),

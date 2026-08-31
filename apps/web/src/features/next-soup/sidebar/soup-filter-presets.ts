@@ -296,6 +296,21 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         clientFilters: { and: ['email', 'no-drafts'] },
         groupBy: 'date',
       }),
+      feed: () => {
+        const twoWeeksAgo = subWeeks(startOfDay(new Date()), 2).toISOString();
+        return {
+          filters: defineQueryFilters({
+            include: {
+              emailFeed: true,
+              emailShared: 'exclude',
+              emailUpdatedAt: { gte: twoWeeksAgo },
+            },
+            emailView: 'inbox',
+          }),
+          clientFilters: { and: ['email', 'no-drafts'] },
+          groupBy: 'date',
+        };
+      },
       noise: () => ({
         filters: defineQueryFilters({
           include: {

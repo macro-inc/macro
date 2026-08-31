@@ -30,6 +30,22 @@ describe('mail view presets', () => {
       expect(getViewPreset('mail', tab)?.groupBy).toBe('date');
     }
   });
+
+  it('binds Feed to assigned-to-Feed mail in a 14-day window', () => {
+    const preset = getViewPreset('mail', 'feed');
+    const twoWeeksAgo = Date.parse(
+      preset?.filters.include?.emailUpdatedAt?.gte ?? ''
+    );
+
+    expect(preset?.filters.include?.emailFeed).toBe(true);
+    expect(preset?.filters.include?.emailImportance).toBeUndefined();
+    expect(twoWeeksAgo).toBeGreaterThan(Date.now() - 15 * 24 * 60 * 60 * 1000);
+    expect(twoWeeksAgo).toBeLessThan(Date.now() - 13 * 24 * 60 * 60 * 1000);
+
+    const ast = compileToAst(queryStateFrom(preset?.filters ?? {}));
+    expect(JSON.stringify(ast.ef)).toContain('"Feed":true');
+    expect(JSON.stringify(ast.ef)).toContain('"gte"');
+  });
 });
 
 describe('task view presets', () => {
