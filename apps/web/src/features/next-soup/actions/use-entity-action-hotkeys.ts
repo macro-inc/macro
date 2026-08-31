@@ -130,6 +130,7 @@ export const useEntityActionHotkeys = (
       splitHandle,
       mergeHistory: true,
       referredFrom: splitHandle.referredFrom(),
+      notificationSource,
     });
   };
 

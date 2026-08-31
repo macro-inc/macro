@@ -1599,6 +1599,25 @@ impl CalendarRepository for PgCalendarRepository {
         }))
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn get_event_attendees(&self, event_id: Uuid) -> Result<Vec<CalendarAttendee>, Report> {
+        Ok(fetch_attendees(&self.pool, &[event_id])
+            .await?
+            .remove(&event_id)
+            .unwrap_or_default())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_occurrence_override_attendees(
+        &self,
+        event_id: Uuid,
+        recurrence_id: &str,
+    ) -> Result<Option<Vec<CalendarAttendee>>, Report> {
+        Ok(fetch_override_attendees(&self.pool, &[event_id])
+            .await?
+            .remove(&(event_id, recurrence_id.to_string())))
+    }
+
     #[tracing::instrument(skip(self, requester_id), err)]
     async fn get_creation_target(
         &self,

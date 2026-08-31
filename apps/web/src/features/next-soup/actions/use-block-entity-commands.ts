@@ -131,6 +131,7 @@ export const useBlockEntityCommands = (
       splitHandle,
       mergeHistory: true,
       referredFrom: splitHandle.referredFrom(),
+      notificationSource,
     });
   };
 

@@ -2,6 +2,7 @@ import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
   hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
@@ -14,6 +15,7 @@ import type { ApiUserNotification } from '@service-notification/generated/schema
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import type { NotificationUpdateOperation } from '@service-storage/graphql/generated/graphql';
 import { updateNotifications } from '@service-storage/graphql-notifications';
+import { graphqlCacheEnabled } from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -386,6 +388,12 @@ export function invalidateUserNotifications() {
   });
 }
 
+async function refreshSoupAfterUncachedGraphqlWrite(): Promise<void> {
+  if (ENABLE_GRAPHQL_SOUP() && !graphqlCacheEnabled()) {
+    await refreshActiveGraphqlSoupQueries();
+  }
+}
+
 /** Mark notifications done through the shared GraphQL mutation. Throws on failure. */
 export async function bulkMarkNotificationsAsDone(
   notificationIds: string[]
@@ -594,6 +602,10 @@ function createNotificationsMutation(
             context as NotificationsMutationContext,
             undefined as never
           );
+          // The normalized client propagates the optimistic notification row
+          // into active Soup edges. Its uncached fallback cannot, so refetch
+          // mounted Soup queries after the authoritative mutation succeeds.
+          await refreshSoupAfterUncachedGraphqlWrite();
         },
         onError: async (error, variables, context) => {
           await lifecycle.onError?.(

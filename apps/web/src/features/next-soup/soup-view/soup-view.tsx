@@ -52,7 +52,7 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
-  markChannelTargetSeenOnOpen,
+  markChannelNotificationsSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
@@ -294,6 +294,7 @@ interface SoupViewProps {
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
   const soupView = useSoupView();
   const isInboxView = useIsInboxView();
   const openFocusedEntityInPreview = () => {
@@ -307,6 +308,7 @@ export const SoupView = (props: SoupViewProps) => {
     }
     void openEntityInSplitFromUnifiedList(focusedRow.original, {
       splitHandle: panel.handle,
+      notificationSource,
     });
   };
   const hasPreviewItems = useSoupPreviewAvailability({
@@ -1000,7 +1002,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Join button (or, in preview, the Viewer's Join prompt) is the only
       // affordance.
       if (!isNonMemberChannelEntity(entity)) {
-        markChannelTargetSeenOnOpen(entity, notificationSource);
+        markChannelNotificationsSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
       }
       return;
@@ -1027,9 +1029,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Single click: focus the row AND open it in the Preview Pair's Viewer.
       // The openWithSplit redirect keeps the Viewer unfocused so keyboard
       // navigation stays in this list.
-      if (!isNonMemberChannelEntity(entity)) {
-        markChannelTargetSeenOnOpen(entity, notificationSource);
-      }
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
 
@@ -1038,15 +1037,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         splitHandle: panel.handle,
         replacePreview: event.altKey,
         referredFrom: currentView(),
+        notificationSource,
       });
       return;
     }
 
     const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
-
-    if (!isNonMemberChannelEntity(entity)) {
-      markChannelTargetSeenOnOpen(entity, notificationSource);
-    }
 
     try {
       await openEntityInSplitFromUnifiedList(entity, {
@@ -1054,6 +1050,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         location,
         splitHandle: panel.handle,
         referredFrom: currentView(),
+        notificationSource,
       });
     } finally {
       finishTouchHighlight?.();

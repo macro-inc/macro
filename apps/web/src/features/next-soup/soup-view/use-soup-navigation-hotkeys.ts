@@ -5,6 +5,7 @@ import {
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type {
   SplitContent,
   SplitEvent,
@@ -36,6 +37,7 @@ export const useSoupNavigationHotkeys = (
   options: UseSoupNavigationHotkeysOptions
 ) => {
   const { scopeId, soup, splitHandle, virtualizerHandle } = options;
+  const notificationSource = useGlobalNotificationSource();
 
   const scrollTo = (index: number) => {
     const handle = virtualizerHandle();
@@ -66,6 +68,7 @@ export const useSoupNavigationHotkeys = (
       splitHandle,
       mergeHistory: true,
       referredFrom: navigationReferredFrom(),
+      notificationSource,
     });
   }, 150);
   onCleanup(() => openInViewerDebounced.clear());
@@ -84,6 +87,7 @@ export const useSoupNavigationHotkeys = (
       splitHandle,
       mergeHistory: true,
       referredFrom: navigationReferredFrom(),
+      notificationSource,
     });
   };
 
