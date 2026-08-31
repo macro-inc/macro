@@ -1007,6 +1007,7 @@ fn contact_sync_is_derived_from_private_channel_created() {
     let event = ChannelEvent::ChannelCreated {
         channel_id: Uuid::nil(),
         actor: Sender::new_from_user(user("alice@example.com")),
+        on_behalf_of: None,
         channel_type: ChannelType::Private,
         channel_name: None,
         participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
@@ -1024,6 +1025,7 @@ fn contact_sync_ignores_public_channel_created() {
     let event = ChannelEvent::ChannelCreated {
         channel_id: Uuid::nil(),
         actor: Sender::new_from_user(user("alice@example.com")),
+        on_behalf_of: None,
         channel_type: ChannelType::Public,
         channel_name: None,
         participant_user_ids: users(&["alice@example.com", "bob@example.com"]),
@@ -1247,6 +1249,7 @@ async fn handle_publishes_channel_created_event() {
         .handle(ChannelEvent::ChannelCreated {
             channel_id,
             actor: Sender::new_from_user(user("alice@example.com")),
+            on_behalf_of: None,
             channel_type: ChannelType::Private,
             channel_name: Some("general".to_string()),
             participant_user_ids: users(&["alice@example.com", "bob@example.com"]),

@@ -2292,9 +2292,14 @@ async fn create_system_channel_event_uses_system_actor() {
     let events = events.events.lock().unwrap();
     assert!(matches!(
         events.as_slice(),
-        [ChannelEvent::ChannelCreated { actor, channel_name: Some(name), .. }]
-            if actor == &Sender::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)
-                && name == "Macro Support x owner"
+        [ChannelEvent::ChannelCreated {
+            actor,
+            on_behalf_of: Some(owner),
+            channel_name: Some(name),
+            ..
+        }] if actor == &Sender::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)
+            && owner.as_ref() == "macro|owner@test.com"
+            && name == "Macro Support x owner"
     ));
 }
 
@@ -2389,6 +2394,7 @@ async fn ensure_dms_dispatches_created_channel_once() {
         [ChannelEvent::ChannelCreated {
             channel_id: actual_channel_id,
             actor,
+            on_behalf_of: None,
             channel_type: ChannelType::DirectMessage,
             channel_name: None,
             participant_user_ids,

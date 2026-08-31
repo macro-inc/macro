@@ -1252,12 +1252,14 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
         ChannelEvent::ChannelCreated {
             channel_id,
             actor,
+            on_behalf_of,
             channel_type,
             channel_name,
             participant_user_ids,
         } => vec![ChannelMacroEvent::created(ChannelCreatedMetadata {
             channel_id: *channel_id,
             actor: actor.clone(),
+            on_behalf_of: on_behalf_of.clone(),
             channel_type: *channel_type,
             channel_name: channel_name.clone(),
             participant_user_ids: participant_user_ids.clone(),

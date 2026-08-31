@@ -668,6 +668,7 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
             ChannelTopicEvent::Created(ChannelCreatedMetadata {
                 channel_id: CHANNEL_ID,
                 actor: sender.clone(),
+                on_behalf_of: None,
                 channel_type: ChannelType::Private,
                 channel_name: Some("general".to_string()),
                 participant_user_ids: vec![user_id()],

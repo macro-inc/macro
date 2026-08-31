@@ -574,6 +574,7 @@ fn channel_event_cases() -> Vec<EventCase> {
                 ChannelTopicEvent::Created(ChannelCreatedMetadata {
                     channel_id,
                     actor: sender(owner),
+                    on_behalf_of: None,
                     channel_type: ChannelType::Team,
                     channel_name: Some("general".to_string()),
                     participant_user_ids: vec![user_id(owner)],

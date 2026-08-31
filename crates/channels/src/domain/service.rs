@@ -334,7 +334,7 @@ where
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         let owner = require_user_actor(&actor)?;
-        self.create_owned_channel(owner.clone(), Sender::new_from_user(owner), req)
+        self.create_owned_channel(owner.clone(), Sender::new_from_user(owner), None, req)
             .await
     }
 
@@ -345,8 +345,9 @@ where
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         self.create_owned_channel(
-            owner,
+            owner.clone(),
             Sender::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+            Some(owner),
             req,
         )
         .await
@@ -356,6 +357,7 @@ where
         &self,
         owner: MacroUserIdStr<'static>,
         activity_actor: Sender,
+        on_behalf_of: Option<MacroUserIdStr<'static>>,
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         if req.auto_join_team && req.channel_type != ChannelType::Team {
@@ -402,6 +404,7 @@ where
         self.events.dispatch(ChannelEvent::ChannelCreated {
             channel_id: created_channel.id,
             actor: activity_actor,
+            on_behalf_of,
             channel_type,
             channel_name,
             participant_user_ids: created_channel.participant_user_ids,
@@ -1366,6 +1369,7 @@ where
         self.events.dispatch(ChannelEvent::ChannelCreated {
             channel_id: created_channel.id,
             actor: owner_sender,
+            on_behalf_of: None,
             channel_type,
             channel_name,
             participant_user_ids: created_channel.participant_user_ids,
