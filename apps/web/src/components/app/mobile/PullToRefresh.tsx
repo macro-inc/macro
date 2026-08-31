@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import Spinner from '@phosphor-icons/core/bold/spinner-bold.svg';
 import { cn } from '@ui';
 import {
@@ -30,11 +31,10 @@ const OVERDRAG_FADE = 40;
 const SETTLE_MS = 250;
 /** Spin floor so near-instant refreshes still read as a completed refresh. */
 const MIN_REFRESH_SPIN_MS = 200;
-/** Refreshes running longer than this are treated as failed. Bounds the
- * spinner when connectivity is gone: refetches can pause or hang
- * indefinitely rather than reject (navigator.onLine is unreliable in
- * WKWebView, so the offline case can't be detected up front). */
-const REFRESH_TIMEOUT_MS = 8000;
+/** Spinner display cap. A refresh still in flight past this retracts the
+ * badge anyway — the list renders reactively, so rows that arrive later
+ * still arrive. A slow refresh is not a failed one. */
+const REFRESH_SPIN_CAP_MS = 3000;
 
 type PullPhase = 'idle' | 'pulling' | 'refreshing' | 'settling';
 
@@ -48,7 +48,8 @@ type PullGesture = {
 /**
  * Pull-to-refresh for a touch scroll container: dragging down from the top
  * reveals a floating spinner badge that arms past a threshold and, once
- * released, spins until `onRefresh` settles. Renders nothing off mobile.
+ * released, spins until `onRefresh` settles or the spin cap elapses.
+ * Renders nothing off mobile.
  *
  * Mount inside a `position: relative` wrapper of the scroll container. Pull translates the scroll container down, and the opaque rows sliding away
  * are what reveal it. A transform leaves layout and scrollTop untouched,
@@ -83,21 +84,28 @@ export function PullToRefresh(props: {
     const minSpin = new Promise((resolve) =>
       window.setTimeout(resolve, MIN_REFRESH_SPIN_MS)
     );
-    const timeout = new Promise((_, reject) =>
-      window.setTimeout(
-        () => reject(new Error('Refresh timed out')),
-        REFRESH_TIMEOUT_MS
-      )
+    const cap = new Promise<'pending'>((resolve) =>
+      window.setTimeout(() => resolve('pending'), REFRESH_SPIN_CAP_MS)
     );
-    void Promise.allSettled([
-      Promise.race([props.onRefresh(), timeout]),
-      minSpin,
-    ]).then(([refreshResult]) => {
-      if (refreshResult.status === 'rejected') {
-        toast.failure('Failed to refresh');
+    const attempt = props.onRefresh().then(
+      () => 'ok' as const,
+      () => 'failed' as const
+    );
+
+    void Promise.all([Promise.race([attempt, cap]), minSpin]).then(
+      ([outcome]) => {
+        // Report a failure only when nothing reached the wire. A refresh
+        // still running at the cap says nothing either way, so it stays
+        // quiet unless the native monitor is certain there is no path out
+        // — that case is indistinguishable from success otherwise.
+        if (outcome === 'failed') {
+          toast.failure('Failed to refresh');
+        } else if (outcome === 'pending' && nativeNetworkStatus() === 'offline') {
+          toast.failure("You're offline");
+        }
+        retract();
       }
-      retract();
-    });
+    );
   };
 
   const onTouchStart = (e: TouchEvent) => {
@@ -224,7 +232,7 @@ export function PullToRefresh(props: {
       <div
         class="pointer-events-none absolute inset-x-0 flex justify-center"
         style={{
-          top: 'var(--mobile-content-inset-top, 0px)',
+          top: 'calc(var(--mobile-content-inset-top, 0px) + var(--mobile-chrome-gutter, 12px) + 4px)',
         }}
         aria-hidden
       >

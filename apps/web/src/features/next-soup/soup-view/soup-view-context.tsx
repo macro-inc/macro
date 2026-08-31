@@ -1493,19 +1493,22 @@ export const SoupViewContextProvider: FlowComponent<
 
         resetToInitialPage();
 
-        await Promise.all([
-          queryClient.invalidateQueries(
-            { queryKey: soupKeys._def },
-            // Reject on refetch failure so pull-to-refresh can surface it
-            // instead of retracting as if the refresh succeeded.
-            { throwOnError: true }
-          ),
-          // urql pages are outside the TanStack cache invalidation above.
-          itemsQuery.transport === 'graphql'
-            ? itemsQuery.refresh()
-            : Promise.resolve(),
-          invalidateUserNotifications(),
-        ]);
+        // Reconcile everything else in the background. Awaiting it would hold
+        // the caller (mobile pull-to-refresh) hostage to every active soup
+        // query in the app — other mounted panels refetch their whole page
+        // chain one request at a time — and would let an unrelated view's
+        // failure report the visible refresh as failed.
+        void queryClient
+          .invalidateQueries({ queryKey: soupKeys._def })
+          .catch(() => undefined);
+        void invalidateUserNotifications().catch(() => undefined);
+
+        // Only the visible list decides the outcome. It throws on refetch
+        // failure, so pull-to-refresh can tell "nothing came back" apart from
+        // "still on its way" instead of retracting as if it had succeeded.
+        // This covers both transports: urql pages sit outside the TanStack
+        // invalidation above, and the REST refetch dedupes against it.
+        await itemsQuery.refresh();
       },
     },
     items,
