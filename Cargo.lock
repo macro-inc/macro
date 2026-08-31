@@ -261,6 +261,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mockall",
+ "opentelemetry",
  "pipedream_mcp",
  "reqwest 0.13.4",
  "rootcause",
@@ -273,6 +274,7 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
  "url",
  "workspace-hack",
 ]

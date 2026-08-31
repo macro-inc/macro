@@ -650,26 +650,59 @@ where
     /// then its heartbeat going stale is what lets this replica take over. A
     /// manager that is alive but unreachable stays an error - executing
     /// locally anyway is how two actors end up on one session.
-    #[tracing::instrument(err, skip(self, command), fields(%session_id))]
+    /// The routing decision is recorded on the span, not only logged: which of
+    /// the three answers the lease gave, which peer it named, and whether the
+    /// command left this process. Those are the fields you group by when a
+    /// replica is mishandling commands, and a log line cannot be aggregated.
+    #[tracing::instrument(
+        err,
+        skip(self, command),
+        fields(
+            %session_id,
+            agent.session.management = tracing::field::Empty,
+            agent.session.manager_replica = tracing::field::Empty,
+            agent.command.forwarded = tracing::field::Empty,
+            agent.command.stale_fallback = tracing::field::Empty,
+        )
+    )]
     async fn route_then_execute(
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> Result<()> {
+        let span = tracing::Span::current();
         // Open never routes: it is what creates the session row this routing
         // would read, and a fresh id has no manager to defer to.
         if matches!(command, HarnessCommand::Open(_)) {
+            span.record("agent.session.management", "open");
+            span.record("agent.command.forwarded", false);
             return self.execute(session_id, command).await;
         }
         let manager = match self.sessions.management(session_id).await? {
-            SessionManagement::Unmanaged | SessionManagement::Ours => {
+            SessionManagement::Unmanaged => {
+                span.record("agent.session.management", "unmanaged");
+                span.record("agent.command.forwarded", false);
+                return self.execute(session_id, command).await;
+            }
+            SessionManagement::Ours => {
+                span.record("agent.session.management", "ours");
+                span.record("agent.command.forwarded", false);
                 return self.execute(session_id, command).await;
             }
             SessionManagement::Peer(manager) => manager,
         };
+        span.record("agent.session.management", "peer");
+        span.record(
+            "agent.session.manager_replica",
+            tracing::field::display(manager.replica),
+        );
         let Some(address) = manager.address else {
+            // Recorded false deliberately: the command stayed here, but as an
+            // error rather than a local execution.
+            span.record("agent.command.forwarded", false);
             return Err(HarnessError::ManagerUnreachable(session_id));
         };
+        span.record("agent.command.forwarded", true);
         tracing::info!(%session_id, peer = %manager.replica, "forwarding an agent session command");
         match self
             .forwarder
@@ -679,6 +712,10 @@ where
             Ok(()) => Ok(()),
             Err(forward_error) => match self.sessions.management(session_id).await? {
                 SessionManagement::Unmanaged | SessionManagement::Ours => {
+                    // Worth aggregating rather than only logging: routine
+                    // fallbacks mean heartbeats are not keeping up, which is a
+                    // different problem from an occasional dead peer.
+                    span.record("agent.command.stale_fallback", true);
                     tracing::warn!(
                         error = ?forward_error,
                         %session_id,

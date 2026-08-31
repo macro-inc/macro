@@ -5,8 +5,12 @@
 //! address is the peer's own private URL as published with its heartbeat, so
 //! the command lands on exactly the process holding the session's actor.
 
+use std::collections::HashMap;
+
 use agent_session::domain::model::{AgentSessionId, ReplicaAddress};
+use opentelemetry::propagation::Injector;
 use reqwest::StatusCode;
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::HarnessCommand;
@@ -15,6 +19,32 @@ use crate::domain::ports::CommandForwarder;
 /// Header carrying the deployment's shared internal key, as
 /// `macro_authorization`'s internal extractor reads it.
 const INTERNAL_API_KEY_HEADER: &str = macro_authorization::INTERNAL_API_KEY_HEADER;
+
+/// Carrier collecting the W3C trace context as request headers.
+#[derive(Default)]
+struct TraceHeaderInjector(HashMap<String, String>);
+
+impl Injector for TraceHeaderInjector {
+    fn set(&mut self, key: &str, value: String) {
+        self.0.insert(key.to_owned(), value);
+    }
+}
+
+/// The calling span's trace context, as headers to stamp onto the forward.
+///
+/// The peer's inbound layer already extracts `traceparent` and parents its
+/// request span to the remote span (see `macro_tower_layers`), so injecting
+/// here is what makes a forwarded command one trace spanning both replicas.
+/// Without it the hop is two unrelated traces, and following a command across
+/// replicas means correlating logs by session id and wall clock.
+fn current_trace_headers() -> HashMap<String, String> {
+    let context = tracing::Span::current().context();
+    let mut injector = TraceHeaderInjector::default();
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&context, &mut injector);
+    });
+    injector.0
+}
 
 /// Forwards commands to peer replicas over their internal HTTP surface.
 #[derive(Clone)]
@@ -43,7 +73,15 @@ impl HttpCommandForwarder {
 }
 
 impl CommandForwarder for HttpCommandForwarder {
-    #[tracing::instrument(err, skip(self, command), fields(%target, %session))]
+    #[tracing::instrument(
+        err,
+        skip(self, command),
+        fields(
+            %target,
+            %session,
+            http.response.status_code = tracing::field::Empty,
+        )
+    )]
     async fn forward(
         &self,
         target: &ReplicaAddress,
@@ -55,15 +93,20 @@ impl CommandForwarder for HttpCommandForwarder {
             target.as_str().trim_end_matches('/'),
             session
         );
-        let response = self
+        let mut request = self
             .client
             .post(url)
-            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key);
+        for (key, value) in current_trace_headers() {
+            request = request.header(key, value);
+        }
+        let response = request
             .json(&command)
             .send()
             .await
             .map_err(|error| HarnessError::Forward(rootcause::report!(error).into_dynamic()))?;
         let status = response.status();
+        tracing::Span::current().record("http.response.status_code", status.as_u16());
         if status.is_success() {
             return Ok(());
         }
