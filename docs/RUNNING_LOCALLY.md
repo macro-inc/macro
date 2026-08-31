@@ -166,8 +166,8 @@ Keys in the file override the code-defined defaults, so you only need to list th
 
 ## Tracing, Logs, and the Debug Browser
 
-`just run_local` and `just stack up` start two global (per-machine, shared
-across instances) debugging containers by default:
+`just run_local` and `just stack up` support two global (per-machine, shared
+across instances) debugging containers:
 
 - **LGTM collector** (`--traces lgtm`, the default): Grafana at
   http://localhost:3001 with Tempo (traces), Loki (service logs), and
@@ -175,10 +175,11 @@ across instances) debugging containers by default:
   OTLP; the frontend exports browser spans through the proxy and propagates
   `traceparent`, so one trace covers browser → proxy → services. Swap with
   `--traces jaeger|datadog`, or disable with `--traces off`.
-- **Agent browser**: Chromium with the DevTools protocol on
-  http://localhost:9222, for agents driving the app (the `chrome-devtools`
-  MCP server in `.mcp.json` / `opencode.json` / `.cursor/mcp.json` points at
-  it). Watch what an agent is doing live at http://localhost:6080/vnc.html.
+- **Agent browser** (opt-in via `--with-chrome`): Chromium with the DevTools
+  protocol on http://localhost:9222, for agents driving the app (the
+  `chrome-devtools` MCP server in `.mcp.json` / `opencode.json` /
+  `.cursor/mcp.json` points at it). Watch what an agent is doing live at
+  http://localhost:6080/vnc.html.
 
 See `.claude/skills/live-debug/SKILL.md` for query recipes (Tempo/Loki HTTP
 APIs) and the browser-debugging workflow.

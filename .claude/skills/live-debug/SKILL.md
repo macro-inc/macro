@@ -10,8 +10,9 @@ allowed-tools: Bash, Read, Grep, Glob
 
 # Live debugging
 
-`just run_local` and `just stack up` start two global debugging containers by
-default (one per machine, shared across instances, left running):
+`just run_local` and `just stack up` start the LGTM collector by default and
+the agent browser with `--with-chrome` (both global: one per machine, shared
+across instances, left running):
 
 | Endpoint | What |
 | --- | --- |
@@ -76,9 +77,11 @@ never silences traces.
 
 ## Drive the shared headless Chrome
 
-A headless Chrome runs in Docker with CDP on 9222. The `chrome-devtools` MCP
-server (`.mcp.json` / `opencode.json` / `.cursor/mcp.json`) is already
-pointed at it — prefer its tools (navigate, snapshot, click, evaluate, console, network) for browser
+`--with-chrome` runs a headless Chrome in Docker with CDP on 9222 (if 9222
+doesn't answer, start it: the compose command is in the `headless-chrome`
+comment in `docker/docker-compose.yml`). The `chrome-devtools` MCP server
+(`.mcp.json` / `opencode.json` / `.cursor/mcp.json`) is already pointed at
+it — prefer its tools (navigate, snapshot, click, evaluate, console, network) for browser
 work. State (cookies, login) persists across agent sessions until the
 container restarts.
 

@@ -123,8 +123,10 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
             build: BuildArgs::default(),
             no_frontend: true,
             enable_onboarding: false,
-            // E2E stacks are ephemeral and throughput-sensitive; no collector.
+            // E2E stacks are ephemeral and throughput-sensitive; no collector,
+            // and Playwright brings its own browsers.
             traces: TracesBackend::Off,
+            with_chrome: false,
             verbose: false,
             with_cf_tunnel: false,
         },

@@ -126,6 +126,11 @@ pub struct RunArgs {
     /// — see `docker/docker-compose.yml` for what each backend does.
     #[arg(long, default_value = "lgtm")]
     pub traces: TracesBackend,
+    /// Start the shared agent browser (Chromium with CDP on 9222, watchable
+    /// over noVNC on 6080) — see the `headless-chrome` service in
+    /// `docker/docker-compose.yml`. Global, one per machine, left running.
+    #[arg(long)]
+    pub with_chrome: bool,
     /// Open Cloudflare quick tunnels into this stack: one for `@cursor`
     /// sessions (a public `EGRESS_BASE_URL`) and one sharing the app itself
     /// through the reverse proxy. Off by default — nothing dials out and the

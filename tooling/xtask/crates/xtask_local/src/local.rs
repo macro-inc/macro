@@ -213,7 +213,9 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
     // the same auto-wiring as a collector started manually beforehand.
     ensure_tracing_backend(&stage, args.traces)?;
-    ensure_headless_chrome(&stage);
+    if args.with_chrome {
+        ensure_headless_chrome(&stage);
+    }
 
     // `run_local`/`run_dev` are full delete + full create: tear the previous
     // stack and ALL its stateful volumes down so the bring-up is always from a

@@ -652,8 +652,8 @@ services:
   # docker/headless-chrome/). Runs on the host network so pages can load the
   # host-run frontend dev server and proxy with plain localhost URLs — bridge
   # networking can't reach host ports on firewalled hosts (NixOS default).
-  # Global and shared (one per machine), started automatically by
-  # `just run_local` / `just stack up`.
+  # Global and shared (one per machine), started by
+  # `just run_local --with-chrome` / `just stack up --with-chrome`.
   # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d headless-chrome
   # ============================================================================
   headless-chrome:
@@ -670,10 +670,11 @@ services:
     network_mode: host
     # Chromium runs sandboxed as a non-root user (no --no-sandbox); the
     # sandbox creates PID/network namespaces, which Docker's default seccomp
-    # profile blocks. Local-only tradeoff: unconfined seccomp in exchange for
-    # a real Chrome sandbox around untrusted page content.
-    security_opt:
-      - seccomp=unconfined
+    # profile denies to unprivileged processes. SYS_ADMIN lets the setuid
+    # sandbox helper do that setup while the default seccomp filter stays on
+    # — verified narrower than the seccomp=unconfined alternative.
+    cap_add:
+      - SYS_ADMIN
 
   # ============================================================================
   # jaeger (UI port 16686, OTLP 4317/4318) — profile: jaeger
