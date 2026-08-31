@@ -1,12 +1,9 @@
 import { openExternalUrl } from '@core/util/url';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import GlobeIcon from '@phosphor/globe-simple.svg';
 import LinkIcon from '@phosphor/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 function extractDomain(url: string) {
