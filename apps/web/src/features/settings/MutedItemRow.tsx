@@ -105,12 +105,7 @@ function MutedItemLayout(props: {
           )}
         </Show>
       </div>
-      <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div class="truncate text-sm text-ink">{props.name}</div>
-        <div class="text-xs text-ink-extra-muted">
-          {mutedEntityTypeLabel(props.item.item_type)}
-        </div>
-      </div>
+      <div class="min-w-0 flex-1 truncate text-sm text-ink">{props.name}</div>
       <button
         type="button"
         class="shrink-0 text-sm text-ink-muted hover:text-ink"
