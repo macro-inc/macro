@@ -303,6 +303,7 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
         <ScrollIndicators
           scrollRef={scrollElement}
           appearance="gradient"
+          gradientColor="panel"
           noBorderStart
           noBorderEnd
         />
