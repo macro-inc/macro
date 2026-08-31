@@ -257,9 +257,10 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     .await
     .map_err(SeedError::CreateSession)?;
 
-    // Frames go in one at a time and in order: `agent_session_log` stamps
-    // `created_at` itself and the log is read back `ORDER BY created_at, id`,
-    // so append order is what makes the recording replay as recorded.
+    // Frames go in one at a time and in order: the writer stamps `created_at`
+    // as each frame is appended and the log is read back
+    // `ORDER BY created_at, id`, so append order is what makes the recording
+    // replay as recorded.
     //
     // One writer for the whole recording, so its fold is built once and
     // advanced a frame at a time. Rebuilding it per frame is what made long
@@ -288,6 +289,15 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             );
         }
     }
+    // The writer batches streamed frames; nothing may stay buffered once the
+    // replay ends.
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .map_err(|source| SeedError::WriteLog {
+            entry: total,
+            total,
+            source,
+        })?;
 
     println!("session:  {}", session.id);
     println!("entries:  {total}");

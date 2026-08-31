@@ -73,6 +73,51 @@ impl InMemoryAgentSessionRepo {
         self.session_reads.load(Ordering::Relaxed)
     }
 
+    /// Record one already-stamped log entry and apply the same projections
+    /// [`AgentSessionLogRepo::create`] does, so the batch path cannot drift.
+    fn persist_stored(&self, stored: StoredAgentSessionLog) {
+        let model_change = match &stored.entry.content {
+            crate::domain::model::Message::ToRuntime(message) => {
+                agent_runtime_protocol::domain::action::AgentSetModelAction::from_runtime(message)
+            }
+            _ => None,
+        };
+        let event = match &stored.entry.content {
+            crate::domain::model::Message::ToServer(ToServerMessage::Event { event }) => {
+                Some(event.clone())
+            }
+            _ => None,
+        };
+        let session_id = stored.entry.agent_session_id;
+        self.logs
+            .lock()
+            .expect("in-memory log store is not poisoned")
+            .entry(session_id)
+            .or_default()
+            .push(stored);
+        if let Some(event) = event
+            && let Some(session) = self
+                .sessions
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .get_mut(&session_id)
+        {
+            session.status = SessionStatus::Event(event);
+            session.modified_at = chrono::Utc::now();
+        }
+        if let Some((acp_session_id, change)) = model_change
+            && let Some(session) = self
+                .sessions
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .get_mut(&session_id)
+            && session.acp_session_id.as_ref() == Some(&acp_session_id)
+        {
+            session.model = change.model;
+            session.modified_at = chrono::Utc::now();
+        }
+    }
+
     /// Seed log entries, in the order they should be read back.
     ///
     /// Each is stamped as it lands, the way the real table's `created_at`
@@ -320,51 +365,21 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
 impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let model_change = match &log.content {
-            crate::domain::model::Message::ToRuntime(message) => {
-                agent_runtime_protocol::domain::action::AgentSetModelAction::from_runtime(message)
-            }
-            _ => None,
-        };
-        let event = match &log.content {
-            crate::domain::model::Message::ToServer(ToServerMessage::Event { event }) => {
-                Some(event.clone())
-            }
-            _ => None,
-        };
-        let session_id = log.agent_session_id;
         let stored = StoredAgentSessionLog {
             created_at: chrono::Utc::now(),
             entry: log,
         };
-        self.logs
-            .lock()
-            .expect("in-memory log store is not poisoned")
-            .entry(session_id)
-            .or_default()
-            .push(stored.clone());
-        if let Some(event) = event
-            && let Some(session) = self
-                .sessions
-                .lock()
-                .expect("in-memory session store is not poisoned")
-                .get_mut(&session_id)
-        {
-            session.status = SessionStatus::Event(event);
-            session.modified_at = chrono::Utc::now();
-        }
-        if let Some((acp_session_id, change)) = model_change
-            && let Some(session) = self
-                .sessions
-                .lock()
-                .expect("in-memory session store is not poisoned")
-                .get_mut(&session_id)
-            && session.acp_session_id.as_ref() == Some(&acp_session_id)
-        {
-            session.model = change.model;
-            session.modified_at = chrono::Utc::now();
-        }
+        self.persist_stored(stored.clone());
         Ok(stored)
+    }
+
+    async fn create_batch(&self, entries: Vec<StoredAgentSessionLog>) -> Result<()> {
+        for stored in entries {
+            // Entries keep the writer's stamp: they carry the time they
+            // were appended, not the time the flush landed.
+            self.persist_stored(stored);
+        }
+        Ok(())
     }
 
     async fn list_by_session(
@@ -478,3 +493,6 @@ impl AgentSessionRealtime for RecordingRealtime {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test;

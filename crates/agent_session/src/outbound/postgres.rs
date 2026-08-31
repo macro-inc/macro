@@ -767,6 +767,95 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         })
     }
 
+    async fn create_batch(&self, entries: Vec<StoredAgentSessionLog>) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        let mut ids = Vec::with_capacity(entries.len());
+        let mut session_ids = Vec::with_capacity(entries.len());
+        let mut user_ids: Vec<Option<String>> = Vec::with_capacity(entries.len());
+        let mut directions: Vec<String> = Vec::with_capacity(entries.len());
+        let mut contents = Vec::with_capacity(entries.len());
+        let mut created_ats = Vec::with_capacity(entries.len());
+        for stored in &entries {
+            let (direction, content) = message_columns(&stored.entry.content)?;
+            ids.push(macro_uuid::generate_uuid_v7());
+            session_ids.push(stored.entry.agent_session_id.as_uuid());
+            user_ids.push(
+                stored
+                    .entry
+                    .user_id
+                    .as_ref()
+                    .map(|user_id| user_id.as_ref().to_owned()),
+            );
+            directions.push(direction.to_owned());
+            contents.push(content);
+            created_ats.push(stored.created_at);
+        }
+
+        // Only the last event needs projecting: statuses overwrite, so the
+        // intermediates were never observable.
+        let event_status = entries
+            .iter()
+            .rev()
+            .find_map(|stored| match &stored.entry.content {
+                Message::ToServer(ToServerMessage::Event { event }) => Some((
+                    stored.entry.agent_session_id,
+                    SessionStatus::Event(event.clone()),
+                )),
+                _ => None,
+            });
+
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session log batch create")?;
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)
+            SELECT * FROM UNNEST(
+                $1::uuid[], $2::uuid[], $3::text[], $4::text[], $5::jsonb[], $6::timestamptz[]
+            )
+            "#,
+            &ids,
+            &session_ids,
+            &user_ids as &[Option<String>],
+            &directions,
+            &contents,
+            &created_ats,
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("failed to create agent session log batch")?;
+
+        if let Some((session_id, status)) = event_status {
+            let (status, status_event_name) = status_columns(&status);
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET status = $2,
+                    status_event_name = $3,
+                    modified_at = now()
+                WHERE id = $1
+                "#,
+                session_id.as_uuid(),
+                status,
+                status_event_name,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to update agent session status from log batch")?;
+        }
+
+        transaction
+            .commit()
+            .await
+            .context("commit agent session log batch create")?;
+        Ok(())
+    }
+
     async fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
