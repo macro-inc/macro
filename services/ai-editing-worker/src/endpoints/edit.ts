@@ -12,7 +12,6 @@ import { type Model, type ResolvedModels, runEditSession } from '../run-edit';
 import { runInSandbox } from '../sandbox';
 import { watchPresenceSpeed } from '../service-clients';
 import { createWorkerSyncSource } from '../sources';
-import { createSyncSocketDiagnostics } from '../sync-diagnostics';
 import { renderTraceMarkdown } from '../trace-log';
 import { insertEditTrace } from '../traces-db';
 
@@ -133,13 +132,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
 
   try {
     const wsUrl = `${env.SYNC_WS_BASE}/document/${documentId}/connect?token=${documentToken}`;
-    const syncDiagnostics = createSyncSocketDiagnostics();
-    const source = createWorkerSyncSource(
-      wsUrl,
-      documentId,
-      signal,
-      syncDiagnostics
-    );
+    const source = createWorkerSyncSource(wsUrl, documentId, signal);
 
     // Animations play at 1x while a human is watching and speed up to
     // `unwatchedSpeed` when nobody is, so unseen edits finish faster without
@@ -167,7 +160,6 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         try {
           const result = await runEditSession({
             source,
-            syncDiagnostics,
             documentId,
             prompt,
             models: buildModels(env, models, () => modelFallbacks++),

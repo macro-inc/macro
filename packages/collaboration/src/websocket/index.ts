@@ -25,11 +25,6 @@ export {
 export type { WebsocketOptions } from './core/websocket-options';
 export type { WebsocketConnectionRetryOptions } from './core/websocket-retry-options';
 export type { UrlResolver } from './core/websocket-url-resolver';
-export { platformWebSocketFactory } from './platform/factory';
-export type {
-  MinimalWebSocket,
-  WebSocketFactory,
-} from './platform/minimal-websocket';
 export {
   createReconnectEffect,
   createSocketEffect,

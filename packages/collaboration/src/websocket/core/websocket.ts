@@ -31,6 +31,26 @@ import {
   type UrlResolver,
 } from './websocket-url-resolver';
 
+/** Frame shape for the deserialize-failure log, without reading the bytes. */
+function describeFrameData(data: unknown): string {
+  if (typeof data === 'string') return `string of ${data.length} chars`;
+  if (data instanceof ArrayBuffer)
+    return `ArrayBuffer of ${data.byteLength} bytes`;
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    return `Blob of ${data.size} bytes`;
+  }
+  if (ArrayBuffer.isView(data)) {
+    return `${data.constructor.name} of ${data.byteLength} bytes`;
+  }
+  return typeof data;
+}
+
+/** Strips the query (auth tokens live there) so the URL is safe to log. */
+function redactUrl(url: string): string {
+  const queryStart = url.indexOf('?');
+  return queryStart === -1 ? url : url.slice(0, queryStart);
+}
+
 /**
  * A websocket wrapper that can be configured to reconnect automatically and buffer messages when the websocket is not connected.
  */
@@ -588,7 +608,21 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
         this.dispatchEvent(type, event);
       })
       .with({ type: WebsocketEvent.Message }, ({ event }) => {
-        const data = deserializeIfNeeded(event.data, this._options.serializer);
+        let data: Receive | WebsocketData;
+        try {
+          data = deserializeIfNeeded(event.data, this._options.serializer);
+        } catch (error) {
+          // Without this log a deserialize failure dies inside the runtime's
+          // native event dispatch with no trace — on Cloudflare Workers it
+          // errors out the socket. Log it loudly first so an undecodable
+          // frame (e.g. a poisoned initial sync) is distinguishable from a
+          // frame that never arrived.
+          console.error(
+            `websocket: failed to deserialize incoming message (${describeFrameData(event.data)}) from ${redactUrl(this._url)}:`,
+            error
+          );
+          throw error;
+        }
         // Copying origin/lastEventId/source can throw on runtimes with
         // stricter Event internals (Cloudflare Workers): the accessors or the
         // MessageEvent init validation reject non-browser shapes, and a throw
