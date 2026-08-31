@@ -66,32 +66,60 @@ export function createSyncSocketDiagnostics(
   let decodedFrames = 0;
   const decodedKinds: string[] = [];
 
+  // These listeners are attached to the native socket ahead of the transport
+  // wrapper's own handlers. A listener exception here could suppress the
+  // wrapper's dispatch for that event (or, under workerd's fail-fast event
+  // dispatch, error out the socket) — the one way observation could break
+  // delivery. Nothing below should be able to throw; swallow anyway so
+  // diagnostics can never cause the failure they measure.
+  const observe = <E>(record: (event: E) => void): ((event: E) => void) => {
+    return (event) => {
+      try {
+        record(event);
+      } catch {
+        /* never let diagnostics interfere with delivery */
+      }
+    };
+  };
+
   const factory: WebSocketFactory = (url, protocols) => {
     const socket = create(url, protocols);
     connectAttempts += 1;
-    socket.addEventListener('open', () => {
-      opened = true;
-    });
-    socket.addEventListener('error', () => {
-      errorEvents += 1;
-    });
-    socket.addEventListener('close', (event) => {
-      lastClose = {
-        code: event.code,
-        reason: event.reason,
-        wasClean: event.wasClean,
-      };
-    });
-    socket.addEventListener('message', (event) => {
-      rawFrames += 1;
-      firstFrame ??= {
-        type: frameType(event.data),
-        bytes: frameBytes(event.data),
-        // As seen when the frame arrived — the wrapper sets 'arraybuffer',
-        // so anything else here means the runtime ignored the setter.
-        binaryType: socket.binaryType,
-      };
-    });
+    socket.addEventListener(
+      'open',
+      observe(() => {
+        opened = true;
+      })
+    );
+    socket.addEventListener(
+      'error',
+      observe(() => {
+        errorEvents += 1;
+      })
+    );
+    socket.addEventListener(
+      'close',
+      observe((event) => {
+        lastClose = {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+        };
+      })
+    );
+    socket.addEventListener(
+      'message',
+      observe((event) => {
+        rawFrames += 1;
+        firstFrame ??= {
+          type: frameType(event.data),
+          bytes: frameBytes(event.data),
+          // As seen when the frame arrived — the wrapper sets 'arraybuffer',
+          // so anything else here means the runtime ignored the setter.
+          binaryType: socket.binaryType,
+        };
+      })
+    );
     return socket;
   };
 
