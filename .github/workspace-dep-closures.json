@@ -2795,6 +2795,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/unfurl",
+      "crates/user_api_key",
       "crates/user_quota",
       "crates/webhook",
       "crates/webhook_signature",
@@ -7845,6 +7846,21 @@
       "crates/unfurl",
       "crates/workspace-hack",
       "services/upload_extractor_lambda_trigger"
+    ],
+    "user_api_key": [
+      "crates/bot_id",
+      "crates/bot_token",
+      "crates/cowlike",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/remote_env_var",
+      "crates/user_api_key",
+      "crates/workspace-hack"
     ],
     "user_link_cleanup_handler": [
       "crates/agent",

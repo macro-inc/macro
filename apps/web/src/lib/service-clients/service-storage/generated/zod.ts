@@ -27013,6 +27013,47 @@ export const editThreadV2Response = zod.object({
 });
 
 /**
+ * @summary List the caller's API keys.
+ */
+export const listUserApiKeysResponse = zod
+  .object({
+    keys: zod
+      .array(
+        zod
+          .object({
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the key was created.'),
+            id: zod
+              .uuid()
+              .describe('Opaque identifier for a stored user API key.'),
+            name: zod.string().describe('User-facing name.'),
+          })
+          .describe(
+            'Safe metadata for a stored key. Never contains the secret or its hash.'
+          )
+      )
+      .describe("The caller's keys. Never includes the raw secret or hash."),
+  })
+  .describe("The caller's API keys as id, name, and created_at.");
+
+/**
+ * @summary Mint a new API key for the caller.
+ */
+export const createUserApiKeyBody = zod
+  .object({
+    name: zod.string().describe('User-facing name for the key.'),
+  })
+  .describe('Request body for minting a key.');
+
+/**
+ * @summary Delete one of the caller's API keys.
+ */
+export const deleteUserApiKeyParams = zod.object({
+  id: zod.uuid().describe('Opaque key identifier.'),
+});
+
+/**
  * @summary Gets a UserPdfDocumentLocation entry
  */
 export const getUserDocumentViewLocationParams = zod.object({

@@ -150,6 +150,10 @@ use task_dedup::{
     },
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use user_api_key::{
+    domain::service::UserApiKeyServiceImpl, inbound::axum_router::UserApiKeyRouterState,
+    outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+};
 
 mod api;
 mod config;
@@ -1164,6 +1168,9 @@ async fn run() -> anyhow::Result<()> {
     });
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+    let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
+        db.clone(),
+    )));
     let calendar_state = CalendarRouterState::new(
         Arc::new(calendar_events::domain::service::CalendarService::new(
             calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
@@ -1268,6 +1275,10 @@ async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         favorites_service,
+        user_api_key_state: UserApiKeyRouterState::new(
+            user_api_key_service,
+            authorization_state.clone(),
+        ),
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
             entity_access_service.clone(),

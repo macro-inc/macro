@@ -337,6 +337,12 @@ export function InlineTagsPill(props: {
   docTags: DocTags;
   class?: string;
   showPlaceholder?: boolean;
+  /**
+   * Fires when the tag picker session (popover or its editor dialog) opens or
+   * closes. Callers that hide the pill once it has no tags should collapse on
+   * the close rather than mid-interaction, which would tear down the open menu.
+   */
+  onActiveChange?: (active: boolean) => void;
 }) {
   const tags = () => props.docTags.appliedTags();
   const first = () => tags()[0];
@@ -349,11 +355,14 @@ export function InlineTagsPill(props: {
       <Layer depth={2}>
         <TagPicker
           docTags={props.docTags}
+          onActiveChange={props.onActiveChange}
           triggerClass={badgeTriggerClasses({
             variant: 'outline',
             size: 'sm',
             class: cn(
-              'min-w-0 gap-1.5 text-left',
+              // Capped so a long tag label truncates instead of squeezing
+              // whatever shares the row with the pill (e.g. a task title).
+              'min-w-0 max-w-35 gap-1.5 text-left',
               tags().length === 0 && 'text-ink-extra-muted',
               props.class
             ),
