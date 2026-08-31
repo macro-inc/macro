@@ -294,6 +294,7 @@ interface SoupViewProps {
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
   const soupView = useSoupView();
   const isInboxView = useIsInboxView();
   const openFocusedEntityInPreview = () => {
@@ -307,6 +308,7 @@ export const SoupView = (props: SoupViewProps) => {
     }
     void openEntityInSplitFromUnifiedList(focusedRow.original, {
       splitHandle: panel.handle,
+      notificationSource,
     });
   };
   const hasPreviewItems = useSoupPreviewAvailability({
@@ -1000,7 +1002,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Join button (or, in preview, the Viewer's Join prompt) is the only
       // affordance.
       if (!isNonMemberChannelEntity(entity)) {
-        markChannelNotificationsSeenOnOpen(entity);
+        markChannelNotificationsSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
       }
       return;
@@ -1035,6 +1037,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         splitHandle: panel.handle,
         replacePreview: event.altKey,
         referredFrom: currentView(),
+        notificationSource,
       });
       return;
     }
@@ -1047,6 +1050,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         location,
         splitHandle: panel.handle,
         referredFrom: currentView(),
+        notificationSource,
       });
     } finally {
       finishTouchHighlight?.();

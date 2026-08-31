@@ -394,15 +394,6 @@ async function refreshSoupAfterUncachedGraphqlWrite(): Promise<void> {
   }
 }
 
-/** Mark notifications seen through the configured transport. Throws on failure. */
-export async function bulkMarkNotificationsAsSeen(
-  notificationIds: string[]
-): Promise<void> {
-  if (notificationIds.length === 0) return;
-  await updateNotifications({ notificationIds, operation: 'MARK_SEEN' });
-  await refreshSoupAfterUncachedGraphqlWrite();
-}
-
 /** Mark notifications done through the shared GraphQL mutation. Throws on failure. */
 export async function bulkMarkNotificationsAsDone(
   notificationIds: string[]

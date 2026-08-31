@@ -72,7 +72,6 @@ import {
 import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
-  bulkMarkNotificationsAsSeen,
   bulkMarkNotificationsAsUndone,
   restoreUserNotifications,
   snapshotUserNotifications,
@@ -374,6 +373,11 @@ interface OpenEntityOptions {
   mergeHistory?: boolean;
   allowDuplicate?: boolean;
   referredFrom?: ReferredFrom;
+  /**
+   * Notification source used to keep REST-backed unread state optimistic when
+   * opening a channel row. Callers that can open channels must provide it.
+   */
+  notificationSource?: NotificationSource;
 }
 
 const DUPLICATE_CONTENT_MESSAGE = 'Content already open.';
@@ -670,7 +674,9 @@ export const openEntityInSplitFromUnifiedList = async (
     channelTarget?.kind === 'message' ? channelTarget : undefined;
   const openChannelAtLatest = channelTarget?.kind === 'latest';
 
-  markChannelNotificationsSeenOnOpen(entity);
+  if (options.notificationSource) {
+    markChannelNotificationsSeenOnOpen(entity, options.notificationSource);
+  }
 
   let params: Record<string, string> | undefined;
   if (entity.type === 'channel' && location?.type === 'channel') {
@@ -741,10 +747,14 @@ export const openEntityInSplitFromUnifiedList = async (
  *
  * The row's attached Soup edge is authoritative. The channel block's message
  * marker discovers notifications through the separately paginated global
- * source, so it cannot reliably clear older notifications. ID-scoped writes
- * update normalized Soup edges optimistically; the uncached fallback refetches.
+ * source, so it cannot reliably clear older notifications. Passing the row's
+ * attached notifications through the source keeps its REST cache and durable
+ * seen overrides in sync while the configured mutation updates GraphQL edges.
  */
-export function markChannelNotificationsSeenOnOpen(entity: EntityData) {
+export function markChannelNotificationsSeenOnOpen(
+  entity: EntityData,
+  notificationSource: NotificationSource
+) {
   if (
     (entity.type !== 'channel' &&
       entity.type !== 'channel_message' &&
@@ -760,9 +770,7 @@ export function markChannelNotificationsSeenOnOpen(entity: EntityData) {
   ).filter((notification) => !notificationIsRead(notification));
   if (notifications.length === 0) return;
 
-  void bulkMarkNotificationsAsSeen(
-    notifications.map((notification) => notification.id)
-  ).catch((error) => {
+  void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
     console.error('Failed to mark channel notifications as read', error);
   });
 }

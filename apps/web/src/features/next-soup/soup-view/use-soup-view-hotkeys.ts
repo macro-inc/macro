@@ -141,7 +141,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         splitHandle
       );
     if (didOpen) {
-      markChannelNotificationsSeenOnOpen(entity);
+      markChannelNotificationsSeenOnOpen(entity, notificationSource);
     }
     return didOpen;
   };
@@ -192,6 +192,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         splitHandle,
         location,
         referredFrom: currentView(),
+        notificationSource,
       });
       return true;
     },
@@ -232,6 +233,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         splitHandle,
         replacePreview: true,
         referredFrom: currentView(),
+        notificationSource,
       });
       return true;
     },
@@ -350,6 +352,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         splitHandle,
         openInNewSplit: true,
         referredFrom: currentView(),
+        notificationSource,
       });
       return true;
     },

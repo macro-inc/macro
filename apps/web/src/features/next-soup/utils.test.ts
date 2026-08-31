@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const { toastAlert, ...operationMocks } = vi.hoisted(() => ({
   toastAlert: vi.fn(),
   bulkMarkNotificationsAsDone: vi.fn(async () => {}),
-  bulkMarkNotificationsAsSeen: vi.fn(async () => {}),
   bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
   cancelQueries: vi.fn(async () => {}),
   flagArchived: vi.fn(async () => ({ isErr: () => false, value: undefined })),
@@ -43,7 +42,6 @@ vi.mock('@queries/notification/entity-mutations', () => ({
 }));
 vi.mock('@queries/notification/user-notifications', () => ({
   bulkMarkNotificationsAsDone: operationMocks.bulkMarkNotificationsAsDone,
-  bulkMarkNotificationsAsSeen: operationMocks.bulkMarkNotificationsAsSeen,
   bulkMarkNotificationsAsUndone: operationMocks.bulkMarkNotificationsAsUndone,
   restoreUserNotifications: vi.fn(),
   snapshotUserNotifications: vi.fn(() => []),
@@ -125,6 +123,10 @@ const asRead = (notification: UnifiedNotification): UnifiedNotification =>
     ...notification,
     viewed_at: '2026-07-14T00:00:00.000Z',
   }) as unknown as UnifiedNotification;
+
+const notificationSourceWithBulkMarkAsRead = (
+  bulkMarkAsRead = vi.fn(async () => {})
+) => ({ bulkMarkAsRead }) as unknown as NotificationSource;
 
 const channelMessageRow = (opts?: {
   target?: ChannelEntityTarget;
@@ -412,16 +414,18 @@ describe('getChannelEntityTarget', () => {
     const olderNotification = sendNotification('older-notification', 'older');
     const readNotification = asRead(sendNotification('read', 'read-msg'));
 
+    const bulkMarkAsRead = vi.fn(async () => {});
     markChannelNotificationsSeenOnOpen(
       channelRow({
         notifications: [agentNotification, olderNotification, readNotification],
-      })
+      }),
+      notificationSourceWithBulkMarkAsRead(bulkMarkAsRead)
     );
 
-    expect(operationMocks.bulkMarkNotificationsAsSeen).toHaveBeenCalledOnce();
-    expect(operationMocks.bulkMarkNotificationsAsSeen).toHaveBeenCalledWith([
-      agentNotification.id,
-      olderNotification.id,
+    expect(bulkMarkAsRead).toHaveBeenCalledOnce();
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([
+      agentNotification,
+      olderNotification,
     ]);
   });
 
@@ -437,9 +441,13 @@ describe('getChannelEntityTarget', () => {
       openWithSplit,
     } as unknown as SplitManager);
 
+    const bulkMarkAsRead = vi.fn(async () => {});
     await openEntityInSplitFromUnifiedList(
       channelRow({ notifications: [notification] }),
-      {}
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      }
     );
 
     expect(openWithSplit).toHaveBeenCalledWith(
@@ -448,9 +456,7 @@ describe('getChannelEntityTarget', () => {
       }),
       expect.any(Object)
     );
-    expect(operationMocks.bulkMarkNotificationsAsSeen).toHaveBeenCalledWith([
-      notification.id,
-    ]);
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
   });
 
   it('does not mark a thread-stack notification when opening its parent channel row', async () => {
@@ -469,18 +475,20 @@ describe('getChannelEntityTarget', () => {
       openWithSplit: vi.fn(),
     } as unknown as SplitManager);
 
+    const bulkMarkAsRead = vi.fn(async () => {});
     await openEntityInSplitFromUnifiedList(
       channelRow({
         notifications: [parentNotification, threadNotification],
       }),
-      {}
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      }
     );
 
-    expect(operationMocks.bulkMarkNotificationsAsSeen).toHaveBeenCalledWith([
-      parentNotification.id,
-    ]);
-    expect(operationMocks.bulkMarkNotificationsAsSeen).not.toHaveBeenCalledWith(
-      expect.arrayContaining([threadNotification.id])
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([parentNotification]);
+    expect(bulkMarkAsRead).not.toHaveBeenCalledWith(
+      expect.arrayContaining([threadNotification])
     );
   });
 
@@ -490,11 +498,14 @@ describe('getChannelEntityTarget', () => {
       .spyOn(console, 'error')
       .mockImplementation(() => {});
     const notification = sendNotification('notification', 'message');
-    operationMocks.bulkMarkNotificationsAsSeen.mockRejectedValueOnce(error);
+    const bulkMarkAsRead = vi.fn(async () => {
+      throw error;
+    });
 
     try {
       markChannelNotificationsSeenOnOpen(
-        channelRow({ notifications: [notification] })
+        channelRow({ notifications: [notification] }),
+        notificationSourceWithBulkMarkAsRead(bulkMarkAsRead)
       );
       await Promise.resolve();
 

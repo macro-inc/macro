@@ -13,7 +13,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { notificationKeys } from '../keys';
 import {
   applyNotificationStatusUpdate,
-  bulkMarkNotificationsAsSeen,
   optimisticInsertNotification,
   type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
@@ -32,7 +31,6 @@ const {
   restMarkSeenMock,
   restUserNotificationsMock,
   restMarkUndoneMock,
-  updateNotificationsMock,
 } = vi.hoisted(() => ({
   createGraphqlMutationMock: vi.fn(),
   createGraphqlQueryMock: vi.fn(),
@@ -44,7 +42,6 @@ const {
   restMarkSeenMock: vi.fn(),
   restUserNotificationsMock: vi.fn(),
   restMarkUndoneMock: vi.fn(),
-  updateNotificationsMock: vi.fn(async () => []),
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
@@ -69,7 +66,7 @@ vi.mock('../graphql/user-notifications', () => ({
 }));
 
 vi.mock('@service-storage/graphql-notifications', () => ({
-  updateNotifications: updateNotificationsMock,
+  updateNotifications: vi.fn(),
 }));
 
 vi.mock('@queries/soup/graphql/active-queries', () => ({
@@ -418,26 +415,6 @@ describe('notification mutations', () => {
 
   afterEach(() => {
     testQueryClient.clear();
-  });
-
-  describe('bulkMarkNotificationsAsSeen', () => {
-    it('writes notification IDs without refreshing the normalized cache', async () => {
-      await bulkMarkNotificationsAsSeen(['notification-1']);
-
-      expect(updateNotificationsMock).toHaveBeenCalledWith({
-        notificationIds: ['notification-1'],
-        operation: 'MARK_SEEN',
-      });
-      expect(refreshActiveSoupQueriesMock).not.toHaveBeenCalled();
-    });
-
-    it('refreshes active Soup queries for the uncached fallback', async () => {
-      graphqlCacheEnabledMock.mockReturnValue(false);
-
-      await bulkMarkNotificationsAsSeen(['notification-1']);
-
-      expect(refreshActiveSoupQueriesMock).toHaveBeenCalledOnce();
-    });
   });
 
   describe('useMarkNotificationsAsSeenMutation', () => {

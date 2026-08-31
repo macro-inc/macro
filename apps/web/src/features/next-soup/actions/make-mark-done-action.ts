@@ -362,6 +362,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         void openEntityInSplitFromUnifiedList(nextRow.original, {
           splitHandle: controller,
           mergeHistory: true,
+          notificationSource: options.notificationSource(),
         });
       }
       onNavigate?.(nextRow.original);
