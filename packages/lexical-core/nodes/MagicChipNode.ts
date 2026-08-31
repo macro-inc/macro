@@ -159,6 +159,12 @@ export class MagicChipNode extends DecoratorNode<
   createDOM(_config: EditorConfig): HTMLElement {
     const element = document.createElement('div');
     element.setAttribute('data-magic-chip', this.__agentSessionId);
+    // Stay as wide as the message column. Streamed content must wrap inside
+    // this box instead of widening it past the editor.
+    element.style.width = '100%';
+    element.style.maxWidth = '100%';
+    element.style.minWidth = '0';
+    element.style.overflowX = 'hidden';
     return element;
   }
 
