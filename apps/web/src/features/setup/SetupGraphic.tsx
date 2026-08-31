@@ -554,7 +554,7 @@ export function SetupGraphic(props: {
       // modules near the top edge and the blocks near the bottom.
       viewBox={SCENE.viewBox}
       fill="currentColor"
-      class={`setup-graphic text-ink cursor-pointer ${props.poweredUp ? 'powered ' : ''}${props.class ?? ''}`}
+      class={`setup-graphic text-ink ${props.poweredUp ? 'powered ' : ''}${props.class ?? ''}`}
       onClick={playSlide}
       aria-hidden="true"
     >

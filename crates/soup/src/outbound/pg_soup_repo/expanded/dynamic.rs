@@ -29,7 +29,9 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::domain::models::grouping::ItemGroupingInfo;
+use crate::domain::models::{
+    SoupDocumentServerFacts, SoupProjectionHydration, grouping::ItemGroupingInfo,
+};
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_select_expr,
 };
@@ -171,6 +173,11 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
             NULL as "is_persistent",
             di.sha as "sha",
             dt.sub_type as "sub_type",
+            EXISTS (
+                SELECT 1
+                FROM document_email de
+                WHERE de.document_id = d.id
+            ) as "is_email_attachment",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             CASE
@@ -226,6 +233,7 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             c."isPersistent" as "is_persistent",
             NULL as "sha",
             NULL as "sub_type",
+            false as "is_email_attachment",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
@@ -254,6 +262,7 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL as "is_persistent",
             NULL as "sha",
             NULL as "sub_type",
+            false as "is_email_attachment",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
@@ -1562,6 +1571,7 @@ fn build_query(
                 NULL::boolean as "is_persistent",
                 NULL::text as "sha",
                 NULL::document_sub_type_value as "sub_type",
+                false as "is_email_attachment",
                 NULL::timestamptz as "viewed_at",
                 NULL::timestamptz as "sort_ts",
                 NULL::boolean as "is_completed",
@@ -1590,6 +1600,8 @@ struct DocumentRow {
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
     sub_type: Option<DocumentSubType>,
+    #[sqlx(default)]
+    is_email_attachment: bool,
     is_completed: Option<bool>,
     deleted_at: Option<DateTime<Utc>>,
 }
@@ -1649,6 +1661,24 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
 }
 
 impl SoupRow {
+    fn document_server_facts(&self) -> Option<SoupDocumentServerFacts> {
+        match self {
+            Self::Document(row) => Some(SoupDocumentServerFacts {
+                is_email_attachment: row.is_email_attachment,
+            }),
+            Self::Chat(_) | Self::Project(_) | Self::CalendarEvent(_) => None,
+        }
+    }
+
+    #[tracing::instrument(err)]
+    fn into_projection_hydration(self) -> Result<SoupProjectionHydration, sqlx::Error> {
+        let document_server_facts = self.document_server_facts();
+        Ok(SoupProjectionHydration {
+            item: self.into_soup_item()?,
+            document_server_facts,
+        })
+    }
+
     #[tracing::instrument(err)]
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
@@ -1667,6 +1697,7 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 sub_type,
+                is_email_attachment: _,
                 is_completed,
                 deleted_at,
             }) => SoupItem::Document(SoupDocument {
@@ -1772,10 +1803,10 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
 }
 
 #[tracing::instrument(skip(db), err)]
-pub(crate) async fn expanded_dynamic_cursor_soup(
+async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
-) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
         limit,
@@ -1807,11 +1838,34 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         // enough to run 10x slower. Planning with the real bind values every
         // time costs ~1ms and keeps the plan stable.
         .persistent(false)
-        .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
+        .try_map(|row| SoupRow::from_row(&row)?.into_projection_hydration())
         .fetch_all(db)
         .await?;
 
     Ok(items)
+}
+
+/// Execute a flat expanded dynamic query and retain document server facts.
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
+    db: &PgPool,
+    args: ExpandedDynamicCursorArgs<'_>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    expanded_dynamic_cursor_soup_hydrated(db, args).await
+}
+
+/// Execute a flat expanded dynamic query without exposing projection metadata.
+#[cfg(test)]
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup(
+    db: &PgPool,
+    args: ExpandedDynamicCursorArgs<'_>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    Ok(expanded_dynamic_cursor_soup_hydrated(db, args)
+        .await?
+        .into_iter()
+        .map(|hydration| hydration.item)
+        .collect())
 }
 
 // ============================================================================

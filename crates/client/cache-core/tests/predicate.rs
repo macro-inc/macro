@@ -364,6 +364,99 @@ fn direct_projection_writes_merge_partial_records_and_report_real_changes() {
 }
 
 #[test]
+fn authoritative_patch_preserves_unmentioned_server_facts_or_marks_missing() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut base = projection("owner-1");
+        base.exact_facts.push(ExactFact {
+            attribute: token("server-relation"),
+            value: ExactValue::new([1]).unwrap(),
+        });
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(base)],
+            )
+            .await
+            .unwrap();
+
+        engine
+            .put_records_with_projections(
+                None,
+                vec![],
+                vec![ProjectionMutation::Patch {
+                    record_key: record_key(),
+                    profile: profile(),
+                    partition: token("document"),
+                    exact: vec![ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![ExactValue::utf8("owner-2").unwrap()],
+                    }],
+                    integers: vec![],
+                    sorts: vec![],
+                }],
+            )
+            .await
+            .unwrap();
+        let states = engine
+            .storage()
+            .load_projection_states(&[record_key()])
+            .await
+            .unwrap();
+        let [Some(ProjectionState::Complete(patched))] = states.as_slice() else {
+            panic!("same-profile patch must preserve completeness");
+        };
+        assert!(patched.exact_facts.iter().any(|fact| {
+            fact.attribute == token("server-relation")
+                && fact.value == ExactValue::new([1]).unwrap()
+        }));
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-2"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![record_key()])
+        );
+
+        let missing_key = RecordKey::new("GraphqlSoupDocument:doc-2").unwrap();
+        engine
+            .put_records_with_projections(
+                None,
+                vec![],
+                vec![ProjectionMutation::Patch {
+                    record_key: missing_key.clone(),
+                    profile: profile(),
+                    partition: token("document"),
+                    exact: vec![ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![ExactValue::utf8("owner-2").unwrap()],
+                    }],
+                    integers: vec![],
+                    sorts: vec![],
+                }],
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            engine
+                .storage()
+                .load_projection_states(&[missing_key])
+                .await
+                .unwrap()
+                .as_slice(),
+            [Some(ProjectionState::Incomplete {
+                kind: ProjectionIncompleteKind::Missing,
+                ..
+            })]
+        ));
+    });
+}
+
+#[test]
 fn optimistic_projection_layers_are_queryable_offline_and_survive_restart() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
@@ -755,6 +848,84 @@ fn commit_recomposes_later_patch_against_anticipated_authority() {
             fact.attribute == token("owner") && fact.value == ExactValue::utf8("owner-3").unwrap()
         }));
         assert_eq!(document.sort_facts[0].value, 99);
+    });
+}
+
+#[test]
+fn optimistic_settlement_applies_authoritative_patch_before_shadow_reconciliation() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut base = projection("owner-1");
+        base.exact_facts.push(ExactFact {
+            attribute: token("server-relation"),
+            value: ExactValue::new([1]).unwrap(),
+        });
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(base)],
+            )
+            .await
+            .unwrap();
+        let transaction = begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
+        )
+        .await;
+        let claimed = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".to_owned(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        engine
+            .commit_optimistic_write_with_projections(
+                transaction,
+                MutationClaimToken {
+                    owner: "runner".to_owned(),
+                    generation: claimed.lease_generation,
+                },
+                OPTIMISTIC_MUTATION,
+                Some("SetEntityProperty"),
+                &optimistic_variables(),
+                &optimistic_data(),
+                vec![ProjectionMutation::Patch {
+                    record_key: record_key(),
+                    profile: profile(),
+                    partition: token("document"),
+                    exact: vec![ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![ExactValue::utf8("owner-3").unwrap()],
+                    }],
+                    integers: vec![],
+                    sorts: vec![],
+                }],
+            )
+            .await
+            .unwrap();
+
+        let states = engine
+            .storage()
+            .load_projection_states(&[record_key()])
+            .await
+            .unwrap();
+        let [Some(ProjectionState::Complete(projection))] = states.as_slice() else {
+            panic!("patched settlement must retain complete authority");
+        };
+        assert!(projection.exact_facts.iter().any(|fact| {
+            fact.attribute == token("owner") && fact.value == ExactValue::utf8("owner-3").unwrap()
+        }));
+        assert!(projection.exact_facts.iter().any(|fact| {
+            fact.attribute == token("server-relation")
+                && fact.value == ExactValue::new([1]).unwrap()
+        }));
     });
 }
 

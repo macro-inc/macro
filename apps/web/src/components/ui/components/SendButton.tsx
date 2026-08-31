@@ -32,7 +32,7 @@ export function SendButton(props: SendButtonProps) {
       tooltip={local.tooltip ?? 'Send'}
       class={cn(
         'rounded-[11px] size-7.5 [&_svg]:stroke-[4px]',
-        'transition-transform ease duration-150',
+        'transition-transform ease-in-out duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',
         local.hidden && 'opacity-0!',

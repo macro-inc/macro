@@ -44,6 +44,7 @@ import {
   GithubPullRequestPills,
 } from './foreign';
 import { ReminderWideContent } from './reminder';
+import { SOUP_ROW_CLASS } from './row-geometry';
 import type { LayoutProps } from './shared';
 
 function RowTags(props: {
@@ -71,13 +72,17 @@ export function WideLayout(props: LayoutProps) {
   return (
     <Entity.Layout
       class={cn(
-        'w-full min-h-[inherit] items-center text-sm px-2',
-        'gap-2 grid grid-rows-[1fr]',
+        // Leading edge (left padding, indicator column, column gap) comes from
+        // the --soup-row-* geometry in ListEntity.css so group headers can line
+        // their label up with this row's content.
+        SOUP_ROW_CLASS.wide,
+        'w-full min-h-[inherit] items-center text-sm pl-(--soup-row-padding-l) pr-2',
+        'gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr]',
         // Drop the indicator column entirely when the checkbox is hidden so the
-        // content isn't indented by an empty 1rem gutter.
+        // content isn't indented by an empty gutter.
         props.hideCheckbox
           ? 'grid-cols-[1fr_auto_8ch]'
-          : 'grid-cols-[1rem_1fr_auto_8ch]',
+          : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
         '[--title-width:10rem]'
       )}
       style={{

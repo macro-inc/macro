@@ -23,7 +23,8 @@ use crate::normalize::{
 use crate::predicate::{
     OptimisticShadowReconciliation, PredicateIndexStorage, PredicateQueryResult,
     ProjectionMutation, ProjectionMutationLayer, ProjectionState,
-    compose_effective_optimistic_projection, compose_pending_optimistic_projection,
+    apply_authoritative_projection_patch, compose_effective_optimistic_projection,
+    compose_pending_optimistic_projection,
 };
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
@@ -1495,6 +1496,25 @@ impl<S: Storage> Engine<S> {
                         document.record_key.clone(),
                         Some(ProjectionState::Complete(document)),
                     );
+                }
+                ProjectionMutation::Patch {
+                    record_key,
+                    profile,
+                    partition,
+                    exact,
+                    integers,
+                    sorts,
+                } => {
+                    let state = apply_authoritative_projection_patch(
+                        authoritative.get(record_key).and_then(Option::as_ref),
+                        record_key,
+                        profile,
+                        partition,
+                        exact,
+                        integers,
+                        sorts,
+                    );
+                    authoritative.insert(record_key.clone(), Some(state));
                 }
                 ProjectionMutation::MarkIncomplete {
                     record_key,

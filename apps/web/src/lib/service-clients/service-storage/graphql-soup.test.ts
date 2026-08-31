@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
   const plainClient = { kind: 'plain' };
   const realtimeClient = { kind: 'realtime' };
   const replaceSubscriptions = vi.fn();
+  const platformFetch = vi.fn();
   return {
     get enabled() {
       return enabled;
@@ -79,6 +80,7 @@ const mocks = vi.hoisted(() => {
     plainClient,
     realtimeClient,
     replaceSubscriptions,
+    platformFetch,
     createWorkerCacheHost: vi.fn(
       (options: { onInitializationError?: (error: Error) => void }) => {
         initializationErrorHandler = options.onInitializationError;
@@ -98,7 +100,9 @@ vi.mock('@core/constant/servers', () => ({
 }));
 vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
-vi.mock('@core/util/platformFetch', () => ({ platformFetch: vi.fn() }));
+vi.mock('@core/util/platformFetch', () => ({
+  platformFetch: mocks.platformFetch,
+}));
 vi.mock('@graphql-cache/rollout', () => ({
   getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
     const enabled = mocks.tauri ? mocks.graphqlEnabled : mocks.enabled;
@@ -129,7 +133,6 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
   normalizedCacheExchange: (host: unknown) => ({ kind: 'cache', host }),
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
-vi.mock('graphql', () => ({ print: () => 'mutation Test' }));
 vi.mock('graphql-ws', () => ({
   createClient: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
 }));
@@ -183,10 +186,76 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.graphqlEnabled = true;
     mocks.tauri = false;
     mocks.resetQueue();
+    mocks.platformFetch.mockReset();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('keeps an old client compatible with a server that has the additive field', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    );
+    const soup = await import('./graphql-soup');
+    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'query LegacySoup { user { soup { items { __typename id } } } }',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.platformFetch).toHaveBeenCalledOnce();
+    expect(soup.graphqlSoupProjectionSupported()).toBe(true);
+  });
+
+  it('retries a new client against an old server without projection local authority', async () => {
+    mocks.platformFetch
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errors: [
+              {
+                message:
+                  'Cannot query field "cacheProjection" on type "GraphqlSoupEntity".',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        )
+      );
+    const soup = await import('./graphql-soup');
+    const query = `query Soup {
+      user { soup { items { __typename id cacheProjection @cacheOnly } } }
+    }`;
+    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.platformFetch).toHaveBeenCalledTimes(2);
+    const retry = mocks.platformFetch.mock.calls[1]?.[1] as RequestInit;
+    expect(JSON.parse(retry.body as string).query).not.toContain(
+      'cacheProjection'
+    );
+    expect(soup.graphqlSoupProjectionSupported()).toBe(false);
   });
 
   it('keeps GraphQL notification subscriptions active when the cache is disabled', async () => {

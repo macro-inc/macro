@@ -41,8 +41,10 @@ import {
   cursorMentionUser,
   isMacroAiId,
   isMacroCoderId,
+  isMacroNewId,
   macroAiMentionUser,
   macroCoderMentionUser,
+  macroNewMentionUser,
 } from '../macroAi';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createInputAttachmentTracker } from './attachment-tracker';
@@ -275,6 +277,12 @@ export function ChannelInput(props: ChannelInputProps) {
       !base.some((user) => isMacroCoderId(user.id))
     ) {
       base.unshift(macroCoderMentionUser());
+    }
+    if (
+      ENABLE_CHAT_V3_AGENTS() &&
+      !base.some((user) => isMacroNewId(user.id))
+    ) {
+      base.unshift(macroNewMentionUser());
     }
     if (
       cursorEnabled &&

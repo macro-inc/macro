@@ -52,8 +52,9 @@ fn bot_id_str(input: &str) -> IResult<&str, BotIdStorage<ArcCowStr<'_>>> {
 
 /// Stable [`BotId`] for the first-party "Macro AI" system bot.
 ///
-/// Mentioning it opens an agent session served by the in-process (in-memory)
-/// agent harness, which answers with the Macro product toolset.
+/// Mentioning it answers with the classic in-channel chat reply (the
+/// `channel_bots` agent loop in `document_storage_service`). Agent sessions
+/// belong to [`MACRO_NEW_BOT_ID`] instead.
 pub const MACRO_AI_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a1a1));
 
@@ -62,6 +63,22 @@ pub const MACRO_AI_HANDLE: &str = "macro";
 
 /// Display name for the "Macro" system bot.
 pub const MACRO_AI_NAME: &str = "Macro";
+
+/// Stable [`BotId`] for the "macro(new)" system bot.
+///
+/// The next-generation Macro bot: mentioning it opens an agent session served
+/// by the in-process (in-memory) agent harness, which answers with the Macro
+/// product toolset. A separate bot from [`MACRO_AI_BOT_ID`] on purpose - the
+/// classic in-channel reply stays on `@macro` for everyone while this one
+/// rolls out, and one id cannot mean both.
+pub const MACRO_NEW_BOT_ID: BotId =
+    BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_a2a2));
+
+/// Stable handle for the "macro(new)" system bot (used for `@` mentions).
+pub const MACRO_NEW_HANDLE: &str = "macro-new";
+
+/// Display name for the "macro(new)" system bot.
+pub const MACRO_NEW_NAME: &str = "macro(new)";
 
 /// Stable [`BotId`] for autonomous Macro platform operations.
 pub const MACRO_SYSTEM_BOT_ID: BotId =
@@ -122,10 +139,19 @@ pub struct SystemBot {
 
 /// Every first-party bot.
 pub const SYSTEM_BOTS: &[SystemBot] = &[
+    // Answers in channel via the classic `channel_bots` reply loop, which
+    // needs no agent session; its next-generation replacement below is the
+    // one whose mentions open sessions.
     SystemBot {
         id: MACRO_AI_BOT_ID,
         name: MACRO_AI_NAME,
         handle: MACRO_AI_HANDLE,
+        has_agent: false,
+    },
+    SystemBot {
+        id: MACRO_NEW_BOT_ID,
+        name: MACRO_NEW_NAME,
+        handle: MACRO_NEW_HANDLE,
         has_agent: true,
     },
     SystemBot {

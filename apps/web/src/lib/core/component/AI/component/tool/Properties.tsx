@@ -139,7 +139,7 @@ function OptionChips(props: { options: ResolvedOption[]; removed?: boolean }) {
         )}
       </For>
       <Show when={overflow() > 0}>
-        <span class="shrink-0 text-2xs text-ink-muted">+{overflow()}</span>
+        <span class="shrink-0 text-xxs text-ink-muted">+{overflow()}</span>
       </Show>
     </>
   );

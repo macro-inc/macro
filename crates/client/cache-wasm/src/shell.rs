@@ -884,7 +884,7 @@ impl CacheEngine {
         })
     }
 
-    /// Evaluates one exact `soup-flat-v1` GraphQL filter request.
+    /// Evaluates one exact `soup-flat-v2` GraphQL filter request.
     #[wasm_bindgen(js_name = entityFilter)]
     pub fn entity_filter(&self, request: JsValue) -> js_sys::Promise {
         let state = self.state.clone();
@@ -965,7 +965,9 @@ impl CacheEngine {
                 let op_id = ops.borrow_mut().intern(&registration.op_id);
                 (op_id, registration.entity_resolvers)
             });
-            let projections = authoritative_projection_mutations(&data);
+            let projections =
+                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
+                    .map_err(err_js)?;
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1009,7 +1011,9 @@ impl CacheEngine {
             state.ensure_callable()?;
             let variables = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let projections = authoritative_projection_mutations(&data);
+            let projections =
+                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
+                    .map_err(err_js)?;
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -1248,7 +1252,9 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let projections = authoritative_projection_mutations(&data);
+            let projections =
+                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
+                    .map_err(err_js)?;
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_with_projections(
