@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   type CronParts,
   describeCron,
+  getDefaultTimezone,
   isValidCronParts,
   type ScheduleFrequency,
   WEEKDAY_OPTIONS,
@@ -151,6 +152,57 @@ function deriveSeed(
   };
 }
 
+/** The zone's offset from UTC at `instant`, as sortable minutes and a ±HH:MM tag. */
+function gmtOffset(
+  zone: string,
+  instant: Date
+): { minutes: number; text: string } {
+  const offset = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(instant)
+    .find((part) => part.type === 'timeZoneName')?.value;
+  const match = offset?.match(/GMT([+-])(\d{2}):(\d{2})/);
+  if (!match) return { minutes: 0, text: '+00:00' };
+  const sign = match[1] === '-' ? -1 : 1;
+  const minutes = sign * (Number(match[2]) * 60 + Number(match[3]));
+  return { minutes, text: `${match[1]}${match[2]}:${match[3]}` };
+}
+
+/** A short zone tag ("EDT", "GMT+5:30") for the schedule summary and once view. */
+function shortZone(zone: string, instant = new Date()): string {
+  return (
+    new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' })
+      .formatToParts(instant)
+      .find((part) => part.type === 'timeZoneName')?.value ?? zone
+  );
+}
+
+/**
+ * Every IANA zone the runtime lists, labelled with its current GMT offset and
+ * ordered by that offset so the list reads west-to-east. Built once — the set
+ * does not change within a session.
+ */
+const TIMEZONE_OPTIONS: { value: string; label: string }[] = (() => {
+  const zones =
+    typeof Intl.supportedValuesOf === 'function'
+      ? Intl.supportedValuesOf('timeZone')
+      : [getDefaultTimezone()];
+  const now = new Date();
+  return zones
+    .map((zone) => {
+      const offset = gmtOffset(zone, now);
+      return {
+        value: zone,
+        label: `(GMT${offset.text}) ${zone.replace(/_/g, ' ')}`,
+        order: offset.minutes,
+      };
+    })
+    .sort((a, b) => a.order - b.order || a.value.localeCompare(b.value))
+    .map(({ value, label }) => ({ value, label }));
+})();
+
 /**
  * The reminder editor's fields — title, how it repeats, and when — shared by the
  * create modal and the edit split.
@@ -168,11 +220,18 @@ export function ReminderForm(props: ReminderFormProps) {
   );
   const isEdit = props.initialSchedule !== undefined;
 
+  const localZone = getDefaultTimezone();
   const [description, setDescription] = createSignal(seed.description);
   const [repeat, setRepeat] = createSignal<RepeatKind>(seed.repeat);
   const [onceDate, setOnceDate] = createSignal(seed.onceDate);
   const [onceTime, setOnceTime] = createSignal(seed.onceTime);
   const [repeatParts, setRepeatParts] = createSignal<CronParts>(seed.parts);
+  // A recurring cron fires at a wall-clock time in this zone. It defaults to the
+  // reminder's stored zone (or the viewer's, for a new recurrence) and is
+  // editable, so a reminder can fire in a zone other than the one editing it.
+  const [timezone, setTimezone] = createSignal(
+    seed.recurringTimezone ?? localZone
+  );
 
   // What the schedule controls were seeded to, so an untouched edit can be told
   // from a real change without depending on second-level precision the pickers
@@ -181,6 +240,7 @@ export function ReminderForm(props: ReminderFormProps) {
   const initialOnceDate = seed.onceDate;
   const initialOnceTime = seed.onceTime;
   const initialParts = seed.parts;
+  const initialTimezone = seed.recurringTimezone ?? localZone;
 
   let titleRef: HTMLInputElement | undefined;
   onMount(() => {
@@ -194,7 +254,8 @@ export function ReminderForm(props: ReminderFormProps) {
     if (repeat() !== initialRepeat) return false;
     return repeat() === 'once'
       ? onceDate() === initialOnceDate && onceTime() === initialOnceTime
-      : samePartsShape(repeatParts(), initialParts);
+      : samePartsShape(repeatParts(), initialParts) &&
+          timezone() === initialTimezone;
   };
 
   /**
@@ -219,6 +280,7 @@ export function ReminderForm(props: ReminderFormProps) {
     setOnceDate(seed.onceDate);
     setOnceTime(seed.onceTime);
     setRepeatParts(seed.parts);
+    setTimezone(initialTimezone);
   };
 
   const cancel = () => {
@@ -279,13 +341,12 @@ export function ReminderForm(props: ReminderFormProps) {
 
     const parts = repeatParts();
     // No past-date check: a recurrence has no single instant to have passed, and
-    // the backend derives its first firing from the cron itself. Keep the
-    // reminder's own zone when it had one; a brand-new recurrence takes the
-    // viewer's default (recurringSchedule's fallback).
+    // the backend derives its first firing from the cron itself. The zone comes
+    // from the picker, seeded from the reminder's own zone (or the viewer's).
     if (!isValidCronParts(parts)) return;
     props.onSubmit({
       description: description(),
-      schedule: recurringSchedule(parts, seed.recurringTimezone),
+      schedule: recurringSchedule(parts, timezone()),
     });
   };
 
@@ -363,21 +424,26 @@ export function ReminderForm(props: ReminderFormProps) {
 
         <Switch>
           <Match when={repeat() === 'once'}>
-            <div class="flex items-center gap-2">
-              <input
-                type="date"
-                aria-label="Date"
-                value={onceDate()}
-                onInput={(event) => setOnceDate(event.currentTarget.value)}
-                class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-              />
-              <input
-                type="time"
-                aria-label="Time"
-                value={onceTime()}
-                onInput={(event) => setOnceTime(event.currentTarget.value)}
-                class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-              />
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <input
+                  type="date"
+                  aria-label="Date"
+                  value={onceDate()}
+                  onInput={(event) => setOnceDate(event.currentTarget.value)}
+                  class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                />
+                <input
+                  type="time"
+                  aria-label="Time"
+                  value={onceTime()}
+                  onInput={(event) => setOnceTime(event.currentTarget.value)}
+                  class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                />
+              </div>
+              <span class="text-xs text-ink-muted">
+                {localZone.replace(/_/g, ' ')} ({shortZone(localZone)})
+              </span>
             </div>
           </Match>
           <Match when={repeat() === 'week'}>
@@ -433,9 +499,33 @@ export function ReminderForm(props: ReminderFormProps) {
         </Switch>
 
         <Show when={repeat() !== 'once'}>
-          <span class="truncate text-xs text-ink-muted">
-            {describeCron(repeatParts())}
-          </span>
+          <div class="flex flex-col gap-2">
+            <label class="flex items-center gap-2 text-xs text-ink-muted">
+              <span class="font-medium">Timezone</span>
+              <select
+                aria-label="Timezone"
+                value={timezone()}
+                onChange={(event) => setTimezone(event.currentTarget.value)}
+                class="min-w-0 flex-1 rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+              >
+                <Show
+                  when={!TIMEZONE_OPTIONS.some((o) => o.value === timezone())}
+                >
+                  <option value={timezone()}>
+                    {timezone().replace(/_/g, ' ')}
+                  </option>
+                </Show>
+                <For each={TIMEZONE_OPTIONS}>
+                  {(option) => (
+                    <option value={option.value}>{option.label}</option>
+                  )}
+                </For>
+              </select>
+            </label>
+            <span class="truncate text-xs text-ink-muted">
+              {describeCron(repeatParts())} · {shortZone(timezone())}
+            </span>
+          </div>
         </Show>
 
         <div class="flex items-center gap-3 pt-2">
