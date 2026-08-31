@@ -7,6 +7,7 @@ FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
+    chromium-sandbox \
     xvfb \
     x11vnc \
     novnc \
@@ -17,5 +18,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY docker/headless-chrome/entrypoint.sh /entrypoint.sh
+
+# Non-root so Chromium's sandbox works and --no-sandbox (and its permanent
+# warning infobar) isn't needed. Debian's chromium ships the setuid sandbox
+# helper for kernels/seccomp setups where the namespace sandbox is blocked.
+RUN useradd --create-home --uid 1000 chrome \
+    && mkdir -p /data/chrome-profile \
+    && chown -R chrome:chrome /data \
+    # Non-root Xvfb can't create the X socket dir itself.
+    && mkdir -p /tmp/.X11-unix \
+    && chmod 1777 /tmp/.X11-unix
+USER chrome
 
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]

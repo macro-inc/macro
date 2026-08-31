@@ -13,6 +13,9 @@ WIDTH="${SCREEN_WIDTH:-1600}"
 HEIGHT="${SCREEN_HEIGHT:-1000}"
 export DISPLAY=:99
 
+# A container *restart* keeps /tmp; a stale lock makes Xvfb refuse to start.
+rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
+
 Xvfb :99 -screen 0 "${WIDTH}x${HEIGHT}x24" -nolisten tcp &
 for _ in $(seq 1 50); do
   [ -e /tmp/.X11-unix/X99 ] && break
@@ -32,7 +35,6 @@ websockify --web /usr/share/novnc 127.0.0.1:6080 127.0.0.1:5900 &
 # Not --headless: rendering to the Xvfb display is what makes the session
 # watchable. Agent-opened tabs all land in this one window.
 exec chromium \
-  --no-sandbox \
   --disable-dev-shm-usage \
   --no-first-run \
   --disable-session-crashed-bubble \

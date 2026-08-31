@@ -668,6 +668,12 @@ services:
     # PID 1's exec target and doesn't reap.
     init: true
     network_mode: host
+    # Chromium runs sandboxed as a non-root user (no --no-sandbox); the
+    # sandbox creates PID/network namespaces, which Docker's default seccomp
+    # profile blocks. Local-only tradeoff: unconfined seccomp in exchange for
+    # a real Chrome sandbox around untrusted page content.
+    security_opt:
+      - seccomp=unconfined
 
   # ============================================================================
   # jaeger (UI port 16686, OTLP 4317/4318) — profile: jaeger
