@@ -26,6 +26,7 @@ fn webhook_user(
         first_name: first_name.map(str::to_string),
         last_name: last_name.map(str::to_string),
         full_name: full_name.map(str::to_string),
+        data: None,
     }
 }
 
