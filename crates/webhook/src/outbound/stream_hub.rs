@@ -141,6 +141,8 @@ impl WebhookStreamSource for HubWebhookStreamSource {
                         "webhook event stream cursor fell behind retained history"
                     ));
                 }
+                // Convert this source's absolute sequence into an index relative
+                // to the oldest event still retained in the VecDeque.
                 if let Some(index) = self.next_sequence.checked_sub(first_sequence)
                     && let Ok(index) = usize::try_from(index)
                     && let Some(buffered) = replay.events.get(index)
