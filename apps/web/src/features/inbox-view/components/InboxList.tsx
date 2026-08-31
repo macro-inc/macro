@@ -10,6 +10,7 @@ import {
   SoupEntityActionDrawer,
   type SoupEntityDrawerActionGroup,
 } from '@app/features/soup';
+import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import type { SplitListController } from '@components/app/split-layout/context';
@@ -31,13 +32,18 @@ import {
   createMemo,
   createSignal,
   Match,
+  type Setter,
   Show,
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { soupNavigationTouchHighlight } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import type { InboxViewState } from '../create-inbox-view-state';
-import { createInboxListState } from '../persistence';
+import {
+  createInboxListEntryStorage,
+  DEFAULT_INBOX_LIST_STATE,
+  type InboxListStateSnapshot,
+} from '../persistence';
 import type { InboxDataSource } from '../queries/use-inbox-query';
 import { InboxEmptyState } from './InboxEmptyState';
 
@@ -55,7 +61,6 @@ type InboxListProps = {
 export function InboxList(props: InboxListProps) {
   const panel = useSplitPanelOrThrow();
   const list = props.list;
-  const listState = createInboxListState(panel.handle);
   const { buildActionGroups } = createSoupEntityActions();
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
@@ -64,10 +69,34 @@ export function InboxList(props: InboxListProps) {
   const [isPullRefreshing, setIsPullRefreshing] = createSignal(false);
   const [drawerRow, setDrawerRow] = createSignal<DrawerRow>();
 
-  list.focus.restore(listState.focusKey(), { reason: 'restore' });
+  let scrollOffset = DEFAULT_INBOX_LIST_STATE.scrollOffset;
+  const readListState = (): InboxListStateSnapshot => ({
+    focusKey: list.focus.requestedKey(),
+    scrollOffset: virtualizer()?.scrollOffset ?? scrollOffset,
+  });
+  const applyListState: Setter<InboxListStateSnapshot> = (next) => {
+    const current = readListState();
+    const value = typeof next === 'function' ? next(current) : next;
+
+    if (value.focusKey !== current.focusKey) {
+      list.focus.restore(value.focusKey, { reason: 'restore' });
+    }
+
+    scrollOffset = value.scrollOffset;
+    if (value.scrollOffset !== current.scrollOffset) {
+      virtualizer()?.scrollTo(value.scrollOffset);
+    }
+
+    return value;
+  };
+  const [, setPersistedListState] = makePersistedState(
+    [readListState, applyListState],
+    { storages: createInboxListEntryStorage(panel.handle) }
+  );
+
   createEffect(() => {
     const focusKey = list.focus.requestedKey();
-    if (focusKey !== listState.focusKey()) listState.setFocusKey(focusKey);
+    setPersistedListState((current) => ({ ...current, focusKey }));
   });
 
   const rows = props.source.items;
@@ -161,7 +190,7 @@ export function InboxList(props: InboxListProps) {
     setVirtualizer(handle);
     if (!handle || restoredScroll) return;
 
-    handle.scrollTo(listState.scrollOffset() ?? 0);
+    handle.scrollTo(scrollOffset);
     restoredScroll = true;
   }
 
@@ -194,8 +223,7 @@ export function InboxList(props: InboxListProps) {
     activeTab = nextTab;
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
-    listState.setScrollOffset(0);
-    virtualizer()?.scrollTo(0);
+    setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
   createEffect(() => {
@@ -220,7 +248,10 @@ export function InboxList(props: InboxListProps) {
     const handle = virtualizer();
     if (!handle) return;
 
-    listState.setScrollOffset(handle.scrollOffset);
+    setPersistedListState((current) => ({
+      ...current,
+      scrollOffset: handle.scrollOffset,
+    }));
     if (!props.source.hasMore()) return;
 
     const distance =

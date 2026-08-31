@@ -1,37 +1,54 @@
-import {
-  type MakePersistedStateOptions,
-  makePersistedState,
-  type PersistenceStorage,
+import type {
+  MakePersistedStateOptions,
+  PersistenceStorage,
 } from '@app/lib/persistence';
 import {
   createEntryPersistenceStorage,
   type EntryPersistenceHandle,
 } from '@components/app/split-layout/entry-persistence';
-import { createStore } from 'solid-js/store';
 import { z } from 'zod';
 import type { InboxViewSnapshot } from './create-inbox-view-state';
 
 export const INBOX_ENTRY_STATE_KEY = 'inbox.view';
 export const INBOX_LIST_ENTRY_STATE_KEY = 'inbox.listState';
 
-const inboxEntryStateSchema = z.object({
-  version: z.literal(1),
-  tab: z.enum(['signal', 'noise', 'all']),
+const inboxEntryStateSchemaWithDefaults = z.object({
+  version: z.literal(1).default(1),
+  tab: z.enum(['signal', 'noise', 'all']).default('signal'),
 });
 
-type InboxEntryState = z.infer<typeof inboxEntryStateSchema>;
+type InboxEntryState = z.infer<typeof inboxEntryStateSchemaWithDefaults>;
 
-const inboxListEntryStateSchema = z.object({
-  version: z.literal(1),
+const DEFAULT_INBOX_ENTRY_STATE: InboxEntryState =
+  inboxEntryStateSchemaWithDefaults.parse({});
+const inboxEntryStateSchema = inboxEntryStateSchemaWithDefaults.catch(
+  DEFAULT_INBOX_ENTRY_STATE
+);
+
+const inboxListEntryStateSchemaWithDefaults = z.object({
+  version: z.literal(1).default(1),
   focusKey: z.string().optional(),
-  scrollOffset: z.number().finite().optional(),
+  scrollOffset: z.number().finite().default(0),
 });
 
-type InboxListEntryState = z.infer<typeof inboxListEntryStateSchema>;
+type InboxListEntryState = z.infer<
+  typeof inboxListEntryStateSchemaWithDefaults
+>;
 
-type InboxListStateSnapshot = {
-  focusKey: string | undefined;
-  scrollOffset: number | undefined;
+const DEFAULT_INBOX_LIST_ENTRY_STATE: InboxListEntryState =
+  inboxListEntryStateSchemaWithDefaults.parse({});
+const inboxListEntryStateSchema = inboxListEntryStateSchemaWithDefaults.catch(
+  DEFAULT_INBOX_LIST_ENTRY_STATE
+);
+
+export type InboxListStateSnapshot = {
+  focusKey: InboxListEntryState['focusKey'];
+  scrollOffset: InboxListEntryState['scrollOffset'];
+};
+
+export const DEFAULT_INBOX_LIST_STATE: InboxListStateSnapshot = {
+  focusKey: DEFAULT_INBOX_LIST_ENTRY_STATE.focusKey,
+  scrollOffset: DEFAULT_INBOX_LIST_ENTRY_STATE.scrollOffset,
 };
 
 function selectEntryState(state: InboxViewSnapshot): InboxEntryState {
@@ -51,10 +68,7 @@ function createInboxEntryStorage(options: {
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
-      const parsed = inboxEntryStateSchema.safeParse(stored);
-      if (!parsed.success) return undefined;
-
-      const restored = parsed.data;
+      const restored = inboxEntryStateSchema.parse(stored);
       return {
         ...current,
         tab: restored.tab,
@@ -69,51 +83,28 @@ export type CreateInboxViewPersistenceOptions = {
   restoreEntryState?: boolean;
 };
 
-function createInboxListEntryStorage(
+export function createInboxListEntryStorage(
   handle: EntryPersistenceHandle
 ): PersistenceStorage<InboxListStateSnapshot> {
   return createEntryPersistenceStorage({
     handle,
     key: INBOX_LIST_ENTRY_STATE_KEY,
     restore: (current, stored) => {
-      const parsed = inboxListEntryStateSchema.safeParse(stored);
-      if (!parsed.success) return undefined;
+      const restored = inboxListEntryStateSchema.parse(stored);
+
       return {
         ...current,
-        focusKey: parsed.data.focusKey,
-        scrollOffset: parsed.data.scrollOffset,
+        focusKey: restored.focusKey,
+        scrollOffset: restored.scrollOffset,
       };
     },
     select: (state): InboxListEntryState => ({
       version: 1,
       ...(state.focusKey === undefined ? {} : { focusKey: state.focusKey }),
-      ...(state.scrollOffset === undefined
-        ? {}
-        : { scrollOffset: state.scrollOffset }),
+      scrollOffset: state.scrollOffset,
     }),
   });
 }
-
-export function createInboxListState(handle: EntryPersistenceHandle) {
-  const [state, setState] = makePersistedState(
-    createStore<InboxListStateSnapshot>({
-      focusKey: undefined,
-      scrollOffset: undefined,
-    }),
-    { storages: createInboxListEntryStorage(handle) }
-  );
-
-  return {
-    focusKey: () => state.focusKey,
-    setFocusKey: (focusKey: string | undefined) =>
-      setState('focusKey', focusKey),
-    scrollOffset: () => state.scrollOffset,
-    setScrollOffset: (scrollOffset: number | undefined) =>
-      setState('scrollOffset', scrollOffset),
-  };
-}
-
-export type InboxListState = ReturnType<typeof createInboxListState>;
 
 /** Persists Inbox navigation state with the owning split entry. */
 export function createInboxViewPersistence(
