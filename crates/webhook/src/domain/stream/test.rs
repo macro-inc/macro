@@ -262,30 +262,20 @@ fn service_with_workspaces(
 }
 
 #[test]
-fn filters_match_couples_events_and_ids_within_one_element() {
-    let filters = vec![
-        WebhookFilter {
-            events: vec!["document.updated".to_string()],
-            ids: Some(vec![DOCUMENT_ID.to_string()]),
-        },
-        WebhookFilter {
-            events: vec!["channel.message_posted".to_string()],
-            ids: None,
-        },
-    ];
+fn filter_accepts_its_events_and_optional_entity_ids() {
+    let document_filter = WebhookFilter {
+        events: vec!["document.updated".to_string()],
+        ids: Some(vec![DOCUMENT_ID.to_string()]),
+    };
+    let channel_filter = WebhookFilter {
+        events: vec!["channel.message_posted".to_string()],
+        ids: None,
+    };
 
-    assert!(filters_match(&filters, "document.updated", DOCUMENT_ID));
-    assert!(!filters_match(
-        &filters,
-        "document.updated",
-        OTHER_DOCUMENT_ID
-    ));
-    assert!(filters_match(
-        &filters,
-        "channel.message_posted",
-        "any-channel-id"
-    ));
-    assert!(!filters_match(&filters, "document.created", DOCUMENT_ID));
+    assert!(document_filter.accepts("document.updated", DOCUMENT_ID));
+    assert!(!document_filter.accepts("document.updated", OTHER_DOCUMENT_ID));
+    assert!(!document_filter.accepts("document.created", DOCUMENT_ID));
+    assert!(channel_filter.accepts("channel.message_posted", "any-channel-id"));
 }
 
 #[test]
@@ -400,55 +390,6 @@ async fn open_stream_caches_access_decisions_per_entity() {
 
     assert_eq!(delivered.len(), 3);
     assert_eq!(*call_count.lock().unwrap(), 1);
-}
-
-#[tokio::test]
-async fn open_stream_enforces_the_per_subscriber_cap() {
-    let service = service(
-        FakeSourceFactory::default(),
-        FakeAccessService::allowing(&[]),
-    );
-
-    let mut held = Vec::new();
-    for _ in 0..MAX_STREAMS_PER_USER {
-        held.push(
-            service
-                .open_stream(
-                    subscriber(),
-                    WebhookScope::Team,
-                    filter(&["document.updated"]),
-                    None,
-                )
-                .await
-                .expect("stream under the cap opens"),
-        );
-    }
-
-    let Err(error) = service
-        .open_stream(
-            subscriber(),
-            WebhookScope::Team,
-            filter(&["document.updated"]),
-            None,
-        )
-        .await
-    else {
-        panic!("stream over the cap must be rejected");
-    };
-    assert!(matches!(error, WebhookStreamError::TooManyStreams));
-
-    drop(held.pop());
-    drop(
-        service
-            .open_stream(
-                subscriber(),
-                WebhookScope::Team,
-                filter(&["document.updated"]),
-                None,
-            )
-            .await
-            .expect("released slot is reusable"),
-    );
 }
 
 #[tokio::test]

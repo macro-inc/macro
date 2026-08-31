@@ -27,7 +27,7 @@ use futures::stream::BoxStream;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -37,13 +37,6 @@ use uuid::Uuid;
 /// Replay re-runs the per-event access checks below, so this window bounds the
 /// database load a resume can cause.
 pub const MAX_REPLAY_WINDOW: Duration = Duration::from_secs(10 * 60);
-
-/// Maximum concurrent event streams per subscriber.
-///
-/// This bounds HTTP and authorization work. Reconnect overlap (a client
-/// reconnecting before its dead stream is reaped) must remain well below it for
-/// a reasonable workload.
-pub const MAX_STREAMS_PER_USER: usize = 10;
 
 /// How long one connection trusts a per-entity access decision.
 ///
@@ -116,9 +109,6 @@ pub enum WebhookStreamError {
     /// The request's filters or resume cursor are invalid.
     #[error("{0}")]
     BadRequest(String),
-    /// The subscriber already holds [`MAX_STREAMS_PER_USER`] streams.
-    #[error("too many concurrent event streams")]
-    TooManyStreams,
     /// Adapter or infrastructure failure.
     #[error("internal stream failure")]
     Internal(rootcause::Report),
@@ -175,21 +165,6 @@ pub trait WebhookEventStreamService: Clone + Send + Sync + 'static {
     + Send;
 }
 
-/// Return whether any filter element matches the event.
-///
-/// Mirrors the persisted-webhook matching semantics: the event name and the
-/// entity id must match within the same filter element, and an element without
-/// `ids` matches every entity id.
-pub fn filters_match(filters: &WebhookFilters, event_name: &str, entity_id: &str) -> bool {
-    filters.iter().any(|filter| {
-        filter.events.iter().any(|event| event == event_name)
-            && filter
-                .ids
-                .as_ref()
-                .is_none_or(|ids| ids.iter().any(|id| id == entity_id))
-    })
-}
-
 /// Resolve where a stream should start, rejecting cursors older than the
 /// replay window.
 fn stream_start(
@@ -235,55 +210,11 @@ fn stream_start(
     })
 }
 
-/// Concurrent stream count per subscriber, shared across a service's streams.
-#[derive(Clone, Default)]
-struct StreamSlots(Arc<Mutex<HashMap<String, usize>>>);
-
-impl StreamSlots {
-    /// Reserve one slot, failing when the subscriber is at the cap.
-    fn acquire(
-        &self,
-        subscriber: &MacroUserIdStr<'static>,
-    ) -> Result<StreamSlot, WebhookStreamError> {
-        let key = subscriber.to_string();
-        let mut counts = self.0.lock().expect("stream slot lock poisoned");
-        let count = counts.entry(key.clone()).or_insert(0);
-        if *count >= MAX_STREAMS_PER_USER {
-            return Err(WebhookStreamError::TooManyStreams);
-        }
-        *count += 1;
-        drop(counts);
-        Ok(StreamSlot {
-            slots: self.clone(),
-            key,
-        })
-    }
-}
-
-/// RAII reservation of one concurrent stream; dropping releases the slot.
-struct StreamSlot {
-    slots: StreamSlots,
-    key: String,
-}
-
-impl Drop for StreamSlot {
-    fn drop(&mut self) {
-        let mut counts = self.slots.0.lock().expect("stream slot lock poisoned");
-        if let Some(count) = counts.get_mut(&self.key) {
-            *count -= 1;
-            if *count == 0 {
-                counts.remove(&self.key);
-            }
-        }
-    }
-}
-
 /// Webhook event stream service implementation.
 pub struct WebhookEventStreamServiceImpl<F, A, R> {
     source_factory: F,
     entity_access_service: Arc<A>,
     workspace_resolver: R,
-    slots: StreamSlots,
 }
 
 impl<F: Clone, A, R: Clone> Clone for WebhookEventStreamServiceImpl<F, A, R> {
@@ -292,7 +223,6 @@ impl<F: Clone, A, R: Clone> Clone for WebhookEventStreamServiceImpl<F, A, R> {
             source_factory: self.source_factory.clone(),
             entity_access_service: self.entity_access_service.clone(),
             workspace_resolver: self.workspace_resolver.clone(),
-            slots: self.slots.clone(),
         }
     }
 }
@@ -304,7 +234,6 @@ impl<F, A, R> WebhookEventStreamServiceImpl<F, A, R> {
             source_factory,
             entity_access_service,
             workspace_resolver,
-            slots: StreamSlots::default(),
         }
     }
 }
@@ -317,7 +246,6 @@ struct StreamState<Src, A> {
     workspace_id: String,
     filters: WebhookFilters,
     access_cache: HashMap<String, (Instant, bool)>,
-    _slot: StreamSlot,
 }
 
 impl<Src, A> StreamState<Src, A>
@@ -378,11 +306,9 @@ where
                     return None;
                 }
             };
-            if !filters_match(
-                &self.filters,
-                &candidate.event.event_name,
-                &candidate.event.entity_id,
-            ) {
+            if !self.filters.iter().any(|filter| {
+                filter.accepts(&candidate.event.event_name, &candidate.event.entity_id)
+            }) {
                 continue;
             }
             match self.subscriber_in_audience(&candidate.audience).await {
@@ -425,7 +351,6 @@ where
         last_event_id: Option<Uuid>,
     ) -> Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError> {
         validate_filters(&filters)?;
-        let slot = self.slots.acquire(&subscriber)?;
         let start = stream_start(last_event_id, Utc::now().timestamp_millis())?;
 
         let workspace_id = match scope {
@@ -462,7 +387,6 @@ where
             workspace_id,
             filters,
             access_cache: HashMap::new(),
-            _slot: slot,
         };
         Ok(futures::stream::unfold(state, |mut state| async move {
             state.next_delivered().await.map(|event| (event, state))
