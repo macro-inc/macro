@@ -356,6 +356,9 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         args.env.env_file.as_deref(),
         state.frontend == "static",
         None,
+        // `update` doesn't know the original `--traces` choice; keep the
+        // running stack's wiring keyed on the port probe as before.
+        true,
     )?;
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;

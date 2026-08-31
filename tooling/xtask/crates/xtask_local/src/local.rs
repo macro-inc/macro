@@ -171,6 +171,7 @@ const LOCAL_BUILD_SERVICE_IMAGES: &[&str] = &[
     "analytics_proxy",
     "sdk-webhook-relay",
     "search",
+    "headless-chrome",
 ];
 
 /// Repository-built app containers safe to recreate during `stack update`.
@@ -621,6 +622,7 @@ fn prepare(
         args.env.env_file.as_deref(),
         static_frontend,
         egress_public_url,
+        args.traces.enabled(),
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
     sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;
@@ -852,8 +854,10 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
             // `up -d` returns once the container starts, not once it's accepting
             // connections; `env_layer::resolve` (which runs right after this, in
             // `prepare`) needs the OTLP port live NOW to decide whether to wire
-            // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of racing.
-            for _ in 0..50 {
+            // `OTEL_EXPORTER_OTLP_ENDPOINT`, so wait for it here instead of
+            // racing. 30s: the LGTM all-in-one is the heaviest collector and
+            // takes 10-20s on a cold volume.
+            for _ in 0..300 {
                 if summary::port_open(4318) {
                     return Ok(());
                 }
@@ -1005,20 +1009,34 @@ fn disconnect_tracing_network(instance: &Instance) {
     // label, not the container name: the global collector `macro-lgtm-1`
     // (project `macro`, service `lgtm`) is name-indistinguishable from a
     // container of an instance literally named `lgtm` (project `macro-lgtm`).
-    for name in attached.lines().map(str::trim).filter(|n| !n.is_empty()) {
-        let project = Command::new("docker")
-            .args([
-                "inspect",
-                name,
-                "--format",
-                r#"{{index .Config.Labels "com.docker.compose.project"}}"#,
-            ])
-            .output()
-            .ok()
-            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
-        if project.as_deref() != Some(instance.project_name()) {
+    // One `docker inspect` for all attached containers, not one per name.
+    let names: Vec<&str> = attached
+        .lines()
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .collect();
+    if names.is_empty() {
+        return;
+    }
+    let Some(labeled) = Command::new("docker")
+        .args(["inspect", "--format"])
+        .arg(r#"{{.Name}} {{index .Config.Labels "com.docker.compose.project"}}"#)
+        .args(&names)
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
+    else {
+        return;
+    };
+    for line in labeled.lines() {
+        // `{{.Name}}` carries a leading slash.
+        let Some((name, project)) = line.split_once(' ') else {
+            continue;
+        };
+        if project != instance.project_name() {
             let _ = Command::new("docker")
-                .args(["network", "disconnect", "-f", &network, name])
+                .args(["network", "disconnect", "-f", &network])
+                .arg(name.trim_start_matches('/'))
                 .output();
         }
     }

@@ -47,6 +47,7 @@ pub fn resolve(
     env_file: Option<&Path>,
     static_frontend: bool,
     egress_public_url: Option<&str>,
+    wire_otel: bool,
 ) -> Result<ResolvedEnv> {
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
     // integration/secret config services require. For local we then overlay the
@@ -75,13 +76,13 @@ pub fn resolve(
             env.insert(k, v);
         }
         // Local telemetry export: point services at the local OTLP collector
-        // (docker-network alias `otel-collector`) only when one answers on the
-        // OTLP HTTP port, so services don't spam export errors when none is
-        // running. All collectors bind 4318 — LGTM (compose profile `lgtm`,
-        // the `--traces` default), Jaeger (`jaeger`), and the Datadog agent
-        // (`datadog`) — so (re)start the stack after starting one to pick up
-        // tracing.
-        if super::summary::port_open(4318) {
+        // (docker-network alias `otel-collector`) only when the run asked for
+        // tracing AND one answers on the OTLP HTTP port (so services don't
+        // spam export errors when none is running). The `wire_otel` gate is
+        // what makes `--traces off` real: collectors are global and left
+        // running across invocations, so the port alone can't distinguish
+        // "wants tracing" from "a collector happens to be up".
+        if wire_otel && super::summary::port_open(4318) {
             env.insert(
                 "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
                 "http://otel-collector:4317".into(),

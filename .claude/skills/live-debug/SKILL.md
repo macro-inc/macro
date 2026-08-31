@@ -33,8 +33,8 @@ stack to pick it up.
 
 ## Query telemetry (prefer APIs over the Grafana UI)
 
-The `grafana` MCP server (`.mcp.json` / `opencode.json`, Docker `mcp/grafana`
-on the host network) is pointed at this Grafana. Prefer its tools:
+The `grafana` MCP server (`.mcp.json` / `opencode.json` / `.cursor/mcp.json`,
+Docker `mcp/grafana` on the host network) is pointed at this Grafana. Prefer its tools:
 
 - Logs: `query_loki_logs`, `list_loki_label_values`, `find_error_pattern_logs`
 - Traces: `tempo_traceql-search`, `tempo_get-trace`,
@@ -77,8 +77,8 @@ never silences traces.
 ## Drive the shared headless Chrome
 
 A headless Chrome runs in Docker with CDP on 9222. The `chrome-devtools` MCP
-server (`.mcp.json` / `opencode.json`) is already pointed at it — prefer its
-tools (navigate, snapshot, click, evaluate, console, network) for browser
+server (`.mcp.json` / `opencode.json` / `.cursor/mcp.json`) is already
+pointed at it — prefer its tools (navigate, snapshot, click, evaluate, console, network) for browser
 work. State (cookies, login) persists across agent sessions until the
 container restarts.
 

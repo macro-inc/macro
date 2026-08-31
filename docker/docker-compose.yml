@@ -606,7 +606,9 @@ services:
   lgtm:
     profiles:
       - lgtm
-    image: grafana/otel-lgtm:latest
+    # Pinned: docker/lgtm/tempo-config.yaml is a copy of this image's internal
+    # Tempo config plus one key — an unpinned bump could silently diverge.
+    image: grafana/otel-lgtm:0.32.0
     # The all-in-one occasionally loses a component on first boot (observed:
     # Pyroscope readiness flake) and exits; it's the default collector, so let
     # Docker bring it back rather than leaving telemetry dark.
@@ -662,6 +664,9 @@ services:
       dockerfile: docker/headless-chrome/Dockerfile
     image: macro-local-headless-chrome:dev
     restart: unless-stopped
+    # Reap orphans from the display stack (x11vnc/websockify) — Chromium is
+    # PID 1's exec target and doesn't reap.
+    init: true
     network_mode: host
 
   # ============================================================================

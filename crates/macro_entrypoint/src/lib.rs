@@ -136,14 +136,13 @@ impl MacroEntrypoint {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
                 let rust_log_filter = rust_log_env_filter();
                 // Local OTLP export is opt-in. xtask injects this only for
-                // trace-enabled local runs.
-                let tracer_provider = OtelExporterOtlpEndpoint::new()
-                    .map(|_| init_opentelemetry("local".to_string()));
-                // Ship tracing events to the collector as OTLP log records
-                // too (Loki, when the collector is the LGTM stack), so local
-                // logs are queryable next to the traces they belong to.
-                let logger_provider =
-                    OtelExporterOtlpEndpoint::new().map(|_| init_otel_logs("local".to_string()));
+                // trace-enabled local runs. Alongside spans, tracing events
+                // ship as OTLP log records (Loki, when the collector is the
+                // LGTM stack), so local logs are queryable next to the traces
+                // they belong to.
+                let export_otel = OtelExporterOtlpEndpoint::new().is_some();
+                let tracer_provider = export_otel.then(|| init_opentelemetry("local".to_string()));
+                let logger_provider = export_otel.then(|| init_otel_logs("local".to_string()));
 
                 if let Some(provider) = tracer_provider.as_ref() {
                     let otel_filter = otel_env_filter();
