@@ -158,7 +158,7 @@ export function EventTimeInput(props: EventTimeInputProps) {
       <Popover.Portal>
         <Layer depth={4}>
           <Popover.Content
-            class="z-action-menu max-h-64 min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu-glass p-1.5 glass-lg menu-open-animation"
+            class="z-action-menu flex max-h-64 min-w-[var(--kb-popper-anchor-width)] flex-col rounded-xl border border-edge bg-menu-glass p-1.5 glass-lg menu-open-animation"
             style={{
               'z-index': 'calc(var(--z-index-action-menu) + 1)',
             }}
@@ -180,20 +180,23 @@ export function EventTimeInput(props: EventTimeInputProps) {
             <Popover.Title class="sr-only">
               Choose {props.label.toLowerCase()}
             </Popover.Title>
-            <Listbox<EventTimeOption>
-              ref={(element) => {
-                listbox = element;
-              }}
-              options={EVENT_TIME_OPTIONS}
-              optionValue="value"
-              optionTextValue="label"
-              value={selectedTime()}
-              onChange={selectTime}
-              selectionMode="single"
-              disallowEmptySelection
-              shouldFocusWrap
-              renderItem={(item) => <TimeOptionItem {...item} />}
-            />
+            {/* Scroll on an inner box, not on the glass node — see Select. */}
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <Listbox<EventTimeOption>
+                ref={(element) => {
+                  listbox = element;
+                }}
+                options={EVENT_TIME_OPTIONS}
+                optionValue="value"
+                optionTextValue="label"
+                value={selectedTime()}
+                onChange={selectTime}
+                selectionMode="single"
+                disallowEmptySelection
+                shouldFocusWrap
+                renderItem={(item) => <TimeOptionItem {...item} />}
+              />
+            </div>
           </Popover.Content>
         </Layer>
       </Popover.Portal>

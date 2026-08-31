@@ -106,12 +106,18 @@ function SelectContent(props: SelectContentProps) {
         <Layer depth={local.depth ?? 3}>
           <KobalteSelect.Content
             class={cn(
-              'z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu-glass p-1.5 glass-lg menu-open-animation',
+              'z-action-menu flex max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] flex-col rounded-xl border border-edge bg-menu-glass p-1.5 glass-lg menu-open-animation',
               local.class
             )}
             {...rest}
           >
-            {local.children}
+            {/* The scroll lives on an inner box, never on the glass node: the
+                rim is an absolutely positioned ::after, and absolute children
+                of a scroll container are translated with the content, so a
+                scrolling glass node slides its own rim out of frame. */}
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {local.children}
+            </div>
           </KobalteSelect.Content>
         </Layer>
       </KobalteSelect.Portal>

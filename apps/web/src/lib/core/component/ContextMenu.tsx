@@ -302,7 +302,14 @@ function MobileConditionalOverlay(
 
 const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu-glass ${MENU_SURFACE_SCOPE} glass-lg rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
+/* The menu surface carries the glass, so the scroll has to live on an inner
+   box: the rim is an absolutely positioned ::after, and absolute children of
+   a scroll container are translated with the content, which would slide the
+   rim off a menu taller than its max height. */
+export const MENU_SCROLL_CLASS =
+  'flex min-h-0 w-full flex-col items-start overflow-y-auto';
+
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu-glass ${MENU_SURFACE_SCOPE} glass-lg rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
@@ -424,7 +431,9 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
               ref={contentRef}
               onCloseAutoFocus={props.onCloseAutoFocus}
             >
-              {props.children}
+              <div class={cn(!props.overrideStyling && MENU_SCROLL_CLASS)}>
+                {props.children}
+              </div>
             </ContextMenu.Content>
           </Layer>
         }
@@ -435,7 +444,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
               class={cn(MENU_CONTENT_CLASS, props.class)}
               ref={contentRef}
             >
-              {props.children}
+              <div class={MENU_SCROLL_CLASS}>{props.children}</div>
             </ContextMenu.SubContent>
           </Layer>
         </ContextMenu.Portal>
