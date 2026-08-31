@@ -107,6 +107,24 @@ pub struct WebSocketMetadata {
 
 pub type WsMetaMap = BTreeMap<String, WebSocketMetadata>;
 
+/// Attribution from currently-connected websocket metadata only.
+///
+/// Closed sockets must not contribute an `actor`: the isolate stays warm while
+/// anyone is connected, so a disconnected AI peer would otherwise keep
+/// attributing later human edits.
+fn actor_attribution_from_meta<'a>(
+    metas: impl IntoIterator<Item = &'a WebSocketMetadata>,
+) -> (Option<String>, Option<String>) {
+    metas
+        .into_iter()
+        .find_map(|meta| {
+            meta.actor
+                .clone()
+                .map(|actor| (Some(actor), meta.user_id.clone()))
+        })
+        .unwrap_or((None, None))
+}
+
 #[durable_object]
 pub struct DocumentSyncSession {
     state: State,
@@ -163,6 +181,44 @@ mod u64_serde_strings {
             assert_eq!(result.set, data);
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod actor_attribution_test {
+    use super::{AccessLevel, WebSocketMetadata, actor_attribution_from_meta};
+
+    fn meta(actor: Option<&str>, user_id: Option<&str>) -> WebSocketMetadata {
+        WebSocketMetadata {
+            user_id: user_id.map(str::to_string),
+            access_level: AccessLevel::Edit,
+            actor: actor.map(str::to_string),
+            peer_ids: Default::default(),
+        }
+    }
+
+    #[test]
+    fn ignores_sockets_without_an_actor() {
+        let human = meta(None, Some("macro|user@example.com"));
+        assert_eq!(actor_attribution_from_meta([&human]), (None, None));
+    }
+
+    #[test]
+    fn uses_the_connected_actor_and_its_user() {
+        let stale = meta(Some("bot|stale"), Some("macro|first@example.com"));
+        let human = meta(None, Some("macro|user@example.com"));
+        assert_eq!(
+            actor_attribution_from_meta([&human]),
+            (None, None),
+            "closed AI metadata must not be consulted"
+        );
+        assert_eq!(
+            actor_attribution_from_meta([&stale, &human]),
+            (
+                Some("bot|stale".to_string()),
+                Some("macro|first@example.com".to_string())
+            )
+        );
     }
 }
 
@@ -326,15 +382,26 @@ impl DocumentSyncSession {
     }
 
     fn actor_attribution(&self) -> (Option<String>, Option<String>) {
+        let connected: BTreeSet<String> = self
+            .state
+            .get_websockets()
+            .iter()
+            .filter_map(|ws| get_ws_id(&self.state, ws).ok())
+            .collect();
+        let map = self.ws_meta_map.lock("actor_attribution");
+        actor_attribution_from_meta(connected.iter().filter_map(|ws_id| map.get(ws_id)))
+    }
+
+    async fn forget_websocket_metadata(&self, ws: &WebSocket) {
+        let Ok(ws_id) = get_ws_id(&self.state, ws) else {
+            return;
+        };
         self.ws_meta_map
-            .lock("actor_attribution")
-            .values()
-            .find_map(|meta| {
-                meta.actor
-                    .clone()
-                    .map(|actor| (Some(actor), meta.user_id.clone()))
-            })
-            .unwrap_or((None, None))
+            .lock("DocumentSyncSession::forget_websocket_metadata")
+            .remove(&ws_id);
+        if let Err(err) = self.state.storage().delete(&ws_id).await {
+            warn!(error=?err, ws_id, "failed to delete websocket metadata");
+        }
     }
 
     pub fn push_blame_events(&self, events: Vec<crate::d1::BlameEvent>) {
@@ -1172,6 +1239,7 @@ impl DurableObject for DocumentSyncSession {
                     report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
                 });
             }
+            self.forget_websocket_metadata(&ws).await;
             Ok(())
         })
         .await
