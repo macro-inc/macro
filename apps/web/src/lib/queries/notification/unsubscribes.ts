@@ -56,6 +56,16 @@ function writeUnsubscribes(
   );
 }
 
+function rollbackUnsubscribes(previous: UserUnsubscribe[] | undefined) {
+  if (previous === undefined) {
+    queryClient.removeQueries({
+      queryKey: notificationKeys.unsubscribes.queryKey,
+    });
+    return;
+  }
+  queryClient.setQueryData(notificationKeys.unsubscribes.queryKey, previous);
+}
+
 export function useMuteItemMutation() {
   return useMutation(() => ({
     mutationFn: async (item: UserUnsubscribe) => {
@@ -74,12 +84,7 @@ export function useMuteItemMutation() {
       return { previous };
     },
     onError: (_error, _item, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(
-          notificationKeys.unsubscribes.queryKey,
-          context.previous
-        );
-      }
+      rollbackUnsubscribes(context?.previous);
     },
     onSettled: () => {
       void invalidateUnsubscribes();
@@ -107,12 +112,7 @@ export function useUnmuteItemMutation() {
       return { previous };
     },
     onError: (_error, _item, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(
-          notificationKeys.unsubscribes.queryKey,
-          context.previous
-        );
-      }
+      rollbackUnsubscribes(context?.previous);
     },
     onSettled: () => {
       void invalidateUnsubscribes();
