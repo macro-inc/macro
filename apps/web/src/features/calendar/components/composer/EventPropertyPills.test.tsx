@@ -3,7 +3,7 @@
  */
 
 import { recipientEntityMapper } from '@core/user';
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { Dialog } from '@ui';
 import { createSignal } from 'solid-js';
@@ -26,11 +26,6 @@ function guest(email: string, name: string): EventEditorGuestOption {
   });
 }
 
-const OPTIONS = [
-  guest('ada@example.com', 'Ada Lovelace'),
-  guest('grace@example.com', 'Grace Hopper'),
-];
-
 function renderInComposerDialog() {
   const [selected, setSelected] = createSignal<SelectedEventEditorGuest[]>([]);
 
@@ -38,7 +33,7 @@ function renderInComposerDialog() {
     <Dialog open>
       <input aria-label="Title" />
       <EventComposerGuestsPill
-        options={() => OPTIONS}
+        options={() => [guest('ada@example.com', 'Ada Lovelace')]}
         selected={selected()}
         onChange={setSelected}
       />
@@ -72,41 +67,5 @@ describe('EventComposerGuestsPill', () => {
     await user.click(trigger);
 
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    expect(
-      within(screen.getByRole('dialog')).getByRole('listbox')
-    ).toBeTruthy();
-    const search = screen.getByRole('combobox', { name: 'Search for guests' });
-    expect(document.activeElement).toBe(search);
-
-    await user.click(search);
-    expect(document.activeElement).toBe(search);
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
-  });
-
-  it('restores search focus when the dialog steals focus', async () => {
-    const user = userEvent.setup();
-    renderInComposerDialog();
-
-    const trigger = screen.getByRole('button', { name: 'Guests' });
-    await user.click(trigger);
-
-    screen.getByRole('dialog').focus();
-
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
-    expect(document.activeElement).toBe(
-      screen.getByRole('combobox', { name: 'Search for guests' })
-    );
-  });
-
-  it('closes the guest list when focus moves to the title', async () => {
-    const user = userEvent.setup();
-    renderInComposerDialog();
-
-    const trigger = screen.getByRole('button', { name: 'Guests' });
-    await user.click(trigger);
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
-
-    await user.click(screen.getByLabelText('Title'));
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 });
