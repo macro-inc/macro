@@ -658,6 +658,69 @@
 	min-height: 1.5rem;
 }
 
+/*
+ * Keep a fixed all-day slot in the scrollgrid so extra chips grow over the
+ * time grid instead of shrinking it and shifting the hour rows.
+ */
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	> td {
+	position: relative;
+	z-index: 4;
+	height: 3rem;
+	max-height: 3rem;
+	overflow: visible;
+	vertical-align: top;
+	border-bottom-width: 0;
+}
+
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-scroller-harness {
+	position: absolute;
+	top: 0;
+	right: 0;
+	left: 0;
+	z-index: 4;
+	height: auto;
+	min-height: 100%;
+	overflow: visible;
+}
+
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-daygrid-body,
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-daygrid-body
+	> table {
+	height: auto;
+}
+
+.calendar-view .fc .fc-timegrid .fc-daygrid-body {
+	border-bottom: var(--app-border-width) solid var(--fc-border-color);
+}
+
+.calendar-view .fc .fc-timegrid .fc-scrollgrid-section-liquid > td {
+	border-top-width: 0;
+}
+
 .calendar-view .fc .fc-timegrid-divider {
 	height: 0;
 	padding: 0;
