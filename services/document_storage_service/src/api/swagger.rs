@@ -135,6 +135,8 @@ use soup::inbound::axum_router::{
     PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
     SoupPage,
 };
+use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
+use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -310,6 +312,11 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
 
+        // user api keys
+        user_api_key::inbound::axum_router::create_user_api_key_handler,
+        user_api_key::inbound::axum_router::list_user_api_keys_handler,
+        user_api_key::inbound::axum_router::delete_user_api_key_handler,
+
         // reminders
         reminders::inbound::axum_router::list_reminders_handler,
         reminders::inbound::axum_router::create_reminder_handler,
@@ -456,6 +463,10 @@ use utoipa::OpenApi;
             ForeignEntity,
             Favorite,
             FavoritesList,
+            CreatedUserApiKey,
+            CreateUserApiKeyRequest,
+            UserApiKeyInfo,
+            UserApiKeysList,
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,

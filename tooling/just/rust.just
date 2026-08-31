@@ -86,6 +86,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/frecency/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/favorites/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/reminders/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/user_api_key/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/soup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/system_properties/.env

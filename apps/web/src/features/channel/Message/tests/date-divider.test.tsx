@@ -101,9 +101,14 @@ describe('NewDivider', () => {
 
     const label = screen.getByText('Today - New');
     expect(label.classList.contains('text-accent')).toBe(true);
+    expect(label.previousElementSibling?.classList.contains('h-px')).toBe(true);
     expect(
-      label.previousElementSibling?.classList.contains('border-accent/40')
+      label.previousElementSibling?.classList.contains('bg-accent/40')
     ).toBe(true);
+    expect(label.nextElementSibling?.classList.contains('h-px')).toBe(true);
+    expect(label.nextElementSibling?.classList.contains('bg-accent/40')).toBe(
+      true
+    );
     expect(screen.queryByText('Today')).toBeNull();
   });
 });

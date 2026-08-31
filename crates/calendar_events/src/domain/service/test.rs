@@ -100,6 +100,18 @@ impl CalendarRepository for FakeRepo {
         unreachable!("mutation lookups are not exercised by sync tests")
     }
 
+    async fn get_event_attendees(&self, _event_id: Uuid) -> Result<Vec<CalendarAttendee>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn get_occurrence_override_attendees(
+        &self,
+        _event_id: Uuid,
+        _recurrence_id: &str,
+    ) -> Result<Option<Vec<CalendarAttendee>>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
     async fn get_creation_target(
         &self,
         _requester_id: &str,

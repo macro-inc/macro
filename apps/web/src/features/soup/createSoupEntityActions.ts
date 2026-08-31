@@ -270,6 +270,7 @@ export function createSoupEntityActions(): {
           ...options,
           splitHandle,
           referredFrom: 'entity-actions-menu',
+          notificationSource,
         });
       };
 

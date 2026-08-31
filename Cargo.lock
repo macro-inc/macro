@@ -5168,6 +5168,7 @@ dependencies = [
  "tracing",
  "unicode-segmentation",
  "urlencoding",
+ "user_api_key",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -17060,6 +17061,31 @@ name = "urlencoding"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
+
+[[package]]
+name = "user_api_key"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "hex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-error-response",
+ "rand 0.9.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "user_link_cleanup_handler"

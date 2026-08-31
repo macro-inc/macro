@@ -1,11 +1,15 @@
 import type { UnifiedNotification } from '@notifications/types';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import type {
   GraphqlEntityType,
   NotificationEntityInput,
   NotificationUpdateOperation,
 } from '@service-storage/graphql/generated/graphql';
 import { updateNotificationsForEntities as updateGraphqlNotificationsForEntities } from '@service-storage/graphql-notifications';
-import { mapGraphqlNotification } from '@service-storage/graphql-soup';
+import {
+  graphqlCacheEnabled,
+  mapGraphqlNotification,
+} from '@service-storage/graphql-soup';
 
 type SimpleNotificationEntityType =
   | 'calendar_event'
@@ -122,5 +126,8 @@ export async function updateNotificationsForEntities(args: {
     entities: args.entities.map(toNotificationEntityInput),
     operation: args.operation,
   });
+  if (!graphqlCacheEnabled()) {
+    await refreshActiveGraphqlSoupQueries();
+  }
   return rows.map((row) => mapGraphqlNotification(row));
 }
