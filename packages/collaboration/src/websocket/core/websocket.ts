@@ -612,11 +612,6 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
         try {
           data = deserializeIfNeeded(event.data, this._options.serializer);
         } catch (error) {
-          // Without this log a deserialize failure dies inside the runtime's
-          // native event dispatch with no trace — on Cloudflare Workers it
-          // errors out the socket. Log it loudly first so an undecodable
-          // frame (e.g. a poisoned initial sync) is distinguishable from a
-          // frame that never arrived.
           console.error(
             `websocket: failed to deserialize incoming message (${describeFrameData(event.data)}) from ${redactUrl(this._url)}:`,
             error
