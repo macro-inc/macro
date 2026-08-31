@@ -589,12 +589,22 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       })
       .with({ type: WebsocketEvent.Message }, ({ event }) => {
         const data = deserializeIfNeeded(event.data, this._options.serializer);
-        const newEvent = new MessageEvent('message', {
-          data,
-          origin: event.origin,
-          lastEventId: event.lastEventId,
-          source: event.source,
-        });
+        // Copying origin/lastEventId/source can throw on runtimes with
+        // stricter Event internals (Cloudflare Workers): the accessors or the
+        // MessageEvent init validation reject non-browser shapes, and a throw
+        // here escapes into the native dispatch and errors out the socket.
+        // Consumers only read `data`, so fall back to a data-only event.
+        let newEvent: MessageEvent;
+        try {
+          newEvent = new MessageEvent('message', {
+            data,
+            origin: event.origin,
+            lastEventId: event.lastEventId,
+            source: event.source,
+          });
+        } catch {
+          newEvent = new MessageEvent('message', { data });
+        }
         this.dispatchEvent(WebsocketEvent.Message, newEvent);
       })
       .with(

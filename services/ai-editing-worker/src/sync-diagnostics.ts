@@ -18,7 +18,7 @@ import {
 import type { Attribute } from '@macro-inc/observability';
 
 const MAX_DECODED_KINDS = 10;
-const MAX_EVENTS = 12;
+const MAX_EVENTS = 24;
 const HEX_PREFIX_BYTES = 24;
 
 export type SyncSocketDiagnostics = {
@@ -116,6 +116,8 @@ export function createSyncSocketDiagnostics(
   let firstDecodeError: string | undefined;
   let firstFrameHex: string | undefined;
   let firstFrameProbe: string | undefined;
+  let listenerErrors = 0;
+  let firstListenerError: string | undefined;
   // Ordered event log with ms offsets from diagnostics creation, so "did the
   // error fire before or after the frame" is answerable from the span.
   const startedAt = Date.now();
@@ -142,10 +144,85 @@ export function createSyncSocketDiagnostics(
     };
   };
 
+  /**
+   * Route every listener registered on the native socket (the transport
+   * wrapper's included) through a guard that contains and records exceptions.
+   * On prod/dev the message dispatch dies between our first-registered
+   * listener and the wrapper's handler (`frame → error` in the same ms,
+   * `decoded=0`, no deserialize attempt): either a later listener throws on
+   * the runtime's stricter Event objects, or the runtime aborts multi-listener
+   * dispatch. The guard's per-listener start/ok/threw trail distinguishes
+   * those, and containment keeps a throwing listener from erroring the socket.
+   */
+  const instrumentListeners = (socket: {
+    addEventListener: (...args: never[]) => void;
+    removeEventListener: (...args: never[]) => void;
+  }) => {
+    type AnyListener = (event: unknown) => void;
+    const originalAdd = socket.addEventListener.bind(
+      socket
+    ) as unknown as (type: string, listener: AnyListener, options?: unknown) => void;
+    const originalRemove = socket.removeEventListener.bind(
+      socket
+    ) as unknown as (type: string, listener: AnyListener, options?: unknown) => void;
+    const guards = new WeakMap<object, AnyListener>();
+    let nextId = 0;
+
+    socket.addEventListener = ((
+      type: string,
+      listener: AnyListener,
+      options?: unknown
+    ) => {
+      const id = nextId++;
+      const guard: AnyListener = (event) => {
+        // Trail only the first frame's message dispatch to keep events short.
+        const trail = type === 'message' && rawFrames <= 1;
+        if (trail) logEvent(`l${id}.msg`);
+        try {
+          listener.call(socket, event as never);
+          if (trail) logEvent(`l${id}.ok`);
+        } catch (error) {
+          listenerErrors += 1;
+          const stackLine =
+            error instanceof Error && error.stack
+              ? (error.stack.split('\n')[1] ?? '').trim()
+              : '';
+          firstListenerError ??=
+            `${type} listener: ${errorText(error)}${stackLine ? ` @ ${stackLine}` : ''}`.slice(
+              0,
+              300
+            );
+          logEvent(`l${id}.threw(${type})`);
+          console.error(
+            `sync socket ${type} listener threw (contained):`,
+            error
+          );
+        }
+      };
+      guards.set(listener, guard);
+      originalAdd(type, guard, options);
+    }) as never;
+
+    socket.removeEventListener = ((
+      type: string,
+      listener: AnyListener,
+      options?: unknown
+    ) => {
+      originalRemove(type, guards.get(listener) ?? listener, options);
+    }) as never;
+  };
+
   const factory: WebSocketFactory = (url, protocols) => {
     const socket = create(url, protocols);
     connectAttempts += 1;
     logEvent('connect');
+    try {
+      instrumentListeners(
+        socket as unknown as Parameters<typeof instrumentListeners>[0]
+      );
+    } catch {
+      /* patching is best-effort; an unpatched socket still works */
+    }
     socket.addEventListener(
       'open',
       observe(() => {
@@ -233,6 +310,12 @@ export function createSyncSocketDiagnostics(
           attrs['sync.ws.first_decode_error'] = firstDecodeError;
         }
       }
+      if (listenerErrors > 0) {
+        attrs['sync.ws.listener_errors'] = listenerErrors;
+        if (firstListenerError !== undefined) {
+          attrs['sync.ws.first_listener_error'] = firstListenerError;
+        }
+      }
       if (decodedKinds.length > 0) {
         attrs['sync.ws.decoded_kinds'] = decodedKinds.join(',');
       }
@@ -263,6 +346,12 @@ export function createSyncSocketDiagnostics(
       }
       if (decodeFailures > 0) {
         parts.push(`decode_failures=${decodeFailures}`);
+      }
+      if (listenerErrors > 0) {
+        parts.push(`listener_errors=${listenerErrors}`);
+      }
+      if (firstListenerError !== undefined) {
+        parts.push(`listener_error=${firstListenerError}`);
       }
       if (lastClose) {
         parts.push(`close=${lastClose.code}`);
