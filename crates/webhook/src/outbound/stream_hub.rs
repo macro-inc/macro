@@ -13,14 +13,11 @@ use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 
 /// Hard event-count bound for the process-local replay log.
-const MAX_REPLAY_EVENTS: usize = 100_000;
-/// Approximate aggregate payload bound for the process-local replay log.
-const MAX_REPLAY_BYTES: usize = 128 * 1024 * 1024;
+const MAX_REPLAY_EVENTS: usize = 50_000;
 
 struct BufferedCandidate {
     sequence: u64,
     inserted_at: Instant,
-    approximate_bytes: usize,
     candidate: StreamCandidateEvent,
 }
 
@@ -28,7 +25,6 @@ struct ReplayBuffer {
     events: VecDeque<BufferedCandidate>,
     event_ids: HashSet<String>,
     next_sequence: u64,
-    approximate_bytes: usize,
     retention: Duration,
 }
 
@@ -38,7 +34,6 @@ impl ReplayBuffer {
             events: VecDeque::new(),
             event_ids: HashSet::new(),
             next_sequence: 0,
-            approximate_bytes: 0,
             retention,
         }
     }
@@ -48,14 +43,11 @@ impl ReplayBuffer {
             return false;
         }
 
-        let approximate_bytes = approximate_candidate_bytes(&candidate);
         let event_id = candidate.event.event_id.clone();
         self.event_ids.insert(event_id);
-        self.approximate_bytes = self.approximate_bytes.saturating_add(approximate_bytes);
         self.events.push_back(BufferedCandidate {
             sequence: self.next_sequence,
             inserted_at: now,
-            approximate_bytes,
             candidate,
         });
         self.next_sequence = self.next_sequence.wrapping_add(1);
@@ -67,13 +59,11 @@ impl ReplayBuffer {
         while self.events.front().is_some_and(|event| {
             now.saturating_duration_since(event.inserted_at) > self.retention
                 || self.events.len() > MAX_REPLAY_EVENTS
-                || self.approximate_bytes > MAX_REPLAY_BYTES
         }) {
-            let event = self.events.pop_front().expect("front event exists");
+            let Some(event) = self.events.pop_front() else {
+                break;
+            };
             self.event_ids.remove(&event.candidate.event.event_id);
-            self.approximate_bytes = self
-                .approximate_bytes
-                .saturating_sub(event.approximate_bytes);
         }
     }
 }
@@ -117,7 +107,7 @@ impl WebhookStreamCandidateSink for WebhookStreamHub {
             .inner
             .replay
             .lock()
-            .expect("webhook stream replay buffer lock poisoned")
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .push(candidate, Instant::now());
         if inserted {
             self.inner.changed.notify_waiters();
@@ -138,12 +128,9 @@ impl WebhookStreamSource for HubWebhookStreamSource {
             tokio::pin!(changed);
             changed.as_mut().enable();
             {
-                let mut replay = self
-                    .hub
-                    .inner
-                    .replay
-                    .lock()
-                    .expect("webhook stream replay buffer lock poisoned");
+                let mut replay = self.hub.inner.replay.lock().map_err(|_| {
+                    rootcause::report!("webhook stream replay buffer lock poisoned")
+                })?;
                 replay.prune(Instant::now());
                 let first_sequence = replay
                     .events
@@ -175,7 +162,7 @@ impl WebhookStreamSourceFactory for WebhookStreamHub {
             .inner
             .replay
             .lock()
-            .expect("webhook stream replay buffer lock poisoned");
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         replay.prune(Instant::now());
 
         let next_sequence = match start {
@@ -196,13 +183,4 @@ impl WebhookStreamSourceFactory for WebhookStreamHub {
             next_sequence,
         })
     }
-}
-
-fn approximate_candidate_bytes(candidate: &StreamCandidateEvent) -> usize {
-    candidate.event.event_id.len()
-        + candidate.event.event_name.len()
-        + candidate.event.entity_type.len()
-        + candidate.event.entity_id.len()
-        + candidate.event.ordering_key.len()
-        + serde_json::to_vec(&candidate.event.broker_envelope).map_or(0, |value| value.len())
 }
