@@ -1,4 +1,7 @@
+import { PillTabs } from '@components/app/mobile/PillTabs';
 import { TabsInset } from '@core/component/TabsInset';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Show } from 'solid-js';
 import type { InboxViewState } from '../create-inbox-view-state';
 import type { InboxTab } from '../types';
 
@@ -18,14 +21,28 @@ export function InboxTabs(props: { state: InboxViewState }) {
   };
 
   return (
-    <div class="mx-4 mt-3 h-9 shrink-0 touch:mx-0">
-      <TabsInset
-        aria-label="Inbox views"
-        list={INBOX_TABS}
-        value={props.state.tab()}
-        onChange={setTab}
-        fullWidth
-      />
-    </div>
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <div class="h-9 min-w-0 flex-1">
+          <TabsInset
+            aria-label="Inbox views"
+            list={INBOX_TABS}
+            value={props.state.tab()}
+            onChange={setTab}
+            fullWidth
+          />
+        </div>
+      }
+    >
+      <div class="h-10 min-w-0 flex-1">
+        <PillTabs
+          scrollable
+          items={INBOX_TABS}
+          value={props.state.tab()}
+          onChange={setTab}
+        />
+      </div>
+    </Show>
   );
 }

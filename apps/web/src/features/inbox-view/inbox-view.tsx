@@ -164,9 +164,10 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
 
   return (
     <>
-      <ViewShell.Main>
-        <InboxHeader />
-        <InboxTabs state={props.state} />
+      <ViewShell.Main class="border-r border-edge">
+        <InboxHeader>
+          <InboxTabs state={props.state} />
+        </InboxHeader>
         <Suspense fallback={<InboxFallback />}>
           <InboxList
             state={props.state}
@@ -220,7 +221,7 @@ export function InboxView(props: InboxViewProps) {
             <ViewShell.Root
               resizable
               aside={false}
-              main={{ width: 320, min: 224, max: 360 }}
+              main={{ width: 360, min: 224, max: 420 }}
               detail={{
                 width: 720,
                 initialWidth: 'auto',
