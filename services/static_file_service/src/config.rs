@@ -1,4 +1,5 @@
 use anyhow::Context;
+use database_env_vars::DatabaseUrl;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::env_vars;
@@ -27,6 +28,8 @@ pub struct Config {
     pub static_file_service_url: String,
     /// Internal API key
     pub internal_api_key: InternalApiKey,
+    /// MacroDB URL used to authorize `x-macro-user-api-key` credentials.
+    pub database_url: DatabaseUrl,
 }
 
 impl Config {

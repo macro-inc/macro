@@ -7,8 +7,11 @@
 //! and user API key authorization to be configured explicitly, just like
 //! internal authorization. Services backed by MacroDB should use
 //! `PgBotAuthorizer` and, when they accept user API keys,
-//! `PgUserApiKeyAuthorizer`. Services that intentionally reject those
-//! credentials must pass [`NoBotAuthorizer`] and [`NoUserApiKeyAuthorizer`].
+//! `PgUserApiKeyAuthorizer`. Services that intentionally reject bot
+//! credentials must pass [`NoBotAuthorizer`]. User API key authorization is
+//! wired with [`PgUserApiKeyAuthorizer`] in every service that constructs
+//! [`MacroAuthorizationServiceImpl`]; [`NoUserApiKeyAuthorizer`] is for tests
+//! and schema-only composition roots.
 //!
 //! # Choosing an Axum extractor
 //!

@@ -441,7 +441,10 @@ services:
     command: ["/app/out/image_proxy_service"]
     ports:
       - "8097:8080"
+    depends_on:
+      - postgres
     networks:
+      databases:
       services:
         aliases:
           - image-proxy-service

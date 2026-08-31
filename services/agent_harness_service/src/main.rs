@@ -77,6 +77,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
@@ -420,7 +421,7 @@ async fn run() -> anyhow::Result<()> {
             default_user_id: None,
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(pool.clone())),
-        macro_authorization::NoUserApiKeyAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(pool.clone())),
     );
     let read_state = AgentSessionRouterState::new(
         AgentSessionServiceImpl::new(
