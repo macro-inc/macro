@@ -2,9 +2,9 @@ import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isScopeInActiveBranch } from '@core/hotkey/utils';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import type { ListController } from './create-list-controller';
-import type { ListItemResult, ListKey, ListNavigationOptions } from './types';
+import type { ListItemResult, ListNavigationOptions } from './types';
 
 /** Minimal scrolling contract implemented by virtualized list handles. */
 export type ListScrollHandle = {
@@ -72,16 +72,6 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   options: UseListInteractionsOptions<TItem, TMetadata>
 ) {
   const list = options.controller;
-  const [selectionAnchor, setSelectionAnchor] = createSignal<
-    ListKey | undefined
-  >();
-  const [rangeSession, setRangeSession] = createSignal<
-    | {
-        baseline: ReadonlySet<ListKey>;
-        selected: boolean;
-      }
-    | undefined
-  >();
 
   const canHandle = (condition?: () => boolean) =>
     (options.enabled?.() ?? true) && (condition?.() ?? true);
@@ -94,8 +84,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
   };
 
   const finishNavigation = (result: ListItemResult<TItem>) => {
-    setSelectionAnchor(result.key);
-    setRangeSession(undefined);
+    list.selection.setAnchor(result.key);
     scrollFocusedIntoView();
   };
 
@@ -130,59 +119,6 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     return true;
   };
 
-  const beginRange = (selected: boolean) => {
-    const existing = rangeSession();
-    if (existing) return existing;
-    const session = {
-      baseline: new Set(list.selection.requestedKeys()),
-      selected,
-    };
-    setRangeSession(session);
-    return session;
-  };
-
-  const applyRange = (targetKey: ListKey, selected: boolean) => {
-    const anchor = selectionAnchor();
-    if (
-      anchor === undefined ||
-      !list.selection.isSelectable(anchor) ||
-      !list.selection.isSelectable(targetKey)
-    ) {
-      return false;
-    }
-
-    const session = beginRange(selected);
-    list.selection.selectRange(
-      anchor,
-      targetKey,
-      session.selected,
-      session.baseline
-    );
-    return true;
-  };
-
-  const setSelected = (
-    key: ListKey,
-    selected: boolean,
-    selectionOptions: { range?: boolean } = {}
-  ) => {
-    if (!list.selection.isSelectable(key)) return false;
-    if (selectionOptions.range && selectionAnchor() !== undefined) {
-      return applyRange(key, selected);
-    }
-
-    if (selected) list.selection.select(key);
-    else list.selection.deselect(key);
-    setSelectionAnchor(key);
-    setRangeSession(undefined);
-    return true;
-  };
-
-  const toggleSelected = (
-    key: ListKey,
-    selectionOptions: { range?: boolean } = {}
-  ) => setSelected(key, !list.selection.isSelected(key), selectionOptions);
-
   const selectionNavigationOptions = (): ListNavigationOptions<TItem> => {
     const configured = options.navigation?.extendSelection;
     return {
@@ -207,39 +143,27 @@ export function useListInteractions<TItem, TMetadata = unknown>(
         selectionNavigationOptions()
       );
       if (!firstSelectable) return false;
-      setSelectionAnchor(firstSelectable.key);
-      setRangeSession({
-        baseline: new Set(list.selection.requestedKeys()),
-        selected: true,
-      });
-      list.selection.select(firstSelectable.key);
+
+      list.selection.set(firstSelectable.key, true);
       scrollFocusedIntoView();
       return true;
     }
 
-    const anchor = selectionAnchor();
+    const anchor = list.selection.anchor();
     if (anchor === undefined || !list.selection.isSelectable(anchor)) {
-      setSelectionAnchor(currentKey);
+      list.selection.setAnchor(currentKey);
     }
-    beginRange(true);
 
     const result = list.navigate.by(offset, selectionNavigationOptions());
-    if (!result || !applyRange(result.key, true)) return false;
+    if (!result || !list.selection.extendRange(result.key, true)) return false;
+
     scrollFocusedIntoView();
     return true;
   };
 
-  const toggleAllVisible = () => {
-    list.selection.toggleAllVisible();
-    setSelectionAnchor(undefined);
-    setRangeSession(undefined);
-  };
+  const toggleAllVisible = () => list.selection.toggleAllVisible();
 
-  const clearSelection = () => {
-    list.selection.clear();
-    setSelectionAnchor(undefined);
-    setRangeSession(undefined);
-  };
+  const clearSelection = () => list.selection.clear();
 
   const group = createHotkeyGroup();
 
@@ -367,7 +291,7 @@ export function useListInteractions<TItem, TMetadata = unknown>(
     condition: canToggleSelection,
     keyDownHandler: () => {
       const key = list.focus.key();
-      return key === undefined ? false : toggleSelected(key);
+      return key === undefined ? false : list.selection.toggle(key);
     },
   }).withGroup(group);
 
@@ -409,16 +333,13 @@ export function useListInteractions<TItem, TMetadata = unknown>(
       scrollFocusedIntoView,
     },
     selection: {
-      anchor: selectionAnchor,
-      set: setSelected,
-      toggle: toggleSelected,
+      anchor: list.selection.anchor,
+      set: list.selection.set,
+      toggle: list.selection.toggle,
       extend: extendSelection,
       toggleAllVisible,
       clear: clearSelection,
-      clearAnchor: () => {
-        setSelectionAnchor(undefined);
-        setRangeSession(undefined);
-      },
+      clearAnchor: list.selection.clearAnchor,
     },
   };
 }

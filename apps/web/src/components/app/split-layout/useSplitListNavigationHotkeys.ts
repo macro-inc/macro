@@ -49,6 +49,7 @@ export function useSplitListNavigationHotkeys(
     });
 
     if (next?.item.kind === 'entity') {
+      list.controller.selection.setAnchor(next.key);
       options.openEntityInSplit(next.item.entity, {
         mergeHistory: true,
         referredFrom: list.viewId,

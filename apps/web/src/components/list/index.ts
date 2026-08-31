@@ -8,6 +8,7 @@ export {
   type CreateListSelectionOptions,
   createListController,
   type ListController,
+  type ListSelectionSetOptions,
 } from './create-list-controller';
 export {
   type CreateSelectionStateOptions,
