@@ -162,8 +162,16 @@ function CalendarSearchControl() {
     });
   };
 
+  const focusInput = () => {
+    inputRef?.focus();
+    inputRef?.select();
+  };
+
   // Cmd+F opens the search, matching the channel block's find-bar. Registered
   // only while this control is mounted, which the calendar-search flag gates.
+  // Once the popover is open its portal holds focus outside the split scope, so
+  // this split-scoped handler only fires to open it — the re-select-while-open
+  // case is handled by `handleContentKeyDown` on the portal content instead.
   const searchHotkey = registerHotkey({
     hotkey: 'cmd+f',
     scopeId: panel.splitHotkeyScope,
@@ -171,16 +179,22 @@ function CalendarSearchControl() {
     description: 'Search events',
     runWithInputFocused: true,
     keyDownHandler: () => {
-      if (open()) {
-        inputRef?.focus();
-        inputRef?.select();
-      } else {
-        setOpen(true);
-      }
+      if (open()) focusInput();
+      else setOpen(true);
       return true;
     },
   });
   onCleanup(searchHotkey.dispose);
+
+  // The portal content lives outside the split hotkey scope, so a second Cmd+F
+  // never reaches the split-scoped opener above — handle it here so it
+  // re-selects the query instead of falling through to the browser find dialog.
+  const handleContentKeyDown = (event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'f') {
+      event.preventDefault();
+      focusInput();
+    }
+  };
 
   return (
     <Popover
@@ -214,6 +228,7 @@ function CalendarSearchControl() {
               event.preventDefault();
               inputRef?.focus();
             }}
+            onKeyDown={handleContentKeyDown}
           >
             <div class="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
               <div class="flex items-center gap-2 px-3 py-2">
@@ -273,7 +288,7 @@ function CalendarSearchControl() {
                               'flex w-full items-center gap-2 rounded-lg p-1.5 px-2 text-left outline-none',
                               index() === activeIndex() && 'bg-ink/5'
                             )}
-                            onMouseEnter={() => setActiveRow(index())}
+                            onMouseMove={() => setActiveRow(index())}
                             onClick={() => openResult(event)}
                           >
                             <span class="flex size-4 shrink-0 items-center justify-center">
