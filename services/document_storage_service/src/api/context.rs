@@ -129,8 +129,7 @@ use webhook::{
     inbound::stream_router::WebhookStreamRouterState,
     outbound::{
         http_validator::ReqwestWebhookValidationClient,
-        kafka_stream_source::KafkaWebhookStreamSourceFactory,
-        pg_repository::PgRepository as PgWebhookRepo,
+        pg_repository::PgRepository as PgWebhookRepo, stream_hub::WebhookStreamHub,
     },
 };
 
@@ -510,11 +509,8 @@ pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
 /// Type alias for the service backing the webhook-event SSE endpoint.
-pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
-    KafkaWebhookStreamSourceFactory,
-    EntityAccessService,
-    PgWebhookRepo,
->;
+pub(crate) type DssSseStreamService =
+    WebhookEventStreamServiceImpl<WebhookStreamHub, EntityAccessService, PgWebhookRepo>;
 
 /// Type alias for the webhook-event SSE router state.
 pub(crate) type DssSseStreamState =

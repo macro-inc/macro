@@ -95,7 +95,7 @@ impl FakeSourceFactory {
 impl WebhookStreamSourceFactory for FakeSourceFactory {
     type Source = FakeSource;
 
-    async fn open(&self, start: StreamStart) -> Result<Self::Source, rootcause::Report> {
+    async fn open(&self, start: StreamStart) -> Result<Self::Source, WebhookStreamSourceOpenError> {
         self.opened_starts.lock().unwrap().push(start);
         Ok(FakeSource {
             candidates: std::mem::take(&mut *self.candidates.lock().unwrap()),
@@ -289,9 +289,12 @@ fn stream_start_resumes_at_recent_cursor_and_rejects_stale_cursors() {
     );
 
     let recent_ms = now_ms - 60_000;
+    let recent_id = uuid_v7_at_ms(recent_ms);
     assert_eq!(
-        stream_start(Some(uuid_v7_at_ms(recent_ms)), now_ms).expect("recent cursor is valid"),
-        StreamStart::AtTimestampMs(recent_ms)
+        stream_start(Some(recent_id), now_ms).expect("recent cursor is valid"),
+        StreamStart::AtEvent {
+            event_id: recent_id,
+        }
     );
 
     let stale_ms = now_ms - 2 * window_ms;
@@ -300,6 +303,11 @@ fn stream_start_resumes_at_recent_cursor_and_rejects_stale_cursors() {
     assert!(matches!(error, WebhookStreamError::BadRequest(_)));
 
     let error = stream_start(Some(Uuid::new_v4()), now_ms).expect_err("v4 cursor is rejected");
+    assert!(matches!(error, WebhookStreamError::BadRequest(_)));
+
+    let future =
+        uuid_v7_at_ms(now_ms + i64::try_from(MAX_CURSOR_CLOCK_SKEW.as_millis()).unwrap() + 1);
+    let error = stream_start(Some(future), now_ms).expect_err("future cursor is rejected");
     assert!(matches!(error, WebhookStreamError::BadRequest(_)));
 }
 
@@ -426,20 +434,22 @@ async fn open_stream_passes_the_start_through_and_rejects_stale_cursors() {
             .expect("stream opens"),
     );
     let recent_ms = Utc::now().timestamp_millis() - 60_000;
+    let recent_id = uuid_v7_at_ms(recent_ms);
     drop(
         service
-            .open_stream(
-                subscriber(),
-                filter(&["document.updated"]),
-                Some(uuid_v7_at_ms(recent_ms)),
-            )
+            .open_stream(subscriber(), filter(&["document.updated"]), Some(recent_id))
             .await
             .expect("stream opens"),
     );
 
     let starts = opened_starts.lock().unwrap().clone();
     assert_eq!(starts[0], StreamStart::Latest);
-    assert_eq!(starts[1], StreamStart::AtTimestampMs(recent_ms));
+    assert_eq!(
+        starts[1],
+        StreamStart::AtEvent {
+            event_id: recent_id,
+        }
+    );
 
     let stale_cursor = uuid_v7_at_ms(
         Utc::now().timestamp_millis()

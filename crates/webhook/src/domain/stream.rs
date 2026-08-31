@@ -7,13 +7,13 @@
 //! candidate event is checked against the caller's own entity access, and
 //! nothing is persisted.
 //!
-//! Delivery is at-least-once within [`MAX_REPLAY_WINDOW`]: every event carries
-//! its UUIDv7 broker event id, and a reconnecting client resumes by presenting
-//! the last id it saw. A cursor older than the window is rejected outright —
-//! the client must resync out of band and reconnect without a cursor — so a
-//! stale cursor can neither replay arbitrarily far back nor fake continuity.
-//! Events near the cursor may be re-delivered; clients must deduplicate by
-//! event id.
+//! Delivery is at-least-once from retained history: every event carries its
+//! UUIDv7 broker event id, and a reconnecting client resumes by presenting the
+//! last id it saw. Cursors older than [`MAX_REPLAY_WINDOW`] or evicted by the
+//! replay log's safety bounds require an out-of-band resync. A valid cursor
+//! conservatively replays the full retained window because Kafka partition
+//! ordering cannot establish one global position across replicas; clients must
+//! deduplicate by event id.
 
 #[cfg(test)]
 mod test;
@@ -41,9 +41,9 @@ pub const MAX_REPLAY_WINDOW: Duration = Duration::from_secs(10 * 60);
 
 /// Maximum concurrent event streams per subscriber.
 ///
-/// Purely a resource bound — every stream owns a broker consumer. Reconnect
-/// overlap (a client reconnecting before its dead stream is reaped) must never
-/// brush against this for a reasonable workload.
+/// This bounds HTTP and authorization work. Reconnect overlap (a client
+/// reconnecting before its dead stream is reaped) must remain well below it for
+/// a reasonable workload.
 pub const MAX_STREAMS_PER_USER: usize = 10;
 
 /// How long one connection trusts a per-entity access decision.
@@ -52,15 +52,21 @@ pub const MAX_STREAMS_PER_USER: usize = 10;
 /// which a subscriber can still see events for an entity whose access was just
 /// revoked.
 const ACCESS_CACHE_TTL: Duration = Duration::from_secs(30);
+/// Hard bound on per-connection entity authorization cache entries.
+const MAX_ACCESS_CACHE_ENTRIES: usize = 10_000;
+/// Producer clock skew tolerated when validating UUIDv7 resume cursors.
+const MAX_CURSOR_CLOCK_SKEW: Duration = Duration::from_secs(60);
 
 /// Where a newly opened stream source begins reading.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamStart {
     /// Only events published after the source opens.
     Latest,
-    /// The earliest retained event at or after this Unix-epoch millisecond
-    /// timestamp.
-    AtTimestampMs(i64),
+    /// Verify this broker event is retained, then replay retained history.
+    AtEvent {
+        /// UUIDv7 broker event id supplied by the subscriber.
+        event_id: Uuid,
+    },
 }
 
 /// Whose access decides who may see one candidate event.
@@ -89,6 +95,31 @@ pub struct StreamCandidateEvent {
     pub audience: StreamAudience,
 }
 
+/// Sink for candidates consumed once and multiplexed to local subscribers.
+pub trait WebhookStreamCandidateSink: Clone + Send + Sync + 'static {
+    /// Temporarily reject new stream opens while retained history is loading.
+    fn begin_loading(&self);
+
+    /// Allow new stream opens after retained history has caught up.
+    fn mark_ready(&self);
+
+    /// Publish one normalized candidate into the local stream source.
+    fn publish(&self, candidate: StreamCandidateEvent);
+}
+
+/// Failure to open a positioned stream source.
+#[derive(Debug, thiserror::Error)]
+pub enum WebhookStreamSourceOpenError {
+    /// The process-local source is loading or reconnecting.
+    #[error("webhook event stream source is unavailable")]
+    Unavailable,
+    /// The requested cursor predates the history retained by this process.
+    #[error(
+        "resume cursor does not identify a retained webhook event; resync and reconnect without Last-Event-ID"
+    )]
+    ReplayUnavailable,
+}
+
 /// Webhook event stream error.
 #[derive(Debug, thiserror::Error)]
 pub enum WebhookStreamError {
@@ -98,6 +129,9 @@ pub enum WebhookStreamError {
     /// The subscriber already holds [`MAX_STREAMS_PER_USER`] streams.
     #[error("too many concurrent event streams")]
     TooManyStreams,
+    /// The process-level event source is loading or reconnecting.
+    #[error("webhook event stream source is temporarily unavailable")]
+    Unavailable,
     /// Adapter or infrastructure failure.
     #[error("internal stream failure")]
     Internal(rootcause::Report),
@@ -129,7 +163,7 @@ pub trait WebhookStreamSourceFactory: Clone + Send + Sync + 'static {
     fn open(
         &self,
         start: StreamStart,
-    ) -> impl Future<Output = Result<Self::Source, rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<Self::Source, WebhookStreamSourceOpenError>> + Send;
 }
 
 /// Inbound port for opening filtered, access-checked event streams.
@@ -137,10 +171,10 @@ pub trait WebhookEventStreamService: Clone + Send + Sync + 'static {
     /// Open an event stream for `subscriber`.
     ///
     /// `last_event_id` is the UUIDv7 broker event id of the last event the
-    /// subscriber saw; when present, the stream resumes from that event's
-    /// timestamp. A cursor older than [`MAX_REPLAY_WINDOW`] is rejected as a
-    /// bad request rather than silently truncated. The stream ends on any
-    /// internal failure — subscribers reconnect and resume by id.
+    /// subscriber saw; when present, the source verifies that event is retained
+    /// and conservatively replays its retained history. An unavailable cursor
+    /// is rejected as a bad request rather than silently truncated. The stream
+    /// ends on any internal failure so subscribers reconnect and resume by id.
     fn open_stream(
         &self,
         subscriber: MacroUserIdStr<'static>,
@@ -177,6 +211,11 @@ fn stream_start(
     let timestamp = last_event_id.get_timestamp().ok_or_else(|| {
         WebhookStreamError::BadRequest("last event id must be a UUIDv7 broker event id".to_string())
     })?;
+    if last_event_id.get_version_num() != 7 {
+        return Err(WebhookStreamError::BadRequest(
+            "last event id must be a UUIDv7 broker event id".to_string(),
+        ));
+    }
     let (seconds, nanoseconds) = timestamp.to_unix();
     let event_ms = i64::try_from(seconds)
         .ok()
@@ -193,7 +232,16 @@ fn stream_start(
             MAX_REPLAY_WINDOW.as_secs()
         )));
     }
-    Ok(StreamStart::AtTimestampMs(event_ms))
+    let max_future_ms =
+        now_ms.saturating_add(i64::try_from(MAX_CURSOR_CLOCK_SKEW.as_millis()).unwrap_or(i64::MAX));
+    if event_ms > max_future_ms {
+        return Err(WebhookStreamError::BadRequest(
+            "last event id cannot be in the future".to_string(),
+        ));
+    }
+    Ok(StreamStart::AtEvent {
+        event_id: last_event_id,
+    })
 }
 
 /// Concurrent stream count per subscriber, shared across a service's streams.
@@ -271,20 +319,23 @@ impl<F, A, R> WebhookEventStreamServiceImpl<F, A, R> {
 }
 
 /// Owned per-stream state advanced by the unfold loop.
-struct StreamState<Src, A> {
+struct StreamState<Src, A, R> {
     source: Src,
     entity_access_service: Arc<A>,
+    workspace_resolver: R,
     subscriber: MacroUserIdStr<'static>,
     workspace_ids: Vec<String>,
+    workspace_ids_resolved_at: Instant,
     filters: WebhookFilters,
     access_cache: HashMap<String, (Instant, bool)>,
     _slot: StreamSlot,
 }
 
-impl<Src, A> StreamState<Src, A>
+impl<Src, A, R> StreamState<Src, A, R>
 where
     Src: WebhookStreamSource,
     A: EntityAccessService,
+    R: WebhookWorkspaceResolver,
 {
     /// Whether the subscriber may see an event with this audience.
     async fn subscriber_in_audience(
@@ -293,6 +344,17 @@ where
     ) -> Result<bool, rootcause::Report> {
         match audience {
             StreamAudience::Workspace { workspace_id } => {
+                if self.workspace_ids_resolved_at.elapsed() >= ACCESS_CACHE_TTL {
+                    self.workspace_ids = self
+                        .workspace_resolver
+                        .resolve_workspace_ids(vec![self.subscriber.clone()])
+                        .await
+                        .map_err(|error| {
+                            let error: anyhow::Error = error.into();
+                            rootcause::report!("failed to refresh subscriber workspaces: {error:?}")
+                        })?;
+                    self.workspace_ids_resolved_at = Instant::now();
+                }
                 Ok(self.workspace_ids.contains(workspace_id))
             }
             StreamAudience::Entity {
@@ -304,6 +366,13 @@ where
                     && decided_at.elapsed() < ACCESS_CACHE_TTL
                 {
                     return Ok(*allowed);
+                }
+                if self.access_cache.len() >= MAX_ACCESS_CACHE_ENTRIES {
+                    self.access_cache
+                        .retain(|_, (decided_at, _)| decided_at.elapsed() < ACCESS_CACHE_TTL);
+                    if self.access_cache.len() >= MAX_ACCESS_CACHE_ENTRIES {
+                        self.access_cache.clear();
+                    }
                 }
                 let allowed = self
                     .entity_access_service
@@ -392,13 +461,24 @@ where
                 ))
             })?;
 
-        let source = self.source_factory.open(start).await?;
+        let source = self
+            .source_factory
+            .open(start)
+            .await
+            .map_err(|error| match error {
+                WebhookStreamSourceOpenError::ReplayUnavailable => {
+                    WebhookStreamError::BadRequest(error.to_string())
+                }
+                WebhookStreamSourceOpenError::Unavailable => WebhookStreamError::Unavailable,
+            })?;
 
         let state = StreamState {
             source,
             entity_access_service: self.entity_access_service.clone(),
+            workspace_resolver: self.workspace_resolver.clone(),
             subscriber,
             workspace_ids,
+            workspace_ids_resolved_at: Instant::now(),
             filters,
             access_cache: HashMap::new(),
             _slot: slot,

@@ -753,8 +753,9 @@ async fn run() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let webhook_stream_hub = webhook::outbound::WebhookStreamHub::new();
     let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
-        webhook::outbound::KafkaWebhookStreamSourceFactory::new(config.kafka_brokers.as_ref()),
+        webhook_stream_hub.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
     );
@@ -762,6 +763,45 @@ async fn run() -> anyhow::Result<()> {
         sse_stream_service,
         authorization_state.clone(),
     );
+    consumer_tracker.spawn({
+        let brokers = config.kafka_brokers.as_ref().to_string();
+        let hub = webhook_stream_hub;
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                hub.begin_loading();
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = async {
+                        let consumer = webhook::inbound::kafka_stream_consumer::KafkaWebhookStreamConsumer::connect(
+                            brokers.clone(),
+                        )
+                        .await?;
+                        consumer.bootstrap(&hub).await?;
+                        hub.mark_ready();
+                        consumer.run(&hub).await
+                    } => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+                if let Err(error) = result {
+                    hub.mark_unavailable();
+                    tracing::error!(
+                        error = ?error,
+                        "webhook SSE Kafka consumer stopped"
+                    );
+                    tokio::select! {
+                        biased;
+                        _ = cancellation_token.cancelled() => break,
+                        _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                    }
+                }
+            }
+        }
+    });
 
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
