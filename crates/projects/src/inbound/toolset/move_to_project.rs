@@ -81,6 +81,10 @@ fn move_failed(code: EntityMutationErrorCode) -> ToolCallError {
 
 /// Mint the receipts a domain's move capability requires and dispatch to it,
 /// mirroring the DSS entity-mutation router.
+///
+/// Documents publish bot attribution from a Macro AI receipt. Chat `patch`,
+/// project lifecycle events, and email `thread_project_changed` still require
+/// an authenticated user, so those moves stay user-scoped.
 async fn move_with<S, ESvc>(
     service: &S,
     entity_access_service: &ESvc,
@@ -92,33 +96,56 @@ where
     S: MoveEntity,
     ESvc: EntityAccessService,
 {
-    let receipt = entity_access_service
-        .generate_bot_entity_access_receipt::<S::Receipt>(
-            bot_id::MACRO_AI_BOT_ID,
-            BotAccessScope::User {
-                user_id: user_id.clone(),
-                user_org_id: None,
-            },
-            &entity.entity_id,
-            entity.entity_type,
-        )
-        .await
-        .map_err(entity_access_failed)?;
+    let attribute_to_ai = entity.entity_type == EntityType::Document;
+    let receipt = if attribute_to_ai {
+        entity_access_service
+            .generate_bot_entity_access_receipt::<S::Receipt>(
+                bot_id::MACRO_AI_BOT_ID,
+                BotAccessScope::User {
+                    user_id: user_id.clone(),
+                    user_org_id: None,
+                },
+                &entity.entity_id,
+                entity.entity_type,
+            )
+            .await
+    } else {
+        entity_access_service
+            .generate_entity_access_receipt::<S::Receipt>(
+                user_id,
+                None,
+                &entity.entity_id,
+                entity.entity_type,
+            )
+            .await
+    }
+    .map_err(entity_access_failed)?;
 
     let request = match project_id {
         Some(project_id) => {
-            let project_receipt = entity_access_service
-                .generate_bot_entity_access_receipt::<EditAccessLevel>(
-                    bot_id::MACRO_AI_BOT_ID,
-                    BotAccessScope::User {
-                        user_id: user_id.clone(),
-                        user_org_id: None,
-                    },
-                    &project_id,
-                    EntityType::Project,
-                )
-                .await
-                .map_err(project_access_failed)?;
+            let project_receipt = if attribute_to_ai {
+                entity_access_service
+                    .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                        bot_id::MACRO_AI_BOT_ID,
+                        BotAccessScope::User {
+                            user_id: user_id.clone(),
+                            user_org_id: None,
+                        },
+                        &project_id,
+                        EntityType::Project,
+                    )
+                    .await
+            } else {
+                entity_access_service
+                    .generate_entity_access_receipt::<EditAccessLevel>(
+                        user_id,
+                        None,
+                        &project_id,
+                        EntityType::Project,
+                    )
+                    .await
+            }
+            .map_err(project_access_failed)?;
             MoveEntityRequest::MoveToProject {
                 entity,
                 receipt,
