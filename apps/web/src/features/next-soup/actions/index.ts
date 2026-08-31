@@ -15,9 +15,9 @@ export { makeHideCompanyAction } from './make-hide-company-action';
 export { makeMarkDoneAction } from './make-mark-done-action';
 export { makeMarkNotDoneAction } from './make-mark-not-done-action';
 export { makeMarkNotificationsReadAction } from './make-mark-notifications-read-action';
+export { makeMarkSenderFeedAction } from './make-mark-sender-feed-action';
 export { makeMarkSenderSignalAction } from './make-mark-sender-important-action';
 export { makeMarkSenderNoiseAction } from './make-mark-sender-noise-action';
-export { makeMarkSenderFeedAction } from './make-mark-sender-feed-action';
 export {
   makeMarkReadAction,
   makeMarkUnreadAction,

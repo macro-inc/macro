@@ -716,8 +716,7 @@ async function upsertSenderFilterWithToast(
   linkId?: string,
   surface?: 'signal' | 'feed' | 'noise'
 ) {
-  const label =
-    surface === 'feed' ? 'Feed' : isImportant ? 'Signal' : 'Noise';
+  const label = surface === 'feed' ? 'Feed' : isImportant ? 'Signal' : 'Noise';
 
   const result = await emailClient.upsertEmailFilter(
     {
@@ -779,7 +778,5 @@ export const markSenderNoiseWithToast = (
   linkId?: string
 ) => upsertSenderFilterWithToast(senderEmail, false, linkId);
 
-export const markSenderFeedWithToast = (
-  senderEmail: string,
-  linkId?: string
-) => upsertSenderFilterWithToast(senderEmail, false, linkId, 'feed');
+export const markSenderFeedWithToast = (senderEmail: string, linkId?: string) =>
+  upsertSenderFilterWithToast(senderEmail, false, linkId, 'feed');
