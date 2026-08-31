@@ -29,8 +29,7 @@ import type { TabItem } from '@core/component/Tabs';
 import { TabsInset } from '@core/component/TabsInset';
 import { TabsInsetDropdown } from '@core/component/TabsInsetDropdown';
 import {
-  ENABLE_EMAIL_FEED_FLAG,
-  ENABLE_EMAIL_FEED_OVERRIDE,
+  ENABLE_EMAIL_FEED,
   ENABLE_REMINDERS_FLAG,
   ENABLE_REMINDERS_OVERRIDE,
 } from '@core/constant/featureFlags';
@@ -60,16 +59,13 @@ export const useVisibleViewTabs = () => {
   const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
     enabledOverride: ENABLE_REMINDERS_OVERRIDE,
   });
-  const feedFlag = useFeatureFlag(ENABLE_EMAIL_FEED_FLAG, {
-    enabledOverride: ENABLE_EMAIL_FEED_OVERRIDE,
-  });
 
   return (view: TabbedListView): TabItem[] => {
     let tabs = VIEW_TAB_LISTS[view];
     if (view === 'inbox' && !remindersFlag().enabled) {
       tabs = tabs.filter((tab) => tab.value !== 'reminders');
     }
-    if (view === 'mail' && !feedFlag().enabled) {
+    if (view === 'mail' && !ENABLE_EMAIL_FEED()) {
       tabs = tabs.filter((tab) => tab.value !== 'feed');
     }
     return tabs;
