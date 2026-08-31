@@ -34,13 +34,18 @@ stack to pick it up.
 ## Query telemetry (prefer APIs over the Grafana UI)
 
 The `grafana` MCP server (`.mcp.json` / `opencode.json`, Docker `mcp/grafana`
-on the host network) is pointed at this Grafana. Prefer its tools for logs
-and metrics: `query_loki_logs`, `list_loki_label_values`,
-`find_error_pattern_logs`, `query_prometheus`, `search_dashboards`.
+on the host network) is pointed at this Grafana. Prefer its tools:
+
+- Logs: `query_loki_logs`, `list_loki_label_values`, `find_error_pattern_logs`
+- Traces: `tempo_traceql-search`, `tempo_get-trace`,
+  `tempo_get-attribute-values`, `tempo_docs-traceql` (proxied from Tempo's
+  own MCP server; every `tempo_*` call needs `datasourceUid: "tempo"`)
+- Metrics: `query_prometheus`; plus `search_dashboards`, `generate_deeplink`
+
 Datasource UIDs are stable: `loki`, `prometheus`, `tempo`, `pyroscope`.
 
-It has no Tempo query tool, so for traces use `curl` against the Tempo API
-(below). Two timing quirks: Loki/Tempo time params are unix epoch
+The raw HTTP APIs below are the fallback when the MCP is unavailable. Two
+timing quirks either way: Loki/Tempo time params are unix epoch
 **nanoseconds**, and Tempo's search index flushes every ~30s — a trace you
 just produced is fetchable by ID immediately but may not show in search yet.
 

@@ -626,6 +626,10 @@ services:
       # Keep telemetry across container restarts — traces/logs are the local
       # debugging record; losing them on a collector bounce defeats the point.
       - lgtm_data:/data
+      # The image's Tempo config plus `query_frontend.mcp_server.enabled` —
+      # Tempo's MCP server (TraceQL query tools), which mcp-grafana proxies
+      # to agents via its proxied-tools discovery.
+      - ./docker/lgtm/tempo-config.yaml:/otel-lgtm/tempo-config.yaml:ro
     networks:
       services:
         aliases:
