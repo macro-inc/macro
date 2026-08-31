@@ -32,7 +32,6 @@ struct ReplayBuffer {
     retention: Duration,
     generation: u64,
     healthy: bool,
-    accepting: bool,
 }
 
 impl ReplayBuffer {
@@ -45,22 +44,15 @@ impl ReplayBuffer {
             retention,
             generation: 0,
             healthy: false,
-            accepting: false,
         }
-    }
-
-    fn begin_loading(&mut self) {
-        self.accepting = false;
     }
 
     fn mark_ready(&mut self) {
         self.healthy = true;
-        self.accepting = true;
     }
 
     fn mark_unavailable(&mut self) {
         self.healthy = false;
-        self.accepting = false;
         self.generation = self.generation.wrapping_add(1);
     }
 
@@ -131,16 +123,7 @@ impl WebhookStreamHub {
         }
     }
 
-    /// Mark the hub as loading or reconnecting its process-level source.
-    pub fn begin_loading(&self) {
-        self.inner
-            .replay
-            .lock()
-            .expect("webhook stream replay buffer lock poisoned")
-            .begin_loading();
-    }
-
-    /// Make the loaded history and live source available to new streams.
+    /// Make the live source available to new streams.
     pub fn mark_ready(&self) {
         self.inner
             .replay
@@ -161,14 +144,6 @@ impl WebhookStreamHub {
 }
 
 impl WebhookStreamCandidateSink for WebhookStreamHub {
-    fn begin_loading(&self) {
-        WebhookStreamHub::begin_loading(self);
-    }
-
-    fn mark_ready(&self) {
-        WebhookStreamHub::mark_ready(self);
-    }
-
     fn publish(&self, candidate: StreamCandidateEvent) {
         let inserted = self
             .inner
@@ -240,7 +215,7 @@ impl WebhookStreamSourceFactory for WebhookStreamHub {
             .lock()
             .expect("webhook stream replay buffer lock poisoned");
         replay.prune(Instant::now());
-        if !replay.accepting {
+        if !replay.healthy {
             return Err(WebhookStreamSourceOpenError::Unavailable);
         }
 

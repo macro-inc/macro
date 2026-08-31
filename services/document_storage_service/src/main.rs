@@ -769,7 +769,6 @@ async fn run() -> anyhow::Result<()> {
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
-                hub.begin_loading();
                 let result = tokio::select! {
                     biased;
                     _ = cancellation_token.cancelled() => break,
@@ -778,7 +777,6 @@ async fn run() -> anyhow::Result<()> {
                             brokers.clone(),
                         )
                         .await?;
-                        consumer.bootstrap(&hub).await?;
                         hub.mark_ready();
                         consumer.run(&hub).await
                     } => result,
