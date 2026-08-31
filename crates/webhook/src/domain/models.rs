@@ -277,6 +277,17 @@ pub struct WebhookFilter {
     pub ids: Option<Vec<String>>,
 }
 
+impl WebhookFilter {
+    /// Return whether this filter accepts an event name and entity id.
+    pub fn accepts(&self, event_name: &str, entity_id: &str) -> bool {
+        self.events.iter().any(|event| event == event_name)
+            && self
+                .ids
+                .as_ref()
+                .is_none_or(|ids| ids.iter().any(|id| id == entity_id))
+    }
+}
+
 /// Collection of webhook filters used to decide delivery eligibility.
 pub type WebhookFilters = Vec<WebhookFilter>;
 
