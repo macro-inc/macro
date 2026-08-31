@@ -31,11 +31,7 @@ axum = { workspace = true, features = ["tower-log", "ws"] }
 chrono = { workspace = true }
 doppler-config = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
-database_env_vars = { path = "../../crates/database_env_vars" }
-macro_authorization = { path = "../../crates/macro_authorization", features = [
-  "postgres",
-] }
-sqlx = { workspace = true }
+macro_authorization = { path = "../../crates/macro_authorization" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_config = { path = "../../crates/macro_config" }
 macro_cors = { path = "../../crates/macro_cors" }

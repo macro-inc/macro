@@ -9,10 +9,9 @@ use config::Config;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+    MacroAuthorizationState,
 };
 use macro_entrypoint::MacroEntrypoint;
-use sqlx::postgres::PgPoolOptions;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -29,12 +28,6 @@ async fn main() -> anyhow::Result<()> {
     let jwt_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
-    let db = PgPoolOptions::new()
-        .min_connections(1)
-        .max_connections(5)
-        .connect(config.database_url.as_ref())
-        .await
-        .context("could not connect to db")?;
     let authorization_service = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_args),
         InternalAuthConfig {
@@ -42,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
-        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db)),
+        macro_authorization::NoUserApiKeyAuthorizer,
     );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
 

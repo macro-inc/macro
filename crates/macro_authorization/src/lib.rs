@@ -9,9 +9,10 @@
 //! `PgBotAuthorizer` and, when they accept user API keys,
 //! `PgUserApiKeyAuthorizer`. Services that intentionally reject bot
 //! credentials must pass [`NoBotAuthorizer`]. User API key authorization is
-//! wired with [`PgUserApiKeyAuthorizer`] in every service that constructs
-//! [`MacroAuthorizationServiceImpl`]; [`NoUserApiKeyAuthorizer`] is for tests
-//! and schema-only composition roots.
+//! wired with [`PgUserApiKeyAuthorizer`] in every service that already has a
+//! MacroDB pool. Services without MacroDB (`image_proxy_service`,
+//! `static_file_service`), tests, and schema-only composition roots keep
+//! [`NoUserApiKeyAuthorizer`].
 //!
 //! # Choosing an Axum extractor
 //!

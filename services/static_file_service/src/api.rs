@@ -12,11 +12,7 @@ use anyhow::Context;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{
-    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState,
-    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
-};
-use sqlx::postgres::PgPoolOptions;
+use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
 use std::sync::Arc;
 use tower_http::limit::RequestBodyLimitLayer;
 use utoipa::OpenApi;
@@ -50,12 +46,6 @@ pub async fn setup_and_serve(
         config.static_storage_bucket.as_ref().to_owned(),
     );
 
-    let db = PgPoolOptions::new()
-        .min_connections(1)
-        .max_connections(5)
-        .connect(config.database_url.as_ref())
-        .await
-        .context("could not connect to db")?;
     let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
         MacroAuthJwtValidator::new(jwt_validation_args),
         InternalAuthConfig {
@@ -63,7 +53,7 @@ pub async fn setup_and_serve(
             default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
         },
         macro_authorization::NoBotAuthorizer,
-        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db)),
+        macro_authorization::NoUserApiKeyAuthorizer,
     )));
 
     let state = AppState {
