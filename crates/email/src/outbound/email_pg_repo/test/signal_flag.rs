@@ -33,6 +33,7 @@ async fn filter_upsert_and_delete_resync_signal_flags(pool: Pool<Postgres>) -> a
                 email_address: Some("plain@example.com".to_string()),
                 email_domain: None,
                 is_important: false,
+                surface: None,
             },
         )
         .await?;
@@ -63,6 +64,7 @@ async fn domain_filter_upsert_promotes_category_thread(pool: Pool<Postgres>) -> 
             email_address: None,
             email_domain: Some("newsletter.com".to_string()),
             is_important: true,
+            surface: None,
         },
     )
     .await?;
@@ -198,6 +200,7 @@ async fn address_exception_beats_domain_mute_via_filter_mutations(
             email_address: None,
             email_domain: Some("example.com".to_string()),
             is_important: false,
+            surface: None,
         },
     )
     .await?;
@@ -210,6 +213,7 @@ async fn address_exception_beats_domain_mute_via_filter_mutations(
             email_address: Some("plain@example.com".to_string()),
             email_domain: None,
             is_important: true,
+            surface: None,
         },
     )
     .await?;
@@ -238,6 +242,7 @@ async fn deleting_domain_filter_keeps_address_exception(
                 email_address: None,
                 email_domain: Some("example.com".to_string()),
                 is_important: false,
+                surface: None,
             },
         )
         .await?;
@@ -247,6 +252,7 @@ async fn deleting_domain_filter_keeps_address_exception(
             email_address: Some("plain@example.com".to_string()),
             email_domain: None,
             is_important: true,
+            surface: None,
         },
     )
     .await?;

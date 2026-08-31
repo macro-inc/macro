@@ -20,7 +20,7 @@ pub use draft::{
     CreateDraftInput, CreatedDraft, ParsedAddresses, ResolvedDraftInput, SimpleMessageInfo,
     UpsertedContacts, UpsertedRecipient,
 };
-pub use email_filter::{EmailFilter, UpsertEmailFilterInput};
+pub use email_filter::{EmailFilter, EmailSurface, UpsertEmailFilterInput};
 pub use error::EmailErr;
 pub use label::{
     Label, LabelListVisibility, LabelType, LinkLabel, MessageLabel, MessageListVisibility,

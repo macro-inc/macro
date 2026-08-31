@@ -83,6 +83,7 @@ export type ScalarFieldFilters = {
   emailSeen?: boolean;
   emailDone?: boolean;
   emailImportance?: boolean;
+  emailFeed?: boolean;
   emailShared?: 'exclude' | 'include' | 'only';
   emailCalendarOnly?: boolean;
   channelSeen?: boolean;

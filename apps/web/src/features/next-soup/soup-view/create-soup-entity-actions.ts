@@ -5,6 +5,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { ENABLE_EMAIL_FEED } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -26,6 +27,7 @@ import {
   makeMarkNotDoneAction,
   makeMarkNotificationsReadAction,
   makeMarkReadAction,
+  makeMarkSenderFeedAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
   makeMarkUnreadAction,
@@ -49,6 +51,7 @@ const SIGNAL_TABS = new Set<string | undefined>([
   'important',
 ]);
 const NOISE_TABS = new Set(['noise']);
+const FEED_TABS = new Set(['feed']);
 
 type SoupEntityActionItem = {
   id: string;
@@ -141,6 +144,7 @@ export function createSoupEntityActions(): {
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
+  const markSenderFeedAction = makeMarkSenderFeedAction();
   const hideCompanyAction = makeHideCompanyAction({
     setHidden: (companyId, hidden) =>
       hiddenMutation.mutateAsync({ companyId, hidden }),
@@ -426,8 +430,10 @@ export function createSoupEntityActions(): {
     // Sender group: Sender → Signal, Sender → Noise, Block Sender
     const senderItems: SoupEntityActionItem[] = [];
 
+    const onFeed = FEED_TABS.has(activeTab ?? '');
+
     if (
-      NOISE_TABS.has(activeTab ?? '') &&
+      (NOISE_TABS.has(activeTab ?? '') || onFeed) &&
       canExecuteAll(markSenderSignalAction.canExecute)
     ) {
       senderItems.push({
@@ -438,13 +444,25 @@ export function createSoupEntityActions(): {
     }
 
     if (
-      SIGNAL_TABS.has(activeTab) &&
+      (SIGNAL_TABS.has(activeTab) || onFeed) &&
       canExecuteAll(markSenderNoiseAction.canExecute)
     ) {
       senderItems.push({
         id: 'sender-noise',
         label: 'Sender → Noise',
         onClick: handle(markSenderNoiseAction.executeWithSoup),
+      });
+    }
+
+    if (
+      ENABLE_EMAIL_FEED() &&
+      !onFeed &&
+      canExecuteAll(markSenderFeedAction.canExecute)
+    ) {
+      senderItems.push({
+        id: 'sender-feed',
+        label: 'Sender → Feed',
+        onClick: handle(markSenderFeedAction.executeWithSoup),
       });
     }
 

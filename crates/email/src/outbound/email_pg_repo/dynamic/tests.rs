@@ -320,6 +320,7 @@ fn test_importance_compiles_to_thread_signal_flag() {
     )
     .to_debug_sql();
     assert!(thread.contains("t.is_signal"));
+    assert!(thread.contains("NOT t.is_feed"));
     assert!(!thread.contains("NOT t.is_signal"));
 
     let thread = build_thread_email_filter(
@@ -328,6 +329,7 @@ fn test_importance_compiles_to_thread_signal_flag() {
     )
     .to_debug_sql();
     assert!(thread.contains("NOT t.is_signal"));
+    assert!(thread.contains("NOT t.is_feed"));
 }
 
 #[test]

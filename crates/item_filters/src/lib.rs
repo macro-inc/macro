@@ -229,9 +229,13 @@ pub struct EmailFilters {
 
     /// Filter by email importance. None to not filter. True to show only important emails
     /// (drafts, personal, sent, or uncategorized). False to show only unimportant emails
-    /// (those categorized as promotions, social, updates, or forums).
+    /// (those categorized as promotions, social, updates, or forums) that are not Feed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
+
+    /// When `Some(true)`, only include threads assigned to Feed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feed: Option<bool>,
 
     /// Filter by email notification state.
     #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
@@ -288,6 +292,7 @@ impl IsEmpty for EmailFilters {
             link_ids,
             project_ids,
             importance,
+            feed,
             notification_filters,
             include_labels,
             exclude_labels,
@@ -304,6 +309,7 @@ impl IsEmpty for EmailFilters {
             && link_ids.is_empty()
             && project_ids.is_empty()
             && importance.is_none()
+            && feed.is_none()
             && notification_filters.is_empty()
             && include_labels.is_empty()
             && exclude_labels.is_empty()

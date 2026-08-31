@@ -387,21 +387,11 @@ impl EmailRepo for EmailPgRepo {
         let mut tx = self.pool.begin().await?;
 
         let filter = if let Some(address) = &input.email_address {
-            email_filter::upsert_email_filter_by_address(
-                &mut tx,
-                link_id,
-                address,
-                input.is_important,
-            )
-            .await?
+            email_filter::upsert_email_filter_by_address(&mut tx, link_id, address, input.surface())
+                .await?
         } else if let Some(domain) = &input.email_domain {
-            email_filter::upsert_email_filter_by_domain(
-                &mut tx,
-                link_id,
-                domain,
-                input.is_important,
-            )
-            .await?
+            email_filter::upsert_email_filter_by_domain(&mut tx, link_id, domain, input.surface())
+                .await?
         } else {
             unreachable!(
                 "UpsertEmailFilterInput must have either email_address or email_domain; validated by service layer"

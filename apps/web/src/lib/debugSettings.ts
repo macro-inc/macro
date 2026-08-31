@@ -11,6 +11,7 @@ import { type Accessor, createSignal } from 'solid-js';
 
 export const DEBUG_SETTING_KEYS = {
   FORCE_EMPTY_STATES: 'force-empty-states',
+  ENABLE_EMAIL_FEED: 'enable-email-feed',
 } as const;
 
 export type DebugSettingKey =
@@ -29,6 +30,12 @@ export const DEBUG_SETTINGS: DebugSettingDef[] = [
     label: 'Force empty states',
     description:
       'Short-circuits sidebar nav views to their empty state regardless of content, for debugging empty states.',
+  },
+  {
+    key: DEBUG_SETTING_KEYS.ENABLE_EMAIL_FEED,
+    label: 'Email Feed',
+    description:
+      'Show the Mail Feed tab and Sender → Feed. Off by default. Persists on this device.',
   },
 ];
 

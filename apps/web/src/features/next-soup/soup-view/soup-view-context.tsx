@@ -49,6 +49,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
+  ENABLE_EMAIL_FEED,
   ENABLE_FEATURED_SEARCH_RESULTS,
   ENABLE_REMINDERS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
@@ -259,6 +260,9 @@ const resolveTabId = (
   // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
   // off would leave a hidden tab active, still querying reminders.
   if (view === 'inbox' && remembered === 'reminders' && !ENABLE_REMINDERS()) {
+    return config.default;
+  }
+  if (view === 'mail' && remembered === 'feed' && !ENABLE_EMAIL_FEED()) {
     return config.default;
   }
   return remembered;

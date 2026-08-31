@@ -55,8 +55,11 @@ pub enum EmailLiteral {
     ProjectId(String),
     /// Filters by email importance, evaluated against the denormalized
     /// `email_threads.is_signal` flag: true matches signal threads, false
-    /// matches noise threads.
+    /// matches noise threads that are not Feed.
     Importance(bool),
+    /// Filters by the denormalized `email_threads.is_feed` flag. True matches
+    /// Feed threads. False applies no constraint.
+    Feed(bool),
     /// This node value filters by notification done state for emails.
     NotificationDone(bool),
     /// This node value filters by notification seen state for emails.
@@ -93,6 +96,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             link_ids,
             project_ids,
             importance,
+            feed,
             notification_filters,
             include_labels: _,
             exclude_labels: _,
@@ -148,6 +152,9 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .expand(EmailLiteral::ProjectId, Expr::or);
 
         let importance_node = importance.map(|imp| Expr::Literal(EmailLiteral::Importance(imp)));
+        let feed_node = feed
+            .filter(|v| *v)
+            .map(|v| Expr::Literal(EmailLiteral::Feed(v)));
         let notification_done_node = notification_filters
             .done
             .map(|done| Expr::Literal(EmailLiteral::NotificationDone(done)));
@@ -172,6 +179,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             owner_nodes,
             project_id_nodes,
             importance_node,
+            feed_node,
             notification_done_node,
             notification_seen_node,
             shared_node,

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::EmailFilter;
+use crate::domain::models::{EmailFilter, EmailSurface};
 
 #[derive(sqlx::FromRow)]
 struct EmailFilterRow {
@@ -11,17 +11,23 @@ struct EmailFilterRow {
     email_address: Option<String>,
     email_domain: Option<String>,
     is_important: bool,
+    surface: String,
     created_at: DateTime<Utc>,
 }
 
 impl From<EmailFilterRow> for EmailFilter {
     fn from(row: EmailFilterRow) -> Self {
+        let surface = row
+            .surface
+            .parse()
+            .unwrap_or(EmailSurface::from_important(row.is_important));
         EmailFilter {
             id: row.id,
             link_id: row.link_id,
             email_address: row.email_address,
             email_domain: row.email_domain,
             is_important: row.is_important,
+            surface,
             created_at: row.created_at,
         }
     }
@@ -34,18 +40,21 @@ pub async fn upsert_email_filter_by_address(
     conn: &mut sqlx::PgConnection,
     link_id: Uuid,
     email_address: &str,
-    is_important: bool,
+    surface: EmailSurface,
 ) -> Result<EmailFilter, sqlx::Error> {
+    let is_important = surface.is_important();
+    let surface_str = surface.as_str();
     let row = sqlx::query_as!(
         EmailFilterRow,
-        r#"INSERT INTO email_filters (link_id, email_address, is_important)
-        VALUES ($1, $2, $3)
+        r#"INSERT INTO email_filters (link_id, email_address, is_important, surface)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (link_id, lower(email_address)) WHERE email_address IS NOT NULL
-        DO UPDATE SET is_important = EXCLUDED.is_important
-        RETURNING id, link_id, email_address, email_domain, is_important, created_at"#,
+        DO UPDATE SET is_important = EXCLUDED.is_important, surface = EXCLUDED.surface
+        RETURNING id, link_id, email_address, email_domain, is_important, surface, created_at"#,
         link_id,
         email_address,
         is_important,
+        surface_str,
     )
     .fetch_one(conn)
     .await?;
@@ -60,18 +69,21 @@ pub async fn upsert_email_filter_by_domain(
     conn: &mut sqlx::PgConnection,
     link_id: Uuid,
     email_domain: &str,
-    is_important: bool,
+    surface: EmailSurface,
 ) -> Result<EmailFilter, sqlx::Error> {
+    let is_important = surface.is_important();
+    let surface_str = surface.as_str();
     let row = sqlx::query_as!(
         EmailFilterRow,
-        r#"INSERT INTO email_filters (link_id, email_domain, is_important)
-        VALUES ($1, $2, $3)
+        r#"INSERT INTO email_filters (link_id, email_domain, is_important, surface)
+        VALUES ($1, $2, $3, $4)
         ON CONFLICT (link_id, lower(email_domain)) WHERE email_domain IS NOT NULL
-        DO UPDATE SET is_important = EXCLUDED.is_important
-        RETURNING id, link_id, email_address, email_domain, is_important, created_at"#,
+        DO UPDATE SET is_important = EXCLUDED.is_important, surface = EXCLUDED.surface
+        RETURNING id, link_id, email_address, email_domain, is_important, surface, created_at"#,
         link_id,
         email_domain,
         is_important,
+        surface_str,
     )
     .fetch_one(conn)
     .await?;
@@ -232,15 +244,57 @@ pub async fn resync_signal_flags_for_sender(
                               )
                           )
                       )
-                ) AS sig
+                ) AS sig,
+                EXISTS (
+                    SELECT 1
+                    FROM email_messages m
+                    WHERE m.thread_id = a.thread_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM email_message_labels ml
+                          JOIN email_labels l ON ml.label_id = l.id
+                          WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                      )
+                      AND (
+                          EXISTS (
+                              SELECT 1
+                              FROM email_contacts sender_c
+                              JOIN email_filters ef
+                                ON ef.link_id = m.link_id
+                               AND ef.email_address IS NOT NULL
+                               AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
+                              WHERE sender_c.id = m.from_contact_id
+                                AND ef.surface = 'feed'
+                          )
+                          OR EXISTS (
+                              SELECT 1
+                              FROM email_contacts sender_c
+                              JOIN email_filters ef
+                                ON ef.link_id = m.link_id
+                               AND ef.email_domain IS NOT NULL
+                               AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
+                              WHERE sender_c.id = m.from_contact_id
+                                AND ef.surface = 'feed'
+                                AND NOT EXISTS (
+                                    SELECT 1 FROM email_filters ef_addr
+                                    WHERE ef_addr.link_id = m.link_id
+                                      AND ef_addr.email_address IS NOT NULL
+                                      AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
+                                )
+                          )
+                      )
+                ) AS feed
             FROM affected a
         )
         UPDATE email_threads t
-        SET is_signal = calc.sig
+        SET is_signal = (calc.sig AND NOT calc.feed),
+            is_feed = calc.feed
         FROM calc
         WHERE t.id = calc.thread_id
           AND t.link_id = $1
-          AND t.is_signal IS DISTINCT FROM calc.sig
+          AND (
+              t.is_signal IS DISTINCT FROM (calc.sig AND NOT calc.feed)
+              OR t.is_feed IS DISTINCT FROM calc.feed
+          )
         "#,
         link_id,
         email_address,
@@ -260,7 +314,7 @@ pub async fn list_email_filters(
 ) -> Result<Vec<EmailFilter>, sqlx::Error> {
     let rows = sqlx::query_as!(
         EmailFilterRow,
-        r#"SELECT id, link_id, email_address, email_domain, is_important, created_at
+        r#"SELECT id, link_id, email_address, email_domain, is_important, surface, created_at
         FROM email_filters
         WHERE link_id = $1
         ORDER BY created_at DESC"#,

@@ -17,4 +17,6 @@ export interface UpsertEmailFilterRequest {
   email_domain?: UpsertEmailFilterRequestEmailDomain;
   /** Whether matching senders should be considered important. */
   is_important: boolean;
+  /** Surface to assign. When omitted, Signal if `is_important`, otherwise Noise. */
+  surface?: 'signal' | 'feed' | 'noise';
 }

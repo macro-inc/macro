@@ -152,10 +152,12 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
         match (&input.email_address, &input.email_domain) {
             (Some(addr), None) => {
                 let addr = Self::validate_sender_address(addr)?;
+                let surface = input.surface();
                 Ok(UpsertEmailFilterInput {
                     email_address: Some(addr),
                     email_domain: None,
-                    is_important: input.is_important,
+                    is_important: surface.is_important(),
+                    surface: Some(surface),
                 })
             }
             (None, Some(domain)) => {
@@ -176,10 +178,12 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
                         "Email domain is too long".to_string(),
                     ));
                 }
+                let surface = input.surface();
                 Ok(UpsertEmailFilterInput {
                     email_address: None,
                     email_domain: Some(domain),
-                    is_important: input.is_important,
+                    is_important: surface.is_important(),
+                    surface: Some(surface),
                 })
             }
             _ => Err(EmailErr::InvalidEmailFilter(
@@ -479,6 +483,7 @@ where
                         email_address: Some(addr),
                         email_domain: None,
                         is_important: matches!(policy, SenderPolicy::Signal),
+                        surface: None,
                     },
                 )
                 .await?;

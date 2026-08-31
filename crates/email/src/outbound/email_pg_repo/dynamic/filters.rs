@@ -36,6 +36,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
+            | EmailLiteral::Feed(_)
             | EmailLiteral::NotificationSeen(_)
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
@@ -58,6 +59,7 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
+            | EmailLiteral::Feed(_)
             | EmailLiteral::NotificationSeen(_)
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
@@ -211,6 +213,7 @@ pub(super) fn build_message_email_filter(
         }
 
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(EmailLiteral::Feed(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::NotificationDone(_)) => {
             SqlFragment::raw("TRUE")
         }
@@ -860,12 +863,16 @@ pub(super) fn build_thread_email_filter(
         // Denormalized importance flag maintained by update_thread_metadata
         // (sync_thread_signal_flag) and the email_filters resync fan-out.
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
-            SqlFragment::raw("t.is_signal")
+            SqlFragment::raw("(t.is_signal AND NOT t.is_feed)")
         }
 
         filter_ast::ExprFrame::Literal(EmailLiteral::Importance(false)) => {
-            SqlFragment::raw("(NOT t.is_signal)")
+            SqlFragment::raw("(NOT t.is_signal AND NOT t.is_feed)")
         }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::Feed(true)) => SqlFragment::raw("t.is_feed"),
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::Feed(false)) => SqlFragment::raw("TRUE"),
 
         filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(ref lit)) => {
             date_predicate("t.created_at", lit)

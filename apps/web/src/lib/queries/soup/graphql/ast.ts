@@ -314,6 +314,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { projectId: mapString(value, 'projectId') };
     case 'Importance':
       return { importance: mapBoolean(value, 'importance') };
+    case 'Feed':
+      return { feed: mapBoolean(value, 'feed') };
     case 'NotificationDone':
       return { notificationDone: mapBoolean(value, 'notificationDone') };
     case 'NotificationSeen':

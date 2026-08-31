@@ -428,32 +428,34 @@ export type GraphqlEmailFilterAst = {
 /** GraphQL input representing the email literal. */
 export type GraphqlEmailLiteral =
   {   /** The bcc option. */
-  bcc: GraphqlEmailValue; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
+  bcc: GraphqlEmailValue; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
   |  { bcc?: never;   /** The calendar only option. */
-  calendarOnly: boolean; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
+  calendarOnly: boolean; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
   |  { bcc?: never; calendarOnly?: never;   /** The cc option. */
-  cc: GraphqlEmailValue; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
+  cc: GraphqlEmailValue; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
   |  { bcc?: never; calendarOnly?: never; cc?: never;   /** The created at option. */
-  createdAt: GraphqlDateLiteral; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never;   /** The importance option. */
+  createdAt: GraphqlDateLiteral; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never;   /** The Feed surface option. */
+  feed: boolean; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never;   /** The importance option. */
   importance: boolean; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never;   /** The notification done option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never;   /** The notification done option. */
   notificationDone: boolean; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never;   /** The notification seen option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never;   /** The notification seen option. */
   notificationSeen: boolean; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never;   /** The owner option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never;   /** The owner option. */
   owner: string | number; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never;   /** The project id option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never;   /** The project id option. */
   projectId: string; recipient?: never; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never;   /** The recipient option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never;   /** The recipient option. */
   recipient: GraphqlEmailValue; sender?: never; shared?: never; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never;   /** The sender option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never;   /** The sender option. */
   sender: GraphqlEmailValue; shared?: never; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never;   /** The shared option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never;   /** The shared option. */
   shared: GraphqlSharedEmailFilter; threadId?: never; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never;   /** The thread id option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never;   /** The thread id option. */
   threadId: string | number; updatedAt?: never; }
-  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never;   /** The updated at option. */
+  |  { bcc?: never; calendarOnly?: never; cc?: never; createdAt?: never; feed?: never; importance?: never; notificationDone?: never; notificationSeen?: never; owner?: never; projectId?: never; recipient?: never; sender?: never; shared?: never; threadId?: never;   /** The updated at option. */
   updatedAt: GraphqlDateLiteral; };
 
 /** GraphQL input representing the email value. */

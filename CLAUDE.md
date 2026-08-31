@@ -336,3 +336,17 @@ After backend edits, run `bash .cursor/rebuild.sh`. That nix-builds the stack bi
 No seeding or OTP is needed to log in: passwordless login auto-creates a user for any email, and the stack's auth service is built with `return_passwordless_code`, so the login API returns the code in its response (codes are also visible in Mailpit at http://localhost:8025). `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures. The `agent_harness_service` restart loop is expected when AI provider keys are missing; with `DOPPLER_TOKEN` those keys come from `local`/`lcl_preview`.
 
 Leave `SQLX_OFFLINE` unset for `cargo test`. If SQLx reports missing cached query data, run `just prepare_db` instead of enabling offline mode. Run crate tests from the repository root with `cargo test -p <crate>`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as markdown under `temp/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default roles: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.

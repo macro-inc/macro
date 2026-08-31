@@ -1,4 +1,5 @@
 import { analytics } from '@app/lib/analytics';
+import { DEBUG_SETTING_KEYS, getDebugSetting } from '@app/lib/debugSettings';
 
 /**
  * This constant reflects whether the app is running locally with hot reload enabled
@@ -415,6 +416,15 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = resolveFeatureFlag(
   'ENABLE_CLIENT_EMAIL_SIGNAL_FILTER',
   false
 );
+
+export const ENABLE_EMAIL_FEED_FLAG = 'enable-email-feed';
+
+export function ENABLE_EMAIL_FEED(): boolean {
+  if (getDebugSetting(DEBUG_SETTING_KEYS.ENABLE_EMAIL_FEED)) {
+    return true;
+  }
+  return analytics.posthog.isFeatureEnabled(ENABLE_EMAIL_FEED_FLAG) ?? false;
+}
 
 export const ENABLE_APP_STORE_QR_CODE = resolveFeatureFlag(
   'ENABLE_APP_STORE_QR_CODE',
