@@ -9,7 +9,7 @@ import {
   getCachedItemPreview,
   isAccessiblePreviewItem,
 } from '@queries/preview';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * The description this reminder would get if it were being created now, for a
@@ -57,7 +57,10 @@ export const makeEditReminderAction = () => {
     });
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     // Opening the composer doesn't change the list, so selection and focus are
     // left where they are.
     execute(entities);

@@ -8,12 +8,17 @@ export {
   type CreateListSelectionOptions,
   createListController,
   type ListController,
+  type ListSelectionSetOptions,
 } from './create-list-controller';
 export {
   type CreateSelectionStateOptions,
   createSelectionState,
   type SelectionState,
 } from './create-selection-state';
+export {
+  createStaticListDataSource,
+  type ListDataSource,
+} from './list-data-source';
 export type {
   ListActivateOptions,
   ListActivation,
@@ -31,7 +36,9 @@ export type {
 export {
   type ListInteractionActivation,
   type ListInteractionActivationIntent,
+  type ListInteractionDisclosure,
   type ListInteractionNavigation,
+  type ListInteractionNavigationEvent,
   type ListScrollHandle,
   type UseListInteractionsOptions,
   useListInteractions,

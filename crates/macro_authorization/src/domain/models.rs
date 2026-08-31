@@ -138,6 +138,17 @@ pub struct ResolvedBotActingUser {
     pub organization_id: Option<i32>,
 }
 
+/// User identity facts resolved for a valid user API key.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResolvedApiKeyUser {
+    /// The user's parsed Macro identifier.
+    pub macro_user_id: MacroUserIdStr<'static>,
+    /// The user's FusionAuth identifier.
+    pub fusion_user_id: String,
+    /// The user's organization, when present.
+    pub organization_id: Option<i32>,
+}
+
 /// Unverified acting-user claims presented by a bot.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BotActingUserClaims {

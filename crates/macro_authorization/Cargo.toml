@@ -14,7 +14,7 @@ axum = [
 default = ["axum", "outbound"]
 local_auth = ["dep:macro_env_var"]
 outbound = ["dep:macro_auth"]
-postgres = ["dep:sqlx"]
+postgres = ["dep:sqlx", "dep:sha2"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
@@ -28,6 +28,7 @@ model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user" }
 rootcause = { workspace = true }
 serde = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

@@ -12,7 +12,7 @@ use bot_id::BotId;
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, ValidatedIdentity,
+    MacroAuthorizationServiceImpl, NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -98,6 +98,7 @@ async fn serve(directory: FactsDirectory) -> (Arc<RuntimeRegistry<GatewaySender>
             default_user_id: None,
         },
         SelfBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     );
     let app: Router = Router::new().nest(
         "/runtime",

@@ -1,17 +1,55 @@
 //! Outbound capabilities required by the harness domain.
 
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::{AgentSessionId, SandboxSize};
+use agent_session::domain::model::{AgentSessionId, ReplicaAddress, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use super::error::Result;
+use super::error::{HarnessError, Result};
 use super::model::{
-    PriorChannelMessage, ProvisionedEgress, SandboxEgress, SessionAnnouncement, SpawnContainer,
+    HarnessCommand, PriorChannelMessage, ProvisionedEgress, SandboxEgress, SessionAnnouncement,
+    SpawnContainer,
 };
 use super::sandbox::SandboxResizeEffect;
+
+/// Delivers a session's command to the replica that manages its live actor.
+///
+/// The receiving side executes without re-resolving management (a forward is
+/// single-hop by contract, so two replicas with momentarily different views
+/// cannot bounce a command between each other). Success means the peer ran
+/// the command to completion - the response is the acknowledgment - so a
+/// caller that awaited a forward has the same guarantee as one that executed
+/// locally.
+pub trait CommandForwarder: Send + Sync + 'static {
+    /// Run `command` for `session` on the replica at `target`.
+    fn forward(
+        &self,
+        target: &ReplicaAddress,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// A forwarder for deployments with exactly one replica, where a live peer
+/// cannot exist: being asked to forward is itself the error, loudly, rather
+/// than a silent local fallback that would mask a mis-wiring.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPeers;
+
+impl CommandForwarder for NoPeers {
+    async fn forward(
+        &self,
+        target: &ReplicaAddress,
+        session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> Result<()> {
+        Err(HarnessError::Forward(rootcause::report!(
+            "this deployment has no command forwarding, yet {target} manages session {session}"
+        )))
+    }
+}
 
 #[cfg(test)]
 mod test;

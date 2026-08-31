@@ -4,13 +4,20 @@ name = "agent_trigger"
 publish = false
 version = "0.1.0"
 
+[features]
+# Lexical / fast-model adapters. Off by default: `lexical_client` pulls
+# models_search → models_soup → notification → rdkafka, and the self-hosted
+# daemon only needs domain events from this crate. Services that construct
+# the adapters enable this; do not add it to coding_agent_worker.
+outbound = ["dep:agent", "dep:ai_usage", "dep:lexical_client"]
+
 [dependencies]
-agent = { path = "../agent" }
+agent = { path = "../agent", optional = true }
 agent_session = { path = "../agent_session" }
-ai_usage = { path = "../ai_usage" }
+ai_usage = { path = "../ai_usage", optional = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
-lexical_client = { path = "../lexical_client" }
+lexical_client = { path = "../lexical_client", optional = true }
 channels = { path = "../channels", features = ["ports"] }
 chrono = { workspace = true }
 # Only the domain vocabulary (`Event`, `MacroEvent`, `TopicEvent`). Asking for

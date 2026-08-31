@@ -39,7 +39,7 @@ import {
   type RequestPolicy,
   subscriptionExchange,
 } from '@urql/core';
-import { parse, print, visit } from 'graphql';
+import { type DocumentNode, parse, print, visit } from 'graphql';
 import {
   createClient as createGraphqlWsClient,
   type Client as GraphqlWsClient,
@@ -117,6 +117,48 @@ export function graphqlSoupProjectionSupported(): boolean {
   return soupProjectionServerSupported;
 }
 
+function stripGraphqlSoupClientDirectives(
+  document: DocumentNode
+): DocumentNode {
+  return visit(document, {
+    Directive(node) {
+      return node.name.value === 'cacheOnly' ? null : undefined;
+    },
+  });
+}
+
+/** Removes client-only directives from a document before network transport. */
+export function graphqlSoupTransportDocument(query: string): string {
+  return print(stripGraphqlSoupClientDirectives(parse(query)));
+}
+
+function graphqlSoupTransportRequest(
+  init: RequestInit | undefined
+): RequestInit | undefined {
+  if (typeof init?.body !== 'string') return init;
+  try {
+    const payload: unknown = JSON.parse(init.body);
+    if (
+      payload === null ||
+      typeof payload !== 'object' ||
+      !('query' in payload) ||
+      typeof payload.query !== 'string' ||
+      !payload.query.includes('@cacheOnly')
+    ) {
+      return init;
+    }
+    return {
+      ...init,
+      body: JSON.stringify({
+        ...payload,
+        query: graphqlSoupTransportDocument(payload.query),
+      }),
+    };
+  } catch {
+    return init;
+  }
+}
+
 /** Removes only the additive cache metadata field for a legacy-server retry. */
 export function legacySoupProjectionDocument(query: string): string {
   return print(
@@ -176,7 +218,9 @@ async function isLegacyProjectionValidationError(
           typeof error === 'object' &&
           'message' in error &&
           typeof error.message === 'string' &&
-          /Cannot query field ["']cacheProjection["']/.test(error.message)
+          /(?:Cannot query|Unknown) field ["']cacheProjection["']/.test(
+            error.message
+          )
       )
     );
   } catch {
@@ -188,8 +232,9 @@ export async function dssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  const response = await authorizedDssGraphqlFetch(input, init);
-  const legacyInit = legacyProjectionRequest(init);
+  const transportInit = graphqlSoupTransportRequest(init);
+  const response = await authorizedDssGraphqlFetch(input, transportInit);
+  const legacyInit = legacyProjectionRequest(transportInit);
   if (
     legacyInit === undefined ||
     !(await isLegacyProjectionValidationError(response))
@@ -237,7 +282,7 @@ function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
   return subscriptionExchange({
     forwardSubscription(payload, request) {
       const graphqlWsPayload = {
-        query: print(request.query),
+        query: print(stripGraphqlSoupClientDirectives(request.query)),
         operationName: payload.operationName,
         variables: payload.variables,
         extensions: payload.extensions,

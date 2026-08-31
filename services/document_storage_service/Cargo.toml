@@ -216,6 +216,10 @@ tower-http = { workspace = true, features = ["compression-gzip"] }
 tracing = { workspace = true }
 unicode-segmentation = { workspace = true }
 urlencoding = { workspace = true }
+user_api_key = { path = "../../crates/user_api_key", features = [
+  "inbound",
+  "postgres",
+] }
 utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }

@@ -72,6 +72,7 @@ members = [
   "crates/system_skills",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/user_api_key",
   "crates/webhook_signature",
   "crates/worker-rs-otel",
   "crates/workspace-hack",

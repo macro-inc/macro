@@ -10798,6 +10798,155 @@
         }
       }
     },
+    "/user-api-keys": {
+      "get": {
+        "tags": ["user-api-keys"],
+        "summary": "List the caller's API keys.",
+        "operationId": "list_user_api_keys",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserApiKeysList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["user-api-keys"],
+        "summary": "Mint a new API key for the caller.",
+        "operationId": "create_user_api_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserApiKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedUserApiKey"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user-api-keys/{id}": {
+      "delete": {
+        "tags": ["user-api-keys"],
+        "summary": "Delete one of the caller's API keys.",
+        "operationId": "delete_user_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Opaque key identifier.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/UserApiKeyId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "API key deleted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user_document_view_location/{document_id}": {
       "get": {
         "tags": [
@@ -16100,6 +16249,17 @@
           }
         ]
       },
+      "CreateUserApiKeyRequest": {
+        "type": "object",
+        "description": "Request body for minting a key.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "User-facing name for the key."
+          }
+        }
+      },
       "CreateViewRequest": {
         "type": "object",
         "required": ["name", "config"],
@@ -16225,6 +16385,30 @@
           "workspace_id": {
             "type": "string",
             "description": "Owning workspace id."
+          }
+        }
+      },
+      "CreatedUserApiKey": {
+        "type": "object",
+        "description": "A newly minted key: safe metadata plus the secret, shown only once.",
+        "required": ["id", "name", "createdAt", "key"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was created."
+          },
+          "id": {
+            "$ref": "#/components/schemas/UserApiKeyId",
+            "description": "Opaque identifier used to address the key after create."
+          },
+          "key": {
+            "type": "string",
+            "description": "The newly minted secret. Shown only on create."
+          },
+          "name": {
+            "type": "string",
+            "description": "User-facing name."
           }
         }
       },
@@ -24695,6 +24879,45 @@
         "properties": {
           "location": {
             "type": "string"
+          }
+        }
+      },
+      "UserApiKeyId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Opaque identifier for a stored user API key."
+      },
+      "UserApiKeyInfo": {
+        "type": "object",
+        "description": "Safe metadata for a stored key. Never contains the secret or its hash.",
+        "required": ["id", "name", "createdAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was created."
+          },
+          "id": {
+            "$ref": "#/components/schemas/UserApiKeyId",
+            "description": "Opaque identifier used to address the key after create."
+          },
+          "name": {
+            "type": "string",
+            "description": "User-facing name."
+          }
+        }
+      },
+      "UserApiKeysList": {
+        "type": "object",
+        "description": "The caller's API keys as id, name, and created_at.",
+        "required": ["keys"],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserApiKeyInfo"
+            },
+            "description": "The caller's keys. Never includes the raw secret or hash."
           }
         }
       },

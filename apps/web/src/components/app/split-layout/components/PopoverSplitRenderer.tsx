@@ -134,6 +134,14 @@ function PopoverSplitModal(props: {
     setTitleFileMenuTrigger,
     titleFileMenuActions,
     setTitleFileMenuActions,
+    list: () => undefined,
+    setList: (factory) => {
+      if (import.meta.env.DEV) {
+        console.warn('Popover splits do not register lists');
+      }
+
+      return factory();
+    },
     headerCollapser: { register: () => () => {} },
     toolbarCollapser: { register: () => () => {} },
   };

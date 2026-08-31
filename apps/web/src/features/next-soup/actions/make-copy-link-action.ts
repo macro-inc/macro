@@ -4,8 +4,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
-import type { SoupState } from '../create-soup-state';
 import { calendarEventLinkTarget } from '../utils';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Get the URL type/path segment for an entity
@@ -89,7 +89,10 @@ export const makeCopyLinkAction = () => {
     toast.success('Link copied to clipboard');
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
     // Don't clear selection or change focus for copy link
   };

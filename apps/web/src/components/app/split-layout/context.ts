@@ -1,4 +1,8 @@
+import type { ListController, ListDataSource } from '@app/components/list';
+import type { ListView } from '@app/constants/list-views';
+import type { SoupRow } from '@app/features/soup';
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import type { EntityData } from '@entity';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -61,6 +65,37 @@ export type SplitFileMenuActionSection = {
   actions: SplitFileMenuAction[];
 };
 
+export type SplitListRow = SoupRow<EntityData>;
+
+export type SplitListActivationMetadata = {
+  event?: MouseEvent;
+  newSplit?: boolean;
+};
+
+export type SplitListController = ListController<
+  SplitListRow,
+  SplitListActivationMetadata
+>;
+
+export type SplitListRegistration<
+  TDataSource extends
+    ListDataSource<SplitListRow> = ListDataSource<SplitListRow>,
+> = {
+  viewId: ListView;
+  dataSource: TDataSource;
+  controller: SplitListController;
+};
+
+export type SetSplitList = <TDataSource extends ListDataSource<SplitListRow>>(
+  factory: () => SplitListRegistration<TDataSource>
+) => SplitListRegistration<TDataSource>;
+
+export type SplitListBinding = {
+  viewId: ListView | undefined;
+  dataSource: ListDataSource<SplitListRow>;
+  controller: SplitListController;
+};
+
 export function getSplitFileMenuActionSections(
   groups: SplitFileMenuActionGroups
 ): SplitFileMenuActionSection[] {
@@ -98,6 +133,8 @@ export type SplitPanelContextType = {
   setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
   setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
+  list: Accessor<SplitListBinding | undefined>;
+  setList: SetSplitList;
   headerCollapser: PriorityCollapser;
   toolbarCollapser: PriorityCollapser;
 };

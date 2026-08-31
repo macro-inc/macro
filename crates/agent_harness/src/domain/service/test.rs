@@ -35,7 +35,9 @@ use crate::domain::model::{
     AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
     OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
 };
-use crate::domain::ports::{AgentPromptComposer, ChannelPromptContext, ContainerManager as _};
+use crate::domain::ports::{
+    AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
+};
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
@@ -210,6 +212,7 @@ fn harness_with_edges(
         prompt_context,
         prompt_composer,
         EgressProvisionerMock::new(),
+        NoPeers,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -1416,6 +1419,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
+        NoPeers,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -1800,4 +1804,158 @@ async fn set_sandbox_size_unsupported_does_not_persist() {
         SandboxSize::Default
     );
     assert_eq!(containers.resumed(), 0);
+}
+
+/// A [`CommandForwarder`] that records its calls and reports success.
+#[derive(Clone, Default)]
+struct RecordingForwarder {
+    calls: Arc<Mutex<Vec<(String, AgentSessionId)>>>,
+}
+
+impl crate::domain::ports::CommandForwarder for RecordingForwarder {
+    async fn forward(
+        &self,
+        target: &agent_session::domain::model::ReplicaAddress,
+        session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> crate::domain::error::Result<()> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((target.as_str().to_owned(), session));
+        Ok(())
+    }
+}
+
+/// A forwarder standing in for a peer that died mid-forward: the call fails,
+/// and by the time the caller re-reads the lease the peer's claim is gone.
+#[derive(Clone)]
+struct DyingPeerForwarder {
+    repo: InMemoryAgentSessionRepo,
+    claim: agent_session::domain::model::SessionClaim,
+}
+
+impl crate::domain::ports::CommandForwarder for DyingPeerForwarder {
+    async fn forward(
+        &self,
+        _target: &agent_session::domain::model::ReplicaAddress,
+        _session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> crate::domain::error::Result<()> {
+        use agent_session::domain::ports::SessionOwnership as _;
+        self.repo.release(&self.claim).await.expect("peer releases");
+        Err(HarnessError::Forward(rootcause::report!(
+            "the peer went away"
+        )))
+    }
+}
+
+/// Claim a session for a fabricated peer replica that publishes an address.
+async fn claim_as_peer(
+    repo: &InMemoryAgentSessionRepo,
+    session: AgentSessionId,
+    address: &str,
+) -> agent_session::domain::model::SessionClaim {
+    use agent_session::domain::model::{ClaimOutcome, ReplicaAddress, ReplicaId};
+    use agent_session::domain::ports::SessionOwnership as _;
+    let peer = ReplicaId::mint();
+    repo.heartbeat(peer, Some(&ReplicaAddress::new(address)))
+        .await
+        .expect("peer heartbeats");
+    match repo.claim(session, peer).await.expect("peer claims") {
+        ClaimOutcome::Claimed(claim) => claim,
+        ClaimOutcome::ManagedElsewhere(_) => panic!("nobody else should hold the test session"),
+    }
+}
+
+/// A command for a session a live peer manages goes to the peer's address
+/// and never executes here: the session outlives a Delete this replica would
+/// otherwise have applied.
+#[tokio::test]
+async fn commands_for_a_peer_managed_session_forward_to_its_address() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = agent_session::testing::test_agent_session(AgentSessionId::new());
+    let id = session.id;
+    repo.insert_session(session);
+    let _claim = claim_as_peer(&repo, id, "http://10.0.0.7:8100").await;
+    let forwarder = RecordingForwarder::default();
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        RuntimeRegistry::<ContainerSender>::new(),
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        forwarder.clone(),
+        SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    );
+
+    service
+        .execute(id, HarnessCommand::Delete)
+        .await
+        .expect("the forwarded command succeeds");
+
+    assert_eq!(
+        forwarder.calls.lock().unwrap().clone(),
+        vec![("http://10.0.0.7:8100".to_owned(), id)]
+    );
+    assert!(
+        repo.get(id).await.is_ok(),
+        "the delete ran on the peer, not here"
+    );
+}
+
+/// A forward that fails against a peer whose lease is gone by the re-read
+/// falls back to executing locally, so a peer crash costs one retry rather
+/// than the command.
+#[tokio::test]
+async fn a_dead_peers_command_falls_back_to_local_execution() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = agent_session::testing::test_agent_session(AgentSessionId::new());
+    let id = session.id;
+    repo.insert_session(session);
+    let claim = claim_as_peer(&repo, id, "http://10.0.0.7:8100").await;
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        RuntimeRegistry::<ContainerSender>::new(),
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        DyingPeerForwarder {
+            repo: repo.clone(),
+            claim,
+        },
+        SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    );
+
+    service
+        .execute(id, HarnessCommand::Delete)
+        .await
+        .expect("the fallback executes locally");
+
+    assert!(
+        repo.get(id).await.is_err(),
+        "the delete ran here once the peer was gone"
+    );
 }
