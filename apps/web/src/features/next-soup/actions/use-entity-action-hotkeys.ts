@@ -1,9 +1,6 @@
 import { isListViewID } from '@app/constants/list-views';
 import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
-import {
-  openEntityInSplitFromUnifiedList,
-  restoreSoupFocus,
-} from '@app/features/next-soup/utils';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { isShareableEntityType } from '@app/features/sharing/global-share-modal/GlobalShareModal';
@@ -16,8 +13,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { type EntityData, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
-import { onCleanup } from 'solid-js';
-import type { SoupState } from '../create-soup-state';
+import { type Accessor, onCleanup } from 'solid-js';
 import {
   makeAddTagAction,
   makeCopyAction,
@@ -38,21 +34,31 @@ import {
   makeShareAction,
   markReminderTargetDone,
 } from './index';
+import type { EntityActionListState } from './to-entity-action-list-state';
 
 type UseEntityActionHotkeysOptions = {
   scopeId: string;
-  soup: SoupState;
+  list: EntityActionListState;
+  selectedEntities: Accessor<EntityData[]>;
+  focusedEntity: Accessor<EntityData | undefined>;
+  restoreFocus: (entityId?: string) => void | Promise<void>;
   activeSoupViewTab?: () => string | undefined;
   splitHandle?: SplitHandle;
   condition?: () => boolean;
-  /** Fallback entity getter used when soup has no selection/focus (e.g., block views) */
-  getEntityFallback?: () => EntityData | undefined;
 };
 
 export const useEntityActionHotkeys = (
   options: UseEntityActionHotkeysOptions
 ) => {
-  const { scopeId, soup, splitHandle, condition, getEntityFallback } = options;
+  const {
+    scopeId,
+    list,
+    selectedEntities,
+    focusedEntity,
+    restoreFocus,
+    splitHandle,
+    condition,
+  } = options;
 
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
@@ -99,22 +105,11 @@ export const useEntityActionHotkeys = (
   const addTagAction = makeAddTagAction();
 
   const getEntitiesForAction = (): EntityData[] => {
-    if (
-      splitHandle?.content().type === 'component' &&
-      isListViewID(splitHandle?.content().id)
-    ) {
-      const selected = soup.selection.selected();
-      if (selected.length > 0) return selected;
-    }
+    const selected = selectedEntities();
+    if (selected.length > 0) return selected;
 
-    const focused = soup.focus.item();
+    const focused = focusedEntity();
     if (focused) return [focused];
-
-    // Fallback: use provided entity getter (e.g., for block views)
-    if (getEntityFallback) {
-      const entity = getEntityFallback();
-      if (entity) return [entity];
-    }
 
     return [];
   };
@@ -168,7 +163,7 @@ export const useEntityActionHotkeys = (
     const entities = getEntitiesForAction();
     if (entities.length > 0) {
       openPropertyEditor(entities, mode, property, {
-        restoreFocus: () => restoreSoupFocus(entities[0]?.id),
+        restoreFocus: () => restoreFocus(entities[0]?.id),
       });
     }
   };
@@ -183,7 +178,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(markDone.canExecute)) return false;
 
-      markDone.executeWithSoup(entities, soup, openNextEntity);
+      markDone.executeWithSoup(entities, list, openNextEntity);
       return true;
     },
     condition: () => {
@@ -208,7 +203,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(markNotDone.canExecute)) return false;
 
-      markNotDone.executeWithSoup(entities, soup);
+      markNotDone.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -242,7 +237,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(markUnread.canExecute)) return false;
 
-      markUnread.executeWithSoup(entities, soup);
+      markUnread.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -265,7 +260,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.some(markRead.canExecute)) return false;
 
-      markRead.executeWithSoup(entities, soup);
+      markRead.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -295,7 +290,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(deleteAction.canExecute)) return false;
 
-      deleteAction.executeWithSoup(entities, soup);
+      deleteAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -337,13 +332,13 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
 
       if (editsReminder()) {
-        editReminderAction.executeWithSoup(entities, soup);
+        editReminderAction.executeWithSoup(entities, list);
         return true;
       }
 
       if (!entities.every(renameAction.canExecute)) return false;
 
-      renameAction.executeWithSoup(entities, soup);
+      renameAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -373,7 +368,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(favoriteAction.canExecute)) return false;
 
-      favoriteAction.executeWithSoup(entities, soup);
+      favoriteAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -399,7 +394,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(copyAction.canExecute)) return false;
 
-      copyAction.executeWithSoup(entities, soup);
+      copyAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -425,7 +420,7 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(moveToProjectAction.canExecute)) return false;
 
-      moveToProjectAction.executeWithSoup(entities, soup);
+      moveToProjectAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -449,7 +444,7 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!copyLinkAction.canExecute(entities[0])) return false;
-      copyLinkAction.executeWithSoup(entities, soup);
+      copyLinkAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -471,7 +466,7 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!copyBranchNameAction.canExecute(entities[0])) return false;
-      copyBranchNameAction.executeWithSoup(entities, soup);
+      copyBranchNameAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -494,7 +489,7 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!copyEntityIdAction.canExecute(entities[0])) return false;
-      copyEntityIdAction.executeWithSoup(entities, soup);
+      copyEntityIdAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -521,7 +516,7 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       if (entities.length !== 1) return false;
       if (!createReminderAction.canExecute(entities[0])) return false;
-      createReminderAction.executeWithSoup(entities, soup, {
+      createReminderAction.executeWithSoup(entities, list, {
         advances: marksDoneOnThisView(),
       });
       return true;
@@ -547,7 +542,7 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       if (!shareAction.canExecute(entities[0])) return false;
-      shareAction.executeWithSoup(entities, soup);
+      shareAction.executeWithSoup(entities, list);
       return true;
     },
     condition: () => {
@@ -592,7 +587,7 @@ export const useEntityActionHotkeys = (
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
       addTagAction.execute(entities, {
-        restoreFocus: () => restoreSoupFocus(entities[0]?.id),
+        restoreFocus: () => restoreFocus(entities[0]?.id),
       });
       return true;
     },

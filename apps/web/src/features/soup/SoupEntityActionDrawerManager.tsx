@@ -1,26 +1,23 @@
-import { SoupEntityActionDrawer } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
-import type { EntityData } from '@entity';
 import { createEffect, createSignal, type JSX, onCleanup } from 'solid-js';
-import type { SoupState } from '../create-soup-state';
 import {
   createSoupEntityActions,
   viewedProjectIdFromContent,
-} from './create-soup-entity-actions';
+} from './createSoupEntityActions';
+import { SoupEntityActionDrawer } from './SoupEntityActionDrawer';
 import {
+  type EntityActionDrawerEntry,
   SoupEntityActionDrawerContextProvider,
   type SoupEntityActionDrawerState,
   useSoupEntityActionDrawer,
-} from './soup-entity-action-drawer-context';
-import { useSoupView } from './soup-view-context';
+} from './SoupEntityActionDrawerContext';
 
 function ConfiguredSoupEntityActionDrawer() {
   const panel = useSplitPanelOrThrow();
   const drawerState = useSoupEntityActionDrawer();
-  const { activeTab } = useSoupView();
   const { buildActionGroups } = createSoupEntityActions();
 
   if (!drawerState) {
@@ -29,13 +26,12 @@ function ConfiguredSoupEntityActionDrawer() {
   }
 
   const groups = () => {
-    const entity = drawerState.entity();
-    const soup = drawerState.soup();
-    if (!entity || !soup) return [];
+    const entry = drawerState.entry();
+    if (!entry) return [];
 
     const content = panel.handle.content();
-    return buildActionGroups(soup, [entity], {
-      activeTab: activeTab(),
+    return buildActionGroups(entry.list, [entry.entity], {
+      activeTab: entry.activeTab(),
       activeListView: content.id,
       viewedProjectId: viewedProjectIdFromContent(content),
       splitHandle: panel.handle,
@@ -44,7 +40,7 @@ function ConfiguredSoupEntityActionDrawer() {
 
   return (
     <SoupEntityActionDrawer
-      entity={drawerState.entity()}
+      entity={drawerState.entry()?.entity}
       groups={groups()}
       open={drawerState.isOpen()}
       onOpenChange={(open) => {
@@ -59,27 +55,19 @@ function ConfiguredSoupEntityActionDrawer() {
   );
 }
 
-/**
- * On mobile: provides drawer context and renders the SoupEntityActionDrawer
- * (opened via long-press on soup entity rows).
- * On desktop: renders children as-is with no context, signals, or drawer.
- */
 export function MaybeSoupEntityActionDrawerManager(props: {
   children: JSX.Element;
 }) {
   if (!isMobile()) return props.children;
 
   const [isOpen, setIsOpen] = createSignal(false);
-  const [entity, setEntity] = createSignal<EntityData | undefined>();
-  const [soup, setSoup] = createSignal<SoupState | undefined>();
+  const [entry, setEntry] = createSignal<EntityActionDrawerEntry>();
 
   const ctx: SoupEntityActionDrawerState = {
     isOpen,
-    entity,
-    soup,
-    open: (e: EntityData, s: SoupState) => {
-      setEntity(() => e);
-      setSoup(() => s);
+    entry,
+    open: (nextEntry) => {
+      setEntry(() => nextEntry);
       setIsOpen(true);
     },
     close: () => setIsOpen(false),
@@ -87,7 +75,6 @@ export function MaybeSoupEntityActionDrawerManager(props: {
 
   let wrapperEl!: HTMLDivElement;
 
-  // Block in-progress touch sequences (scroll, swipe) the moment the drawer opens.
   createEffect(() => {
     if (!isOpen()) return;
     const block = (e: TouchEvent) => {
@@ -105,7 +92,10 @@ export function MaybeSoupEntityActionDrawerManager(props: {
 
   return (
     <SoupEntityActionDrawerContextProvider value={ctx}>
-      <div class="size-full" ref={wrapperEl}>
+      <div
+        class="flex size-full min-h-0 min-w-0 flex-1 flex-col"
+        ref={wrapperEl}
+      >
         {props.children}
       </div>
       <ConfiguredSoupEntityActionDrawer />

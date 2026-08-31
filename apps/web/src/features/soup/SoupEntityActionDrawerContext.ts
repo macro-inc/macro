@@ -1,12 +1,17 @@
+import type { EntityActionListState } from '@app/features/next-soup/actions';
 import type { EntityData } from '@entity';
 import { type Accessor, createContext, useContext } from 'solid-js';
-import type { SoupState } from '../create-soup-state';
+
+export type EntityActionDrawerEntry = {
+  entity: EntityData;
+  list: EntityActionListState;
+  activeTab: Accessor<string | undefined>;
+};
 
 export type SoupEntityActionDrawerState = {
   isOpen: Accessor<boolean>;
-  entity: Accessor<EntityData | undefined>;
-  soup: Accessor<SoupState | undefined>;
-  open: (entity: EntityData, soup: SoupState) => void;
+  entry: Accessor<EntityActionDrawerEntry | undefined>;
+  open: (entry: EntityActionDrawerEntry) => void;
   close: () => void;
 };
 

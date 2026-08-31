@@ -25,9 +25,7 @@ import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inb
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { MaybeSoupEntityActionDrawerManager } from '@app/features/next-soup/soup-view/SoupEntityActionDrawerManager';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
@@ -57,7 +55,12 @@ import {
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
+  restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import {
+  MaybeSoupEntityActionDrawerManager,
+  SoupEntityContextMenu,
+} from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
@@ -924,7 +927,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register entity action hotkeys
   useEntityActionHotkeys({
     scopeId: scopeId(),
-    soup,
+    list: soup,
+    selectedEntities: soup.selection.selected,
+    focusedEntity: soup.focus.item,
+    restoreFocus: restoreSoupFocus,
     activeSoupViewTab: activeTab,
     splitHandle: panel.handle,
   });
@@ -1527,7 +1533,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 <Match
                                   when={!row.group || row.group?.isExpanded()}
                                 >
-                                  <SoupEntityContextMenu entity={row.original}>
+                                  <SoupEntityContextMenu
+                                    entity={row.original}
+                                    list={soup}
+                                    selectedEntities={soup.selection.selected}
+                                    activeTab={activeTab}
+                                  >
                                     <Dynamic
                                       component={rowEntry().component}
                                       entity={row.original}

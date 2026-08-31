@@ -1,3 +1,7 @@
+import {
+  type EntityActionListState,
+  makeAddTagAction,
+} from '@app/features/next-soup/actions';
 import { ContextMenuContent } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
@@ -18,18 +22,17 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { makeAddTagAction } from '../actions';
-import { useSoupEntityActionDrawer } from './soup-entity-action-drawer-context';
-import { SoupEntityActionsMenu } from './soup-entity-actions-menu';
-import { useSoupView } from './soup-view-context';
+import { useSoupEntityActionDrawer } from './SoupEntityActionDrawerContext';
+import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
 
 interface SoupEntityContextMenuProps {
   entity: EntityData;
+  list: EntityActionListState;
+  selectedEntities: Accessor<EntityData[]>;
+  activeTab: Accessor<string | undefined>;
   onOpenChange?: (open: boolean) => void;
 }
 
-// Detached tag picker anchored at the position the context menu opened from.
-// Mounted only while open, so picker state resets on every invocation.
 function RowTagPicker(props: {
   entityId: string;
   entityType: EntityType;
@@ -58,7 +61,6 @@ function RowTagPicker(props: {
 export const SoupEntityContextMenu: FlowComponent<
   SoupEntityContextMenuProps
 > = (props) => {
-  const { soup } = useSoupView();
   const drawerManager = useSoupEntityActionDrawer();
   const addTagAction = makeAddTagAction();
 
@@ -68,11 +70,12 @@ export const SoupEntityContextMenu: FlowComponent<
     y: number;
   }>();
 
-  // If the right-clicked row is part of a multi-selection, act on the whole
-  // selection; otherwise act on just that row.
   const menuEntities = () => {
-    const selected = soup.selection.selected();
-    if (selected.length > 1 && soup.selection.isSelected(props.entity.id)) {
+    const selected = props.selectedEntities();
+    if (
+      selected.length > 1 &&
+      selected.some((entity) => entity.id === props.entity.id)
+    ) {
       return selected;
     }
     return [props.entity];
@@ -88,7 +91,14 @@ export const SoupEntityContextMenu: FlowComponent<
           data-soup-entity
           ref={(el) => {
             touchHandler(el, () => ({
-              onLongPress: () => drawerManager?.open(props.entity, soup),
+              onLongPress: () => {
+                props.onOpenChange?.(true);
+                drawerManager?.open({
+                  entity: props.entity,
+                  list: props.list,
+                  activeTab: props.activeTab,
+                });
+              },
             }));
           }}
         >
@@ -99,8 +109,6 @@ export const SoupEntityContextMenu: FlowComponent<
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenu.Trigger
             class="size-full group/cm-trigger"
-            // Kobalte's trigger consumes the onContextMenu prop without
-            // calling it, so capture the pointer position natively.
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }
@@ -112,10 +120,8 @@ export const SoupEntityContextMenu: FlowComponent<
               <ContextMenuContent class="w-64 text-xs text-ink-muted">
                 <SoupEntityActionsMenu
                   entities={menuEntities()}
-                  soup={soup}
-                  // Deferred so the menu finishes closing (and its focus
-                  // handoff settles) before the picker popover mounts, else
-                  // the popover dismisses itself on focus-outside.
+                  list={props.list}
+                  activeTab={props.activeTab}
                   onEditTags={
                     canEditTags()
                       ? () => setTimeout(() => setTagPickerOpen(true), 0)

@@ -1,12 +1,12 @@
 import { NO_STAGE } from '@app/features/next-soup/filters/configs/';
 import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
 } from '@app/features/next-soup/utils';
+import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
@@ -59,7 +59,7 @@ type StageColumn = {
  *
  */
 export function CompanyKanban() {
-  const { source, soup, stageFilter, searchText } = useSoupView();
+  const { source, soup, stageFilter, searchText, activeTab } = useSoupView();
   const panel = useSplitPanelOrThrow();
 
   // Stage moves made while the board is fed by search results. Search rows
@@ -353,7 +353,12 @@ export function CompanyKanban() {
                         // rows); an auto-height wrapper resolves that to the
                         // card's content height instead of the column's.
                         <div class="shrink-0">
-                          <SoupEntityContextMenu entity={entity}>
+                          <SoupEntityContextMenu
+                            entity={entity}
+                            list={soup}
+                            selectedEntities={soup.selection.selected}
+                            activeTab={activeTab}
+                          >
                             <CompanyKanbanCard
                               entity={entity}
                               draggable={canDragFrom(column.key)}
