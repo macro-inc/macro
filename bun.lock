@@ -298,7 +298,6 @@
         "flat": "^6.0.1",
         "hono": "^4.6.20",
         "loro-crdt": "catalog:",
-        "neverthrow": "^8.2.0",
         "p-queue": "^9.3.0",
         "quickjs-emscripten": "^0.31.0",
         "random-js": "^2.1.0",

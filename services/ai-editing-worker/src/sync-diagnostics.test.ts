@@ -19,6 +19,10 @@ class FakeNativeSocket {
     set.add(listener);
   }
 
+  removeEventListener(type: string, listener: Listener) {
+    this.listeners.get(type)?.delete(listener);
+  }
+
   fire(type: string, event: unknown) {
     for (const listener of this.listeners.get(type) ?? []) {
       listener(event as never);
@@ -110,23 +114,34 @@ describe('createSyncSocketDiagnostics', () => {
     const attrs = diagnostics.attrs();
     expect(attrs['sync.ws.first_frame.hex']).toBe('fffefd');
     expect(String(attrs['sync.ws.first_frame.probe'])).toMatch(/^err:/);
+    // The trail includes per-listener entries (lN.msg / lN.ok) around the
+    // frame observation from the diagnostics' own message listener.
     expect(String(attrs['sync.ws.events'])).toMatch(
-      /^connect\+\d+ms,open\+\d+ms,frame\(3\)\+\d+ms$/
+      /^connect\+\d+ms,open\+\d+ms,l\d+\.msg\+\d+ms,frame\(3\)\+\d+ms,l\d+\.ok\+\d+ms$/
     );
     expect(diagnostics.summary()).toContain('probe=err:');
   });
 
-  it('tracks deserialize failures reported by the serializer', () => {
+  it('contains and records a throwing native listener', () => {
     const { diagnostics, sockets } = createDiagnosticsWithSocket();
     diagnostics.factory('wss://example', undefined);
-    sockets[0].fire('open', {});
-    diagnostics.recordDecodeFailure(new Error('unexpected end of buffer'));
-
-    expect(diagnostics.attrs()).toMatchObject({
-      'sync.ws.decode_failures': 1,
-      'sync.ws.first_decode_error': 'unexpected end of buffer',
+    const socket = sockets[0];
+    // Registered through the patched addEventListener, like the wrapper's.
+    (socket as unknown as MinimalWebSocket).addEventListener('message', () => {
+      throw new Error('boom in listener');
     });
-    expect(diagnostics.summary()).toContain('decode_failures=1');
+
+    socket.fire('open', {});
+    socket.fire('message', { data: new ArrayBuffer(4) });
+
+    const attrs = diagnostics.attrs();
+    expect(attrs['sync.ws.listener_errors']).toBe(1);
+    expect(String(attrs['sync.ws.first_listener_error'])).toContain(
+      'boom in listener'
+    );
+    // The frame was still observed despite the throwing listener.
+    expect(attrs['sync.ws.raw_frames']).toBe(1);
+    expect(diagnostics.summary()).toContain('listener_errors=1');
   });
 
   it('counts retries as separate connect attempts and errors', () => {

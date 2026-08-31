@@ -24,7 +24,6 @@
 		"envsafe": "^2.0.3",
 		"hono": "^4.6.20",
 		"loro-crdt": "catalog:",
-		"neverthrow": "^8.2.0",
 		"quickjs-emscripten": "^0.31.0",
 		"yargs": "^18.0.0",
 		"zod": "^4.4.3",

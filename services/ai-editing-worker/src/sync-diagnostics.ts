@@ -26,8 +26,6 @@ export type SyncSocketDiagnostics = {
   factory: WebSocketFactory;
   /** Record a message that made it through deserialization. */
   recordDecoded(kind: string): void;
-  /** Record a frame the serializer failed to deserialize. */
-  recordDecodeFailure(error: unknown): void;
   /** Flat span attributes describing everything observed so far. */
   attrs(): Record<string, Attribute>;
   /** One-line summary for error messages, e.g. "opened=false raw_frames=0". */
@@ -112,8 +110,6 @@ export function createSyncSocketDiagnostics(
     | undefined;
   let decodedFrames = 0;
   const decodedKinds: string[] = [];
-  let decodeFailures = 0;
-  let firstDecodeError: string | undefined;
   let firstFrameHex: string | undefined;
   let firstFrameProbe: string | undefined;
   let listenerErrors = 0;
@@ -278,11 +274,6 @@ export function createSyncSocketDiagnostics(
       decodedFrames += 1;
       if (decodedKinds.length < MAX_DECODED_KINDS) decodedKinds.push(kind);
     },
-    recordDecodeFailure(error: unknown): void {
-      decodeFailures += 1;
-      firstDecodeError ??= errorText(error);
-      logEvent('decode_failure');
-    },
     attrs(): Record<string, Attribute> {
       const attrs: Record<string, Attribute> = {
         'sync.ws.connect_attempts': connectAttempts,
@@ -302,12 +293,6 @@ export function createSyncSocketDiagnostics(
         }
         if (firstFrameProbe !== undefined) {
           attrs['sync.ws.first_frame.probe'] = firstFrameProbe;
-        }
-      }
-      if (decodeFailures > 0) {
-        attrs['sync.ws.decode_failures'] = decodeFailures;
-        if (firstDecodeError !== undefined) {
-          attrs['sync.ws.first_decode_error'] = firstDecodeError;
         }
       }
       if (listenerErrors > 0) {
@@ -343,9 +328,6 @@ export function createSyncSocketDiagnostics(
       }
       if (firstFrameProbe !== undefined) {
         parts.push(`probe=${firstFrameProbe}`);
-      }
-      if (decodeFailures > 0) {
-        parts.push(`decode_failures=${decodeFailures}`);
       }
       if (listenerErrors > 0) {
         parts.push(`listener_errors=${listenerErrors}`);

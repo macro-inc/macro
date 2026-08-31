@@ -24,7 +24,6 @@ export {
 } from './core/websocket-event';
 export type { WebsocketOptions } from './core/websocket-options';
 export type { WebsocketConnectionRetryOptions } from './core/websocket-retry-options';
-export type { WebsocketSerializer } from './core/websocket-serializer';
 export type { UrlResolver } from './core/websocket-url-resolver';
 export { platformWebSocketFactory } from './platform/factory';
 export type {
