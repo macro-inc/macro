@@ -26597,7 +26597,7 @@
       },
       "WebhookScope": {
         "type": "string",
-        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.",
+        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used. `Display`/`FromStr`\nspell the same names as serde, for query strings and config values.",
         "enum": ["user", "team"]
       },
       "WebhookStatus": {
