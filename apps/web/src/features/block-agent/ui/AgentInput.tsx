@@ -1,9 +1,10 @@
 /**
  * The agent block's composer: the chat input's look and its markdown editing
- * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), without the
- * rest of `ChatInput`'s machinery — no mentions, attachments, upload queue,
- * or contexts; model plumbing arrives through the `modelControl` slot. Visual
- * chrome mirrors `@core/component/AI/component/input/ChatInput.tsx`.
+ * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), including `@`
+ * mentions so users can attach Macro items the same way they do in chat.
+ * Attachments, upload queue, and chat contexts stay out; model plumbing
+ * arrives through the `modelControl` slot. Visual chrome mirrors
+ * `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -27,7 +28,7 @@ export interface AgentInputProps {
    * typing `/` opens a typeahead over them. `/` stays plain text while empty.
    */
   commands?: () => AgentCommandItem[];
-  /** Receives the composed markdown. */
+  /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
   /** Sits as a pill above the input box, e.g. the session's model selector. */
@@ -68,6 +69,10 @@ export function AgentInput(props: AgentInputProps) {
 
   const editor = buildConfig('chat')
     .namespace('agent-input')
+    .withMentions({
+      showOpenTabs: true,
+      block: 'agent',
+    })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
@@ -118,7 +123,9 @@ export function AgentInput(props: AgentInputProps) {
           >
             <MarkdownShell
               config={editor}
-              placeholder={props.placeholder ?? 'Message the agent'}
+              placeholder={
+                props.placeholder ?? 'Message the agent, @mention anything'
+              }
               autofocus={props.autofocus}
             />
           </div>

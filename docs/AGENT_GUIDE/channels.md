@@ -20,6 +20,11 @@ Placeholder `Type @ to share with #<name>`. Click it, `type_text`, press Enter t
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
 files`, `Format`, a `Task` switch (turns the message into a task), `Send message` button.
 
+`@Macro` answers in the thread (classic bot). `@macro-new` / `@coder` / `@cursor` open
+an agent session; follow-up `@` mentions of that bot in the same thread route to it.
+Agent replies may contain mention chips (`<m-document-mention>`) that render like any
+other channel mention.
+
 ## Channel tabs
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,

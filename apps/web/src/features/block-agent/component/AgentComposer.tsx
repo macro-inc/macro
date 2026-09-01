@@ -42,7 +42,7 @@ export function AgentComposer() {
         onRemove={composer.remove}
       />
       <AgentInput
-        placeholder="Message the agent"
+        placeholder="Message the agent, @mention anything"
         autofocus={autofocus}
         busy={composer.busy()}
         disabled={loadFailed()}

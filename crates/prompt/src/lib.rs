@@ -161,12 +161,24 @@ mod tests {
     }
 
     #[test]
+    fn agent_session_preamble_tells_the_model_to_emit_mention_tags() {
+        let preamble = agent_session::PROMPT.to_string();
+        assert!(preamble.contains("XML mention tag"));
+        assert!(preamble.contains("clickable chips"));
+    }
+
+    #[test]
     fn markdown_surface_scope_names_every_surface_but_the_reply_tone_exception() {
         // The mention rule must name every Markdown-authoring surface and the
         // non-Markdown-document exception, and the tool-use tone rule must not
         // silently bleed into tool-authored content.
         let in_app = TOOL_USE_PROMPT.to_string();
-        for surface in ["SendChannelMessage", "SendEmail", "CreateDocument"] {
+        for surface in [
+            "SendChannelMessage",
+            "SendEmail",
+            "CreateDocument",
+            "agent session",
+        ] {
             assert!(
                 in_app.contains(surface),
                 "markdown surface scope should name {surface}"

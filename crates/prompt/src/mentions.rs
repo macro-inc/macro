@@ -2,8 +2,9 @@
 //! Macro's shared Markdown rendering.
 //!
 //! These rules apply everywhere the model authors Markdown in Macro: its own
-//! conversational replies, `SendChannelMessage` content, `SendEmail` bodies,
-//! and `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents.
+//! conversational replies (AI chat and agent session transcripts),
+//! `SendChannelMessage` content, `SendEmail` bodies, and
+//! `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents.
 //! The one exclusion is non-Markdown documents created via `CreateDocument`
 //! (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are stored as raw file bytes and
 //! never parsed as Markdown, so they take no Markdown syntax or mention tags.
@@ -17,7 +18,7 @@ use crate::types::StaticPrompt;
 
 static TITLE: &str = "Mentioning documents, channels, channel messages, chats, projects, email threads, and calendar events";
 
-static INSTRUCTIONS: &str = r##"These rules apply everywhere you author Markdown in Macro: your own conversational replies, `SendChannelMessage` content, `SendEmail` bodies, and `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents. They do NOT apply to non-Markdown documents created via `CreateDocument` (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are raw file bytes, never parsed as Markdown, and must never contain mention tags or Markdown syntax.
+static INSTRUCTIONS: &str = r##"These rules apply everywhere you author Markdown in Macro: your own conversational replies (AI chat and agent session transcripts), `SendChannelMessage` content, `SendEmail` bodies, and `CreateDocument`/`EditDocument` content for Markdown (`.md`) documents. They do NOT apply to non-Markdown documents created via `CreateDocument` (e.g. PDF, CSV, PNG, XLSX, DOCX) — those are raw file bytes, never parsed as Markdown, and must never contain mention tags or Markdown syntax.
 
 When referencing a document, channel, chat, project, email thread, or calendar event, use XML mention tags with a JSON payload.
 The AI does not need to know the name — an empty string is fine and the frontend will resolve it.
@@ -46,8 +47,8 @@ static INTENT: &str = "Entities and channel messages are referenced with correct
 <m-document-mention> XML tags using the right blockName and blockParams for each entity type, \
 including exactly \"email\" for email threads, exactly \"calendar\" for calendar events, and \
 channel_message_id for specific channel messages, \
-across every Markdown surface (replies, channel messages, email bodies, and Markdown documents) — \
-never inside non-Markdown documents.";
+across every Markdown surface (AI chat replies, agent session replies, channel messages, \
+email bodies, and Markdown documents) — never inside non-Markdown documents.";
 
 /// The entity-mention prompt.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
