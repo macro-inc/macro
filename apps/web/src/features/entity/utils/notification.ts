@@ -83,14 +83,10 @@ export type MuteItem = {
  * notifications and the mute API store `email_thread` / `foreign_entity`.
  */
 export function normalizeMuteItemType(type: string): string {
-  switch (type) {
-    case 'email':
-      return 'email_thread';
-    case 'foreign':
-      return 'foreign_entity';
-    default:
-      return type;
-  }
+  return match(type)
+    .with('email', () => 'email_thread')
+    .with('foreign', () => 'foreign_entity')
+    .otherwise((value) => value);
 }
 
 /**
@@ -132,24 +128,18 @@ export function muteItemPreviewEntity(item: MuteItem):
         | 'project';
     }
   | undefined {
-  switch (normalizeMuteItemType(item.item_type)) {
-    case 'email_thread':
-      return { id: item.item_id, type: 'email' };
-    case 'channel':
-      return { id: item.item_id, type: 'channel' };
-    case 'calendar_event':
-      return { id: item.item_id, type: 'calendar_event' };
-    case 'document':
-      return { id: item.item_id, type: 'document' };
-    case 'chat':
-      return { id: item.item_id, type: 'chat' };
-    case 'project':
-      return { id: item.item_id, type: 'project' };
-    case 'call':
-      return { id: item.item_id, type: 'call' };
-    default:
-      return undefined;
-  }
+  return match(normalizeMuteItemType(item.item_type))
+    .with('email_thread', () => ({ id: item.item_id, type: 'email' as const }))
+    .with(
+      'channel',
+      'calendar_event',
+      'document',
+      'chat',
+      'project',
+      'call',
+      (type) => ({ id: item.item_id, type })
+    )
+    .otherwise(() => undefined);
 }
 
 /** Icon used before a preview loads, or when the type has no preview. */
@@ -166,28 +156,13 @@ export function muteItemFallbackIconType(
   | 'md'
   | 'project'
   | 'reminder' {
-  switch (normalizeMuteItemType(itemType)) {
-    case 'channel':
-      return 'channel';
-    case 'document':
-      return 'md';
-    case 'email_thread':
-      return 'email';
-    case 'chat':
-      return 'chat';
-    case 'calendar_event':
-      return 'calendar';
-    case 'call':
-      return 'call';
-    case 'project':
-      return 'project';
-    case 'reminder':
-      return 'reminder';
-    case 'foreign_entity':
-      return 'githubPullRequest';
-    default:
-      return 'default';
-  }
+  return match(normalizeMuteItemType(itemType))
+    .with('channel', 'chat', 'call', 'project', 'reminder', (type) => type)
+    .with('document', () => 'md' as const)
+    .with('email_thread', () => 'email' as const)
+    .with('calendar_event', () => 'calendar' as const)
+    .with('foreign_entity', () => 'githubPullRequest' as const)
+    .otherwise(() => 'default' as const);
 }
 
 export function isMutedItem(
