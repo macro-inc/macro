@@ -4,6 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show } from 'solid-js';
 import type { InboxViewState } from '../create-inbox-view-state';
 import type { InboxTab } from '../types';
+import { InboxFilterDrawer, InboxFilterDropdown } from './InboxFilters';
 
 const INBOX_TABS: { value: InboxTab; label: string }[] = [
   { value: 'signal', label: 'Signal' },
@@ -24,20 +25,26 @@ export function InboxTabs(props: { state: InboxViewState }) {
     <Show
       when={isTouchDevice()}
       fallback={
-        <div class="h-9 min-w-0 flex-1">
-          <TabsInset
-            aria-label="Inbox views"
-            list={INBOX_TABS}
-            value={props.state.tab()}
-            onChange={setTab}
-            fullWidth
-          />
+        <div class="flex h-8 min-w-0 flex-1 items-center gap-3">
+          <div class="h-8 min-w-0 basis-3/4 shrink max-w-72">
+            <TabsInset
+              aria-label="Inbox views"
+              list={INBOX_TABS}
+              value={props.state.tab()}
+              onChange={setTab}
+              class="h-8"
+              trackClass="h-full"
+              fullWidth
+            />
+          </div>
+          <InboxFilterDropdown state={props.state} />
         </div>
       }
     >
       <div class="h-10 min-w-0 flex-1">
         <PillTabs
           scrollable
+          leading={<InboxFilterDrawer state={props.state} />}
           items={INBOX_TABS}
           value={props.state.tab()}
           onChange={setTab}

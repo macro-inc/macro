@@ -139,6 +139,14 @@ const typeOptions: Record<InboxTypeFilter, InboxFacetOption> = {
   },
 };
 
+export const INBOX_FILTER_GROUPS = [
+  {
+    id: 'type',
+    label: 'Type',
+    options: Object.values(typeOptions),
+  },
+];
+
 export const INBOX_FACETS: Facet<
   EntityData,
   InboxFacetContext,

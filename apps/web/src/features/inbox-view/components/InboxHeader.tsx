@@ -14,10 +14,14 @@ export function InboxHeader(props: ParentProps) {
           </SplitPanel.ControlGroup>
         </div>
       </Show>
-      <div class="mt-1 flex min-h-10 min-w-0 items-center gap-2 touch:mt-0">
-        <h1 class="m-0 shrink-0 truncate text-2xl font-semibold tracking-[-0.035em] text-ink touch:hidden">
-          Inbox
-        </h1>
+      <Show when={!isTouchDevice()}>
+        <div class="mt-1 flex min-h-10 min-w-0 items-center">
+          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.035em] text-ink">
+            Inbox
+          </h1>
+        </div>
+      </Show>
+      <div class="mt-3 flex min-h-10 min-w-0 items-center touch:mt-0">
         {props.children}
       </div>
     </header>
