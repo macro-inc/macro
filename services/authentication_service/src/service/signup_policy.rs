@@ -6,12 +6,14 @@ use std::{collections::HashSet, fmt};
 use macro_user_id::email::Email;
 use serde_json::Value;
 
+const MACRO_EMAIL_DOMAIN: &str = "macro.com";
+
 /// The configured signup admission policy.
 #[derive(Clone, Eq, PartialEq)]
 pub enum SignupPolicy {
     /// Admit every signup origin.
     AllowAll,
-    /// Admit public signups only when their normalized email is present.
+    /// Admit public signups when their normalized email is a Macro address or present.
     EmailAllowlist { allowed_emails: HashSet<String> },
 }
 
@@ -22,6 +24,8 @@ impl SignupPolicy {
     }
 
     /// Create an exact-address allowlist from a JSON array of email strings.
+    ///
+    /// The resulting policy also admits every `@macro.com` address.
     pub fn from_allowlist_json(raw_json: &str) -> Result<Self, SignupPolicyConfigError> {
         let value = serde_json::from_str::<Value>(raw_json)
             .map_err(|_| SignupPolicyConfigError::MalformedJson)?;
@@ -48,7 +52,7 @@ impl SignupPolicy {
             Self::AllowAll => Ok(()),
             Self::EmailAllowlist { allowed_emails } => {
                 let normalized_email = normalize_public_email(email)?;
-                if allowed_emails.contains(&normalized_email) {
+                if is_macro_email(&normalized_email) || allowed_emails.contains(&normalized_email) {
                     Ok(())
                 } else {
                     Err(SignupPolicyDenial::PublicEmailNotAllowed)
@@ -155,4 +159,10 @@ fn normalize_email(email: &str) -> Result<String, ()> {
     let lowercased_email = email.to_lowercase();
     Email::parse_from_str(&lowercased_email).map_err(|_| ())?;
     Ok(lowercased_email)
+}
+
+fn is_macro_email(normalized_email: &str) -> bool {
+    normalized_email
+        .rsplit_once('@')
+        .is_some_and(|(_, domain)| domain == MACRO_EMAIL_DOMAIN)
 }
