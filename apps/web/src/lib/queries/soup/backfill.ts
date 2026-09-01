@@ -29,7 +29,8 @@ const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
 const BACKFILL_RETRY_COUNT = 5;
 const BACKFILL_RETRY_SCHEDULE = Schedule.exponential('1 second');
-const CACHE_HOST_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000, 4_000];
+const CACHE_HOST_RETRY_COUNT = 6;
+const CACHE_HOST_RETRY_SCHEDULE = Schedule.exponential('100 millis');
 const BACKFILL_PROGRESS_PAGE_INTERVAL = 10;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -470,9 +471,21 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   );
 });
 
+const waitForGraphqlSoupCacheHost = Effect.suspend(() =>
+  getGraphqlSoupCacheHost() === undefined
+    ? Effect.fail('cache-host-unavailable' as const)
+    : Effect.void
+).pipe(
+  Effect.retry({
+    times: CACHE_HOST_RETRY_COUNT,
+    schedule: CACHE_HOST_RETRY_SCHEDULE,
+  })
+);
+
 /**
  * Runs the checkpointed backfill Effect while this tab owns leadership.
- * Interrupting the fiber cancels the active fetch or inter-page sleep.
+ * Interrupting the fiber cancels cache readiness waits, active fetches, and
+ * inter-page sleeps.
  */
 export function useSoupBackfills(userId: string): void {
   const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
@@ -487,33 +500,14 @@ export function useSoupBackfills(userId: string): void {
       return;
     }
 
-    let disposed = false;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    let interruptBackfill: (() => void) | undefined;
-    const startWhenCacheReady = (retryIndex: number): void => {
-      if (disposed) return;
-
-      if (getGraphqlSoupCacheHost() !== undefined) {
-        const fiber = Effect.runFork(runSoupBackfills(userId));
-        interruptBackfill = () => {
-          Effect.runFork(Fiber.interrupt(fiber));
-        };
-        return;
-      }
-
-      const retryDelay = CACHE_HOST_RETRY_DELAYS_MS[retryIndex];
-      if (retryDelay === undefined) return;
-      retryTimer = setTimeout(
-        () => startWhenCacheReady(retryIndex + 1),
-        retryDelay
-      );
-    };
-
-    startWhenCacheReady(0);
+    const fiber = Effect.runFork(
+      waitForGraphqlSoupCacheHost.pipe(
+        Effect.flatMap(() => runSoupBackfills(userId)),
+        Effect.ignore
+      )
+    );
     onCleanup(() => {
-      disposed = true;
-      if (retryTimer !== undefined) clearTimeout(retryTimer);
-      interruptBackfill?.();
+      Effect.runFork(Fiber.interrupt(fiber));
     });
   });
 }
