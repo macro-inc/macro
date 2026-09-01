@@ -14,14 +14,19 @@ export type MagicChipActivity = {
 /**
  * The one state the chip renders.
  *
- * Three, in the order a turn passes through them: an activity line while the
- * agent works with nothing to show, the answer as it is written with the
- * activity line still under it, and the answer alone once the turn ends.
+ * A running turn is always `working`: one fixed-height line, whatever the
+ * agent is doing — narration included, carried as the activity's detail. The
+ * chip only takes the height of real prose once the turn is over, so it never
+ * grows and shrinks under the message while the agent works.
  */
 export type MagicChipPresentation =
   | { kind: 'working'; activity: MagicChipActivity }
-  | { kind: 'answering'; markdown: string; activity: MagicChipActivity }
-  | { kind: 'settled'; markdown: string };
+  | {
+      kind: 'settled';
+      markdown: string;
+      /** How the turn ended, when it ended as anything but a clean answer. */
+      activity?: MagicChipActivity;
+    };
 
 export type MagicChipPresentationInput = {
   persistedStatus: MagicChipStatus;
@@ -84,7 +89,11 @@ function toolActivity(
 
 function partActivity(part: MessagePart): MagicChipActivity {
   return match(part)
-    .with({ kind: 'text' }, () => ({ label: 'Writing response', busy: false }))
+    .with({ kind: 'text' }, ({ text }) => ({
+      label: 'Writing response',
+      detail: text.trim() || undefined,
+      busy: true,
+    }))
     .with({ kind: 'thought' }, ({ text }) => ({
       label: 'Thinking',
       detail: text.trim() || undefined,
@@ -235,16 +244,18 @@ function liveEventActivity(
   return statusActivity(name);
 }
 
+/**
+ * The agent's latest prose, which is the trailing text part and only that.
+ *
+ * The fold coalesces streamed chunks into the trailing text part, so a text
+ * part that is no longer last is something the agent said and then moved on
+ * from — narration before a tool call, not the turn's answer. Only the last
+ * one is the answer, and only a finished turn has one.
+ */
 function answerMarkdown(response: FoldedMessage | undefined): string {
-  return (
-    response?.parts
-      .filter(
-        (part): part is Extract<MessagePart, { kind: 'text' }> =>
-          part.kind === 'text' && Boolean(part.text.trim())
-      )
-      .map((part) => part.text)
-      .join('\n\n') ?? ''
-  );
+  const latest = response?.parts.at(-1);
+  if (latest?.kind !== 'text' || !latest.text.trim()) return '';
+  return latest.text;
 }
 
 /** Project fold and lifecycle facts into the one state the view renders. */
@@ -253,9 +264,18 @@ export function deriveMagicChipPresentation(
 ): MagicChipPresentation {
   const { response, prompt, latestEvent, persistedStatus } = input;
 
+  // Only a finished turn earns the chip's full height, and every ending
+  // qualifies: a turn cut short still leaves prose worth reading, with the
+  // reason it stopped kept underneath.
   const markdown = answerMarkdown(response);
-  if (response?.stop?.kind === 'end_turn' && markdown) {
-    return { kind: 'settled', markdown };
+  if (response?.stop && markdown) {
+    return {
+      kind: 'settled',
+      markdown,
+      ...(response.stop.kind === 'end_turn'
+        ? {}
+        : { activity: turnEndedActivity(response) }),
+    };
   }
 
   // Best available answer first: how the turn ended, then what it is doing,
@@ -268,12 +288,6 @@ export function deriveMagicChipPresentation(
     (prompt ? { label: 'Waiting for agent', busy: true } : undefined) ??
     liveEventActivity(latestEvent, 'acp_ready') ??
     statusActivity(persistedStatus);
-
-  // Prose the turn has not closed on yet. The fold appends into the trailing
-  // text part as chunks land, so this is the answer being written, and the
-  // activity stays alongside it to say what the agent is doing between
-  // sentences.
-  if (markdown) return { kind: 'answering', markdown, activity };
 
   return { kind: 'working', activity };
 }

@@ -3,31 +3,25 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { type Component, Match, Show, Switch } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import type { MagicChipActivity, MagicChipPresentation } from './presentation';
 
-function working(presentation: MagicChipPresentation) {
-  return presentation.kind === 'working' ? presentation : undefined;
-}
-
-function answering(presentation: MagicChipPresentation) {
-  return presentation.kind === 'answering' ? presentation : undefined;
-}
-
-function settled(presentation: MagicChipPresentation) {
-  return presentation.kind === 'settled' ? presentation : undefined;
-}
-
-/** Fixed-height activity line — no box, just a shimmering label in the flow. */
+/**
+ * The whole chip while a turn runs: one line, always `h-6`, whatever the agent
+ * is doing.
+ *
+ * Both halves are held to that line. The label is short and never shrinks; the
+ * detail — a thought, a command, a sentence of narration — is arbitrarily long
+ * and gets the rest of the row, clipped with `min-w-0` so it can be narrower
+ * than its text and truncated at whatever width the message gives it.
+ */
 const ActivityLine: Component<{
-  agentSessionId: string;
   activity: MagicChipActivity;
   onOpen?: () => void;
 }> = (props) => (
   <button
     type="button"
-    class="flex h-6 w-full min-w-0 items-center gap-2 text-left"
-    data-magic-chip={props.agentSessionId}
+    class="flex h-6 w-full min-w-0 items-center gap-2 overflow-hidden text-left"
     disabled={!props.onOpen}
     onMouseDown={(event) => event.preventDefault()}
     onClick={props.onOpen}
@@ -44,7 +38,7 @@ const ActivityLine: Component<{
     </span>
     <Show when={props.activity.detail}>
       {(detail) => (
-        <span class="min-w-0 truncate text-xs text-ink-extra-muted">
+        <span class="min-w-0 flex-1 truncate text-xs text-ink-extra-muted">
           {detail()}
         </span>
       )}
@@ -52,100 +46,67 @@ const ActivityLine: Component<{
   </button>
 );
 
-/** The response, quoted as if the agent had answered inline. */
+/** The finished answer, quoted as if the agent had replied inline. */
 const AnswerBody: Component<{ markdown: string }> = (props) => (
-  <div class="w-full border-l-2 border-accent pl-3 text-left text-sm leading-6">
+  <div class="w-full min-w-0 border-l-2 border-accent pl-3 text-left text-sm leading-6">
     <StaticMarkdownContext theme={channelTheme}>
       <StaticMarkdown markdown={props.markdown} target="external" />
     </StaticMarkdownContext>
   </div>
 );
 
+/** Closes the settled chip where the activity line sat while the turn ran. */
+const OpenSessionLink: Component<{ onOpen?: () => void }> = (props) => (
+  <button
+    type="button"
+    class="mb-2 flex h-6 items-center text-xs text-ink-extra-muted hover:text-ink"
+    onMouseDown={(event) => event.preventDefault()}
+    onClick={props.onOpen}
+    disabled={!props.onOpen}
+  >
+    Open session
+  </button>
+);
+
 /**
- * The answer as it is being written, with the activity line beneath it.
+ * Render an already-derived Magic Chip presentation.
  *
- * The same quoted body the settled state uses, so the turn ending changes
- * only what is under the answer, not the answer itself — no reflow at the
- * moment the agent stops.
+ * A running turn is one `h-6` row and stays that height from the first event
+ * to the last, however much the agent narrates in between — the message below
+ * never moves while the agent works. Reaching the answer is the single moment
+ * the chip grows.
  */
-const StreamingAnswer: Component<{
-  agentSessionId: string;
-  markdown: string;
-  activity: MagicChipActivity;
-  onOpen?: () => void;
-}> = (props) => (
-  <div
-    class="grid w-full min-w-0 justify-items-start gap-1"
-    data-magic-chip={props.agentSessionId}
-  >
-    <AnswerBody markdown={props.markdown} />
-    <div class="w-full pl-3">
-      <ActivityLine
-        agentSessionId={props.agentSessionId}
-        activity={props.activity}
-        onOpen={props.onOpen}
-      />
-    </div>
-  </div>
-);
-
-/** The settled response, quoted as if the agent had answered inline. */
-const SettledAnswer: Component<{
-  agentSessionId: string;
-  markdown: string;
-  onOpen?: () => void;
-}> = (props) => (
-  <div
-    class="grid w-full min-w-0 justify-items-start gap-1"
-    data-magic-chip={props.agentSessionId}
-  >
-    <AnswerBody markdown={props.markdown} />
-    <button
-      type="button"
-      class="pl-3.5 mb-2 text-xs text-ink-extra-muted hover:text-ink"
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={props.onOpen}
-      disabled={!props.onOpen}
-    >
-      Open session
-    </button>
-  </div>
-);
-
-/** Render an already-derived Magic Chip presentation. */
 export const MagicChipView: Component<{
   agentSessionId: string;
   presentation: MagicChipPresentation;
   onOpen?: () => void;
-}> = (props) => (
-  <Switch>
-    <Match when={working(props.presentation)}>
-      {(presentation) => (
-        <ActivityLine
-          agentSessionId={props.agentSessionId}
-          activity={presentation().activity}
-          onOpen={props.onOpen}
-        />
-      )}
-    </Match>
-    <Match when={answering(props.presentation)}>
-      {(presentation) => (
-        <StreamingAnswer
-          agentSessionId={props.agentSessionId}
-          markdown={presentation().markdown}
-          activity={presentation().activity}
-          onOpen={props.onOpen}
-        />
-      )}
-    </Match>
-    <Match when={settled(props.presentation)}>
-      {(presentation) => (
-        <SettledAnswer
-          agentSessionId={props.agentSessionId}
-          markdown={presentation().markdown}
-          onOpen={props.onOpen}
-        />
-      )}
-    </Match>
-  </Switch>
-);
+}> = (props) => {
+  // A settled turn is the only one with prose; an unsettled one is the only
+  // one guaranteed an activity. The footer takes whichever it gets.
+  const markdown = () =>
+    props.presentation.kind === 'settled'
+      ? props.presentation.markdown
+      : undefined;
+  const activity = () => props.presentation.activity;
+
+  return (
+    <div
+      class="grid w-full min-w-0 justify-items-start gap-1"
+      data-magic-chip={props.agentSessionId}
+    >
+      <Show when={markdown()}>
+        {(markdown) => <AnswerBody markdown={markdown()} />}
+      </Show>
+      <div class="w-full min-w-0 pl-3">
+        <Show
+          when={activity()}
+          fallback={<OpenSessionLink onOpen={props.onOpen} />}
+        >
+          {(activity) => (
+            <ActivityLine activity={activity()} onOpen={props.onOpen} />
+          )}
+        </Show>
+      </div>
+    </div>
+  );
+};
