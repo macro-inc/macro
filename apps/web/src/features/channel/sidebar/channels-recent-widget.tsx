@@ -35,6 +35,7 @@ import {
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
+import { Key } from '@solid-primitives/keyed';
 import { makePersisted } from '@solid-primitives/storage';
 import { cn, NavRow, Surface, ToggleSwitch, Tooltip } from '@ui';
 import {
@@ -511,14 +512,14 @@ export const ChannelsRecentWidget = (props: {
               lastUserScrollAt = Date.now();
             }}
           >
-            <For each={visibleChannels()}>
+            <Key each={visibleChannels()} by={(channel) => channel.entity.id}>
               {(channel) => (
                 <ChannelRow
-                  channel={channel}
+                  channel={channel()}
                   onFloatingOpenChange={props.onDropdownOpenChange}
                 />
               )}
-            </For>
+            </Key>
             <Show when={showAllCaughtUp()}>
               <div class="flex h-7 w-full items-center gap-2 px-2 py-1 text-sm font-medium text-ink-extra-muted/60">
                 <span class="truncate">All caught up</span>
@@ -549,9 +550,9 @@ export const ChannelsRecentWidget = (props: {
       fallback={
         <Show when={slimVisible().length > 0}>
           <section class="w-full py-1.5 flex flex-col items-start gap-0.5">
-            <For each={slimVisible()}>
-              {(channel) => <ChannelRow channel={channel} isSlim />}
-            </For>
+            <Key each={slimVisible()} by={(channel) => channel.entity.id}>
+              {(channel) => <ChannelRow channel={channel()} isSlim />}
+            </Key>
             <Show when={slimOverflow() > 0}>
               <span class="w-full text-center text-xxs text-ink-muted mt-1">
                 +{slimOverflow()}

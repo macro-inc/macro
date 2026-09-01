@@ -39,6 +39,7 @@ import {
 import { Account } from './Account';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
+import { ApiKeys } from './ApiKeys';
 import { Appearance } from './Appearance';
 import { ConnectedAccounts } from './ConnectedAccounts';
 import { Crm } from './Crm';
@@ -388,6 +389,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <Show when={isCurrentTab('Account')}>
                   <Suspense>
                     <Account />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('API Keys')}>
+                  <Suspense>
+                    <ApiKeys />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Notifications')}>

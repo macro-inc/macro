@@ -54,7 +54,9 @@ Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 
 ## Settings — `/app/settings/<section>`
 
-Left nav: General → `Account` (profile, delete account), `Notifications`, `Billing`,
+Left nav: General → `Account` (profile, delete account), `API Keys` (create /
+list / delete personal keys; the secret is shown only once and is sent as
+`x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
 (setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; `Log out`.

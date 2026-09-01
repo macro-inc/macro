@@ -21,7 +21,7 @@
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
-| `/app/settings/account` | Settings (also `/app/settings/mcp-server`, `/shortcuts`, etc.) |
+| `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
 (`/app/<left>/<right>`). Each pane has its own Close / Go Back / Go Forward buttons.

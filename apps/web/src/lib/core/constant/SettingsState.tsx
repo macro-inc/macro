@@ -15,6 +15,7 @@ import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
 
 export type SettingsTab =
   | 'Account'
+  | 'API Keys'
   | 'Notifications'
   | 'Billing'
   | 'Subscription'

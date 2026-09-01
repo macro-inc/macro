@@ -5,6 +5,7 @@ import BugIcon from '@lucide/bug.svg';
 import BuildingsIcon from '@lucide/building-2.svg';
 import CpuIcon from '@lucide/cpu.svg';
 import CreditCardIcon from '@lucide/credit-card.svg';
+import KeyIcon from '@lucide/key.svg';
 import KeyboardIcon from '@lucide/keyboard.svg';
 import SwatchesIcon from '@lucide/palette.svg';
 import PlugIcon from '@lucide/plug.svg';
@@ -53,6 +54,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'General',
     items: [
       { tab: 'Account', label: 'Account', icon: UserIconPhosphor },
+      { tab: 'API Keys', label: 'API Keys', icon: KeyIcon },
       { tab: 'Notifications', label: 'Notifications', icon: BellIcon },
       { tab: 'Billing', label: 'Billing', icon: CreditCardIcon },
       { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
@@ -92,6 +94,7 @@ const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
  */
 const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',
+  'API Keys': 'api-keys',
   Notifications: 'notifications',
   Billing: 'billing',
   Subscription: 'subscription',
@@ -164,6 +167,7 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
+      case 'API Keys':
       case 'Billing':
         return true;
       case 'Notifications':
