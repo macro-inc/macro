@@ -145,17 +145,21 @@ export function InboxList() {
   }: ListActivation<InboxDataSourceItem, InboxListActivationMetadata>) {
     if (item.kind === 'load-more') {
       if (!item.isLoading) void source.loadMore();
+
       return;
     }
 
     if (item.kind !== 'entity') return;
 
     const sourceRow = source.items().find((row) => row.id === item.id);
+
     if (sourceRow?.kind !== 'entity') return;
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+
     preview.cancel();
+
     void openEntity(sourceRow.entity, {
       event: metadata?.event,
       newSplit,
@@ -448,193 +452,188 @@ export function InboxList() {
             void action.onClick();
           }}
         >
-          <Show
-            when={
-              forceEmptyState() || !source.isLoading() || isPullRefreshing()
-            }
-            fallback={
+          <Switch>
+            <Match
+              when={
+                !forceEmptyState() && source.isLoading() && !isPullRefreshing()
+              }
+            >
               <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
                 <SpinnerIcon
                   aria-label="Loading inbox"
                   class="size-5 animate-spin"
                 />
               </div>
-            }
-          >
-            <Show
-              when={forceEmptyState() || !source.error()}
-              fallback={
-                <div
-                  ref={setEmptyViewport}
-                  class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))] text-sm text-ink-muted"
-                >
-                  <span>Inbox couldn’t be loaded.</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void source.refresh()}
-                  >
-                    Try again
-                  </Button>
-                </div>
-              }
-            >
-              <Show
-                when={!forceEmptyState() && rows().length > 0}
-                fallback={
-                  <div
-                    ref={setEmptyViewport}
-                    class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
-                  >
-                    <InboxEmptyState />
-                  </div>
-                }
-              >
-                <div
-                  ref={(element) => {
-                    setViewport(element);
-                    soupNavigationTouchHighlight(element);
-                  }}
-                  class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
-                >
-                  <Virtualizer
-                    ref={registerVirtualizer}
-                    data={rows()}
-                    scrollRef={viewport()}
-                    bufferSize={500}
-                    itemSize={88}
-                    keepMounted={
-                      list.focus.index() >= 0 ? [list.focus.index()] : undefined
-                    }
-                    onScroll={checkNearEnd}
-                  >
-                    {(row) => (
-                      <Switch>
-                        <Match
-                          when={row.kind === 'group-header' ? row : undefined}
-                        >
-                          {(group) => (
-                            <InboxDateGroupHeader
-                              row={group()}
-                              isFirst={rows()[0]?.id === group().id}
-                            />
-                          )}
-                        </Match>
-                        <Match when={row.kind === 'entity' ? row : undefined}>
-                          {(entityRow) => (
-                            <SoupEntityContextMenu
-                              entity={entityRow().entity}
-                              list={actionState}
-                              selectedEntities={selectedEntities}
-                              viewContext={entityActionViewContext()}
-                              onOpenChange={(open) => {
-                                if (!open) return;
-                                focusActionRow({
-                                  entity: entityRow().entity,
-                                  rowId: entityRow().id,
-                                });
-                              }}
-                            >
-                              <div
-                                id={entityRow().id}
-                                role="row"
-                                data-soup-entity
-                              >
-                                <div role="gridcell">
-                                  <InboxListEntity
-                                    class="mx-0 w-full border-b border-edge touch:border-b-0"
-                                    cardClass="rounded-none px-4 py-3"
-                                    entity={entityRow().entity}
-                                    occurrenceKey={entityRow().id}
-                                    checked={list.selection.isSelected(
-                                      entityRow().id
-                                    )}
-                                    hideCheckbox
-                                    highlighted={
-                                      !isTouchDevice() &&
-                                      list.focus.key() === entityRow().id
-                                    }
-                                    focusable={false}
-                                    entityRowConfig={{
-                                      swipeLeftColor: 'bg-success',
-                                      swipeLeftRevealedComponent: (
-                                        <CheckIcon class="size-8 text-surface" />
-                                      ),
-                                    }}
-                                    onClick={(event) => {
-                                      if (
-                                        event.metaKey ||
-                                        event.ctrlKey ||
-                                        (isTouchDevice() &&
-                                          list.selection.count() > 0)
-                                      ) {
-                                        listInteractions.selection.toggle(
-                                          entityRow().id
-                                        );
-                                        return;
-                                      }
+            </Match>
 
-                                      list.activate.key(entityRow().id, {
-                                        reason: 'pointer',
-                                        metadata: { event },
-                                      });
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            </SoupEntityContextMenu>
-                          )}
-                        </Match>
-                        <Match
-                          when={row.kind === 'load-more' ? row : undefined}
-                        >
-                          {(loadMore) => (
-                            <div id={loadMore().id} role="row">
-                              <div
-                                role="gridcell"
-                                aria-busy={loadMore().isLoading}
-                                class={cn(
-                                  'flex min-h-12 items-center justify-center',
-                                  !isTouchDevice() &&
-                                    list.focus.key() === loadMore().id &&
-                                    'bg-active/60'
-                                )}
-                                onClick={() =>
-                                  list.activate.key(loadMore().id, {
-                                    reason: 'pointer',
-                                  })
-                                }
-                              >
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  depth={2}
-                                  disabled={loadMore().isLoading}
-                                  class="bg-surface"
-                                >
-                                  <Show
-                                    when={!loadMore().isLoading}
-                                    fallback={
-                                      <SpinnerIcon class="size-3 animate-spin" />
+            <Match when={!forceEmptyState() && source.error()}>
+              <div
+                ref={setEmptyViewport}
+                class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))] text-sm text-ink-muted"
+              >
+                <span>Inbox couldn’t be loaded.</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void source.refresh()}
+                >
+                  Try again
+                </Button>
+              </div>
+            </Match>
+
+            <Match when={forceEmptyState() || rows().length === 0}>
+              <div
+                ref={setEmptyViewport}
+                class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
+              >
+                <InboxEmptyState />
+              </div>
+            </Match>
+
+            <Match when={true}>
+              <div
+                ref={(element) => {
+                  setViewport(element);
+                  soupNavigationTouchHighlight(element);
+                }}
+                class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
+              >
+                <Virtualizer
+                  ref={registerVirtualizer}
+                  data={rows()}
+                  scrollRef={viewport()}
+                  bufferSize={500}
+                  itemSize={88}
+                  keepMounted={
+                    list.focus.index() >= 0 ? [list.focus.index()] : undefined
+                  }
+                  onScroll={checkNearEnd}
+                >
+                  {(row) => (
+                    <Switch>
+                      <Match
+                        when={row.kind === 'group-header' ? row : undefined}
+                      >
+                        {(group) => (
+                          <InboxDateGroupHeader
+                            row={group()}
+                            isFirst={rows()[0]?.id === group().id}
+                          />
+                        )}
+                      </Match>
+                      <Match when={row.kind === 'entity' ? row : undefined}>
+                        {(entityRow) => (
+                          <SoupEntityContextMenu
+                            entity={entityRow().entity}
+                            list={actionState}
+                            selectedEntities={selectedEntities}
+                            viewContext={entityActionViewContext()}
+                            onOpenChange={(open) => {
+                              if (!open) return;
+                              focusActionRow({
+                                entity: entityRow().entity,
+                                rowId: entityRow().id,
+                              });
+                            }}
+                          >
+                            <div
+                              id={entityRow().id}
+                              role="row"
+                              data-soup-entity
+                            >
+                              <div role="gridcell">
+                                <InboxListEntity
+                                  class="mx-0 w-full border-b border-edge touch:border-b-0"
+                                  cardClass="rounded-none px-4 py-3"
+                                  entity={entityRow().entity}
+                                  occurrenceKey={entityRow().id}
+                                  checked={list.selection.isSelected(
+                                    entityRow().id
+                                  )}
+                                  hideCheckbox
+                                  highlighted={
+                                    !isTouchDevice() &&
+                                    list.focus.key() === entityRow().id
+                                  }
+                                  focusable={false}
+                                  entityRowConfig={{
+                                    swipeLeftColor: 'bg-success',
+                                    swipeLeftRevealedComponent: (
+                                      <CheckIcon class="size-8 text-surface" />
+                                    ),
+                                  }}
+                                  onClick={(event) => {
+                                    if (
+                                      event.metaKey ||
+                                      event.ctrlKey ||
+                                      (isTouchDevice() &&
+                                        list.selection.count() > 0)
+                                    ) {
+                                      listInteractions.selection.toggle(
+                                        entityRow().id
+                                      );
+                                      return;
                                     }
-                                  >
-                                    <CaretDownIcon class="size-2.5" />
-                                  </Show>
-                                  {loadMore().isLoading
-                                    ? 'Loading...'
-                                    : 'Load More'}
-                                </Button>
+
+                                    list.activate.key(entityRow().id, {
+                                      reason: 'pointer',
+                                      metadata: { event },
+                                    });
+                                  }}
+                                />
                               </div>
                             </div>
-                          )}
-                        </Match>
-                      </Switch>
-                    )}
-                  </Virtualizer>
-                </div>
-              </Show>
-            </Show>
-          </Show>
+                          </SoupEntityContextMenu>
+                        )}
+                      </Match>
+                      <Match when={row.kind === 'load-more' ? row : undefined}>
+                        {(loadMore) => (
+                          <div id={loadMore().id} role="row">
+                            <div
+                              role="gridcell"
+                              aria-busy={loadMore().isLoading}
+                              class={cn(
+                                'flex min-h-12 items-center justify-center',
+                                !isTouchDevice() &&
+                                  list.focus.key() === loadMore().id &&
+                                  'bg-active/60'
+                              )}
+                              onClick={() =>
+                                list.activate.key(loadMore().id, {
+                                  reason: 'pointer',
+                                })
+                              }
+                            >
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                depth={2}
+                                disabled={loadMore().isLoading}
+                                class="bg-surface"
+                              >
+                                <Show
+                                  when={!loadMore().isLoading}
+                                  fallback={
+                                    <SpinnerIcon class="size-3 animate-spin" />
+                                  }
+                                >
+                                  <CaretDownIcon class="size-2.5" />
+                                </Show>
+                                {loadMore().isLoading
+                                  ? 'Loading...'
+                                  : 'Load More'}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </Match>
+                    </Switch>
+                  )}
+                </Virtualizer>
+              </div>
+            </Match>
+          </Switch>
         </SwipableRowProvider>
 
         <Show when={selectedEntities().length > 0}>
