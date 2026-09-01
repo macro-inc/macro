@@ -144,6 +144,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
       },
       {
         normalizedCacheOptimistic: {
+          uuid: expect.any(String),
           optimisticResponse: {
             updateNotifications: [
               {

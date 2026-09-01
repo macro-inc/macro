@@ -25,6 +25,7 @@ ai_usage = { path = "../../crates/ai_usage" }
 aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
+harness_id = { path = "../../crates/harness_id" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 aws-sdk-kms = { workspace = true }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
@@ -47,6 +48,7 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }
+rootcause = { workspace = true }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }

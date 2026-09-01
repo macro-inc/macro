@@ -1,7 +1,7 @@
-# Run the coding agent daemon.
+# Run the coding agent daemon - one command, the control panel.
 #
-#   just serve
-#   RUST_LOG=coding_agent_worker=trace just serve   # tap the ACP wire
+#   just run
+#   RUST_LOG=coding_agent_worker=trace just run   # tap the ACP wire (Logs tab)
 #
 # Reads the repo-root macro.toml by default; override with CONFIG=/path/to.toml.
 
@@ -10,8 +10,9 @@ CONFIG := env("CONFIG", justfile_directory() + "/../../macro.toml")
 ROOT := justfile_directory() + "/../.."
 SCRIPTS := ROOT + "/tooling/xtask/crates/xtask_workflows/src/workflows/scripts"
 
-# Serve this bot's agent sessions: webhook receiver, one connection, one harness.
-serve:
+# Serve this harness's agent sessions inside the control panel: registration,
+# bound agents, live sessions, config, pairing, and logs - one process.
+run:
     SQLX_OFFLINE=true cargo run -p coding_agent_worker -- --config {{ CONFIG }}
 
 # Build the release `macrod` the way the tag workflow does, and prove it is as

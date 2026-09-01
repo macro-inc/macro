@@ -2,7 +2,7 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-version = "0.6.3"
+version = "0.6.4"
 
 [features]
 default = []

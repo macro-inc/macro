@@ -32,8 +32,8 @@ use macro_uuid::Uuid;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
-    OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults,
+    MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
@@ -52,14 +52,16 @@ fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
 }
 
-fn staff_sender() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid staff user id")
-}
-
 fn open_command() -> OpenSession {
     let thread_id = macro_uuid::generate_uuid_v7();
     OpenSession {
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+        runtime: AgentRuntimeConfig {
+            kind: AgentKind::SandboxedCoder,
+            model: "agent-model".to_owned(),
+            harness: "opencode".to_owned(),
+            instructions: String::new(),
+        },
         origin: MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),
             thread_id,
@@ -180,11 +182,29 @@ type TestHarness = AgentHarnessService<
     >,
     MockContainerManager,
     AnnouncerMock,
-    Arc<RuntimeRegistry<ContainerSender>>,
+    TestConnections,
     PromptContextMock,
     PromptComposerMock,
     EgressProvisionerMock,
 >;
+
+/// Bot-to-harness bindings for tests: every bot maps to the harness sharing
+/// its uuid, so tests attach runtimes by [`harness_for_bot`].
+#[derive(Clone, Default)]
+struct MirrorBindings;
+
+impl crate::domain::ports::HarnessBindings for MirrorBindings {
+    async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
+        Ok(Some(harness_for_bot(bot)))
+    }
+}
+
+fn harness_for_bot(bot: BotId) -> harness_id::HarnessId {
+    harness_id::HarnessId::new_from_uuid(bot.as_uuid())
+}
+
+type TestConnections =
+    crate::outbound::runtime_registry::HarnessKeyedConnections<MirrorBindings, ContainerSender>;
 
 fn harness_with_edges(
     prompt_context: PromptContextMock,
@@ -208,7 +228,7 @@ fn harness_with_edges(
         ),
         containers.clone(),
         announcer.clone(),
-        Arc::clone(&runtimes),
+        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
         EgressProvisionerMock::new(),
@@ -370,6 +390,8 @@ async fn open_creates_announces_and_delivers_the_mention() {
     assert_eq!(session.acp_session_id, Some(SessionId::new("acp-test")));
     assert_eq!(session.originating_message_id, Some(origin.message_id));
     assert_eq!(session.thread_id, Some(origin.thread_id));
+    assert_eq!(session.model, "agent-model");
+    assert_eq!(session.harness, "opencode");
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
     assert_eq!(announced[0].origin_channel_id, origin.channel_id);
@@ -447,7 +469,7 @@ async fn composer_failure_stops_open_before_announcement_or_delivery() {
 }
 
 #[tokio::test]
-async fn open_sends_prior_messages_only_to_the_agent_prompt() {
+async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     let context = vec![PriorChannelMessage {
         sender: "previous@example.com".to_owned(),
         content: "previous channel message".to_owned(),
@@ -457,7 +479,8 @@ async fn open_sends_prior_messages_only_to_the_agent_prompt() {
         PromptContextMock::with_messages(context.clone()),
         composer.clone(),
     );
-    let command = open_command();
+    let mut command = open_command();
+    command.runtime.instructions = "Diagnose first.".to_owned();
     let raw = command.origin.content.clone();
     let id = AgentSessionId::new();
 
@@ -945,7 +968,9 @@ async fn live_cursor_session(
 ) -> ContainerMock {
     let mut command = open_command();
     command.bot_id = bot_id::CURSOR_BOT_ID;
-    command.origin.sender = staff_sender();
+    command.runtime.kind = AgentKind::Cursor;
+    command.runtime.harness = "cursor".to_owned();
+    command.origin.sender = sender();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
@@ -963,24 +988,6 @@ async fn live_cursor_session(
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("cursor session should open");
     container
-}
-
-#[tokio::test]
-async fn a_non_staff_sender_cannot_open_a_cursor_session() {
-    let (service, _repo, containers, _announcer, _runtimes) = harness();
-    let mut command = open_command();
-    command.bot_id = bot_id::CURSOR_BOT_ID;
-
-    let error = service
-        .execute(AgentSessionId::new(), HarnessCommand::Open(command))
-        .await
-        .expect_err("non-staff must not open cursor sessions");
-
-    assert!(matches!(
-        error,
-        HarnessError::Session(AgentSessionError::Forbidden)
-    ));
-    assert_eq!(containers.spawned(), 0);
 }
 
 #[tokio::test]
@@ -1081,28 +1088,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 }
 
 #[tokio::test]
-async fn a_non_staff_control_event_cannot_drive_a_cursor_session() {
-    let (service, _repo, containers, _announcer, _runtimes) = harness();
-    let id = AgentSessionId::new();
-    let container = live_cursor_session(&service, &containers, id).await;
-
-    let error = service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::prompt("spend cursor credits"),
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect_err("non-staff must not control cursor sessions");
-
-    assert!(matches!(error, AgentSessionError::Forbidden));
-    assert_eq!(prompts(&container.agent()).len(), 1);
-}
-
-#[tokio::test]
-async fn a_staff_control_event_can_drive_a_cursor_session() {
+async fn a_user_control_event_can_drive_their_cursor_session() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     let container = live_cursor_session(&service, &containers, id).await;
@@ -1112,11 +1098,11 @@ async fn a_staff_control_event_can_drive_a_cursor_session() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("continue"),
-                actor: Some(staff_sender()),
+                actor: Some(sender()),
             },
         )
         .await
-        .expect("staff may control cursor sessions");
+        .expect("the session owner may control cursor sessions");
 
     assert_eq!(prompts(&container.agent()).len(), 2);
 }
@@ -1299,7 +1285,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // session: no handshake, no ACP session, nothing sent - a session nobody
     // is prompting costs the runtime nothing.
     let runtime = ContainerMock::default();
-    runtimes.attach(session.bot_id, runtime.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
     assert!(runtime.agent().received_requests().is_empty());
     assert!(
         repo.get(session.id)
@@ -1339,7 +1325,7 @@ async fn a_bound_session_stays_on_its_connection_until_it_drops() {
         .expect("open");
 
     let first = ContainerMock::default();
-    runtimes.attach(session.bot_id, first.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), first.clone());
     let (result, ()) = tokio::join!(
         prompt(&service, session.id, "fix the failing test"),
         complete_bound_handshake(&first)
@@ -1369,7 +1355,7 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
         .expect("open");
 
     let first = ContainerMock::default();
-    runtimes.attach(session.bot_id, first.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), first.clone());
     let (result, ()) = tokio::join!(
         prompt(&service, session.id, "fix the failing test"),
         complete_bound_handshake(&first)
@@ -1382,7 +1368,7 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
     first.disconnects();
     await_disconnect(&repo, session.id).await;
     let second = ContainerMock::default();
-    runtimes.attach(session.bot_id, second.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), second.clone());
     assert!(second.agent().received_requests().is_empty());
 
     let (result, ()) = tokio::join!(
@@ -1415,7 +1401,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         ),
         containers.clone(),
         AnnouncerMock::new(),
-        RuntimeRegistry::<ContainerSender>::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
@@ -1462,7 +1448,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
     // this deployment's to run, so the dial must not be what the session is
     // restored onto.
     let dialed_in = ContainerMock::default();
-    runtimes.attach(session.bot_id, dialed_in.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), dialed_in.clone());
 
     let prompted = service.control_event(
         id,
@@ -1887,7 +1873,7 @@ async fn commands_for_a_peer_managed_session_forward_to_its_address() {
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        RuntimeRegistry::<ContainerSender>::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
@@ -1933,7 +1919,7 @@ async fn a_dead_peers_command_falls_back_to_local_execution() {
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        RuntimeRegistry::<ContainerSender>::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),

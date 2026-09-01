@@ -28,6 +28,8 @@
 //! | [`UserOnly`] | Directly authenticated user | [`MacroUserAuthentication`] |
 //! | [`UserOrBot`] | Directly authenticated user or bot | [`UserOrBotAuthorization`] |
 //! | [`BotOnly`] | Bot, with optional acting user | [`BotAuthentication`] |
+//! | [`UserBotOrHarness`] | Directly authenticated user, bot, or harness | [`UserBotOrHarnessAuthorization`] |
+//! | [`HarnessOnly`] | Harness, acting for its verified user | [`HarnessAuthentication`] |
 //! | [`InternalOnly`] | Internal service, with optional acting user | [`InternalAuthorization`] |
 //! | [`AnyPrincipal`] | Any authenticated principal | [`MacroAuthorization`] |
 //!
@@ -58,15 +60,18 @@ pub mod outbound;
 
 pub use domain::{
     bot_authorizer::BotAuthorizerService,
+    harness_authorizer::HarnessAuthorizerService,
     models::{
         BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotScope,
-        BotTokenAuthorization, InternalAuthConfig, InternalIdentityClaims, MacroAuthorization,
+        BotTokenAuthorization, HarnessAuthentication, HarnessAuthorizationOwner,
+        HarnessTokenAuthorization, InternalAuthConfig, InternalIdentityClaims, MacroAuthorization,
         MacroAuthorizationError, MacroUserAuthentication, ResolvedApiKeyUser,
         ResolvedBotActingUser, ValidatedIdentity,
     },
     ports::{
-        BotAuthorizationRepo, BotAuthorizer, JwtValidator, MacroAuthorizationService,
-        NoBotAuthorizer, NoUserApiKeyAuthorizer, UserApiKeyAuthorizationRepo, UserApiKeyAuthorizer,
+        BotAuthorizationRepo, BotAuthorizer, HarnessAuthorizationRepo, HarnessAuthorizer,
+        JwtValidator, MacroAuthorizationService, NoBotAuthorizer, NoHarnessAuthorizer,
+        NoUserApiKeyAuthorizer, UserApiKeyAuthorizationRepo, UserApiKeyAuthorizer,
     },
     service::MacroAuthorizationServiceImpl,
     user_api_key_authorizer::UserApiKeyAuthorizerService,
@@ -78,14 +83,16 @@ pub use inbound::{
     ActingEntity, ActingUser, ActingUserAuthorization, AnyPrincipal, AuthorizationPolicy,
     BOT_FOR_FUSIONAUTH_USER_ID_HEADER, BOT_FOR_MACRO_USER_ID_HEADER,
     BOT_FOR_ORGANIZATION_ID_HEADER, BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotOnly,
-    INTERNAL_API_KEY_HEADER, INTERNAL_FUSIONAUTH_USER_ID_HEADER,
-    INTERNAL_MACRO_ORGANIZATION_ID_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalAuthorization,
-    InternalEntity, InternalOnly, LEGACY_DSS_INTERNAL_API_KEY_HEADER,
-    LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER, MacroAuthorizationExtractor,
-    MacroAuthorizationRejection, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
-    USER_API_KEY_HEADER, UserOnly, UserOrBot, UserOrBotAuthorization, UserOrBotEntity,
-    UserOrInternal, UserOrInternalAuthorization, UserOrInternalCaller, UserOrInternalEntity,
-    UserOrInternalService, UserOrInternalServiceAuthorization,
+    HARNESS_FOR_MACRO_USER_ID_HEADER, HARNESS_TOKEN_HEADER, HarnessOnly, INTERNAL_API_KEY_HEADER,
+    INTERNAL_FUSIONAUTH_USER_ID_HEADER, INTERNAL_MACRO_ORGANIZATION_ID_HEADER,
+    INTERNAL_MACRO_USER_ID_HEADER, InternalAuthorization, InternalEntity, InternalOnly,
+    LEGACY_DSS_INTERNAL_API_KEY_HEADER, LEGACY_DSS_INTERNAL_MACRO_USER_ID_HEADER,
+    MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor, USER_API_KEY_HEADER, UserBotOrHarness,
+    UserBotOrHarnessAuthorization, UserBotOrHarnessEntity, UserOnly, UserOrBot,
+    UserOrBotAuthorization, UserOrBotEntity, UserOrInternal, UserOrInternalAuthorization,
+    UserOrInternalCaller, UserOrInternalEntity, UserOrInternalService,
+    UserOrInternalServiceAuthorization,
 };
 /// JWT validation adapters for user-authenticated and internal-only services.
 #[cfg(feature = "outbound")]
@@ -95,3 +102,6 @@ pub use outbound::{MacroAuthJwtValidator, NoopMacroAuthJwtValidator};
 pub use outbound::{
     PgBotAuthorizationRepo, PgBotAuthorizer, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
+/// PostgreSQL harness authorization repository and concrete authorizer.
+#[cfg(feature = "postgres")]
+pub use outbound::{PgHarnessAuthorizationRepo, PgHarnessAuthorizer};

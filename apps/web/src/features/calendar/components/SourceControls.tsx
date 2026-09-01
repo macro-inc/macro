@@ -15,17 +15,18 @@ export function SourceControls(props: SourceControlsProps) {
       <For each={props.sources}>
         {(source) => (
           <Checkbox
-            as="label"
             checked={props.isVisible(source.id)}
             onChange={(checked) => props.onVisibilityChange(source.id, checked)}
             class="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-ink hover:bg-hover"
           >
-            <span
-              aria-hidden="true"
-              class="size-2.5 shrink-0 rounded-sm"
-              style={{ 'background-color': source.color }}
-            />
-            <span class="min-w-0 flex-1 truncate">{source.name}</span>
+            <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
+              <span
+                aria-hidden="true"
+                class="size-2.5 shrink-0 rounded-sm"
+                style={{ 'background-color': source.color }}
+              />
+              <span class="min-w-0 flex-1 truncate">{source.name}</span>
+            </Checkbox.Label>
             <Checkbox.Control />
           </Checkbox>
         )}

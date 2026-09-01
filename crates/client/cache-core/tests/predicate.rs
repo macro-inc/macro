@@ -112,10 +112,20 @@ async fn try_begin_with_projection(
     engine: &mut Engine<InMemoryStorage>,
     projection_mutations: Vec<OptimisticProjectionMutation>,
 ) -> Result<MutationId, EngineError<std::convert::Infallible>> {
+    let uuid = uuid::Uuid::new_v4().to_string();
+    try_begin_with_projection_uuid(engine, &uuid, projection_mutations).await
+}
+
+async fn try_begin_with_projection_uuid(
+    engine: &mut Engine<InMemoryStorage>,
+    uuid: &str,
+    projection_mutations: Vec<OptimisticProjectionMutation>,
+) -> Result<MutationId, EngineError<std::convert::Infallible>> {
     engine
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                uuid,
                 query: OPTIMISTIC_MUTATION,
                 operation_name: Some("SetEntityProperty"),
                 variables: &optimistic_variables(),
@@ -926,6 +936,69 @@ fn optimistic_settlement_applies_authoritative_patch_before_shadow_reconciliatio
             fact.attribute == token("server-relation")
                 && fact.value == ExactValue::new([1]).unwrap()
         }));
+    });
+}
+
+#[test]
+fn pending_uuid_replacement_reassigns_projection_shadow_to_the_new_tail() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(projection("authority"))],
+            )
+            .await
+            .unwrap();
+        let uuid = "e3ac0a53-8789-4925-8664-744630448ebe";
+        let first = try_begin_with_projection_uuid(
+            &mut engine,
+            uuid,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-1"))],
+        )
+        .await
+        .unwrap();
+        let replacement = try_begin_with_projection_uuid(
+            &mut engine,
+            uuid,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
+        )
+        .await
+        .unwrap();
+
+        assert!(replacement > first);
+        let queue = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(
+            queue.iter().map(|row| row.id).collect::<Vec<_>>(),
+            [replacement]
+        );
+        let shadow = engine
+            .storage()
+            .load_optimistic_projections(&[record_key()])
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(shadow.owner, replacement);
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-2"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Optimistic(vec![record_key()])
+        );
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Optimistic(Vec::new())
+        );
     });
 }
 

@@ -650,7 +650,12 @@ export const openEntityInSplitFromUnifiedList = async (
       'calendar',
       CALENDAR_BLOCK_ID
     );
-    if (existing) {
+    const existingIsViewer =
+      existing &&
+      splitHandle?.isControllerSplit() &&
+      splitHandle.viewerId() === existing.id;
+
+    if (existing && !existingIsViewer) {
       existing.activate();
     } else {
       splitManager.openWithSplit(
@@ -659,7 +664,9 @@ export const openEntityInSplitFromUnifiedList = async (
           activate: true,
           referredFrom: null,
           preferNewSplit: openInNewSplit,
+          replacePreview,
           handle: splitHandle,
+          mergeHistory,
         }
       );
     }

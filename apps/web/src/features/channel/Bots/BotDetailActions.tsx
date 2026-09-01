@@ -1,7 +1,9 @@
 import TrashIcon from '@phosphor/trash.svg';
 import { Button } from '@ui';
+import { Show } from 'solid-js';
 
 type BotDetailActionsProps = {
+  canDelete: boolean;
   dirty: boolean;
   pending: boolean;
   saving: boolean;
@@ -12,17 +14,19 @@ type BotDetailActionsProps = {
 export function BotDetailActions(props: BotDetailActionsProps) {
   return (
     <div class="flex items-center justify-between gap-3 pt-1">
-      <Button
-        type="button"
-        variant="danger"
-        size="sm"
-        disabled={props.pending}
-        onClick={props.onDelete}
-      >
-        <TrashIcon />
-        Delete bot
-      </Button>
-      <div class="flex items-center gap-2">
+      <Show when={props.canDelete}>
+        <Button
+          type="button"
+          variant="danger"
+          size="sm"
+          disabled={props.pending}
+          onClick={props.onDelete}
+        >
+          <TrashIcon />
+          Delete bot
+        </Button>
+      </Show>
+      <div class="ml-auto flex items-center gap-2">
         <Button
           type="button"
           variant="ghost"

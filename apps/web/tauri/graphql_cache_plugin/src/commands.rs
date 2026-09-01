@@ -10,9 +10,10 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    AffectedOperationsResultWire, ClaimedMutationWire, EngineHandle,
-    EnqueueOptimisticMutationResultWire, ReadResultWire, RecordSelectionResultWire,
-    WriteRegistration, WriteRequest, WriteResultWire,
+    AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
+    DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
+    MutationUpsertKindWire, ReadResultWire, RecordSelectionResultWire,
+    RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest, WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
@@ -236,6 +237,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, CacheState>,
     origin_op_id: Option<String>,
+    uuid: String,
     query: String,
     operation_name: Option<String>,
     variables: Option<Variables>,
@@ -250,6 +252,7 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
     let result = engine_handle(&state)?
         .enqueue_optimistic_mutation(
             origin_op_id,
+            uuid,
             query,
             operation_name,
             variables.unwrap_or_default(),
@@ -264,6 +267,18 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
     emit_cache_changed(&app, &result.result.revision);
+    if let MutationUpsertKindWire::ReplacedPending {
+        removed_transaction_id,
+    } = &result.upsert_kind
+    {
+        emit_mutation_settled(
+            &app,
+            removed_transaction_id.clone(),
+            "superseded",
+            None,
+            Some(result.transaction_id.clone()),
+        );
+    }
     Ok(result)
 }
 
@@ -325,15 +340,17 @@ pub async fn graphql_cache_claim_next_mutation(
 
 /// Retains a retryable queued mutation and releases its lease.
 #[tauri::command]
-pub async fn graphql_cache_defer_optimistic_write(
+pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
+    app: AppHandle<R>,
     state: State<'_, CacheState>,
     transaction_id: String,
     lease_owner: String,
     lease_generation: String,
     next_attempt_at_ms: i64,
     error: String,
-) -> Result<(), String> {
-    engine_handle(&state)?
+) -> Result<DeferOptimisticWriteResultWire, String> {
+    let settlement_transaction_id = transaction_id.clone();
+    let result = engine_handle(&state)?
         .defer_optimistic_write(
             transaction_id,
             lease_owner,
@@ -341,7 +358,23 @@ pub async fn graphql_cache_defer_optimistic_write(
             next_attempt_at_ms,
             error,
         )
-        .await
+        .await?;
+    if let DeferOptimisticWriteResultWire::DiscardedSuperseded {
+        replacement_transaction_id,
+        result: write_result,
+    } = &result
+    {
+        emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+        emit_cache_changed(&app, &write_result.revision);
+        emit_mutation_settled(
+            &app,
+            settlement_transaction_id,
+            "superseded",
+            None,
+            Some(replacement_transaction_id.clone()),
+        );
+    }
+    Ok(result)
 }
 
 /// Atomically replaces a claimed optimistic layer with the real response.
@@ -356,7 +389,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     operation_name: Option<String>,
     variables: Option<Variables>,
     data: serde_json::Value,
-) -> Result<WriteResultWire, String> {
+) -> Result<CommitOptimisticWriteResultWire, String> {
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
         .commit_optimistic_write(
@@ -369,9 +402,30 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             data,
         )
         .await?;
-    emit_ops_affected(&app, &result.affected_ops, &result.changed);
-    emit_cache_changed(&app, &result.revision);
-    emit_mutation_settled(&app, settlement_transaction_id, "committed", None);
+    let (write_result, replacement_transaction_id) = match &result {
+        CommitOptimisticWriteResultWire::Committed { result } => (result, None),
+        CommitOptimisticWriteResultWire::CommittedSuperseded {
+            replacement_transaction_id,
+            result,
+        } => (result, Some(replacement_transaction_id.clone())),
+    };
+    emit_ops_affected(
+        &app,
+        &write_result.affected_ops,
+        &write_result.changed,
+    );
+    emit_cache_changed(&app, &write_result.revision);
+    emit_mutation_settled(
+        &app,
+        settlement_transaction_id,
+        if replacement_transaction_id.is_some() {
+            "superseded"
+        } else {
+            "committed"
+        },
+        None,
+        replacement_transaction_id,
+    );
     Ok(result)
 }
 
@@ -384,19 +438,40 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
     lease_owner: String,
     lease_generation: String,
     error: String,
-) -> Result<WriteResultWire, String> {
+) -> Result<RollbackOptimisticWriteResultWire, String> {
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
         .rollback_optimistic_write(transaction_id, lease_owner, lease_generation)
         .await?;
-    emit_ops_affected(&app, &result.affected_ops, &result.changed);
-    emit_cache_changed(&app, &result.revision);
-    emit_mutation_settled(
-        &app,
-        settlement_transaction_id,
-        "permanently-failed",
-        Some(error),
-    );
+    match &result {
+        RollbackOptimisticWriteResultWire::RolledBack {
+            result: write_result,
+        } => {
+            emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+            emit_cache_changed(&app, &write_result.revision);
+            emit_mutation_settled(
+                &app,
+                settlement_transaction_id,
+                "permanently-failed",
+                Some(error),
+                None,
+            );
+        }
+        RollbackOptimisticWriteResultWire::DiscardedSuperseded {
+            replacement_transaction_id,
+            result: write_result,
+        } => {
+            emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
+            emit_cache_changed(&app, &write_result.revision);
+            emit_mutation_settled(
+                &app,
+                settlement_transaction_id,
+                "superseded",
+                None,
+                Some(replacement_transaction_id.clone()),
+            );
+        }
+    }
     Ok(result)
 }
 

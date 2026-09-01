@@ -23,7 +23,7 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
-    OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
+    OpenSession, SessionAnnouncement, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
@@ -397,6 +397,21 @@ where
             .await
             .map_err(into_session_error)
     }
+
+    async fn session_harness(
+        &self,
+        id: AgentSessionId,
+    ) -> agent_session::domain::error::Result<Option<harness_id::HarnessId>> {
+        // The row is the source of truth for which bot the session runs, and
+        // the binding resolves the bot's current harness the same way `bind`
+        // does at delivery time.
+        let session = self.inner.sessions.get_session(id).await?;
+        self.inner
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)
+    }
 }
 
 /// External sessions create the row and announce - the magic-chip message
@@ -546,7 +561,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id: session.id,
-                kind: AgentKind::of(session.bot_id),
+                kind: AgentKind::for_session(session.bot_id, &session.harness),
                 size: sandbox_size,
                 egress: egress.sandbox,
             })
@@ -652,26 +667,59 @@ where
     /// then its heartbeat going stale is what lets this replica take over. A
     /// manager that is alive but unreachable stays an error - executing
     /// locally anyway is how two actors end up on one session.
-    #[tracing::instrument(err, skip(self, command), fields(%session_id))]
+    /// The routing decision is recorded on the span, not only logged: which of
+    /// the three answers the lease gave, which peer it named, and whether the
+    /// command left this process. Those are the fields you group by when a
+    /// replica is mishandling commands, and a log line cannot be aggregated.
+    #[tracing::instrument(
+        err,
+        skip(self, command),
+        fields(
+            %session_id,
+            agent.session.management = tracing::field::Empty,
+            agent.session.manager_replica = tracing::field::Empty,
+            agent.command.forwarded = tracing::field::Empty,
+            agent.command.stale_fallback = tracing::field::Empty,
+        )
+    )]
     async fn route_then_execute(
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> Result<()> {
+        let span = tracing::Span::current();
         // Open never routes: it is what creates the session row this routing
         // would read, and a fresh id has no manager to defer to.
         if matches!(command, HarnessCommand::Open(_)) {
+            span.record("agent.session.management", "open");
+            span.record("agent.command.forwarded", false);
             return self.execute(session_id, command).await;
         }
         let manager = match self.sessions.management(session_id).await? {
-            SessionManagement::Unmanaged | SessionManagement::Ours => {
+            SessionManagement::Unmanaged => {
+                span.record("agent.session.management", "unmanaged");
+                span.record("agent.command.forwarded", false);
+                return self.execute(session_id, command).await;
+            }
+            SessionManagement::Ours => {
+                span.record("agent.session.management", "ours");
+                span.record("agent.command.forwarded", false);
                 return self.execute(session_id, command).await;
             }
             SessionManagement::Peer(manager) => manager,
         };
+        span.record("agent.session.management", "peer");
+        span.record(
+            "agent.session.manager_replica",
+            tracing::field::display(manager.replica),
+        );
         let Some(address) = manager.address else {
+            // Recorded false deliberately: the command stayed here, but as an
+            // error rather than a local execution.
+            span.record("agent.command.forwarded", false);
             return Err(HarnessError::ManagerUnreachable(session_id));
         };
+        span.record("agent.command.forwarded", true);
         tracing::info!(%session_id, peer = %manager.replica, "forwarding an agent session command");
         match self
             .forwarder
@@ -681,6 +729,10 @@ where
             Ok(()) => Ok(()),
             Err(forward_error) => match self.sessions.management(session_id).await? {
                 SessionManagement::Unmanaged | SessionManagement::Ours => {
+                    // Worth aggregating rather than only logging: routine
+                    // fallbacks mean heartbeats are not keeping up, which is a
+                    // different problem from an occasional dead peer.
+                    span.record("agent.command.stale_fallback", true);
                     tracing::warn!(
                         error = ?forward_error,
                         %session_id,
@@ -694,26 +746,6 @@ where
     }
 
     async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
-        match &command {
-            HarnessCommand::Open(open)
-                if AgentKind::of(open.bot_id) == AgentKind::Cursor
-                    && !is_macro_staff(&open.origin.sender) =>
-            {
-                return Err(AgentSessionError::Forbidden.into());
-            }
-            HarnessCommand::Deliver(deliver) => {
-                let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id) == AgentKind::Cursor
-                    && !deliver.actor.as_ref().is_some_and(is_macro_staff)
-                {
-                    return Err(AgentSessionError::Forbidden.into());
-                }
-            }
-            HarnessCommand::Open(_)
-            | HarnessCommand::SetSandboxSize(_)
-            | HarnessCommand::Delete => {}
-        }
-
         match command {
             HarnessCommand::Open(command) => self.open(session_id, command).await,
             HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
@@ -777,7 +809,7 @@ where
         // runs in Cursor's cloud, the in-memory bot has no sandbox, and an
         // external bot provisions its own. For all three, the size is only
         // recorded below as a preference.
-        if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
+        if AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::SandboxedCoder
             && effect != SandboxResizeEffect::NoOp
         {
             if effect == SandboxResizeEffect::Restart {
@@ -814,7 +846,11 @@ where
         agent.session.id = tracing::field::Empty,
     ))]
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
-        let OpenSession { bot_id, origin } = command;
+        let OpenSession {
+            bot_id,
+            runtime,
+            origin,
+        } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
         let defaults = self.defaults.for_bot(bot_id);
         let repo_url = defaults.repo_url.clone();
@@ -844,8 +880,8 @@ where
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
-                model: defaults.model.clone(),
-                harness: defaults.harness.clone(),
+                model: runtime.model.clone(),
+                harness: runtime.harness.clone(),
                 repo_url: Some(repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
@@ -877,7 +913,7 @@ where
             .containers
             .spawn(SpawnContainer {
                 session_id,
-                kind: AgentKind::of(bot_id),
+                kind: runtime.kind,
                 size: sandbox_size,
                 egress: egress.sandbox,
             })
@@ -976,7 +1012,7 @@ where
             // wire.
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id).is_managed() {
+                if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
                         .resumed_mcp_servers(session_id, &session.owner_id)

@@ -181,6 +181,58 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
     JsFuture::from(promise).await.expect("promise resolves")
 }
 
+fn empty_js_write_result() -> JsWriteResult {
+    JsWriteResult {
+        revision: "0".to_string(),
+        changed: Vec::new(),
+        affected_ops: Vec::new(),
+        reset: false,
+        revalidations: Vec::new(),
+    }
+}
+
+#[wasm_bindgen_test]
+fn tagged_wire_enum_fields_are_camel_case() {
+    assert_eq!(
+        serde_json::to_value(JsMutationUpsertKind::ReplacedPending {
+            removed_transaction_id: "1".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "replaced-pending", "removedTransactionId": "1"})
+    );
+    assert_eq!(
+        serde_json::to_value(JsMutationUpsertKind::AppendedAfterActive {
+            active_transaction_id: "2".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "appended-after-active", "activeTransactionId": "2"})
+    );
+    assert_eq!(
+        serde_json::to_value(JsDeferOptimisticWriteResult::DiscardedSuperseded {
+            replacement_transaction_id: "3".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "3"
+    );
+    assert_eq!(
+        serde_json::to_value(JsCommitOptimisticWriteResult::CommittedSuperseded {
+            replacement_transaction_id: "4".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "4"
+    );
+    assert_eq!(
+        serde_json::to_value(JsRollbackOptimisticWriteResult::DiscardedSuperseded {
+            replacement_transaction_id: "5".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "5"
+    );
+}
+
 async fn assert_closed(promise: js_sys::Promise) {
     let error = JsFuture::from(promise)
         .await
@@ -959,6 +1011,7 @@ async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
     let enqueue: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
             None,
+            "00000000-0000-4000-8000-000000000001".into(),
             OPTIMISTIC_DOCUMENT_MUTATION.into(),
             Some("RenameEntities".into()),
             js(serde_json::json!({
@@ -1089,6 +1142,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
     let first: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
             None,
+            "00000000-0000-4000-8000-000000000002".into(),
             PROPERTY_MUTATION.into(),
             Some("SetEntityProperty".into()),
             js(mutation_variables()),
@@ -1109,6 +1163,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
     let second: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
             None,
+            "00000000-0000-4000-8000-000000000003".into(),
             PROPERTY_MUTATION.into(),
             Some("SetEntityProperty".into()),
             js(mutation_variables()),
@@ -1211,6 +1266,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
     let enqueue: serde_json::Value = from_js(
         resolved(engine.enqueue_optimistic_mutation(
             None,
+            "00000000-0000-4000-8000-000000000004".into(),
             PROPERTY_MUTATION.into(),
             Some("SetEntityProperty".into()),
             js(mutation_variables()),
@@ -1308,6 +1364,7 @@ async fn destroy_recovery_wipes_records_and_queue() {
     .await;
     resolved(engine.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000005".into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -1523,6 +1580,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
         .await;
     assert_reset_required(engine.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000006".into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -1572,6 +1630,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
         .expect("operation is interned before reset");
     resolved(engine.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000007".into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),
@@ -1690,6 +1749,7 @@ async fn every_method_rejects_after_consuming_close() {
     .await;
     assert_closed(engine.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000008".into(),
         PROPERTY_MUTATION.into(),
         Some("SetEntityProperty".into()),
         js(mutation_variables()),

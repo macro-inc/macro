@@ -28,6 +28,7 @@ fn queued(label: &str, created_at_ms: i64) -> NewQueuedMutation {
         .fields
         .insert("value".into(), CacheValue::String(label.into()));
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation {
             request: MutationRequest {
                 query: format!("mutation {label} {{ update {{ id }} }}"),
@@ -50,11 +51,74 @@ fn queued(label: &str, created_at_ms: i64) -> NewQueuedMutation {
     }
 }
 
+fn queued_with_uuid(label: &str, created_at_ms: i64, uuid: uuid::Uuid) -> NewQueuedMutation {
+    let mut queued = queued(label, created_at_ms);
+    queued.uuid = uuid;
+    queued
+}
+
 fn claim(owner: &str, generation: u64) -> MutationClaimToken {
     MutationClaimToken {
         owner: owner.into(),
         generation,
     }
+}
+
+#[test]
+fn uuid_replacements_survive_reopen_with_pending_and_active_semantics() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("uuid-replacements.db");
+        let uuid = uuid::Uuid::new_v4();
+        let mut storage = database.open("pending").unwrap();
+        let first = storage
+            .enqueue_mutation(queued_with_uuid("First", 1, uuid))
+            .await
+            .unwrap();
+        let replacement = storage
+            .enqueue_mutation(queued_with_uuid("Replacement", 2, uuid))
+            .await
+            .unwrap();
+        assert!(replacement > first);
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 1);
+        storage.try_close().unwrap();
+
+        let storage = database.open("pending").unwrap();
+        let queue = storage.load_mutation_queue().await.unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].id, replacement);
+        assert_eq!(queue[0].uuid, uuid);
+        storage.try_close().unwrap();
+
+        database.physical_reset();
+        let mut storage = database.open("active").unwrap();
+        let active = storage
+            .enqueue_mutation(queued_with_uuid("Active", 10, uuid))
+            .await
+            .unwrap();
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 10,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claimed.queued.id, active);
+        let replacement = storage
+            .enqueue_mutation(queued_with_uuid("Latest", 11, uuid))
+            .await
+            .unwrap();
+        storage.try_close().unwrap();
+
+        let storage = database.open("active").unwrap();
+        let queue = storage.load_mutation_queue().await.unwrap();
+        assert_eq!(queue.len(), 2);
+        assert_eq!(queue[0].id, active);
+        assert!(queue[0].superseded);
+        assert_eq!(queue[1].id, replacement);
+        assert!(!queue[1].superseded);
+    });
 }
 
 #[test]
@@ -141,6 +205,7 @@ fn queue_preserves_every_field_order_and_reopen_state() {
         first_entry.mutation.lease_owner = Some("reopen-owner".into());
         first_entry.mutation.lease_expires_at_ms = Some(175);
         let second_entry = NewQueuedMutation {
+            uuid: uuid::Uuid::new_v4(),
             mutation: StoredMutation::new(
                 MutationRequest {
                     query: "mutation Second { update { id } }".into(),

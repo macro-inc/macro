@@ -128,7 +128,7 @@ pub async fn get_user_profile_by_fusionauth_user_id_and_email(
         SELECT id, "organizationId" as "organization_id?"
         FROM "User"
         WHERE "macro_user_id" = $1
-        AND email = $2
+        AND LOWER(email) = LOWER($2)
         "#,
         &fusionauth_user_id,
         &email

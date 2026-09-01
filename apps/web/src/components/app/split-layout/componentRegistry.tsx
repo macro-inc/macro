@@ -3,6 +3,7 @@ import type { EventEditorInitialValues } from '@app/features/calendar/components
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
+import { InboxView } from '@app/features/inbox-view/inbox-view';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
@@ -14,7 +15,7 @@ import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag'
 import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { usePosthog } from '@app/lib/analytics/posthog';
+import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
@@ -31,6 +32,8 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
   ENABLE_CRM,
+  ENABLE_NEW_APP_VIEWS_FLAG,
+  ENABLE_NEW_APP_VIEWS_OVERRIDE,
   ENABLE_REMINDERS,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
@@ -39,7 +42,14 @@ import type { ViewId } from '@core/types/view';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { EmptyStatePanel } from '@ui';
-import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
+import {
+  type Component,
+  createRenderEffect,
+  type JSXElement,
+  lazy,
+  onMount,
+  Show,
+} from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import { previewEmptyStateForContent } from './previewController';
@@ -50,6 +60,26 @@ function usePageViewTracking(pageTitle: string) {
     analytics.pageView(pageTitle);
     analytics.track('open_view', { viewId: pageTitle });
   });
+}
+
+function useNewAppViews() {
+  const panel = useSplitPanelOrThrow();
+  const posthog = usePosthog();
+  const flag = useFeatureFlag(ENABLE_NEW_APP_VIEWS_FLAG, {
+    enabledOverride: ENABLE_NEW_APP_VIEWS_OVERRIDE,
+  });
+  const ready = () =>
+    ENABLE_NEW_APP_VIEWS_OVERRIDE !== undefined || posthog.flagsLoaded();
+  const enabled = () => ready() && flag().enabled;
+
+  createRenderEffect(() => {
+    if (!ready()) return;
+    panel.handle.updateMeta?.({
+      splitPanelLayout: enabled() ? 'composable' : 'legacy',
+    });
+  });
+
+  return { ready, enabled };
 }
 
 /**
@@ -190,22 +220,32 @@ registerComponent(
   })
 );
 
-registerComponent(
-  'inbox',
-  withAuth(() => {
-    usePageViewTracking('inbox');
-    const preset = getViewPreset('inbox');
-    return (
-      <SoupView
-        viewName="Inbox"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        disableLocalSearch
-      />
-    );
-  })
-);
+function LegacyInboxView() {
+  const preset = getViewPreset('inbox');
+  return (
+    <SoupView
+      viewName="Inbox"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+      disableLocalSearch
+    />
+  );
+}
+
+function RegisteredInboxView() {
+  usePageViewTracking('inbox');
+  const newAppViews = useNewAppViews();
+  return (
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show when={newAppViews.enabled()} fallback={<LegacyInboxView />}>
+        <InboxView />
+      </Show>
+    </Show>
+  );
+}
+
+registerComponent('inbox', withAuth(RegisteredInboxView));
 
 registerComponent('recent', withAuth(RecentViewWrapper));
 

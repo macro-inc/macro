@@ -502,6 +502,7 @@ export class CacheWorkerCore {
         const result: EnqueueOptimisticMutationResult =
           await engine.enqueueOptimisticMutation(
             request.originOpId,
+            request.uuid,
             request.query,
             request.operationName,
             request.variables,
@@ -515,6 +516,16 @@ export class CacheWorkerCore {
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
+        if (result.upsertKind.kind === 'replaced-pending') {
+          this.push({
+            kind: 'mutation-settled',
+            settlement: {
+              transactionId: result.upsertKind.removedTransactionId,
+              status: 'superseded',
+              replacementTransactionId: result.transactionId,
+            },
+          });
+        }
         return result;
       })
       .with({ kind: 'inspect-query-variants' }, async (request) => {
@@ -542,14 +553,26 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'defer-optimistic-write' }, async (request) => {
         const engine = this.requireEngine();
-        await engine.deferOptimisticWrite(
+        const result = await engine.deferOptimisticWrite(
           request.transactionId,
           request.leaseOwner,
           request.leaseGeneration,
           request.nextAttemptAtMs,
           request.error
         );
-        return null;
+        if (result.kind === 'discarded-superseded') {
+          result.revision = parseCacheRevision(result.revision);
+          this.fanOut(result, true);
+          this.push({
+            kind: 'mutation-settled',
+            settlement: {
+              transactionId: request.transactionId,
+              status: 'superseded',
+              replacementTransactionId: result.replacementTransactionId,
+            },
+          });
+        }
+        return result;
       })
       .with({ kind: 'commit-optimistic-write' }, async (request) => {
         const engine = this.requireEngine();
@@ -567,10 +590,17 @@ export class CacheWorkerCore {
         this.fanOut(result, true);
         this.push({
           kind: 'mutation-settled',
-          settlement: {
-            transactionId: request.transactionId,
-            status: 'committed',
-          },
+          settlement:
+            result.kind === 'committed-superseded'
+              ? {
+                  transactionId: request.transactionId,
+                  status: 'superseded',
+                  replacementTransactionId: result.replacementTransactionId,
+                }
+              : {
+                  transactionId: request.transactionId,
+                  status: 'committed',
+                },
         });
         return result;
       })
@@ -585,11 +615,18 @@ export class CacheWorkerCore {
         this.fanOut(result, true);
         this.push({
           kind: 'mutation-settled',
-          settlement: {
-            transactionId: request.transactionId,
-            status: 'permanently-failed',
-            error: request.error,
-          },
+          settlement:
+            result.kind === 'discarded-superseded'
+              ? {
+                  transactionId: request.transactionId,
+                  status: 'superseded',
+                  replacementTransactionId: result.replacementTransactionId,
+                }
+              : {
+                  transactionId: request.transactionId,
+                  status: 'permanently-failed',
+                  error: request.error,
+                },
         });
         return result;
       })

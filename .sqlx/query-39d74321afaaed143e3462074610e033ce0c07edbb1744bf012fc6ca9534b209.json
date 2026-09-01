@@ -1,0 +1,130 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent,\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.default_model,\n                a.channel_scope,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.id = $1\n              AND b.kind = 'owned'\n              AND b.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "handle",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "avatar_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "has_agent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "instructions",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "harness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 16,
+        "name": "default_model",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "channel_scope",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "channel_ids!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "39d74321afaaed143e3462074610e033ce0c07edbb1744bf012fc6ca9534b209"
+}
