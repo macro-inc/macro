@@ -835,3 +835,12 @@ registerComponent(
   'icon-gallery',
   lazy(() => import('@core/internal/IconGallery'))
 );
+registerComponent(
+  'magic-chip',
+  lazy(
+    () =>
+      import(
+        '@core/component/LexicalMarkdown/component/decorator/MagicChip/debug/Gallery'
+      )
+  )
+);

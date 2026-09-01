@@ -14,6 +14,7 @@ import type {
   SessionStatusDto,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import type { MagicChipAgent } from './display';
 import {
   deriveMagicChipPresentation,
   type MagicChipPresentation,
@@ -39,9 +40,12 @@ function magicChipStatus(
 /** Observe the session lifecycle and the chip's anchored folded turn. */
 export function createMagicChipModel(props: MagicChipDecoratorProps): {
   presentation: Accessor<MagicChipPresentation>;
+  agent: Accessor<MagicChipAgent | undefined>;
 } {
   const [latestEvent, setLatestEvent] = createSignal<string>();
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
+  const [foldReady, setFoldReady] = createSignal(false);
+  const [agent, setAgent] = createSignal<MagicChipAgent>();
   const [persistedStatus, setPersistedStatus] = createSignal(props.status);
   let active = true;
   let release: (() => void) | undefined;
@@ -98,9 +102,15 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       }
       release = acquired.release;
       setMessages(acquired.messages);
+      setAgent({
+        name: acquired.bot.name,
+        avatarUrl: acquired.bot.avatarUrl,
+      });
+      setFoldReady(true);
     })
     .catch((error: unknown) => {
       console.error('[magic-chip] session log could not be folded', error);
+      if (active) setFoldReady(true);
     });
 
   onCleanup(() => {
@@ -116,14 +126,15 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       (message) => message.turn === turn
     );
     return deriveMagicChipPresentation({
+      foldReady: foldReady(),
       persistedStatus: persistedStatus(),
       latestEvent: latestEvent(),
       prompt: messagesForTurn.find((message) => message.author.kind === 'user'),
-      response: messagesForTurn.find(
+      response: messagesForTurn.findLast(
         (message) => message.author.kind === 'agent'
       ),
     });
   };
 
-  return { presentation };
+  return { presentation, agent };
 }

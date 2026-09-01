@@ -45,6 +45,7 @@ describe('createMagicChipModel', () => {
     vi.clearAllMocks();
     sessionFold.subscribeAgentSessionLog.mockReturnValue(vi.fn());
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      bot: { id: 'bot', name: 'Macro' },
       messages: [prompt, response],
       release: vi.fn(),
     });
@@ -54,12 +55,43 @@ describe('createMagicChipModel', () => {
     });
   });
 
+  it('settles on the latest agent message in the attached turn', async () => {
+    sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      bot: { id: 'bot', name: 'Macro' },
+      messages: [
+        prompt,
+        response,
+        {
+          ...response,
+          parts: [{ kind: 'text', text: 'And one more thing.' }],
+        },
+      ],
+      release: vi.fn(),
+    });
+    let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
+    const dispose = createRoot((rootDispose) => {
+      presentation = createMagicChipModel(props).presentation;
+      return rootDispose;
+    });
+
+    await Promise.resolve();
+
+    expect(presentation()).toEqual({
+      kind: 'settled',
+      markdown: 'And one more thing.',
+    });
+
+    dispose();
+  });
+
   it('settles after the attached turn completes despite stale acp_ready status', async () => {
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {
       presentation = createMagicChipModel(props).presentation;
       return rootDispose;
     });
+
+    expect(presentation()).toEqual({ kind: 'loading' });
 
     await Promise.resolve();
 
@@ -74,6 +106,7 @@ describe('createMagicChipModel', () => {
 
   it('hydrates a disconnected status from the session', async () => {
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      bot: { id: 'bot', name: 'Macro' },
       messages: [],
       release: vi.fn(),
     });
@@ -88,7 +121,11 @@ describe('createMagicChipModel', () => {
 
     expect(presentation()).toEqual({
       kind: 'working',
-      activity: { label: 'Session disconnected', busy: false },
+      activity: {
+        icon: 'disconnect',
+        label: 'Session disconnected',
+        busy: false,
+      },
     });
 
     dispose();
