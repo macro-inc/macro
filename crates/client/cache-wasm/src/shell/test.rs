@@ -304,10 +304,17 @@ fn mutation_variables() -> serde_json::Value {
     }})
 }
 
-fn v2_document_supplement(document_id: &str, is_email_attachment: bool) -> String {
+fn v3_document_supplement(
+    document_id: &str,
+    is_email_attachment: bool,
+    is_important: bool,
+    status_option_ids: Vec<uuid::Uuid>,
+) -> String {
     encode_cache_projection_supplement(&SoupCacheProjectionSupplement::document(
         RecordKey::new(format!("GraphqlSoupDocument:{document_id}")).unwrap(),
         is_email_attachment,
+        is_important,
+        status_option_ids,
     ))
     .unwrap()
 }
@@ -316,6 +323,26 @@ fn projected_document_item(
     document_id: &str,
     owner: &str,
     is_email_attachment: bool,
+    sub_type: Option<&str>,
+    updated_at: i64,
+) -> serde_json::Value {
+    projected_document_item_with_facts(
+        document_id,
+        owner,
+        is_email_attachment,
+        true,
+        Vec::new(),
+        sub_type,
+        updated_at,
+    )
+}
+
+fn projected_document_item_with_facts(
+    document_id: &str,
+    owner: &str,
+    is_email_attachment: bool,
+    is_important: bool,
+    status_option_ids: Vec<uuid::Uuid>,
     sub_type: Option<&str>,
     updated_at: i64,
 ) -> serde_json::Value {
@@ -331,7 +358,12 @@ fn projected_document_item(
     serde_json::json!({
         "__typename": "GraphqlSoupDocument",
         "id": document_id,
-        "cacheProjection": v2_document_supplement(document_id, is_email_attachment),
+        "cacheProjection": v3_document_supplement(
+            document_id,
+            is_email_attachment,
+            is_important,
+            status_option_ids,
+        ),
         "displayName": format!("Document {document_id}"),
         "ownerId": owner,
         "projectId": null,
@@ -454,6 +486,70 @@ fn documents_preset_filter(document_filter: serde_json::Value) -> serde_json::Va
             "callFilter": { "literal": { "callId": NIL_ID } },
             "crmCompanyFilter": { "literal": { "id": NIL_ID } },
             "foreignEntityFilter": { "literal": { "id": NIL_ID } }
+        },
+        "sortMethod": "UPDATED_AT",
+        "sortDirection": "DESC",
+        "limit": 100
+    })
+}
+
+fn my_tasks_filter(owner: &str) -> serde_json::Value {
+    const NIL_ID: &str = "00000000-0000-0000-0000-000000000000";
+    const STATUS_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000002";
+    serde_json::json!({
+        "filters": {
+            "calendarEventFilter": { "literal": { "id": NIL_ID } },
+            "documentFilter": {
+                "and": {
+                    "left": { "literal": { "subType": "TASK" } },
+                    "right": {
+                        "or": {
+                            "left": { "literal": { "owner": owner } },
+                            "right": { "literal": { "importance": true } }
+                        }
+                    }
+                }
+            },
+            "projectFilter": { "literal": { "projectId": NIL_ID } },
+            "chatFilter": { "literal": { "chatId": NIL_ID } },
+            "emailFilter": { "tree": { "literal": { "threadId": NIL_ID } } },
+            "channelFilter": { "literal": { "channelId": NIL_ID } },
+            "channelThreadFilter": { "literal": { "threadId": NIL_ID } },
+            "callFilter": { "literal": { "callId": NIL_ID } },
+            "crmCompanyFilter": { "literal": { "id": NIL_ID } },
+            "foreignEntityFilter": { "literal": { "id": NIL_ID } },
+            "propertiesFilter": {
+                "or": {
+                    "left": {
+                        "literal": {
+                            "propertyDefinitionId": STATUS_PROPERTY_ID,
+                            "value": {
+                                "selectOption": "00000001-0000-0000-0002-000000000001"
+                            }
+                        }
+                    },
+                    "right": {
+                        "or": {
+                            "left": {
+                                "literal": {
+                                    "propertyDefinitionId": STATUS_PROPERTY_ID,
+                                    "value": {
+                                        "selectOption": "00000001-0000-0000-0002-000000000002"
+                                    }
+                                }
+                            },
+                            "right": {
+                                "literal": {
+                                    "propertyDefinitionId": STATUS_PROPERTY_ID,
+                                    "value": {
+                                        "selectOption": "00000001-0000-0000-0002-000000000003"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         },
         "sortMethod": "UPDATED_AT",
         "sortDirection": "DESC",
@@ -686,8 +782,8 @@ async fn operations_preserve_js_boundary_interner_and_ordering() {
 }
 
 #[wasm_bindgen_test(async)]
-async fn soup_updated_v2_supplements_advance_revision_and_recompute_documents_presets_locally() {
-    const SCOPE: &str = "cache-wasm-realtime-documents-v2";
+async fn soup_updated_v3_supplements_advance_revision_and_recompute_documents_presets_locally() {
+    const SCOPE: &str = "cache-wasm-realtime-documents-v3";
     const OWNER: &str = "macro|user@example.com";
     const OTHER_OWNER: &str = "macro|shared@example.com";
     const INITIAL: &str = "00000000-0000-0000-0000-000000000001";
@@ -807,6 +903,98 @@ async fn soup_updated_v2_supplements_advance_revision_and_recompute_documents_pr
     );
     assert_eq!(selected["revision"], "2");
     assert_eq!(selected["records"][0]["record"]["id"], ORDINARY);
+
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn soup_updated_v3_recomputes_my_tasks_importance_and_status_locally() {
+    const SCOPE: &str = "cache-wasm-realtime-my-tasks-v3";
+    const VIEWER: &str = "macro|viewer@example.com";
+    const OWNER_TASK: &str = "00000000-0000-0000-0000-000000000011";
+    const ASSIGNED_TASK: &str = "00000000-0000-0000-0000-000000000012";
+    const COMPLETED_TASK: &str = "00000000-0000-0000-0000-000000000013";
+    let status =
+        |suffix| uuid::Uuid::parse_str(&format!("00000001-0000-0000-0002-{suffix:012}")).unwrap();
+    let key = |id| format!("GraphqlSoupDocument:{id}");
+    let engine = fresh_engine(SCOPE).await;
+
+    let initial: serde_json::Value = from_js(
+        resolved(engine.write_query(
+            write_context(None),
+            SOUP_WITH_PROJECTION_QUERY.into(),
+            Some("SoupWithProjection".into()),
+            js(serde_json::json!({ "input": { "limit": 100 } })),
+            js(serde_json::json!({
+                "user": {
+                    "id": "user-1",
+                    "soup": {
+                        "nextCursor": null,
+                        "items": [projected_document_item_with_facts(
+                            OWNER_TASK,
+                            VIEWER,
+                            false,
+                            false,
+                            vec![status(1)],
+                            Some("task"),
+                            10,
+                        )]
+                    }
+                }
+            })),
+            Some("user-1".into()),
+        ))
+        .await,
+    );
+    assert_eq!(initial["revision"], "1");
+
+    let updates = [
+        projected_document_item_with_facts(
+            ASSIGNED_TASK,
+            "macro|other@example.com",
+            false,
+            true,
+            vec![status(2)],
+            Some("task"),
+            30,
+        ),
+        projected_document_item_with_facts(
+            COMPLETED_TASK,
+            "macro|other@example.com",
+            false,
+            true,
+            vec![status(4)],
+            Some("task"),
+            20,
+        ),
+    ]
+    .into_iter()
+    .map(|item| serde_json::json!({ "__typename": "SoupUpdated", "item": item }))
+    .collect::<Vec<_>>();
+    let realtime: serde_json::Value = from_js(
+        resolved(engine.write_query(
+            write_context(None),
+            SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+            Some("SoupUpdatesWithProjection".into()),
+            js(serde_json::json!({})),
+            js(serde_json::json!({ "soupUpdates": updates })),
+            None,
+        ))
+        .await,
+    );
+    assert_eq!(realtime["revision"], "2");
+
+    let filtered: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(my_tasks_filter(VIEWER)))).await);
+    assert_eq!(
+        filtered,
+        serde_json::json!({
+            "kind": "complete",
+            "revision": "2",
+            "keys": [key(ASSIGNED_TASK), key(OWNER_TASK)],
+            "optimistic": false,
+        })
+    );
 
     close_and_destroy(&engine, SCOPE).await;
 }
