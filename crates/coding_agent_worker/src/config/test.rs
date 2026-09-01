@@ -70,7 +70,7 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
 
     let secure = MacroApi {
         api_url: "https://agent-harness.macro.com/".to_owned(),
-        storage_url: "https://cloud-storage.macro.com".to_owned(),
+        storage_url: "https://gateway.macro.com/dss".to_owned(),
         web_url: "https://macro.com/app/".to_owned(),
     };
     assert_eq!(

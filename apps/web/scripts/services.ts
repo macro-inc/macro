@@ -10,16 +10,16 @@ export type Service = {
 export const services: Service[] = [
 	{
 		name: "cloud-storage",
-		dev: "https://cloud-storage-dev.macro.com/api-doc/openapi.json",
-		prod: "https://cloud-storage.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/dss/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/dss/api-doc/openapi.json",
 		local: "http://localhost:8086/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-storage/",
 		orvalKey: "storageService",
 	},
 	{
 		name: "properties-service",
-		dev: "https://cloud-storage-dev.macro.com/properties/api-doc/openapi.json",
-		prod: "https://cloud-storage.macro.com/properties/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/dss/properties/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/dss/properties/api-doc/openapi.json",
 		local: "http://localhost:8086/properties/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-properties/",
 		orvalKey: "propertiesService",

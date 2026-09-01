@@ -31,9 +31,14 @@ attribute.
   (add `start`/`end` RFC3339 to narrow; default window is 1h). Note CORS preflights create
   separate tiny traces for the same path — prefer the trace whose root is `web-app`.
 
-URL prefix → service mapping (proxy strips the prefix): `/dss/*` → document_storage_service,
+URL prefix → service mapping: `/dss/*` → document_storage_service,
 `/cognition/*` → document_cognition_service, `/auth/*` → authentication_service,
 `/email/*` → email_service. Frontend OTel exports to `/i/otlp/v1/{traces,logs}`.
+
+The local Caddy proxy strips these prefixes before forwarding, so `span.url.path` is
+unprefixed locally. The deployed gateway ALB does **not** strip `/dss` — DSS serves the
+same routes at both `/` and `/dss` — so in dev and prod `span.url.path` includes the
+prefix. Query both forms when a search comes back empty.
 
 ## Logs (Loki)
 
