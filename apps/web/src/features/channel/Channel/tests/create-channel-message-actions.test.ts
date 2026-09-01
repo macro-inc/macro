@@ -112,4 +112,49 @@ describe('createChannelMessageActions', () => {
 
     expect(onReply).toHaveBeenCalledWith({ message: reply });
   });
+
+  it('asks for confirmation when deleting without Shift', () => {
+    const harness = buildHarness({ userId: 'user-1' });
+    const message = buildMessage();
+    const actions = harness.getMessageActions(message);
+
+    actions.onDelete?.({
+      message,
+      event: { shiftKey: false } as MouseEvent,
+    });
+
+    expect(harness.deleteMessage).toHaveBeenCalledTimes(1);
+    expect(harness.deleteMessage).toHaveBeenCalledWith(
+      {
+        channelID: 'channel-1',
+        messageID: 'message-1',
+        threadID: undefined,
+      },
+      { skipConfirmation: false }
+    );
+  });
+
+  it('skips confirmation when Shift is held on delete', () => {
+    const harness = buildHarness({ userId: 'user-1' });
+    const message = buildMessage({
+      id: 'reply-1',
+      thread_id: 'parent-1',
+    });
+    const actions = harness.getMessageActions(message);
+
+    actions.onDelete?.({
+      message,
+      event: { shiftKey: true } as MouseEvent,
+    });
+
+    expect(harness.deleteMessage).toHaveBeenCalledTimes(1);
+    expect(harness.deleteMessage).toHaveBeenCalledWith(
+      {
+        channelID: 'channel-1',
+        messageID: 'reply-1',
+        threadID: 'parent-1',
+      },
+      { skipConfirmation: true }
+    );
+  });
 });

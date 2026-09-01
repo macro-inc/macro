@@ -49,4 +49,18 @@ describe('createDeleteMessageConfirmation', () => {
 
     expect(deleteMessage).not.toHaveBeenCalled();
   });
+
+  it('deletes immediately when confirmation is skipped', async () => {
+    const deleteMessage = vi.fn();
+    const { requestDelete, ConfirmationDialog } =
+      createDeleteMessageConfirmation(deleteMessage);
+
+    render(() => <ConfirmationDialog />);
+
+    requestDelete(deleteInput, { skipConfirmation: true });
+
+    expect(deleteMessage).toHaveBeenCalledTimes(1);
+    expect(deleteMessage).toHaveBeenCalledWith(deleteInput);
+    expect(screen.queryByText('Delete message')).toBeNull();
+  });
 });

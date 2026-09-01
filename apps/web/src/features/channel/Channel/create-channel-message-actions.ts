@@ -52,7 +52,10 @@ type ChannelMessageActionEffects = {
 export type CreateChannelMessageActionsOptions = {
   channelId: Accessor<string>;
   userId: Accessor<string | undefined>;
-  deleteMessage: (input: DeleteMessageInput) => void;
+  deleteMessage: (
+    input: DeleteMessageInput,
+    options?: { skipConfirmation?: boolean }
+  ) => void;
   addReaction: (input: AddReactionInput) => void;
   removeReaction: (input: RemoveReactionInput) => void;
   onReply?: MessageActionHandler;
@@ -176,14 +179,17 @@ export function createChannelMessageActions(
           : undefined,
       onEdit: canEdit ? options.onEdit : undefined,
       onDelete: canDelete
-        ? () => {
-            options.deleteMessage({
-              channelID: options.channelId(),
-              messageID: message.id,
-              threadID:
-                (message as MessageData & { thread_id?: string | null })
-                  .thread_id ?? undefined,
-            });
+        ? (ctx) => {
+            options.deleteMessage(
+              {
+                channelID: options.channelId(),
+                messageID: message.id,
+                threadID:
+                  (message as MessageData & { thread_id?: string | null })
+                    .thread_id ?? undefined,
+              },
+              { skipConfirmation: ctx.event?.shiftKey === true }
+            );
           }
         : undefined,
       onCreateTask: options.onCreateTask,

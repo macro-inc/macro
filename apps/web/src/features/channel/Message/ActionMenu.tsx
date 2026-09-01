@@ -47,6 +47,7 @@ type ActionItem = {
   destructive?: boolean;
   class?: string;
   iconClass?: string;
+  tooltip?: string;
 };
 
 type ActionMenuProps = {
@@ -67,7 +68,7 @@ function ActionButton(props: {
       aria-label={props.action.label}
       data-message-action={props.action.id}
       onClick={props.onClick}
-      tooltip={props.action.label}
+      tooltip={props.action.tooltip ?? props.action.label}
       size="icon-sm"
       variant="ghost"
       class={props.action.class}
@@ -149,6 +150,7 @@ function ActionMenuContent(props: ActionMenuProps) {
     {
       id: 'delete',
       label: 'Delete',
+      tooltip: 'Delete (Shift+click to skip confirmation)',
       icon: TrashIcon,
       onClick: actions?.onDelete,
       destructive: true,

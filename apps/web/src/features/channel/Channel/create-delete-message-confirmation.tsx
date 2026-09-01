@@ -3,9 +3,17 @@ import { Button, Dialog, Surface } from '@ui';
 import { createSignal, type JSX } from 'solid-js';
 import type { DeleteMessageInput } from './create-channel-message-actions';
 
+export type RequestDeleteOptions = {
+  /** When true, delete immediately instead of opening the confirmation dialog. */
+  skipConfirmation?: boolean;
+};
+
 export type DeleteMessageConfirmation = {
-  /** Opens the confirmation dialog for the given delete request. */
-  requestDelete: (input: DeleteMessageInput) => void;
+  /** Opens the confirmation dialog, or deletes immediately when skipping. */
+  requestDelete: (
+    input: DeleteMessageInput,
+    options?: RequestDeleteOptions
+  ) => void;
   /** Renders the confirmation dialog; mount once per channel surface. */
   ConfirmationDialog: () => JSX.Element;
 };
@@ -13,15 +21,24 @@ export type DeleteMessageConfirmation = {
 /**
  * Wraps a `deleteMessage` mutation with a confirmation step. Deleting a
  * channel message is destructive, so every entry point (action menu, mobile
- * drawer, hotkeys) routes through `requestDelete`, which opens a dialog and
- * only fires the underlying delete once the user confirms.
+ * drawer, hotkeys) routes through `requestDelete`. Shift-clicking Delete
+ * sets `skipConfirmation` and fires the underlying delete immediately.
  */
 export function createDeleteMessageConfirmation(
   deleteMessage: (input: DeleteMessageInput) => void
 ): DeleteMessageConfirmation {
   const [pending, setPending] = createSignal<DeleteMessageInput | undefined>();
 
-  const requestDelete = (input: DeleteMessageInput) => setPending(input);
+  const requestDelete = (
+    input: DeleteMessageInput,
+    options?: RequestDeleteOptions
+  ) => {
+    if (options?.skipConfirmation) {
+      deleteMessage(input);
+      return;
+    }
+    setPending(input);
+  };
 
   const close = () => setPending(undefined);
 

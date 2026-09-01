@@ -35,6 +35,12 @@ instead.
 - Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
   participants.
 
+## Delete a message
+
+Hover a message and click the trash `Delete` button. A `Delete message` dialog
+asks for confirmation. Hold **Shift** while clicking Delete to skip the dialog
+and delete immediately.
+
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
