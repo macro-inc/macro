@@ -35,30 +35,24 @@ fn success_response() -> ResponseTemplate {
     }))
 }
 
-fn expected_body(data: Option<serde_json::Value>) -> serde_json::Value {
-    let mut user = json!({
-        "email": "user@example.com",
-        "password": "unused-password",
-        "username": null
-    });
-
-    if let Some(data) = data {
-        user.as_object_mut().unwrap().insert("data".into(), data);
-    }
-
+fn expected_body() -> serde_json::Value {
     json!({
         "applicationId": "application-id",
         "skipVerification": true,
-        "user": user
+        "user": {
+            "email": "user@example.com",
+            "password": "unused-password",
+            "username": null
+        }
     })
 }
 
 #[tokio::test]
-async fn create_user_omits_data_when_absent() {
+async fn create_user_posts_user() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/api/user"))
-        .and(body_json(expected_body(None)))
+        .and(body_json(expected_body()))
         .respond_with(success_response())
         .expect(1)
         .mount(&server)
@@ -73,31 +67,11 @@ async fn create_user_omits_data_when_absent() {
 }
 
 #[tokio::test]
-async fn create_user_with_data_sets_user_data() {
-    let server = MockServer::start().await;
-    let data = json!({"custom": {"source": "test"}});
-    Mock::given(method("POST"))
-        .and(path("/api/user"))
-        .and(body_json(expected_body(Some(data.clone()))))
-        .respond_with(success_response())
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let user_id = client(server.uri())
-        .create_user_with_data(user(), true, IpAddr::from([127, 0, 0, 1]), data)
-        .await
-        .unwrap();
-
-    assert_eq!(user_id, "created-user-id");
-}
-
-#[tokio::test]
-async fn create_user_with_id_omits_data_when_absent() {
+async fn create_user_with_id_posts_user_to_id_endpoint() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/api/user/caller-user-id"))
-        .and(body_json(expected_body(None)))
+        .and(body_json(expected_body()))
         .respond_with(success_response())
         .expect(1)
         .mount(&server)
@@ -105,32 +79,6 @@ async fn create_user_with_id_omits_data_when_absent() {
 
     let user_id = client(server.uri())
         .create_user_with_id("caller-user-id", user(), true, IpAddr::from([127, 0, 0, 1]))
-        .await
-        .unwrap();
-
-    assert_eq!(user_id, "created-user-id");
-}
-
-#[tokio::test]
-async fn create_user_with_id_and_data_sets_user_data() {
-    let server = MockServer::start().await;
-    let data = json!({"custom": {"source": "test"}});
-    Mock::given(method("POST"))
-        .and(path("/api/user/caller-user-id"))
-        .and(body_json(expected_body(Some(data.clone()))))
-        .respond_with(success_response())
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    let user_id = client(server.uri())
-        .create_user_with_id_and_data(
-            "caller-user-id",
-            user(),
-            true,
-            IpAddr::from([127, 0, 0, 1]),
-            data,
-        )
         .await
         .unwrap();
 

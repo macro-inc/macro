@@ -29,42 +29,11 @@ impl FusionAuthClient {
         skip_verification: bool,
         client_ip: IpAddr,
     ) -> Result<String> {
-        self.create_user_with_optional_data(user, skip_verification, client_ip, None)
-            .await
-    }
-
-    /// Creates a new user in FusionAuth with caller-provided metadata stored in `user.data`.
-    /// This will automatically trigger the api::webhooks::user::create_user_webhook to be called
-    /// from within FusionAuth as well.
-    #[tracing::instrument(skip(self), err, fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
-    pub async fn create_user_with_data(
-        &self,
-        user: create::User<'_>,
-        skip_verification: bool,
-        client_ip: IpAddr,
-        data: serde_json::Value,
-    ) -> Result<String> {
-        self.create_user_with_optional_data(user, skip_verification, client_ip, Some(data))
-            .await
-    }
-
-    async fn create_user_with_optional_data(
-        &self,
-        user: create::User<'_>,
-        skip_verification: bool,
-        client_ip: IpAddr,
-        data: Option<serde_json::Value>,
-    ) -> Result<String> {
         create::create_user(
             &self.auth_client,
             &self.fusion_auth_base_url,
             None,
-            create::CreateUserRequest::new(
-                Cow::Borrowed(&self.client_id),
-                skip_verification,
-                user,
-                data,
-            ),
+            create::CreateUserRequest::new(Cow::Borrowed(&self.client_id), skip_verification, user),
             client_ip,
         )
         .await
@@ -81,55 +50,11 @@ impl FusionAuthClient {
         skip_verification: bool,
         client_ip: IpAddr,
     ) -> Result<String> {
-        self.create_user_with_id_and_optional_data(
-            user_id,
-            user,
-            skip_verification,
-            client_ip,
-            None,
-        )
-        .await
-    }
-
-    /// Creates a new user in FusionAuth with a caller-specified id and caller-provided metadata
-    /// stored in `user.data`. Triggers the create-user webhook like [`Self::create_user`].
-    #[tracing::instrument(skip(self), err, fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
-    pub async fn create_user_with_id_and_data(
-        &self,
-        user_id: &str,
-        user: create::User<'_>,
-        skip_verification: bool,
-        client_ip: IpAddr,
-        data: serde_json::Value,
-    ) -> Result<String> {
-        self.create_user_with_id_and_optional_data(
-            user_id,
-            user,
-            skip_verification,
-            client_ip,
-            Some(data),
-        )
-        .await
-    }
-
-    async fn create_user_with_id_and_optional_data(
-        &self,
-        user_id: &str,
-        user: create::User<'_>,
-        skip_verification: bool,
-        client_ip: IpAddr,
-        data: Option<serde_json::Value>,
-    ) -> Result<String> {
         create::create_user(
             &self.auth_client,
             &self.fusion_auth_base_url,
             Some(user_id),
-            create::CreateUserRequest::new(
-                Cow::Borrowed(&self.client_id),
-                skip_verification,
-                user,
-                data,
-            ),
+            create::CreateUserRequest::new(Cow::Borrowed(&self.client_id), skip_verification, user),
             client_ip,
         )
         .await
