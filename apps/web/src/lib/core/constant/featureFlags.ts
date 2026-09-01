@@ -11,25 +11,15 @@ import { analytics } from '@app/lib/analytics';
  */
 export const LOCAL_ONLY = !!import.meta.hot;
 
-type FeatureFlagValue = 'true' | 'false' | undefined;
+const parseBooleanOverride = (value: unknown): boolean | undefined =>
+  value === 'true' ? true : value === 'false' ? false : undefined;
 
 /**
  * Reads a `VITE_<flagName>` env override. Returns `undefined` when unset, so
  * callers can fall through to PostHog rather than forcing the flag off.
  */
 export function getFeatureFlagOverride(flagName: string): boolean | undefined {
-  const envKey = `VITE_${flagName}` as const;
-  const value = import.meta.env[envKey] as FeatureFlagValue;
-
-  if (value === 'true') {
-    return true;
-  }
-
-  if (value === 'false') {
-    return false;
-  }
-
-  return undefined;
+  return parseBooleanOverride(import.meta.env[`VITE_${flagName}`]);
 }
 
 export function resolveFeatureFlag(
@@ -600,9 +590,6 @@ export const ENABLE_GRAPHQL_SOUP_FLAG = 'enable-graphql-soup';
 export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(
   'ENABLE_GRAPHQL_SOUP'
 );
-
-const parseBooleanOverride = (value: unknown): boolean | undefined =>
-  value === 'true' ? true : value === 'false' ? false : undefined;
 
 /** Controls the cache-warming GraphQL soup backfill. */
 export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
