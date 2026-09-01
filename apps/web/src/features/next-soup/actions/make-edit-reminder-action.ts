@@ -1,41 +1,16 @@
-import { openReminderEditor } from '@app/features/reminders/reminder-composer';
-import {
-  reminderDescriptionForReference,
-  scheduleFromRow,
-} from '@app/features/reminders/reminder-schedule';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
-import type { EntityData, ReminderEntity } from '@entity';
-import {
-  getCachedItemPreview,
-  isAccessiblePreviewItem,
-} from '@queries/preview';
+import type { EntityData } from '@entity';
+import { openEntityInSplitFromUnifiedList } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
-
-/**
- * The description this reminder would get if it were being created now, for a
- * blank description to fall back to.
- *
- * Read from the preview cache rather than fetched: the row the editor was
- * opened from has already rendered this name, so it is cached. A miss returns
- * undefined and the editor keeps the existing description instead — better than
- * blocking on a request to answer a question the user may not even ask.
- */
-function fallbackDescriptionFor(entity: ReminderEntity): string | undefined {
-  const reference = entity.referencedEntity;
-  if (!reference) return undefined;
-
-  const cached = getCachedItemPreview(reference.id);
-  if (!cached || !isAccessiblePreviewItem(cached)) return undefined;
-
-  return reminderDescriptionForReference(cached.rawName, reference.type);
-}
 
 /**
  * Edit an existing reminder — its description, its schedule, or both.
  *
- * `execute` opens the composer prefilled rather than writing anything: both
- * answers come from the user, so there is nothing to do until that modal
- * resolves. Single-entity only, like creating one.
+ * Opens the reminder's editor the same way a row click does: through
+ * {@link openEntityInSplitFromUnifiedList}, which resolves the reminder to its
+ * `reminder-view` split and previews it into the Viewer when driven from a
+ * Preview Pair. Single-entity only, like creating one.
  */
 export const makeEditReminderAction = () => {
   const canExecute = (entity: EntityData): boolean =>
@@ -47,13 +22,9 @@ export const makeEditReminderAction = () => {
     // otherwise still fire against a row that has since changed.
     if (!entity || entity.type !== 'reminder' || !canExecute(entity)) return;
 
-    openReminderEditor({
-      id: entity.id,
-      description: entity.description,
-      remindAt: new Date(entity.nextRunAt),
-      schedule: scheduleFromRow(entity),
-      completed: entity.completedAt != null,
-      fallbackDescription: fallbackDescriptionFor(entity),
+    openEntityInSplitFromUnifiedList(entity, {
+      splitHandle: globalSplitManager()?.activeSplit(),
+      referredFrom: null,
     });
   };
 
@@ -61,7 +32,7 @@ export const makeEditReminderAction = () => {
     entities: EntityData[],
     _soup: EntityActionListState
   ) => {
-    // Opening the composer doesn't change the list, so selection and focus are
+    // Opening the editor doesn't change the list, so selection and focus are
     // left where they are.
     execute(entities);
   };

@@ -11,6 +11,7 @@ import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-prese
 import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
+import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePosthog } from '@app/lib/analytics/posthog';
@@ -137,12 +138,31 @@ function RedirectSplit(props: { to: SplitContent }) {
   return null;
 }
 
+/**
+ * A reminder view carries its reminder id in the id slot — `reminder-view~<id>`
+ * — because component params are dropped on URL restore (see `contentUrlSegments`)
+ * and split identity is keyed on the id, so each reminder needs a distinct one.
+ */
+const REMINDER_VIEW_PREFIX = 'reminder-view~';
+
 export function resolveComponent(
   name: string,
   params?: ComponentParams
 ): ResolvedComponent {
   const registration = REGISTRY.get(name);
-  if (!registration) throw new Error(`Component '${name}' not registered`);
+  if (!registration) {
+    if (name.startsWith(REMINDER_VIEW_PREFIX)) {
+      const base = REGISTRY.get('reminder-view');
+      if (base) {
+        const reminderId = name.slice(REMINDER_VIEW_PREFIX.length);
+        return {
+          element: () => base.factory({ ...(params ?? {}), reminderId }),
+          initialMeta: base.initialMeta,
+        };
+      }
+    }
+    throw new Error(`Component '${name}' not registered`);
+  }
   return {
     element: () => registration.factory(params ?? {}),
     initialMeta: registration.initialMeta,
@@ -599,6 +619,10 @@ registerComponent('calendar-event-compose', (params) => {
 registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');
   return <ComposeSkill {...params} />;
+});
+registerComponent('reminder-view', (params) => {
+  usePageViewTracking('reminder-view');
+  return <ReminderEditorSplit reminderId={params.reminderId as string} />;
 });
 registerComponent(
   'import-linear',

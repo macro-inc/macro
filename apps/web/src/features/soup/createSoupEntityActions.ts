@@ -28,7 +28,6 @@ import {
 import {
   markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
-  reminderSplitTarget,
 } from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -230,12 +229,14 @@ export function createSoupEntityActions(): {
       if (!entity || entity.type === 'foreign') return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
-      // A reminder opens what it references. A standalone one references
-      // nothing, so there is nothing to open.
+      // A reminder opens its own editor — a `reminder-view` component split —
+      // not what it references, so a standalone reminder is openable too and
+      // the dedup check is against that editor split, not the reference.
       if (entity.type === 'reminder') {
-        const target = reminderSplitTarget(entity);
-        if (!target) return undefined;
-        const open = splitManager.getSplitByContent(target.type, target.id);
+        const open = splitManager.getSplitByContent(
+          'component',
+          `reminder-view~${entity.id}`
+        );
         if (open && open.id !== splitHandle?.viewerId()) return undefined;
         return entity;
       }
@@ -386,12 +387,14 @@ export function createSoupEntityActions(): {
     }
 
     if (entities.length === 1) {
-      middleItems.push({
-        id: 'copy-link',
-        label: 'Copy Link',
-        hotkeyToken: TOKENS.entity.action.copyLink,
-        onClick: handle(copyLinkAction.executeWithSoup),
-      });
+      if (copyLinkAction.canExecute(entities[0])) {
+        middleItems.push({
+          id: 'copy-link',
+          label: 'Copy Link',
+          hotkeyToken: TOKENS.entity.action.copyLink,
+          onClick: handle(copyLinkAction.executeWithSoup),
+        });
+      }
 
       if (copyBranchNameAction.canExecute(entities[0])) {
         middleItems.push({

@@ -221,14 +221,15 @@ export const openEntityInNewTab = ({
   entity: EntityData;
   location?: SearchLocation;
 }) => {
-  // A reminder has no route of its own — it opens what it references, the
-  // same as the split paths. A standalone one references nothing, so there is
-  // no tab to open.
+  // A reminder opens its own editor — a `reminder-view` component split with a
+  // URL of its own — the same as the split paths, even a standalone one that
+  // references nothing.
   if (entity.type === 'reminder') {
-    const target = reminderSplitTarget(entity);
-    if (!target) return;
     openExternalUrl(
-      new URL(`/app/${target.type}/${target.id}`, window.location.origin).href
+      new URL(
+        `/app/component/reminder-view~${entity.id}`,
+        window.location.origin
+      ).href
     );
     return;
   }
@@ -640,9 +641,6 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  // A standalone reminder points at nothing, so there is nothing to open.
-  if (entity.type === 'reminder' && !entity.referencedEntity) return;
-
   // Calendar is a singleton block. Event opens retarget that one instance
   // with a locator range, including repeat clicks on an already-open split.
   if (entity.type === 'calendar_event') {
@@ -855,9 +853,10 @@ export function calendarBlockParamsForEntity(
 }
 
 /**
- * The split a reminder opens: the entity it references, never itself.
- * `undefined` for a standalone reminder, which points at nothing — callers use
- * that to decide whether opening is possible at all.
+ * The entity a reminder references, as block content. A reminder itself opens
+ * its own `reminder-view` editor (see `getEntitySplitContent`); this is only
+ * the reference, used where the reference is shown directly (PreviewPanel).
+ * `undefined` for a standalone reminder, which points at nothing.
  *
  * `fileType`/`subType` come resolved from the server, so a referenced document
  * lands on its real block rather than 'unknown'.
@@ -899,12 +898,14 @@ function getEntitySplitContent(entity: EntityData) {
         return { type: 'contact' as const, id: entity.id };
       })
       .with({ type: 'reminder' }, (entity) => {
-        return (
-          reminderSplitTarget(entity) ?? {
-            type: 'unknown' as const,
-            id: entity.id,
-          }
-        );
+        // A reminder has no block of its own; it opens its editor as a
+        // component split. The reminder id rides in the content id (component
+        // params are dropped on URL restore, and split identity is keyed on the
+        // id, so each reminder needs a distinct one) — see `resolveComponent`.
+        return {
+          type: 'component' as const,
+          id: `reminder-view~${entity.id}`,
+        };
       })
       // Calendar events open the singleton calendar block; the open path
       // branches before reaching here, so this only serves duplicate checks.
