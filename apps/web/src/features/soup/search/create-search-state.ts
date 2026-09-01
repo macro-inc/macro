@@ -178,6 +178,14 @@ export function createSearchState(options: CreateSearchStateOptions) {
     isFetchingNextPage: () => searchQuery.isFetchingNextPage,
     fetchNextPage: () => searchQuery.fetchNextPage(),
     refetch: () => searchQuery.refetch(),
+    /** Refetches the service results, throwing on failure so a caller (mobile
+     * pull-to-refresh) can report the outcome. Resolves without a request
+     * when the service query is disabled — a short or paused query renders
+     * local fuzzy matches, which have no network source to refetch. */
+    refresh: async () => {
+      if (!searchQuery.isEnabled) return;
+      await searchQuery.refetch({ throwOnError: true });
+    },
   };
 }
 
