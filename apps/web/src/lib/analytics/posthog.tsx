@@ -62,7 +62,6 @@ function readFeatureFlag<T extends JsonType>(
       const remote = typeof flagOrKey === 'string' ? undefined : flagOrKey;
       const key = typeof flagOrKey === 'string' ? flagOrKey : flagOrKey.key;
       const override = remote?.override ?? opts?.enabledOverride;
-      const invert = remote?.invert ?? false;
 
       if (override !== undefined) {
         return { enabled: override, payload: fallbackPayload, loading: false };
@@ -73,10 +72,9 @@ function readFeatureFlag<T extends JsonType>(
       }
 
       const result = posthog.instance.getFeatureFlagResult(key);
-      const raw = result?.enabled ?? false;
 
       return {
-        enabled: invert ? !raw : raw,
+        enabled: result?.enabled ?? false,
         payload: (result?.payload as T) ?? fallbackPayload,
         loading: false,
       };

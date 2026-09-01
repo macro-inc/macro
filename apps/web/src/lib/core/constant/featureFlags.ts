@@ -56,7 +56,6 @@ type RemoteFlagConfig = {
   key: string;
   env?: string;
   default?: boolean;
-  invert?: boolean;
 };
 
 /** Compile-time / env-only flag. Read with `isFeatureEnabled`. */
@@ -68,7 +67,6 @@ export type EnvFlag = {
 export type RemoteFlag = {
   key: string;
   override: boolean | undefined;
-  invert: boolean;
 };
 
 export type Flag = EnvFlag | RemoteFlag;
@@ -95,7 +93,6 @@ export function defineFlag(config: RemoteFlagConfig | EnvFlagConfig): Flag {
     return {
       key: config.key,
       override: envOverride(config.env) ?? config.default,
-      invert: config.invert === true,
     };
   }
 
@@ -106,19 +103,14 @@ export function defineFlag(config: RemoteFlagConfig | EnvFlagConfig): Flag {
 
 /**
  * Imperative snapshot. Env/`default` override wins. Otherwise PostHog,
- * or `false` if flags have not loaded or the key is unknown. Invert
- * only runs on a real PostHog boolean, not on that fallback.
+ * or `false` if flags have not loaded or the key is unknown.
  */
 export function isFeatureEnabled(flag: Flag): boolean {
   if ('key' in flag) {
     if (flag.override !== undefined) {
       return flag.override;
     }
-    const value = analytics.posthog.isFeatureEnabled(flag.key);
-    if (value === undefined) {
-      return false;
-    }
-    return flag.invert ? !value : value;
+    return analytics.posthog.isFeatureEnabled(flag.key) ?? false;
   }
   return flag.enabled;
 }
