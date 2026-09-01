@@ -5,6 +5,8 @@
 //! separate from `WebhookService`, which is the CRUD surface for webhook
 //! creation and edits.
 
+#[cfg(feature = "stream")]
+pub(crate) mod stream;
 #[cfg(test)]
 mod test;
 
@@ -442,60 +444,6 @@ pub(crate) fn normalized_agent_trigger_event(
         ),
         audience,
     ))
-}
-
-#[cfg(feature = "stream")]
-pub(crate) fn document_stream_candidate(
-    event: &Event<DocumentTopicEvent>,
-) -> Result<Option<crate::domain::stream::StreamCandidateEvent>, WebhookEventIngestionError> {
-    Ok(normalized_document_event(event)?.map(|normalized| {
-        crate::domain::stream::StreamCandidateEvent {
-            audience: crate::domain::stream::StreamAudience::Entity {
-                entity_id: normalized.entity_id.clone(),
-                entity_type: EntityType::Document,
-            },
-            event: normalized,
-        }
-    }))
-}
-
-#[cfg(feature = "stream")]
-pub(crate) fn channel_stream_candidate(
-    event: &Event<ChannelTopicEvent>,
-) -> Result<crate::domain::stream::StreamCandidateEvent, WebhookEventIngestionError> {
-    let normalized = normalized_channel_event(event)?;
-    Ok(crate::domain::stream::StreamCandidateEvent {
-        audience: crate::domain::stream::StreamAudience::Entity {
-            entity_id: normalized.entity_id.clone(),
-            entity_type: EntityType::Channel,
-        },
-        event: normalized,
-    })
-}
-
-#[cfg(feature = "stream")]
-pub(crate) fn webhook_stream_candidate(
-    event: &Event<WebhookTopicEvent>,
-) -> Result<crate::domain::stream::StreamCandidateEvent, WebhookEventIngestionError> {
-    let (normalized, workspace_id) = normalized_webhook_event(event)?;
-    Ok(crate::domain::stream::StreamCandidateEvent {
-        audience: crate::domain::stream::StreamAudience::Workspace { workspace_id },
-        event: normalized,
-    })
-}
-
-#[cfg(feature = "stream")]
-pub(crate) fn agent_trigger_stream_candidate(
-    event: &Event<AgentTriggerTopicEvent>,
-) -> Result<crate::domain::stream::StreamCandidateEvent, WebhookEventIngestionError> {
-    let (normalized, audience) = normalized_agent_trigger_event(event)?;
-    Ok(crate::domain::stream::StreamCandidateEvent {
-        audience: crate::domain::stream::StreamAudience::Entity {
-            entity_id: audience.entity_id,
-            entity_type: audience.entity_type,
-        },
-        event: normalized,
-    })
 }
 
 impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
