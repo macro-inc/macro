@@ -50,13 +50,12 @@ type EnvFlagConfig = {
   key?: never;
   env?: string;
   default: boolean;
-  defaultInDev?: boolean;
 };
 
 type RemoteFlagConfig = {
   key: string;
   env?: string;
-  defaultInDev?: boolean;
+  default?: boolean;
   invert?: boolean;
 };
 
@@ -74,23 +73,17 @@ export type RemoteFlag = {
 
 export type Flag = EnvFlag | RemoteFlag;
 
-function resolveOverride(
-  env: string | undefined,
-  defaultInDev: boolean | undefined
-): boolean | undefined {
-  const fromEnv = env === undefined ? undefined : getFeatureFlagOverride(env);
-  if (fromEnv !== undefined) {
-    return fromEnv;
-  }
-  if (DEV_MODE_ENV && defaultInDev !== undefined) {
-    return defaultInDev;
-  }
-  return undefined;
+function envOverride(env: string | undefined): boolean | undefined {
+  return env === undefined ? undefined : getFeatureFlagOverride(env);
 }
 
 /**
  * Define a feature flag. Pass `key` for PostHog, or `default` (and no `key`)
  * for env-only. `env` is the name after `VITE_`, e.g. `'ENABLE_REMINDERS'`.
+ *
+ * `default` is used when env is unset. For remote flags, omit it (or pass
+ * `undefined`) to defer to PostHog. The caller decides when that default
+ * applies, e.g. `DEV_MODE_ENV || undefined` or `LOCAL_ONLY || undefined`.
  *
  * Remote: `useFeatureFlag(flag)` or `isFeatureEnabled(flag)`.
  * Env-only: `isFeatureEnabled(flag)` only.
@@ -98,28 +91,33 @@ function resolveOverride(
 export function defineFlag(config: RemoteFlagConfig): RemoteFlag;
 export function defineFlag(config: EnvFlagConfig): EnvFlag;
 export function defineFlag(config: RemoteFlagConfig | EnvFlagConfig): Flag {
-  const override = resolveOverride(config.env, config.defaultInDev);
-
   if (config.key !== undefined) {
     return {
       key: config.key,
-      override,
+      override: envOverride(config.env) ?? config.default,
       invert: config.invert === true,
     };
   }
 
   return {
-    enabled: override ?? config.default,
+    enabled: envOverride(config.env) ?? config.default,
   };
 }
 
-/** Imperative snapshot. Works for env-only and remote flags. */
+/**
+ * Imperative snapshot. Env/`default` override wins. Otherwise PostHog,
+ * or `false` if flags have not loaded or the key is unknown. Invert
+ * only runs on a real PostHog boolean, not on that fallback.
+ */
 export function isFeatureEnabled(flag: Flag): boolean {
   if ('key' in flag) {
     if (flag.override !== undefined) {
       return flag.override;
     }
-    const value = analytics.posthog.isFeatureEnabled(flag.key) ?? false;
+    const value = analytics.posthog.isFeatureEnabled(flag.key);
+    if (value === undefined) {
+      return false;
+    }
     return flag.invert ? !value : value;
   }
   return flag.enabled;
