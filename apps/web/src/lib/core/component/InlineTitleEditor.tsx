@@ -1,17 +1,11 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cn } from '@ui/utils/classname';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onMount } from 'solid-js';
 
 /**
  * Inline-editable entity title, mirroring the markdown-document title UX:
  * the title is edited in place with no pencil affordance — put the caret in
  * it, type, and the rename commits on blur/Enter (Escape discards). Blank or
  * unchanged edits are dropped rather than committed.
- *
- * Default is an always-editable input (CRM headers). Pass
- * `doubleClickToEdit` when the title shares a click target with surrounding
- * chrome (split headers): the title stays static until double-click, a tap
- * on touch (no double-click there), or keyboard activation.
  */
 export function InlineTitleEditor(props: {
   /** Current display name; shown whenever the user isn't mid-edit. */
@@ -21,15 +15,22 @@ export function InlineTitleEditor(props: {
   onRename: (name: string) => void;
   /** Optional typography and sizing override for compact title contexts. */
   class?: string;
-  /**
-   * Render static text until an explicit edit gesture. Pointer devices
-   * double-click; touch taps; keyboard Enter/Space on the title.
-   */
-  doubleClickToEdit?: boolean;
+  /** Focus and select the name once mounted, for callers that mount the
+   * editor in response to an explicit edit gesture. */
+  autofocus?: boolean;
+  /** Runs after the editor loses focus, whether the edit committed or was
+   * discarded, so those callers can drop back to their static title. */
+  onExit?: () => void;
 }) {
   // Local draft while the user is typing; null = show the current value.
   const [draft, setDraft] = createSignal<string | null>(null);
-  const [editing, setEditing] = createSignal(!props.doubleClickToEdit);
+  let inputRef: HTMLInputElement | undefined;
+
+  onMount(() => {
+    if (!props.autofocus) return;
+    inputRef?.focus();
+    inputRef?.select();
+  });
 
   const commit = () => {
     const raw = draft();
@@ -40,78 +41,33 @@ export function InlineTitleEditor(props: {
     props.onRename(next);
   };
 
-  const exit = () => {
-    commit();
-    if (props.doubleClickToEdit) setEditing(false);
-  };
-
-  const startEditing = (event: Event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setEditing(true);
-  };
-
   return (
-    // Title clicks aren't clicks on surrounding chrome (split menu / tab).
-    <span
-      class="min-w-0"
-      onClick={(event) => event.stopPropagation()}
-      onDblClick={(event) => event.stopPropagation()}
-    >
-      <Show
-        when={editing()}
-        fallback={
-          <button
-            type="button"
-            aria-label={props.ariaLabel}
-            class={cn(
-              'inline-block min-w-0 max-w-full truncate bg-transparent p-0 text-left text-xl font-semibold',
-              props.class
-            )}
-            onDblClick={startEditing}
-            onClick={(event) => {
-              // Mouse click is detail 1; keyboard activation is 0. Touch
-              // reports 1 as well, so it goes through isTouchDevice.
-              if (isTouchDevice() || event.detail === 0) startEditing(event);
-            }}
-          >
-            {props.value}
-          </button>
+    <input
+      ref={inputRef}
+      type="text"
+      aria-label={props.ariaLabel}
+      autocomplete="off"
+      data-1p-ignore
+      class={cn(
+        'field-sizing-content min-w-0 max-w-full truncate bg-transparent text-xl font-semibold outline-none',
+        props.class
+      )}
+      placeholder={props.placeholder}
+      value={draft() ?? props.value}
+      onInput={(e) => setDraft(e.currentTarget.value)}
+      onBlur={() => {
+        commit();
+        props.onExit?.();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.currentTarget.blur();
+        } else if (e.key === 'Escape') {
+          setDraft(null);
+          e.currentTarget.blur();
         }
-      >
-        <input
-          ref={(el) => {
-            if (!props.doubleClickToEdit) return;
-            // Focus after the input is connected — a ref callback is too
-            // early and leaves document.activeElement on the body.
-            queueMicrotask(() => {
-              el.focus();
-              el.select();
-            });
-          }}
-          type="text"
-          aria-label={props.ariaLabel}
-          autocomplete="off"
-          data-1p-ignore
-          class={cn(
-            'field-sizing-content min-w-0 max-w-full truncate bg-transparent text-xl font-semibold outline-none',
-            props.class
-          )}
-          placeholder={props.placeholder}
-          value={draft() ?? props.value}
-          onInput={(e) => setDraft(e.currentTarget.value)}
-          onBlur={exit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              e.currentTarget.blur();
-            } else if (e.key === 'Escape') {
-              setDraft(null);
-              e.currentTarget.blur();
-            }
-          }}
-        />
-      </Show>
-    </span>
+      }}
+    />
   );
 }
