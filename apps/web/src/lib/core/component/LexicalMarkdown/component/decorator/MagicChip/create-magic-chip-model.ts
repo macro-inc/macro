@@ -130,7 +130,7 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       persistedStatus: persistedStatus(),
       latestEvent: latestEvent(),
       prompt: messagesForTurn.find((message) => message.author.kind === 'user'),
-      response: messagesForTurn.find(
+      response: messagesForTurn.findLast(
         (message) => message.author.kind === 'agent'
       ),
     });

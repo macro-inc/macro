@@ -11,11 +11,8 @@ import Spinner from '@phosphor-icons/core/light/spinner-light.svg';
 import Stop from '@phosphor-icons/core/light/stop-light.svg';
 import TerminalWindow from '@phosphor-icons/core/light/terminal-window-light.svg';
 import WarningCircle from '@phosphor-icons/core/light/warning-circle-light.svg';
-import { staticFileSizedUrl } from '@core/constant/servers';
-import { Avatar } from '@ui';
-import { type Component, Show } from 'solid-js';
+import { type Component } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import type { MagicChipAgent } from './display';
 import type { MagicChipActivityIcon } from './presentation';
 
 const LEAD_ICONS: Record<
@@ -37,26 +34,6 @@ const LEAD_ICONS: Record<
   disconnect: Plugs,
   gear: Gear,
 };
-
-export function AgentFace(props: MagicChipAgent) {
-  const initial = () => props.name.trim().charAt(0).toUpperCase() || 'A';
-  return (
-    <Avatar size="sm" class="shrink-0 text-[8px]">
-      <Show
-        when={props.avatarUrl}
-        fallback={<Avatar.Fallback>{initial()}</Avatar.Fallback>}
-      >
-        {(url) => (
-          <Avatar.Image
-            class="bg-surface"
-            src={staticFileSizedUrl(url(), 'small')}
-            alt={props.name}
-          />
-        )}
-      </Show>
-    </Avatar>
-  );
-}
 
 export function LeadIcon(props: {
   icon: MagicChipActivityIcon;

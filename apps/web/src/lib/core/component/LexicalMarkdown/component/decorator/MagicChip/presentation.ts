@@ -323,16 +323,20 @@ function liveEventActivity(
   return statusActivity(name);
 }
 
+/**
+ * The latest agent utterance in the turn.
+ *
+ * Streaming chunks append into the trailing text part, so one part is one
+ * message. A later text part is a later message — after a tool, or another
+ * agent bubble in the same turn. Joining them would replay the first reply
+ * under every addition.
+ */
 function answerMarkdown(response: FoldedMessage | undefined): string {
-  return (
-    response?.parts
-      .filter(
-        (part): part is Extract<MessagePart, { kind: 'text' }> =>
-          part.kind === 'text' && Boolean(part.text.trim())
-      )
-      .map((part) => part.text)
-      .join('\n\n') ?? ''
+  const latest = response?.parts.findLast(
+    (part): part is Extract<MessagePart, { kind: 'text' }> =>
+      part.kind === 'text' && Boolean(part.text.trim())
   );
+  return latest?.text ?? '';
 }
 
 /** Project fold and lifecycle facts into the one state the view renders. */
@@ -361,10 +365,9 @@ export function deriveMagicChipPresentation(
     liveEventActivity(latestEvent, 'acp_ready') ??
     statusActivity(persistedStatus);
 
-  // Prose the turn has not closed on yet. The fold appends into the trailing
-  // text part as chunks land, so this is the answer being written, and the
-  // activity stays alongside it to say what the agent is doing between
-  // sentences.
+  // Latest prose the turn has not closed on yet. Chunks append into the
+  // trailing text part, so this is the message being written; activity
+  // stays alongside it between sentences.
   if (markdown) return { kind: 'answering', markdown, activity };
 
   return { kind: 'working', activity };

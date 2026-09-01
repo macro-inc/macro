@@ -771,10 +771,12 @@ export function Channel(props: ChannelProps) {
                               item.id === messageIndex.keys.at(-1);
 
                             return (
-                              <Show when={message()}>
-                                {(m) => (
+                              // `when={message()}` remounts on every cache
+                              // object; a reply would remount the thread.
+                              <Show when={message() && item.id}>
+                                {(id) => (
                                   <ChannelThread
-                                    data={m}
+                                    data={() => messageById().get(id())!}
                                     channelId={() => props.channelId}
                                     isNewestThread={isNewestThread()}
                                     getMessageActions={getMessageActions}

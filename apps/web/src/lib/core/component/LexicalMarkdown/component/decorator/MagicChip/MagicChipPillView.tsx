@@ -1,3 +1,4 @@
+import ArrowBendUpLeft from '@phosphor-icons/core/light/arrow-bend-up-left-light.svg';
 import ArrowRight from '@phosphor-icons/core/light/arrow-right-light.svg';
 import ArrowsOutSimple from '@phosphor-icons/core/light/arrows-out-simple-light.svg';
 import Check from '@phosphor-icons/core/light/check-light.svg';
@@ -12,8 +13,9 @@ import {
   Show,
   type JSX,
 } from 'solid-js';
-import { AgentFace, LeadIcon } from './activity-icon';
+import { LeadIcon } from './activity-icon';
 import type { MagicChipPill } from './display';
+import { MAGIC_CHIP_LOADING_ACTIVITY } from './presentation';
 
 /** Horizontal chrome around the face: `px-3` plus 1px border each side. */
 const PILL_CHROME_INLINE = 'calc(1.5rem + 2px)';
@@ -66,11 +68,11 @@ export const ChipCopyButton: Component<{ text: string }> = (props) => {
   };
 
   return (
-    <Tooltip label={copied() ? 'Copied' : 'Copy'} as="span">
+    <Tooltip label={copied() ? 'Copied' : 'Copy agent text'} as="span">
       <button
         type="button"
         class={CHIP_ACTION_CLASS}
-        aria-label={copied() ? 'Copied' : 'Copy'}
+        aria-label={copied() ? 'Copied' : 'Copy agent text'}
         onMouseDown={stopChipActionEvent}
         onClick={(event) => {
           event.stopPropagation();
@@ -90,6 +92,8 @@ function stateKey(pill: MagicChipPill): string {
   return pill.lead ? `${pill.lead.icon}:${pill.lead.label}` : 'settled';
 }
 
+const LOADING_KEY = `${MAGIC_CHIP_LOADING_ACTIVITY.icon}:${MAGIC_CHIP_LOADING_ACTIVITY.label}`;
+
 function PillFace(props: { pill: MagicChipPill; clamp?: boolean }) {
   const copy = () => props.pill.body || props.pill.lead?.label || '';
   const clamp = () => props.clamp !== false;
@@ -102,14 +106,14 @@ function PillFace(props: { pill: MagicChipPill; clamp?: boolean }) {
       }}
     >
       <Show
-        when={props.pill.agent}
+        when={props.pill.agent || !props.pill.lead}
         fallback={
           <Show when={props.pill.lead}>
             {(lead) => <LeadIcon icon={lead().icon} busy={lead().busy} />}
           </Show>
         }
       >
-        {(agent) => <AgentFace name={agent().name} avatarUrl={agent().avatarUrl} />}
+        <ArrowBendUpLeft class="size-3.5 shrink-0 text-ink-muted" />
       </Show>
       <Show when={copy()}>
         {(text) => (
@@ -148,7 +152,11 @@ function SwipeFace(props: { pill: MagicChipPill }) {
     on(
       () => props.pill,
       (next) => {
-        if (stateKey(next) === stateKey(current)) {
+        // Hydrating after a remount is not a state change — skip the swipe.
+        if (
+          stateKey(next) === stateKey(current) ||
+          stateKey(current) === LOADING_KEY
+        ) {
           current = next;
           setShown(next);
           return;

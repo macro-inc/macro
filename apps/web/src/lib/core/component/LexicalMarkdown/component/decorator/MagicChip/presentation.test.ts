@@ -151,6 +151,35 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it('shows only the latest agent message when the turn has several', () => {
+    const presentation = present({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [
+          { kind: 'text', text: 'Let me check the tests.' },
+          {
+            kind: 'tool_use',
+            rawInput: null,
+            rawOutput: null,
+            id: 'done',
+            label: 'Terminal',
+            status: 'completed',
+            detail: {
+              kind: 'terminal',
+              command: 'cargo test',
+              output: null,
+              exitCode: 0,
+            },
+          },
+          { kind: 'text', text: 'All green.' },
+        ],
+        stop: { kind: 'end_turn' },
+      }),
+    });
+
+    expect(presentation).toEqual({ kind: 'settled', markdown: 'All green.' });
+  });
+
   it('keeps the answer visible while a tool runs mid-turn', () => {
     // Prose, then a tool call: the text stays and the activity says what the
     // agent moved on to, rather than the answer vanishing until it resumes.

@@ -14,6 +14,7 @@ import {
   ChipActionRow,
   ChipCopyButton,
   type MagicChipActions,
+  MAGIC_CHIP_PILL_BLOCK_SIZE_PX,
   MagicChipPillView,
   stopChipActionEvent,
 } from './MagicChipPillView';
@@ -229,11 +230,14 @@ const MagicChipOpened: Component<{
   actions: MagicChipActions;
 }> = (props) => (
   <div class="group/chip relative flex w-full min-w-0 flex-col items-start">
-    <span
-      class="pointer-events-none absolute inset-y-0 left-0 w-0.5 rounded-full bg-thread-rail"
-      aria-hidden="true"
-    />
-    <div class="w-full min-w-0 px-4">
+    <div
+      class="relative flex w-full min-w-0 items-center px-4"
+      style={{ 'min-block-size': `${MAGIC_CHIP_PILL_BLOCK_SIZE_PX}px` }}
+    >
+      <span
+        class="pointer-events-none absolute inset-y-0 left-0 w-0.5 rounded-full bg-thread-rail"
+        aria-hidden="true"
+      />
       <PresentationSwitch
         agentSessionId={props.agentSessionId}
         presentation={props.presentation}

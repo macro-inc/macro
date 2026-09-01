@@ -55,6 +55,35 @@ describe('createMagicChipModel', () => {
     });
   });
 
+  it('settles on the latest agent message in the attached turn', async () => {
+    sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      bot: { id: 'bot', name: 'Macro' },
+      messages: [
+        prompt,
+        response,
+        {
+          ...response,
+          parts: [{ kind: 'text', text: 'And one more thing.' }],
+        },
+      ],
+      release: vi.fn(),
+    });
+    let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
+    const dispose = createRoot((rootDispose) => {
+      presentation = createMagicChipModel(props).presentation;
+      return rootDispose;
+    });
+
+    await Promise.resolve();
+
+    expect(presentation()).toEqual({
+      kind: 'settled',
+      markdown: 'And one more thing.',
+    });
+
+    dispose();
+  });
+
   it('settles after the attached turn completes despite stale acp_ready status', async () => {
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {
