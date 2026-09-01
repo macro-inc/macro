@@ -22915,6 +22915,11 @@
             "type": "boolean",
             "description": "Whether the selected canonical source is read-only."
           },
+          "lastReminderFiredAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When this event's most recent reminder notification was delivered."
+          },
           "location": {
             "type": ["string", "null"],
             "description": "Optional location label."

@@ -7021,6 +7021,10 @@ export type SoupCalendarEventSoupPropertiesField = {
      */
     isReadOnly: boolean;
     /**
+     * When this event's most recent reminder notification was delivered.
+     */
+    lastReminderFiredAt?: string | null;
+    /**
      * Optional location label.
      */
     location?: string | null;

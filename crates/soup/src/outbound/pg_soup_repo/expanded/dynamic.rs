@@ -138,7 +138,7 @@ static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
                     CASE $2
                         WHEN 'created_at' THEN event.created_at
                         WHEN 'viewed_at' THEN '1970-01-01 00:00:00+00'::timestamptz
-                        ELSE event.updated_at
+                        ELSE GREATEST(event.updated_at, event.last_reminder_fired_at)
                     END::timestamptz as sort_ts,
                     NULL::text as project_id,
                     'CALENDAR_EVENT'::property_entity_type as property_entity_type
@@ -461,6 +461,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
                 'isReadOnly', event.is_read_only,
                 'createdAt', event.created_at,
                 'updatedAt', event.updated_at,
+                'lastReminderFiredAt', event.last_reminder_fired_at,
                 'extra', NULL
             ) as "calendar_event",
             gi.group_key as "group_key",

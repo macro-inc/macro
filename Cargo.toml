@@ -216,6 +216,7 @@ lru = "0.16"
 mockall = "0.13"
 nom = "8"
 opentelemetry = { version = "0.31.0", default-features = false }
+opentelemetry-appender-tracing = { version = "0.31.1", default-features = false }
 opentelemetry-http = { version = "0.31.0", default-features = false }
 opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
   "grpc-tonic",

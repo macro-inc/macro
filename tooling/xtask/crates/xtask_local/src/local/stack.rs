@@ -148,6 +148,17 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         clear_state(&instance)?;
     }
 
+    // Same collector/browser bring-up as `run_stack`, and for the same reason:
+    // before `prepare` so the env probe wires `OTEL_EXPORTER_OTLP_ENDPOINT`.
+    // A CI bake (`--infra-only`) has no services to trace and no one driving
+    // a browser, so it skips both.
+    if !args.infra_only {
+        super::ensure_tracing_backend(&stage, args.run.traces)?;
+        if args.run.with_chrome {
+            super::ensure_headless_chrome(&stage);
+        }
+    }
+
     // Same full-delete/full-create overlap as `run_stack`: tear the previous
     // stack down in the background while the host-side build runs.
     let teardown = (!stage.is_dry_run()).then(|| {
@@ -319,7 +330,8 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
             no_frontend: false,
             enable_onboarding: false,
             verbose: args.verbose,
-            traces: None,
+            traces: super::cli::TracesBackend::default(),
+            with_chrome: false,
             with_cf_tunnel: false,
         },
         no_snapshot: false,
@@ -347,6 +359,9 @@ fn update_running(args: &UpdateArgs) -> Result<()> {
         args.env.env_file.as_deref(),
         state.frontend == "static",
         None,
+        // `update` doesn't know the original `--traces` choice; keep the
+        // running stack's wiring keyed on the port probe as before.
+        true,
     )?;
     let remounted = if let Some(source) = args.binaries_dir.as_deref() {
         let new = super::build::BinariesDir::classify(source)?;

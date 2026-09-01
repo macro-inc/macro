@@ -121,11 +121,16 @@ pub struct RunArgs {
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
-    /// Start a local OTLP trace collector and wire services to export to it.
-    /// Omit to leave tracing off (the default) — see `docker/docker-compose.yml`
-    /// for what each backend does.
+    /// Which local OTLP collector to start and wire services to. Defaults to
+    /// the LGTM stack (Grafana/Tempo/Loki); pass `off` to run without tracing
+    /// — see `docker/docker-compose.yml` for what each backend does.
+    #[arg(long, default_value = "lgtm")]
+    pub traces: TracesBackend,
+    /// Start the shared agent browser (Chromium with CDP on 9222, watchable
+    /// over noVNC on 6080) — see the `headless-chrome` service in
+    /// `docker/docker-compose.yml`. Global, one per machine, left running.
     #[arg(long)]
-    pub traces: Option<TracesBackend>,
+    pub with_chrome: bool,
     /// Open Cloudflare quick tunnels into this stack: one for `@cursor`
     /// sessions (a public `EGRESS_BASE_URL`) and one sharing the app itself
     /// through the reverse proxy. Off by default — nothing dials out and the
@@ -135,28 +140,43 @@ pub struct RunArgs {
 }
 
 /// Which OTLP trace collector `--traces` should bring up.
-#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TracesBackend {
+    /// Grafana + Tempo + Loki + Prometheus in one container (the default).
+    /// UI at http://localhost:3001, no account needed.
+    #[default]
+    Lgtm,
     /// Fully local trace viewer at http://localhost:16686, no account needed.
     Jaeger,
     /// Forwards to Datadog APM (us5); requires `DD_API_KEY`.
     Datadog,
+    /// No collector: services and frontend run with telemetry export off.
+    Off,
 }
 
 impl TracesBackend {
+    /// Whether this run wants a collector at all.
+    pub fn enabled(self) -> bool {
+        self != TracesBackend::Off
+    }
+
     /// The compose service name gated by this backend's profile.
-    pub fn compose_service(self) -> &'static str {
+    pub fn compose_service(self) -> Option<&'static str> {
         match self {
-            TracesBackend::Jaeger => "jaeger",
-            TracesBackend::Datadog => "datadog-agent",
+            TracesBackend::Lgtm => Some("lgtm"),
+            TracesBackend::Jaeger => Some("jaeger"),
+            TracesBackend::Datadog => Some("datadog-agent"),
+            TracesBackend::Off => None,
         }
     }
 
     /// The compose profile gating this backend's service.
-    pub fn compose_profile(self) -> &'static str {
+    pub fn compose_profile(self) -> Option<&'static str> {
         match self {
-            TracesBackend::Jaeger => "jaeger",
-            TracesBackend::Datadog => "datadog",
+            TracesBackend::Lgtm => Some("lgtm"),
+            TracesBackend::Jaeger => Some("jaeger"),
+            TracesBackend::Datadog => Some("datadog"),
+            TracesBackend::Off => None,
         }
     }
 
@@ -165,7 +185,7 @@ impl TracesBackend {
     /// silently dropping everything at the intake.
     pub fn required_env(self) -> Option<&'static str> {
         match self {
-            TracesBackend::Jaeger => None,
+            TracesBackend::Lgtm | TracesBackend::Jaeger | TracesBackend::Off => None,
             TracesBackend::Datadog => Some("DD_API_KEY"),
         }
     }
