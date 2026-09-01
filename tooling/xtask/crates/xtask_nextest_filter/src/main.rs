@@ -69,6 +69,7 @@ impl fmt::Display for PackageSelection {
     }
 }
 
+#[cfg(test)]
 impl PackageSelection {
     fn packages(&self) -> Option<&BTreeSet<String>> {
         match self {
