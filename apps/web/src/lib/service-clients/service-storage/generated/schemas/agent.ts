@@ -6,6 +6,7 @@
  */
 
 import type { AgentChannelScope } from './agentChannelScope';
+import type { AgentHarnessId } from './agentHarnessId';
 import type { Bot } from './bot';
 
 /**
@@ -22,6 +23,7 @@ export interface Agent {
   default_model: string;
   /** Harness used to run the agent. */
   harness: string;
+  harness_id?: AgentHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
 }

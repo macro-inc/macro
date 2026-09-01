@@ -182,11 +182,29 @@ type TestHarness = AgentHarnessService<
     >,
     MockContainerManager,
     AnnouncerMock,
-    Arc<RuntimeRegistry<ContainerSender>>,
+    TestConnections,
     PromptContextMock,
     PromptComposerMock,
     EgressProvisionerMock,
 >;
+
+/// Bot-to-harness bindings for tests: every bot maps to the harness sharing
+/// its uuid, so tests attach runtimes by [`harness_for_bot`].
+#[derive(Clone, Default)]
+struct MirrorBindings;
+
+impl crate::domain::ports::HarnessBindings for MirrorBindings {
+    async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
+        Ok(Some(harness_for_bot(bot)))
+    }
+}
+
+fn harness_for_bot(bot: BotId) -> harness_id::HarnessId {
+    harness_id::HarnessId::new_from_uuid(bot.as_uuid())
+}
+
+type TestConnections =
+    crate::outbound::runtime_registry::HarnessKeyedConnections<MirrorBindings, ContainerSender>;
 
 fn harness_with_edges(
     prompt_context: PromptContextMock,
@@ -210,7 +228,7 @@ fn harness_with_edges(
         ),
         containers.clone(),
         announcer.clone(),
-        Arc::clone(&runtimes),
+        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
         EgressProvisionerMock::new(),
@@ -1267,7 +1285,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // session: no handshake, no ACP session, nothing sent - a session nobody
     // is prompting costs the runtime nothing.
     let runtime = ContainerMock::default();
-    runtimes.attach(session.bot_id, runtime.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
     assert!(runtime.agent().received_requests().is_empty());
     assert!(
         repo.get(session.id)
@@ -1307,7 +1325,7 @@ async fn a_bound_session_stays_on_its_connection_until_it_drops() {
         .expect("open");
 
     let first = ContainerMock::default();
-    runtimes.attach(session.bot_id, first.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), first.clone());
     let (result, ()) = tokio::join!(
         prompt(&service, session.id, "fix the failing test"),
         complete_bound_handshake(&first)
@@ -1337,7 +1355,7 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
         .expect("open");
 
     let first = ContainerMock::default();
-    runtimes.attach(session.bot_id, first.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), first.clone());
     let (result, ()) = tokio::join!(
         prompt(&service, session.id, "fix the failing test"),
         complete_bound_handshake(&first)
@@ -1350,7 +1368,7 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
     first.disconnects();
     await_disconnect(&repo, session.id).await;
     let second = ContainerMock::default();
-    runtimes.attach(session.bot_id, second.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), second.clone());
     assert!(second.agent().received_requests().is_empty());
 
     let (result, ()) = tokio::join!(
@@ -1383,7 +1401,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         ),
         containers.clone(),
         AnnouncerMock::new(),
-        RuntimeRegistry::<ContainerSender>::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
@@ -1430,7 +1448,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
     // this deployment's to run, so the dial must not be what the session is
     // restored onto.
     let dialed_in = ContainerMock::default();
-    runtimes.attach(session.bot_id, dialed_in.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), dialed_in.clone());
 
     let prompted = service.control_event(
         id,
@@ -1855,7 +1873,7 @@ async fn commands_for_a_peer_managed_session_forward_to_its_address() {
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        RuntimeRegistry::<ContainerSender>::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
@@ -1901,7 +1919,7 @@ async fn a_dead_peers_command_falls_back_to_local_execution() {
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        RuntimeRegistry::<ContainerSender>::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),

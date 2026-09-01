@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM harness_pairing_requests\n            WHERE expires_at <= now() AND status <> 'approved'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "7c44900ff1b6056f0476aabe7fb01f3acbfaa80c6ab3bef064f0fe2cb08553f3"
+}

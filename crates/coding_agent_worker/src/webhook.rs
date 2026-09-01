@@ -17,6 +17,7 @@ use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::post;
+use bot_id::BotId;
 use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -35,6 +36,9 @@ pub enum TriggerWork {
     /// Open a session for a mention, serve it, and forward the mention as
     /// its first prompt.
     OpenAndPrompt {
+        /// The mentioned agent the session runs for. One harness serves many
+        /// agents, so the daemon must name the bot when creating the session.
+        bot: BotId,
         /// Who asked; owns the session and authors the prompt.
         sender: MacroUserIdStr<'static>,
         /// Channel the mention was posted in.
@@ -82,6 +86,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenAndPrompt {
+                bot: mentioned.bot_id,
                 sender,
                 channel_id: message.channel_id,
                 // A top-level mention roots its own thread; a mention inside
@@ -122,8 +127,10 @@ pub trait WorkExecutor: Send + Sync + 'static {
 pub struct WebhookState<Executor> {
     /// Where translated work goes.
     pub executor: Executor,
-    /// The webhook's signing secret, shared with the deliverer.
-    pub signing_secret: String,
+    /// The webhook's signing secret, shared with the deliverer. Behind a lock
+    /// because feed reconciliation replaces the feed - and its secret - when
+    /// the bound-agent set changes.
+    pub signing_secret: std::sync::Arc<std::sync::RwLock<String>>,
 }
 
 /// Build the router serving `POST /macro-events`.
@@ -144,7 +151,12 @@ async fn ingest<Executor: WorkExecutor>(
     else {
         return StatusCode::UNAUTHORIZED;
     };
-    if !webhook_signature::verify(&state.signing_secret, timestamp, &body, signature) {
+    let signing_secret = state
+        .signing_secret
+        .read()
+        .expect("signing secret lock")
+        .clone();
+    if !webhook_signature::verify(&signing_secret, timestamp, &body, signature) {
         return StatusCode::UNAUTHORIZED;
     }
 

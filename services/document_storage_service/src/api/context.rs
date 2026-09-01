@@ -369,6 +369,15 @@ pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo, DssEventBroker>;
 pub(crate) type DssBotsState =
     BotsRouterState<DssBotService, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the harnesses service wired into DSS.
+pub(crate) type DssHarnessService = harnesses::domain::service::HarnessServiceImpl<
+    harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+>;
+
+/// Type alias for the harnesses router state.
+pub(crate) type DssHarnessesState =
+    harnesses::inbound::axum_router::HarnessesRouterState<DssHarnessService, AuthorizationService>;
+
 /// Type alias for the channel bot webhook router state.
 pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
     DssBotService,
@@ -543,6 +552,7 @@ pub(crate) struct ApiContext {
     /// the channels router (starter-doc seeding records mention backlinks).
     pub channel_service: Arc<DssChannelService>,
     pub bots_state: DssBotsState,
+    pub harnesses_state: DssHarnessesState,
     pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,

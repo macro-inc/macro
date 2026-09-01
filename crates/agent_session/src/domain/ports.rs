@@ -30,6 +30,8 @@ pub struct BotFacts {
     pub is_managed: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
+    /// The registered harness this bot's agent is bound to, when it is one.
+    pub harness_id: Option<harness_id::HarnessId>,
 }
 
 /// Read-only lookup of the bots sessions may be opened for.
@@ -470,4 +472,16 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
         size: SandboxSize,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The harness currently bound to serve this session, resolved through its
+    /// bot's binding. `None` for a managed session or an unbound bot.
+    ///
+    /// The control routes use it to confine a harness caller to the sessions
+    /// its own daemon serves: ownership alone would let a harness that merely
+    /// acts for a user drive or delete sessions another harness serves for the
+    /// same user.
+    fn session_harness(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<harness_id::HarnessId>>> + Send;
 }

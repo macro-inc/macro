@@ -61,7 +61,7 @@ pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Harness>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Bots, Auth>,
+    gateway_state: RuntimeGatewayState<Auth>,
     forward_state: ForwardGatewayState<Harness, Auth>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
@@ -103,7 +103,7 @@ fn api_router<T, R, Opener, Bots, Access, Auth, Harness>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Bots, Auth>,
+    gateway_state: RuntimeGatewayState<Auth>,
     forward_state: ForwardGatewayState<Harness, Auth>,
 ) -> Router
 where

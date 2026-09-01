@@ -7,6 +7,27 @@ use uuid::Uuid;
 
 /// Shared bot id used by bot principals.
 pub use bot_id::BotId;
+/// Shared harness id used by agent-harness bindings.
+pub use harness_id::HarnessId;
+
+/// Owner of a registered harness an agent wants to run on.
+///
+/// Kept minimal on purpose: the bots domain only needs enough to decide
+/// whether a caller may bind an agent to the harness. Mirrors the harnesses
+/// domain's `HarnessOwner`, whose table enforces exactly one owner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HarnessOwner {
+    /// User-owned (private) harness.
+    User {
+        /// Owner user id.
+        user_id: String,
+    },
+    /// Team-owned harness, usable by every team member.
+    Team {
+        /// Owner team id.
+        team_id: Uuid,
+    },
+}
 
 /// Bot kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -195,6 +216,8 @@ pub struct Agent {
     pub instructions: String,
     /// Harness used to run the agent.
     pub harness: String,
+    /// Registered harness the agent runs on, when `harness` is `macrod`.
+    pub harness_id: Option<HarnessId>,
     /// Model selected specifically for this agent.
     pub default_model: String,
     /// Whether the agent is global or channel-specific.
@@ -209,6 +232,10 @@ pub struct Agent {
 pub struct CreateAgentRequest {
     /// Team owner. Omit for a private, user-owned agent.
     pub team_id: Option<Uuid>,
+    /// Registered harness to run on. Required when `harness` is `macrod`,
+    /// forbidden otherwise.
+    #[serde(default)]
+    pub harness_id: Option<HarnessId>,
     /// Display name.
     pub name: String,
     /// Stable `@` handle.
@@ -236,6 +263,10 @@ pub struct CreateAgentRequest {
 pub struct UpdateAgentRequest {
     /// Team owner. Omit to make the agent private to the caller.
     pub team_id: Option<Uuid>,
+    /// Registered harness to run on. Required when `harness` is `macrod`,
+    /// forbidden otherwise.
+    #[serde(default)]
+    pub harness_id: Option<HarnessId>,
     /// Display name.
     pub name: String,
     /// Stable `@` handle.

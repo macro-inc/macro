@@ -492,6 +492,9 @@ pub async fn list_bot_channels_handler<
     let caller = match authorization.authorization {
         MacroAuthorization::User(user) => BotChannelListCaller::User(user.macro_user_id),
         MacroAuthorization::Bot(bot) => BotChannelListCaller::Bot(bot.bot_id),
+        MacroAuthorization::Harness(_) => {
+            return Err(BotsHandlerErr::Bot(BotError::Unauthorized));
+        }
         MacroAuthorization::Internal(_) => BotChannelListCaller::Internal,
     };
     Ok(Json(

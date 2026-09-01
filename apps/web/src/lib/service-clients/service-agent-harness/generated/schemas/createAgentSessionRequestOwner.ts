@@ -7,8 +7,9 @@
 
 /**
  * The user who owns the session. Ignored for user callers, who always
-own their own sessions; required for bot callers without verified
-acting-user claims.
+own their own sessions, and for harness callers, whose verified acting
+user (owner or confirmed team member) owns the session instead;
+required for bot callers without verified acting-user claims.
 
 For bot callers this is a claim, not a verified fact: it is scoped to
 the bot's own sessions, but the named user owns the session on the

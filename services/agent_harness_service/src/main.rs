@@ -12,6 +12,7 @@ mod api;
 mod bots_directory;
 mod config;
 mod containers;
+mod harness_bindings;
 mod trigger;
 
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -46,7 +47,7 @@ use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::HttpCommandForwarder;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::routing::RoutedContainerManager;
-use agent_harness::outbound::runtime_registry::RuntimeRegistry;
+use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::rig_engine::RigTurnEngine;
@@ -81,13 +82,14 @@ use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use github::domain::service::{InstallationTokenConfig, InstallationTokenService};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
-    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer, PgHarnessAuthorizationRepo,
+    PgHarnessAuthorizer, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
@@ -454,10 +456,11 @@ async fn run() -> anyhow::Result<()> {
     let prompt_context =
         ChannelPromptContextAdapter::new(channel_service, Arc::clone(&entity_access));
 
-    // One connection per bot, shared by every session that bot runs. Held
-    // here because the gateway puts dialed-in sockets into it and the harness
-    // takes sessions out of it.
-    let runtimes = RuntimeRegistry::new();
+    // One connection per harness, shared by every session of every agent
+    // bound to it. Held here because the gateway puts dialed-in sockets into
+    // it and the harness takes sessions out of it. Attach/detach is mirrored
+    // to the harnesses table so the settings page can show connection state.
+    let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
     let mut defaults = HarnessDefaults::new(SessionDefaults {
         bot_id,
         model: config.harness_model.clone(),
@@ -506,7 +509,7 @@ async fn run() -> anyhow::Result<()> {
         sessions,
         containers,
         announcer,
-        Arc::clone(&runtimes),
+        HarnessKeyedConnections::new(PgHarnessBindings::new(pool.clone()), Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
         EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
@@ -528,7 +531,10 @@ async fn run() -> anyhow::Result<()> {
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(pool.clone())),
         PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(pool.clone())),
-    );
+    )
+    .with_harness_authorizer(PgHarnessAuthorizer::new(PgHarnessAuthorizationRepo::new(
+        pool.clone(),
+    )));
     let read_state = AgentSessionRouterState::new(
         AgentSessionServiceImpl::new(
             session_repo.clone(),
@@ -551,7 +557,6 @@ async fn run() -> anyhow::Result<()> {
     );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
-        bots_directory,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let forward_state = ForwardGatewayState::new(

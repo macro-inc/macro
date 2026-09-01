@@ -57,6 +57,7 @@ fn a_mention_becomes_open_and_prompt_rooting_its_own_thread() {
     assert_eq!(
         work,
         TriggerWork::OpenAndPrompt {
+            bot: bot_id::BotId::TEST_A,
             sender: sender(),
             channel_id: Uuid::from_u128(1),
             thread_id: Uuid::from_u128(2),
@@ -127,7 +128,7 @@ fn state(
 ) -> Arc<WebhookState<std::sync::Arc<RecordingExecutor>>> {
     Arc::new(WebhookState {
         executor,
-        signing_secret: SECRET.to_owned(),
+        signing_secret: std::sync::Arc::new(std::sync::RwLock::new(SECRET.to_owned())),
     })
 }
 

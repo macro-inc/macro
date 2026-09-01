@@ -46,23 +46,28 @@ impl BotDirectory for PgBotDirectory {
             }
             Some(BotOwner::Team { .. }) | None => None,
         };
-        let is_managed = if row.has_agent {
-            self.repo
+        let (is_managed, harness_id) = if row.has_agent {
+            let agent = self
+                .repo
                 .get_agent(bot)
                 .await
-                .map_err(AgentSessionError::Unknown)?
+                .map_err(AgentSessionError::Unknown)?;
+            let harness_id = agent.as_ref().and_then(|agent| agent.harness_id);
+            let is_managed = agent
                 .map_or_else(
                     || AgentKind::of(bot),
                     |agent| AgentKind::from_harness(&agent.harness),
                 )
-                .is_managed()
+                .is_managed();
+            (is_managed, harness_id)
         } else {
-            false
+            (false, None)
         };
         Ok(Some(BotFacts {
             has_agent: row.has_agent,
             is_managed,
             owner_user_id,
+            harness_id,
         }))
     }
 }

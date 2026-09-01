@@ -180,6 +180,48 @@ export function SettingsRow(props: {
 }
 
 /**
+ * A radio choice rendered as a bordered card: a title and one-line description
+ * beside the radio input. Used by the agent dialog's channel/share pickers and
+ * the harness pairing dialog's Private/Team picker.
+ */
+export function ChoiceRow(props: {
+  name: string;
+  value: string;
+  checked: boolean;
+  title: string;
+  description: string;
+  disabled?: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
+      classList={{
+        'cursor-not-allowed opacity-50': props.disabled,
+        'cursor-pointer': !props.disabled,
+      }}
+    >
+      <input
+        type="radio"
+        name={props.name}
+        value={props.value}
+        checked={props.checked}
+        disabled={props.disabled}
+        onChange={props.onChange}
+        aria-label={props.title}
+        class="mt-0.5 accent-accent"
+      />
+      <span class="min-w-0">
+        <span class="block text-sm font-medium text-ink">{props.title}</span>
+        <span class="mt-0.5 block text-xs text-ink-muted">
+          {props.description}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/**
  * A row for an integration / service: a brand icon, a title + one-line
  * description, and a trailing action slot. Used by the Connected accounts and
  * MCP cards so every integration reads the same.

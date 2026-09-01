@@ -61,6 +61,7 @@ fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) 
         bot: owned_bot(bot_id, owner),
         instructions: String::new(),
         harness: "in-memory".to_owned(),
+        harness_id: None,
         default_model: "model".to_owned(),
         channel_scope,
         channel_ids: vec![],

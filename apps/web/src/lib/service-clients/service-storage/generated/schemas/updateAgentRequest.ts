@@ -8,6 +8,7 @@
 import type { AgentChannelScope } from './agentChannelScope';
 import type { UpdateAgentRequestAvatarUrl } from './updateAgentRequestAvatarUrl';
 import type { UpdateAgentRequestDescription } from './updateAgentRequestDescription';
+import type { UpdateAgentRequestHarnessId } from './updateAgentRequestHarnessId';
 import type { UpdateAgentRequestTeamId } from './updateAgentRequestTeamId';
 
 /**
@@ -28,6 +29,7 @@ export interface UpdateAgentRequest {
   handle: string;
   /** Harness used to run the agent. */
   harness: string;
+  harness_id?: UpdateAgentRequestHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
   /** Display name. */
