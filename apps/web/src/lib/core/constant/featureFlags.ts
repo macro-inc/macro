@@ -53,8 +53,7 @@ export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
  */
 export const ENABLE_NEW_APP_VIEWS_FLAG = 'enable-new-app-views';
 export const ENABLE_NEW_APP_VIEWS_OVERRIDE =
-  getFeatureFlagOverride('ENABLE_NEW_APP_VIEWS') ??
-  (DEV_MODE_ENV ? true : undefined);
+  getFeatureFlagOverride('ENABLE_NEW_APP_VIEWS');
 
 /**
  * This constant reflects whether the app is running in production mode with prod backend environment
