@@ -106,7 +106,12 @@ export interface MacroOpts {
   hosts?: Partial<Record<ServiceName, string>>;
   /** Override the web app base URL (e.g. for local frontend dev). Also reads MACRO_WEB_URL. */
   webAppUrl?: string;
-  /** Signing secret for verifying incoming webhooks. Falls back to MACRO_WEBHOOK_SECRET. */
+  /**
+   * Signing secret for verifying incoming persisted-webhook deliveries.
+   * Required only for `macro.events.webhook()` / `macro.events.handle()`.
+   * SSE via `macro.events.listen()` uses the API token and does not need
+   * this. Falls back to MACRO_WEBHOOK_SECRET.
+   */
   webhookSecret?: string;
   wsVerify?: string;
   /** User id the bot acts for, sent as `x-macro-bot-for-macro-user-id` on
