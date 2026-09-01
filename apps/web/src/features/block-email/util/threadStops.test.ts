@@ -5,8 +5,8 @@ import {
   enterListStop,
   nextThreadStop,
   shownStops,
-  threadStopFromHover,
   type ThreadStop,
+  threadStopFromHover,
 } from './threadStops';
 
 const message = (index: number): ThreadStop => ({ kind: 'message', index });

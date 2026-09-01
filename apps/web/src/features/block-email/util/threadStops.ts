@@ -64,7 +64,7 @@ export function threadStopFromHover(
 ): ThreadStop | undefined {
   if (!hover) return undefined;
   if (hover.kind === 'hidden-chip') return { kind: 'hidden-chip' };
-  const index = messageIds.findIndex((id) => id === hover.id);
+  const index = messageIds.indexOf(hover.id);
   if (index < 0) return undefined;
   return { kind: 'message', index };
 }
