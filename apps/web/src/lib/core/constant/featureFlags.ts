@@ -46,6 +46,85 @@ export function resolveFeatureFlag(
  */
 export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
 
+type EnvFlagConfig = {
+  key?: never;
+  env?: string;
+  default: boolean;
+  defaultInDev?: boolean;
+};
+
+type RemoteFlagConfig = {
+  key: string;
+  env?: string;
+  defaultInDev?: boolean;
+  invert?: boolean;
+};
+
+/** Compile-time / env-only flag. Read with `isFeatureEnabled`. */
+export type EnvFlag = {
+  enabled: boolean;
+};
+
+/** PostHog-backed flag. Read with `useFeatureFlag` or `isFeatureEnabled`. */
+export type RemoteFlag = {
+  key: string;
+  override: boolean | undefined;
+  invert: boolean;
+};
+
+export type Flag = EnvFlag | RemoteFlag;
+
+function resolveOverride(
+  env: string | undefined,
+  defaultInDev: boolean | undefined
+): boolean | undefined {
+  const fromEnv = env === undefined ? undefined : getFeatureFlagOverride(env);
+  if (fromEnv !== undefined) {
+    return fromEnv;
+  }
+  if (DEV_MODE_ENV && defaultInDev !== undefined) {
+    return defaultInDev;
+  }
+  return undefined;
+}
+
+/**
+ * Define a feature flag. Pass `key` for PostHog, or `default` (and no `key`)
+ * for env-only. `env` is the name after `VITE_`, e.g. `'ENABLE_REMINDERS'`.
+ *
+ * Remote: `useFeatureFlag(flag)` or `isFeatureEnabled(flag)`.
+ * Env-only: `isFeatureEnabled(flag)` only.
+ */
+export function defineFlag(config: RemoteFlagConfig): RemoteFlag;
+export function defineFlag(config: EnvFlagConfig): EnvFlag;
+export function defineFlag(config: RemoteFlagConfig | EnvFlagConfig): Flag {
+  const override = resolveOverride(config.env, config.defaultInDev);
+
+  if (config.key !== undefined) {
+    return {
+      key: config.key,
+      override,
+      invert: config.invert === true,
+    };
+  }
+
+  return {
+    enabled: override ?? config.default,
+  };
+}
+
+/** Imperative snapshot. Works for env-only and remote flags. */
+export function isFeatureEnabled(flag: Flag): boolean {
+  if ('key' in flag) {
+    if (flag.override !== undefined) {
+      return flag.override;
+    }
+    const value = analytics.posthog.isFeatureEnabled(flag.key) ?? false;
+    return flag.invert ? !value : value;
+  }
+  return flag.enabled;
+}
+
 /**
  * Switches Inbox, Tasks, and Channels from the current SoupView implementations
  * to the new composable view implementations. Override locally with
