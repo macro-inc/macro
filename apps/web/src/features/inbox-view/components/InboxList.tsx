@@ -56,7 +56,7 @@ type InboxListProps = {
   state: InboxViewState;
   source: InboxDataSource;
   list: SplitListController;
-  ref?: (element: HTMLDivElement) => void;
+  onPreviewEntity: (entity: WithNotification<EntityData>) => void;
 };
 
 /** Compact Inbox-card list used by the Activity-layout Inbox workspace. */
@@ -150,6 +150,11 @@ export function InboxList(props: InboxListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        const row = event.result?.item;
+        if (row?.kind === 'entity') {
+          props.onPreviewEntity(row.entity);
+        }
+
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (props.source.isLoadingMore() || !props.source.hasMore()) return;
 
@@ -237,6 +242,7 @@ export function InboxList(props: InboxListProps) {
     activeTab = nextTab;
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
+    panel.handle.resetPreview();
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
@@ -251,6 +257,10 @@ export function InboxList(props: InboxListProps) {
     });
     if (restored) return;
     if (isTouchDevice()) return;
+    if (panel.handle.isControllerSplit()) {
+      panel.handle.resetPreview();
+      return;
+    }
 
     list.focus.first({
       isNavigable: (row) => row.kind === 'entity',
@@ -278,10 +288,7 @@ export function InboxList(props: InboxListProps) {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
-        ref={(element) => {
-          listRoot = element;
-          props.ref?.(element);
-        }}
+        ref={listRoot}
         role="grid"
         aria-label="Inbox"
         aria-multiselectable="true"

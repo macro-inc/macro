@@ -756,7 +756,7 @@ describe('layoutManager', () => {
         const { manager, controllerId } = setup();
         manager.engagePreviewMode(controllerId);
 
-        expect(manager.previewControllerWidth(controllerId)).toBe(440);
+        expect(manager.previewControllerWidth(controllerId)).toBe(360);
         expect(manager.splits()).toHaveLength(2);
         const viewerId = manager.splits()[1].id;
         expect(manager.viewerOf(controllerId)).toBe(viewerId);

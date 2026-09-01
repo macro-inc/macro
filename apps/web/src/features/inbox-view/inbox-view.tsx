@@ -2,16 +2,8 @@ import {
   createListController,
   type ListActivation,
 } from '@app/components/list';
-import {
-  useViewShell,
-  useViewTabHotkeys,
-  ViewShell,
-} from '@app/components/view-shell';
-import {
-  useGlobalBlockOrchestrator,
-  useGlobalNotificationSource,
-} from '@components/app/GlobalAppState';
-import { PreviewPanel } from '@components/app/PreviewPanel';
+import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type {
   SplitListActivationMetadata,
   SplitListRow,
@@ -26,7 +18,8 @@ import {
   type WithNotification,
 } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createEffect, onMount, Show, Suspense } from 'solid-js';
+import { debounce } from '@solid-primitives/scheduled';
+import { createEffect, onCleanup, onMount, Suspense } from 'solid-js';
 import { persistSoupNavigationTouchHighlight } from '../next-soup/soup-view/soup-navigation-touch-highlight';
 import {
   markChannelNotificationsSeenOnOpen,
@@ -63,21 +56,9 @@ function InboxFallback() {
   );
 }
 
-function InboxPreviewFallback() {
-  return (
-    <div class="grid size-full place-items-center text-ink-muted">
-      <SpinnerIcon aria-label="Loading preview" class="size-5 animate-spin" />
-    </div>
-  );
-}
-
 function InboxWorkspace(props: InboxWorkspaceProps) {
   const panel = useSplitPanelOrThrow();
-  const shell = useViewShell();
-  const orchestrator = useGlobalBlockOrchestrator();
   const notificationSource = useGlobalNotificationSource();
-
-  let listElement: HTMLDivElement | undefined;
 
   const list = panel.setList(() => {
     const dataSource = useInboxDataSource(props.state);
@@ -108,10 +89,11 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
 
         const newSplit =
           metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+        openPreviewDebounced.clear();
         void open(sourceRow.entity, {
           event: metadata?.event,
           newSplit,
-          replacePair: false,
+          replacePair: metadata?.event?.altKey === true && !newSplit,
         });
       },
     });
@@ -121,6 +103,37 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
       dataSource,
       controller,
     };
+  });
+
+  const openPreviewDebounced = debounce(
+    (entity: WithNotification<EntityData>) => {
+      if (!panel.handle.isControllerSplit()) return;
+      if (focusedEntity()?.id !== entity.id) return;
+
+      void open(entity, {
+        newSplit: false,
+        replacePair: false,
+        mergeHistory: true,
+      });
+    },
+    150
+  );
+  onCleanup(() => openPreviewDebounced.clear());
+
+  let initialPreviewResolved = false;
+  createEffect(() => {
+    if (initialPreviewResolved) return;
+    if (panel.handle.isViewerSplit()) {
+      initialPreviewResolved = true;
+      return;
+    }
+    if (!panel.handle.canEngagePreview()) return;
+
+    list.controller.focus.clear({ reason: 'programmatic' });
+    panel.handle.engagePreview();
+    if (panel.handle.isControllerSplit()) {
+      initialPreviewResolved = true;
+    }
   });
 
   useViewTabHotkeys({
@@ -147,14 +160,13 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
       event?: MouseEvent;
       newSplit: boolean;
       replacePair: boolean;
+      mergeHistory?: boolean;
     }
   ) {
     markReminderSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
       markChannelNotificationsSeenOnOpen(entity, notificationSource);
     }
-
-    if (!options.newSplit && shell.detail.placement() === 'inline') return;
 
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
@@ -166,6 +178,7 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
         replacePreview: options.replacePair,
         splitHandle: panel.handle,
         referredFrom: 'inbox',
+        mergeHistory: options.mergeHistory,
       });
     } finally {
       finishTouchHighlight?.();
@@ -173,44 +186,23 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
   }
 
   return (
-    <>
-      <ViewShell.Main class="border-r border-edge">
-        <InboxHeader>
-          <InboxTabs state={props.state} />
-        </InboxHeader>
-        <Suspense fallback={<InboxFallback />}>
-          <InboxList
-            ref={(element) => {
-              listElement = element;
-            }}
-            state={props.state}
-            source={list.dataSource}
-            list={list.controller}
-          />
-        </Suspense>
-      </ViewShell.Main>
-      <ViewShell.Detail class="overflow-hidden bg-surface">
-        <Suspense fallback={<InboxPreviewFallback />}>
-          <Show
-            when={focusedEntity()}
-            fallback={
-              <div class="flex size-full items-center justify-center px-6 text-center text-ink-extra-muted text-sm">
-                Select an inbox item to preview it.
-              </div>
-            }
-          >
-            {(entity) => (
-              <PreviewPanel
-                selectedEntity={entity()}
-                orchestrator={orchestrator}
-                splitPanelContext={panel}
-                onFocusOut={() => listElement?.focus({ preventScroll: true })}
-              />
-            )}
-          </Show>
-        </Suspense>
-      </ViewShell.Detail>
-    </>
+    <ViewShell.Main>
+      <InboxHeader>
+        <InboxTabs state={props.state} />
+      </InboxHeader>
+      <Suspense fallback={<InboxFallback />}>
+        <InboxList
+          state={props.state}
+          source={list.dataSource}
+          list={list.controller}
+          onPreviewEntity={(entity) => {
+            if (!panel.handle.isControllerSplit()) return;
+
+            openPreviewDebounced(entity);
+          }}
+        />
+      </Suspense>
+    </ViewShell.Main>
   );
 }
 
@@ -234,19 +226,7 @@ export function InboxView(props: InboxViewProps) {
       <StaticMarkdownContext>
         <SplitPanel.Root>
           <SplitPanel.Body>
-            <ViewShell.Root
-              resizable
-              aside={false}
-              main={{ width: 360, min: 224, max: 420 }}
-              detail={{
-                width: 720,
-                initialWidth: 'auto',
-                min: 320,
-                max: 1600,
-                whenNarrow: 'hide',
-              }}
-              detailOpen
-            >
+            <ViewShell.Root aside={false} main={{ min: 224 }}>
               <InboxWorkspace state={state} />
             </ViewShell.Root>
           </SplitPanel.Body>
