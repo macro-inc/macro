@@ -324,6 +324,46 @@ export function MarkdownPopup(props: {
     });
   };
 
+  // Shared by the desktop toolbar's inline AI row and the touch AI drawer:
+  // the autosizing prompt input and its submit-or-stop button.
+  const handleAiInput = (
+    e: InputEvent & { currentTarget: HTMLTextAreaElement }
+  ) => {
+    setAiEditInput(e.currentTarget.value);
+    e.currentTarget.style.height = 'auto';
+    e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+  };
+
+  const AiEditSubmitButton = () => (
+    <Show
+      when={hasActiveAiEdit(blockId)}
+      fallback={
+        <Button
+          size="icon-sm"
+          class="rounded-md"
+          depth={3}
+          variant="ghost"
+          tooltip="Ask Macro"
+          disabled={!aiEditInput().trim()}
+          onClick={handleAiEditSubmit}
+        >
+          <CheckIcon class="size-4" />
+        </Button>
+      }
+    >
+      <Button
+        size="icon-sm"
+        class="rounded-md"
+        depth={3}
+        variant="ghost"
+        tooltip="Stop AI edit"
+        onClick={() => cancelAiEdit(blockId)}
+      >
+        <div class="size-2.5 rounded-xs bg-current" />
+      </Button>
+    </Show>
+  );
+
   const handleAiEditSubmit = () => {
     if (aiEditRunning()) return;
     const instruction = aiEditInput().trim();
@@ -364,6 +404,12 @@ export function MarkdownPopup(props: {
     );
   };
 
+  const shouldShowTableButton = () =>
+    Boolean(canEdit() && convertibleListKey());
+
+  const shouldShowEditWithAiButton = () =>
+    inlineAiEditing().enabled && canEdit();
+
   const handleConvertToTasks = () => {
     const currentSelection = selection();
     const userId = currentUserId();
@@ -398,6 +444,9 @@ export function MarkdownPopup(props: {
     const location = editor.read(() => $getLocationUrl('md', blockId));
     if (!location) return;
     await navigator.clipboard.writeText(location);
+    // Desktop gets the inline check-icon flip; on touch the toolbar is
+    // small and easily dismissed, so confirm with a toast as well.
+    if (isTouchDevice()) toast.success('Link copied to clipboard');
     setLocationCopied(true);
     setTimeout(() => setLocationCopied(false), 2000);
   };
@@ -631,7 +680,7 @@ export function MarkdownPopup(props: {
               {isConverting() ? 'Converting...' : 'Tasks'}
             </Button>
           </Show>
-          <Show when={canEdit() && convertibleListKey()}>
+          <Show when={shouldShowTableButton()}>
             <Button
               size="sm"
               class="rounded-md"
@@ -659,7 +708,7 @@ export function MarkdownPopup(props: {
           </Button>
         </div>
 
-        <Show when={inlineAiEditing().enabled && canEdit()}>
+        <Show when={shouldShowEditWithAiButton()}>
           <div class="mt-1 flex w-full min-w-72 items-center gap-1 border-t border-edge p-1 pt-1.5 pr-2">
             <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
             <textarea
@@ -671,11 +720,7 @@ export function MarkdownPopup(props: {
               }}
               onFocus={() => setAiInputFocused(true)}
               onBlur={() => setAiInputFocused(false)}
-              onInput={(e) => {
-                setAiEditInput(e.currentTarget.value);
-                e.currentTarget.style.height = 'auto';
-                e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-              }}
+              onInput={handleAiInput}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -688,33 +733,7 @@ export function MarkdownPopup(props: {
                 }
               }}
             />
-            <Show
-              when={hasActiveAiEdit(blockId)}
-              fallback={
-                <Button
-                  size="icon-sm"
-                  class="rounded-md"
-                  depth={3}
-                  variant="ghost"
-                  tooltip="Ask Macro"
-                  disabled={!aiEditInput().trim()}
-                  onClick={handleAiEditSubmit}
-                >
-                  <CheckIcon class="size-4" />
-                </Button>
-              }
-            >
-              <Button
-                size="icon-sm"
-                class="rounded-md"
-                depth={3}
-                variant="ghost"
-                tooltip="Stop AI edit"
-                onClick={() => cancelAiEdit(blockId)}
-              >
-                <div class="size-2.5 rounded-xs bg-current" />
-              </Button>
-            </Show>
+            <AiEditSubmitButton />
           </div>
         </Show>
 
@@ -891,8 +910,8 @@ export function MarkdownPopup(props: {
           isConverting={isConverting()}
           hasSelection={(selection()?.text ?? '') !== ''}
           showTasksOption={shouldShowCheckboxToTaskButton()}
-          showTableOption={Boolean(canEdit() && convertibleListKey())}
-          showEditWithAiOption={inlineAiEditing().enabled && canEdit()}
+          showTableOption={shouldShowTableButton()}
+          showEditWithAiOption={shouldShowEditWithAiButton()}
           showOpenCommentOption={highlightedCommentThreads().length > 0}
           locationCopied={locationCopied()}
           setPopupVisible={setPopupVisible}
@@ -1042,11 +1061,7 @@ export function MarkdownPopup(props: {
                   ref={(el) => {
                     requestAnimationFrame(() => el.focus());
                   }}
-                  onInput={(e) => {
-                    setAiEditInput(e.currentTarget.value);
-                    e.currentTarget.style.height = 'auto';
-                    e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-                  }}
+                  onInput={handleAiInput}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -1054,33 +1069,7 @@ export function MarkdownPopup(props: {
                     }
                   }}
                 />
-                <Show
-                  when={hasActiveAiEdit(blockId)}
-                  fallback={
-                    <Button
-                      size="icon-sm"
-                      class="rounded-md"
-                      depth={3}
-                      variant="ghost"
-                      tooltip="Ask Macro"
-                      disabled={!aiEditInput().trim()}
-                      onClick={handleAiEditSubmit}
-                    >
-                      <CheckIcon class="size-4" />
-                    </Button>
-                  }
-                >
-                  <Button
-                    size="icon-sm"
-                    class="rounded-md"
-                    depth={3}
-                    variant="ghost"
-                    tooltip="Stop AI edit"
-                    onClick={() => cancelAiEdit(blockId)}
-                  >
-                    <div class="size-2.5 rounded-xs bg-current" />
-                  </Button>
-                </Show>
+                <AiEditSubmitButton />
               </div>
             </MobileDrawer.Content>
           </MobileDrawer.Portal>

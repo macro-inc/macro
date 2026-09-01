@@ -67,7 +67,7 @@ function PinnedReplyComposer(props: {
     <ThreadContext.Provider value={{ mentionsSignal }}>
       <StaticMarkdownContext theme={drawerCommentTheme}>
         <div
-          class="relative shrink-0 px-3"
+          class="shrink-0 px-3"
           classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
         >
           <NewReplyInput
@@ -213,9 +213,10 @@ export function CommentThreadDrawer() {
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
         <MobileDrawer.Content
           aria-label="Comments"
-          // A fixed opening height: half the screen regardless of thread
-          // length — short threads leave space, long ones scroll inside.
-          targetHeight={50}
+          // Viewing a thread opens at a fixed half-screen height — short
+          // threads leave space, long ones scroll inside. A new-comment
+          // draft is just the composer, so it fits its content instead.
+          targetHeight={activeRoot()?.isNew ? undefined : 50}
           // select-none: a press-and-hold on message text would start an
           // iOS text-selection gesture (magnifier loupe), which claims the
           // touch and cancels corvu's drag-to-dismiss (corvu aborts drags
@@ -264,9 +265,7 @@ export function CommentThreadDrawer() {
             <CommentsContext.Provider value={drawerCommentsContext}>
               <Show when={activeRoot()} keyed>
                 {(root) => (
-                  // Positioned wrapper: the composer's action row anchors to
-                  // the nearest positioned ancestor (see ThreadBody).
-                  <div class="relative shrink-0">
+                  <div class="shrink-0">
                     <ThreadBody
                       comment={root}
                       isActive

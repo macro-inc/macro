@@ -97,8 +97,7 @@ export const CommentsContext = createContext<CommentsContextType>({
  * The content of a comment thread: the root comment with its replies and the
  * reply input, or the new-comment composer for a draft. Positioning-agnostic —
  * `Thread` wraps it in the floating margin card, and the touch comment drawer
- * renders it directly. Absolutely-positioned children (the composer's action
- * row) anchor to the nearest positioned ancestor, so hosts must provide one.
+ * renders it directly.
  */
 export function ThreadBody(props: {
   comment: Root;

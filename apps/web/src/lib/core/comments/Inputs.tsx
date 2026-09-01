@@ -100,7 +100,7 @@ export function EditInput(props: {
 
   return (
     <div
-      class={cn('p-2 pb-8')}
+      class={cn('relative p-2 pb-12')}
       on:click={(e) => {
         e.stopPropagation();
         focusEditor();
