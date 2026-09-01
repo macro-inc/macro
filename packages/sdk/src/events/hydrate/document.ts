@@ -82,5 +82,13 @@ export function hydrateDocumentEvent(
       metadata,
       document: Document.byId(client, metadata.document_id),
     }))
+    .with(
+      { event_type: 'document.email_attachment_unlinked' },
+      ({ metadata }) => ({
+        event_type: 'document.email_attachment_unlinked' as const,
+        metadata,
+        document: Document.byId(client, metadata.document_id),
+      }),
+    )
     .exhaustive();
 }

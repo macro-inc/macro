@@ -3906,6 +3906,16 @@ export type DocumentDeletedMetadata = {
 };
 
 /**
+ * Metadata for [`DocumentTopicEvent::EmailAttachmentUnlinked`].
+ */
+export type DocumentEmailAttachmentUnlinkedMetadata = {
+    /**
+     * The id of the document that lost its last `document_email` row.
+     */
+    document_id: string;
+};
+
+/**
  * The document filters used to filter down what documents you search over.
  */
 export type DocumentFilters = {
@@ -4334,6 +4344,13 @@ export type DocumentTopicEvent = {
      * A peer joined, left, or a periodic save occurred.
      */
     metadata: DocumentInteractionMetadata;
+} | {
+    event_type: 'document.email_attachment_unlinked';
+    /**
+     * The document is no longer an email attachment (`document_email` is empty)
+     * but the document row itself remains.
+     */
+    metadata: DocumentEmailAttachmentUnlinkedMetadata;
 };
 
 /**

@@ -461,6 +461,7 @@ export * from './documentContentLocationProperty';
 export * from './documentContentState';
 export * from './documentContentUploadedMetadata';
 export * from './documentContentUploadedMetadataDocumentVersionId';
+export * from './documentEmailAttachmentUnlinkedMetadata';
 export * from './documentFilters';
 export * from './documentFiltersImportance';
 export * from './documentFiltersIsEmailAttachment';

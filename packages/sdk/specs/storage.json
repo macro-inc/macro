@@ -17213,6 +17213,17 @@
           }
         }
       },
+      "DocumentEmailAttachmentUnlinkedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`DocumentTopicEvent::EmailAttachmentUnlinked`].",
+        "required": ["document_id"],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "description": "The id of the document that lost its last `document_email` row."
+          }
+        }
+      },
       "DocumentFilters": {
         "type": "object",
         "description": "The document filters used to filter down what documents you search over.",
@@ -17896,6 +17907,21 @@
               "metadata": {
                 "$ref": "#/components/schemas/DocumentInteractionMetadata",
                 "description": "A peer joined, left, or a periodic save occurred."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The document is no longer an email attachment (`document_email` is empty)\nbut the document row itself remains.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["document.email_attachment_unlinked"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/DocumentEmailAttachmentUnlinkedMetadata",
+                "description": "The document is no longer an email attachment (`document_email` is empty)\nbut the document row itself remains."
               }
             }
           }
