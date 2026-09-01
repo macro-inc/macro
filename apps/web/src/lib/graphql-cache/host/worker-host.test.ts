@@ -23,7 +23,7 @@ import { createWorkerCacheHost } from './worker-host';
 const CLIENT_ID = '00000000-0000-4000-8000-000000000007';
 const EMPTY_WRITE: WriteResult = {
   revision: INITIAL_CACHE_REVISION,
-  revisionAdvanced: true,
+  revisionAdvanced: false,
   changed: [],
   affectedOps: [],
   reset: false,
