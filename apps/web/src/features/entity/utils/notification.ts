@@ -142,10 +142,7 @@ export function muteItemPreviewEntity(item: MuteItem):
     .otherwise(() => undefined);
 }
 
-/** Icon used before a preview loads, or when the type has no preview. */
-export function muteItemFallbackIconType(
-  itemType: string
-):
+export type MuteItemFallbackIconType =
   | 'calendar'
   | 'call'
   | 'channel'
@@ -155,7 +152,12 @@ export function muteItemFallbackIconType(
   | 'githubPullRequest'
   | 'md'
   | 'project'
-  | 'reminder' {
+  | 'reminder';
+
+/** Icon used before a preview loads, or when the type has no preview. */
+export function muteItemFallbackIconType(
+  itemType: string
+): MuteItemFallbackIconType {
   return match(normalizeMuteItemType(itemType))
     .with('channel', 'chat', 'call', 'project', 'reminder', (type) => type)
     .with('document', () => 'md' as const)
