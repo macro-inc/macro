@@ -181,8 +181,9 @@ fn compute_doppler_bins() -> Step<Run> {
 }
 
 /// Compute the cargo-nextest package filter from the changed files, via the
-/// `xtask nextest-filter` subcommand. Root cargo/toolchain/CI changes
-/// short-circuit to an empty filter (run the whole suite).
+/// `xtask nextest-filter` subcommand. Determinator compares the PR merge-base
+/// against HEAD; root cargo/toolchain/CI changes still short-circuit to an
+/// empty filter (run the whole suite).
 fn compute_nextest_filter() -> Step<Run> {
     Step::new("compute nextest package filter")
         .run(include_str!("scripts/compute_nextest_filter.sh"))

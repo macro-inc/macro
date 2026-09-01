@@ -70,6 +70,10 @@ jobs:
       run: |
         set -euo pipefail
 
+        # Compare against the merge-base so a deleted file still appears. `--no-renames`
+        # turns a rename into a delete+add pair so the old path is attributed to its
+        # package (otherwise git reports only the new name).
+
         if [ -z "${GITHUB_BASE_REF:-}" ]; then
           compare_rev="$(git rev-parse HEAD~1)"
         else
@@ -81,7 +85,8 @@ jobs:
           fi
         fi
 
-        git diff --name-only "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
+        printf '%s\n' "$compare_rev" > /tmp/base-revision
+        git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
       shell: bash
     - id: doppler-bins
       name: compute affected Doppler config bins
@@ -109,7 +114,8 @@ jobs:
         # live Postgres (SQLX_OFFLINE is unset there), so `.sqlx` contents cannot change
         # test outcomes, and a query change always comes with a source change in the
         # owning crate, which the package filter below already maps.
-        if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-nix|setup-nix-dev-shell|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
+        # Cargo.lock is omitted: determinator compares the old and new Cargo graphs.
+        if grep -qE '^(Cargo\.toml|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-nix|setup-nix-dev-shell|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
           echo "Workspace-level change detected; running all tests"
           echo "nextest_filter=" >> "$GITHUB_OUTPUT"
           exit 0
@@ -125,13 +131,35 @@ jobs:
           exit 0
         fi
 
-        filterset="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files)"
-
-        if [ -z "$filterset" ]; then
-          echo "No package-specific Rust changes detected; running all tests"
-        else
-          echo "nextest filter: $filterset"
+        if [ ! -s /tmp/changed-files ] || [ ! -s /tmp/base-revision ]; then
+          echo "Unknown or empty change set; running all tests"
+          echo "nextest_filter=" >> "$GITHUB_OUTPUT"
+          exit 0
         fi
+
+        packages="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files "$(< /tmp/base-revision)")"
+
+        # Keep the current nextest filterset contract so this PR can land without the
+        # `-p` runner rewrite. `all` / empty / `none` still mean "run the full suite"
+        # here; a follow-up can switch bash to `rust_packages` and treat `none` as skip.
+        if [ -z "$packages" ] || [ "$packages" = "all" ] || [ "$packages" = "none" ]; then
+          echo "No package-specific Rust changes detected; running all tests"
+          echo "nextest_filter=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        filterset=""
+        for package in $packages; do
+          escaped="${package//\\/\\\\}"
+          escaped="${escaped//)/\\)}"
+          escaped="${escaped//,/\\,}"
+          if [ -n "$filterset" ]; then
+            filterset="${filterset}|"
+          fi
+          filterset="${filterset}rdeps(=${escaped})"
+        done
+
+        echo "nextest filter: $filterset"
         echo "nextest_filter=$filterset" >> "$GITHUB_OUTPUT"
       shell: bash
   check:

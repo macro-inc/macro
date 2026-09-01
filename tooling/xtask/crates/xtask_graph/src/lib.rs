@@ -5,6 +5,8 @@
 //! Anchors `cargo metadata` on the workspace root (from [`xtask_paths`]) so
 //! the task works from anywhere in the repo.
 
+use std::path::Path;
+
 use anyhow::{Context, Result};
 use guppy::MetadataCommand;
 use guppy::graph::PackageGraph;
@@ -16,8 +18,13 @@ use guppy::graph::PackageGraph;
 /// silently rewritten.
 pub fn build_graph(locked: bool) -> Result<PackageGraph> {
     let workspace_dir = xtask_paths::workspace_root();
+    build_graph_at(&workspace_dir, locked)
+}
+
+/// Build a [`PackageGraph`] for the workspace rooted at `workspace_dir`.
+pub fn build_graph_at(workspace_dir: &Path, locked: bool) -> Result<PackageGraph> {
     let mut cmd = MetadataCommand::new();
-    cmd.current_dir(&workspace_dir);
+    cmd.current_dir(workspace_dir);
     if locked {
         cmd.other_options(vec!["--locked".to_owned()]);
     }
