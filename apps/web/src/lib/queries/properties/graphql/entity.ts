@@ -384,6 +384,17 @@ const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
       ).toPromise()
     : client.mutation(mutation, variables, context).toPromise());
   const disposition = mutationDisposition(mutationResult);
+  if (
+    disposition.kind === 'queued' &&
+    mutationResult.data == null &&
+    args.optimisticProperty
+  ) {
+    return {
+      ...mutationResult,
+      data: { setEntityProperty: args.optimisticProperty },
+      error: undefined,
+    };
+  }
   if (disposition.kind !== 'permanently-failed' || mutationResult.error) {
     return mutationResult;
   }

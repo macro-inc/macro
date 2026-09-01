@@ -371,7 +371,9 @@ pub async fn graphql_cache_defer_optimistic_write<R: Runtime>(
     } = &result
     {
         emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
-        emit_cache_changed(&app, &write_result.revision);
+        if write_result.revision_advanced {
+            emit_cache_changed(&app, &write_result.revision);
+        }
         emit_mutation_settled(
             &app,
             settlement_transaction_id,
@@ -415,11 +417,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             result,
         } => (result, Some(replacement_transaction_id.clone())),
     };
-    emit_ops_affected(
-        &app,
-        &write_result.affected_ops,
-        &write_result.changed,
-    );
+    emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
     if write_result.revision_advanced {
         emit_cache_changed(&app, &write_result.revision);
     }

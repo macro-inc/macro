@@ -262,7 +262,7 @@ describe('GraphQL entity property mutations', () => {
     );
   });
 
-  it('durably queues optimistic saves', async () => {
+  it('returns optimistic data for saves queued behind a replacement', async () => {
     const property = {
       propertyId: 'assignment-1',
       propertyDefinitionId: 'definition-1',
@@ -283,11 +283,12 @@ describe('GraphQL entity property mutations', () => {
             kind: 'mutation',
             context,
           } as Operation,
-          data: { setEntityProperty: { id: 'assignment-1' } },
+          data: undefined,
           extensions: {
             normalizedCacheMutationDisposition: {
-              kind: 'queued',
+              kind: 'superseded',
               transactionId: 'transaction-1',
+              replacementTransactionId: 'transaction-2',
             },
           },
           stale: false,
@@ -317,10 +318,14 @@ describe('GraphQL entity property mutations', () => {
         ],
       })
     ).resolves.toMatchObject({
+      data: {
+        setEntityProperty: expect.objectContaining({ id: 'assignment-1' }),
+      },
       extensions: {
         normalizedCacheMutationDisposition: {
-          kind: 'queued',
+          kind: 'superseded',
           transactionId: 'transaction-1',
+          replacementTransactionId: 'transaction-2',
         },
       },
     });
