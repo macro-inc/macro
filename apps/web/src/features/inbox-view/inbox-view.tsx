@@ -63,6 +63,14 @@ function InboxFallback() {
   );
 }
 
+function InboxPreviewFallback() {
+  return (
+    <div class="grid size-full place-items-center text-ink-muted">
+      <SpinnerIcon aria-label="Loading preview" class="size-5 animate-spin" />
+    </div>
+  );
+}
+
 function InboxWorkspace(props: InboxWorkspaceProps) {
   const panel = useSplitPanelOrThrow();
   const shell = useViewShell();
@@ -177,22 +185,24 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
         </Suspense>
       </ViewShell.Main>
       <ViewShell.Detail class="overflow-hidden bg-surface">
-        <Show
-          when={focusedEntity()}
-          fallback={
-            <div class="flex size-full items-center justify-center px-6 text-center text-ink-extra-muted text-sm">
-              Select an inbox item to preview it.
-            </div>
-          }
-        >
-          {(entity) => (
-            <PreviewPanel
-              selectedEntity={entity()}
-              orchestrator={orchestrator}
-              splitPanelContext={panel}
-            />
-          )}
-        </Show>
+        <Suspense fallback={<InboxPreviewFallback />}>
+          <Show
+            when={focusedEntity()}
+            fallback={
+              <div class="flex size-full items-center justify-center px-6 text-center text-ink-extra-muted text-sm">
+                Select an inbox item to preview it.
+              </div>
+            }
+          >
+            {(entity) => (
+              <PreviewPanel
+                selectedEntity={entity()}
+                orchestrator={orchestrator}
+                splitPanelContext={panel}
+              />
+            )}
+          </Show>
+        </Suspense>
       </ViewShell.Detail>
     </>
   );

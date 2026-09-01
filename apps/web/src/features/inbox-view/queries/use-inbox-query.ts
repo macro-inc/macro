@@ -161,7 +161,9 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
 
   const rawEntities = createMemo<EntityData[]>((previous) => {
     if (!search.isSearching()) {
-      return query.isPlaceholderData ? [] : (query.data?.entities ?? []);
+      if (query.isLoading) return previous;
+
+      return query.data?.entities ?? [];
     }
 
     const results = search.data();
@@ -258,11 +260,11 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
 
   const isLoading = () => {
     if (!search.isSearching()) {
-      return query.isLoading || query.isPlaceholderData;
+      return query.isLoading && rawEntities().length === 0;
     }
     if (entities().items.length > 0) return false;
     if (usesServiceSearch()) return search.isLoading();
-    return query.isLoading || query.isPlaceholderData;
+    return query.isLoading;
   };
 
   return {
