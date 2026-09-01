@@ -6,6 +6,7 @@ import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
@@ -53,6 +54,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'General',
     items: [
       { tab: 'Account', label: 'Account', icon: UserIconPhosphor },
+      { tab: 'API Keys', label: 'API Keys', icon: KeyIcon },
       { tab: 'Notifications', label: 'Notifications', icon: BellIcon },
       { tab: 'Billing', label: 'Billing', icon: CreditCardIcon },
       { tab: 'Appearance', label: 'Appearance', icon: SwatchesIcon },
@@ -92,6 +94,7 @@ const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
  */
 const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',
+  'API Keys': 'api-keys',
   Notifications: 'notifications',
   Billing: 'billing',
   Subscription: 'subscription',
@@ -164,6 +167,7 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
+      case 'API Keys':
       case 'Billing':
         return true;
       case 'Notifications':

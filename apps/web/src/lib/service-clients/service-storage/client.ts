@@ -63,6 +63,7 @@ import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompa
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
+import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
 import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
 import type { CreateEntityMentionResponse } from './generated/schemas/createEntityMentionResponse';
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
@@ -156,6 +157,7 @@ import type { TypedSuccessResponse } from './generated/schemas/typedSuccessRespo
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
+import type { UserApiKeysList } from './generated/schemas/userApiKeysList';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
 import type { View } from './generated/schemas/view';
@@ -582,6 +584,29 @@ export const storageServiceClient = {
 
   async revokeBotToken(args: WithBotId & { token_id: string }) {
     return await dssFetch(`/bots/${args.bot_id}/tokens/${args.token_id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async listUserApiKeys() {
+    return (
+      await dssFetch<UserApiKeysList>(`/user-api-keys`, {
+        method: 'GET',
+      })
+    ).map((result) => result.keys);
+  },
+
+  async createUserApiKey(args: { name: string }) {
+    return (
+      await dssFetch<CreatedUserApiKey>(`/user-api-keys`, {
+        method: 'POST',
+        body: JSON.stringify({ name: args.name }),
+      })
+    ).map((result) => result);
+  },
+
+  async deleteUserApiKey(args: { id: string }) {
+    return await dssFetch(`/user-api-keys/${encodeURIComponent(args.id)}`, {
       method: 'DELETE',
     });
   },
