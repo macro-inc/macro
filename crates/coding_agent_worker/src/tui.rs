@@ -1,11 +1,10 @@
 //! The macrod control panel: one process that serves and shows itself.
 //!
-//! `macrod` runs the serving core (webhook receiver, feed reconciler,
-//! harness bridge) inside a terminal UI that shows what the server knows
-//! about this harness - its registration, the agents bound to it, their
-//! sessions, and the daemon's own logs - and drives its lifecycle: edit
-//! `macro.toml`, pair (or re-pair, restarting the core on the new
-//! credential), and retire the harness.
+//! `macrod` runs the serving core (SSE listener, harness bridge) inside a
+//! terminal UI that shows what the server knows about this harness - its
+//! registration, the agents bound to it, their sessions, and the daemon's
+//! own logs - and drives its lifecycle: edit `macro.toml`, pair (or re-pair,
+//! restarting the core on the new credential), and retire the harness.
 
 mod api;
 mod config_form;
@@ -23,7 +22,6 @@ use crate::config::Config;
 use crate::daemon::Daemon;
 use crate::outbound::credentials::{CredentialStore as _, FileCredentialStore, HarnessCredentials};
 use crate::outbound::pairing::{ClaimStatus, PairingClient};
-use crate::outbound::registration;
 
 use api::{HarnessSelfApi, Snapshot};
 use config_form::{ConfigForm, FIELDS, FieldKind};
@@ -353,7 +351,7 @@ impl App {
         let _ = std::fs::remove_file(crate::outbound::credentials::credentials_path(
             &self.config_path,
         ));
-        let _ = std::fs::remove_file(registration::state_path(&self.config_path));
+        let _ = std::fs::remove_file(self.config_path.with_extension("webhook-state.json"));
         self.credentials = None;
         self.snapshot = Snapshot::default();
         self.ok("harness removed - press p to pair again");

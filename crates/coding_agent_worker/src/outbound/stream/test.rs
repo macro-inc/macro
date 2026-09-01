@@ -1,33 +1,37 @@
 use super::*;
+use crate::config::MacroApi;
+use crate::outbound::credentials::{HarnessCredentials, HarnessScope};
+use harness_id::HarnessId;
+use webhook::domain::models::WebhookFilter;
+
+fn test_client(storage_url: &str) -> EventStreamClient {
+    EventStreamClient::new(
+        &MacroApi {
+            api_url: "http://unused".to_owned(),
+            storage_url: storage_url.to_owned(),
+            web_url: "https://macro.com/app".to_owned(),
+        },
+        &HarnessCredentials {
+            harness_id: HarnessId::TEST_A,
+            token: "mhns_test".to_owned(),
+            scope: HarnessScope::User,
+        },
+    )
+}
 
 #[test]
-fn stream_scope_accepts_user_and_team() {
-    assert_eq!(stream_scope("user").expect("user"), WebhookScope::User);
-    assert_eq!(stream_scope("team").expect("team"), WebhookScope::Team);
-    assert!(stream_scope("workspace").is_err());
+fn stream_scope_maps_harness_ownership() {
+    assert_eq!(stream_scope(HarnessScope::User), WebhookScope::User);
+    assert_eq!(stream_scope(HarnessScope::Team), WebhookScope::Team);
 }
 
-#[tokio::test]
-async fn identify_bot_reads_the_id_from_bots_me() {
-    let url = serve_once(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"id\":\"00000000-0000-0000-0000-000000000001\"}",
-    )
-    .await;
-    let client = test_client(&url);
-
-    let bot = client.identify_bot().await.expect("identify the bot");
-    assert_eq!(bot.to_string(), "00000000-0000-0000-0000-000000000001");
-}
-
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, serde::Deserialize)]
 struct Envelope {
     n: u8,
 }
 
 #[tokio::test]
 async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
-    // A keep-alive comment, an envelope, a non-JSON data frame, a JSON frame
-    // of the wrong shape, a CRLF multi-line envelope, then close.
     let url = serve_once(
         "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n\
          : keep-alive\n\n\
@@ -41,13 +45,10 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
     .await;
     let client = test_client(&url);
     let mut stream = client
-        .connect::<Envelope>(
-            WebhookScope::User,
-            &[WebhookFilter {
-                events: vec!["agent_trigger.new".to_owned()],
-                ids: None,
-            }],
-        )
+        .connect::<Envelope>(&[WebhookFilter {
+            events: vec!["agent_trigger.new".to_owned()],
+            ids: None,
+        }])
         .await
         .expect("open the stream");
 
@@ -67,20 +68,31 @@ async fn connect_refuses_a_non_2xx_answer() {
     let client = test_client(&url);
 
     let error = client
-        .connect::<Envelope>(WebhookScope::User, &[])
+        .connect::<Envelope>(&[])
         .await
         .err()
         .expect("a 403 is refused");
     assert!(format!("{error:?}").contains("403"));
 }
 
-fn test_client(storage_url: &str) -> EventStreamClient {
-    EventStreamClient::new(
-        storage_url,
-        "mbot_test",
-        "user",
-        "macro|owner@example.com",
+#[tokio::test]
+async fn bound_bot_ids_are_sorted_and_unique() {
+    let url = serve_once(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"bot_id\":\"00000000-0000-0000-0000-000000000002\",\"name\":\"b\",\"handle\":\"b\"},\
+          {\"bot_id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"a\",\"handle\":\"a\"},\
+          {\"bot_id\":\"00000000-0000-0000-0000-000000000002\",\"name\":\"b2\",\"handle\":\"b2\"}]",
     )
+    .await;
+    let client = test_client(&url);
+    let ids = client.bound_bot_ids().await.expect("list agents");
+    assert_eq!(
+        ids,
+        vec![
+            "00000000-0000-0000-0000-000000000001".to_owned(),
+            "00000000-0000-0000-0000-000000000002".to_owned()
+        ]
+    );
 }
 
 async fn serve_once(response: &'static str) -> String {

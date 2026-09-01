@@ -3580,7 +3580,6 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "toml_edit 0.22.27",
- "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "uuid",

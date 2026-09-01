@@ -16,11 +16,7 @@ agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
-axum = { workspace = true }
 bot_id = { path = "../bot_id" }
-# Only the domain models: the daemon reads `GET /bots/me` and the webhook
-# API's bodies, and wants none of either crate's server-side machinery.
-bots = { path = "../bots", default-features = false }
 chrono = { workspace = true }
 clap = { workspace = true }
 crossterm = { workspace = true }
@@ -52,7 +48,6 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 tracing-subscriber = { workspace = true }
 webhook = { path = "../webhook", default-features = false }
-webhook_signature = { path = "../webhook_signature" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
@@ -62,4 +57,3 @@ channels = { path = "../channels", default-features = false }
 chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 tokio = { workspace = true, features = ["io-util", "net"] }
-tower = { workspace = true, features = ["util"] }

@@ -91,7 +91,7 @@ fn a_bots_own_message_is_skipped() {
 
 #[test]
 fn trigger_filters_name_this_bot_and_every_trigger_event() {
-    let filters = trigger_filters(bot_id::BotId::TEST_A);
+    let filters = trigger_filters([bot_id::BotId::TEST_A]);
     assert_eq!(filters.len(), 1);
     let filter = &filters[0];
     assert_eq!(

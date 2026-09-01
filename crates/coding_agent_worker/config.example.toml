@@ -9,8 +9,7 @@
 # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
 # gateway the daemon dials per session.
 api_url = "http://localhost:50009/agent-harness"
-# Base URL of the storage service (harness pairing + webhook APIs); the
-# daemon registers its own trigger feed there at boot.
+# Base URL of the storage service (harness pairing + live event stream).
 storage_url = "http://localhost:50009/dss"
 # Optional: base URL of the Macro web app, used only to print the pairing
 # link. Defaults to https://macro.com/app.
@@ -23,16 +22,6 @@ name = "erics-macbook"
 # Optional: "private" (default) or "team". Team harnesses can run agents any
 # of your teammates create. The approval dialog arrives preselected to this.
 scope = "private"
-
-[server]
-# Port `POST /macro-events` is served on.
-port = 8790
-# The URL deliveries reach this daemon at; what the feed registers.
-# Locally, the stack's relay tunnels this to the port above.
-public_url = "http://sdk-webhook-relay:8787/macro-events"
-# Optional override; normally the daemon registers its own feed at boot
-# and keeps the minted secret in a state file next to this config.
-# signing_secret = "whsec_..."
 
 [harness]
 command = "opencode"

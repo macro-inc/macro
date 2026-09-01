@@ -104,16 +104,18 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
     }
 }
 
-/// Every event this daemon's stream asks for, straight from the topic's own
-/// vocabulary. A name this daemon does not yet handle is still worth
-/// subscribing to - it arrives, is recognised as unsupported, and is
-/// skipped - which beats silently never being sent it.
-pub fn trigger_filters(bot: BotId) -> Vec<WebhookFilter> {
+/// Every event this daemon's stream asks for, scoped to the bound bots.
+///
+/// A name this daemon does not yet handle is still worth subscribing to -
+/// it arrives, is recognised as unsupported, and is skipped - which beats
+/// silently never being sent it.
+pub fn trigger_filters(bots: impl IntoIterator<Item = impl ToString>) -> Vec<WebhookFilter> {
+    let ids: Vec<String> = bots.into_iter().map(|bot| bot.to_string()).collect();
     vec![WebhookFilter {
         events: AgentTriggerEventName::iter()
             .map(|event| event.to_string())
             .collect(),
-        ids: Some(vec![bot.to_string()]),
+        ids: Some(ids),
     }]
 }
 

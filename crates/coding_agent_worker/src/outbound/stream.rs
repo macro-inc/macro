@@ -1,5 +1,5 @@
-//! Live trigger stream: identify this bot, then hold
-//! `GET /webhook/events/stream` open as that bot acting for its owner.
+//! Live trigger stream: hold `GET /webhook/events/stream` open as this
+//! harness, covering every agent currently bound to it.
 //!
 //! The body is Server-Sent Events, decoded by `eventsource-stream`. Each
 //! event's `data` is the same broker envelope persisted webhooks deliver,
@@ -7,82 +7,97 @@
 //! best-effort: a dropped connection misses events published while it was
 //! down.
 
+use std::collections::BTreeSet;
 use std::marker::PhantomData;
 use std::pin::Pin;
 
-use bot_id::BotId;
 use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
+use harnesses::domain::models::HarnessAgent;
 use rootcause::prelude::ResultExt as _;
-use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use webhook::domain::models::{WebhookFilter, WebhookScope};
+
+use crate::config::MacroApi;
+use crate::outbound::credentials::{HarnessCredentials, HarnessScope};
 
 #[cfg(test)]
 mod test;
 
-const BOT_TOKEN_HEADER: &str = "x-macro-bot-token";
-const BOT_SCOPE_HEADER: &str = "x-macro-bot-scope";
-const BOT_ACTING_USER_HEADER: &str = "x-macro-bot-for-macro-user-id";
+const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 
-/// Map the daemon's `bot_scope` config onto the stream query's workspace scope.
-pub fn stream_scope(bot_scope: &str) -> rootcause::Result<WebhookScope> {
-    bot_scope.parse().map_err(|_| {
-        rootcause::report!("unsupported bot_scope `{bot_scope}`; expected `user` or `team`")
-    })
+/// Map the harness's ownership onto the stream query's workspace scope.
+pub fn stream_scope(scope: HarnessScope) -> WebhookScope {
+    match scope {
+        HarnessScope::User => WebhookScope::User,
+        HarnessScope::Team => WebhookScope::Team,
+    }
 }
 
-/// Client for the storage service's live event stream, acting as one bot.
+/// Client for the storage service's live event stream, acting as one harness.
 pub struct EventStreamClient {
     http: reqwest::Client,
     base: String,
-    bot_token: String,
-    bot_scope: String,
-    owner_user_id: String,
+    token: String,
+    scope: WebhookScope,
 }
 
 impl EventStreamClient {
-    /// Build a client that calls the storage service as one bot.
-    pub fn new(
-        storage_url: impl Into<String>,
-        bot_token: impl Into<String>,
-        bot_scope: impl Into<String>,
-        owner_user_id: impl Into<String>,
-    ) -> Self {
+    /// Build a client from the daemon's config and paired credentials.
+    pub fn new(config: &MacroApi, credentials: &HarnessCredentials) -> Self {
         Self {
             http: reqwest::Client::new(),
-            base: storage_url.into().trim_end_matches('/').to_owned(),
-            bot_token: bot_token.into(),
-            bot_scope: bot_scope.into(),
-            owner_user_id: owner_user_id.into(),
+            base: config.storage_url.trim_end_matches('/').to_owned(),
+            token: credentials.token.clone(),
+            scope: stream_scope(credentials.scope),
         }
     }
 
     fn credentialed(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        request
-            .header(BOT_TOKEN_HEADER, &self.bot_token)
-            .header(BOT_SCOPE_HEADER, &self.bot_scope)
-            .header(BOT_ACTING_USER_HEADER, &self.owner_user_id)
+        request.header(HARNESS_TOKEN_HEADER, &self.token)
     }
 
-    /// Who this daemon's token is. Stream filters are scoped to that bot.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn identify_bot(&self) -> rootcause::Result<BotId> {
+    async fn read<T: DeserializeOwned>(
+        &self,
+        what: &'static str,
+        request: reqwest::RequestBuilder,
+    ) -> rootcause::Result<T> {
         let response = self
-            .credentialed(self.http.get(format!("{}/bots/me", self.base)))
+            .credentialed(request)
             .send()
             .await
-            .context("could not reach the service to identify the bot")?;
+            .context(format!("could not reach the service to {what}"))?;
         let status = response.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+            rootcause::bail!(
+                "the service refused this harness's credentials ({status}) while trying to \
+                 {what}; the harness was likely removed - press p to pair again"
+            );
+        }
         if !status.is_success() {
             let message = response.text().await.unwrap_or_default();
-            rootcause::bail!("the service answered {status} to identify the bot: {message}");
+            rootcause::bail!("the service answered {status} to {what}: {message}");
         }
-        let me: BotMe = response
+        Ok(response
             .json()
             .await
-            .context("could not read the service's answer to identify the bot")?;
-        Ok(me.id)
+            .context(format!("could not read the service's answer to {what}"))?)
+    }
+
+    /// The agents currently bound to this harness, as sorted bot-id strings —
+    /// the shape the stream filter carries.
+    pub async fn bound_bot_ids(&self) -> rootcause::Result<Vec<String>> {
+        let agents: Vec<HarnessAgent> = self
+            .read(
+                "list this harness's agents",
+                self.http.get(format!("{}/harnesses/me/agents", self.base)),
+            )
+            .await?;
+        let ids: BTreeSet<String> = agents
+            .into_iter()
+            .map(|agent| agent.bot_id.to_string())
+            .collect();
+        Ok(ids.into_iter().collect())
     }
 
     /// Open `GET /webhook/events/stream` and start reading envelopes of
@@ -90,7 +105,6 @@ impl EventStreamClient {
     #[tracing::instrument(skip(self, filters), err)]
     pub async fn connect<E: DeserializeOwned>(
         &self,
-        scope: WebhookScope,
         filters: &[WebhookFilter],
     ) -> rootcause::Result<EventStream<E>> {
         let filters =
@@ -101,7 +115,7 @@ impl EventStreamClient {
                     .get(format!("{}/webhook/events/stream", self.base))
                     .header(reqwest::header::ACCEPT, "text/event-stream")
                     .query(&[
-                        ("scope", scope.to_string().as_str()),
+                        ("scope", self.scope.to_string().as_str()),
                         ("filters", filters.as_str()),
                     ]),
             )
@@ -118,11 +132,6 @@ impl EventStreamClient {
             _envelope: PhantomData,
         })
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct BotMe {
-    id: BotId,
 }
 
 type SseEvents =
