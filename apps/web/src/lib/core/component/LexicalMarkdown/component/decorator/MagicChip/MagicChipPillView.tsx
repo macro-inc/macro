@@ -22,7 +22,7 @@ const PILL_CHROME_INLINE = 'calc(1.5rem + 2px)';
 /** Idle arrow sits in flow: `ml-1.5` plus the 14px icon. */
 const PILL_IDLE_ARROW_INLINE = 'calc(0.375rem + 0.875rem)';
 
-export const MAGIC_CHIP_PILL_BLOCK_SIZE_PX = 40;
+export const MAGIC_CHIP_PILL_BLOCK_SIZE_PX = 32;
 /** Long answers ellipsize inside this, not across the message column. */
 export const MAGIC_CHIP_PILL_MAX_INLINE_SIZE = 'min(100%, 20rem)';
 
