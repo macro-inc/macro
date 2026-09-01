@@ -9,6 +9,7 @@ import type { CacheHost } from './types';
 
 const emptyWriteResult = (): WriteResult => ({
   revision: INITIAL_CACHE_REVISION,
+  revisionAdvanced: false,
   changed: [],
   affectedOps: [],
   reset: false,

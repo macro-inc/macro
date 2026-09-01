@@ -144,6 +144,7 @@ struct JsQueryRegistration {
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
     revision: String,
+    revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -154,6 +155,7 @@ struct JsWriteResult {
 #[serde(rename_all = "camelCase")]
 struct JsHydrationWriteResult {
     revision: String,
+    revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -172,6 +174,7 @@ struct JsEnqueueOptimisticMutationResult {
     transaction_id: String,
     upsert_kind: JsMutationUpsertKind,
     revision: String,
+    revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -389,6 +392,7 @@ enum JsRollbackOptimisticWriteResult {
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
         revision: result.revision.to_string(),
+        revision_advanced: result.revision_advanced,
         changed: result
             .changed
             .into_iter()
@@ -1113,6 +1117,7 @@ impl CacheEngine {
             let result = state.engine_result(result)?;
             to_js(&JsHydrationWriteResult {
                 revision: result.write_result.revision.to_string(),
+                revision_advanced: result.write_result.revision_advanced,
                 changed: result
                     .write_result
                     .changed
@@ -1202,6 +1207,7 @@ impl CacheEngine {
                 transaction_id: result.transaction_id.to_string(),
                 upsert_kind: result.upsert_kind.into(),
                 revision: result.write_result.revision.to_string(),
+                revision_advanced: result.write_result.revision_advanced,
                 changed: result
                     .write_result
                     .changed

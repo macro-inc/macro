@@ -289,6 +289,7 @@ function makeFakeHost(): FakeHost {
       host.cacheActions.push({ kind: 'write', value: args.data });
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -318,6 +319,7 @@ function makeFakeHost(): FakeHost {
       return {
         transactionId,
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -363,6 +365,7 @@ function makeFakeHost(): FakeHost {
       return {
         kind: 'committed',
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -374,6 +377,7 @@ function makeFakeHost(): FakeHost {
       return {
         kind: 'rolled-back' as const,
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -721,6 +725,7 @@ describe('normalizedCacheExchange', () => {
       cacheContainsDocument = true;
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -1361,6 +1366,7 @@ describe('normalizedCacheExchange', () => {
       cached = args.data;
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,

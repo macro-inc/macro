@@ -305,6 +305,8 @@ export type HydrationResult =
 export type WriteResult = {
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
+  /** Whether this write advanced `revision`. */
+  revisionAdvanced: boolean;
   /** Entity keys whose records changed. */
   changed: string[];
   /** Registered operation ids affected by the change (origin excluded). */

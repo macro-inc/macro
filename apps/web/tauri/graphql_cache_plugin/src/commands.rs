@@ -169,7 +169,9 @@ pub async fn graphql_cache_write<R: Runtime>(
         })
         .await?;
     emit_ops_affected(&app, &result.affected_ops, &result.changed);
-    emit_cache_changed(&app, &result.revision);
+    if result.revision_advanced {
+        emit_cache_changed(&app, &result.revision);
+    }
     Ok(result)
 }
 
@@ -217,7 +219,9 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
         &result.write_result.affected_ops,
         &result.write_result.changed,
     );
-    emit_cache_changed(&app, &result.write_result.revision);
+    if result.write_result.revision_advanced {
+        emit_cache_changed(&app, &result.write_result.revision);
+    }
     Ok(match result.data {
         Some(data) => HydrationResultWire::Data {
             data,
@@ -266,7 +270,9 @@ pub async fn graphql_cache_enqueue_optimistic_mutation<R: Runtime>(
         )
         .await?;
     emit_ops_affected(&app, &result.result.affected_ops, &result.result.changed);
-    emit_cache_changed(&app, &result.result.revision);
+    if result.result.revision_advanced {
+        emit_cache_changed(&app, &result.result.revision);
+    }
     if let MutationUpsertKindWire::ReplacedPending {
         removed_transaction_id,
     } = &result.upsert_kind
@@ -414,7 +420,9 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
         &write_result.affected_ops,
         &write_result.changed,
     );
-    emit_cache_changed(&app, &write_result.revision);
+    if write_result.revision_advanced {
+        emit_cache_changed(&app, &write_result.revision);
+    }
     emit_mutation_settled(
         &app,
         settlement_transaction_id,
@@ -448,7 +456,9 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
             result: write_result,
         } => {
             emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
-            emit_cache_changed(&app, &write_result.revision);
+            if write_result.revision_advanced {
+                emit_cache_changed(&app, &write_result.revision);
+            }
             emit_mutation_settled(
                 &app,
                 settlement_transaction_id,
@@ -462,7 +472,9 @@ pub async fn graphql_cache_rollback_optimistic_write<R: Runtime>(
             result: write_result,
         } => {
             emit_ops_affected(&app, &write_result.affected_ops, &write_result.changed);
-            emit_cache_changed(&app, &write_result.revision);
+            if write_result.revision_advanced {
+                emit_cache_changed(&app, &write_result.revision);
+            }
             emit_mutation_settled(
                 &app,
                 settlement_transaction_id,

@@ -71,6 +71,7 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
 fn empty_write_result() -> WriteResultWire {
     WriteResultWire {
         revision: "0".to_string(),
+        revision_advanced: false,
         changed: Vec::new(),
         affected_ops: Vec::new(),
         reset: false,

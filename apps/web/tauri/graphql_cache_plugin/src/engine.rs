@@ -52,6 +52,8 @@ pub enum ReadResultWire {
 pub struct WriteResultWire {
     /// Effective-view revision installed by this logical mutation.
     pub revision: String,
+    /// Whether this write advanced `revision`.
+    pub revision_advanced: bool,
     /// Entity keys whose records changed.
     pub changed: Vec<String>,
     /// Registered operation ids affected by the change (origin excluded).
@@ -352,6 +354,7 @@ pub struct EngineHandle {
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
         revision: result.revision.to_string(),
+        revision_advanced: result.revision_advanced,
         changed: result
             .changed
             .into_iter()

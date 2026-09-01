@@ -150,6 +150,48 @@ async fn begin_with_projection(
 }
 
 #[test]
+fn authoritative_projection_no_op_does_not_advance_revision() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        let first = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        assert!(first.revision_advanced);
+        assert_eq!(first.revision.to_string(), "1");
+
+        let unchanged = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        assert!(unchanged.changed.is_empty());
+        assert!(!unchanged.revision_advanced);
+        assert_eq!(unchanged.revision, first.revision);
+
+        let projection_only = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key, Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-2"))],
+            )
+            .await
+            .unwrap();
+        assert!(projection_only.changed.is_empty());
+        assert!(projection_only.revision_advanced);
+        assert_eq!(projection_only.revision.to_string(), "2");
+    });
+}
+
+#[test]
 fn replacement_removes_stale_facts_and_incomplete_states_fall_back() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

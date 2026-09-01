@@ -839,6 +839,7 @@ describe('CacheWorkerCore', () => {
   it('pushes cache changes even without affected operations', async () => {
     const writeResult = {
       revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
       changed: ['GraphqlSoupDocument:doc-1'],
       affectedOps: [],
       reset: false,
@@ -881,6 +882,42 @@ describe('CacheWorkerCore', () => {
       undefined
     );
     expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
+  });
+
+  it('does not push cache changes for no-op writes', async () => {
+    const writeResult = {
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: false,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        writeQuery: vi.fn().mockResolvedValue(writeResult),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'write',
+      query: 'subscription { soupUpdates { __typename } }',
+      data: { soupUpdates: [] },
+    });
+
+    expect(messages).not.toContainEqual({
       kind: 'cache-changed',
       revision: INITIAL_CACHE_REVISION,
     });

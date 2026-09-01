@@ -207,7 +207,12 @@ export class CacheWorkerCore {
       const result = await this.enqueue(request);
       const durationMs = this.now() - startedAt;
       const revisionCategory = revisionAdvancementCategory(request);
-      if (revisionCategory !== undefined) {
+      const revisionAdvanced =
+        typeof result !== 'object' ||
+        result === null ||
+        !('revisionAdvanced' in result) ||
+        result.revisionAdvanced !== false;
+      if (revisionCategory !== undefined && revisionAdvanced) {
         this.telemetry.record({
           name: 'graphql_cache.revision_advance',
           operationCategory: category,
@@ -639,6 +644,7 @@ export class CacheWorkerCore {
         this.fanOut(
           {
             revision: result.revision,
+            revisionAdvanced: true,
             changed: request.keys,
             affectedOps: result.affectedOps,
             reset: false,
@@ -657,6 +663,7 @@ export class CacheWorkerCore {
         this.fanOut(
           {
             revision: result.revision,
+            revisionAdvanced: true,
             changed: request.keys,
             affectedOps: result.affectedOps,
             reset: false,
@@ -918,7 +925,7 @@ export class CacheWorkerCore {
         keys: result.changed,
       });
     }
-    if (cacheChanged) {
+    if (cacheChanged && result.revisionAdvanced) {
       this.push({ kind: 'cache-changed', revision: result.revision });
     }
   }
