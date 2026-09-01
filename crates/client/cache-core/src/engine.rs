@@ -24,7 +24,8 @@ use crate::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionMutationLayer, ProjectionState,
     StagedOptimisticProjection, StagedOptimisticProjectionOwner,
-    apply_authoritative_projection_patch, compose_effective_optimistic_projection,
+    apply_authoritative_projection_mutations, apply_authoritative_projection_patch,
+    compose_effective_optimistic_projection,
 };
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
@@ -1317,49 +1318,13 @@ impl<S: Storage> Engine<S> {
             .load_projection_states(&keys)
             .await
             .map_err(EngineError::Storage)?;
-        let mut projected = keys.iter().cloned().zip(states).collect::<HashMap<_, _>>();
+        let mut projected = keys
+            .into_iter()
+            .zip(states)
+            .filter_map(|(key, state)| state.map(|state| (key, state)))
+            .collect::<HashMap<_, _>>();
         let before = projected.clone();
-
-        for mutation in mutations {
-            let key = mutation.record_key().clone();
-            let state = match mutation {
-                ProjectionMutation::Replace(document) => {
-                    let mut document = document.clone();
-                    document.canonicalize();
-                    Some(ProjectionState::Complete(document))
-                }
-                ProjectionMutation::Patch {
-                    record_key,
-                    profile,
-                    partition,
-                    exact,
-                    integers,
-                    sorts,
-                } => Some(apply_authoritative_projection_patch(
-                    projected.get(record_key).and_then(Option::as_ref),
-                    record_key,
-                    profile,
-                    partition,
-                    exact,
-                    integers,
-                    sorts,
-                )),
-                ProjectionMutation::MarkIncomplete {
-                    record_key,
-                    profile,
-                    partition,
-                    kind,
-                } => Some(ProjectionState::Incomplete {
-                    record_key: record_key.clone(),
-                    profile: profile.clone(),
-                    partition: partition.clone(),
-                    kind: *kind,
-                }),
-                ProjectionMutation::Delete(_) => None,
-            };
-            projected.insert(key, state);
-        }
-
+        apply_authoritative_projection_mutations(&mut projected, mutations);
         Ok(projected != before)
     }
 

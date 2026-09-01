@@ -13,7 +13,7 @@ use predicate_index::{
     PendingOptimisticProjection, Profile, RecordKey, Token, ValidatedIndexQuery, ValidationError,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use thiserror::Error;
 
 /// Persisted projection state for one supported normalized record.
@@ -567,6 +567,60 @@ impl ProjectionMutation {
             Self::Patch { record_key, .. }
             | Self::MarkIncomplete { record_key, .. }
             | Self::Delete(record_key) => record_key,
+        }
+    }
+}
+
+/// Apply authoritative projection mutations to materialized projection states.
+///
+/// Replacement documents are canonicalized before becoming authoritative so
+/// no-op detection and every storage implementation compare and persist the
+/// same value.
+pub fn apply_authoritative_projection_mutations(
+    states: &mut HashMap<RecordKey, ProjectionState>,
+    mutations: &[ProjectionMutation],
+) {
+    for mutation in mutations {
+        let key = mutation.record_key().clone();
+        let state = match mutation {
+            ProjectionMutation::Replace(document) => {
+                let mut document = document.clone();
+                document.canonicalize();
+                Some(ProjectionState::Complete(document))
+            }
+            ProjectionMutation::Patch {
+                record_key,
+                profile,
+                partition,
+                exact,
+                integers,
+                sorts,
+            } => Some(apply_authoritative_projection_patch(
+                states.get(record_key),
+                record_key,
+                profile,
+                partition,
+                exact,
+                integers,
+                sorts,
+            )),
+            ProjectionMutation::MarkIncomplete {
+                record_key,
+                profile,
+                partition,
+                kind,
+            } => Some(ProjectionState::Incomplete {
+                record_key: record_key.clone(),
+                profile: profile.clone(),
+                partition: partition.clone(),
+                kind: *kind,
+            }),
+            ProjectionMutation::Delete(_) => None,
+        };
+        if let Some(state) = state {
+            states.insert(key, state);
+        } else {
+            states.remove(&key);
         }
     }
 }

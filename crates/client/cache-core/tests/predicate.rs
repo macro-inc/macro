@@ -192,6 +192,52 @@ fn authoritative_projection_no_op_does_not_advance_revision() {
 }
 
 #[test]
+fn authoritative_projection_no_op_uses_the_canonical_persisted_value() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        let mut replacement = projection("owner-1");
+        replacement.exact_facts.push(ExactFact {
+            attribute: token("category"),
+            value: ExactValue::utf8("report").unwrap(),
+        });
+        let mut canonical = replacement.clone();
+        canonical.canonicalize();
+        assert_ne!(replacement, canonical, "fixture must be non-canonical");
+
+        let first = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), Record::default())],
+                vec![ProjectionMutation::Replace(replacement.clone())],
+            )
+            .await
+            .unwrap();
+        assert!(first.revision_advanced);
+        assert_eq!(
+            engine
+                .storage()
+                .load_projection_states(&[record_key()])
+                .await
+                .unwrap(),
+            vec![Some(ProjectionState::Complete(canonical))]
+        );
+
+        let unchanged = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key, Record::default())],
+                vec![ProjectionMutation::Replace(replacement)],
+            )
+            .await
+            .unwrap();
+        assert!(unchanged.changed.is_empty());
+        assert!(!unchanged.revision_advanced);
+        assert_eq!(unchanged.revision, first.revision);
+    });
+}
+
+#[test]
 fn replacement_removes_stale_facts_and_incomplete_states_fall_back() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

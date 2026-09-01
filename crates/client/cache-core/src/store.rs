@@ -9,7 +9,7 @@
 use crate::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionState, StagedOptimisticProjection,
-    StagedOptimisticProjectionOwner, apply_authoritative_projection_patch,
+    StagedOptimisticProjectionOwner, apply_authoritative_projection_mutations,
 };
 use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
@@ -835,54 +835,7 @@ fn apply_in_memory_projection_mutations(
     projections: &mut HashMap<PredicateRecordKey, ProjectionState>,
     mutations: Vec<ProjectionMutation>,
 ) {
-    for mutation in mutations {
-        match mutation {
-            ProjectionMutation::Replace(document) => {
-                projections.insert(
-                    document.record_key.clone(),
-                    ProjectionState::Complete(document),
-                );
-            }
-            ProjectionMutation::Patch {
-                record_key,
-                profile,
-                partition,
-                exact,
-                integers,
-                sorts,
-            } => {
-                let state = apply_authoritative_projection_patch(
-                    projections.get(&record_key),
-                    &record_key,
-                    &profile,
-                    &partition,
-                    &exact,
-                    &integers,
-                    &sorts,
-                );
-                projections.insert(record_key, state);
-            }
-            ProjectionMutation::MarkIncomplete {
-                record_key,
-                profile,
-                partition,
-                kind,
-            } => {
-                projections.insert(
-                    record_key.clone(),
-                    ProjectionState::Incomplete {
-                        record_key,
-                        profile,
-                        partition,
-                        kind,
-                    },
-                );
-            }
-            ProjectionMutation::Delete(record_key) => {
-                projections.remove(&record_key);
-            }
-        }
-    }
+    apply_authoritative_projection_mutations(projections, &mutations);
 }
 
 fn claim_matches(mutation: &crate::queue::StoredMutation, claim: &MutationClaimToken) -> bool {

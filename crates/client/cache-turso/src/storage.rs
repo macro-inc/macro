@@ -7,7 +7,7 @@ use cache_core::codec::{
 use cache_core::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation, ProjectionState,
-    StagedOptimisticProjectionOwner, apply_authoritative_projection_patch,
+    StagedOptimisticProjectionOwner, apply_authoritative_projection_mutations,
 };
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
@@ -1723,125 +1723,112 @@ fn optimistic_projection_state_code(state: &OptimisticProjectionState) -> (i64, 
 
 fn write_projection_mutations(
     connection: &Arc<Connection>,
-    projections: Vec<ProjectionMutation>,
+    mutations: Vec<ProjectionMutation>,
 ) -> Result<(), TursoStorageError> {
-    for mutation in projections {
-        match mutation {
-            ProjectionMutation::Replace(document) => {
-                document.validate().map_err(|_| invariant())?;
-                let document_id = upsert_index_document(
-                    connection,
-                    &document.record_key,
-                    &document.profile,
-                    &document.partition,
-                    0,
+    let keys = mutations
+        .iter()
+        .map(ProjectionMutation::record_key)
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let mut states = keys
+        .iter()
+        .cloned()
+        .zip(load_projection_states(connection, &keys)?)
+        .filter_map(|(key, state)| state.map(|state| (key, state)))
+        .collect::<HashMap<_, _>>();
+
+    for mutation in &mutations {
+        let key = mutation.record_key().clone();
+        apply_authoritative_projection_mutations(&mut states, std::slice::from_ref(mutation));
+        write_projection_state(connection, &key, states.get(&key))?;
+    }
+    Ok(())
+}
+
+fn write_projection_state(
+    connection: &Arc<Connection>,
+    record_key: &PredicateRecordKey,
+    state: Option<&ProjectionState>,
+) -> Result<(), TursoStorageError> {
+    match state {
+        Some(ProjectionState::Complete(document)) => {
+            document.validate().map_err(|_| invariant())?;
+            let document_id = upsert_index_document(
+                connection,
+                &document.record_key,
+                &document.profile,
+                &document.partition,
+                0,
+            )?;
+            delete_index_facts(connection, document_id)?;
+            for fact in &document.exact_facts {
+                require_changed(
+                    driver::execute(
+                        connection,
+                        EXACT_FACT_INSERT,
+                        vec![
+                            Value::from_i64(document_id),
+                            text(fact.attribute.as_str()),
+                            Value::from_blob(fact.value.as_bytes().to_vec()),
+                        ],
+                    )?,
+                    1,
                 )?;
-                delete_index_facts(connection, document_id)?;
-                for fact in document.exact_facts {
-                    require_changed(
-                        driver::execute(
-                            connection,
-                            EXACT_FACT_INSERT,
-                            vec![
-                                Value::from_i64(document_id),
-                                text(fact.attribute.as_str()),
-                                Value::from_blob(fact.value.as_bytes().to_vec()),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                }
-                for fact in document.integer_facts {
-                    require_changed(
-                        driver::execute(
-                            connection,
-                            INTEGER_FACT_INSERT,
-                            vec![
-                                Value::from_i64(document_id),
-                                text(fact.attribute.as_str()),
-                                Value::from_i64(fact.value),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                }
-                for fact in document.sort_facts {
-                    require_changed(
-                        driver::execute(
-                            connection,
-                            SORT_FACT_INSERT,
-                            vec![
-                                Value::from_i64(document_id),
-                                text(fact.attribute.as_str()),
-                                Value::from_i64(fact.value),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                }
             }
-            ProjectionMutation::Patch {
+            for fact in &document.integer_facts {
+                require_changed(
+                    driver::execute(
+                        connection,
+                        INTEGER_FACT_INSERT,
+                        vec![
+                            Value::from_i64(document_id),
+                            text(fact.attribute.as_str()),
+                            Value::from_i64(fact.value),
+                        ],
+                    )?,
+                    1,
+                )?;
+            }
+            for fact in &document.sort_facts {
+                require_changed(
+                    driver::execute(
+                        connection,
+                        SORT_FACT_INSERT,
+                        vec![
+                            Value::from_i64(document_id),
+                            text(fact.attribute.as_str()),
+                            Value::from_i64(fact.value),
+                        ],
+                    )?,
+                    1,
+                )?;
+            }
+        }
+        Some(ProjectionState::Incomplete {
+            profile,
+            partition,
+            kind,
+            ..
+        }) => {
+            let document_id = upsert_index_document(
+                connection,
                 record_key,
                 profile,
                 partition,
-                exact,
-                integers,
-                sorts,
-            } => {
-                let current =
-                    load_projection_states(connection, std::slice::from_ref(&record_key))?
-                        .into_iter()
-                        .next()
-                        .flatten();
-                let state = apply_authoritative_projection_patch(
-                    current.as_ref(),
-                    &record_key,
-                    &profile,
-                    &partition,
-                    &exact,
-                    &integers,
-                    &sorts,
-                );
-                let resolved = match state {
-                    ProjectionState::Complete(document) => ProjectionMutation::Replace(document),
-                    ProjectionState::Incomplete {
-                        record_key,
-                        profile,
-                        partition,
-                        kind,
-                    } => ProjectionMutation::MarkIncomplete {
-                        record_key,
-                        profile,
-                        partition,
-                        kind,
-                    },
-                };
-                write_projection_mutations(connection, vec![resolved])?;
-            }
-            ProjectionMutation::MarkIncomplete {
-                record_key,
-                profile,
-                partition,
-                kind,
-            } => {
-                let document_id = upsert_index_document(
-                    connection,
-                    &record_key,
-                    &profile,
-                    &partition,
-                    projection_state_code(kind),
-                )?;
-                delete_index_facts(connection, document_id)?;
-            }
-            ProjectionMutation::Delete(record_key) => {
-                let changed = driver::execute(
-                    connection,
-                    INDEX_DOCUMENT_DELETE,
-                    vec![text(record_key.as_str())],
-                )?;
-                if !(0..=1).contains(&changed) {
-                    return Err(invariant());
-                }
+                projection_state_code(*kind),
+            )?;
+            delete_index_facts(connection, document_id)?;
+        }
+        None => {
+            let changed = driver::execute(
+                connection,
+                INDEX_DOCUMENT_DELETE,
+                vec![text(record_key.as_str())],
+            )?;
+            if !(0..=1).contains(&changed) {
+                return Err(invariant());
             }
         }
     }
@@ -2266,7 +2253,8 @@ fn load_index_documents(
             });
     }
 
-    for document in documents.values() {
+    for document in documents.values_mut() {
+        document.canonicalize();
         document.validate().map_err(|_| invariant())?;
     }
     Ok(keys.iter().map(|key| documents.get(key).cloned()).collect())
