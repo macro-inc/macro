@@ -12,9 +12,10 @@ import {
   Show,
 } from 'solid-js';
 import {
-  adjustScrollAfterPrepend,
+  fetchOlderMessages,
   isTruncatedMiddleMessage,
   isUnreadMessage,
+  listNeedsOlderPage,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from '../util/scrollToMessage';
@@ -56,8 +57,28 @@ export function MessageList(props: MessageListProps) {
       list.style.setProperty('--thread-height', `${list.clientHeight}px`);
     };
 
+    const maybeFetchOlder = () => {
+      if (
+        !listNeedsOlderPage({
+          initialLoadComplete: props.initialLoadComplete,
+          isScrollingToMessage: getIsScrollingToMessage(),
+          isFetching: context.query.isFetching(),
+          hasMore: context.query.hasMore(),
+          scrollHeight: list.scrollHeight,
+          clientHeight: list.clientHeight,
+        })
+      ) {
+        return;
+      }
+      fetchOlderMessages(list, context.query.fetchNextPage);
+    };
+
     applyHeight();
-    const observer = new ResizeObserver(applyHeight);
+    maybeFetchOlder();
+    const observer = new ResizeObserver(() => {
+      applyHeight();
+      maybeFetchOlder();
+    });
     observer.observe(list);
     onCleanup(() => observer.disconnect());
   });
@@ -82,17 +103,7 @@ export function MessageList(props: MessageListProps) {
           !context.query.isFetching() &&
           context.query.hasMore()
         ) {
-          const previousScrollHeight = list.scrollHeight;
-          const previousScrollTop = list.scrollTop;
-          void Promise.resolve(context.query.fetchNextPage()).then(() => {
-            requestAnimationFrame(() => {
-              adjustScrollAfterPrepend(
-                list,
-                previousScrollHeight,
-                previousScrollTop
-              );
-            });
-          });
+          fetchOlderMessages(list, context.query.fetchNextPage);
         }
       }}
     >

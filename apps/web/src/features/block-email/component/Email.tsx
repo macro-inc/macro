@@ -314,9 +314,9 @@ function EmailContent(props: EmailViewProps) {
     if (!stop) return true;
     return match(stop)
       .with({ kind: 'title' }, () => {
+        context.messages.setFocused(undefined);
         const startDelta = scrollToListStartDelta(list);
         if (startDelta !== 0) return animateListScroll(list, startDelta);
-        context.messages.setFocused(undefined);
         return true;
       })
       .with({ kind: 'hidden-chip' }, () => focusHiddenMessages())

@@ -174,9 +174,37 @@ export function adjustScrollAfterPrepend(
   previousScrollHeight: number,
   previousScrollTop: number
 ): void {
-  if (previousScrollTop <= 0) return;
   const delta = container.scrollHeight - previousScrollHeight;
-  if (delta > 0) container.scrollTop = previousScrollTop + delta;
+  if (delta <= 0) return;
+  const wasOverflowing = previousScrollHeight > container.clientHeight;
+  if (previousScrollTop <= 0 && wasOverflowing) return;
+  container.scrollTop = previousScrollTop + delta;
+}
+
+export function listNeedsOlderPage(args: {
+  initialLoadComplete: boolean;
+  isScrollingToMessage: boolean;
+  isFetching: boolean;
+  hasMore: boolean;
+  scrollHeight: number;
+  clientHeight: number;
+}): boolean {
+  if (!args.initialLoadComplete || args.isScrollingToMessage) return false;
+  if (args.isFetching || !args.hasMore) return false;
+  return args.scrollHeight <= args.clientHeight;
+}
+
+export function fetchOlderMessages(
+  list: HTMLElement,
+  fetchNextPage: () => unknown
+): void {
+  const previousScrollHeight = list.scrollHeight;
+  const previousScrollTop = list.scrollTop;
+  void Promise.resolve(fetchNextPage()).then(() => {
+    requestAnimationFrame(() => {
+      adjustScrollAfterPrepend(list, previousScrollHeight, previousScrollTop);
+    });
+  });
 }
 
 export function revealMessageAfterLayout(

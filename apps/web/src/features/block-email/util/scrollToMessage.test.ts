@@ -5,6 +5,7 @@ import {
   alignmentDelta,
   hiddenMessagesControl,
   isTruncatedMiddleMessage,
+  listNeedsOlderPage,
   nearestDelta,
   pageThenAdvanceDelta,
   revealDelta,
@@ -223,6 +224,7 @@ describe('adjustScrollAfterPrepend', () => {
     Object.defineProperty(container, 'scrollHeight', {
       get: () => scrollHeight,
     });
+    Object.defineProperty(container, 'clientHeight', { get: () => 150 });
     container.scrollTop = 50;
     scrollHeight = 400;
     adjustScrollAfterPrepend(container, 200, 50);
@@ -231,8 +233,55 @@ describe('adjustScrollAfterPrepend', () => {
 
   it('leaves the title pinned when you were already at the top', () => {
     const container = document.createElement('div');
+    Object.defineProperty(container, 'scrollHeight', { get: () => 400 });
+    Object.defineProperty(container, 'clientHeight', { get: () => 150 });
     container.scrollTop = 0;
     adjustScrollAfterPrepend(container, 200, 0);
     expect(container.scrollTop).toBe(0);
+  });
+
+  it('keeps the newest cards on screen when the first page did not overflow', () => {
+    const container = document.createElement('div');
+    let scrollHeight = 200;
+    Object.defineProperty(container, 'scrollHeight', {
+      get: () => scrollHeight,
+    });
+    Object.defineProperty(container, 'clientHeight', { get: () => 400 });
+    container.scrollTop = 0;
+    scrollHeight = 500;
+    adjustScrollAfterPrepend(container, 200, 0);
+    expect(container.scrollTop).toBe(300);
+  });
+});
+
+describe('listNeedsOlderPage', () => {
+  const ready = {
+    initialLoadComplete: true,
+    isScrollingToMessage: false,
+    isFetching: false,
+    hasMore: true,
+    scrollHeight: 200,
+    clientHeight: 400,
+  };
+
+  it('fetches when the first page does not overflow', () => {
+    expect(listNeedsOlderPage(ready)).toBe(true);
+  });
+
+  it('waits for overflow scroll once the list is taller than the view', () => {
+    expect(
+      listNeedsOlderPage({ ...ready, scrollHeight: 800, clientHeight: 400 })
+    ).toBe(false);
+  });
+
+  it('does not fetch while loading, scrolling, or finished', () => {
+    expect(listNeedsOlderPage({ ...ready, initialLoadComplete: false })).toBe(
+      false
+    );
+    expect(listNeedsOlderPage({ ...ready, isScrollingToMessage: true })).toBe(
+      false
+    );
+    expect(listNeedsOlderPage({ ...ready, isFetching: true })).toBe(false);
+    expect(listNeedsOlderPage({ ...ready, hasMore: false })).toBe(false);
   });
 });
