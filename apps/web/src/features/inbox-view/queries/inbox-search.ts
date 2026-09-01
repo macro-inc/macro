@@ -128,7 +128,7 @@ export function buildInboxSearchRequest(
     filters.channel_filters = channelFilters;
   }
 
-  if (types.has('channels') && filtersIncompleteEntities) {
+  if (types.has('channels')) {
     filters.channel_thread_filters = {
       participant_ids: [context.userId ?? NIL_UUID],
     };

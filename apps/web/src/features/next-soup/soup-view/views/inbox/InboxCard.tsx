@@ -63,7 +63,7 @@ function Root(props: RootProps): JSX.Element {
         props.class
       )}
       data-unread={props.dimmed ? undefined : true}
-      role={interactive() ? 'button' : undefined}
+      role={interactive() && props.focusable !== false ? 'button' : undefined}
       tabIndex={interactive() && props.focusable !== false ? 0 : undefined}
       onClick={props.onClick}
       onKeyDown={onKeyDown}

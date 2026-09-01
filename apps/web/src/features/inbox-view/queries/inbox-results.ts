@@ -5,7 +5,7 @@ import {
 } from '@app/features/soup/collection';
 import type { EntityData, WithNotification } from '@entity';
 
-const inboxSortTimestamp = (entity: EntityData) =>
+export const inboxSortTimestamp = (entity: EntityData) =>
   entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
 
 export function groupInboxEntitiesByDate(

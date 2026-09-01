@@ -106,11 +106,15 @@ function noiseClause(): FacetClause {
   });
 }
 
-function allClause(capabilities: InboxQueryCapabilities): FacetClause {
+function allClause(
+  capabilities: InboxQueryCapabilities,
+  userId: string | undefined
+): FacetClause {
   const filters: FacetClause = {
     df: documentClause([visibleEntity('documentId')], capabilities),
     ef: visibleEntity('threadId'),
     chanf: visibleEntity('channelId'),
+    cthf: clause.eq('channelThreadParticipantId', userId ?? NIL_UUID),
     cf: visibleEntity('chatId'),
     pf: visibleEntity('folderId'),
   };
@@ -144,7 +148,7 @@ function tabClause(
   return match(tab)
     .with('signal', () => signalClause(capabilities, now, userId))
     .with('noise', noiseClause)
-    .with('all', () => allClause(capabilities))
+    .with('all', () => allClause(capabilities, userId))
     .with('reminders', remindersClause)
     .exhaustive();
 }

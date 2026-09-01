@@ -45,7 +45,7 @@ import {
   type InboxQueryCapabilities,
   type InboxViewContext,
 } from './inbox-query';
-import { groupInboxEntitiesByDate } from './inbox-results';
+import { groupInboxEntitiesByDate, inboxSortTimestamp } from './inbox-results';
 import { buildInboxSearchRequest } from './inbox-search';
 
 export type InboxDataSourceItem = SoupRow<WithNotification<EntityData>>;
@@ -88,7 +88,7 @@ function matchesTab(
       }
 
       return (
-        new Date(entity.sortTs ?? entity.updatedAt ?? 0).getTime() >=
+        new Date(inboxSortTimestamp(entity) ?? 0).getTime() >=
         subWeeks(startOfDay(new Date()), 2).getTime()
       );
     })
