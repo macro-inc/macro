@@ -69,10 +69,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           class={cn(
             'relative macro-thread-collapsed-row p-4 min-w-0 border rounded-lg',
             props.isFocused
-              ? 'border-edge bg-hover'
+              ? 'border-edge bg-hover dark-mode:bg-active'
               : cn(
                   'border-edge-muted bg-message',
-                  props.allowHover && 'hover:bg-hover'
+                  props.allowHover && 'hover:bg-hover dark-mode:hover:bg-active'
                 )
           )}
           style={{

@@ -253,8 +253,11 @@ export function MessageContainer(props: MessageContainerProps) {
             classList={{
               'bg-message': !props.isFocused,
               'bg-hover': props.isFocused,
+              'dark-mode:bg-active': props.isFocused,
               'border-edge': props.isFocused,
               'border-edge-muted': !props.isFocused,
+              'hover:bg-hover': props.allowHover && !props.isFocused,
+              'dark-mode:hover:bg-active': props.allowHover && !props.isFocused,
             }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
