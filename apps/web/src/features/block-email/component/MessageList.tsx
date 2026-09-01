@@ -207,16 +207,15 @@ export function MessageList(props: MessageListProps) {
                 >
                   <div class="shrink-0 w-full flex justify-center">
                     <div class="macro-message-width macro-message-padding w-full">
-                      <div class="relative flex h-6 items-center justify-center">
+                      <div class="grid h-6 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                         <span
                           aria-hidden="true"
-                          class="absolute inset-x-0 top-1/2 border-t border-edge-muted"
+                          class="border-t border-edge-muted"
                         />
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           class={cn(
-                            'relative bg-panel px-2 text-xs font-medium text-ink-muted outline-none',
                             props.hiddenChipFocused && 'bg-active text-ink'
                           )}
                           data-hidden-messages
@@ -226,6 +225,10 @@ export function MessageList(props: MessageListProps) {
                           Show {hiddenCount()} hidden{' '}
                           {hiddenCount() === 1 ? 'message' : 'messages'}
                         </Button>
+                        <span
+                          aria-hidden="true"
+                          class="border-t border-edge-muted"
+                        />
                       </div>
                     </div>
                   </div>
