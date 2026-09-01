@@ -17,6 +17,7 @@
 //!   `cargo clippy -p`.
 
 use std::collections::BTreeSet;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -33,6 +34,49 @@ use xtask_graph::build_graph_at;
 mod test;
 
 const DETERMINATOR_RULES: &str = include_str!("../determinator.toml");
+
+/// Which workspace packages Rust CI should compile and test.
+///
+/// Stringified only at the CLI seam (`Display`) so bash can switch on `all`,
+/// `none`, or a space-separated package list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PackageSelection {
+    /// Every workspace package is affected.
+    All,
+    /// No changed file mapped to a package.
+    None,
+    /// Changed packages plus reverse dependencies.
+    Packages(BTreeSet<String>),
+}
+
+impl fmt::Display for PackageSelection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::All => f.write_str("all"),
+            Self::None => f.write_str("none"),
+            Self::Packages(packages) => {
+                let mut first = true;
+                for name in packages {
+                    if !first {
+                        f.write_str(" ")?;
+                    }
+                    first = false;
+                    f.write_str(name)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl PackageSelection {
+    fn packages(&self) -> Option<&BTreeSet<String>> {
+        match self {
+            Self::Packages(packages) => Some(packages),
+            Self::All | Self::None => None,
+        }
+    }
+}
 
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -82,7 +126,7 @@ fn compute_packages(
     old_graph: &PackageGraph,
     new_graph: &PackageGraph,
     changed_files: &[PathBuf],
-) -> Result<String> {
+) -> Result<PackageSelection> {
     let rules = DeterminatorRules::parse(DETERMINATOR_RULES)
         .context("parsing nextest determinator rules")?;
     let mut determinator = Determinator::new(old_graph, new_graph);
@@ -110,14 +154,14 @@ fn compute_packages(
         .collect();
 
     if packages.is_empty() {
-        return Ok("none".to_owned());
+        return Ok(PackageSelection::None);
     }
 
     if packages.len() == new_graph.workspace().iter().count() {
-        return Ok("all".to_owned());
+        return Ok(PackageSelection::All);
     }
 
-    Ok(packages.into_iter().collect::<Vec<_>>().join(" "))
+    Ok(PackageSelection::Packages(packages))
 }
 
 struct BaseWorktree {
