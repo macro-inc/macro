@@ -10,6 +10,7 @@ import {
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
+import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
@@ -28,6 +29,7 @@ import {
   type Component,
   createEffect,
   createMemo,
+  createSignal,
   For,
   type JSX,
   type ParentProps,
@@ -40,7 +42,6 @@ import {
 } from '../context';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import { HeaderIsland } from './HeaderIsland';
-import { RenamableSplitTitle } from './RenamableSplitTitle';
 
 export function StaticSplitLabel(props: {
   label: string;
@@ -55,9 +56,15 @@ export function StaticSplitLabel(props: {
   renameAriaLabel?: string;
 }) {
   const panel = useSplitPanelOrThrow();
+  const [renaming, setRenaming] = createSignal(false);
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
+  const startRename = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setRenaming(true);
+  };
   const openTitleFileMenu = (e: MouseEvent) => {
     if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
@@ -100,11 +107,35 @@ export function StaticSplitLabel(props: {
               }
             >
               {(onRename) => (
-                <RenamableSplitTitle
-                  label={props.label}
-                  ariaLabel={props.renameAriaLabel ?? 'Rename'}
-                  onRename={onRename()}
-                />
+                <Show
+                  when={renaming()}
+                  fallback={
+                    <span
+                      class="inline-block truncate text-sm font-semibold"
+                      onDblClick={startRename}
+                      onClick={(event) => {
+                        if (isTouchDevice()) startRename(event);
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  }
+                >
+                  <span
+                    onClick={(event) => event.stopPropagation()}
+                    onDblClick={(event) => event.stopPropagation()}
+                  >
+                    <InlineTitleEditor
+                      value={props.label}
+                      placeholder="Untitled"
+                      ariaLabel={props.renameAriaLabel ?? 'Rename'}
+                      onRename={onRename()}
+                      class="text-sm"
+                      autofocus
+                      onExit={() => setRenaming(false)}
+                    />
+                  </span>
+                </Show>
               )}
             </Show>
             <Show when={panel.titleFileMenuTrigger()}>
