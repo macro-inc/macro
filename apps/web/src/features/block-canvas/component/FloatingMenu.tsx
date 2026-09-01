@@ -19,7 +19,7 @@ import AlignRight from '@lucide/align-end-vertical.svg?component-solid';
 import AlignTop from '@lucide/align-start-horizontal.svg?component-solid';
 import AlignLeft from '@lucide/align-start-vertical.svg?component-solid';
 import TextAa from '@lucide/case-sensitive.svg?component-solid';
-import CornersOut from '@lucide/fullscreen.svg?component-solid';
+import CornersOut from '@lucide/maximize.svg?component-solid';
 import Reverse from '@lucide/move-horizontal.svg?component-solid';
 import TrashSimple from '@lucide/trash-2.svg?component-solid';
 import { Button, cn, Tooltip } from '@ui';

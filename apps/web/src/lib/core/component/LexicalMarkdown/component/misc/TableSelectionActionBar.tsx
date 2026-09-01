@@ -24,7 +24,7 @@ import {
 } from '@lexical/table';
 import ClipboardIcon from '@lucide/clipboard.svg';
 import CopyIcon from '@lucide/copy.svg';
-import CornersOutIcon from '@lucide/fullscreen.svg';
+import CornersOutIcon from '@lucide/maximize.svg';
 import CornersInIcon from '@lucide/minimize.svg';
 import ScissorsIcon from '@lucide/scissors.svg';
 import { createCallback } from '@solid-primitives/rootless';
