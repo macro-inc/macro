@@ -11,3 +11,4 @@ pub mod credentials;
 pub mod link;
 pub mod pairing;
 pub mod registration;
+pub mod stream;

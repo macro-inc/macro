@@ -22,6 +22,7 @@ mod dispatch;
 mod harness;
 mod outbound;
 mod runtime;
+mod trigger;
 mod tui;
 mod webhook;
 

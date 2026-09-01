@@ -59,4 +59,5 @@ channel_sender = { path = "../channel_sender" }
 channels = { path = "../channels", default-features = false }
 chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
+tokio = { workspace = true, features = ["io-util", "net"] }
 tower = { workspace = true, features = ["util"] }

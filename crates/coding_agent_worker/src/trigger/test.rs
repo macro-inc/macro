@@ -1,17 +1,10 @@
 use super::*;
-use agent_session::domain::model::AgentSessionId;
-use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, ExistingAgentSessionEvent, NewAgentSessionEvent,
-};
-use macro_user_id::user_id::MacroUserIdStr;
-use macro_uuid::Uuid;
+use agent_trigger::domain::broker_events::AgentBotMentionedEvent;
 use channel_sender::ChannelSender;
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::models::ChannelType;
 use chrono::Utc;
 use std::sync::Mutex;
-
-const SECRET: &str = "signing-secret";
 
 fn test_session() -> AgentSessionId {
     AgentSessionId::new_from_uuid(Uuid::from_u128(0xA))
@@ -96,6 +89,24 @@ fn a_bots_own_message_is_skipped() {
     assert_eq!(trigger_to_work(event), Err(Skipped::NotFromUser));
 }
 
+#[test]
+fn trigger_filters_name_this_bot_and_every_trigger_event() {
+    let filters = trigger_filters(bot_id::BotId::TEST_A);
+    assert_eq!(filters.len(), 1);
+    let filter = &filters[0];
+    assert_eq!(
+        filter.events,
+        vec![
+            "agent_trigger.new".to_owned(),
+            "agent_trigger.existing".to_owned()
+        ]
+    );
+    assert_eq!(
+        filter.ids.as_deref(),
+        Some([bot_id::BotId::TEST_A.to_string()].as_slice())
+    );
+}
+
 /// Records executed work instead of doing anything.
 #[derive(Default)]
 struct RecordingExecutor {
@@ -118,83 +129,36 @@ impl WorkExecutor for std::sync::Arc<RecordingExecutor> {
     }
 }
 
-fn delivery(event: &AgentTriggerTopicEvent, secret: &str) -> (HeaderMap, Bytes) {
-    let body = serde_json::to_vec(&Event::new(event.clone())).unwrap();
-    let timestamp = "1755188000";
-    let signature = webhook_signature::sign(secret, timestamp, &body).unwrap();
-    let mut headers = HeaderMap::new();
-    headers.insert(TIMESTAMP_HEADER, timestamp.parse().unwrap());
-    headers.insert(SIGNATURE_HEADER, signature.parse().unwrap());
-    (headers, Bytes::from(body))
-}
-
-fn state(
-    executor: std::sync::Arc<RecordingExecutor>,
-) -> Arc<WebhookState<std::sync::Arc<RecordingExecutor>>> {
-    Arc::new(WebhookState {
-        executor,
-        signing_secret: std::sync::Arc::new(std::sync::RwLock::new(SECRET.to_owned())),
-    })
-}
-
 #[tokio::test]
-async fn a_signed_mention_executes() {
+async fn a_mention_envelope_executes() {
     let executor = std::sync::Arc::new(RecordingExecutor::default());
-    let (headers, body) = delivery(&mention("fix it"), SECRET);
+    let raw = serde_json::to_value(Event::new(mention("fix it"))).unwrap();
 
-    let status = ingest(State(state(executor.clone())), headers, body).await;
+    handle_envelope(raw, &executor)
+        .await
+        .expect("a mention envelope is work");
 
-    assert_eq!(status, StatusCode::OK);
     assert_eq!(executor.executed.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
-async fn a_bad_signature_is_rejected_before_anything_runs() {
+async fn an_undecodable_envelope_is_skipped() {
     let executor = std::sync::Arc::new(RecordingExecutor::default());
-    let (headers, body) = delivery(&mention("fix it"), "wrong-secret");
 
-    let status = ingest(State(state(executor.clone())), headers, body).await;
+    handle_envelope(serde_json::json!({ "not": "a trigger" }), &executor)
+        .await
+        .expect("undecodable envelopes are not errors");
 
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(executor.executed.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn missing_signature_headers_are_rejected() {
-    let executor = std::sync::Arc::new(RecordingExecutor::default());
-    let (_, body) = delivery(&mention("fix it"), SECRET);
-
-    let status = ingest(State(state(executor.clone())), HeaderMap::new(), body).await;
-
-    assert_eq!(status, StatusCode::UNAUTHORIZED);
-    assert!(executor.executed.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn an_undecodable_payload_is_acked_and_dropped() {
-    let executor = std::sync::Arc::new(RecordingExecutor::default());
-    let body = Bytes::from_static(b"not json");
-    let timestamp = "1755188000";
-    let signature = webhook_signature::sign(SECRET, timestamp, &body).unwrap();
-    let mut headers = HeaderMap::new();
-    headers.insert(TIMESTAMP_HEADER, timestamp.parse().unwrap());
-    headers.insert(SIGNATURE_HEADER, signature.parse().unwrap());
-
-    let status = ingest(State(state(executor.clone())), headers, body).await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert!(executor.executed.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn failed_work_asks_for_redelivery() {
+async fn failed_work_is_returned() {
     let executor = std::sync::Arc::new(RecordingExecutor {
         fail: true,
         ..Default::default()
     });
-    let (headers, body) = delivery(&mention("fix it"), SECRET);
+    let raw = serde_json::to_value(Event::new(mention("fix it"))).unwrap();
 
-    let status = ingest(State(state(executor.clone())), headers, body).await;
-
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(handle_envelope(raw, &executor).await.is_err());
 }
