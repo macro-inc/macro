@@ -8,7 +8,7 @@ use model_entity::EntityType;
 pub use notification::domain::models::NotificationTitle;
 use notification::domain::models::{
     NotifCollapseKey, Notification, NotificationExtIos,
-    apple::{APNSPushNotification, AlertDictionary, Aps, PushNotificationData},
+    apple::{APNSPushNotification, Alert, AlertDictionary, Aps, PushNotificationData},
 };
 use rootcause::Report;
 use rootcause::report;
@@ -708,12 +708,25 @@ impl notification::domain::models::Notification for NewEmailMetadata {
     const TYPE_NAME: &'static str = "new_email";
 }
 
+impl NewEmailMetadata {
+    /// Lock-screen title: the sender's display name (or email), when present.
+    fn sender_line(&self) -> Option<&str> {
+        self.sender
+            .as_deref()
+            .map(str::trim)
+            .filter(|sender| !sender.is_empty())
+    }
+}
+
 impl NotificationTitle for NewEmailMetadata {
     fn format_title(
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok(self.subject.clone())
+        Ok(self
+            .sender_line()
+            .unwrap_or(self.subject.trim())
+            .to_string())
     }
 
     fn format_body(
@@ -740,6 +753,12 @@ impl NotificationExtIos for NewEmailMetadata {
         notification_id: Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let mut apns = alert_apns(self, sender_id, notification_id, None).ok()?;
+        if let Some(Alert::Dictionary(alert)) = &mut apns.aps.alert {
+            let subject = self.subject.trim();
+            if self.sender_line().is_some() && !subject.is_empty() {
+                alert.subtitle = Some(subject.to_string());
+            }
+        }
         apns.aps.thread_id = Some(self.thread_id.clone());
         Some(apns)
     }
