@@ -64,10 +64,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="@container macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'relative macro-thread-collapsed-row p-4 min-w-0 border bg-message rounded-lg',
+            'relative macro-thread-collapsed-row p-4 min-w-0 border rounded-lg',
             props.isFocused
-              ? 'z-1 border-edge shadow-md shadow-drop-shadow'
-              : 'border-edge-muted'
+              ? 'z-1 border-edge bg-hover shadow-md shadow-drop-shadow'
+              : 'border-edge-muted bg-message hover:bg-hover'
           )}
           style={{
             '--user-icon-width': '1rem',

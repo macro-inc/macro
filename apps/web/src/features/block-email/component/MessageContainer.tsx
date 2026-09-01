@@ -230,9 +230,11 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative p-4 border bg-message rounded-lg"
+            class="relative p-4 border rounded-lg"
             style={{ '--user-icon-width': '1rem' }}
             classList={{
+              'bg-message': !props.isFocused,
+              'bg-hover': props.isFocused,
               'border-edge': props.isFocused,
               'border-edge-muted': !props.isFocused,
               'z-1': props.isFocused,
@@ -241,6 +243,11 @@ export function MessageContainer(props: MessageContainerProps) {
             }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
+            onFocus={() => {
+              if (props.message.db_id) {
+                context.messages.setFocused(props.message.db_id);
+              }
+            }}
           >
             <div class="flex flex-col min-w-0 gap-2 overflow-hidden">
               <EmailMessageTopBar
