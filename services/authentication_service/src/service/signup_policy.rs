@@ -6,18 +6,6 @@ use std::{collections::HashSet, fmt};
 use macro_user_id::email::Email;
 use serde_json::Value;
 
-/// The signup origin to authorize.
-#[derive(Clone, Eq, PartialEq)]
-pub enum SignupOrigin {
-    /// A customer-facing signup identified by email address.
-    Public {
-        /// The email address FusionAuth or the public API is trying to create.
-        email: String,
-    },
-    /// A trusted internal shared-mailbox grant user.
-    SharedMailbox,
-}
-
 /// The configured signup admission policy.
 #[derive(Clone, Eq, PartialEq)]
 pub enum SignupPolicy {
@@ -54,14 +42,6 @@ impl SignupPolicy {
         Ok(Self::EmailAllowlist { allowed_emails })
     }
 
-    /// Authorize a signup origin.
-    pub fn authorize_origin(&self, origin: &SignupOrigin) -> Result<(), SignupPolicyDenial> {
-        match origin {
-            SignupOrigin::Public { email } => self.authorize_public_email(email),
-            SignupOrigin::SharedMailbox => Ok(()),
-        }
-    }
-
     /// Authorize a public signup email address.
     pub fn authorize_public_email(&self, email: &str) -> Result<(), SignupPolicyDenial> {
         match self {
@@ -82,17 +62,6 @@ impl SignupPolicy {
         match self {
             Self::AllowAll => None,
             Self::EmailAllowlist { allowed_emails } => Some(allowed_emails.len()),
-        }
-    }
-}
-
-impl fmt::Debug for SignupOrigin {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Public { .. } => {
-                formatter.write_str("SignupOrigin::Public { email: <redacted> }")
-            }
-            Self::SharedMailbox => formatter.write_str("SignupOrigin::SharedMailbox"),
         }
     }
 }

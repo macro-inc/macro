@@ -9,9 +9,7 @@ use macro_user_id::email::Email;
 use model::authentication::webhooks::{
     Event, EventInfo, FusionAuthUserWebhook, User as FusionAuthWebhookUser,
 };
-use serde_json::{Value, json};
-
-use crate::api::signup_policy::shared_mailbox_grant_user_data;
+use serde_json::Value;
 
 use super::{
     UserCreateWebhookError, dispatch_user_create_webhook, identity_provider_name,
@@ -121,37 +119,20 @@ async fn allow_all_environment_policy_invokes_onboarding() {
 }
 
 #[tokio::test]
-async fn shared_mailbox_signup_succeeds_without_customer_onboarding() {
-    let policy = SignupPolicy::from_allowlist_json(r#"["allowed@example.com"]"#).unwrap();
-    let req = user_create_webhook(
-        "shared-mailbox@example.com",
-        Some(shared_mailbox_grant_user_data()),
-    );
-
-    let (is_ok, invocation_count) = dispatch_with_invocation_count(&policy, req).await;
-
-    assert!(is_ok);
-    assert_eq!(invocation_count, 0);
-}
-
-#[tokio::test]
-async fn missing_marker_cannot_bypass_allowlist() {
-    let policy = SignupPolicy::from_allowlist_json(r#"["allowed@example.com"]"#).unwrap();
+async fn allowlisted_shared_mailbox_email_invokes_onboarding() {
+    let policy = SignupPolicy::from_allowlist_json(r#"["shared-mailbox@example.com"]"#).unwrap();
     let req = user_create_webhook("shared-mailbox@example.com", None);
 
     let (is_ok, invocation_count) = dispatch_with_invocation_count(&policy, req).await;
 
-    assert!(!is_ok);
-    assert_eq!(invocation_count, 0);
+    assert!(is_ok);
+    assert_eq!(invocation_count, 1);
 }
 
 #[tokio::test]
-async fn unknown_marker_cannot_bypass_allowlist() {
+async fn non_allowlisted_shared_mailbox_email_is_denied() {
     let policy = SignupPolicy::from_allowlist_json(r#"["allowed@example.com"]"#).unwrap();
-    let req = user_create_webhook(
-        "shared-mailbox@example.com",
-        Some(json!({ "macro": { "userPurpose": "unknown" } })),
-    );
+    let req = user_create_webhook("shared-mailbox@example.com", None);
 
     let (is_ok, invocation_count) = dispatch_with_invocation_count(&policy, req).await;
 

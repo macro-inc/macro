@@ -64,29 +64,12 @@ Matching rules:
   supported.
 - Denial responses and policy errors must not disclose configured addresses.
 
-## Shared-mailbox signup marker
+## Shared mailboxes
 
-Internal shared-mailbox grant relocation can create FusionAuth users that are
-not customer signups. That internal path attaches this exact FusionAuth
-`user.data` marker:
-
-```json
-{
-  "macro": {
-    "userPurpose": "shared_mailbox_grant"
-  }
-}
-```
-
-Only that exact closed marker is treated as `SignupOrigin::SharedMailbox`.
-Recognized shared-mailbox users are admitted by the signup policy and the
-`user.create` webhook acknowledges them without running customer onboarding.
-Absent, malformed, partial, or unknown metadata is treated as a public signup.
-
-This bypass is purpose-based and internal-only. It relies on the existing
-internal authorization boundary of the relocation endpoint. Client IP,
-localhost, domains, email patterns, `skip_verification`, or verification state
-must never be used as signup-policy bypass evidence.
+Internal shared-mailbox grant relocation creates ordinary FusionAuth users for
+mailbox grants. In Develop, those mailbox addresses must be listed explicitly in
+`DEVELOPMENT_SIGNUP_ALLOWLIST_JSON` before relocation creates the FusionAuth
+user. There is no metadata-based signup-policy bypass for shared mailboxes.
 
 ## Rollout
 

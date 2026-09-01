@@ -5,7 +5,7 @@ use analytics_client::{MetaActionSource, MetaUserData};
 use std::{collections::HashSet, future::Future};
 
 use anyhow::Context;
-use authentication_service::service::signup_policy::{SignupOrigin, SignupPolicy};
+use authentication_service::service::signup_policy::SignupPolicy;
 use axum::{
     extract::{self, State},
     http::StatusCode,
@@ -17,7 +17,7 @@ use rand::Rng;
 use crate::{
     api::{
         context::{ApiContext, AuthorizationService},
-        signup_policy::{signup_forbidden_response, signup_origin_from_fusionauth_user_data},
+        signup_policy::signup_forbidden_response,
     },
     rate_limit_config::RATE_LIMIT_CONFIG,
 };
@@ -138,18 +138,9 @@ where
     F: FnOnce(FusionAuthUserWebhook) -> Fut,
     Fut: Future<Output = anyhow::Result<()>>,
 {
-    let origin = signup_origin_from_fusionauth_user_data(
-        req.event.user.email.clone(),
-        req.event.user.data.as_ref(),
-    );
-
     signup_policy
-        .authorize_origin(&origin)
+        .authorize_public_email(&req.event.user.email)
         .map_err(|_| UserCreateWebhookError::Forbidden)?;
-
-    if origin == SignupOrigin::SharedMailbox {
-        return Ok(());
-    }
 
     onboard_user(req)
         .await
@@ -220,6 +211,18 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         && count >= RATE_LIMIT_CONFIG.create_user_hourly.0
     {
         anyhow::bail!("rate limit exceeded")
+    }
+
+    if let Some((user_id, organization_id)) =
+        macro_db_client::user::get::get_user_profile_by_fusionauth_user_id_and_email(
+            &ctx.db,
+            &fusionauth_user_id,
+            &email,
+        )
+        .await?
+    {
+        tracing::info!(user_id=?user_id, organization_id=?organization_id, "user profile already exists for FusionAuth user");
+        return Ok(());
     }
 
     // check if user exists

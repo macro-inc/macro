@@ -60,38 +60,6 @@ fn plus_aliases_remain_distinct_addresses() {
 }
 
 #[test]
-fn shared_mailbox_origin_is_allowed_by_allowlist_policy() {
-    let policy =
-        SignupPolicy::from_allowlist_json(r#"["person@example.test"]"#).expect("valid allowlist");
-
-    assert!(
-        policy
-            .authorize_origin(&SignupOrigin::SharedMailbox)
-            .is_ok()
-    );
-}
-
-#[test]
-fn public_origin_is_checked_against_allowlist() {
-    let policy =
-        SignupPolicy::from_allowlist_json(r#"["person@example.test"]"#).expect("valid allowlist");
-
-    assert!(
-        policy
-            .authorize_origin(&SignupOrigin::Public {
-                email: "person@example.test".to_string(),
-            })
-            .is_ok()
-    );
-    assert_eq!(
-        policy.authorize_origin(&SignupOrigin::Public {
-            email: "other@example.test".to_string(),
-        }),
-        Err(SignupPolicyDenial::PublicEmailNotAllowed)
-    );
-}
-
-#[test]
 fn malformed_json_is_rejected() {
     assert_eq!(
         SignupPolicy::from_allowlist_json("not json"),
@@ -143,19 +111,15 @@ fn empty_arrays_are_rejected() {
 fn diagnostics_do_not_reveal_allowlist_or_denied_email() {
     let policy = SignupPolicy::from_allowlist_json(r#"["secret-address@example.test"]"#)
         .expect("valid allowlist");
-    let origin = SignupOrigin::Public {
-        email: "denied-address@example.test".to_string(),
-    };
     let denial = policy
-        .authorize_origin(&origin)
+        .authorize_public_email("denied-address@example.test")
         .expect_err("email should be denied");
 
-    let origin_debug = format!("{origin:?}");
     let policy_debug = format!("{policy:?}");
     let denial_debug = format!("{denial:?}");
     let denial_display = denial.to_string();
 
-    for diagnostic in [origin_debug, policy_debug, denial_debug, denial_display] {
+    for diagnostic in [policy_debug, denial_debug, denial_display] {
         assert!(!diagnostic.contains("secret-address@example.test"));
         assert!(!diagnostic.contains("denied-address@example.test"));
     }

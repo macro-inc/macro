@@ -75,7 +75,7 @@ async fn create_user_omits_data_when_absent() {
 #[tokio::test]
 async fn create_user_with_data_sets_user_data() {
     let server = MockServer::start().await;
-    let data = json!({"macro": {"userPurpose": "shared_mailbox_grant"}});
+    let data = json!({"custom": {"source": "test"}});
     Mock::given(method("POST"))
         .and(path("/api/user"))
         .and(body_json(expected_body(Some(data.clone()))))
@@ -114,7 +114,7 @@ async fn create_user_with_id_omits_data_when_absent() {
 #[tokio::test]
 async fn create_user_with_id_and_data_sets_user_data() {
     let server = MockServer::start().await;
-    let data = json!({"macro": {"userPurpose": "shared_mailbox_grant"}});
+    let data = json!({"custom": {"source": "test"}});
     Mock::given(method("POST"))
         .and(path("/api/user/caller-user-id"))
         .and(body_json(expected_body(Some(data.clone()))))

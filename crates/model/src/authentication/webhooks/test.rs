@@ -12,8 +12,8 @@ fn user_create_payload_without_user_data_defaults_to_none() {
 #[test]
 fn user_create_payload_retains_user_data() {
     let data = json!({
-        "macro": {
-            "userPurpose": "shared_mailbox_grant"
+        "custom": {
+            "source": "test"
         },
         "arbitrary": ["metadata", 42]
     });
