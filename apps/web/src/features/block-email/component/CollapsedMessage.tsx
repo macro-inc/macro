@@ -10,8 +10,11 @@ import { EmailUserTooltip } from './EmailUserTooltip';
 interface CollapsedMessageProps {
   message: ApiMessage;
   isFocused: boolean;
+  allowHover: boolean;
   onClick: () => void;
   onFocus?: () => void;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
 }
 
 export function CollapsedMessage(props: CollapsedMessageProps) {
@@ -67,7 +70,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             'relative macro-thread-collapsed-row p-4 min-w-0 border rounded-lg',
             props.isFocused
               ? 'border-edge bg-hover'
-              : 'border-edge-muted bg-message hover:bg-hover'
+              : cn(
+                  'border-edge-muted bg-message',
+                  props.allowHover && 'hover:bg-hover'
+                )
           )}
           style={{
             '--user-icon-width': '1rem',
@@ -76,6 +82,8 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           tabIndex={0}
           onClick={handleRowClick}
           onFocus={props.onFocus}
+          onPointerEnter={props.onPointerEnter}
+          onPointerLeave={props.onPointerLeave}
           onKeyDown={handleKeyDown}
         >
           <div

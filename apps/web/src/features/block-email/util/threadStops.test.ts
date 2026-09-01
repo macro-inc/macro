@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   adjacentStop,
   enterListStop,
+  nextThreadStop,
   shownStops,
+  threadStopFromHover,
   type ThreadStop,
 } from './threadStops';
 
@@ -84,5 +86,82 @@ describe('enterListStop', () => {
     const collapsed = shownStops({ length: 6, showMiddle: false });
     expect(enterListStop(collapsed, 'next')).toEqual(message(0));
     expect(enterListStop(collapsed, 'prev')).toEqual(message(5));
+  });
+});
+
+describe('threadStopFromHover', () => {
+  const ids = ['a', 'b', 'c'];
+
+  it('maps a hovered card id to its index', () => {
+    expect(threadStopFromHover({ kind: 'message', id: 'b' }, ids)).toEqual(
+      message(1)
+    );
+  });
+
+  it('maps the hidden chip and ignores unknown ids', () => {
+    expect(threadStopFromHover({ kind: 'hidden-chip' }, ids)).toEqual({
+      kind: 'hidden-chip',
+    });
+    expect(threadStopFromHover({ kind: 'message', id: 'missing' }, ids)).toBe(
+      undefined
+    );
+    expect(threadStopFromHover(undefined, ids)).toBe(undefined);
+  });
+});
+
+describe('nextThreadStop', () => {
+  const stops = shownStops({
+    length: 6,
+    showMiddle: false,
+    hasComposer: true,
+  });
+
+  it('steps off the hovered card when nothing is keyboard-selected', () => {
+    expect(
+      nextThreadStop({
+        stops,
+        keyboard: undefined,
+        hover: message(0),
+        dir: 'next',
+      })
+    ).toEqual({ kind: 'hidden-chip' });
+    expect(
+      nextThreadStop({
+        stops,
+        keyboard: undefined,
+        hover: message(0),
+        dir: 'prev',
+      })
+    ).toEqual({ kind: 'title' });
+  });
+
+  it('prefers the keyboard cursor over hover', () => {
+    expect(
+      nextThreadStop({
+        stops,
+        keyboard: message(5),
+        hover: message(0),
+        dir: 'prev',
+      })
+    ).toEqual(message(4));
+  });
+
+  it('enters from the ends when there is no cursor and no hover', () => {
+    expect(
+      nextThreadStop({
+        stops,
+        keyboard: undefined,
+        hover: undefined,
+        dir: 'next',
+      })
+    ).toEqual(message(0));
+    expect(
+      nextThreadStop({
+        stops,
+        keyboard: undefined,
+        hover: undefined,
+        dir: 'prev',
+      })
+    ).toEqual(message(5));
   });
 });

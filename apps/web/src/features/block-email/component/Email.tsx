@@ -28,6 +28,7 @@ import {
   createSignal,
   Match,
   on,
+  onCleanup,
   onMount,
   Show,
   Switch,
@@ -53,8 +54,9 @@ import {
 } from '../util/scrollToMessage';
 import {
   adjacentStop,
-  enterListStop,
+  nextThreadStop,
   shownStops,
+  threadStopFromHover,
   type ThreadStop,
 } from '../util/threadStops';
 import { BottomReplyButtons } from './BottomReplyButtons';
@@ -160,6 +162,24 @@ function EmailContent(props: EmailViewProps) {
   };
 
   const [hiddenChipFocused, setHiddenChipFocused] = createSignal(false);
+  const [keyboardSelecting, setKeyboardSelecting] = createSignal(false);
+  const [listAnchor, setListAnchor] = createSignal<'title' | 'composer'>();
+  let lastPointer = { x: Number.NaN, y: Number.NaN };
+  let armedPointer: { x: number; y: number } | undefined;
+
+  const releaseKeyboardPointer = () => {
+    armedPointer = undefined;
+    setKeyboardSelecting(false);
+    setListAnchor(undefined);
+    context.messages.setFocused(undefined);
+    leaveHiddenChip();
+  };
+
+  const armKeyboardPointer = () => {
+    if (isTouchDevice()) return;
+    setKeyboardSelecting(true);
+    armedPointer = { x: lastPointer.x, y: lastPointer.y };
+  };
 
   const leaveHiddenChip = () => {
     setHiddenChipFocused(false);
@@ -314,21 +334,31 @@ function EmailContent(props: EmailViewProps) {
     if (!stop) return true;
     return match(stop)
       .with({ kind: 'title' }, () => {
+        armKeyboardPointer();
+        setListAnchor('title');
         context.messages.setFocused(undefined);
         const startDelta = scrollToListStartDelta(list);
         if (startDelta !== 0) return animateListScroll(list, startDelta);
         return true;
       })
-      .with({ kind: 'hidden-chip' }, () => focusHiddenMessages())
+      .with({ kind: 'hidden-chip' }, () => {
+        armKeyboardPointer();
+        setListAnchor(undefined);
+        return focusHiddenMessages();
+      })
       .with({ kind: 'message' }, ({ index }) => {
         const id = messages[index]?.db_id;
         if (!id) return false;
+        armKeyboardPointer();
+        setListAnchor(undefined);
         return performScrollToMessage(id, {
           behavior: 'smooth',
           focus: true,
         });
       })
       .with({ kind: 'composer' }, () => {
+        armKeyboardPointer();
+        setListAnchor('composer');
         leaveHiddenChip();
         context.messages.setFocused(undefined);
         markdownDomRef.focus();
@@ -348,32 +378,37 @@ function EmailContent(props: EmailViewProps) {
       hasComposer: Boolean(markdownDomRef),
     });
 
-    if (hiddenChipFocused()) {
-      return applyStop(
-        adjacentStop(stops, { kind: 'hidden-chip' }, dir),
-        messages,
-        list
-      );
+    const keyboard = (() => {
+      if (!keyboardSelecting()) return undefined;
+      if (hiddenChipFocused()) return { kind: 'hidden-chip' } as const;
+      const anchor = listAnchor();
+      if (anchor === 'title' || anchor === 'composer') {
+        return { kind: anchor } as const;
+      }
+      const focusedId = context.messages.focusedID();
+      if (!focusedId) return undefined;
+      const index = messages.findIndex((message) => message.db_id === focusedId);
+      return index >= 0 ? ({ kind: 'message', index } as const) : undefined;
+    })();
+
+    if (keyboard?.kind === 'message') {
+      const focusedId = messages[keyboard.index]?.db_id;
+      const focusedEl = focusedId
+        ? messageElement(list, messages, focusedId)
+        : undefined;
+      if (focusedEl) {
+        const pageDelta = pageThenAdvanceDelta(list, focusedEl, dir);
+        if (pageDelta !== 0) return animateListScroll(list, pageDelta);
+      }
     }
 
-    const currentFocusedId = context.messages.focusedID();
-    if (!currentFocusedId) {
-      return applyStop(enterListStop(stops, dir), messages, list);
-    }
-
-    const focusedEl = messageElement(list, messages, currentFocusedId);
-    if (focusedEl) {
-      const pageDelta = pageThenAdvanceDelta(list, focusedEl, dir);
-      if (pageDelta !== 0) return animateListScroll(list, pageDelta);
-    }
-
-    const currentIndex = messages.findIndex(
-      (message) => message.db_id === currentFocusedId
+    const hover = threadStopFromHover(
+      context.messages.hovered(),
+      messages.map((message) => message.db_id)
     );
-    if (currentIndex < 0) return false;
 
     return applyStop(
-      adjacentStop(stops, { kind: 'message', index: currentIndex }, dir),
+      nextThreadStop({ stops, keyboard, hover, dir }),
       messages,
       list
     );
@@ -446,6 +481,18 @@ function EmailContent(props: EmailViewProps) {
   };
 
   onMount(() => {
+    if (!isTouchDevice()) {
+      const onMove = (event: PointerEvent) => {
+        lastPointer = { x: event.clientX, y: event.clientY };
+        const armed = armedPointer;
+        if (!armed) return;
+        if (event.clientX === armed.x && event.clientY === armed.y) return;
+        releaseKeyboardPointer();
+      };
+      window.addEventListener('pointermove', onMove);
+      onCleanup(() => window.removeEventListener('pointermove', onMove));
+    }
+
     registerEmailHotkeys(scopeId(), {
       replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
@@ -535,12 +582,23 @@ function EmailContent(props: EmailViewProps) {
       }
 
       if (hiddenChipFocused()) {
-        leaveHiddenChip();
+        releaseKeyboardPointer();
+        return true;
+      }
+
+      if (keyboardSelecting() && listAnchor()) {
+        releaseKeyboardPointer();
         return true;
       }
 
       const focusedId = context.messages.focusedID();
-      if (!focusedId) return false;
+      if (!focusedId) {
+        if (keyboardSelecting()) {
+          releaseKeyboardPointer();
+          return true;
+        }
+        return false;
+      }
 
       // If there's an active reply, just clear it (don't collapse the message)
       if (context.messages.replyingToMessageId() === focusedId) {
@@ -554,7 +612,7 @@ function EmailContent(props: EmailViewProps) {
         return true;
       }
 
-      context.messages.setFocused(undefined);
+      releaseKeyboardPointer();
       if (
         activeEl instanceof HTMLElement &&
         activeEl.closest(`[data-message-body-id="${CSS.escape(focusedId)}"]`)
@@ -741,7 +799,10 @@ function EmailContent(props: EmailViewProps) {
                     underScrollsBottom={!replyInputInFlow()}
                     showMiddleMessages={showMiddleMessages()}
                     hiddenChipFocused={hiddenChipFocused()}
+                    keyboardSelecting={keyboardSelecting()}
+                    allowRowHover={!keyboardSelecting()}
                     onHiddenChipFocus={() => {
+                      armKeyboardPointer();
                       context.messages.setFocused(undefined);
                       setHiddenChipFocused(true);
                     }}

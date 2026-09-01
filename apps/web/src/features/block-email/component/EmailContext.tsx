@@ -73,6 +73,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ReplyType } from '../util/replyType';
+import type { HoveredThreadStop } from '../util/threadStops';
 
 /**
  * Tracks thread IDs that had a draft saved since the last query fetch.
@@ -115,6 +116,8 @@ type EmailContextValues = {
     setTargetMessageID: (id: string | undefined) => void;
     focusedID: Accessor<string | undefined>;
     setFocused: (messageID: string | undefined) => void;
+    hovered: Accessor<HoveredThreadStop | undefined>;
+    setHovered: (stop: HoveredThreadStop | undefined) => void;
     expandedBodyIds: Record<string, boolean>;
     setExpandedBodyId: (id: string, expanded: boolean) => void;
     isBodyExpanded: (id: string) => boolean;
@@ -245,6 +248,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   );
 
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
+  const [hoveredStop, setHoveredStop] = createSignal<HoveredThreadStop>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
   const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
   const [mobileReplyComposerOpen, setMobileReplyComposerOpen] =
@@ -916,6 +920,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           messages: {
             focusedID: focusedMessageId,
             setFocused: setFocusedMessageId,
+            hovered: hoveredStop,
+            setHovered: setHoveredStop,
             targetMessageID: targetMessageId,
             setTargetMessageID: setTargetMessageId,
             list: createMemo(() => threadQuery.data?.filtered ?? []),

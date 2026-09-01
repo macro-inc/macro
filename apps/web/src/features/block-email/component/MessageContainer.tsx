@@ -28,6 +28,7 @@ interface MessageContainerProps {
   isFirstMessage: boolean;
   isLastMessage: boolean;
   isFocused: boolean;
+  allowHover: boolean;
   isExpanded: boolean;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }
@@ -198,6 +199,20 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   };
 
+  const hoverThisRow = () => {
+    const id = props.message.db_id;
+    if (!id) return;
+    context.messages.setHovered({ kind: 'message', id });
+  };
+
+  const unhoverThisRow = () => {
+    const id = props.message.db_id;
+    const hovered = context.messages.hovered();
+    if (hovered?.kind === 'message' && hovered.id === id) {
+      context.messages.setHovered(undefined);
+    }
+  };
+
   const handleExpand = () => {
     const messageId = props.message.db_id;
     if (!messageId) return;
@@ -217,7 +232,10 @@ export function MessageContainer(props: MessageContainerProps) {
         <CollapsedMessage
           message={props.message}
           isFocused={props.isFocused}
+          allowHover={props.allowHover}
           onClick={handleExpand}
+          onPointerEnter={hoverThisRow}
+          onPointerLeave={unhoverThisRow}
           onFocus={() => {
             if (props.message.db_id) {
               context.messages.setFocused(props.message.db_id);
@@ -240,6 +258,8 @@ export function MessageContainer(props: MessageContainerProps) {
             }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
+            onPointerEnter={hoverThisRow}
+            onPointerLeave={unhoverThisRow}
             onFocus={() => {
               if (props.message.db_id) {
                 context.messages.setFocused(props.message.db_id);

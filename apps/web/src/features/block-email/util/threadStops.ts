@@ -10,6 +10,10 @@ export type ThreadStop =
   | { kind: 'hidden-chip' }
   | { kind: 'composer' };
 
+export type HoveredThreadStop =
+  | { kind: 'message'; id: string }
+  | { kind: 'hidden-chip' };
+
 function sameStop(left: ThreadStop, right: ThreadStop): boolean {
   if (left.kind !== right.kind) return false;
   if (left.kind === 'message' && right.kind === 'message') {
@@ -52,4 +56,27 @@ export function enterListStop(
 ): ThreadStop | undefined {
   const messages = stops.filter((stop) => stop.kind === 'message');
   return dir === 'prev' ? messages.at(-1) : messages[0];
+}
+
+export function threadStopFromHover(
+  hover: HoveredThreadStop | undefined,
+  messageIds: Array<string | undefined>
+): ThreadStop | undefined {
+  if (!hover) return undefined;
+  if (hover.kind === 'hidden-chip') return { kind: 'hidden-chip' };
+  const index = messageIds.findIndex((id) => id === hover.id);
+  if (index < 0) return undefined;
+  return { kind: 'message', index };
+}
+
+/** Keyboard cursor wins. Otherwise the first arrow steps off the hovered stop. */
+export function nextThreadStop(args: {
+  stops: ThreadStop[];
+  keyboard: ThreadStop | undefined;
+  hover: ThreadStop | undefined;
+  dir: NavDirection;
+}): ThreadStop | undefined {
+  const from = args.keyboard ?? args.hover;
+  if (from) return adjacentStop(args.stops, from, args.dir);
+  return enterListStop(args.stops, args.dir);
 }

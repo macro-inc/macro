@@ -35,6 +35,8 @@ interface MessageListProps {
   underScrollsBottom?: boolean;
   showMiddleMessages: boolean;
   hiddenChipFocused: boolean;
+  keyboardSelecting: boolean;
+  allowRowHover: boolean;
   onHiddenChipFocus: () => void;
   onOpenMiddle: () => void;
 }
@@ -190,7 +192,11 @@ export function MessageList(props: MessageListProps) {
                   <MessageContainer
                     isFirstMessage={normalizedIndex() === 0}
                     isLastMessage={isLastMessage()}
-                    isFocused={isFocusedSelector(message().db_id ?? undefined)}
+                    isFocused={
+                      props.keyboardSelecting &&
+                      isFocusedSelector(message().db_id ?? undefined)
+                    }
+                    allowHover={props.allowRowHover}
                     message={message()}
                     isExpanded={isExpanded()}
                     markdownDomRef={
@@ -219,6 +225,16 @@ export function MessageList(props: MessageListProps) {
                             props.hiddenChipFocused && 'bg-active text-ink'
                           )}
                           data-hidden-messages
+                          onPointerEnter={() =>
+                            context.messages.setHovered({ kind: 'hidden-chip' })
+                          }
+                          onPointerLeave={() => {
+                            if (
+                              context.messages.hovered()?.kind === 'hidden-chip'
+                            ) {
+                              context.messages.setHovered(undefined);
+                            }
+                          }}
                           onFocus={() => props.onHiddenChipFocus()}
                           onClick={() => props.onOpenMiddle()}
                         >
