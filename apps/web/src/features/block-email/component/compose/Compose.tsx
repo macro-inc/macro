@@ -311,18 +311,13 @@ export function EmailCompose(props: EmailComposeProps) {
       >[];
 
       if (attachments.length) {
-        const uploaded = await uploadAttachmentMutation.mutateAsync({
+        await uploadAttachmentMutation.mutateAsync({
           draftID: draftId,
           attachments: attachments.map((a) => a.file),
           linkId: headerLinkId(),
+          onAttachmentAdded: form.attachments.assignAttachmentID,
+          onAttachmentUploadFailed: form.attachments.clearAttachmentID,
         });
-
-        for (const attachment of uploaded.attachments) {
-          form.attachments.assignAttachmentID(
-            attachment.file,
-            attachment.attachmentID
-          );
-        }
       }
 
       setCurrentDraftID(draftId);

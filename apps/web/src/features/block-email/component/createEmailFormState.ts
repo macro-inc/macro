@@ -409,6 +409,15 @@ export function createEmailFormState(
           )
         );
       },
+      clearAttachmentID: (file: File) => {
+        setAttachments((p) =>
+          p.map((a) =>
+            a.type === 'local' && a.file === file
+              ? { ...a, attachmentID: undefined }
+              : a
+          )
+        );
+      },
       removeByFile: (file: File) => {
         setAttachments((p) =>
           p.filter((a) => a.type !== 'local' || a.file !== file)

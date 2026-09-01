@@ -11,10 +11,18 @@ type UploadDraftAttachmentsParams = {
   attachments: File[];
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
-};
-
-type UploadDraftAttachmentsReturn = {
-  attachments: { file: File; attachmentID: string }[];
+  /**
+   * Called as soon as the attachment record exists, before the content upload.
+   * Callers must record the id here rather than after the mutation settles --
+   * the content upload can take a long time, and a debounced draft save that
+   * still sees the file without an id would add it to the draft a second time.
+   */
+  onAttachmentAdded?: (file: File, attachmentID: string) => void;
+  /**
+   * Called when the content upload fails, after the attachment record has
+   * been removed from the draft, so the file becomes eligible for a retry.
+   */
+  onAttachmentUploadFailed?: (file: File) => void;
 };
 
 class UploadDraftAttachmentError extends Error {
@@ -28,16 +36,10 @@ class UploadDraftAttachmentError extends Error {
 }
 
 export const useUploadDraftAttachmentsMutation = (
-  callbacks?: MutationCallbacks<
-    UploadDraftAttachmentsReturn,
-    Error,
-    UploadDraftAttachmentsParams
-  >
+  callbacks?: MutationCallbacks<void, Error, UploadDraftAttachmentsParams>
 ) => {
   return useMutation(() => ({
     mutationFn: async (params: UploadDraftAttachmentsParams) => {
-      const uploadedAttachments = [];
-
       for (const attachment of params.attachments) {
         const arrayBuffer = await attachment.arrayBuffer();
         const sha = await contentHash(arrayBuffer);
@@ -57,10 +59,7 @@ export const useUploadDraftAttachmentsMutation = (
             )
         );
 
-        uploadedAttachments.push({
-          file: attachment,
-          attachmentID: result.attachment_id,
-        });
+        params.onAttachmentAdded?.(attachment, result.attachment_id);
 
         const uploadedResponse = await uploadToPresignedUrl({
           presignedUrl: result.upload_url,
@@ -84,14 +83,8 @@ export const useUploadDraftAttachmentsMutation = (
           );
         }
       }
-
-      return { attachments: uploadedAttachments };
     },
-    ...withCallbacks<
-      UploadDraftAttachmentsReturn,
-      Error,
-      UploadDraftAttachmentsParams
-    >(
+    ...withCallbacks<void, Error, UploadDraftAttachmentsParams>(
       {
         async onError(error, variables) {
           if (error instanceof UploadDraftAttachmentError) {
@@ -106,6 +99,7 @@ export const useUploadDraftAttachmentsMutation = (
             } catch {
               console.error('Unable to remove draft attachment after failure');
             }
+            variables.onAttachmentUploadFailed?.(error.context.file);
           }
           toast.failure('Failed to save attachments');
         },
