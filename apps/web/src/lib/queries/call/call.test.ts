@@ -13,7 +13,7 @@ vi.mock('@service-call/client', () => ({ callServiceClient: {} }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn(), failure: vi.fn(), success: vi.fn() },
 }));
-vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLS: () => true }));
+vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLS: true }));
 
 import { queryClient } from '@queries/client';
 import { setActiveCallEndedCache, setActiveCallStartedCache } from './call';

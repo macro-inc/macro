@@ -93,7 +93,8 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
-  ENABLE_GRAPHQL_SOUP: () => mocks.graphqlEnabled,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },

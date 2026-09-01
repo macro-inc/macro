@@ -1,19 +1,40 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { toastAlert, ...operationMocks } = vi.hoisted(() => ({
-  toastAlert: vi.fn(),
-  bulkMarkNotificationsAsDone: vi.fn(async () => {}),
-  bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
-  cancelQueries: vi.fn(async () => {}),
-  flagArchived: vi.fn(async () => ({ isErr: () => false, value: undefined })),
-  invalidateQueries: vi.fn(async () => {}),
-  invalidateRemindersById: vi.fn(),
-  invalidateSoupEntity: vi.fn(async () => {}),
-  setReminderCompleted: vi.fn(async () => {}),
-  updateNotificationsForEntities: vi.fn(
-    async (): Promise<Array<{ id: string }>> => []
-  ),
-}));
+const { toastAlert, ...operationMocks } = vi.hoisted(() => {
+  const store: Record<string, string> = {};
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => {
+        store[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete store[key];
+      },
+      clear: () => {
+        for (const key of Object.keys(store)) delete store[key];
+      },
+    },
+  });
+  return {
+    toastAlert: vi.fn(),
+    bulkMarkNotificationsAsDone: vi.fn(async () => {}),
+    bulkMarkNotificationsAsUndone: vi.fn(async () => {}),
+    cancelQueries: vi.fn(async () => {}),
+    flagArchived: vi.fn(async () => ({
+      isErr: () => false,
+      value: undefined,
+    })),
+    invalidateQueries: vi.fn(async () => {}),
+    invalidateRemindersById: vi.fn(),
+    invalidateSoupEntity: vi.fn(async () => {}),
+    setReminderCompleted: vi.fn(async () => {}),
+    updateNotificationsForEntities: vi.fn(
+      async (): Promise<Array<{ id: string }>> => []
+    ),
+  };
+});
 
 // utils.ts transitively imports the websocket client modules, which open real
 // sockets at module scope and reject under jsdom.
@@ -62,10 +83,18 @@ vi.mock('@queries/soup/cache', () => ({
 vi.mock('@service-email/client', () => ({
   emailClient: { flagArchived: operationMocks.flagArchived },
 }));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  ENABLE_CALENDAR_UI: () => true,
-}));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@core/constant/featureFlags')>();
+  return {
+    ...actual,
+    enableCalendarUi: { key: 'enable-calendar-ui' },
+    isFeatureEnabled: (flag: Parameters<typeof actual.isFeatureEnabled>[0]) =>
+      'key' in flag && flag.key === 'enable-calendar-ui'
+        ? true
+        : actual.isFeatureEnabled(flag),
+  };
+});
 
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type {
