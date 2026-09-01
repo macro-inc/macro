@@ -1,4 +1,5 @@
 import type {
+  CommitOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   ReadResult,
   WriteResult,
@@ -60,8 +61,8 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async deferOptimisticWrite() {
       return { kind: 'deferred' } as const;
     },
-    async commitOptimisticWrite(): Promise<WriteResult> {
-      return emptyWriteResult();
+    async commitOptimisticWrite(): Promise<CommitOptimisticWriteResult> {
+      return { kind: 'committed', ...emptyWriteResult() };
     },
     async rollbackOptimisticWrite() {
       return { kind: 'rolled-back' as const, ...emptyWriteResult() };

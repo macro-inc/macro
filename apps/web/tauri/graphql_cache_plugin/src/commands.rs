@@ -10,10 +10,10 @@
 //! worker's `{ok: false, error}` responses.
 
 use crate::engine::{
-    AffectedOperationsResultWire, ClaimedMutationWire, DeferOptimisticWriteResultWire,
-    EngineHandle, EnqueueOptimisticMutationResultWire, MutationUpsertKindWire, ReadResultWire,
-    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest,
-    WriteResultWire,
+    AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
+    DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
+    MutationUpsertKindWire, ReadResultWire, RecordSelectionResultWire,
+    RollbackOptimisticWriteResultWire, WriteRegistration, WriteRequest, WriteResultWire,
 };
 use crate::{
     CacheState, InitializedCache, emit_cache_changed, emit_mutation_settled, emit_ops_affected,
@@ -389,7 +389,7 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
     operation_name: Option<String>,
     variables: Option<Variables>,
     data: serde_json::Value,
-) -> Result<WriteResultWire, String> {
+) -> Result<CommitOptimisticWriteResultWire, String> {
     let settlement_transaction_id = transaction_id.clone();
     let result = engine_handle(&state)?
         .commit_optimistic_write(
@@ -402,9 +402,30 @@ pub async fn graphql_cache_commit_optimistic_write<R: Runtime>(
             data,
         )
         .await?;
-    emit_ops_affected(&app, &result.affected_ops, &result.changed);
-    emit_cache_changed(&app, &result.revision);
-    emit_mutation_settled(&app, settlement_transaction_id, "committed", None, None);
+    let (write_result, replacement_transaction_id) = match &result {
+        CommitOptimisticWriteResultWire::Committed { result } => (result, None),
+        CommitOptimisticWriteResultWire::CommittedSuperseded {
+            replacement_transaction_id,
+            result,
+        } => (result, Some(replacement_transaction_id.clone())),
+    };
+    emit_ops_affected(
+        &app,
+        &write_result.affected_ops,
+        &write_result.changed,
+    );
+    emit_cache_changed(&app, &write_result.revision);
+    emit_mutation_settled(
+        &app,
+        settlement_transaction_id,
+        if replacement_transaction_id.is_some() {
+            "superseded"
+        } else {
+            "committed"
+        },
+        None,
+        replacement_transaction_id,
+    );
     Ok(result)
 }
 

@@ -14,6 +14,7 @@ import {
   type CacheResponseErrorCode,
   type CacheRevision,
   type ClaimedMutation,
+  type CommitOptimisticWriteResult,
   type DeferOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
   type EntityFilterCacheArgs,
@@ -992,7 +993,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       transactionId: string,
       claim: MutationClaim,
       args: CacheWriteArgs
-    ): Promise<WriteResult> {
+    ): Promise<CommitOptimisticWriteResult> {
       await ensureInitialized();
       return (await request({
         kind: 'commit-optimistic-write',
@@ -1003,7 +1004,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         data: args.data,
-      })) as WriteResult;
+      })) as CommitOptimisticWriteResult;
     },
 
     async rollbackOptimisticWrite(

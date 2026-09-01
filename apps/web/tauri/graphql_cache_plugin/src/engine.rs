@@ -13,8 +13,9 @@
 
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, DeferOptimisticWriteResult, Engine, InitialClaimOutcome, NetworkWrite,
-    QueryRegistration, ReadResult, RollbackOptimisticWriteResult, WriteResult,
+    BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
+    InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -201,6 +202,30 @@ pub enum DeferOptimisticWriteResultWire {
         /// Current transaction carrying the newer intent.
         replacement_transaction_id: String,
         /// Cache changes caused by discarding the old layer.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
+}
+
+/// Tagged result of committing a current or superseded queue attempt.
+#[derive(Debug, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum CommitOptimisticWriteResultWire {
+    /// The current mutation committed normally.
+    Committed {
+        /// Cache changes caused by commit.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
+    /// The response committed beneath a newer optimistic replacement.
+    CommittedSuperseded {
+        /// Current transaction carrying the newer intent.
+        replacement_transaction_id: String,
+        /// Cache changes caused by commit.
         #[serde(flatten)]
         result: WriteResultWire,
     },
@@ -680,7 +705,7 @@ impl EngineHandle {
         operation_name: Option<String>,
         variables: Variables,
         data: serde_json::Value,
-    ) -> Result<WriteResultWire, String> {
+    ) -> Result<CommitOptimisticWriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
         let claim = MutationClaimToken {
             owner: lease_owner,
@@ -688,8 +713,8 @@ impl EngineHandle {
         };
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
-        engine
-            .commit_optimistic_write(
+        match engine
+            .commit_optimistic_write_with_outcome(
                 transaction,
                 claim,
                 &query,
@@ -698,8 +723,20 @@ impl EngineHandle {
                 &data,
             )
             .await
-            .map(|result| wire_write_result(ops, result))
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?
+        {
+            CommitOptimisticWriteResult::Committed(result) => {
+                Ok(CommitOptimisticWriteResultWire::Committed {
+                    result: wire_write_result(ops, result),
+                })
+            }
+            CommitOptimisticWriteResult::CommittedSuperseded(result) => {
+                Ok(CommitOptimisticWriteResultWire::CommittedSuperseded {
+                    replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                    result: wire_write_result(ops, result.write_result),
+                })
+            }
+        }
     }
 
     /// Permanently fails a claimed mutation and drops its optimistic layer.

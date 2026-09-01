@@ -1267,7 +1267,12 @@ export function normalizedCacheExchange(
                   await applyOperationCacheEffects(op, effects);
                 }
                 revalidateAfterCommit(committed.revalidations ?? [], op);
-                disposition = 'committed';
+                if (committed.kind === 'committed-superseded') {
+                  replacementTransactionId = committed.replacementTransactionId;
+                  disposition = 'superseded';
+                } else {
+                  disposition = 'committed';
+                }
               }
             } catch (error) {
               options.onCacheError?.(error, op);

@@ -183,13 +183,22 @@ pub struct EnqueueOptimisticMutationResult<E> {
     pub initial_claim: InitialClaimOutcome<E>,
 }
 
-/// Cache change and replacement identity produced by discarding superseded work.
+/// Cache change and replacement identity produced by settling superseded work.
 #[derive(Debug)]
 pub struct SupersededMutationResult {
-    /// Cache changes caused by removing the superseded layer.
+    /// Cache changes caused by settling the superseded layer.
     pub write_result: WriteResult,
     /// Current transaction carrying the caller's newer intent.
     pub replacement_transaction_id: OptimisticTransactionId,
+}
+
+/// Tagged commit result used by transport adapters for settlement fanout.
+#[derive(Debug)]
+pub enum CommitOptimisticWriteResult {
+    /// A current mutation committed normally.
+    Committed(WriteResult),
+    /// The response committed beneath a newer optimistic replacement.
+    CommittedSuperseded(SupersededMutationResult),
 }
 
 /// Result of attempting to defer a failed queue attempt.
@@ -1756,6 +1765,80 @@ impl<S: Storage> Engine<S> {
             Vec::new(),
         )
         .await
+    }
+
+    /// Commits an optimistic write and reports whether a newer UUID match superseded it.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn commit_optimistic_write_with_outcome(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        data: &Json,
+    ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
+        self.commit_optimistic_write_with_projections_outcome(
+            transaction,
+            claim,
+            query,
+            operation_name,
+            variables,
+            data,
+            Vec::new(),
+        )
+        .await
+    }
+
+    /// Commits an optimistic write with projections and reports supersession.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn commit_optimistic_write_with_projections_outcome(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        data: &Json,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        let layer = self
+            .optimistic
+            .iter()
+            .find(|layer| layer.id == transaction)
+            .ok_or(EngineError::UnknownTransaction(transaction))?;
+        let replacement_transaction_id = if layer.superseded {
+            Some(
+                self.optimistic
+                    .iter()
+                    .find(|candidate| candidate.uuid == layer.uuid && !candidate.superseded)
+                    .map(|candidate| candidate.id)
+                    .ok_or(EngineError::UnknownTransaction(transaction))?,
+            )
+        } else {
+            None
+        };
+        let write_result = self
+            .commit_optimistic_write_with_projections(
+                transaction,
+                claim,
+                query,
+                operation_name,
+                variables,
+                data,
+                projections,
+            )
+            .await?;
+        match replacement_transaction_id {
+            Some(replacement_transaction_id) => Ok(
+                CommitOptimisticWriteResult::CommittedSuperseded(SupersededMutationResult {
+                    write_result,
+                    replacement_transaction_id,
+                }),
+            ),
+            None => Ok(CommitOptimisticWriteResult::Committed(write_result)),
+        }
     }
 
     /// Settles an optimistic write with atomic generic projection replacement.

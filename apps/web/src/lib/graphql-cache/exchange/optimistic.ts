@@ -145,14 +145,13 @@ export function withOptimisticMutationDisposition(
   result: OperationResult,
   disposition: OptimisticMutationDispositionMetadata
 ): OperationResult {
-  const accepted =
-    disposition.kind === 'queued' || disposition.kind === 'superseded';
-  const queuedData = accepted
-    ? optimisticContextOf(result.operation)?.optimisticResponse
-    : undefined;
+  const queuedData =
+    disposition.kind === 'queued'
+      ? optimisticContextOf(result.operation)?.optimisticResponse
+      : undefined;
   return {
     ...result,
-    ...(accepted
+    ...(disposition.kind === 'queued'
       ? {
           data: queuedData ?? result.data,
           // A durable queued mutation is an accepted local write. Preserve the
@@ -160,7 +159,14 @@ export function withOptimisticMutationDisposition(
           // that would roll back UI state or block the next edit.
           error: undefined,
         }
-      : {}),
+      : disposition.kind === 'superseded'
+        ? {
+            // The replacement's optimistic payload is already visible in the
+            // cache. Never expose this older operation's stale response.
+            data: undefined,
+            error: undefined,
+          }
+        : {}),
     extensions: {
       ...result.extensions,
       [OPTIMISTIC_MUTATION_DISPOSITION_KEY]: disposition,
@@ -182,11 +188,14 @@ export function optimisticMutationDispositionOf<
   }
 
   const metadata = value as OptimisticMutationDispositionMetadata;
-  if (
-    (metadata.kind === 'queued' || metadata.kind === 'superseded') &&
-    metadata.transactionId
-  ) {
+  if (metadata.kind === 'queued' && metadata.transactionId) {
     return { kind: 'queued', transactionId: metadata.transactionId };
+  }
+  if (metadata.kind === 'superseded' && metadata.replacementTransactionId) {
+    return {
+      kind: 'queued',
+      transactionId: metadata.replacementTransactionId,
+    };
   }
   if (metadata.kind === 'committed' && result.data != null) {
     return { kind: 'committed', data: result.data };

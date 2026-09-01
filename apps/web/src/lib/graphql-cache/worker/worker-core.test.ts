@@ -100,6 +100,50 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
+  it('reports a successful stale commit as superseded', async () => {
+    const commitOptimisticWrite = vi.fn().mockResolvedValue({
+      kind: 'committed-superseded',
+      replacementTransactionId: '2',
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+      revalidations: [],
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    messages.length = 0;
+
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'commit-optimistic-write',
+      transactionId: '1',
+      leaseOwner: 'runner',
+      leaseGeneration: '1',
+      query: 'mutation Update { update }',
+      data: { update: true },
+    });
+
+    expect(messages).toContainEqual({
+      kind: 'mutation-settled',
+      settlement: {
+        transactionId: '1',
+        status: 'superseded',
+        replacementTransactionId: '2',
+      },
+    });
+  });
+
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
     let resolveEnqueue!: (result: {

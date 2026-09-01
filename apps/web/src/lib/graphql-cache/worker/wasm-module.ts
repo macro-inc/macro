@@ -16,6 +16,7 @@ import type {
   CacheRevision,
   CacheRevisionResult,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
@@ -155,7 +156,7 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown
-  ): Promise<WriteResult>;
+  ): Promise<CommitOptimisticWriteResult>;
   rollbackOptimisticWrite(
     transactionId: string,
     leaseOwner: string,

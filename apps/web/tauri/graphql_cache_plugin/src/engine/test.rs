@@ -103,12 +103,20 @@ fn tagged_wire_enum_fields_are_camel_case() {
         "3"
     );
     assert_eq!(
-        serde_json::to_value(RollbackOptimisticWriteResultWire::DiscardedSuperseded {
+        serde_json::to_value(CommitOptimisticWriteResultWire::CommittedSuperseded {
             replacement_transaction_id: "4".to_string(),
             result: empty_write_result(),
         })
         .unwrap()["replacementTransactionId"],
         "4"
+    );
+    assert_eq!(
+        serde_json::to_value(RollbackOptimisticWriteResultWire::DiscardedSuperseded {
+            replacement_transaction_id: "5".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "5"
     );
 }
 
@@ -456,6 +464,9 @@ fn optimistic_layer_commits_durably() {
         soup_data(true),
     ))
     .unwrap();
+    let CommitOptimisticWriteResultWire::Committed { result: committed } = committed else {
+        panic!("current transaction was reported as superseded")
+    };
     assert!(!committed.changed.is_empty());
 
     let ReadResultWire::Hit { data } = read(&handle, None) else {

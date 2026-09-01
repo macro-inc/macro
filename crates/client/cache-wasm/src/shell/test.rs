@@ -216,12 +216,20 @@ fn tagged_wire_enum_fields_are_camel_case() {
         "3"
     );
     assert_eq!(
-        serde_json::to_value(JsRollbackOptimisticWriteResult::DiscardedSuperseded {
+        serde_json::to_value(JsCommitOptimisticWriteResult::CommittedSuperseded {
             replacement_transaction_id: "4".to_string(),
             result: empty_js_write_result(),
         })
         .unwrap()["replacementTransactionId"],
         "4"
+    );
+    assert_eq!(
+        serde_json::to_value(JsRollbackOptimisticWriteResult::DiscardedSuperseded {
+            replacement_transaction_id: "5".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "5"
     );
 }
 

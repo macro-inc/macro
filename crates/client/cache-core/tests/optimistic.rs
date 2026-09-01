@@ -2,8 +2,8 @@
 //! strict ordering, and lifecycle resets.
 
 use cache_core::engine::{
-    BeginOptimisticWrite, DeferOptimisticWriteResult, Engine, EngineError, InitialClaimOutcome,
-    ReadResult,
+    BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
+    EngineError, InitialClaimOutcome, ReadResult,
 };
 use cache_core::predicate::{OptimisticUpsertReconciliation, ProjectionMutation};
 use cache_core::queue::{
@@ -1092,8 +1092,8 @@ fn successful_superseded_attempt_commits_beneath_the_replacement_without_flicker
         assert_eq!(claimed, active);
         let replacement = begin_value(&mut engine, X, "b", 11).await;
 
-        engine
-            .commit_optimistic_write(
+        let outcome = engine
+            .commit_optimistic_write_with_outcome(
                 active,
                 claim,
                 MUTATION,
@@ -1103,6 +1103,10 @@ fn successful_superseded_attempt_commits_beneath_the_replacement_without_flicker
             )
             .await
             .unwrap();
+        let CommitOptimisticWriteResult::CommittedSuperseded(outcome) = outcome else {
+            panic!("stale response was reported as a current commit")
+        };
+        assert_eq!(outcome.replacement_transaction_id, replacement);
 
         let queue = engine.storage().load_mutation_queue().await.unwrap();
         assert_eq!(queue.len(), 1);

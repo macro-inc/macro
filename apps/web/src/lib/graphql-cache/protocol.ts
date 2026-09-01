@@ -375,6 +375,14 @@ export type DeferOptimisticWriteResult =
       replacementTransactionId: string;
     });
 
+/** Result of committing a current or superseded attempt. */
+export type CommitOptimisticWriteResult =
+  | (WriteResult & { kind: 'committed' })
+  | (WriteResult & {
+      kind: 'committed-superseded';
+      replacementTransactionId: string;
+    });
+
 /** Result of rolling back a failed attempt. */
 export type RollbackOptimisticWriteResult =
   | (WriteResult & { kind: 'rolled-back' })

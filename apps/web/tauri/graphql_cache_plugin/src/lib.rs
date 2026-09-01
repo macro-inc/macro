@@ -23,9 +23,10 @@ pub mod commands;
 mod engine;
 
 pub use engine::{
-    AffectedOperationsResultWire, ClaimedMutationWire, DeferOptimisticWriteResultWire,
-    EngineHandle, EnqueueOptimisticMutationResultWire, InitialMutationClaimWire, ReadResultWire,
-    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteResultWire,
+    AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
+    DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
+    InitialMutationClaimWire, ReadResultWire, RecordSelectionResultWire,
+    RollbackOptimisticWriteResultWire, WriteResultWire,
 };
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose

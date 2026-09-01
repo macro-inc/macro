@@ -21,6 +21,7 @@ import type { CacheHost } from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type ClaimedMutation,
+  type CommitOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
   type MutationClaim,
@@ -356,10 +357,11 @@ function makeFakeHost(): FakeHost {
       transactionId,
       _claim,
       args
-    ): Promise<WriteResult> {
+    ): Promise<CommitOptimisticWriteResult> {
       host.commits.push({ transactionId, query: args.query, data: args.data });
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
+        kind: 'committed',
         revision: INITIAL_CACHE_REVISION,
         changed: [],
         affectedOps: [],
@@ -1944,6 +1946,26 @@ describe('normalizedCacheExchange', () => {
       });
       // The optimistic path never uses the plain write-through.
       expect(host.writes).toHaveLength(0);
+    });
+
+    it('does not expose a stale response when commit lands beneath a replacement', async () => {
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        kind: 'committed-superseded',
+        replacementTransactionId: 'txn-2',
+      });
+      const { ops, results } = harness(host);
+
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(host.commits[0]?.data).toEqual({ from: 'network' });
+      expect(results[0]?.data).toBeUndefined();
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-2',
+      });
     });
 
     it('replays mixed explicit cache effects in order after an optimistic commit', async () => {

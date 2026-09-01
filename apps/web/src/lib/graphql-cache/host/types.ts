@@ -14,6 +14,7 @@ import type {
   CacheReadPriority,
   CacheRevision,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
@@ -132,7 +133,7 @@ export interface CacheHost {
     transactionId: string,
     claim: MutationClaim,
     args: CacheWriteArgs
-  ): Promise<WriteResult>;
+  ): Promise<CommitOptimisticWriteResult>;
   /** Permanently fails a claimed mutation and drops its optimistic layer. */
   rollbackOptimisticWrite(
     transactionId: string,

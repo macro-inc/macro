@@ -2,8 +2,9 @@ use async_lock::Mutex;
 use cache_core::codec::cache_database_name;
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, DeferOptimisticWriteResult, Engine, EngineError, InitialClaimOutcome,
-    NetworkWrite, QueryRegistration, ReadResult, RollbackOptimisticWriteResult, WriteResult,
+    BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
+    EngineError, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -343,6 +344,24 @@ struct JsRevisionResult {
 enum JsDeferOptimisticWriteResult {
     Deferred,
     DiscardedSuperseded {
+        replacement_transaction_id: String,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsCommitOptimisticWriteResult {
+    Committed {
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+    CommittedSuperseded {
         replacement_transaction_id: String,
         #[serde(flatten)]
         result: JsWriteResult,
@@ -1336,7 +1355,7 @@ impl CacheEngine {
                     .map_err(err_js)?;
             let result = state
                 .engine_mut()?
-                .commit_optimistic_write_with_projections(
+                .commit_optimistic_write_with_projections_outcome(
                     transaction,
                     claim,
                     &query,
@@ -1346,8 +1365,20 @@ impl CacheEngine {
                     projections,
                 )
                 .await;
-            let result = state.engine_result(result)?;
-            to_js(&js_write_result(result, &ops.borrow()))
+            let result = match state.engine_result(result)? {
+                CommitOptimisticWriteResult::Committed(result) => {
+                    JsCommitOptimisticWriteResult::Committed {
+                        result: js_write_result(result, &ops.borrow()),
+                    }
+                }
+                CommitOptimisticWriteResult::CommittedSuperseded(result) => {
+                    JsCommitOptimisticWriteResult::CommittedSuperseded {
+                        replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
+            };
+            to_js(&result)
         })
     }
 

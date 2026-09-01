@@ -590,10 +590,17 @@ export class CacheWorkerCore {
         this.fanOut(result, true);
         this.push({
           kind: 'mutation-settled',
-          settlement: {
-            transactionId: request.transactionId,
-            status: 'committed',
-          },
+          settlement:
+            result.kind === 'committed-superseded'
+              ? {
+                  transactionId: request.transactionId,
+                  status: 'superseded',
+                  replacementTransactionId: result.replacementTransactionId,
+                }
+              : {
+                  transactionId: request.transactionId,
+                  status: 'committed',
+                },
         });
         return result;
       })

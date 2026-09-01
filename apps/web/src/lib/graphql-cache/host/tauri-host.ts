@@ -15,6 +15,7 @@ import type {
   CachedQueryVariantWire,
   CacheRevision,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   HydrationResult,
@@ -329,9 +330,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       transactionId: string,
       claim: MutationClaim,
       args: CacheWriteArgs
-    ): Promise<WriteResult> {
+    ): Promise<CommitOptimisticWriteResult> {
       await ready;
-      return await request<WriteResult>(
+      return await request<CommitOptimisticWriteResult>(
         'graphql_cache_commit_optimistic_write',
         {
           transactionId,
