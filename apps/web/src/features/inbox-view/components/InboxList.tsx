@@ -2,6 +2,7 @@ import '@entity/composed/ListEntity.css';
 import {
   createListController,
   type ListActivation,
+  listOwnedSlotName,
   useListInteractions,
 } from '@app/components/list';
 import {
@@ -14,6 +15,7 @@ import {
   createSoupEntityActions,
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
+  useSoupListNavigationHotkeys,
   viewedProjectIdFromContent,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
@@ -21,11 +23,10 @@ import { makePersistedState } from '@app/lib/persistence';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import type {
-  SplitListActivationMetadata,
-  SplitListRow,
-} from '@components/app/split-layout/context';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitPanelOrThrow,
+  withSplitPanelOwner,
+} from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -62,7 +63,10 @@ import {
   DEFAULT_INBOX_LIST_STATE,
   type InboxListStateSnapshot,
 } from '../persistence';
-import { useInboxDataSource } from '../queries/use-inbox-query';
+import {
+  type InboxDataSourceItem,
+  useInboxDataSource,
+} from '../queries/use-inbox-query';
 import { useInboxPreview } from '../use-inbox-preview';
 import { InboxDateGroupHeader } from './InboxDateGroupHeader';
 import { InboxEmptyState } from './InboxEmptyState';
@@ -72,18 +76,24 @@ type InboxActionRow = {
   rowId: string;
 };
 
+type InboxListActivationMetadata = {
+  event?: MouseEvent;
+  newSplit?: boolean;
+};
+
 /** Compact Inbox-card list used by the Activity-layout Inbox workspace. */
 export function InboxList() {
   const { state } = useInboxView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
-  const registration = panel.setList(() => {
-    const dataSource = useInboxDataSource(state);
-    const controller = createListController<
-      SplitListRow,
-      SplitListActivationMetadata
-    >({
-      items: dataSource.items,
+
+  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
+    useInboxDataSource(state)
+  );
+
+  const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
+    createListController<InboxDataSourceItem, InboxListActivationMetadata>({
+      items: source.items,
       getKey: (row) => row.id,
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
@@ -91,16 +101,25 @@ export function InboxList() {
       isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
       isSelectable: (row) => row.kind === 'entity',
       onActivate,
-    });
+    })
+  );
 
-    return {
+  withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () => {
+    useSoupListNavigationHotkeys({
+      splitHotkeyScope: panel.splitHotkeyScope,
       viewId: 'inbox',
-      dataSource,
-      controller,
-    };
+      dataSource: source,
+      controller: list,
+      handle: panel.handle,
+      openEntityInSplit: (entity, options) => {
+        void openEntityInSplitFromUnifiedList(entity, {
+          splitHandle: panel.handle,
+          ...options,
+        });
+      },
+    });
   });
-  const list = registration.controller;
-  const source = registration.dataSource;
+
   const preview = useInboxPreview({
     controller: list,
     handle: panel.handle,
@@ -123,7 +142,7 @@ export function InboxList() {
   function onActivate({
     item,
     metadata,
-  }: ListActivation<SplitListRow, SplitListActivationMetadata>) {
+  }: ListActivation<InboxDataSourceItem, InboxListActivationMetadata>) {
     if (item.kind === 'load-more') {
       if (!item.isLoading) void source.loadMore();
       return;

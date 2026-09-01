@@ -1,68 +1,63 @@
+import type { ListController, ListDataSource } from '@app/components/list';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import type { EntityData } from '@entity';
-import type { SplitListBinding } from './context';
-import type { SplitHandle } from './layoutManager';
+import type { SoupRow } from './types';
 
 const LOAD_MORE_DISTANCE_FROM_END = 3;
 
-export type SplitListOpenEntityOptions = {
+export type SoupListNavigationOpenOptions = {
   mergeHistory: true;
   referredFrom: ListView;
 };
 
-export type UseSplitListNavigationHotkeysOptions = {
+export type UseSoupListNavigationHotkeysOptions<TEntity extends EntityData> = {
   splitHotkeyScope: string;
-  list: () => SplitListBinding | undefined;
+  viewId: ListView;
+  dataSource: ListDataSource<SoupRow<TEntity>>;
+  controller: Pick<ListController<SoupRow<TEntity>>, 'navigate' | 'selection'>;
   handle: SplitHandle;
   openEntityInSplit: (
-    entity: EntityData,
-    options: SplitListOpenEntityOptions
+    entity: TEntity,
+    options: SoupListNavigationOpenOptions
   ) => void;
 };
 
-type ConfiguredSplitListBinding = SplitListBinding & {
-  viewId: ListView;
-};
-
-export function useSplitListNavigationHotkeys(
-  options: UseSplitListNavigationHotkeysOptions
+export function useSoupListNavigationHotkeys<TEntity extends EntityData>(
+  options: UseSoupListNavigationHotkeysOptions<TEntity>
 ) {
-  const canNavigate = (
-    list: SplitListBinding | undefined
-  ): list is ConfiguredSplitListBinding => {
+  const canNavigate = () => {
     const content = options.handle.content();
     return (
-      list?.viewId !== undefined &&
       (content.type !== 'component' || !isListViewID(content.id)) &&
-      options.handle.referredFrom() === list.viewId
+      options.handle.referredFrom() === options.viewId
     );
   };
 
   const step = (direction: -1 | 1) => {
-    const list = options.list();
-    if (!canNavigate(list)) return false;
+    if (!canNavigate()) return false;
 
-    const rows = list.dataSource.items();
-    const next = list.controller.navigate.by(direction, {
+    const rows = options.dataSource.items();
+    const next = options.controller.navigate.by(direction, {
       isNavigable: (row) => row.kind === 'entity',
     });
 
     if (next?.item.kind === 'entity') {
-      list.controller.selection.setAnchor(next.key);
+      options.controller.selection.setAnchor(next.key);
       options.openEntityInSplit(next.item.entity, {
         mergeHistory: true,
-        referredFrom: list.viewId,
+        referredFrom: options.viewId,
       });
     }
 
     if (
       direction === 1 &&
       (!next || rows.length - next.index - 1 <= LOAD_MORE_DISTANCE_FROM_END) &&
-      list.dataSource.hasMore() &&
-      !list.dataSource.isLoadingMore()
+      options.dataSource.hasMore() &&
+      !options.dataSource.isLoadingMore()
     ) {
-      void list.dataSource.loadMore();
+      void options.dataSource.loadMore();
     }
 
     return true;
@@ -72,7 +67,7 @@ export function useSplitListNavigationHotkeys(
     scopeId: options.splitHotkeyScope,
     hotkey: 'j',
     description: 'Move down',
-    condition: () => canNavigate(options.list()),
+    condition: canNavigate,
     keyDownHandler: () => step(1),
     registrationType: 'add',
     hide: true,
@@ -82,7 +77,7 @@ export function useSplitListNavigationHotkeys(
     scopeId: options.splitHotkeyScope,
     hotkey: 'k',
     description: 'Move up',
-    condition: () => canNavigate(options.list()),
+    condition: canNavigate,
     keyDownHandler: () => step(-1),
     registrationType: 'add',
     hide: true,

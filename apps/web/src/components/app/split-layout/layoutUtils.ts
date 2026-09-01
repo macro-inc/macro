@@ -97,6 +97,13 @@ export function useSplitPanelOrThrow() {
 }
 
 /**
+ * Creates or replaces a named resource under the current split panel's owner.
+ */
+export function withSplitPanelOwner<T>(name: string, factory: () => T): T {
+  return useSplitPanelOrThrow().replaceOwnedSlot(name, factory);
+}
+
+/**
  * Get the context value for the the SplitPanel with possible undefined.
  * @returns
  */

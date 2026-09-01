@@ -1,9 +1,10 @@
-import type { SplitListController } from '@components/app/split-layout/context';
+import type { ListController } from '@app/components/list';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import type { EntityData } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
 import { debounce } from '@solid-primitives/scheduled';
 import { createEffect, onCleanup } from 'solid-js';
+import type { InboxDataSourceItem } from './queries/use-inbox-query';
 
 export type InboxPreviewController = {
   request: (entity: WithNotification<EntityData>) => void;
@@ -11,7 +12,7 @@ export type InboxPreviewController = {
 };
 
 export type UseInboxPreviewOptions = {
-  controller: SplitListController;
+  controller: Pick<ListController<InboxDataSourceItem>, 'focus'>;
   handle: Pick<
     SplitHandle,
     'canEngagePreview' | 'engagePreview' | 'isControllerSplit' | 'isViewerSplit'
