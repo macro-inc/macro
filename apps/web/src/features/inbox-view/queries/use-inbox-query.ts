@@ -38,9 +38,8 @@ import {
   notDoneFilter,
   scheduledRemindersFilter,
 } from '../../next-soup/filters/predicates';
-import type { InboxViewState } from '../create-inbox-view-state';
 import { INBOX_FACETS, type InboxFacetContext } from '../inbox-facets';
-import type { InboxTab } from '../types';
+import type { InboxTab, InboxViewState } from '../types';
 import {
   buildInboxQuery,
   type InboxQueryCapabilities,
@@ -52,6 +51,11 @@ import { buildInboxSearchRequest } from './inbox-search';
 export type InboxDataSourceItem = SoupRow<WithNotification<EntityData>>;
 
 export type InboxDataSource = ListDataSource<InboxDataSourceItem>;
+
+export type InboxDataSourceInput = Pick<
+  InboxViewState,
+  'tab' | 'search' | 'groupBy' | 'facets'
+>;
 
 function matchesCapabilities(
   entity: EntityData,
@@ -94,7 +98,9 @@ function matchesTab(
     .exhaustive();
 }
 
-export function useInboxDataSource(state: InboxViewState): InboxDataSource {
+export function useInboxDataSource(
+  state: InboxDataSourceInput
+): InboxDataSource {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
@@ -114,8 +120,8 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
 
   const viewContext = createMemo(
     (): InboxViewContext => ({
-      tab: state.tab(),
-      facets: state.facets(),
+      tab: state.tab,
+      facets: state.facets,
       facetContext: facetContext(),
       capabilities: capabilities(),
       userId: userId(),
@@ -143,7 +149,7 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
 
   const { entityPool } = useSearchContext();
   const localPool = createMemo(() => {
-    if (!state.search().trim()) return [];
+    if (!state.search.trim()) return [];
     const pool = entityPool();
     const matchingIds = new Set(
       transformEntities(pool.map((item) => item.data)).map(
@@ -154,7 +160,7 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
   });
 
   const search = createSearchState({
-    text: state.search,
+    text: () => state.search,
     localPool,
     buildRequest: (request) => buildInboxSearchRequest(viewContext(), request),
   });
@@ -240,7 +246,7 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
 
   const items = createMemo<InboxDataSourceItem[]>(() => {
     let result: InboxDataSourceItem[];
-    if (state.groupBy() === 'date' && !search.isSearching()) {
+    if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(groupInboxEntitiesByDate(entities().items));
     } else {
       result = buildFlatSoupRows(entities().items);
@@ -249,7 +255,7 @@ export function useInboxDataSource(state: InboxViewState): InboxDataSource {
     if (hasMore()) {
       result.push(
         createSoupLoadMoreRow({
-          scopeId: `inbox:${state.tab()}`,
+          scopeId: `inbox:${state.tab}`,
           isLoading: isLoadingMore(),
         })
       );

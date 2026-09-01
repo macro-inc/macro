@@ -1,4 +1,5 @@
 import { ListFilterDropdown } from '@app/components/view-shell';
+import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { pressPulse } from '@components/app/mobile/pressPulse';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -11,8 +12,8 @@ import XIcon from '@phosphor/x.svg';
 import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
-import type { InboxViewState } from '../create-inbox-view-state';
 import { INBOX_FILTER_GROUPS } from '../inbox-facets';
+import { useInboxView } from '../inbox-view-context';
 
 const FILTER_ICONS = new Map<string, () => JSX.Element>([
   ['documents', () => <EntityIcon targetType="md" size="xs" />],
@@ -34,29 +35,52 @@ const FILTER_GROUPS = INBOX_FILTER_GROUPS.map((group) => ({
   })),
 }));
 
-function isSelected(state: InboxViewState, groupId: string, optionId: string) {
-  const selectedIds = state.facets()[groupId] ?? [];
-  if (groupId === 'read' && optionId === 'all') {
-    return selectedIds.length === 0;
-  }
+function useInboxFilters() {
+  const { state, setFacets } = useInboxView();
 
-  return selectedIds.includes(optionId);
-}
+  const isSelected = (groupId: string, optionId: string) => {
+    const selectedIds = state.facets[groupId] ?? [];
+    if (groupId === 'read' && optionId === 'all') {
+      return selectedIds.length === 0;
+    }
 
-function setSelected(
-  state: InboxViewState,
-  groupId: string,
-  optionId: string,
-  selected: boolean
-) {
-  if (groupId === 'read') {
-    if (!selected) return;
+    return selectedIds.includes(optionId);
+  };
 
-    state.setFacetOptions(groupId, optionId === 'all' ? [] : [optionId]);
-    return;
-  }
+  const setSelected = (
+    groupId: string,
+    optionId: string,
+    selected: boolean
+  ) => {
+    if (groupId === 'read') {
+      if (!selected) return;
 
-  state.setFacetOption(groupId, optionId, selected);
+      setFacets({
+        ...state.facets,
+        [groupId]: optionId === 'all' ? [] : [optionId],
+      });
+      return;
+    }
+
+    const update = selected ? addUnique(optionId) : removeValue(optionId);
+    setFacets({
+      ...state.facets,
+      [groupId]: update(state.facets[groupId]),
+    });
+  };
+
+  const activeCount = () =>
+    Object.values(state.facets).reduce(
+      (count, optionIds) => count + optionIds.length,
+      0
+    );
+
+  return {
+    activeCount,
+    clear: () => setFacets({}),
+    isSelected,
+    setSelected,
+  };
 }
 
 function scrollAccordionItemToTop(
@@ -92,27 +116,26 @@ function FilterCountBadge(props: { count: number }) {
   );
 }
 
-export function InboxFilterDropdown(props: { state: InboxViewState }) {
+export function InboxFilterDropdown() {
+  const filters = useInboxFilters();
+
   return (
     <div class="relative ml-auto shrink-0">
       <ListFilterDropdown
         groups={FILTER_GROUPS}
-        isSelected={(groupId, optionId) =>
-          isSelected(props.state, groupId, optionId)
-        }
-        onSelectionChange={(groupId, optionId, selected) =>
-          setSelected(props.state, groupId, optionId, selected)
-        }
-        onClear={props.state.clearFacets}
+        isSelected={filters.isSelected}
+        onSelectionChange={filters.setSelected}
+        onClear={filters.clear}
         label="Filter Inbox"
       />
 
-      <FilterCountBadge count={props.state.activeFacetCount()} />
+      <FilterCountBadge count={filters.activeCount()} />
     </div>
   );
 }
 
-export function InboxFilterDrawer(props: { state: InboxViewState }) {
+export function InboxFilterDrawer() {
+  const filters = useInboxFilters();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
 
   return (
@@ -132,7 +155,7 @@ export function InboxFilterDrawer(props: { state: InboxViewState }) {
         ref={pressPulse}
       >
         <SlidersHorizontalIcon />
-        <FilterCountBadge count={props.state.activeFacetCount()} />
+        <FilterCountBadge count={filters.activeCount()} />
       </MobileDrawer.Trigger>
 
       <MobileDrawer.Portal>
@@ -161,7 +184,7 @@ export function InboxFilterDrawer(props: { state: InboxViewState }) {
                           group.options.filter(
                             (option) =>
                               option.id !== group.defaultOptionId &&
-                              isSelected(props.state, group.id, option.id)
+                              filters.isSelected(group.id, option.id)
                           ).length
                       );
 
@@ -194,7 +217,7 @@ export function InboxFilterDrawer(props: { state: InboxViewState }) {
                             <For each={group.options}>
                               {(option) => {
                                 const selected = () =>
-                                  isSelected(props.state, group.id, option.id);
+                                  filters.isSelected(group.id, option.id);
 
                                 return (
                                   <button
@@ -207,8 +230,7 @@ export function InboxFilterDrawer(props: { state: InboxViewState }) {
                                     aria-checked={selected()}
                                     class="not-last:mb-px flex w-full items-center gap-3 bg-surface px-3 py-2.5 text-left text-sm transition-colors hover:bg-hover"
                                     onClick={() =>
-                                      setSelected(
-                                        props.state,
+                                      filters.setSelected(
                                         group.id,
                                         option.id,
                                         group.selectionMode === 'single'
@@ -253,13 +275,13 @@ export function InboxFilterDrawer(props: { state: InboxViewState }) {
             </div>
           </div>
 
-          <Show when={props.state.activeFacetCount() > 0}>
+          <Show when={filters.activeCount() > 0}>
             <div class="shrink-0 border-edge-muted border-t p-2">
               <Button
                 variant="outline"
                 size="sm"
                 class="min-h-10 rounded-lg bg-active!"
-                onClick={props.state.clearFacets}
+                onClick={filters.clear}
               >
                 <XIcon class="size-3!" />
                 Clear all

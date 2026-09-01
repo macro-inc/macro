@@ -7,7 +7,7 @@ import {
   type EntryPersistenceHandle,
 } from '@components/app/split-layout/entry-persistence';
 import { z } from 'zod';
-import type { InboxViewSnapshot } from './create-inbox-view-state';
+import type { InboxViewState } from './types';
 
 export const INBOX_ENTRY_STATE_KEY = 'inbox.view';
 export const INBOX_LIST_ENTRY_STATE_KEY = 'inbox.listState';
@@ -51,7 +51,7 @@ export const DEFAULT_INBOX_LIST_STATE: InboxListStateSnapshot = {
   scrollOffset: DEFAULT_INBOX_LIST_ENTRY_STATE.scrollOffset,
 };
 
-function selectEntryState(state: InboxViewSnapshot): InboxEntryState {
+function selectEntryState(state: InboxViewState): InboxEntryState {
   return {
     version: 1,
     tab: state.tab === 'reminders' ? 'signal' : state.tab,
@@ -61,7 +61,7 @@ function selectEntryState(state: InboxViewSnapshot): InboxEntryState {
 function createInboxEntryStorage(options: {
   handle: EntryPersistenceHandle;
   restore: boolean;
-}): PersistenceStorage<InboxViewSnapshot> {
+}): PersistenceStorage<InboxViewState> {
   return createEntryPersistenceStorage({
     handle: options.handle,
     key: INBOX_ENTRY_STATE_KEY,
@@ -109,7 +109,7 @@ export function createInboxListEntryStorage(
 /** Persists Inbox navigation state with the owning split entry. */
 export function createInboxViewPersistence(
   options: CreateInboxViewPersistenceOptions
-): MakePersistedStateOptions<InboxViewSnapshot> {
+): MakePersistedStateOptions<InboxViewState> {
   return {
     storages: [
       createInboxEntryStorage({

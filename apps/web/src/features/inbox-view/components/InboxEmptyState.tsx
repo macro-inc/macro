@@ -5,12 +5,15 @@ import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { Match, Switch } from 'solid-js';
-import type { InboxViewState } from '../create-inbox-view-state';
+import { useInboxView } from '../inbox-view-context';
 
-export function InboxEmptyState(props: { state: InboxViewState }) {
+export function InboxEmptyState() {
+  const { state, setFacets } = useInboxView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
-  const searchText = () => props.state.search().trim();
+  const searchText = () => state.search.trim();
+  const hasActiveFilters = () =>
+    Object.values(state.facets).some((optionIds) => optionIds.length > 0);
 
   return (
     <Switch>
@@ -26,7 +29,7 @@ export function InboxEmptyState(props: { state: InboxViewState }) {
         )}
       </Match>
 
-      <Match when={props.state.activeFacetCount() > 0}>
+      <Match when={hasActiveFilters()}>
         <EmptyStatePanel
           centered
           graphic={EmptyStateNoFilterMatchGraphic}
@@ -35,7 +38,7 @@ export function InboxEmptyState(props: { state: InboxViewState }) {
         >
           <FilteredHiddenBanner
             hasHiddenItems={false}
-            onClearFilters={props.state.clearFacets}
+            onClearFilters={() => setFacets({})}
           />
         </EmptyStatePanel>
       </Match>
@@ -53,7 +56,7 @@ export function InboxEmptyState(props: { state: InboxViewState }) {
         />
       </Match>
 
-      <Match when={props.state.tab() === 'noise'}>
+      <Match when={state.tab === 'noise'}>
         <EmptyStatePanel
           graphic={EmptyStateInboxTrayGraphic}
           title="No noise"
@@ -69,7 +72,7 @@ export function InboxEmptyState(props: { state: InboxViewState }) {
         />
       </Match>
 
-      <Match when={props.state.tab() === 'all'}>
+      <Match when={state.tab === 'all'}>
         <EmptyStatePanel
           graphic={EmptyStateInboxTrayGraphic}
           title="Inbox zero"

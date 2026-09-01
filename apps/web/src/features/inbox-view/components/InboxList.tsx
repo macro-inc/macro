@@ -1,5 +1,9 @@
 import '@entity/composed/ListEntity.css';
-import { useListInteractions } from '@app/components/list';
+import {
+  createListController,
+  type ListActivation,
+  useListInteractions,
+} from '@app/components/list';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -14,14 +18,19 @@ import {
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import type { SplitListController } from '@components/app/split-layout/context';
+import type {
+  SplitListActivationMetadata,
+  SplitListRow,
+} from '@components/app/split-layout/context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
   EntitySelectionToolbar,
+  isNonMemberChannelEntity,
   type WithNotification,
 } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -38,14 +47,23 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import { soupNavigationTouchHighlight } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
-import type { InboxViewState } from '../create-inbox-view-state';
+import {
+  persistSoupNavigationTouchHighlight,
+  soupNavigationTouchHighlight,
+} from '../../next-soup/soup-view/soup-navigation-touch-highlight';
+import {
+  markChannelNotificationsSeenOnOpen,
+  markReminderSeenOnOpen,
+  openEntityInSplitFromUnifiedList,
+} from '../../next-soup/utils';
+import { useInboxView } from '../inbox-view-context';
 import {
   createInboxListEntryStorage,
   DEFAULT_INBOX_LIST_STATE,
   type InboxListStateSnapshot,
 } from '../persistence';
-import type { InboxDataSource } from '../queries/use-inbox-query';
+import { useInboxDataSource } from '../queries/use-inbox-query';
+import { useInboxPreview } from '../use-inbox-preview';
 import { InboxDateGroupHeader } from './InboxDateGroupHeader';
 import { InboxEmptyState } from './InboxEmptyState';
 
@@ -53,23 +71,109 @@ type InboxActionRow = {
   entity: WithNotification<EntityData>;
   rowId: string;
 };
-type InboxListProps = {
-  state: InboxViewState;
-  source: InboxDataSource;
-  list: SplitListController;
-  onPreviewEntity: (entity: WithNotification<EntityData>) => void;
-};
 
 /** Compact Inbox-card list used by the Activity-layout Inbox workspace. */
-export function InboxList(props: InboxListProps) {
+export function InboxList() {
+  const { state } = useInboxView();
   const panel = useSplitPanelOrThrow();
-  const list = props.list;
+  const notificationSource = useGlobalNotificationSource();
+  const registration = panel.setList(() => {
+    const dataSource = useInboxDataSource(state);
+    const controller = createListController<
+      SplitListRow,
+      SplitListActivationMetadata
+    >({
+      items: dataSource.items,
+      getKey: (row) => row.id,
+      selection: {
+        getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
+      },
+      isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
+      isSelectable: (row) => row.kind === 'entity',
+      onActivate,
+    });
+
+    return {
+      viewId: 'inbox',
+      dataSource,
+      controller,
+    };
+  });
+  const list = registration.controller;
+  const source = registration.dataSource;
+  const preview = useInboxPreview({
+    controller: list,
+    handle: panel.handle,
+    onPreview: (entity) => {
+      void openEntity(entity, {
+        newSplit: false,
+        replacePair: false,
+        mergeHistory: true,
+      });
+    },
+  });
+
   const { buildActionGroups } = createSoupEntityActions();
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
       activeListView: panel.handle.content().id,
-      activeTab: props.state.tab(),
+      activeTab: state.tab,
     });
+
+  function onActivate({
+    item,
+    metadata,
+  }: ListActivation<SplitListRow, SplitListActivationMetadata>) {
+    if (item.kind === 'load-more') {
+      if (!item.isLoading) void source.loadMore();
+      return;
+    }
+
+    if (item.kind !== 'entity') return;
+
+    const sourceRow = source.items().find((row) => row.id === item.id);
+    if (sourceRow?.kind !== 'entity') return;
+
+    const newSplit =
+      metadata?.newSplit === true || metadata?.event?.shiftKey === true;
+    preview.cancel();
+    void openEntity(sourceRow.entity, {
+      event: metadata?.event,
+      newSplit,
+      replacePair: metadata?.event?.altKey === true && !newSplit,
+    });
+  }
+
+  async function openEntity(
+    entity: WithNotification<EntityData>,
+    options: {
+      event?: MouseEvent;
+      newSplit: boolean;
+      replacePair: boolean;
+      mergeHistory?: boolean;
+    }
+  ) {
+    markReminderSeenOnOpen(entity, notificationSource);
+    if (!isNonMemberChannelEntity(entity)) {
+      markChannelNotificationsSeenOnOpen(entity, notificationSource);
+    }
+
+    const finishTouchHighlight = options.event
+      ? persistSoupNavigationTouchHighlight(options.event)
+      : undefined;
+
+    try {
+      await openEntityInSplitFromUnifiedList(entity, {
+        openInNewSplit: options.newSplit,
+        replacePreview: options.replacePair,
+        splitHandle: panel.handle,
+        referredFrom: 'inbox',
+        mergeHistory: options.mergeHistory,
+      });
+    } finally {
+      finishTouchHighlight?.();
+    }
+  }
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
@@ -110,7 +214,7 @@ export function InboxList(props: InboxListProps) {
     setPersistedListState((current) => ({ ...current, focusKey }));
   });
 
-  const rows = props.source.items;
+  const rows = source.items;
 
   const swipeRowsById = createMemo(() => {
     const entities = new Map<string, InboxActionRow>();
@@ -157,11 +261,11 @@ export function InboxList(props: InboxListProps) {
       onNavigate: (event) => {
         const row = event.result?.item;
         if (row?.kind === 'entity') {
-          props.onPreviewEntity(row.entity);
+          preview.request(row.entity);
         }
 
         if (event.kind !== 'move' || event.direction !== 1) return;
-        if (props.source.isLoadingMore() || !props.source.hasMore()) return;
+        if (source.isLoadingMore() || !source.hasMore()) return;
 
         const distanceFromEnd = event.result
           ? list.items.count() - event.result.index - 1
@@ -169,7 +273,7 @@ export function InboxList(props: InboxListProps) {
 
         if (distanceFromEnd > 3) return;
 
-        void props.source.loadMore();
+        void source.loadMore();
       },
     },
     activation: {
@@ -221,8 +325,7 @@ export function InboxList(props: InboxListProps) {
   function showsEmptyViewport() {
     return (
       forceEmptyState() ||
-      (!props.source.isLoading() &&
-        (Boolean(props.source.error()) || rows().length === 0))
+      (!source.isLoading() && (Boolean(source.error()) || rows().length === 0))
     );
   }
 
@@ -234,18 +337,19 @@ export function InboxList(props: InboxListProps) {
     setIsPullRefreshing(true);
 
     try {
-      await props.source.refresh();
+      await source.refresh();
     } finally {
       setIsPullRefreshing(false);
     }
   }
 
-  let activeTab = props.state.tab();
+  let activeTab = state.tab;
   createEffect(() => {
-    const nextTab = props.state.tab();
+    const nextTab = state.tab;
     if (nextTab === activeTab) return;
 
     activeTab = nextTab;
+    preview.cancel();
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
     panel.handle.resetPreview();
@@ -254,7 +358,7 @@ export function InboxList(props: InboxListProps) {
 
   createEffect(() => {
     rows();
-    if (props.source.isLoading()) return;
+    if (source.isLoading()) return;
 
     if (list.focus.result()) return;
 
@@ -282,12 +386,12 @@ export function InboxList(props: InboxListProps) {
       ...current,
       scrollOffset: handle.scrollOffset,
     }));
-    if (!props.source.hasMore()) return;
+    if (!source.hasMore()) return;
 
     const distance =
       handle.scrollSize - handle.scrollOffset - handle.viewportSize;
-    if (distance < 300 && !props.source.isLoadingMore()) {
-      void props.source.loadMore();
+    if (distance < 300 && !source.isLoadingMore()) {
+      void source.loadMore();
     }
   }
 
@@ -327,9 +431,7 @@ export function InboxList(props: InboxListProps) {
         >
           <Show
             when={
-              forceEmptyState() ||
-              !props.source.isLoading() ||
-              isPullRefreshing()
+              forceEmptyState() || !source.isLoading() || isPullRefreshing()
             }
             fallback={
               <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
@@ -341,7 +443,7 @@ export function InboxList(props: InboxListProps) {
             }
           >
             <Show
-              when={forceEmptyState() || !props.source.error()}
+              when={forceEmptyState() || !source.error()}
               fallback={
                 <div
                   ref={setEmptyViewport}
@@ -351,7 +453,7 @@ export function InboxList(props: InboxListProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => void props.source.refresh()}
+                    onClick={() => void source.refresh()}
                   >
                     Try again
                   </Button>
@@ -365,7 +467,7 @@ export function InboxList(props: InboxListProps) {
                     ref={setEmptyViewport}
                     class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
                   >
-                    <InboxEmptyState state={props.state} />
+                    <InboxEmptyState />
                   </div>
                 }
               >

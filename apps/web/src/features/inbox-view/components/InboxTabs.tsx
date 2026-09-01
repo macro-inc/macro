@@ -1,8 +1,10 @@
+import { useViewTabHotkeys } from '@app/components/view-shell';
 import { PillTabs } from '@components/app/mobile/PillTabs';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TabsInset } from '@core/component/TabsInset';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show } from 'solid-js';
-import type { InboxViewState } from '../create-inbox-view-state';
+import { useInboxView } from '../inbox-view-context';
 import type { InboxTab } from '../types';
 import { InboxFilterDrawer, InboxFilterDropdown } from './InboxFilters';
 
@@ -11,14 +13,26 @@ const INBOX_TABS: { value: InboxTab; label: string }[] = [
   { value: 'noise', label: 'Noise' },
   { value: 'all', label: 'All' },
 ];
+const INBOX_TAB_IDS = INBOX_TABS.map((tab) => tab.value);
 
 /** Compact category switcher from the Activity-layout Inbox experiment. */
-export function InboxTabs(props: { state: InboxViewState }) {
-  const setTab = (value: string) => {
+export function InboxTabs() {
+  const panel = useSplitPanelOrThrow();
+  const { state, setTab } = useInboxView();
+
+  useViewTabHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    ids: () => INBOX_TAB_IDS,
+    activeId: () => state.tab,
+    setActiveId: setTab,
+  });
+
+  const handleTabChange = (value: string) => {
     const tab = INBOX_TABS.find((item) => item.value === value);
     if (!tab) return;
 
-    props.state.setTab(tab.value);
+    setTab(tab.value);
   };
 
   return (
@@ -30,24 +44,24 @@ export function InboxTabs(props: { state: InboxViewState }) {
             <TabsInset
               aria-label="Inbox views"
               list={INBOX_TABS}
-              value={props.state.tab()}
-              onChange={setTab}
+              value={state.tab}
+              onChange={handleTabChange}
               class="h-8"
               trackClass="h-full"
               fullWidth
             />
           </div>
-          <InboxFilterDropdown state={props.state} />
+          <InboxFilterDropdown />
         </div>
       }
     >
       <div class="h-10 min-w-0 flex-1">
         <PillTabs
           scrollable
-          leading={<InboxFilterDrawer state={props.state} />}
+          leading={<InboxFilterDrawer />}
           items={INBOX_TABS}
-          value={props.state.tab()}
-          onChange={setTab}
+          value={state.tab}
+          onChange={handleTabChange}
         />
       </div>
     </Show>

@@ -1,51 +1,19 @@
-import {
-  createListController,
-  type ListActivation,
-} from '@app/components/list';
-import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import type {
-  SplitListActivationMetadata,
-  SplitListRow,
-} from '@components/app/split-layout/context';
+import { ViewShell } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import {
-  type EntityData,
-  isNonMemberChannelEntity,
-  ListEntityMetadataQueryProvider,
-  type WithNotification,
-} from '@entity';
+import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { debounce } from '@solid-primitives/scheduled';
-import { createEffect, onCleanup, onMount, Suspense } from 'solid-js';
-import { persistSoupNavigationTouchHighlight } from '../next-soup/soup-view/soup-navigation-touch-highlight';
-import {
-  markChannelNotificationsSeenOnOpen,
-  markReminderSeenOnOpen,
-  openEntityInSplitFromUnifiedList,
-} from '../next-soup/utils';
+import { createEffect, onMount, Suspense } from 'solid-js';
 import { InboxHeader } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
 import { InboxTabs } from './components/InboxTabs';
-import {
-  type CreateInboxViewStateOptions,
-  createInboxViewState,
-  type InboxViewState,
-} from './create-inbox-view-state';
-import { useInboxDataSource } from './queries/use-inbox-query';
-import type { InboxTab } from './types';
-
-const INBOX_TAB_IDS: readonly InboxTab[] = ['signal', 'noise', 'all'];
+import { InboxViewProvider, useInboxView } from './inbox-view-context';
+import type { InboxViewStateOptions } from './types';
 
 export type InboxViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
-  initialState?: CreateInboxViewStateOptions;
-};
-
-type InboxWorkspaceProps = {
-  state: InboxViewState;
+  initialState?: InboxViewStateOptions;
 };
 
 function InboxFallback() {
@@ -56,167 +24,14 @@ function InboxFallback() {
   );
 }
 
-function InboxWorkspace(props: InboxWorkspaceProps) {
+function InboxViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const notificationSource = useGlobalNotificationSource();
-
-  const list = panel.setList(() => {
-    const dataSource = useInboxDataSource(props.state);
-    const controller = createListController<
-      SplitListRow,
-      SplitListActivationMetadata
-    >({
-      items: dataSource.items,
-      getKey: (row) => row.id,
-      selection: {
-        getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
-      },
-      isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
-      isSelectable: (row) => row.kind === 'entity',
-      onActivate: ({
-        item,
-        metadata,
-      }: ListActivation<SplitListRow, SplitListActivationMetadata>) => {
-        if (item.kind === 'load-more') {
-          if (!item.isLoading) void dataSource.loadMore();
-          return;
-        }
-
-        if (item.kind !== 'entity') return;
-
-        const sourceRow = dataSource.items().find((row) => row.id === item.id);
-        if (sourceRow?.kind !== 'entity') return;
-
-        const newSplit =
-          metadata?.newSplit === true || metadata?.event?.shiftKey === true;
-        openPreviewDebounced.clear();
-        void open(sourceRow.entity, {
-          event: metadata?.event,
-          newSplit,
-          replacePair: metadata?.event?.altKey === true && !newSplit,
-        });
-      },
-    });
-
-    return {
-      viewId: 'inbox',
-      dataSource,
-      controller,
-    };
-  });
-
-  const openPreviewDebounced = debounce(
-    (entity: WithNotification<EntityData>) => {
-      if (!panel.handle.isControllerSplit()) return;
-      if (focusedEntity()?.id !== entity.id) return;
-
-      void open(entity, {
-        newSplit: false,
-        replacePair: false,
-        mergeHistory: true,
-      });
-    },
-    150
-  );
-  onCleanup(() => openPreviewDebounced.clear());
-
-  let initialPreviewResolved = false;
-  createEffect(() => {
-    if (initialPreviewResolved) return;
-    if (panel.handle.isViewerSplit()) {
-      initialPreviewResolved = true;
-      return;
-    }
-    if (!panel.handle.canEngagePreview()) return;
-
-    list.controller.focus.clear({ reason: 'programmatic' });
-    panel.handle.engagePreview();
-    if (panel.handle.isControllerSplit()) {
-      initialPreviewResolved = true;
-    }
-  });
-
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-    ids: () => INBOX_TAB_IDS,
-    activeId: props.state.tab,
-    setActiveId: props.state.setTab,
-  });
-
-  function focusedEntity() {
-    const focusKey = list.controller.focus.key();
-    if (!focusKey) return undefined;
-
-    const row = list.dataSource.items().find((item) => item.id === focusKey);
-    if (row?.kind !== 'entity') return undefined;
-
-    return row.entity;
-  }
-
-  async function open(
-    entity: WithNotification<EntityData>,
-    options: {
-      event?: MouseEvent;
-      newSplit: boolean;
-      replacePair: boolean;
-      mergeHistory?: boolean;
-    }
-  ) {
-    markReminderSeenOnOpen(entity, notificationSource);
-    if (!isNonMemberChannelEntity(entity)) {
-      markChannelNotificationsSeenOnOpen(entity, notificationSource);
-    }
-
-    const finishTouchHighlight = options.event
-      ? persistSoupNavigationTouchHighlight(options.event)
-      : undefined;
-
-    try {
-      await openEntityInSplitFromUnifiedList(entity, {
-        openInNewSplit: options.newSplit,
-        replacePreview: options.replacePair,
-        splitHandle: panel.handle,
-        referredFrom: 'inbox',
-        mergeHistory: options.mergeHistory,
-      });
-    } finally {
-      finishTouchHighlight?.();
-    }
-  }
-
-  return (
-    <ViewShell.Main>
-      <InboxHeader>
-        <InboxTabs state={props.state} />
-      </InboxHeader>
-      <Suspense fallback={<InboxFallback />}>
-        <InboxList
-          state={props.state}
-          source={list.dataSource}
-          list={list.controller}
-          onPreviewEntity={(entity) => {
-            if (!panel.handle.isControllerSplit()) return;
-
-            openPreviewDebounced(entity);
-          }}
-        />
-      </Suspense>
-    </ViewShell.Main>
-  );
-}
-
-/** Composable heterogeneous Inbox built on the shared view and Soup primitives. */
-export function InboxView(props: InboxViewProps) {
-  const panel = useSplitPanelOrThrow();
-  const state = createInboxViewState(props.initialState, {
-    handle: panel.handle,
-  });
+  const { state, setTab } = useInboxView();
 
   createEffect(() => {
-    if (state.tab() !== 'reminders') return;
+    if (state.tab !== 'reminders') return;
 
-    state.setTab('signal');
+    setTab('signal');
   });
 
   onMount(() => panel.handle.setDisplayName('Inbox'));
@@ -227,11 +42,27 @@ export function InboxView(props: InboxViewProps) {
         <SplitPanel.Root>
           <SplitPanel.Body>
             <ViewShell.Root aside={false} main={{ min: 224 }}>
-              <InboxWorkspace state={state} />
+              <ViewShell.Main>
+                <InboxHeader>
+                  <InboxTabs />
+                </InboxHeader>
+                <Suspense fallback={<InboxFallback />}>
+                  <InboxList />
+                </Suspense>
+              </ViewShell.Main>
             </ViewShell.Root>
           </SplitPanel.Body>
         </SplitPanel.Root>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>
+  );
+}
+
+/** Composable heterogeneous Inbox built on the shared view and Soup primitives. */
+export function InboxView(props: InboxViewProps) {
+  return (
+    <InboxViewProvider initialState={props.initialState}>
+      <InboxViewRoot />
+    </InboxViewProvider>
   );
 }
