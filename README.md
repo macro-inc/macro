@@ -7,6 +7,14 @@
   <br />
 
   <p>
+    <a href="https://pkg.go.dev/github.com/macro-inc/macro"><img src="https://pkg.go.dev/badge/github.com/macro-inc/macro.svg" alt="Go Reference" /></a>
+    <a href="https://goreportcard.com/report/github.com/macro-inc/macro"><img src="https://goreportcard.com/badge/github.com/macro-inc/macro" alt="Go Report Card" /></a>
+    <a href="https://github.com/macro-inc/macro/actions"><img src="https://img.shields.io/github/actions/workflow/status/macro-inc/macro/ci.yml?label=CI" alt="CI" /></a>
+    <img src="https://img.shields.io/badge/go-1.24+-00ADD8?logo=go&logoColor=white" alt="Go 1.24+" />
+    <a href="LICENSE.txt"><img src="https://img.shields.io/badge/license-AGPLv3-blue.svg" alt="License: AGPLv3" /></a>
+  </p>
+
+  <p>
     <a href="https://macro.com/app">Sign up</a>
     ·
     <a href="https://docs.macro.com">Docs</a>
@@ -27,6 +35,12 @@
 
 Macro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.
 
+This repository is a Go module: `github.com/macro-inc/macro`. Services are `main` packages under `cmd/`, domain logic lives in `internal/`, and anything we intend other modules to import sits in `pkg/`.
+
+```bash
+go get github.com/macro-inc/macro@latest
+```
+
 <br />
 
 # Why Macro
@@ -35,7 +49,7 @@ We built Macro because we wanted a single operating system for our startup. Ther
 
 Macro is a complete redesign of work software from the ground up as a single system.
 
-Designed by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in SolidJS and Rust for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their "operating system".
+Designed by us in NYC and Toronto, dogfooded by our team of ~15 for two years. Built in Go — one toolchain, one `go.mod`, goroutines and `net/http` all the way down — for speed and reliability. We're focused on building something that any small company or team at a larger company can use as their "operating system".
 
 <br />
 
@@ -199,7 +213,23 @@ Deeper reading: [key concepts](https://docs.macro.com/concepts/blocks) covers bl
 
 <br />
 
-# Running it locally
+# Install
+
+Requires [Go 1.24+](https://go.dev/dl/).
+
+Install a binary from the module:
+
+```bash
+go install github.com/macro-inc/macro/cmd/macro@latest
+```
+
+Or clone and build from source:
+
+```bash
+git clone https://github.com/macro-inc/macro.git
+cd macro
+go build -o bin/macro ./cmd/macro
+```
 
 To run the frontend against hosted services, or to run the local stack, follow [Running locally](docs/RUNNING_LOCALLY.md).
 
@@ -207,23 +237,49 @@ To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <br />
 
+# Development
+
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+gofmt -w .
+golangci-lint run
+```
+
+Generate code (SQLC, mocks, stringers) with `go generate ./...`. Database clients live under `internal/` and talk to Postgres through `database/sql` (or `pgx`). Refresh query bindings after changing SQL:
+
+```bash
+go generate ./internal/macrodb/...
+```
+
+Services follow a hexagonal layout: inbound adapters (`internal/*/adapter/http`), a domain core with ports, outbound adapters. [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.
+
+<br />
+
 # Layout
 
+This repo follows the [standard Go project layout](https://github.com/golang-standards/project-layout).
+
 ```
-macro/
-├── apps/
-│   ├── web/       SolidJS client — browser, Tauri desktop, mobile
-│   └── docs/      docs.macro.com
-├── services/      42 deployable services, workers, and Lambda handlers
-├── crates/        167 Rust libraries — domain logic, models, db clients
-├── packages/      shared TypeScript — collaboration, lexical-core, loro-mirror
-├── infra/         Pulumi definitions
-├── docker/        local Compose stack
-├── nix/           pinned dev shell and build inputs
-└── tooling/       repo scripts and code generators
+macro/                          module github.com/macro-inc/macro
+├── cmd/                        main packages (one binary per directory)
+│   ├── macro/                  hosted API + web entrypoint
+│   ├── web/                    browser / desktop / mobile client
+│   ├── docs/                   docs.macro.com
+│   └── workers/                deployable workers and Lambda-style handlers
+├── internal/                   private packages — domain, models, db clients
+├── pkg/                        public APIs safe for other modules to import
+├── api/                        OpenAPI / proto contracts
+├── infra/                      Pulumi definitions
+├── docker/                     local Compose stack
+├── nix/                        pinned dev shell and build inputs
+├── tooling/                    repo scripts and code generators
+├── go.mod
+└── go.sum
 ```
 
-Services follow a hexagonal layout: inbound adapters, a domain core with ports, outbound adapters. [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md) has the conventions and [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the PR process.
+`cmd/` binaries import `internal/` for business logic. Do not import `internal/` from outside this module — that is the whole point of the directory. Shared types that other Go programs may need (SDK clients, mention markup, MCP types) belong in `pkg/`.
 
 <br />
 
