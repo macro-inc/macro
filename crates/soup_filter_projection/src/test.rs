@@ -361,6 +361,22 @@ fn supplement_capsule_v2_native_golden_round_trip_is_deterministic() {
         decode_cache_projection_supplement(&encoded).unwrap(),
         supplement
     );
+
+    let status_supplement = SoupCacheProjectionSupplement::document(
+        document_key(id),
+        true,
+        false,
+        vec![Uuid::from_u128(11), Uuid::from_u128(12)],
+    );
+    let encoded = encode_cache_projection_supplement(&status_supplement).unwrap();
+    assert_eq!(
+        encoded,
+        "Agxzb3VwLWZsYXQtdjM4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQBAAIQAAAAAAAAAAAAAAAAAAAACxAAAAAAAAAAAAAAAAAAAAAM"
+    );
+    assert_eq!(
+        decode_cache_projection_supplement(&encoded).unwrap(),
+        status_supplement
+    );
 }
 
 #[test]

@@ -18,6 +18,21 @@
         "status_option_ids": []
       },
       "expected_base64": "Agxzb3VwLWZsYXQtdjM4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQAAQA"
+    },
+    {
+      "name": "document-attachment-unimportant-with-statuses",
+      "capsule": {
+        "target_profile": "soup-flat-v3",
+        "record_key": "GraphqlSoupDocument:00000000-0000-0000-0000-000000000001",
+        "partition": "document",
+        "is_email_attachment": true,
+        "is_important": false,
+        "status_option_ids": [
+          "00000000-0000-0000-0000-00000000000b",
+          "00000000-0000-0000-0000-00000000000c"
+        ]
+      },
+      "expected_base64": "Agxzb3VwLWZsYXQtdjM4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQBAAIQAAAAAAAAAAAAAAAAAAAACxAAAAAAAAAAAAAAAAAAAAAM"
     }
   ]
 }
