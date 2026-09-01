@@ -2,7 +2,10 @@
 mod test;
 
 use analytics_client::{MetaActionSource, MetaUserData};
+use std::{collections::HashSet, future::Future};
+
 use anyhow::Context;
+use authentication_service::service::signup_policy::{SignupOrigin, SignupPolicy};
 use axum::{
     extract::{self, State},
     http::StatusCode,
@@ -12,7 +15,10 @@ use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use rand::Rng;
 
 use crate::{
-    api::context::{ApiContext, AuthorizationService},
+    api::{
+        context::{ApiContext, AuthorizationService},
+        signup_policy::{signup_forbidden_response, signup_origin_from_fusionauth_user_data},
+    },
     rate_limit_config::RATE_LIMIT_CONFIG,
 };
 use authentication_service::service::user::create_user::create_user;
@@ -29,7 +35,6 @@ use macro_user_id::{
 };
 use model::authentication::webhooks::{FusionAuthUserWebhook, User as FusionAuthWebhookUser};
 use model_entity::EntityType;
-use std::collections::HashSet;
 use teams::domain::team_repo::TeamService;
 
 /// Macro support team members added to every new user's support channel.
@@ -88,10 +93,11 @@ pub async fn handler(
             })?;
         }
         "user.create" => {
-            create_user_webhook(&ctx, req).await.map_err(|e| {
-                tracing::error!(error=?e, "unable to user.create");
-                (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
-            })?;
+            dispatch_user_create_webhook(&ctx.signup_policy, req, |req| {
+                create_user_webhook(&ctx, req)
+            })
+            .await
+            .map_err(user_create_webhook_error_response)?;
         }
         "user.email.verified" => {
             verify_user_email_webhook(&ctx, req).await.map_err(|e| {
@@ -106,6 +112,48 @@ pub async fn handler(
     }
 
     Ok(StatusCode::OK.into_response())
+}
+
+enum UserCreateWebhookError {
+    Forbidden,
+    Onboarding(anyhow::Error),
+}
+
+fn user_create_webhook_error_response(error: UserCreateWebhookError) -> Response {
+    match error {
+        UserCreateWebhookError::Forbidden => signup_forbidden_response(),
+        UserCreateWebhookError::Onboarding(e) => {
+            tracing::error!(error=?e, "unable to user.create");
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        }
+    }
+}
+
+async fn dispatch_user_create_webhook<F, Fut>(
+    signup_policy: &SignupPolicy,
+    req: FusionAuthUserWebhook,
+    onboard_user: F,
+) -> Result<(), UserCreateWebhookError>
+where
+    F: FnOnce(FusionAuthUserWebhook) -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
+    let origin = signup_origin_from_fusionauth_user_data(
+        req.event.user.email.clone(),
+        req.event.user.data.as_ref(),
+    );
+
+    signup_policy
+        .authorize_origin(&origin)
+        .map_err(|_| UserCreateWebhookError::Forbidden)?;
+
+    if origin == SignupOrigin::SharedMailbox {
+        return Ok(());
+    }
+
+    onboard_user(req)
+        .await
+        .map_err(UserCreateWebhookError::Onboarding)
 }
 
 #[tracing::instrument(skip(ctx, req), err)]
