@@ -5,16 +5,16 @@ use model_file_type::FileType;
 use predicate_index::{ExactFact, IndexDocument, IntegerFact, Token, ValidationError};
 use thiserror::Error;
 
-/// Semantic validation failure for one complete `soup-flat-v2` document.
+/// Semantic validation failure for one complete versioned Soup document.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ProfileValidationError {
     /// Generic storage-neutral document bounds were violated.
     #[error(transparent)]
     Generic(#[from] ValidationError),
-    /// The complete document declares a profile other than `soup-flat-v2`.
+    /// The complete document declares a profile other than the expected version.
     #[error("unsupported Soup projection profile `{0}`")]
     UnsupportedProfile(String),
-    /// The complete document declares a partition outside the v2 profile.
+    /// The complete document declares a partition outside the supported profiles.
     #[error("unsupported Soup projection partition `{0}`")]
     UnsupportedPartition(String),
     /// A fact attribute is not allowed for this partition and profile.
@@ -32,8 +32,17 @@ pub enum ProfileValidationError {
     #[error("duplicate Soup projection fact `{0}`")]
     Duplicate(&'static str),
     /// A fact uses a malformed canonical value.
-    #[error("invalid canonical value for Soup projection fact `{0}`")]
+    #[error("invalid canonical value for Soup projection fact `{0}")]
     InvalidValue(&'static str),
+    /// A multi-valued fact exceeds its profile-specific bound.
+    #[error("too many values for Soup projection fact `{0}")]
+    TooManyValues(&'static str),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ProfileVersion {
+    V2,
+    V3,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -46,8 +55,25 @@ enum PartitionKind {
 /// Validate strict Soup-specific completeness and canonical value semantics for
 /// one composed `soup-flat-v2` index document.
 pub fn validate_soup_flat_v2(document: &IndexDocument) -> Result<(), ProfileValidationError> {
+    validate_soup_flat(document, ProfileVersion::V2)
+}
+
+/// Validate strict Soup-specific completeness and canonical value semantics for
+/// one composed `soup-flat-v3` index document.
+pub fn validate_soup_flat_v3(document: &IndexDocument) -> Result<(), ProfileValidationError> {
+    validate_soup_flat(document, ProfileVersion::V3)
+}
+
+fn validate_soup_flat(
+    document: &IndexDocument,
+    version: ProfileVersion,
+) -> Result<(), ProfileValidationError> {
     document.validate()?;
-    if document.profile != vocabulary::profile_v2() {
+    let expected_profile = match version {
+        ProfileVersion::V2 => vocabulary::profile_v2(),
+        ProfileVersion::V3 => vocabulary::profile_v3(),
+    };
+    if document.profile != expected_profile {
         return Err(ProfileValidationError::UnsupportedProfile(
             document.profile.token().as_str().to_owned(),
         ));
@@ -65,13 +91,14 @@ pub fn validate_soup_flat_v2(document: &IndexDocument) -> Result<(), ProfileVali
         ));
     };
 
-    validate_exact_facts(kind, &document.exact_facts)?;
+    validate_exact_facts(version, kind, &document.exact_facts)?;
     validate_integer_family("integer", &document.integer_facts)?;
     validate_integer_family("sort", &document.sort_facts)?;
     Ok(())
 }
 
 fn validate_exact_facts(
+    version: ProfileVersion,
     kind: PartitionKind,
     facts: &[ExactFact],
 ) -> Result<(), ProfileValidationError> {
@@ -81,6 +108,8 @@ fn validate_exact_facts(
     let mut file_type = 0;
     let mut sub_type = 0;
     let mut email_attachment = 0;
+    let mut importance = 0;
+    let mut status_options = 0;
 
     for fact in facts {
         let attribute = &fact.attribute;
@@ -117,6 +146,22 @@ fn validate_exact_facts(
             if !matches!(value, [0] | [1]) {
                 return Err(ProfileValidationError::InvalidValue("email-attachment"));
             }
+        } else if version == ProfileVersion::V3
+            && attribute == &vocabulary::importance()
+            && kind == PartitionKind::Document
+        {
+            importance += 1;
+            if !matches!(value, [0] | [1]) {
+                return Err(ProfileValidationError::InvalidValue("importance"));
+            }
+        } else if version == ProfileVersion::V3
+            && attribute == &vocabulary::task_status_option()
+            && kind == PartitionKind::Document
+        {
+            status_options += 1;
+            if value.len() != 16 {
+                return Err(ProfileValidationError::InvalidValue("task-status-option"));
+            }
         } else {
             return Err(unexpected("exact", attribute));
         }
@@ -128,7 +173,15 @@ fn validate_exact_facts(
     allow_at_most_one("file-type", file_type)?;
     allow_at_most_one("document-sub-type", sub_type)?;
     match kind {
-        PartitionKind::Document => require_one("email-attachment", email_attachment)?,
+        PartitionKind::Document => {
+            require_one("email-attachment", email_attachment)?;
+            if version == ProfileVersion::V3 {
+                require_one("importance", importance)?;
+                if status_options > crate::MAX_TASK_STATUS_OPTION_IDS {
+                    return Err(ProfileValidationError::TooManyValues("task-status-option"));
+                }
+            }
+        }
         PartitionKind::Project | PartitionKind::Chat if email_attachment != 0 => {
             return Err(ProfileValidationError::UnexpectedAttribute {
                 family: "exact",

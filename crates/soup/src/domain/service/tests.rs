@@ -2635,6 +2635,8 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
                         )),
                         document_server_facts: Some(SoupDocumentServerFacts {
                             is_email_attachment: false,
+                            is_important: true,
+                            status_option_ids: Vec::new(),
                         }),
                     },
                     SoupProjectionHydration {
@@ -2644,6 +2646,8 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
                         )),
                         document_server_facts: Some(SoupDocumentServerFacts {
                             is_email_attachment: true,
+                            is_important: true,
+                            status_option_ids: Vec::new(),
                         }),
                     },
                 ])
@@ -2685,12 +2689,16 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
         page.items[0].document_server_facts,
         Some(SoupDocumentServerFacts {
             is_email_attachment: true,
+            is_important: true,
+            status_option_ids: Vec::new(),
         })
     );
     assert_eq!(
         page.items[1].document_server_facts,
         Some(SoupDocumentServerFacts {
             is_email_attachment: false,
+            is_important: true,
+            status_option_ids: Vec::new(),
         })
     );
 }

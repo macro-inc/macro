@@ -31,6 +31,7 @@ async fn expanded_generic_cursor_soup_hydrated(
     let cursor_id = cursor_id.as_ref().map(|u| u.to_string());
 
     let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let items: Vec<SoupProjectionHydration> = sqlx::query!(
@@ -151,6 +152,25 @@ r#"
                     FROM document_email de
                     WHERE de.document_id = d.id
                 ) as "is_email_attachment!",
+                (
+                    dt.sub_type IS DISTINCT FROM 'task'
+                    OR EXISTS (
+                        SELECT 1
+                        FROM entity_properties ep_assignees
+                        WHERE ep_assignees.entity_id = d.id
+                            AND ep_assignees.entity_type = 'TASK'
+                            AND ep_assignees.property_definition_id = $8
+                            AND ep_assignees.values->'value' @> jsonb_build_array(
+                                jsonb_build_object('entity_id', $1)
+                            )
+                    )
+                ) as "is_important!",
+                ARRAY(
+                    SELECT status_option_id::uuid
+                    FROM jsonb_array_elements_text(
+                        COALESCE(ep_status.values->'value', '[]'::jsonb)
+                    ) AS status_option_id
+                ) as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 t.sort_ts as "sort_ts!",
                 -- Task completion status: check if status property matches "completed"
@@ -209,6 +229,8 @@ r#"
                 NULL as "sha",
                 NULL as "sub_type",
                 false as "is_email_attachment!",
+                true as "is_important!",
+                ARRAY[]::uuid[] as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 t.sort_ts as "sort_ts!",
                 NULL as "is_completed",
@@ -238,6 +260,8 @@ r#"
                 NULL as "sha",
                 NULL as "sub_type",
                 false as "is_email_attachment!",
+                true as "is_important!",
+                ARRAY[]::uuid[] as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 t.sort_ts as "sort_ts!",
                 NULL as "is_completed",
@@ -261,6 +285,7 @@ r#"
         cursor_id,           // $5
         completed_option_id, // $6
         status_property_id,  // $7
+        assignees_property_id, // $8
     )
         .try_map(map_soup_projection_hydration!())
         .fetch_all(db)
@@ -314,6 +339,7 @@ async fn no_frecency_expanded_generic_soup_hydrated(
     let cursor_id = cursor_id.as_ref().map(|u| u.to_string());
 
     let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let items: Vec<SoupProjectionHydration> = sqlx::query!(
@@ -356,6 +382,25 @@ r#"
                     FROM document_email de
                     WHERE de.document_id = d.id
                 ) as "is_email_attachment!",
+                (
+                    dt.sub_type IS DISTINCT FROM 'task'
+                    OR EXISTS (
+                        SELECT 1
+                        FROM entity_properties ep_assignees
+                        WHERE ep_assignees.entity_id = d.id
+                            AND ep_assignees.entity_type = 'TASK'
+                            AND ep_assignees.property_definition_id = $8
+                            AND ep_assignees.values->'value' @> jsonb_build_array(
+                                jsonb_build_object('entity_id', $1)
+                            )
+                    )
+                ) as "is_important!",
+                ARRAY(
+                    SELECT status_option_id::uuid
+                    FROM jsonb_array_elements_text(
+                        COALESCE(ep_status.values->'value', '[]'::jsonb)
+                    ) AS status_option_id
+                ) as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
@@ -417,6 +462,8 @@ r#"
                 NULL as "sha",
                 NULL as "sub_type",
                 false as "is_email_attachment!",
+                true as "is_important!",
+                ARRAY[]::uuid[] as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
@@ -450,6 +497,8 @@ r#"
                 NULL as "sha",
                 NULL as "sub_type",
                 false as "is_email_attachment!",
+                true as "is_important!",
+                ARRAY[]::uuid[] as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
@@ -490,6 +539,7 @@ r#"
         cursor_id,           // $5
         completed_option_id, // $6
         status_property_id,  // $7
+        assignees_property_id, // $8
     )
         .try_map(map_soup_projection_hydration!())
         .fetch_all(db)

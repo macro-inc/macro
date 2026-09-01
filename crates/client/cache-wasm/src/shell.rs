@@ -973,7 +973,7 @@ impl CacheEngine {
         })
     }
 
-    /// Evaluates one exact `soup-flat-v2` GraphQL filter request.
+    /// Evaluates one exact current-profile GraphQL Soup filter request.
     #[wasm_bindgen(js_name = entityFilter)]
     pub fn entity_filter(&self, request: JsValue) -> js_sys::Promise {
         let state = self.state.clone();

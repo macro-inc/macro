@@ -29,6 +29,7 @@ use models_soup::item::SoupItem;
 use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashSet;
 use std::sync::Arc;
+use system_properties::StatusOption;
 use uuid::Uuid;
 
 macro_rules! unwrap_enum {
@@ -5462,7 +5463,7 @@ async fn production_documents_presets_have_authoritative_membership(
     ),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn projection_hydration_carries_attachment_state_from_flat_and_by_id_rows(
+async fn projection_hydration_carries_viewer_relative_facts_from_flat_and_by_id_rows(
     db: PgPool,
 ) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
@@ -5478,41 +5479,71 @@ async fn projection_hydration_carries_attachment_state_from_flat_and_by_id_rows(
     .await?;
 
     let attachment_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let unimportant_task_id = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
     let ordinary_id = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?;
     let attachment_facts = flat
         .iter()
         .find(|hydration| hydration.item.id() == attachment_id)
-        .and_then(|hydration| hydration.document_server_facts)
+        .and_then(|hydration| hydration.document_server_facts.clone())
         .expect("attachment document server facts are hydrated");
+    let unimportant_task_facts = flat
+        .iter()
+        .find(|hydration| hydration.item.id() == unimportant_task_id)
+        .and_then(|hydration| hydration.document_server_facts.clone())
+        .expect("unimportant task server facts are hydrated");
     let ordinary_facts = flat
         .iter()
         .find(|hydration| hydration.item.id() == ordinary_id)
-        .and_then(|hydration| hydration.document_server_facts)
+        .and_then(|hydration| hydration.document_server_facts.clone())
         .expect("ordinary document server facts are hydrated");
     assert_eq!(
         attachment_facts,
         SoupDocumentServerFacts {
             is_email_attachment: true,
+            is_important: true,
+            status_option_ids: vec![StatusOption::NOT_STARTED_UUID],
+        }
+    );
+    assert_eq!(
+        unimportant_task_facts,
+        SoupDocumentServerFacts {
+            is_email_attachment: true,
+            is_important: false,
+            status_option_ids: vec![StatusOption::IN_PROGRESS_UUID],
         }
     );
     assert_eq!(
         ordinary_facts,
         SoupDocumentServerFacts {
             is_email_attachment: false,
+            is_important: true,
+            status_option_ids: Vec::new(),
         }
     );
 
     let entities = [
         EntityType::Document.with_entity_string(attachment_id.to_string()),
+        EntityType::Document.with_entity_string(unimportant_task_id.to_string()),
         EntityType::Document.with_entity_string(ordinary_id.to_string()),
     ];
     let by_id = expanded_soup_by_ids_with_projection(&db, user_id, &entities).await?;
-    assert_eq!(by_id.len(), 2);
+    assert_eq!(by_id.len(), 3);
     assert!(by_id.iter().any(|hydration| {
         hydration.item.id() == attachment_id
             && hydration.document_server_facts
                 == Some(SoupDocumentServerFacts {
                     is_email_attachment: true,
+                    is_important: true,
+                    status_option_ids: vec![StatusOption::NOT_STARTED_UUID],
+                })
+    }));
+    assert!(by_id.iter().any(|hydration| {
+        hydration.item.id() == unimportant_task_id
+            && hydration.document_server_facts
+                == Some(SoupDocumentServerFacts {
+                    is_email_attachment: true,
+                    is_important: false,
+                    status_option_ids: vec![StatusOption::IN_PROGRESS_UUID],
                 })
     }));
     assert!(by_id.iter().any(|hydration| {
@@ -5520,6 +5551,8 @@ async fn projection_hydration_carries_attachment_state_from_flat_and_by_id_rows(
             && hydration.document_server_facts
                 == Some(SoupDocumentServerFacts {
                     is_email_attachment: false,
+                    is_important: true,
+                    status_option_ids: Vec::new(),
                 })
     }));
 

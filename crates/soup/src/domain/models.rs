@@ -1034,10 +1034,19 @@ fn reminder_or_is_sets_only(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilt
 /// This value is internal hydration state. It is deliberately separate from
 /// public Soup entity models so relation-backed facts do not become business
 /// fields on [`models_soup::document::SoupDocument`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoupDocumentServerFacts {
     /// Whether `document_email` contains a row for the document.
     pub is_email_attachment: bool,
+    /// Whether the document is important to the requesting viewer.
+    ///
+    /// Non-task documents are important. Tasks are important when the viewer
+    /// appears in the authoritative Assignees system property.
+    pub is_important: bool,
+    /// Complete authoritative Status select-option IDs for a task.
+    ///
+    /// Non-task documents and tasks without a Status value carry an empty set.
+    pub status_option_ids: Vec<uuid::Uuid>,
 }
 
 /// An authorized Soup item and any server-only facts read by the same
