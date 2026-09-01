@@ -59,18 +59,32 @@ fn filter(events: &[&str]) -> WebhookFilters {
     }]
 }
 
-/// Access service granting view access to a fixed entity id set.
+/// Access service granting explicit accessor membership to a fixed entity id set.
 #[derive(Clone)]
 struct FakeAccessService {
-    allowed_entity_ids: Vec<String>,
-    call_count: Arc<Mutex<usize>>,
+    accessor_entity_ids: Vec<String>,
+    /// Entity ids `get_access_level` would treat as View (e.g. PUBLIC link-share).
+    link_share_entity_ids: Vec<String>,
+    users_by_entity_calls: Arc<Mutex<usize>>,
+    access_level_calls: Arc<Mutex<usize>>,
 }
 
 impl FakeAccessService {
     fn allowing(entity_ids: &[&str]) -> Self {
         Self {
-            allowed_entity_ids: entity_ids.iter().map(|id| id.to_string()).collect(),
-            call_count: Arc::default(),
+            accessor_entity_ids: entity_ids.iter().map(|id| id.to_string()).collect(),
+            link_share_entity_ids: Vec::new(),
+            users_by_entity_calls: Arc::default(),
+            access_level_calls: Arc::default(),
+        }
+    }
+
+    fn link_share_only(entity_ids: &[&str]) -> Self {
+        Self {
+            accessor_entity_ids: Vec::new(),
+            link_share_entity_ids: entity_ids.iter().map(|id| id.to_string()).collect(),
+            users_by_entity_calls: Arc::default(),
+            access_level_calls: Arc::default(),
         }
     }
 }
@@ -102,10 +116,11 @@ impl EntityAccessService for FakeAccessService {
         entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        *self.call_count.lock().unwrap() += 1;
+        *self.access_level_calls.lock().unwrap() += 1;
         Ok(self
-            .allowed_entity_ids
+            .accessor_entity_ids
             .iter()
+            .chain(self.link_share_entity_ids.iter())
             .any(|allowed| allowed == entity_id)
             .then_some(AccessLevel::View))
     }
@@ -150,10 +165,24 @@ impl EntityAccessService for FakeAccessService {
 
     async fn get_users_by_entity(
         &self,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        unimplemented!("not used by webhook event streaming")
+        *self.users_by_entity_calls.lock().unwrap() += 1;
+        if entity_type == EntityType::AgentSession {
+            return Err(AccessError::BadRequest(
+                "get_users_by_entity does not support this entity type",
+            ));
+        }
+        if self
+            .accessor_entity_ids
+            .iter()
+            .any(|allowed| allowed == entity_id)
+        {
+            Ok(vec![subscriber()])
+        } else {
+            Ok(vec![])
+        }
     }
 
     async fn get_call_channel(
@@ -180,7 +209,16 @@ impl EntityAccessService for FakeAccessService {
 
 #[derive(Clone)]
 struct FakeWorkspaceResolver {
-    workspace_ids: Vec<String>,
+    /// Highest-role team, matching `get_user_team_workspace_id`.
+    team_workspace_id: Arc<Mutex<Option<String>>>,
+}
+
+impl FakeWorkspaceResolver {
+    fn with_team(team_workspace_id: Option<String>) -> Self {
+        Self {
+            team_workspace_id: Arc::new(Mutex::new(team_workspace_id)),
+        }
+    }
 }
 
 impl WebhookWorkspaceResolver for FakeWorkspaceResolver {
@@ -188,30 +226,41 @@ impl WebhookWorkspaceResolver for FakeWorkspaceResolver {
 
     async fn resolve_workspace_ids(
         &self,
-        _people: Vec<MacroUserIdStr<'static>>,
+        people: Vec<MacroUserIdStr<'static>>,
     ) -> Result<Vec<String>, Self::Err> {
-        Ok(self.workspace_ids.clone())
+        let mut ids: Vec<String> = people
+            .iter()
+            .map(|person| person.as_ref().to_string())
+            .collect();
+        if let Some(team) = self.team_workspace_id.lock().unwrap().clone() {
+            ids.push(team);
+        }
+        Ok(ids)
+    }
+
+    async fn get_user_team_workspace_id(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(self.team_workspace_id.lock().unwrap().clone())
     }
 }
 
 type TestService = WebhookEventStreamServiceImpl<FakeAccessService, FakeWorkspaceResolver>;
 
 fn service(access: FakeAccessService) -> (TestService, broadcast::Sender<StreamCandidateEvent>) {
-    service_with_workspaces(
-        access,
-        vec![SUBSCRIBER_ID.to_string(), TEAM_WORKSPACE_ID.to_string()],
-    )
+    service_with_team(access, Some(TEAM_WORKSPACE_ID.to_string()))
 }
 
-fn service_with_workspaces(
+fn service_with_team(
     access: FakeAccessService,
-    workspace_ids: Vec<String>,
+    team_workspace_id: Option<String>,
 ) -> (TestService, broadcast::Sender<StreamCandidateEvent>) {
     let (sender, _) = broadcast::channel(16);
     let service = WebhookEventStreamServiceImpl::new(
         sender.clone(),
         Arc::new(access),
-        FakeWorkspaceResolver { workspace_ids },
+        FakeWorkspaceResolver::with_team(team_workspace_id),
     );
     (service, sender)
 }
@@ -269,10 +318,7 @@ async fn open_stream_delivers_only_matching_accessible_events() {
 
 #[tokio::test]
 async fn team_scope_requires_team_membership() {
-    let (service, _) = service_with_workspaces(
-        FakeAccessService::allowing(&[]),
-        vec![SUBSCRIBER_ID.to_string()],
-    );
+    let (service, _) = service_with_team(FakeAccessService::allowing(&[]), None);
 
     let Err(error) = service
         .open_stream(
@@ -296,7 +342,7 @@ async fn open_stream_checks_access_for_each_matching_event() {
         document_candidate("document.updated", DOCUMENT_ID),
     ];
     let access = FakeAccessService::allowing(&[DOCUMENT_ID]);
-    let call_count = access.call_count.clone();
+    let call_count = access.users_by_entity_calls.clone();
     let (service, sender) = service(access);
 
     let stream = service
@@ -351,9 +397,7 @@ async fn lagged_stream_skips_missed_events_and_continues() {
     let service = WebhookEventStreamServiceImpl::new(
         sender.clone(),
         Arc::new(FakeAccessService::allowing(&[DOCUMENT_ID])),
-        FakeWorkspaceResolver {
-            workspace_ids: vec![SUBSCRIBER_ID.to_string(), TEAM_WORKSPACE_ID.to_string()],
-        },
+        FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string())),
     );
     let mut stream = service
         .open_stream(
@@ -377,4 +421,116 @@ async fn lagged_stream_skips_missed_events_and_continues() {
     let delivered = stream.next().await.expect("stream continues after lag");
     assert_ne!(delivered.event_id, latest_id);
     assert_eq!(stream.next().await.unwrap().event_id, latest_id);
+}
+
+#[tokio::test]
+async fn open_stream_does_not_deliver_link_share_only_entities() {
+    let (service, sender) = service(FakeAccessService::link_share_only(&[DOCUMENT_ID]));
+
+    let stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            filter(&["document.updated"]),
+        )
+        .await
+        .expect("stream opens");
+    sender
+        .send(document_candidate("document.updated", DOCUMENT_ID))
+        .unwrap();
+    sender
+        .send(workspace_candidate("document.updated", SUBSCRIBER_ID))
+        .unwrap();
+
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
+    assert_eq!(
+        delivered
+            .iter()
+            .map(|event| event.entity_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["wh_test"]
+    );
+}
+
+#[tokio::test]
+async fn team_scope_uses_highest_role_team_not_first_resolved_workspace() {
+    // Highest-role team is FOREIGN; TEAM would sort first by team_id text.
+    let (service, sender) = service_with_team(
+        FakeAccessService::allowing(&[]),
+        Some(FOREIGN_WORKSPACE_ID.to_string()),
+    );
+
+    let stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::Team,
+            filter(&["webhook.created"]),
+        )
+        .await
+        .expect("stream opens");
+    sender
+        .send(workspace_candidate("webhook.created", TEAM_WORKSPACE_ID))
+        .unwrap();
+    sender
+        .send(workspace_candidate("webhook.created", FOREIGN_WORKSPACE_ID))
+        .unwrap();
+
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
+    assert_eq!(delivered.len(), 1);
+}
+
+#[tokio::test]
+async fn team_membership_revocation_ends_the_stream() {
+    let resolver = FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string()));
+    let (sender, _) = broadcast::channel(16);
+    let service = WebhookEventStreamServiceImpl::new(
+        sender.clone(),
+        Arc::new(FakeAccessService::allowing(&[])),
+        resolver.clone(),
+    );
+    let mut stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::Team,
+            filter(&["webhook.created"]),
+        )
+        .await
+        .expect("stream opens");
+
+    *resolver.team_workspace_id.lock().unwrap() = None;
+    sender
+        .send(workspace_candidate("webhook.created", TEAM_WORKSPACE_ID))
+        .unwrap();
+
+    assert!(stream.next().await.is_none());
+}
+
+#[tokio::test]
+async fn agent_session_events_fall_back_to_access_level() {
+    const SESSION_ID: &str = "55555555-5555-5555-5555-555555555555";
+    let access = FakeAccessService::allowing(&[SESSION_ID]);
+    let access_level_calls = access.access_level_calls.clone();
+    let (service, sender) = service(access);
+
+    let stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            filter(&["agent_trigger.existing"]),
+        )
+        .await
+        .expect("stream opens");
+    sender
+        .send(StreamCandidateEvent {
+            event: normalized("agent_trigger.existing", SESSION_ID),
+            audience: StreamAudience::Entity {
+                entity_id: SESSION_ID.to_string(),
+                entity_type: EntityType::AgentSession,
+            },
+        })
+        .unwrap();
+
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
+    assert_eq!(delivered[0].entity_id, SESSION_ID);
+    assert_eq!(*access_level_calls.lock().unwrap(), 1);
 }

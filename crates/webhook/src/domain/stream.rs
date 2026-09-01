@@ -4,8 +4,10 @@
 //! in `crate::inbound::stream_router`. Unlike ingestion — which matches
 //! persisted webhook subscriptions and enqueues durable deliveries — a stream
 //! is ephemeral: the caller supplies [`WebhookFilters`] on the request, each
-//! candidate event is checked against the caller's own entity access, and
-//! nothing is persisted.
+//! candidate event is checked against the same accessor set persisted
+//! webhooks fan out to (`get_users_by_entity`), and nothing is persisted.
+//! Team-scoped workspace events use `get_user_team_workspace_id` and
+//! re-check membership per event.
 //!
 //! Delivery is best-effort through a process-local broadcast channel. Slow or
 //! disconnected subscribers may miss events and must resync out of band when
@@ -16,7 +18,7 @@ mod test;
 
 use crate::domain::models::{NormalizedWebhookEvent, WebhookFilters, WebhookScope};
 use crate::domain::ports::WebhookWorkspaceResolver;
-use entity_access::domain::models::EntityType;
+use entity_access::domain::models::{AccessError, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use futures::StreamExt as _;
 use futures::stream::BoxStream;
@@ -121,18 +123,38 @@ impl<A, R> WebhookEventStreamServiceImpl<A, R> {
 }
 
 /// Owned per-stream state advanced by the unfold loop.
-struct StreamState<A> {
+struct StreamState<A, R> {
     receiver: broadcast::Receiver<StreamCandidateEvent>,
     entity_access_service: Arc<A>,
+    workspace_resolver: R,
     subscriber: MacroUserIdStr<'static>,
-    workspace_id: String,
+    scope: WebhookScope,
     filters: WebhookFilters,
 }
 
-impl<A> StreamState<A>
+impl<A, R> StreamState<A, R>
 where
     A: EntityAccessService,
+    R: WebhookWorkspaceResolver,
 {
+    /// The workspace this stream currently represents for webhook.* events.
+    ///
+    /// Re-resolved per event so a revoked team membership cannot keep
+    /// receiving workspace lifecycle payloads on a held connection.
+    async fn scoped_workspace_id(&self) -> Result<Option<String>, rootcause::Report> {
+        match self.scope {
+            WebhookScope::User => Ok(Some(self.subscriber.as_ref().to_string())),
+            WebhookScope::Team => self
+                .workspace_resolver
+                .get_user_team_workspace_id(self.subscriber.clone())
+                .await
+                .map_err(|error| {
+                    let error: anyhow::Error = error.into();
+                    rootcause::report!("failed to resolve subscriber team workspace: {error:?}")
+                }),
+        }
+    }
+
     /// Whether the subscriber may see an event with this audience.
     async fn subscriber_in_audience(
         &mut self,
@@ -140,17 +162,42 @@ where
     ) -> Result<bool, rootcause::Report> {
         match audience {
             StreamAudience::Workspace { workspace_id } => {
-                Ok(self.workspace_id.as_str() == workspace_id.as_str())
+                let current = self.scoped_workspace_id().await?;
+                if self.scope == WebhookScope::Team && current.is_none() {
+                    return Err(rootcause::report!(
+                        "team-scoped stream lost team membership"
+                    ));
+                }
+                Ok(current.as_deref() == Some(workspace_id.as_str()))
             }
             StreamAudience::Entity {
                 entity_id,
                 entity_type,
-            } => Ok(self
-                .entity_access_service
-                .get_access_level(Some(&self.subscriber), entity_id, *entity_type)
-                .await
-                .map_err(|error| rootcause::report!(error))?
-                .is_some()),
+            } => {
+                // Same accessor set persisted webhooks fan out to. PUBLIC/TEAM
+                // link-share is View via `get_access_level` but is not an
+                // accessor, so it must not open the live firehose.
+                match self
+                    .entity_access_service
+                    .get_users_by_entity(entity_id, *entity_type)
+                    .await
+                {
+                    Ok(accessors) => Ok(accessors
+                        .iter()
+                        .any(|user| user.as_ref() == self.subscriber.as_ref())),
+                    // Agent sessions (and other non-fanout types) have no
+                    // accessor expansion. Fall back to the subscriber's own
+                    // access level so existing-session triggers still reach
+                    // an authorized listener.
+                    Err(AccessError::BadRequest(_)) => Ok(self
+                        .entity_access_service
+                        .get_access_level(Some(&self.subscriber), entity_id, *entity_type)
+                        .await
+                        .map_err(|error| rootcause::report!(error).into_dynamic())?
+                        .is_some()),
+                    Err(error) => Err(rootcause::report!(error).into_dynamic()),
+                }
+            }
         }
     }
 
@@ -213,32 +260,30 @@ where
     ) -> Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError> {
         validate_filters(&filters)?;
 
-        let workspace_id = match scope {
-            WebhookScope::User => subscriber.as_ref().to_string(),
-            WebhookScope::Team => self
+        if scope == WebhookScope::Team {
+            let team_workspace_id = self
                 .workspace_resolver
-                .resolve_workspace_ids(vec![subscriber.clone()])
+                .get_user_team_workspace_id(subscriber.clone())
                 .await
                 .map_err(|error| {
                     let error: anyhow::Error = error.into();
                     WebhookStreamError::Internal(rootcause::report!(
                         "failed to resolve subscriber team workspace: {error:?}"
                     ))
-                })?
-                .into_iter()
-                .find(|workspace_id| workspace_id != subscriber.as_ref())
-                .ok_or_else(|| {
-                    WebhookStreamError::BadRequest(
-                        "team scope requires the user to belong to a team".to_string(),
-                    )
-                })?,
-        };
+                })?;
+            if team_workspace_id.is_none() {
+                return Err(WebhookStreamError::BadRequest(
+                    "team scope requires the user to belong to a team".to_string(),
+                ));
+            }
+        }
 
         let state = StreamState {
             receiver: self.sender.subscribe(),
             entity_access_service: self.entity_access_service.clone(),
+            workspace_resolver: self.workspace_resolver.clone(),
             subscriber,
-            workspace_id,
+            scope,
             filters,
         };
         Ok(futures::stream::unfold(state, |mut state| async move {
