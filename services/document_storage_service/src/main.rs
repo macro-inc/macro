@@ -753,9 +753,10 @@ async fn run() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
-    let webhook_stream_hub = webhook::outbound::WebhookStreamHub::new();
+    let (webhook_stream_sender, _) =
+        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
     let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
-        webhook_stream_hub.clone(),
+        webhook_stream_sender.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
     );
@@ -765,7 +766,7 @@ async fn run() -> anyhow::Result<()> {
     );
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
-        let hub = webhook_stream_hub;
+        let sender = webhook_stream_sender;
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
@@ -774,7 +775,7 @@ async fn run() -> anyhow::Result<()> {
                     _ = cancellation_token.cancelled() => break,
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
-                        &hub,
+                        &sender,
                     ) => result,
                 };
 
