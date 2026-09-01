@@ -29,6 +29,7 @@ const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
 const BACKFILL_RETRY_COUNT = 5;
 const BACKFILL_RETRY_SCHEDULE = Schedule.exponential('1 second');
+const CACHE_HOST_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000, 4_000];
 const BACKFILL_PROGRESS_PAGE_INTERVAL = 10;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -482,20 +483,37 @@ export function useSoupBackfills(userId: string): void {
   );
 
   createEffect(() => {
-    // Read reactive gates before the non-reactive cache-host lookup so a host
-    // that becomes available after flag loading or leader election is retried.
-    if (
-      !ENABLE_GRAPHQL_BACKFILL ||
-      !graphqlSoupFlag().enabled ||
-      !isLeader() ||
-      getGraphqlSoupCacheHost() === undefined
-    ) {
+    if (!ENABLE_GRAPHQL_BACKFILL || !graphqlSoupFlag().enabled || !isLeader()) {
       return;
     }
 
-    const fiber = Effect.runFork(runSoupBackfills(userId));
+    let disposed = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let interruptBackfill: (() => void) | undefined;
+    const startWhenCacheReady = (retryIndex: number): void => {
+      if (disposed) return;
+
+      if (getGraphqlSoupCacheHost() !== undefined) {
+        const fiber = Effect.runFork(runSoupBackfills(userId));
+        interruptBackfill = () => {
+          Effect.runFork(Fiber.interrupt(fiber));
+        };
+        return;
+      }
+
+      const retryDelay = CACHE_HOST_RETRY_DELAYS_MS[retryIndex];
+      if (retryDelay === undefined) return;
+      retryTimer = setTimeout(
+        () => startWhenCacheReady(retryIndex + 1),
+        retryDelay
+      );
+    };
+
+    startWhenCacheReady(0);
     onCleanup(() => {
-      Effect.runFork(Fiber.interrupt(fiber));
+      disposed = true;
+      if (retryTimer !== undefined) clearTimeout(retryTimer);
+      interruptBackfill?.();
     });
   });
 }

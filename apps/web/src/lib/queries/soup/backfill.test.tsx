@@ -213,9 +213,8 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
-  it('retries cache-host lookup after it was initially unavailable', async () => {
-    const [isLeader, setIsLeader] = createSignal(true);
-    leaderMocks.createTabLeaderSignal.mockReturnValue(isLeader);
+  it('starts when only the cache host becomes available', async () => {
+    vi.useFakeTimers();
     let cacheHost: object | undefined;
     graphqlMocks.getGraphqlSoupCacheHost.mockImplementation(() => cacheHost);
     graphqlMocks.hydrateGraphqlSoup.mockResolvedValue({ nextCursor: null });
@@ -225,12 +224,10 @@ describe('runSoupBackfills', () => {
     expect(graphqlMocks.hydrateGraphqlSoup).not.toHaveBeenCalled();
 
     cacheHost = {};
-    setIsLeader(false);
-    setIsLeader(true);
+    await vi.advanceTimersByTimeAsync(100);
 
-    await vi.waitFor(() =>
-      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled()
-    );
+    expect(graphqlMocks.getGraphqlSoupCacheHost).toHaveBeenCalledTimes(2);
+    expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled();
     rendered.unmount();
   });
 
