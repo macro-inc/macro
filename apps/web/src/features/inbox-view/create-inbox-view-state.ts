@@ -65,7 +65,6 @@ export function createInboxViewState(
       produce((draft) => {
         draft.tab = tab;
         draft.groupBy = defaultGroupBy(tab);
-        draft.facets = {};
       })
     );
   };
