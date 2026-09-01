@@ -8,19 +8,22 @@ use crate::parse::service_to_db::map_service_attachments_to_db;
 use models_email::db::attachment;
 use models_email::{db, service};
 use sqlx::types::Uuid;
-use sqlx::{Executor, PgPool, Pool, Postgres};
+use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashMap;
 
-/// inserts the metadata for attachments of an email into the database in a batch
+/// Inserts attachment metadata for a message.
+///
+/// Returns document ids whose last `document_email` row was removed because
+/// the provider no longer lists that attachment.
 #[tracing::instrument(skip(tx, attachments, message_id), err)]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn insert_attachments(
     tx: &mut sqlx::PgConnection,
     message_id: Uuid,
     attachments: &mut [service::attachment::Attachment],
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<String>> {
     if attachments.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     let db_attachments = map_service_attachments_to_db(attachments, message_id);
@@ -67,12 +70,18 @@ pub async fn insert_attachments(
         })
         .collect();
 
-    // delete orphaned attachments
-    if !orphaned_attachments.is_empty() {
+    let unlinked_document_ids = if orphaned_attachments.is_empty() {
+        Vec::new()
+    } else {
         let orphaned_ids: Vec<Uuid> = orphaned_attachments
             .iter()
             .map(|orphan| orphan.id)
             .collect();
+        let unlinked = crate::attachments::document_email::documents_losing_last_email_attachment(
+            &mut *tx,
+            &orphaned_ids,
+        )
+        .await?;
         sqlx::query!(
             r#"
             DELETE FROM email_attachments
@@ -82,7 +91,8 @@ pub async fn insert_attachments(
         )
         .execute(&mut *tx)
         .await?;
-    }
+        unlinked
+    };
 
     // The thread-level flag only moves when a calendar attachment enters or
     // leaves this message's attachment set.
@@ -95,7 +105,7 @@ pub async fn insert_attachments(
         if calendar_set_changed {
             sync_thread_calendar_flag(&mut *tx, message_id).await?;
         }
-        return Ok(());
+        return Ok(unlinked_document_ids);
     }
 
     let n = new_attachments.len();
@@ -150,7 +160,7 @@ pub async fn insert_attachments(
         sync_thread_calendar_flag(&mut *tx, message_id).await?;
     }
 
-    Ok(())
+    Ok(unlinked_document_ids)
 }
 
 /// Mirrors the SQL calendar-attachment predicate behind the CalendarOnly
@@ -218,10 +228,16 @@ pub async fn fetch_db_attachments_in_bulk(
 
 // deletes all attachments of a given message
 #[tracing::instrument(skip(executor), err)]
-pub async fn delete_message_attachments<'e, E>(executor: E, message_id: Uuid) -> anyhow::Result<()>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+pub async fn delete_message_attachments(
+    executor: &mut sqlx::PgConnection,
+    message_id: Uuid,
+) -> anyhow::Result<Vec<String>> {
+    let unlinked =
+        crate::attachments::document_email::documents_losing_last_email_attachment_for_messages(
+            &mut *executor,
+            &[message_id],
+        )
+        .await?;
     sqlx::query!(
         r#"DELETE FROM email_attachments WHERE message_id = $1"#,
         message_id
@@ -229,7 +245,7 @@ where
     .execute(executor)
     .await?;
 
-    Ok(())
+    Ok(unlinked)
 }
 
 #[tracing::instrument(skip(pool), err)]

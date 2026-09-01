@@ -34,7 +34,7 @@ pub async fn backfill_message(
     process_message_pre_insert(&mut message).await;
 
     // insert message into database
-    email_db_client::messages::insert::insert_message(
+    let unlinked_document_ids = email_db_client::messages::insert::insert_message(
         &ctx.db,
         p.thread_db_id,
         &mut message,
@@ -44,6 +44,10 @@ pub async fn backfill_message(
     )
     .await
     .map_err(|e| map_db_error(e, "Failed to insert final message into database"))?;
+    crate::pubsub::util::publish_document_email_attachment_unlinked(
+        &ctx.macro_event_broker,
+        unlinked_document_ids,
+    );
 
     // Fan out a PopulateCrmContact job per address involved in the
     // message — every non-draft message contributes, in both

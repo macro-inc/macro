@@ -5,9 +5,9 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 use super::{
-    DocumentContentUploadedMetadata, DocumentInteractionMetadata, DocumentMacroEvent,
-    DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata, DocumentTopicEvent,
-    InteractionReason,
+    DocumentContentUploadedMetadata, DocumentEmailAttachmentUnlinkedMetadata,
+    DocumentInteractionMetadata, DocumentMacroEvent, DocumentPurgedMetadata,
+    DocumentSyncContentUpdatedMetadata, DocumentTopicEvent, InteractionReason,
 };
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
@@ -76,6 +76,28 @@ fn sync_content_updated_serializes_to_the_exact_envelope() {
                 "document_id": DOCUMENT_ID,
                 "file_type": "md",
                 "document_version_id": null,
+            },
+        }),
+    );
+}
+
+#[test]
+fn email_attachment_unlinked_serializes_to_the_exact_envelope() {
+    let event = Event::with_event_id(
+        Uuid::from_u128(4),
+        DocumentTopicEvent::EmailAttachmentUnlinked(DocumentEmailAttachmentUnlinkedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        }),
+    );
+
+    assert_wire_round_trip(
+        event,
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000004",
+            "schema_version": 1,
+            "event_type": "document.email_attachment_unlinked",
+            "metadata": {
+                "document_id": DOCUMENT_ID,
             },
         }),
     );
@@ -181,6 +203,18 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
     assert_eq!(
         &purged.event().event,
         &DocumentTopicEvent::Purged(purged_metadata)
+    );
+
+    let unlinked_metadata = DocumentEmailAttachmentUnlinkedMetadata {
+        document_id: DOCUMENT_ID.to_string(),
+    };
+    let unlinked =
+        DocumentMacroEvent::email_attachment_unlinked(DOCUMENT_ID, unlinked_metadata.clone());
+    assert_eq!(unlinked.key(), DOCUMENT_ID);
+    assert_eq!(unlinked.event().schema_version, 1);
+    assert_eq!(
+        &unlinked.event().event,
+        &DocumentTopicEvent::EmailAttachmentUnlinked(unlinked_metadata)
     );
 }
 

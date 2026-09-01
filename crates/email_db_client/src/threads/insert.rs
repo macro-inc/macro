@@ -12,7 +12,7 @@ use sqlx::{PgConnection, PgPool};
 use std::collections::HashMap;
 
 /// inserts a thread and all of its messages into the database
-/// returns the db thread id
+/// returns the db thread id and documents orphaned off their last email attachment
 #[tracing::instrument(
     skip(pool, service_thread),
     fields(
@@ -25,7 +25,7 @@ pub async fn insert_thread_and_messages(
     pool: &PgPool,
     service_thread: thread::Thread,
     link_id: Uuid,
-) -> anyhow::Result<Uuid> {
+) -> anyhow::Result<(Uuid, Vec<String>)> {
     let mut recipient_map: HashMap<String, UpsertedRecipients> = HashMap::new();
 
     // we have to insert addresses before inserting the messages. these values are shared
@@ -48,18 +48,21 @@ pub async fn insert_thread_and_messages(
         let thread_id = insert_thread(&mut tx, &service_thread, link_id).await?;
 
         // Insert all messages
+        let mut unlinked_document_ids = Vec::new();
         for mut message in service_thread.messages.clone() {
             // can't be null bc we are getting the message from gmail api directly
             let provider_id = &message.provider_id.clone().unwrap();
-            messages::insert::insert_message_with_tx(
-                &mut tx,
-                thread_id,
-                &mut message,
-                link_id,
-                recipient_map.remove(provider_id).unwrap(),
-                false,
-            )
-            .await?;
+            unlinked_document_ids.extend(
+                messages::insert::insert_message_with_tx(
+                    &mut tx,
+                    thread_id,
+                    &mut message,
+                    link_id,
+                    recipient_map.remove(provider_id).unwrap(),
+                    false,
+                )
+                .await?,
+            );
         }
 
         // Now that messages have been inserted, we can set replying_to_ids of messages for threads
@@ -74,7 +77,7 @@ pub async fn insert_thread_and_messages(
         // must be synced here or new threads would stay noise.
         super::update::sync_thread_signal_flag(&mut tx, thread_id).await?;
 
-        Ok(thread_id)
+        Ok((thread_id, unlinked_document_ids))
     }
     .await;
 

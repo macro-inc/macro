@@ -3,13 +3,29 @@ use models_email::email::service::message;
 use sqlx::types::Uuid;
 use sqlx::{Executor, Postgres};
 
+/// Outcome of deleting a message. The document ids are those whose last
+/// `document_email` row cascaded away with this message's attachments.
+pub struct DeleteMessageOutcome {
+    /// Present when this was the last message in the thread.
+    pub deleted_thread_id: Option<Uuid>,
+    /// Documents that are no longer email attachments after this delete.
+    pub unlinked_document_ids: Vec<String>,
+}
+
 /// Deletes message from the database with transaction handling. Returns an optional db thread id
 /// if the thread was deleted
 #[tracing::instrument(skip(tx, message), fields(link_id = %message.link_id), err)]
 pub async fn delete_message_with_tx(
     tx: &mut sqlx::PgConnection,
     message: &message::SimpleMessage,
-) -> anyhow::Result<Option<Uuid>> {
+) -> anyhow::Result<DeleteMessageOutcome> {
+    let unlinked_document_ids =
+        crate::attachments::document_email::documents_losing_last_email_attachment_for_messages(
+            &mut *tx,
+            &[message.db_id],
+        )
+        .await?;
+
     // delete the message itself
     delete_db_message(&mut *tx, message.db_id).await?;
 
@@ -33,11 +49,10 @@ pub async fn delete_message_with_tx(
         threads::update::sync_thread_calendar_flag(&mut *tx, message.thread_db_id).await?;
     }
 
-    if deleted_thread {
-        Ok(Some(message.thread_db_id))
-    } else {
-        Ok(None)
-    }
+    Ok(DeleteMessageOutcome {
+        deleted_thread_id: deleted_thread.then_some(message.thread_db_id),
+        unlinked_document_ids,
+    })
 }
 
 #[tracing::instrument(skip(executor), err)]

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT de.document_id\n        FROM document_email de\n        WHERE de.email_attachment_id = ANY($1::uuid[])\n          AND NOT EXISTS (\n            SELECT 1\n            FROM document_email remaining\n            WHERE remaining.document_id = de.document_id\n              AND remaining.email_attachment_id <> ALL($1::uuid[])\n          )\n        ORDER BY de.document_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aeed3ce9ea54baf2d9ce8606c521f98464c85e56553638f59e20e77d9318f5bf"
+}

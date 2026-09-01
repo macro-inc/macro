@@ -87,6 +87,8 @@ impl ActivitySource for DocumentTopicEvent {
             DocumentTopicEvent::SyncContentUpdated(_) => Ingest::Ignore,
             // Session lifecycle (first join / last leave), no actor.
             DocumentTopicEvent::Interaction(_) => Ingest::Ignore,
+            // Soup-filter fact change from email attachment teardown, no actor.
+            DocumentTopicEvent::EmailAttachmentUnlinked(_) => Ingest::Ignore,
         }
     }
 }

@@ -565,14 +565,19 @@ async fn fetch_and_insert_thread(
 
     // insert threads into db
     for thread in threads.into_iter() {
-        threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to insert thread and messages".to_string()),
-                })
-            })?;
+        let (_thread_id, unlinked_document_ids) =
+            threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to insert thread and messages".to_string()),
+                    })
+                })?;
+        crate::pubsub::util::publish_document_email_attachment_unlinked(
+            &ctx.macro_event_broker,
+            unlinked_document_ids,
+        );
     }
 
     Ok(())
@@ -633,7 +638,7 @@ async fn process_and_insert_message(
 ) -> anyhow::Result<()> {
     process_message_pre_insert(message).await;
 
-    email_db_client::messages::insert::insert_message(
+    let unlinked_document_ids = email_db_client::messages::insert::insert_message(
         &ctx.db,
         thread_db_id,
         message,
@@ -647,6 +652,10 @@ async fn process_and_insert_message(
             source: e.context("Failed to insert messages".to_string()),
         })
     })?;
+    crate::pubsub::util::publish_document_email_attachment_unlinked(
+        &ctx.macro_event_broker,
+        unlinked_document_ids,
+    );
 
     Ok(())
 }

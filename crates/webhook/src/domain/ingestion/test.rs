@@ -23,8 +23,8 @@ use channels::domain::{
 use chrono::{DateTime, Utc};
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
-    DocumentDeletedMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata,
+    DocumentDeletedMetadata, DocumentEmailAttachmentUnlinkedMetadata, DocumentPurgedMetadata,
+    DocumentSyncContentUpdatedMetadata, DocumentUpdatedMetadata,
 };
 use entity_access::domain::models::{
     AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
@@ -545,6 +545,14 @@ fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicE
             Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
             })),
+        ),
+        (
+            "document.email_attachment_unlinked",
+            Event::new(DocumentTopicEvent::EmailAttachmentUnlinked(
+                DocumentEmailAttachmentUnlinkedMetadata {
+                    document_id: DOCUMENT_ID.to_string(),
+                },
+            )),
         ),
     ]
 }

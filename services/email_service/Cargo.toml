@@ -92,6 +92,7 @@ chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 crm = { path = "../../crates/crm" }
+documents = { path = "../../crates/documents", default-features = false }
 unfurl = { path = "../../crates/unfurl", features = ["outbound"] }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 doppleganger = { workspace = true }

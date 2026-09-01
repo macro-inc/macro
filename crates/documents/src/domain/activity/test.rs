@@ -10,8 +10,8 @@ use macro_event_broker::Event;
 use super::*;
 use crate::domain::events::{
     DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
-    DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentEmailAttachmentUnlinkedMetadata, DocumentInteractionMetadata, DocumentPurgedMetadata,
+    DocumentSyncContentUpdatedMetadata, DocumentUpdatedMetadata, InteractionReason,
 };
 
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
@@ -205,6 +205,13 @@ fn pipeline_and_session_events_are_ignored() {
         interaction.event.ingest(interaction.event_id),
         Ingest::Ignore
     );
+
+    let unlinked = envelope(DocumentTopicEvent::EmailAttachmentUnlinked(
+        DocumentEmailAttachmentUnlinkedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        },
+    ));
+    assert_eq!(unlinked.event.ingest(unlinked.event_id), Ingest::Ignore);
 }
 
 #[test]

@@ -143,6 +143,14 @@ pub struct DocumentInteractionMetadata {
     pub reason: InteractionReason,
 }
 
+/// Metadata for [`DocumentTopicEvent::EmailAttachmentUnlinked`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct DocumentEmailAttachmentUnlinkedMetadata {
+    /// The id of the document that lost its last `document_email` row.
+    pub document_id: String,
+}
+
 /// Metadata for [`DocumentTopicEvent::Copied`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -194,6 +202,10 @@ pub enum DocumentTopicEvent {
     /// A peer joined, left, or a periodic save occurred.
     #[serde(rename = "document.interaction")]
     Interaction(DocumentInteractionMetadata),
+    /// The document is no longer an email attachment (`document_email` is empty)
+    /// but the document row itself remains.
+    #[serde(rename = "document.email_attachment_unlinked")]
+    EmailAttachmentUnlinked(DocumentEmailAttachmentUnlinkedMetadata),
 }
 
 impl TopicEvent for DocumentTopicEvent {
@@ -253,6 +265,14 @@ impl DocumentMacroEvent {
     /// Build an interaction event keyed by the document id.
     pub fn interaction(key: impl Into<String>, metadata: DocumentInteractionMetadata) -> Self {
         Self::new(key, DocumentTopicEvent::Interaction(metadata))
+    }
+
+    /// Build an email-attachment-unlinked event keyed by the document id.
+    pub fn email_attachment_unlinked(
+        key: impl Into<String>,
+        metadata: DocumentEmailAttachmentUnlinkedMetadata,
+    ) -> Self {
+        Self::new(key, DocumentTopicEvent::EmailAttachmentUnlinked(metadata))
     }
 
     /// Build an event from a topic-specific event variant.

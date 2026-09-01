@@ -11,8 +11,8 @@ use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdat
 use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
-    DocumentInteractionMetadata, DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata,
-    DocumentUpdatedMetadata, InteractionReason,
+    DocumentEmailAttachmentUnlinkedMetadata, DocumentInteractionMetadata, DocumentPurgedMetadata,
+    DocumentSyncContentUpdatedMetadata, DocumentUpdatedMetadata, InteractionReason,
 };
 use email::domain::events::{
     EmailEventOrigin, EmailTopicEvent, MessageDraftSyncedMetadata, ThreadBackfilledMetadata,
@@ -163,6 +163,20 @@ fn moving_a_document_out_of_a_project_updates_the_previous_project() {
     assert!(matches!(patches[1].patch, Patch::Updated(_)));
     assert_eq!(patch_entity(&patches[1]).entity_type, EntityType::Project);
     assert_eq!(patch_entity(&patches[1]).entity_id, previous_project_id);
+}
+
+#[test]
+fn email_attachment_unlinked_maps_to_an_updated_document_patch() {
+    let event =
+        DocumentTopicEvent::EmailAttachmentUnlinked(DocumentEmailAttachmentUnlinkedMetadata {
+            document_id: DOCUMENT_ID.to_string(),
+        });
+
+    let patches = patches_from_document_event(&event);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Document);
+    assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
 }
 
 #[test]

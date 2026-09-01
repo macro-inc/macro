@@ -248,7 +248,8 @@ fn normalized_document_event(
         }
         DocumentTopicEvent::ContentUploaded(_)
         | DocumentTopicEvent::SyncContentUpdated(_)
-        | DocumentTopicEvent::Purged(_) => return Ok(None),
+        | DocumentTopicEvent::Purged(_)
+        | DocumentTopicEvent::EmailAttachmentUnlinked(_) => return Ok(None),
     };
 
     if Uuid::parse_str(entity_id).is_err() {

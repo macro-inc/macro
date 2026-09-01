@@ -225,9 +225,11 @@ async fn oversized_provider_values_do_not_block_the_thread_insert(
         }],
     };
 
-    let inserted_thread_id = insert_thread_and_messages(&pool, thread, link_id).await?;
+    let (inserted_thread_id, unlinked_document_ids) =
+        insert_thread_and_messages(&pool, thread, link_id).await?;
 
     assert_eq!(inserted_thread_id, thread_db_id);
+    assert!(unlinked_document_ids.is_empty());
     let from_name = sqlx::query_scalar!(
         r#"SELECT from_name FROM email_messages WHERE id = $1"#,
         message_db_id

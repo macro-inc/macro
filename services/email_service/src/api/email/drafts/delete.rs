@@ -96,7 +96,7 @@ pub async fn handler(
             .await;
 
     match result {
-        Ok(_deleted_thread) => {
+        Ok(_outcome) => {
             tx.commit().await?;
 
             // cleanup attachments in the background

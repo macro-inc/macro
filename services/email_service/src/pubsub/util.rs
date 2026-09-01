@@ -1,6 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use documents::domain::events::{DocumentEmailAttachmentUnlinkedMetadata, DocumentMacroEvent};
 use email::domain::events::EmailMacroEvent;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -90,6 +91,25 @@ pub fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEv
     let _ = broker
         .send_event(event)
         .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
+}
+
+/// Tell soup clients that these documents are no longer email attachments.
+///
+/// Failures are logged and dropped so email teardown still commits.
+pub fn publish_document_email_attachment_unlinked<B: MacroEventBroker>(
+    broker: &B,
+    document_ids: impl IntoIterator<Item = String>,
+) {
+    for document_id in document_ids {
+        let _ = broker
+            .send_event(&DocumentMacroEvent::email_attachment_unlinked(
+                document_id.clone(),
+                DocumentEmailAttachmentUnlinkedMetadata { document_id },
+            ))
+            .inspect_err(
+                |e| tracing::error!(error=?e, "failed to publish document email-attachment unlink"),
+            );
+    }
 }
 
 /// Send message to connection gateway to trigger email refresh if user is active on FE

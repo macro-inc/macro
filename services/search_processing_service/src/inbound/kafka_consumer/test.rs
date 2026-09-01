@@ -37,9 +37,9 @@ use channels::domain::{
 use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCopiedMetadata, DocumentCreatedMetadata,
-    DocumentDeletedMetadata, DocumentInteractionMetadata, DocumentPurgedMetadata,
-    DocumentSyncContentUpdatedMetadata, DocumentTopicEvent, DocumentUpdatedMetadata,
-    InteractionReason,
+    DocumentDeletedMetadata, DocumentEmailAttachmentUnlinkedMetadata, DocumentInteractionMetadata,
+    DocumentPurgedMetadata, DocumentSyncContentUpdatedMetadata, DocumentTopicEvent,
+    DocumentUpdatedMetadata, InteractionReason,
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
 use macro_event_topics::{
@@ -959,6 +959,16 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 action: DocumentIndexAction::Ignore,
                 document_id: DOCUMENT_ID.to_string(),
                 event_type: "document.interaction",
+            },
+        ),
+        (
+            DocumentTopicEvent::EmailAttachmentUnlinked(DocumentEmailAttachmentUnlinkedMetadata {
+                document_id: DOCUMENT_ID.to_string(),
+            }),
+            DocumentEventDescription {
+                action: DocumentIndexAction::Ignore,
+                document_id: DOCUMENT_ID.to_string(),
+                event_type: "document.email_attachment_unlinked",
             },
         ),
     ]

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT de.document_id\n        FROM document_email de\n        JOIN email_attachments ea ON ea.id = de.email_attachment_id\n        JOIN email_messages em ON em.id = ea.message_id\n        WHERE em.link_id = ANY($1::uuid[])\n          AND NOT EXISTS (\n            SELECT 1\n            FROM document_email remaining\n            JOIN email_attachments remaining_ea ON remaining_ea.id = remaining.email_attachment_id\n            JOIN email_messages remaining_em ON remaining_em.id = remaining_ea.message_id\n            WHERE remaining.document_id = de.document_id\n              AND remaining_em.link_id <> ALL($1::uuid[])\n          )\n        ORDER BY de.document_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "de02e68988a3f1cca32046d4a2e8bff0d71d0000523238d5acc25299d791c176"
+}

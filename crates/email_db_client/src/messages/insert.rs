@@ -24,7 +24,7 @@ pub async fn insert_message_with_tx(
     // 1. inserting thread simultaneously (thread already has latest values)
     // 2. backfilling messages (metadata gets updated once after all messages complete)
     update_thread_metadata: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<String>> {
     let message_db_id = insert_db_message(
         tx,
         message,
@@ -52,9 +52,11 @@ pub async fn insert_message_with_tx(
         .await?;
     }
 
-    if !message.attachments.is_empty() {
-        provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?;
-    }
+    let unlinked_document_ids = if !message.attachments.is_empty() {
+        provider::insert_attachments(tx, message_db_id, &mut message.attachments).await?
+    } else {
+        Vec::new()
+    };
 
     if update_thread_metadata {
         threads::update::update_thread_metadata(tx, thread_db_id, link_id).await?;
@@ -68,7 +70,7 @@ pub async fn insert_message_with_tx(
         .await?;
     }
 
-    Ok(())
+    Ok(unlinked_document_ids)
 }
 
 /// inserts message object into the database
@@ -152,7 +154,7 @@ pub async fn insert_message(
     message: &mut message::Message,
     link_id: Uuid,
     update_thread_metadata: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<String>> {
     // we have to insert addresses before inserting the message. these values are shared
     // across messages, so inserting them in the txn can cause deadlocks.
     let addresses = addresses_from_message(message);
@@ -173,9 +175,9 @@ pub async fn insert_message(
     )
     .await
     {
-        Ok(_) => {
+        Ok(unlinked_document_ids) => {
             tx.commit().await?;
-            Ok(())
+            Ok(unlinked_document_ids)
         }
         Err(e) => {
             if let Err(rollback_err) = tx.rollback().await {

@@ -266,12 +266,13 @@ impl SeedDb {
         thread: service::thread::Thread,
         link_id: uuid::Uuid,
     ) -> anyhow::Result<uuid::Uuid> {
-        let id = email_db_client::threads::insert::insert_thread_and_messages(
-            &self.inner,
-            thread,
-            link_id,
-        )
-        .await?;
+        let (id, _unlinked_document_ids) =
+            email_db_client::threads::insert::insert_thread_and_messages(
+                &self.inner,
+                thread,
+                link_id,
+            )
+            .await?;
         Ok(id)
     }
 
