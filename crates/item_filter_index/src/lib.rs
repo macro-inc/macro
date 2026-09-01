@@ -361,15 +361,15 @@ pub fn compile_soup_flat_v3(
     )
 }
 
+type PropertyLiteralCompiler = fn(&PropertiesLiteral) -> Result<PredicateExpr, CompileError>;
+
 fn compile_soup_flat(
     ast: &EntityFilterAst,
     request: SoupFlatRequest,
     profile: Profile,
     supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
     compile_document_literal: impl Fn(&DocumentLiteral) -> Result<PredicateExpr, CompileError> + Copy,
-    compile_properties_literal: Option<
-        fn(&PropertiesLiteral) -> Result<PredicateExpr, CompileError>,
-    >,
+    compile_properties_literal: Option<PropertyLiteralCompiler>,
 ) -> Result<LocalCompileOutcome, CompileError> {
     if let Eligibility::Unsupported(reason) = check_soup_flat(
         ast,
