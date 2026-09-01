@@ -9,6 +9,7 @@ import KeyIcon from '@lucide/key.svg';
 import KeyboardIcon from '@lucide/keyboard.svg';
 import SwatchesIcon from '@lucide/palette.svg';
 import PlugIcon from '@lucide/plug.svg';
+import HardDrivesIcon from '@lucide/server.svg';
 import DeviceMobileIcon from '@lucide/smartphone.svg';
 import TagIcon from '@lucide/tag.svg';
 import UserIconPhosphor from '@lucide/user.svg';
@@ -78,6 +79,13 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     ],
   },
   {
+    label: 'Agents',
+    items: [
+      { tab: 'Agents', label: 'Agents', icon: BotIcon },
+      { tab: 'Harness', label: 'Harness', icon: HardDrivesIcon },
+    ],
+  },
+  {
     label: 'Admin',
     items: [{ tab: 'Admin', label: 'Debug', icon: BugIcon }],
   },
@@ -106,6 +114,8 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Shortcuts: 'shortcuts',
   'Mobile App': 'mobile-app',
   Agent: 'mcp-server',
+  Agents: 'agents',
+  Harness: 'harness',
   Bots: 'bots',
   Team: 'team',
   Tags: 'tags',
@@ -188,6 +198,9 @@ export const useSettingsTabAvailable = () => {
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
       case 'Agent':
         return !isNativeMobilePlatform();
+      case 'Harness':
+      case 'Agents':
+        return true;
       case 'Bots':
         return botManagementFlag().enabled;
       case 'Mobile':

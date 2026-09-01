@@ -32,6 +32,7 @@ import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
+import type { Agent } from './generated/schemas/agent';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
@@ -53,6 +54,7 @@ import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
+import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
@@ -154,6 +156,7 @@ import type { SoupPage } from './generated/schemas/soupPage';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
+import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
@@ -281,6 +284,7 @@ export type TaskSimilaritySearchResponse = {
 };
 
 type WithBotId = { bot_id: string };
+type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
 
 type CreateBotRequest = {
@@ -527,6 +531,33 @@ export const storageServiceClient = {
     return (
       await dssFetch<Bot[]>(`/bots`, {
         method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getAgents() {
+    return (
+      await dssFetch<Agent[]>(`/agents`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async createAgent(args: CreateAgentRequest) {
+    return (
+      await dssFetch<Agent>(`/agents`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  async updateAgent(args: WithAgentId & UpdateAgentRequest) {
+    const { agent_id, ...request } = args;
+    return (
+      await dssFetch<Agent>(`/agents/${agent_id}`, {
+        method: 'PUT',
+        body: JSON.stringify(request),
       })
     ).map((result) => result);
   },

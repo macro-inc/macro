@@ -34,6 +34,8 @@ pub struct MentionOrigin {
 pub struct OpenSession {
     /// The bot that was mentioned.
     pub bot_id: BotId,
+    /// Runtime configuration resolved for this bot when the trigger arrived.
+    pub runtime: AgentRuntimeConfig,
     /// The mention itself.
     pub origin: MentionOrigin,
 }
@@ -41,13 +43,9 @@ pub struct OpenSession {
 /// How a bot's sessions get a runtime — the closed set of first-party
 /// providers, one name per member.
 ///
-/// Derived from the bot rather than stored anywhere: the bot id is the
-/// durable fact (on trigger events and session rows), and the kind is a pure
-/// function of it, so deriving at each decision site is what keeps the two
-/// from drifting. Matching on it is exhaustive on purpose — a new
-/// provider becomes a compile error at every decision site instead of a
-/// silently wrong `else`. This becomes a bot attribute the day the set
-/// stops being closed.
+/// Legacy system bots derive this from their stable IDs. User and team agents
+/// derive it from their persisted harness slug, which is also copied onto each
+/// session so resume and teardown keep routing correctly after a restart.
 ///
 /// A session's instructions are stored on its row whichever kind serves it,
 /// but only [`Self::InMemory`] reads them today - it builds its system prompt
@@ -58,7 +56,7 @@ pub struct OpenSession {
 /// [`Self::External`] `_meta` on `session/new` for macrod to translate, and
 /// [`Self::Cursor`] - whose API takes a prompt and nothing more - has to fold
 /// them into the prompt body's hidden agent-context node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AgentKind {
     /// A sandbox this deployment provisions (Daytona, or local Docker when
     /// a developer has opted in).
@@ -87,6 +85,26 @@ impl AgentKind {
         }
     }
 
+    /// Resolve a database-backed agent's runtime from its persisted harness.
+    #[must_use]
+    pub fn from_harness(harness: &str) -> Self {
+        match harness {
+            "cursor" => Self::Cursor,
+            "in-memory" | "macro-inmem" => Self::InMemory,
+            _ => Self::External,
+        }
+    }
+
+    /// Resolve a persisted session's runtime without losing fixed system-bot
+    /// identities that predate per-agent harness configuration.
+    #[must_use]
+    pub fn for_session(bot: BotId, harness: &str) -> Self {
+        match Self::of(bot) {
+            Self::External => Self::from_harness(harness),
+            fixed => fixed,
+        }
+    }
+
     /// Whether a deployment provisions this kind's runtimes itself.
     ///
     /// Membership is about who provisions, not whether *this* deployment is
@@ -98,10 +116,18 @@ impl AgentKind {
     }
 }
 
-/// Whether a user belongs to the Macro staff domain - the egress crate's
-/// predicate, reused so the harness's staff gates and the proxy's can never
-/// disagree about who staff is.
-pub(crate) use agent_egress::domain::model::is_macro_staff;
+/// Runtime settings used to open one database-backed or fixed agent.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AgentRuntimeConfig {
+    /// Which runtime implementation serves the agent.
+    pub kind: AgentKind,
+    /// Model stamped onto the new session.
+    pub model: String,
+    /// Harness slug stamped onto the new session.
+    pub harness: String,
+    /// Configured agent instructions, reserved for a dedicated runtime transport.
+    pub instructions: String,
+}
 
 /// Where a prompt came from, when it came from somewhere the session should
 /// answer back into.

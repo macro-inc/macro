@@ -2,10 +2,10 @@
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_channel_event;
-use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
-use agent_trigger::outbound::{ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector};
-use bot_id::BotId;
-use bots::domain::ports::BotRepo as _;
+use agent_trigger::domain::service::AgentTriggerService;
+use agent_trigger::outbound::{
+    BotRepoAgentLookup, ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector,
+};
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::broker_events::ChannelMacroEvent;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
@@ -32,18 +32,6 @@ macro_event_broker::declare_topics!(DeclaredChannelEvent: ChannelMacroEvent);
 
 type TriggerKafkaAdapter = KafkaConsumerAdapter<AgentTriggerConsumerGroup, DeclaredChannelEvent>;
 type TriggerConsumer = MacroEventConsumerService<DeclaredChannelEvent, TriggerKafkaAdapter>;
-
-struct PgAgentBotLookup(PgBotsRepo);
-
-impl AgentBotLookup for PgAgentBotLookup {
-    async fn has_agent(&self, bot_id: BotId) -> agent_session::domain::error::Result<bool> {
-        self.0
-            .get_bot(bot_id)
-            .await
-            .map(|bot| bot.is_some_and(|bot| bot.has_agent))
-            .map_err(agent_session::domain::error::AgentSessionError::Unknown)
-    }
-}
 
 fn commit_message(consumer: &TriggerConsumer, message: &BorrowedMessage<'_>) -> anyhow::Result<()> {
     consumer
@@ -72,7 +60,9 @@ async fn run(pool: PgPool, kafka_brokers: String, internal_api_key: String) -> a
     let lexical = LexicalClient::new(internal_api_key, LexicalServiceUrl::new()?.to_string());
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(pool.clone()),
-        PgAgentBotLookup(PgBotsRepo::new(pool.clone())),
+        BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
+        BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
+        BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         LexicalReplyDetector::new(lexical),
         FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
         ChannelThreadHistory::new(PgChannelsRepo::new(pool)),

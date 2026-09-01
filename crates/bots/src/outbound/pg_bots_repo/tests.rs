@@ -1,8 +1,9 @@
 use super::*;
 use crate::domain::{
     models::{
-        BotChannelListCaller, BotChannelType, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, PatchBotRequest,
+        AgentChannelScope, BotChannelListCaller, BotChannelType, CreateAgentRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchBotRequest,
+        UpdateAgentRequest,
     },
     ports::{BotError, BotService},
     service::BotServiceImpl,
@@ -65,6 +66,36 @@ fn create_channel_scoped_req(handle: &str) -> CreateChannelScopedBotRequest {
         token_label: Some("Webhook".to_string()),
         token_expires_at: None,
         has_agent: None,
+    }
+}
+
+fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAgentRequest {
+    CreateAgentRequest {
+        team_id: None,
+        name: "Bug fixer".to_string(),
+        handle: handle.to_string(),
+        description: Some("Finds and fixes bugs".to_string()),
+        avatar_url: Some("https://static.example/bug-fixer.png".to_string()),
+        instructions: "Fix the root cause and add tests.".to_string(),
+        harness: "cursor".to_string(),
+        default_model: "cursor-small".to_string(),
+        channel_scope,
+        channel_ids: Vec::new(),
+    }
+}
+
+fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAgentRequest {
+    UpdateAgentRequest {
+        team_id: None,
+        name: "Updated bug fixer".to_string(),
+        handle: handle.to_string(),
+        description: None,
+        avatar_url: None,
+        instructions: "Diagnose first, then make the smallest tested fix.".to_string(),
+        harness: "in-memory".to_string(),
+        default_model: "claude-sonnet-4-5".to_string(),
+        channel_scope,
+        channel_ids: Vec::new(),
     }
 }
 
@@ -250,6 +281,25 @@ async fn insert_channel(pool: &PgPool, channel_id: Uuid) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn insert_channel_member(
+    pool: &PgPool,
+    channel_id: Uuid,
+    user_id: &str,
+) -> anyhow::Result<()> {
+    insert_channel(pool, channel_id).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+        VALUES ($1, $2, 'member'::comms_participant_role, NULL)
+        "#,
+        channel_id,
+        user_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 async fn active_channel_participant_count(
     pool: &PgPool,
     channel_id: Uuid,
@@ -352,6 +402,232 @@ async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Resul
     assert_eq!(bot.handle, "datadog");
     assert!(!bot.has_agent);
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let created = service
+        .create_agent(
+            user_id(USER_OWNER),
+            create_agent_req("bug-fixer", AgentChannelScope::All),
+        )
+        .await?;
+
+    assert!(created.bot.has_agent);
+    assert_eq!(created.bot.handle, "bug-fixer");
+    assert_eq!(created.instructions, "Fix the root cause and add tests.");
+    assert_eq!(created.harness, "cursor");
+    assert_eq!(created.default_model, "cursor-small");
+    assert_eq!(created.channel_scope, AgentChannelScope::All);
+    assert!(created.channel_ids.is_empty());
+
+    let listed = service.list_agents(user_id(USER_OWNER)).await?;
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].bot.id, created.bot.id);
+    assert_eq!(listed[0].instructions, created.instructions);
+    assert_eq!(listed[0].harness, created.harness);
+    assert_eq!(listed[0].default_model, created.default_model);
+
+    let fetched = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("created agent should be addressable by bot id");
+    assert_eq!(fetched.bot.id, created.bot.id);
+    assert_eq!(fetched.instructions, created.instructions);
+    assert_eq!(fetched.harness, created.harness);
+    assert_eq!(fetched.default_model, created.default_model);
+
+    assert!(service.list_agents(user_id(USER_OTHER)).await?.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_team_agent_requires_membership_not_admin(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let service = service(&pool);
+    let mut request = create_agent_req("member-agent", AgentChannelScope::All);
+    request.team_id = Some(team_id);
+
+    let created = service
+        .create_agent(user_id(TEAM_MEMBER), request.clone())
+        .await?;
+    assert_eq!(created.bot.owner, Some(BotOwner::Team { team_id }));
+    assert_eq!(created.bot.created_by.as_deref(), Some(TEAM_MEMBER));
+
+    request.handle = "outsider-agent".to_string();
+    let error = service
+        .create_agent(user_id(TEAM_OTHER), request)
+        .await
+        .expect_err("a non-member must not create a team agent");
+    assert!(matches!(error, BotError::Unauthorized));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn updated_agent_replaces_every_field_and_selected_channel(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    insert_channel_member(&pool, first, USER_OWNER).await?;
+    insert_channel_member(&pool, second, USER_OWNER).await?;
+    let service = service(&pool);
+    let mut create = create_agent_req("bug-fixer", AgentChannelScope::Selected);
+    create.channel_ids = vec![first];
+    let created = service.create_agent(user_id(USER_OWNER), create).await?;
+
+    let mut update = update_agent_req("updated-fixer", AgentChannelScope::Selected);
+    update.channel_ids = vec![second];
+    let updated = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, update)
+        .await?;
+
+    assert_eq!(updated.bot.name, "Updated bug fixer");
+    assert_eq!(updated.bot.handle, "updated-fixer");
+    assert_eq!(updated.bot.description, None);
+    assert_eq!(updated.bot.avatar_url, None);
+    assert_eq!(
+        updated.instructions,
+        "Diagnose first, then make the smallest tested fix."
+    );
+    assert_eq!(updated.harness, "in-memory");
+    assert_eq!(updated.default_model, "claude-sonnet-4-5");
+    assert_eq!(updated.channel_ids, vec![second]);
+    assert_eq!(
+        active_channel_participant_count(&pool, first, created.bot.id).await?,
+        0
+    );
+    assert_eq!(
+        active_channel_participant_count(&pool, second, created.bot.id).await?,
+        1
+    );
+
+    let listed = service.list_agents(user_id(USER_OWNER)).await?;
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].bot.handle, "updated-fixer");
+    assert_eq!(listed[0].channel_ids, vec![second]);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_member_creator_can_change_agent_share_between_private_and_team(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let service = service(&pool);
+    let created = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            create_agent_req("share-fixer", AgentChannelScope::All),
+        )
+        .await?;
+
+    let mut make_team = update_agent_req("share-fixer", AgentChannelScope::All);
+    make_team.team_id = Some(team_id);
+    let team_agent = service
+        .update_agent(user_id(TEAM_MEMBER), created.bot.id, make_team)
+        .await?;
+    assert_eq!(team_agent.bot.owner, Some(BotOwner::Team { team_id }));
+
+    let make_private = update_agent_req("share-fixer", AgentChannelScope::All);
+    let private_agent = service
+        .update_agent(user_id(TEAM_MEMBER), created.bot.id, make_private)
+        .await?;
+    assert_eq!(
+        private_agent.bot.owner,
+        Some(BotOwner::User {
+            user_id: TEAM_MEMBER.to_string(),
+        })
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_member_can_update_team_agent_but_cannot_make_it_private(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let service = service(&pool);
+    let mut create = create_agent_req("team-fixer", AgentChannelScope::All);
+    create.team_id = Some(team_id);
+    let created = service.create_agent(user_id(TEAM_ADMIN), create).await?;
+
+    let mut update = update_agent_req("changed-by-member", AgentChannelScope::All);
+    update.team_id = Some(team_id);
+    let updated = service
+        .update_agent(user_id(TEAM_MEMBER), created.bot.id, update)
+        .await?;
+    assert_eq!(updated.bot.handle, "changed-by-member");
+    assert_eq!(updated.bot.owner, Some(BotOwner::Team { team_id }));
+
+    let error = service
+        .update_agent(
+            user_id(TEAM_MEMBER),
+            created.bot.id,
+            update_agent_req("made-private-by-member", AgentChannelScope::All),
+        )
+        .await
+        .expect_err("only the creator may make a team agent private");
+    assert!(matches!(error, BotError::Unauthorized));
+
+    let listed = service.list_agents(user_id(TEAM_ADMIN)).await?;
+    assert_eq!(listed[0].bot.handle, "changed-by-member");
+    assert_eq!(listed[0].bot.owner, Some(BotOwner::Team { team_id }));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn selected_agent_is_created_atomically_in_authorized_channels(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    insert_channel_member(&pool, first, USER_OWNER).await?;
+    insert_channel_member(&pool, second, USER_OWNER).await?;
+    let service = service(&pool);
+    let mut request = create_agent_req("channel-fixer", AgentChannelScope::Selected);
+    request.channel_ids = vec![first, second];
+
+    let created = service.create_agent(user_id(USER_OWNER), request).await?;
+    assert_eq!(created.channel_ids, vec![first, second]);
+    assert_eq!(
+        active_channel_participant_count(&pool, first, created.bot.id).await?,
+        1
+    );
+    assert_eq!(
+        active_channel_participant_count(&pool, second, created.bot.id).await?,
+        1
+    );
+
+    let listed = service.list_agents(user_id(USER_OWNER)).await?;
+    assert_eq!(listed[0].channel_ids.len(), 2);
+    assert!(listed[0].channel_ids.contains(&first));
+    assert!(listed[0].channel_ids.contains(&second));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn selected_agent_rejects_channels_the_caller_cannot_access(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    insert_channel(&pool, channel_id).await?;
+    let service = service(&pool);
+    let mut request = create_agent_req("unauthorized-fixer", AgentChannelScope::Selected);
+    request.channel_ids = vec![channel_id];
+
+    let error = service
+        .create_agent(user_id(USER_OTHER), request)
+        .await
+        .expect_err("a non-member must not create an agent in the channel");
+    assert!(matches!(error, BotError::Unauthorized));
+    assert!(service.list_agents(user_id(USER_OTHER)).await?.is_empty());
     Ok(())
 }
 
@@ -462,6 +738,52 @@ async fn create_team_owned_bot_requires_team_admin_or_owner(pool: PgPool) -> any
         .await
         .expect_err("non-team member must not create a team-owned bot");
     assert!(matches!(err, BotError::Unauthorized));
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_creator_or_team_owner_can_delete_team_bots(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+
+    let mut admin_bot_request = create_req("admin-team-bot");
+    admin_bot_request.team_id = Some(team_id);
+    let admin_bot = service
+        .create_bot(user_id(TEAM_ADMIN), admin_bot_request)
+        .await?;
+
+    let member_delete = service.delete_bot(user_id(TEAM_MEMBER), admin_bot.id).await;
+    assert!(matches!(member_delete, Err(BotError::Unauthorized)));
+    service
+        .delete_bot(user_id(TEAM_OWNER), admin_bot.id)
+        .await?;
+
+    let mut owner_bot_request = create_req("owner-team-bot");
+    owner_bot_request.team_id = Some(team_id);
+    let owner_bot = service
+        .create_bot(user_id(TEAM_OWNER), owner_bot_request)
+        .await?;
+
+    let admin_delete = service.delete_bot(user_id(TEAM_ADMIN), owner_bot.id).await;
+    assert!(matches!(admin_delete, Err(BotError::Unauthorized)));
+
+    let mut member_agent_request = create_agent_req("member-team-agent", AgentChannelScope::All);
+    member_agent_request.team_id = Some(team_id);
+    let member_agent = service
+        .create_agent(user_id(TEAM_MEMBER), member_agent_request)
+        .await?;
+
+    let admin_delete = service
+        .delete_bot(user_id(TEAM_ADMIN), member_agent.bot.id)
+        .await;
+    assert!(matches!(admin_delete, Err(BotError::Unauthorized)));
+    service
+        .delete_bot(user_id(TEAM_MEMBER), member_agent.bot.id)
+        .await?;
 
     Ok(())
 }

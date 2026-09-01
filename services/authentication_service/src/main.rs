@@ -101,6 +101,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    let signup_policy = Arc::new(
+        config
+            .signup_policy()
+            .context("invalid signup policy configuration")?,
+    );
     let microsoft_credentials = config
         .microsoft_credentials()
         .context("invalid Microsoft OAuth configuration")?;
@@ -448,6 +453,7 @@ async fn main() -> anyhow::Result<()> {
             notification_ingress_service,
             sqs_client,
             environment: config.environment,
+            signup_policy,
             rate_limit_service: rate_limit,
             calendar_scope_enabled: config.calendar_scope_enabled,
             jwt_args,

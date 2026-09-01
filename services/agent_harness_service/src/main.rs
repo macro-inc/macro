@@ -7,6 +7,7 @@
 //! announcements, derives agent triggers from `macro.channels`, then drives
 //! the orchestrator from the resulting `macro.agent_sessions` events.
 
+mod agent_runtime_directory;
 mod api;
 mod bots_directory;
 mod config;
@@ -22,10 +23,15 @@ use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, WithMacroMcp};
 use agent_egress::outbound::mcp_credentials::PipedreamMcpCredentials;
 use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
-use agent_harness::domain::model::{HarnessCommand, HarnessDefaults, SessionDefaults};
+use agent_harness::domain::model::{
+    AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, SessionDefaults,
+};
+use agent_harness::domain::ports::AgentRuntimeDirectory as _;
 use agent_harness::domain::service::AgentHarnessService;
+use agent_harness::domain::trigger_router::{
+    RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
+};
 use agent_harness::inbound::forward::ForwardGatewayState;
-use agent_harness::inbound::kafka::{RoutedTrigger, route_agent_trigger};
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
@@ -44,6 +50,7 @@ use agent_harness::outbound::runtime_registry::RuntimeRegistry;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::rig_engine::RigTurnEngine;
+use agent_runtime_directory::PgAgentRuntimeDirectory;
 use agent_session::domain::model::{ReplicaAddress, ReplicaId};
 use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
@@ -313,7 +320,7 @@ async fn run() -> anyhow::Result<()> {
     // closed and drained on shutdown so nothing is dropped mid-publish.
     let event_broker_tracker = tokio_util::task::TaskTracker::new();
     let inmem = match inmem_bot {
-        Some(bot) => {
+        Some(_) => {
             let tool_context = ai_tools::build_tool_service_context_from_env(
                 pool.clone(),
                 event_broker_tracker.clone(),
@@ -325,7 +332,6 @@ async fn run() -> anyhow::Result<()> {
             // their model context from the same log every frame lands in.
             let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
             Some(InMemRuntime {
-                bot,
                 manager: InMemAgentManager::new(engine, frames),
             })
         }
@@ -358,19 +364,46 @@ async fn run() -> anyhow::Result<()> {
             .context("CURSOR_REPO_URL is not a valid repository url")?,
         session_repo.clone(),
     );
-    // Every deployment serves its sandbox bot, the configured in-memory bot,
-    // and Cursor. Whether a given user can open a Cursor session depends on
-    // the key they registered and is answered at spawn.
-    let our_bots: Vec<BotId> = std::iter::once(bot_id)
-        .chain(inmem_bot)
-        .chain(std::iter::once(bot_id::CURSOR_BOT_ID))
-        .collect();
+    // Fixed system agents retain their deployment defaults. User/team agents
+    // are resolved from agent_configs for every trigger so newly-created or
+    // edited agents require no service restart.
+    let mut fixed_runtimes = vec![(
+        bot_id,
+        AgentRuntimeConfig {
+            kind: AgentKind::SandboxedCoder,
+            model: config.harness_model.clone(),
+            harness: config.harness_slug.clone(),
+            instructions: String::new(),
+        },
+    )];
+    if let Some(inmem_bot) = inmem_bot {
+        fixed_runtimes.push((
+            inmem_bot,
+            AgentRuntimeConfig {
+                kind: AgentKind::InMemory,
+                model: config.inmem_model.clone(),
+                harness: config.inmem_harness_slug.clone(),
+                instructions: String::new(),
+            },
+        ));
+    }
+    fixed_runtimes.push((
+        bot_id::CURSOR_BOT_ID,
+        AgentRuntimeConfig {
+            kind: AgentKind::Cursor,
+            model: config.harness_model.clone(),
+            harness: "cursor".to_owned(),
+            instructions: String::new(),
+        },
+    ));
+    let runtime_directory =
+        PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
     // Logged because the failure mode this replaced was silent: a harness that
     // resolved no in-process bot booted healthy, passed its health check, and
     // dropped every in-process-bot mention as ForeignBot with nothing to show
     // for it.
     tracing::info!(
-        bots = ?our_bots.iter().map(|bot| bot.as_uuid()).collect::<Vec<_>>(),
+        bots = ?fixed_runtimes.iter().map(|(bot, _)| bot.as_uuid()).collect::<Vec<_>>(),
         in_process_bot = ?inmem_bot.map(BotId::as_uuid),
         environment = %config.environment,
         "agent harness serving bots"
@@ -673,7 +706,12 @@ async fn run() -> anyhow::Result<()> {
                     tracing::Span::current()
                         .record("macro.event.id", tracing::field::display(event.event().event_id));
 
-                    let routed = match route_agent_trigger(event.event().event.clone(), &our_bots) {
+                    let trigger_event = event.event().event.clone();
+                    let runtime = match agent_trigger_bot_id(&trigger_event) {
+                        Some(bot_id) => runtime_directory.runtime_for(bot_id).await?,
+                        None => None,
+                    };
+                    let routed = match route_agent_trigger(trigger_event, runtime) {
                         Ok(routed) => routed,
                         Err(skipped) => {
                             // Info, not debug: a skip is the last visible trace

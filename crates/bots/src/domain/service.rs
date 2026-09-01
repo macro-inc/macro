@@ -3,9 +3,10 @@
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner,
-        BotToken, BotTokenCandidate, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, PatchBotRequest,
+        Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId,
+        BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
+        CreateBotTokenRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+        PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -43,6 +44,100 @@ fn validate_handle(handle: &str) -> Result<(), BotError> {
         ));
     }
     Ok(())
+}
+
+/// The fields create and update requests share, borrowed for validation so
+/// both paths run the exact same checks without repeating the field list.
+struct AgentFields<'a> {
+    name: &'a str,
+    handle: &'a str,
+    harness: &'a str,
+    default_model: &'a str,
+    channel_scope: AgentChannelScope,
+    channel_ids: &'a [Uuid],
+}
+
+impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
+    fn from(req: &'a CreateAgentRequest) -> Self {
+        Self {
+            name: &req.name,
+            handle: &req.handle,
+            harness: &req.harness,
+            default_model: &req.default_model,
+            channel_scope: req.channel_scope,
+            channel_ids: &req.channel_ids,
+        }
+    }
+}
+
+impl<'a> From<&'a UpdateAgentRequest> for AgentFields<'a> {
+    fn from(req: &'a UpdateAgentRequest) -> Self {
+        Self {
+            name: &req.name,
+            handle: &req.handle,
+            harness: &req.harness,
+            default_model: &req.default_model,
+            channel_scope: req.channel_scope,
+            channel_ids: &req.channel_ids,
+        }
+    }
+}
+
+fn validate_agent_fields(
+    AgentFields {
+        name,
+        handle,
+        harness,
+        default_model,
+        channel_scope,
+        channel_ids,
+    }: AgentFields<'_>,
+) -> Result<(), BotError> {
+    validate_handle(handle)?;
+    if name.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent name must not be empty".to_string(),
+        ));
+    }
+    if harness.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent harness must not be empty".to_string(),
+        ));
+    }
+    if default_model.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent default model must not be empty".to_string(),
+        ));
+    }
+
+    match channel_scope {
+        AgentChannelScope::All if !channel_ids.is_empty() => Err(BotError::BadRequest(
+            "global agents must not include channel ids".to_string(),
+        )),
+        AgentChannelScope::Selected if channel_ids.is_empty() => Err(BotError::BadRequest(
+            "channel-specific agents require at least one channel".to_string(),
+        )),
+        AgentChannelScope::Selected
+            if channel_ids
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                != channel_ids.len() =>
+        {
+            Err(BotError::BadRequest(
+                "agent channel ids must be unique".to_string(),
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
+fn validate_agent_request(req: &CreateAgentRequest) -> Result<(), BotError> {
+    validate_agent_fields(req.into())
+}
+
+fn validate_update_agent_request(req: &UpdateAgentRequest) -> Result<(), BotError> {
+    validate_agent_fields(req.into())
 }
 
 fn token_candidate_is_valid(candidate: &BotTokenCandidate, now: &DateTime<Utc>) -> bool {
@@ -90,6 +185,57 @@ where
         Ok(BotOwner::User {
             user_id: caller.as_ref().to_string(),
         })
+    }
+
+    async fn agent_owner_for_request(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Option<Uuid>,
+    ) -> Result<BotOwner, BotError> {
+        if let Some(team_id) = team_id {
+            if !self
+                .repo
+                .user_has_team(caller.clone(), team_id)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+            {
+                return Err(BotError::Unauthorized);
+            }
+            return Ok(BotOwner::Team { team_id });
+        }
+
+        Ok(BotOwner::User {
+            user_id: caller.as_ref().to_string(),
+        })
+    }
+
+    async fn owner_for_agent_update(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        current: &Bot,
+        requested_team_id: Option<Uuid>,
+    ) -> Result<BotOwner, BotError> {
+        match (current.owner.as_ref(), requested_team_id) {
+            (Some(BotOwner::User { .. }), team_id) => {
+                self.agent_owner_for_request(caller, team_id).await
+            }
+            (
+                Some(BotOwner::Team {
+                    team_id: current_team_id,
+                }),
+                Some(requested_team_id),
+            ) if *current_team_id == requested_team_id => Ok(BotOwner::Team {
+                team_id: requested_team_id,
+            }),
+            (Some(BotOwner::Team { .. }), None)
+                if current.created_by.as_deref() == Some(caller.as_ref()) =>
+            {
+                Ok(BotOwner::User {
+                    user_id: caller.as_ref().to_string(),
+                })
+            }
+            _ => Err(BotError::Unauthorized),
+        }
     }
 
     async fn ensure_manageable(
@@ -157,6 +303,110 @@ where
     R: BotRepo,
     B: MacroEventBroker + Clone,
 {
+    async fn create_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        validate_agent_request(&req)?;
+        if req.channel_scope == AgentChannelScope::Selected
+            && !self
+                .repo
+                .user_has_channels(caller.clone(), &req.channel_ids)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::Unauthorized);
+        }
+
+        let owner = self
+            .agent_owner_for_request(caller.clone(), req.team_id)
+            .await?;
+        let created_by_user_id = caller.clone();
+        let agent = self
+            .repo
+            .create_agent(owner, caller, req)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+
+        self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
+            bot_id: agent.bot.id,
+            kind: agent.bot.kind,
+            owner: agent
+                .bot
+                .owner
+                .clone()
+                .expect("owned agent bot must have an owner"),
+            name: agent.bot.name.clone(),
+            handle: agent.bot.handle.clone(),
+            description: agent.bot.description.clone(),
+            avatar_url: agent.bot.avatar_url.clone(),
+            created_by_user_id,
+            channel_id: None,
+            created_at: agent.bot.created_at,
+        }));
+
+        Ok(agent)
+    }
+
+    async fn update_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        let current = self.ensure_manageable(caller.clone(), bot_id).await?;
+
+        validate_update_agent_request(&req)?;
+        if req.channel_scope == AgentChannelScope::Selected
+            && !self
+                .repo
+                .user_has_channels(caller.clone(), &req.channel_ids)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::Unauthorized);
+        }
+
+        let owner = self
+            .owner_for_agent_update(caller.clone(), &current, req.team_id)
+            .await?;
+        let requested_name = req.name.clone();
+        let requested_handle = req.handle.clone();
+        let requested_description = req.description.clone();
+        let requested_avatar_url = req.avatar_url.clone();
+        let agent = self
+            .repo
+            .update_agent(bot_id, owner, req)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+
+        self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
+            bot_id: agent.bot.id,
+            owner: agent
+                .bot
+                .owner
+                .clone()
+                .expect("owned agent bot must have an owner"),
+            actor_user_id: caller,
+            name: Some(requested_name),
+            handle: Some(requested_handle),
+            description: requested_description,
+            avatar_url: requested_avatar_url,
+            updated_at: agent.bot.updated_at,
+        }));
+
+        Ok(agent)
+    }
+
+    async fn list_agents(&self, caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        self.repo
+            .list_manageable_agents(caller)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))
+    }
+
     async fn create_bot(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -296,6 +546,16 @@ where
         bot_id: BotId,
     ) -> Result<(), BotError> {
         let bot = self.ensure_manageable(caller.clone(), bot_id).await?;
+        if let Some(BotOwner::Team { team_id }) = &bot.owner
+            && bot.created_by.as_deref() != Some(caller.as_ref())
+            && !self
+                .repo
+                .user_owns_team(caller.clone(), *team_id)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::Unauthorized);
+        }
         if !self
             .repo
             .delete_bot(bot_id)

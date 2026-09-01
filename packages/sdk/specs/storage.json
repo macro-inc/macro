@@ -10,6 +10,185 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agents": {
+      "get": {
+        "tags": ["agents"],
+        "summary": "Handler for `GET /agents`.",
+        "operationId": "list_agents",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Agent"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["agents"],
+        "summary": "Handler for `POST /agents`.",
+        "operationId": "create_agent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agent_id}": {
+      "put": {
+        "tags": ["agents"],
+        "summary": "Handler for `PUT /agents/{agent_id}`.",
+        "operationId": "update_agent",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "Agent bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
@@ -11726,6 +11905,53 @@
           }
         }
       },
+      "Agent": {
+        "type": "object",
+        "description": "A persisted user- or team-owned AI agent.",
+        "required": [
+          "bot",
+          "instructions",
+          "harness",
+          "default_model",
+          "channel_scope",
+          "channel_ids"
+        ],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/Bot",
+            "description": "The bot identity used for mentions and channel participation."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Selected channel ids. Empty for a global agent."
+          },
+          "channel_scope": {
+            "$ref": "#/components/schemas/AgentChannelScope",
+            "description": "Whether the agent is global or channel-specific."
+          },
+          "default_model": {
+            "type": "string",
+            "description": "Model selected specifically for this agent."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness used to run the agent."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Instructions supplied to the agent at the start of a conversation."
+          }
+        }
+      },
+      "AgentChannelScope": {
+        "type": "string",
+        "description": "Whether an agent is available everywhere or only in selected channels.",
+        "enum": ["all", "selected"]
+      },
       "Anchor": {
         "oneOf": [
           {
@@ -15459,6 +15685,65 @@
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred."
+          }
+        }
+      },
+      "CreateAgentRequest": {
+        "type": "object",
+        "description": "Request to create a persisted AI agent.",
+        "required": [
+          "name",
+          "handle",
+          "instructions",
+          "harness",
+          "default_model",
+          "channel_scope"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL or data URL."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Selected channels. Must be non-empty only for `selected` scope."
+          },
+          "channel_scope": {
+            "$ref": "#/components/schemas/AgentChannelScope",
+            "description": "Whether the agent is global or channel-specific."
+          },
+          "default_model": {
+            "type": "string",
+            "description": "Model selected specifically for this agent."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness used to run the agent."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. Omit for a private, user-owned agent."
           }
         }
       },
@@ -24693,6 +24978,65 @@
             }
           }
         ]
+      },
+      "UpdateAgentRequest": {
+        "type": "object",
+        "description": "Request to replace the editable configuration of a persisted AI agent.",
+        "required": [
+          "name",
+          "handle",
+          "instructions",
+          "harness",
+          "default_model",
+          "channel_scope"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL or data URL."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Selected channels. Must be non-empty only for `selected` scope."
+          },
+          "channel_scope": {
+            "$ref": "#/components/schemas/AgentChannelScope",
+            "description": "Whether the agent is global or channel-specific."
+          },
+          "default_model": {
+            "type": "string",
+            "description": "Model selected specifically for this agent."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness used to run the agent."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. Omit to make the agent private to the caller."
+          }
+        }
       },
       "UpdateChannelSharePermission": {
         "type": "object",

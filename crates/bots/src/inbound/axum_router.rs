@@ -5,8 +5,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Bot, BotChannel, BotChannelListCaller, BotId, BotToken,
-        CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+        AddChannelBotRequest, Agent, Bot, BotChannel, BotChannelListCaller, BotId, BotToken,
+        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+        PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotService},
 };
@@ -15,7 +16,7 @@ use axum::{
     extract::{FromRef, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
 };
 use entity_access::{
     domain::{
@@ -84,6 +85,13 @@ pub struct BotPath {
     pub bot_id: BotId,
 }
 
+/// Agent path.
+#[derive(Debug, serde::Deserialize)]
+pub struct AgentPath {
+    /// Agent bot id.
+    pub agent_id: BotId,
+}
+
 /// Bot token path.
 #[derive(Debug, serde::Deserialize)]
 pub struct BotTokenPath {
@@ -127,6 +135,12 @@ where
     T: Send + Sync,
 {
     Router::new()
+        .route("/agents", get(list_agents_handler::<S, Svc, Auth>))
+        .route("/agents", post(create_agent_handler::<S, Svc, Auth>))
+        .route(
+            "/agents/{agent_id}",
+            put(update_agent_handler::<S, Svc, Auth>),
+        )
         .route("/bots", get(list_bots_handler::<S, Svc, Auth>))
         .route("/bots", post(create_bot_handler::<S, Svc, Auth>))
         .route("/bots/me", get(get_self_bot_handler::<S, Svc, Auth>))
@@ -166,6 +180,104 @@ where
             delete(remove_channel_bot_handler::<S, Svc, Auth>),
         )
         .with_state(state)
+}
+
+/// Handler for `POST /agents`.
+#[utoipa::path(
+    post,
+    tag = "agents",
+    operation_id = "create_agent",
+    path = "/agents",
+    request_body = CreateAgentRequest,
+    responses(
+        (status = 201, body = Agent),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn create_agent_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(req): Json<CreateAgentRequest>,
+) -> Result<(StatusCode, Json<Agent>), BotsHandlerErr> {
+    let agent = state
+        .service
+        .create_agent(authorization.authorization.user.macro_user_id, req)
+        .await?;
+    Ok((StatusCode::CREATED, Json(agent)))
+}
+
+/// Handler for `GET /agents`.
+#[utoipa::path(
+    get,
+    tag = "agents",
+    operation_id = "list_agents",
+    path = "/agents",
+    responses(
+        (status = 200, body = Vec<Agent>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_agents_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<Vec<Agent>>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_agents(authorization.authorization.user.macro_user_id)
+            .await?,
+    ))
+}
+
+/// Handler for `PUT /agents/{agent_id}`.
+#[utoipa::path(
+    put,
+    tag = "agents",
+    operation_id = "update_agent",
+    path = "/agents/{agent_id}",
+    params(
+        ("agent_id" = BotId, Path, description = "Agent bot ID")
+    ),
+    request_body = UpdateAgentRequest,
+    responses(
+        (status = 200, body = Agent),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn update_agent_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<AgentPath>,
+    Json(req): Json<UpdateAgentRequest>,
+) -> Result<Json<Agent>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .update_agent(
+                authorization.authorization.user.macro_user_id,
+                path.agent_id,
+                req,
+            )
+            .await?,
+    ))
 }
 
 fn caller_from_receipt(

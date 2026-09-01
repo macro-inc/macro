@@ -9,9 +9,12 @@ use agent_session::domain::error::Result;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession};
 use agent_session::domain::ports::AgentSessionRepo;
 use bot_id::BotId;
+use bots::domain::models::{Agent, AgentChannelScope, Bot, BotKind, BotOwner};
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::side_effects::bot_mention_ids;
 
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use crate::domain::broker_events::{AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind};
@@ -33,8 +36,39 @@ const TRANSCRIPT_CAP: usize = 40;
 /// Bot facts required to decide whether a mention may start an agent session.
 #[cfg_attr(test, mockall::automock)]
 pub trait AgentBotLookup: Send + Sync + 'static {
-    /// Whether this bot is configured with an agent.
-    fn has_agent(&self, bot_id: BotId) -> impl Future<Output = Result<bool>> + Send;
+    /// Get an active persisted agent by bot id.
+    fn get_agent(&self, bot_id: BotId) -> impl Future<Output = Result<Option<Agent>>> + Send;
+
+    /// Get an active bot, including a fixed system bot, by id.
+    fn get_bot(&self, bot_id: BotId) -> impl Future<Output = Result<Option<Bot>>> + Send;
+}
+
+/// Team-membership facts, for agents shared with their owning team.
+///
+/// Its own port rather than a bot fact: membership belongs to the teams
+/// domain, and the trigger domain only ever asks this one question of it.
+#[cfg_attr(test, mockall::automock)]
+pub trait TeamMembershipLookup: Send + Sync + 'static {
+    /// Check whether a user belongs to a team.
+    fn user_has_team(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool>> + Send;
+}
+
+/// Channel-participation facts, for agents scoped to selected channels.
+///
+/// Its own port rather than a bot fact: participation belongs to the channels
+/// domain, and the trigger domain only ever asks this one question of it.
+#[cfg_attr(test, mockall::automock)]
+pub trait ChannelParticipationLookup: Send + Sync + 'static {
+    /// Check whether a bot is an active channel participant.
+    fn bot_active_in_channel(
+        &self,
+        channel_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Detects whether a message is composed as a quote-reply - a leading
@@ -73,26 +107,34 @@ pub trait ImplicitTriggerJudge: Send + Sync + 'static {
 }
 
 /// Looks up the session context for a channel message and evaluates its trigger rule.
-pub struct AgentTriggerService<Repo, Bots, Replies, Judge, History> {
+pub struct AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, History> {
     sessions: Repo,
     bots: Bots,
+    teams: Teams,
+    channels: Channels,
     replies: Replies,
     judge: Judge,
     history: History,
 }
 
-impl<Repo, Bots, Replies, Judge, History> AgentTriggerService<Repo, Bots, Replies, Judge, History>
+impl<Repo, Bots, Teams, Channels, Replies, Judge, History>
+    AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, History>
 where
     Repo: AgentSessionRepo,
     Bots: AgentBotLookup,
+    Teams: TeamMembershipLookup,
+    Channels: ChannelParticipationLookup,
     Replies: ReplyDetector,
     Judge: ImplicitTriggerJudge,
     History: ThreadHistory,
 {
-    /// Creates a trigger service backed by session and bot lookups.
+    /// Creates a trigger service backed by session, bot, membership, and
+    /// participation lookups.
     pub const fn new(
         sessions: Repo,
         bots: Bots,
+        teams: Teams,
+        channels: Channels,
         replies: Replies,
         judge: Judge,
         history: History,
@@ -100,9 +142,61 @@ where
         Self {
             sessions,
             bots,
+            teams,
+            channels,
             replies,
             judge,
             history,
+        }
+    }
+
+    /// Whether `posted` may address `bot_id` under the bot's current scope.
+    ///
+    /// System agents are global. Persisted all-channel agents are private to
+    /// their owner or shared with their owning team. Selected agents and
+    /// legacy agent-backed bots use explicit channel participation.
+    async fn agent_is_available(
+        &self,
+        posted: &ChannelMessagePostedMetadata,
+        bot_id: BotId,
+    ) -> Result<bool> {
+        let Some(caller) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+            return Ok(false);
+        };
+
+        if let Some(agent) = self.bots.get_agent(bot_id).await? {
+            if !agent.bot.has_agent {
+                return Ok(false);
+            }
+            return match agent.channel_scope {
+                AgentChannelScope::All => match agent.bot.owner {
+                    Some(BotOwner::User { user_id }) => Ok(user_id == caller.as_ref()),
+                    Some(BotOwner::Team { team_id }) => {
+                        self.teams.user_has_team(caller, team_id).await
+                    }
+                    None => Ok(false),
+                },
+                AgentChannelScope::Selected => {
+                    self.channels
+                        .bot_active_in_channel(posted.channel_id, bot_id)
+                        .await
+                }
+            };
+        }
+
+        let Some(bot) = self.bots.get_bot(bot_id).await? else {
+            return Ok(false);
+        };
+        if !bot.has_agent {
+            return Ok(false);
+        }
+        match bot.kind {
+            BotKind::System => Ok(true),
+            BotKind::Owned => {
+                self.channels
+                    .bot_active_in_channel(posted.channel_id, bot_id)
+                    .await
+            }
         }
     }
 
@@ -185,8 +279,8 @@ where
             ChannelSession::CreatedFromThread(session) => Some(session.bot_id),
             ChannelSession::None => mentioned_bot,
         };
-        let has_agent = match bot {
-            Some(bot_id) => self.bots.has_agent(bot_id).await?,
+        let available = match bot {
+            Some(bot_id) => self.agent_is_available(posted, bot_id).await?,
             None => false,
         };
 
@@ -195,7 +289,7 @@ where
             existing: &existing,
             mentioned_bot,
         };
-        match yield_event(&message, has_agent) {
+        match yield_event(&message, available) {
             AgentSessionEventDecision::Event(event) => {
                 let outcome = match existing {
                     ChannelSession::None => "top_level_mentioned",
@@ -236,7 +330,7 @@ where
         }
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
-            if self.bots.has_agent(session.bot_id).await? {
+            if self.agent_is_available(posted, session.bot_id).await? {
                 candidates.push(session);
             }
         }

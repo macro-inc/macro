@@ -9,8 +9,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    HarnessCommand, PriorChannelMessage, ProvisionedEgress, SandboxEgress, SessionAnnouncement,
-    SpawnContainer,
+    AgentRuntimeConfig, HarnessCommand, PriorChannelMessage, ProvisionedEgress, SandboxEgress,
+    SessionAnnouncement, SpawnContainer,
 };
 use super::sandbox::SandboxResizeEffect;
 
@@ -53,6 +53,17 @@ impl CommandForwarder for NoPeers {
 
 #[cfg(test)]
 mod test;
+
+/// Resolves the runtime configuration for a bot that may receive agent
+/// session triggers.
+pub trait AgentRuntimeDirectory: Send + Sync + 'static {
+    /// Return a runtime profile for a managed agent, an external profile for a
+    /// BYOA bot, or `None` when the bot has no agent configuration.
+    fn runtime_for(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<AgentRuntimeConfig>>> + Send;
+}
 
 /// Loads messages preceding a channel-originated agent prompt.
 pub trait ChannelPromptContext: Send + Sync + 'static {

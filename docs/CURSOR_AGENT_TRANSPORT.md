@@ -84,7 +84,7 @@ associated type, resolved once.
 
 ## Product surface
 
-### 1. Settings → Connections
+### 1. Settings → Agents → Harness
 
 A field to enter a Cursor API key. On submit we validate it before storing:
 `GET /v1/me` with the key. A `crsr_`-prefixed key that authenticates is stored;
