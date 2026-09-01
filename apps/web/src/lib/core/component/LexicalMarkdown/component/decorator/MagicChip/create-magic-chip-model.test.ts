@@ -45,6 +45,7 @@ describe('createMagicChipModel', () => {
     vi.clearAllMocks();
     sessionFold.subscribeAgentSessionLog.mockReturnValue(vi.fn());
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      bot: { id: 'bot', name: 'Macro' },
       messages: [prompt, response],
       release: vi.fn(),
     });
@@ -61,6 +62,8 @@ describe('createMagicChipModel', () => {
       return rootDispose;
     });
 
+    expect(presentation()).toEqual({ kind: 'loading' });
+
     await Promise.resolve();
 
     expect(presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
@@ -74,6 +77,7 @@ describe('createMagicChipModel', () => {
 
   it('hydrates a disconnected status from the session', async () => {
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      bot: { id: 'bot', name: 'Macro' },
       messages: [],
       release: vi.fn(),
     });
@@ -88,7 +92,11 @@ describe('createMagicChipModel', () => {
 
     expect(presentation()).toEqual({
       kind: 'working',
-      activity: { label: 'Session disconnected', busy: false },
+      activity: {
+        icon: 'disconnect',
+        label: 'Session disconnected',
+        busy: false,
+      },
     });
 
     dispose();
