@@ -2,10 +2,12 @@
 //! `GET /webhook/events/stream` open as that bot acting for its owner.
 //!
 //! The body is Server-Sent Events, decoded by `eventsource-stream`. Each
-//! event's `data` is the same broker envelope persisted webhooks deliver.
-//! Delivery is best-effort: a dropped connection misses events published
-//! while it was down.
+//! event's `data` is the same broker envelope persisted webhooks deliver,
+//! decoded straight into the caller's envelope type. Delivery is
+//! best-effort: a dropped connection misses events published while it was
+//! down.
 
+use std::marker::PhantomData;
 use std::pin::Pin;
 
 use bot_id::BotId;
@@ -13,6 +15,7 @@ use eventsource_stream::{Event, EventStreamError, Eventsource as _};
 use futures::{Stream, StreamExt as _};
 use rootcause::prelude::ResultExt as _;
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use webhook::domain::models::{WebhookFilter, WebhookScope};
 
 #[cfg(test)]
@@ -82,13 +85,14 @@ impl EventStreamClient {
         Ok(me.id)
     }
 
-    /// Open `GET /webhook/events/stream` and start reading envelopes.
+    /// Open `GET /webhook/events/stream` and start reading envelopes of
+    /// type `E`.
     #[tracing::instrument(skip(self, filters), err)]
-    pub async fn connect(
+    pub async fn connect<E: DeserializeOwned>(
         &self,
         scope: WebhookScope,
         filters: &[WebhookFilter],
-    ) -> rootcause::Result<EventStream> {
+    ) -> rootcause::Result<EventStream<E>> {
         let filters =
             serde_json::to_string(filters).context("could not encode the stream filters")?;
         let response = self
@@ -111,6 +115,7 @@ impl EventStreamClient {
         }
         Ok(EventStream {
             events: Box::pin(response.bytes_stream().eventsource()),
+            _envelope: PhantomData,
         })
     }
 }
@@ -123,17 +128,18 @@ struct BotMe {
 type SseEvents =
     Pin<Box<dyn Stream<Item = Result<Event, EventStreamError<reqwest::Error>>> + Send>>;
 
-/// An open SSE response, yielding one broker envelope at a time.
-pub struct EventStream {
+/// An open SSE response, yielding one decoded envelope at a time.
+pub struct EventStream<E> {
     events: SseEvents,
+    _envelope: PhantomData<E>,
 }
 
-impl EventStream {
-    /// The next complete JSON envelope, or `None` when the server closes.
+impl<E: DeserializeOwned> EventStream<E> {
+    /// The next envelope, or `None` when the server closes.
     ///
-    /// Keep-alive comments never surface as events; a `data` payload that is
-    /// not JSON is skipped rather than ending the stream.
-    pub async fn next_envelope(&mut self) -> rootcause::Result<Option<serde_json::Value>> {
+    /// Keep-alive comments never surface as events; a `data` payload that
+    /// does not decode as `E` is skipped rather than ending the stream.
+    pub async fn next_event(&mut self) -> rootcause::Result<Option<E>> {
         loop {
             let Some(event) = self.events.next().await else {
                 return Ok(None);

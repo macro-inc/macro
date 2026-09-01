@@ -128,19 +128,16 @@ pub trait WorkExecutor: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), crate::dispatch::DispatchError>> + Send;
 }
 
-/// Decode one stream envelope, translate it, and execute. Undecodable or
-/// skippable payloads are ignored; an execute failure is returned so the
-/// caller can log it.
-#[tracing::instrument(skip(executor, raw), err)]
-pub async fn handle_envelope<Executor: WorkExecutor>(
-    raw: serde_json::Value,
+/// The envelope the stream delivers: the broker's, carrying a trigger event.
+pub type TriggerEvent = Event<AgentTriggerTopicEvent>;
+
+/// Translate one delivered event and execute it. Skippable events are
+/// ignored; an execute failure is returned so the caller can log it.
+#[tracing::instrument(skip(executor, event), fields(event_id = %event.event_id), err)]
+pub async fn handle_event<Executor: WorkExecutor>(
+    event: TriggerEvent,
     executor: &Executor,
 ) -> Result<(), crate::dispatch::DispatchError> {
-    let Ok(event) = serde_json::from_value::<Event<AgentTriggerTopicEvent>>(raw) else {
-        tracing::debug!("undecodable agent-trigger stream payload; skipped");
-        return Ok(());
-    };
-
     match trigger_to_work(event.event) {
         Ok(work) => executor.execute(work).await,
         Err(skipped) => {

@@ -130,24 +130,29 @@ impl WorkExecutor for std::sync::Arc<RecordingExecutor> {
 }
 
 #[tokio::test]
-async fn a_mention_envelope_executes() {
+async fn a_mention_event_executes() {
     let executor = std::sync::Arc::new(RecordingExecutor::default());
-    let raw = serde_json::to_value(Event::new(mention("fix it"))).unwrap();
 
-    handle_envelope(raw, &executor)
+    handle_event(Event::new(mention("fix it")), &executor)
         .await
-        .expect("a mention envelope is work");
+        .expect("a mention is work");
 
     assert_eq!(executor.executed.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
-async fn an_undecodable_envelope_is_skipped() {
+async fn a_skipped_event_is_not_an_error() {
     let executor = std::sync::Arc::new(RecordingExecutor::default());
+    let mut event = mention("self talk");
+    if let AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
+        &mut event
+    {
+        mentioned.message.sender = ChannelSender::new_from_bot(bot_id::BotId::TEST_B);
+    }
 
-    handle_envelope(serde_json::json!({ "not": "a trigger" }), &executor)
+    handle_event(Event::new(event), &executor)
         .await
-        .expect("undecodable envelopes are not errors");
+        .expect("skipped events are not errors");
 
     assert!(executor.executed.lock().unwrap().is_empty());
 }
@@ -158,7 +163,10 @@ async fn failed_work_is_returned() {
         fail: true,
         ..Default::default()
     });
-    let raw = serde_json::to_value(Event::new(mention("fix it"))).unwrap();
 
-    assert!(handle_envelope(raw, &executor).await.is_err());
+    assert!(
+        handle_event(Event::new(mention("fix it")), &executor)
+            .await
+            .is_err()
+    );
 }
