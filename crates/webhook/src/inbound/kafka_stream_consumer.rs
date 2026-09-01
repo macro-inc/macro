@@ -1,8 +1,11 @@
 //! Process-level Kafka consumer feeding the local webhook stream channel.
 
 use crate::domain::ingestion::{
-    WebhookEventIngestionError, agent_trigger_stream_candidate, channel_stream_candidate,
-    document_stream_candidate, webhook_stream_candidate,
+    WebhookEventIngestionError,
+    stream::{
+        agent_trigger_stream_candidate, channel_stream_candidate, document_stream_candidate,
+        webhook_stream_candidate,
+    },
 };
 use crate::domain::stream::StreamCandidateEvent;
 use crate::topics::DeclaredMacroEvent;
