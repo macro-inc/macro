@@ -7,6 +7,7 @@ import {
   type ScheduleFrequency,
   WEEKDAY_OPTIONS,
 } from '@core/util/cron';
+import { TZDateMini } from '@date-fns/tz';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import { Button, cn } from '@ui';
 import {
@@ -297,12 +298,17 @@ export function ReminderForm(props: ReminderFormProps) {
     if (kind === 'once') return;
     // Coming from a one-shot, seed the recurrence from the date and time the
     // one-shot fields currently hold rather than the mount-time parts, so
-    // switching to Weekly or Monthly lands on that weekday and time. Between
-    // two recurring kinds, keep the parts the user set and only flip frequency.
+    // switching to Weekly or Monthly lands on that weekday and time. Those
+    // fields are the viewer's local wall-clock but the cron is read in
+    // `timezone()`, so take the weekday and time of that instant AS SEEN in
+    // that zone — otherwise the local time would be reinterpreted in a
+    // different zone and the reminder would fire at another moment. Between two
+    // recurring kinds, keep the parts the user set and only flip frequency.
     if (wasOnce) {
       const from = onceDateTime();
       if (!Number.isNaN(from.getTime())) {
-        setRepeatParts(repeatPartsFromDate(from, kind));
+        const inZone = TZDateMini.tz(timezone(), from.getTime());
+        setRepeatParts(repeatPartsFromDate(inZone, kind));
         return;
       }
     }
