@@ -19,8 +19,10 @@ type UploadDraftAttachmentsParams = {
    */
   onAttachmentAdded?: (file: File, attachmentID: string) => void;
   /**
-   * Called when the content upload fails, after the attachment record has
-   * been removed from the draft, so the file becomes eligible for a retry.
+   * Called when the content upload fails, once its attachment record has been
+   * confirmed removed from the draft, so the file becomes eligible for a
+   * retry. Not called when the removal itself fails -- retrying a file whose
+   * record survived would duplicate it on the draft.
    */
   onAttachmentUploadFailed?: (file: File) => void;
 };
@@ -105,17 +107,20 @@ export const useUploadDraftAttachmentsMutation = (
         async onError(error, variables) {
           if (error instanceof UploadDraftAttachmentError) {
             try {
-              await emailClient.removeDraftAttachment(
-                {
-                  draftID: variables.draftID,
-                  attachmentID: error.context.attachmentID,
-                },
-                variables.linkId
+              await throwOnErr(
+                async () =>
+                  await emailClient.removeDraftAttachment(
+                    {
+                      draftID: variables.draftID,
+                      attachmentID: error.context.attachmentID,
+                    },
+                    variables.linkId
+                  )
               );
+              variables.onAttachmentUploadFailed?.(error.context.file);
             } catch {
               console.error('Unable to remove draft attachment after failure');
             }
-            variables.onAttachmentUploadFailed?.(error.context.file);
           }
           toast.failure('Failed to save attachments');
         },
