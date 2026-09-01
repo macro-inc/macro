@@ -84,6 +84,7 @@ export function InboxList(props: InboxListProps) {
     focusKey: list.focus.requestedKey(),
     scrollOffset: virtualizer()?.scrollOffset ?? scrollOffset,
   });
+
   const applyListState: Setter<InboxListStateSnapshot> = (next) => {
     const current = readListState();
     const value = typeof next === 'function' ? next(current) : next;
@@ -420,13 +421,14 @@ export function InboxList(props: InboxListProps) {
                               >
                                 <div role="gridcell">
                                   <InboxListEntity
-                                    class="mx-0 w-full"
-                                    cardClass="rounded-none"
+                                    class="mx-0 w-full border-b border-edge touch:border-b-0"
+                                    cardClass="rounded-none px-4 py-3"
                                     entity={entityRow().entity}
                                     occurrenceKey={entityRow().id}
                                     checked={list.selection.isSelected(
                                       entityRow().id
                                     )}
+                                    hideCheckbox
                                     highlighted={
                                       !isTouchDevice() &&
                                       list.focus.key() === entityRow().id
@@ -438,13 +440,6 @@ export function InboxList(props: InboxListProps) {
                                         <CheckIcon class="size-8 text-surface" />
                                       ),
                                     }}
-                                    onChecked={(checked, shiftKey) =>
-                                      listInteractions.selection.set(
-                                        entityRow().id,
-                                        checked,
-                                        { range: shiftKey }
-                                      )
-                                    }
                                     onClick={(event) => {
                                       if (
                                         event.metaKey ||
