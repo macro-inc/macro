@@ -11,7 +11,7 @@ import { floatWithSelection } from '@core/component/LexicalMarkdown/directive/fl
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isMobile } from '@core/mobile/isMobile';
 import { debouncedDependent } from '@core/util/debounce';
-import Quote from '@phosphor/quotes.svg';
+import Quote from '@lucide/quote.svg';
 import { createSignal, onCleanup, Show } from 'solid-js';
 import { readReplyableSelection } from '../state/reply-selection';
 

@@ -4,12 +4,12 @@ import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import MacroLogo from '@icon/macro-logo.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
-import XIcon from '@phosphor/x.svg';
+import RobotIcon from '@lucide/bot.svg';
+import PencilIcon from '@lucide/pencil.svg';
+import PlusIcon from '@lucide/plus.svg';
+import TrashIcon from '@lucide/trash.svg';
+import UploadIcon from '@lucide/upload.svg';
+import XIcon from '@lucide/x.svg';
 import {
   type AgentWithHarnessId,
   type CreateAgentParams,

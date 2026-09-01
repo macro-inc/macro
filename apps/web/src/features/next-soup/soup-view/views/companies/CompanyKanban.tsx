@@ -27,7 +27,7 @@ import {
   getCompanyOwnerId,
   isCrmCompanyEntity,
 } from '@entity';
-import CircleDashed from '@phosphor/circle-dashed.svg';
+import CircleDashed from '@lucide/circle-dashed.svg';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { getSoupEntityById } from '@queries/soup/normalized-cache';
 import { EntityType } from '@service-properties/generated/schemas/entityType';

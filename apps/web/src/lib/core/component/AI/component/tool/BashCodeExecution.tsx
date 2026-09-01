@@ -1,6 +1,6 @@
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
-import CaretRight from '@phosphor-icons/core/regular/caret-right.svg';
-import Terminal from '@phosphor-icons/core/regular/terminal.svg';
+import CaretDown from '@lucide/chevron-down.svg';
+import CaretRight from '@lucide/chevron-right.svg';
+import Terminal from '@lucide/terminal.svg';
 import type { BashCodeExecutionResult } from '@service-cognition/generated/tools/types';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';

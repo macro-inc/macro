@@ -7,26 +7,26 @@ import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import { Switch } from '@kobalte/core/switch';
 import { $isCodeNode, CodeNode } from '@lexical/code';
+import Braces from '@lucide/braces.svg';
+import Copy from '@lucide/copy.svg';
+import FileC from '@lucide/file-code.svg';
+import FileCode from '@lucide/file-code.svg';
+import FileCpp from '@lucide/file-code.svg';
+import FileCss from '@lucide/file-code.svg';
+import FileHtml from '@lucide/file-code.svg';
+import FileJs from '@lucide/file-code.svg';
+import FilePy from '@lucide/file-code.svg';
+import FileRs from '@lucide/file-code.svg';
+import FileSql from '@lucide/file-code.svg';
+import FileTs from '@lucide/file-code.svg';
+import FileMd from '@lucide/file-text.svg';
+import TrashCan from '@lucide/trash-2.svg';
 import {
   $isCustomCodeNode,
   LanguageDefinitions,
   normalizedLanguage,
   type SupportedLanguage,
 } from '@macro-inc/lexical-core';
-import Braces from '@phosphor/brackets-curly.svg';
-import Copy from '@phosphor/copy.svg';
-import FileC from '@phosphor/file-c.svg';
-import FileCode from '@phosphor/file-code.svg';
-import FileCpp from '@phosphor/file-cpp.svg';
-import FileCss from '@phosphor/file-css.svg';
-import FileHtml from '@phosphor/file-html.svg';
-import FileJs from '@phosphor/file-js.svg';
-import FileMd from '@phosphor/file-md.svg';
-import FilePy from '@phosphor/file-py.svg';
-import FileRs from '@phosphor/file-rs.svg';
-import FileSql from '@phosphor/file-sql.svg';
-import FileTs from '@phosphor/file-ts.svg';
-import TrashCan from '@phosphor/trash-simple.svg';
 import { Button, cn, Dropdown } from '@ui';
 import {
   $getNodeByKey,

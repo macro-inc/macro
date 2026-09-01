@@ -5,8 +5,8 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
 import PhoneCallIcon from '@icon/wide-call.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
-import XIcon from '@phosphor/x.svg';
+import PlusCircleIcon from '@lucide/circle-plus.svg';
+import XIcon from '@lucide/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,

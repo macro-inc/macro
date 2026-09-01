@@ -1,6 +1,6 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
 import {
   type ActivityEvent,
   createEntityActivityQuery,

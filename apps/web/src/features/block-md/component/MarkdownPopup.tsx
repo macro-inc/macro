@@ -51,18 +51,18 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import MacroGridLoader from '@icon/macro-grid-noise-loader-4.svg';
+import CheckIcon from '@lucide/check.svg?component-solid';
+import ClipboardIcon from '@lucide/clipboard.svg?component-solid';
+import NotesIcon from '@lucide/file-text.svg?component-solid';
+import GridIcon from '@lucide/grid-2x2.svg';
+import LinkIcon from '@lucide/link.svg?component-solid';
+import LoadingIcon from '@lucide/loader-circle.svg?component-solid';
+import PencilIcon from '@lucide/pencil.svg?component-solid';
+import PaperPlaneRight from '@lucide/send-horizontal.svg?component-solid';
+import SparkleIcon from '@lucide/sparkles.svg?component-solid';
+import CheckSquareIcon from '@lucide/square-check.svg?component-solid';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import GridIcon from '@phosphor/grid-four.svg';
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
-import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-solid';
-import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
-import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
-import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
-import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import {
   cancelAiEdit,
   hasActiveAiEdit,
@@ -664,7 +664,7 @@ export function MarkdownPopup(props: {
                   width={20}
                   height={20}
                   color="var(--color-accent)"
-                  class="text-accent fill-accent!"
+                  class="text-accent text-accent!"
                 />
               </button>
             </div>

@@ -1,5 +1,5 @@
 import { internalDrag } from '@core/directive/internalDragState';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import Spinner from '@lucide/loader-circle.svg?component-solid';
 import { cn } from '@ui';
 import {
   createEffect,

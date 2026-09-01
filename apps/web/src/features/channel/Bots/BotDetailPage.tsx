@@ -2,7 +2,7 @@ import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
+import CaretLeftIcon from '@lucide/chevron-left.svg';
 import {
   useBotChannelsQuery,
   useBotQuery,

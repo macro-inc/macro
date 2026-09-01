@@ -27,19 +27,19 @@ import {
 } from '@entity';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
+import AtIcon from '@lucide/at-sign.svg?component-solid';
+import BellSimpleIcon from '@lucide/bell.svg?component-solid';
+import CalendarBlankIcon from '@lucide/calendar.svg?component-solid';
+import ArrowBendUpLeftIcon from '@lucide/corner-up-left.svg?component-solid';
+import FilesIcon from '@lucide/files.svg';
+import GitMergeIcon from '@lucide/git-merge.svg';
+import GitPullRequestIcon from '@lucide/git-pull-request.svg';
+import ChatCircleIcon from '@lucide/message-circle.svg?component-solid';
+import ChatTextIcon from '@lucide/message-square-text.svg?component-solid';
+import PaperclipIcon from '@lucide/paperclip.svg?component-solid';
+import PhoneIcon from '@lucide/phone.svg?component-solid';
+import UserPlusIcon from '@lucide/user-plus.svg?component-solid';
 import { formatCalendarReminderTime } from '@notifications';
-import FilesIcon from '@phosphor/files.svg';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import ArrowBendUpLeftIcon from '@phosphor-icons/core/regular/arrow-bend-up-left.svg?component-solid';
-import AtIcon from '@phosphor-icons/core/regular/at.svg?component-solid';
-import BellSimpleIcon from '@phosphor-icons/core/regular/bell-simple.svg?component-solid';
-import CalendarBlankIcon from '@phosphor-icons/core/regular/calendar-blank.svg?component-solid';
-import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?component-solid';
-import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
-import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
   type PropertySaveHandler,

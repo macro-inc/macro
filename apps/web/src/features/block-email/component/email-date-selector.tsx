@@ -1,7 +1,7 @@
 import { DateSelector } from '@block-email/component/date-selector';
 import { isMobile } from '@core/mobile/isMobile';
-import ClockIcon from '@phosphor/clock.svg';
-import IconX from '@phosphor/x.svg';
+import ClockIcon from '@lucide/clock.svg';
+import IconX from '@lucide/x.svg';
 import { Button, Tooltip } from '@ui';
 import { addYears } from 'date-fns/addYears';
 import { format } from 'date-fns/format';

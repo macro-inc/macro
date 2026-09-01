@@ -3,10 +3,10 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import HashIcon from '@lucide/hash.svg';
+import XIcon from '@lucide/x.svg';
 import { Surface } from '@ui';
 import { type Component, createMemo, For, Show } from 'solid-js';
 import {
@@ -102,7 +102,7 @@ export function ChannelMultiSelect(props: {
         <Combobox.Content
           as={Surface}
           depth={3}
-          class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-64 rounded-xl p-1.5 shadow-menu bg-menu"
+          class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-64 rounded-xl p-1.5 glass-lg bg-menu-glass"
         >
           <Show
             when={options().length > 0}

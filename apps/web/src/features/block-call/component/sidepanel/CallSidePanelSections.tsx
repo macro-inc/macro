@@ -7,7 +7,7 @@ import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
-import ClockIcon from '@phosphor/clock.svg';
+import ClockIcon from '@lucide/clock.svg';
 import {
   useSetCallRecordShareWithTeamMutation,
   useToggleShareWithTeamMutation,

@@ -1,4 +1,4 @@
-import User from '@phosphor-icons/core/regular/user.svg?component-solid';
+import User from '@lucide/user.svg?component-solid';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,

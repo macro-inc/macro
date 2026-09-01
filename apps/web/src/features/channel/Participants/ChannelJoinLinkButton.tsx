@@ -1,8 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import { getWebOrigin } from '@core/util/webOrigin';
-import CheckIcon from '@phosphor/check.svg';
-import LinkIcon from '@phosphor/link.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import CheckIcon from '@lucide/check.svg';
+import LinkIcon from '@lucide/link.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { useGetChannelJoinLinkMutation } from '@queries/channel/join-links';
 import { Button } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';

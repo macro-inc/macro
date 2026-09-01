@@ -1,5 +1,5 @@
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import CheckCircleIcon from '@phosphor/check-circle.svg';
+import ChevronDownIcon from '@lucide/chevron-down.svg';
+import CheckCircleIcon from '@lucide/circle-check.svg';
 import { cn, InlineCheckbox } from '@ui';
 import { Show } from 'solid-js';
 import type {

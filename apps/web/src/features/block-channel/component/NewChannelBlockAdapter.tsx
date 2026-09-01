@@ -59,7 +59,7 @@ import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { buildEntityData } from '@entity';
-import RenameIcon from '@phosphor/pencil-line.svg';
+import RenameIcon from '@lucide/pencil-line.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import {
   fetchResolvedChannelMessage,

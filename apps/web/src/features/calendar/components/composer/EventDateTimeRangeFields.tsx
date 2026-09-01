@@ -1,7 +1,7 @@
 import { Popover } from '@kobalte/core/popover';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import ArrowRightIcon from '@lucide/arrow-right.svg';
+import CalendarBlankIcon from '@lucide/calendar.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { ToggleSwitch } from '@ui/components/ToggleSwitch';
@@ -93,7 +93,7 @@ function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-edge bg-menu shadow-menu menu-open-animation"
+            class="portal-scope z-action-menu w-72 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-edge bg-menu-glass glass-lg menu-open-animation"
             on:keydown={(event: KeyboardEvent) => {
               if (event.key !== 'Escape') return;
               event.preventDefault();

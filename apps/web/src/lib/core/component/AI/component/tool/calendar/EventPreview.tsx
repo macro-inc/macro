@@ -6,9 +6,9 @@ import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-so
 import type { CalendarPeriodView } from '@app/features/calendar/types';
 import { formatLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { getDefaultCalendarTimeFormat } from '@app/features/calendar/utils/time-format';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CalendarIcon from '@lucide/calendar.svg';
+import CaretLeftIcon from '@lucide/chevron-left.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Button, cn } from '@ui';
 import {

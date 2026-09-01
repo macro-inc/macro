@@ -1,5 +1,5 @@
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import ArrowUpRightIcon from '@lucide/arrow-up-right.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 

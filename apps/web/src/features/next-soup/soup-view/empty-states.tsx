@@ -21,7 +21,7 @@ import EmptyStateInboxZeroGraphic from '@design/empty-state-inbox-zero.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { type Component, type JSXElement, Match, Switch } from 'solid-js';

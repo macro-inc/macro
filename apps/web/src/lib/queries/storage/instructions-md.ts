@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { instructionsMdKeys } from './keys';
 
-export { default as AiInstructionsIcon } from '@phosphor/notepad.svg';
+export { default as AiInstructionsIcon } from '@lucide/notebook.svg';
 
 /**
  * Returns the instructions md document id for the current user.

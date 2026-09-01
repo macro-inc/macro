@@ -1,7 +1,7 @@
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FilePdfIcon from '@phosphor/file-pdf.svg';
-import FileTextIcon from '@phosphor/file-text.svg';
-import HashIcon from '@phosphor/hash.svg';
+import FilePdfIcon from '@lucide/file-text.svg';
+import FileTextIcon from '@lucide/file-text.svg';
+import HashIcon from '@lucide/hash.svg';
+import EnvelopeIcon from '@lucide/mail.svg';
 import { describe, expect, it } from 'vitest';
 import {
   getSearchIcon,

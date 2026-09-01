@@ -1,6 +1,6 @@
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretLeft from '@lucide/chevron-left.svg';
+import CaretRight from '@lucide/chevron-right.svg';
 import { endOfDay } from 'date-fns/endOfDay';
 import { isAfter } from 'date-fns/isAfter';
 import { isBefore } from 'date-fns/isBefore';

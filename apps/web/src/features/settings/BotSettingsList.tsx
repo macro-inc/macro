@@ -1,8 +1,8 @@
 import { BotAvatar } from '@channel/Bots/BotAvatar';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
-import BotIcon from '@icon/wide-bot.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import BotIcon from '@lucide/bot.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { useBotChannelsQuery } from '@queries/bots/bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button } from '@ui';

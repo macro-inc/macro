@@ -1,4 +1,4 @@
-import Spinner from '@phosphor/circle-notch.svg';
+import Spinner from '@lucide/loader-circle.svg';
 export function Loading() {
   return (
     <div class="flex flex-col items-center justify-center h-full">

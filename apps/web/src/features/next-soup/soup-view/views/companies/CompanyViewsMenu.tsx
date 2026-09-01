@@ -15,12 +15,12 @@ import {
 import { useCrmPermissions } from '@companies/crm/team-crm-config';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import FloppyDiskIcon from '@phosphor/floppy-disk.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PushPinIcon from '@phosphor/push-pin.svg';
-import SlidersIcon from '@phosphor/sliders-horizontal.svg';
-import StackIcon from '@phosphor/stack.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import StackIcon from '@lucide/layers.svg';
+import LinkIcon from '@lucide/link.svg';
+import PushPinIcon from '@lucide/pin.svg';
+import FloppyDiskIcon from '@lucide/save.svg';
+import SlidersIcon from '@lucide/sliders-horizontal.svg';
+import TrashIcon from '@lucide/trash.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Button, cn, Dropdown, SegmentedControl, Tooltip } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -202,7 +202,7 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
         </Show>
       </Dropdown.Trigger>
 
-      <Dropdown.Content class="w-64 shadow-menu">
+      <Dropdown.Content class="w-64">
         <Dropdown.Group>
           <Dropdown.GroupLabel>My views</Dropdown.GroupLabel>
           <For
@@ -353,7 +353,7 @@ export function CompanyDisplayMenu() {
           </Dropdown.Trigger>
         </Tooltip>
 
-        <Dropdown.Content class="w-56 shadow-menu">
+        <Dropdown.Content class="w-56">
           {/* Column visibility only applies to the list. */}
           <Show when={viewMode() === 'list'}>
             <Dropdown.Group>

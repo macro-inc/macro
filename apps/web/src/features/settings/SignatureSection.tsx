@@ -1,7 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { ThrownResultError } from '@core/util/result';
-import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
+import SignatureIcon from '@lucide/signature.svg?component-solid';
 import { useEmailSignature } from '@queries/email/link';
 import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import { SIGNATURE_IMAGES_UNRESOLVED_CODE } from '@service-email/client';

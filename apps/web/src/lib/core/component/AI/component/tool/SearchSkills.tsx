@@ -1,7 +1,7 @@
 import { getEntityClickContent } from '@channel/Attachments/attachment-utils';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { buildEntityData, EntityRowIcon, EntityRowTitle } from '@entity';
-import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
+import MagnifyingGlass from '@lucide/search.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

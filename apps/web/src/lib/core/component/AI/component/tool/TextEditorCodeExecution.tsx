@@ -9,7 +9,7 @@ import {
   allSupportedExtensionSet,
   isCodeEditorExtensionSupported,
 } from '@core/util/languageQuery';
-import Terminal from '@phosphor-icons/core/regular/terminal.svg';
+import Terminal from '@lucide/terminal.svg';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type {
   TextEditorCodeExecutionContent,

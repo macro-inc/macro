@@ -1,4 +1,4 @@
-import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
+import MagnifyingGlass from '@lucide/search.svg';
 import { Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';

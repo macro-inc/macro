@@ -18,7 +18,7 @@ import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import PaperclipIcon from '@lucide/paperclip.svg?component-solid';
 import { isIOS } from '@solid-primitives/platform';
 import { Surface } from '@ui';
 import {

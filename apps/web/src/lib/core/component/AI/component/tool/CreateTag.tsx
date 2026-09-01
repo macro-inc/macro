@@ -1,4 +1,4 @@
-import Tag from '@phosphor-icons/core/regular/tag.svg';
+import Tag from '@lucide/tag.svg';
 import { TagDot } from '@property/tags/TagDot';
 import { Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

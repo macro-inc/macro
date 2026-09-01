@@ -3,8 +3,8 @@ import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-hea
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, type MacroId, tryMacroId } from '@core/user';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import CircleDashed from '@phosphor/circle-dashed.svg';
+import ChevronRightIcon from '@lucide/chevron-right.svg';
+import CircleDashed from '@lucide/circle-dashed.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { cn, Layer } from '@ui';

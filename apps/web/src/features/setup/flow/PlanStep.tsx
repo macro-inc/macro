@@ -4,8 +4,8 @@ import {
   type PlanTier,
 } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import Check from '@phosphor/check.svg';
+import ArrowRight from '@lucide/arrow-right.svg';
+import Check from '@lucide/check.svg';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { useSearchParams } from '@solidjs/router';
 import { Button, cn } from '@ui';

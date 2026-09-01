@@ -65,12 +65,12 @@ import WideStar from '@icon/wide-star.svg';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
+import BellSimpleIcon from '@lucide/bell.svg';
+import Robot from '@lucide/bot.svg';
+import PlusIcon from '@lucide/plus.svg';
+import MagnifyingGlassIcon from '@lucide/search.svg';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import type { Span } from '@macro-inc/observability';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import Robot from '@phosphor/robot.svg';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import {

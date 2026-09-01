@@ -72,7 +72,6 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedActivityIcon } from '@icon/wide-activity';
-import WideCalendarIcon from '@icon/wide-calendar.svg';
 import { AnimatedCallIcon } from '@icon/wide-call';
 import PhoneIcon from '@icon/wide-call.svg';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
@@ -85,15 +84,16 @@ import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CaretUpIcon from '@phosphor/caret-up.svg';
-import CompassIcon from '@phosphor/compass.svg';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
-import GearIcon from '@phosphor/gear.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import SignOutIcon from '@phosphor/sign-out.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
-import XIcon from '@phosphor/x.svg';
+import WideCalendarIcon from '@lucide/calendar.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
+import CaretUpIcon from '@lucide/chevron-up.svg';
+import CompassIcon from '@lucide/compass.svg';
+import DotsThreeIcon from '@lucide/ellipsis.svg';
+import SignOutIcon from '@lucide/log-out.svg';
+import MagnifyingGlassIcon from '@lucide/search.svg';
+import GearIcon from '@lucide/settings.svg';
+import UsersThreeIcon from '@lucide/users.svg';
+import XIcon from '@lucide/x.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -576,7 +576,7 @@ const SidebarSectionMenu = (props: {
     >
       <DotsThreeIcon />
     </Dropdown.Trigger>
-    <Dropdown.Content class="w-56 shadow-menu">
+    <Dropdown.Content class="w-56">
       <Dropdown.Group>
         <Dropdown.GroupLabel>Customize</Dropdown.GroupLabel>
         <For each={props.options}>
@@ -902,7 +902,7 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         The menu is shrink-to-fit, so without a cap a long name or email
         stretches it instead of engaging the `truncate` below.
       */}
-      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))] shadow-menu">
+      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))]">
         <Dropdown.Group class="p-1.5 gap-0">
           <div class="flex items-center gap-3 px-1 py-1">
             <Show

@@ -1,9 +1,9 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { Dialog } from '@kobalte/core/dialog';
-import NewTab from '@phosphor/arrow-square-out.svg';
-import ArrowsOut from '@phosphor/arrows-out-simple.svg';
-import ThreeDotsIcon from '@phosphor/dots-three.svg';
-import Trash from '@phosphor/trash.svg';
+import ThreeDotsIcon from '@lucide/ellipsis.svg';
+import ArrowsOut from '@lucide/expand.svg';
+import NewTab from '@lucide/external-link.svg';
+import Trash from '@lucide/trash.svg';
 import { Button, Dropdown, Layer } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 

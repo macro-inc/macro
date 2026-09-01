@@ -1,6 +1,6 @@
 import { PIPEDREAM_ICON_MAP } from '@core/component/AI/constant/mcpServers';
 import { proxyImageUrl } from '@core/util/imageProxy';
-import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
+import PlugIcon from '@lucide/plug.svg?component-solid';
 import { Show } from 'solid-js';
 
 /**

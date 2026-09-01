@@ -13,9 +13,9 @@ import {
 } from '@core/user';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
-import HashIcon from '@phosphor/hash.svg';
-import InfoIcon from '@phosphor/info.svg';
-import XIcon from '@phosphor/x.svg';
+import HashIcon from '@lucide/hash.svg';
+import InfoIcon from '@lucide/info.svg';
+import XIcon from '@lucide/x.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';

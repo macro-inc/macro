@@ -1,7 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
-import HashIcon from '@phosphor/hash.svg';
-import UserPlus from '@phosphor/user-plus.svg';
+import HashIcon from '@lucide/hash.svg';
+import UserPlus from '@lucide/user-plus.svg';
 import { cn, HoverCard } from '@ui';
 import type { ParentProps } from 'solid-js';
 import type { CallStatus } from '../types/entity';

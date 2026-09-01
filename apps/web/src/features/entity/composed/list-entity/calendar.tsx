@@ -1,6 +1,6 @@
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { emailToMacroId, getDisplayName } from '@core/user';
-import RepeatIcon from '@phosphor/repeat.svg';
+import RepeatIcon from '@lucide/repeat.svg';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
 import type {

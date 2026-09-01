@@ -1,8 +1,8 @@
 import { channelWebhookUrl } from '@channel/Bots/webhook';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
-import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import RobotIcon from '@lucide/bot.svg';
+import PlusIcon from '@lucide/plus.svg';
 import {
   useChannelBotsQuery,
   useRemoveBotFromChannelMutation,

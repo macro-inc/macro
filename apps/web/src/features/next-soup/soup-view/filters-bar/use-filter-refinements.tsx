@@ -28,7 +28,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserContext, useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
-import CircleDashedIcon from '@phosphor/circle-dashed.svg';
+import CircleDashedIcon from '@lucide/circle-dashed.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
 import { batch, createMemo, createSignal, type JSX } from 'solid-js';

@@ -11,7 +11,7 @@ import {
   SearchTimestamp,
   type WithSearch,
 } from '@entity';
-import MagnifyingGlass from '@phosphor-icons/core/regular/magnifying-glass.svg';
+import MagnifyingGlass from '@lucide/search.svg';
 import { useSearchResponseItemMapper } from '@queries/soup/transform-utils';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createMemo, createSignal, For, Show } from 'solid-js';

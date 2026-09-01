@@ -1,9 +1,11 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { Toast, toaster } from '@kobalte/core/toast';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@lucide/check.svg';
+import Spinner from '@lucide/loader-circle.svg';
+import XIcon from '@lucide/x.svg';
+// Bare '!', pairing with the bare check above; circle-alert would enclose one
+// half of the status set. Same reason as the calendar components.
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
-import Spinner from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, cn, Surface } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {

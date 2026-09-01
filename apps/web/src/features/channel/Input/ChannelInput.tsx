@@ -552,6 +552,10 @@ export function ChannelInput(props: ChannelInputProps) {
         }}
         class={cn(
           'rounded-xl bg-surface touch:rounded-3xl touch:island',
+          // Desktop gets the glass treatment with a wide, soft ambient shadow
+          // (see `glass-input`); touch keeps its island chrome, whose own
+          // ring/shadow the glass box-shadow would fight.
+          !isTouchDevice() && 'glass-input bg-menu-glass',
           isCollapsed() && 'hidden',
           isTouchDevice() && 'bg-chrome'
         )}

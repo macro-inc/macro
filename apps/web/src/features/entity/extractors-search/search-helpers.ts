@@ -1,8 +1,8 @@
 import PhoneCallIcon from '@icon/wide-call.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FilePdfIcon from '@phosphor/file-pdf.svg';
-import FileTextIcon from '@phosphor/file-text.svg';
-import HashIcon from '@phosphor/hash.svg';
+import FilePdfIcon from '@lucide/file-text.svg';
+import FileTextIcon from '@lucide/file-text.svg';
+import HashIcon from '@lucide/hash.svg';
+import EnvelopeIcon from '@lucide/mail.svg';
 import { match } from 'ts-pattern';
 import { type ContentHitData, hitHasSender } from '../types/search';
 

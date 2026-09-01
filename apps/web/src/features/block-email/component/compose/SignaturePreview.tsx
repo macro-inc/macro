@@ -1,8 +1,8 @@
 import { isMobile } from '@core/mobile/isMobile';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
-import InfoIcon from '@phosphor/info.svg';
-import CaretDownIcon from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CaretDownIcon from '@lucide/chevron-down.svg?component-solid';
+import InfoIcon from '@lucide/info.svg';
+import XIcon from '@lucide/x.svg?component-solid';
 import { Tooltip } from '@ui';
 import { createEffect, createSignal, Show } from 'solid-js';
 

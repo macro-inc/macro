@@ -1,7 +1,7 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { useKeyPressed } from '@core/util/useKeyPressed';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@lucide/search.svg';
 import type { DateProperty } from '@property/types';
 import { useSearchInputFocus } from '@property/utils';
 import { cn } from '@ui';

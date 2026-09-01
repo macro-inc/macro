@@ -1,6 +1,6 @@
 import { BotAvatar } from '@channel/Bots/BotAvatar';
-import CopyIcon from '@phosphor/copy.svg';
-import XIcon from '@phosphor/x.svg';
+import CopyIcon from '@lucide/copy.svg';
+import XIcon from '@lucide/x.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button } from '@ui';
 import { Show } from 'solid-js';

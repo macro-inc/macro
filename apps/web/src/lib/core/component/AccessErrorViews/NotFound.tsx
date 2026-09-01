@@ -1,3 +1,4 @@
+// Lucide has no unenclosed question mark; see Gone.
 import Question from '@phosphor-icons/core/regular/question.svg?component-solid';
 
 /**

@@ -1,5 +1,5 @@
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
+import CaretRight from '@lucide/chevron-right.svg?component-solid';
 import { createSignal, Show } from 'solid-js';
 
 export function ThinkingBlock(props: {

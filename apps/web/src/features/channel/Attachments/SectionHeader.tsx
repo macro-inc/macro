@@ -1,4 +1,4 @@
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import Spinner from '@lucide/loader-circle.svg?component-solid';
 import { Button, cn, Panel } from '@ui';
 import { type Accessor, type JSX, Show } from 'solid-js';
 

@@ -1,10 +1,10 @@
 import type { CollectionNode } from '@kobalte/core';
 import { Collapsible } from '@kobalte/core/collapsible';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import PlusIcon from '@lucide/plus.svg';
+import XIcon from '@lucide/x.svg';
 import { Button, Checkbox, Layer } from '@ui';
 import {
   batch,

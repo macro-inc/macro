@@ -7,9 +7,9 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
-import PlayIcon from '@phosphor-icons/core/regular/play.svg?component-solid';
-import StopIcon from '@phosphor-icons/core/regular/stop.svg?component-solid';
-import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import StopIcon from '@lucide/circle-stop.svg?component-solid';
+import PlayIcon from '@lucide/play.svg?component-solid';
+import TrashIcon from '@lucide/trash-2.svg?component-solid';
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import {
   type ChatStreamController,

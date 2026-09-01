@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { formatRelativeDate } from '@core/util/time';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@lucide/chevron-right.svg';
 import { cn } from '@ui';
 import { For, type JSX, Show, splitProps } from 'solid-js';
 import { getThreadReplyCountLabel } from './utils/thread-reply-indicator-helpers';

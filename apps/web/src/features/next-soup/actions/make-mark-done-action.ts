@@ -13,8 +13,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import type { HotkeyGroup } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
+import ArrowCounterClockwise from '@lucide/rotate-ccw.svg?component-solid';
 import type { NotificationSource } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
   type NotificationEntityRef,
   toNotificationEntityRef,

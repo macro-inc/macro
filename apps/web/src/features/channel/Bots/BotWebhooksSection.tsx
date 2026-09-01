@@ -1,4 +1,4 @@
-import KeyIcon from '@phosphor/key.svg';
+import KeyIcon from '@lucide/key.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import { BotFormSection } from './BotFormSection';

@@ -8,8 +8,8 @@ import { StaticSplitLabel } from '@components/app/split-layout/components/SplitL
 import { useBlockId } from '@core/block';
 import { openExternalUrl } from '@core/util/url';
 import GithubIcon from '@icon/mcp-github.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GitMerge from '@lucide/git-merge.svg';
+import GitPullRequest from '@lucide/git-pull-request.svg';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
 import { Show } from 'solid-js';

@@ -1,13 +1,13 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { type IUser, idToEmail, recipientEntityMapper } from '@core/user';
 import { Popover } from '@kobalte/core/popover';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
-import CalendarDotsIcon from '@phosphor/calendar-dots.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import MapPinIcon from '@phosphor/map-pin.svg';
-import RepeatIcon from '@phosphor/repeat.svg';
-import UsersIcon from '@phosphor/users.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
+import BellSimpleIcon from '@lucide/bell.svg';
+import CalendarDotsIcon from '@lucide/calendar-days.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import MapPinIcon from '@lucide/map-pin.svg';
+import RepeatIcon from '@lucide/repeat.svg';
+import UsersIcon from '@lucide/users.svg';
+import VideoCameraIcon from '@lucide/video.svg';
 import { useProperty } from '@property/core/context';
 import { Root as PropertyRoot } from '@property/core/Root';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
@@ -144,7 +144,7 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       </Tooltip>
       <Popover.Portal>
         <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-1.5 text-sm shadow-menu menu-open-animation">
+          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-1.5 text-sm glass-lg menu-open-animation">
             <Popover.Title class="sr-only">Event guests</Popover.Title>
             <Show
               when={props.selected.length > 0}
@@ -340,7 +340,7 @@ export function EventComposerLocationPill(
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-2 shadow-menu menu-open-animation"
+            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass-lg menu-open-animation"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               queueMicrotask(() => input?.focus());

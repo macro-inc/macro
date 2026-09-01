@@ -18,8 +18,8 @@ import {
 import { fileDrop } from '@core/directive/fileDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { HEIC_EXTENSIONS, HEIC_MIME_TYPES } from '@core/heic/constants';
-import UploadSimple from '@phosphor-icons/core/bold/upload-simple-bold.svg?component-solid';
-import Image from '@phosphor-icons/core/regular/image.svg?component-solid';
+import Image from '@lucide/image.svg?component-solid';
+import UploadSimple from '@lucide/upload.svg?component-solid';
 //import { copiedFile } from "@core/state/clipboard";
 import { useHistoryQuery } from '@queries/history/history';
 import { Dropdown } from '@ui';

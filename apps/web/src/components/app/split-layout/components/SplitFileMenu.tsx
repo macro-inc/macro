@@ -26,18 +26,18 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useIsDocumentOwner } from '@core/signal/permissions';
 import { buildEntityData, type EntityData } from '@entity';
-import DotsThree from '@icon/dots-three-large.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import BellSimple from '@phosphor/bell-simple.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
-import Copy from '@phosphor/copy.svg';
-import Link from '@phosphor/link.svg';
-import Rename from '@phosphor/pencil-line.svg';
-import Star from '@phosphor/star.svg';
-import Tag from '@phosphor/tag.svg';
-import Trash from '@phosphor/trash-simple.svg';
+import ArrowRight from '@lucide/arrow-right.svg';
+import BellSimple from '@lucide/bell.svg';
+import Check from '@lucide/check.svg';
+import CaretDown from '@lucide/chevron-down.svg';
+import CaretRight from '@lucide/chevron-right.svg';
+import Copy from '@lucide/copy.svg';
+import DotsThree from '@lucide/ellipsis.svg';
+import Link from '@lucide/link.svg';
+import Rename from '@lucide/pencil-line.svg';
+import Star from '@lucide/star.svg';
+import Tag from '@lucide/tag.svg';
+import Trash from '@lucide/trash-2.svg';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import { cn, Dropdown, Hotkey } from '@ui';
 import {
@@ -194,7 +194,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
       >
         <DotsThree />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-64 shadow-menu">
+      <Dropdown.Content class="w-64">
         <For each={sections()}>
           {(section) => (
             <Dropdown.Group>

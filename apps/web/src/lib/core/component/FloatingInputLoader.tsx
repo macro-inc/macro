@@ -1,5 +1,5 @@
-import CheckCircle from '@phosphor/check-circle.svg';
-import Spinner from '@phosphor/spinner.svg';
+import CheckCircle from '@lucide/circle-check.svg';
+import Spinner from '@lucide/loader-circle.svg';
 import { cn } from '@ui';
 import {
   type Accessor,

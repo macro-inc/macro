@@ -1,4 +1,4 @@
-import PencilIcon from '@phosphor/pencil-simple.svg';
+import PencilIcon from '@lucide/pencil.svg';
 import { cn } from '@ui/utils/classname';
 import { createSignal } from 'solid-js';
 

@@ -13,7 +13,7 @@
  */
 
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
+import CaretDown from '@lucide/chevron-down.svg?component-solid';
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { cn, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';

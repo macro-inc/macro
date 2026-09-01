@@ -1,8 +1,8 @@
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { useChannelsContext } from '@core/context/channels';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import RobotIcon from '@lucide/bot.svg';
+import CaretLeftIcon from '@lucide/chevron-left.svg';
 import {
   useCreateBotMutation,
   useCreateBotTokenMutation,

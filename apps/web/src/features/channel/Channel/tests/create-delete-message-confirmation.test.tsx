@@ -7,7 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { createDeleteMessageConfirmation } from '../create-delete-message-confirmation';
 
-vi.mock('@phosphor-icons/core/regular/x.svg?component-solid', () => ({
+vi.mock('@lucide/x.svg?component-solid', () => ({
   default: () => <span data-testid="close-icon" />,
 }));
 

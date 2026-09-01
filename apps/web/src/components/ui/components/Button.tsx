@@ -69,6 +69,9 @@ export type ButtonVariantProps = VariantProps<typeof buttonVariants>;
 export type ButtonVariant = NonNullable<ButtonVariantProps['variant']>;
 export type ButtonSize = NonNullable<ButtonVariantProps['size']>;
 
+/** Glass strength, when a caller needs one the size would not pick. */
+export type ButtonGlass = 'sm' | 'md' | 'lg';
+
 export type ButtonClassOptions = {
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -108,6 +111,13 @@ export type ButtonProps = ButtonRootProps<'button'> &
      */
     shortcut?: string | string[];
     size?: ButtonSize;
+    /**
+     * Force a glass strength instead of the one the size implies. Passing a
+     * second glass class through `class` does NOT work: the utilities are
+     * separate rules setting the same custom properties, so whichever is
+     * defined later in index.css wins no matter the order in the attribute.
+     */
+    glass?: ButtonGlass;
     class?: string;
     tooltipDisabled?: boolean;
   };
@@ -132,6 +142,71 @@ export function buttonClasses(options: ButtonClassOptions = {}): string {
   );
 }
 
+// The glass treatment (see the `glass` utilities in index.css) — ported from
+// the marketing site's hero CTA ring. Variants with a surface of their own
+// carry it persistently. `ghost` and `outline` are the exceptions, and only
+// because they are transparent: a backdrop-filter over nothing has no
+// substrate to blur, and a persistent rim would put a chip around every bare
+// toolbar icon in the app. They pick the glass up on hover, where the
+// `overlay-*` scrim gives it something to sit on. The glass scales with the
+// button: compact sizes get the subtler `glass-sm` so dense toolbars don't
+// shimmer, and `xl` — the onboarding CTA, the one control in the app at the
+// scale of the marketing hero this was ported from — gets the full `glass-lg`.
+// Literal class strings only — Tailwind's scanner can't see classes built
+// from template strings, so the hover-variant map is spelled out in full.
+const glassSizeStyles: Record<ButtonSize, string> = {
+  xs: 'glass-sm',
+  'icon-xs': 'glass-sm',
+  sm: 'glass-sm',
+  'icon-sm': 'glass-sm',
+  md: 'glass',
+  'icon-md': 'glass',
+  lg: 'glass',
+  'icon-lg': 'glass',
+  xl: 'glass-lg',
+};
+
+const hoverGlassSizeStyles: Record<ButtonSize, string> = {
+  xs: 'not-disabled:hover:glass-sm',
+  'icon-xs': 'not-disabled:hover:glass-sm',
+  sm: 'not-disabled:hover:glass-sm',
+  'icon-sm': 'not-disabled:hover:glass-sm',
+  md: 'not-disabled:hover:glass',
+  'icon-md': 'not-disabled:hover:glass',
+  lg: 'not-disabled:hover:glass',
+  'icon-lg': 'not-disabled:hover:glass',
+  xl: 'not-disabled:hover:glass-lg',
+};
+
+const HOVER_ONLY_GLASS_VARIANTS = new Set<ButtonVariant>(['ghost', 'outline']);
+
+const glassOverrideStyles: Record<ButtonGlass, string> = {
+  sm: 'glass-sm',
+  md: 'glass',
+  lg: 'glass-lg',
+};
+
+const hoverGlassOverrideStyles: Record<ButtonGlass, string> = {
+  sm: 'not-disabled:hover:glass-sm',
+  md: 'not-disabled:hover:glass',
+  lg: 'not-disabled:hover:glass-lg',
+};
+
+const glassClass = (
+  variant: ButtonVariant,
+  size: ButtonSize,
+  override: ButtonGlass | undefined
+): string => {
+  if (HOVER_ONLY_GLASS_VARIANTS.has(variant)) {
+    return override === undefined
+      ? hoverGlassSizeStyles[size]
+      : hoverGlassOverrideStyles[override];
+  }
+  return override === undefined
+    ? glassSizeStyles[size]
+    : glassOverrideStyles[override];
+};
+
 function isIconSize(size: ButtonSize): boolean {
   return size.startsWith('icon-');
 }
@@ -153,6 +228,7 @@ export const Button = (props: ButtonProps) => {
     'square',
     'tooltipDisabled',
     'aria-label',
+    'glass',
   ]);
 
   const group = useButtonGroupContext();
@@ -167,7 +243,13 @@ export const Button = (props: ButtonProps) => {
       fullWidth: local.fullWidth,
       noTouchResize: local.noTouchResize,
       square: local.square,
-      class: local.class,
+      // Inside a ButtonGroup the group owns the frame (it strips per-button
+      // borders and rounding), so it carries the glass for the whole row —
+      // one pane of glass instead of one per segment.
+      class: cn(
+        group === undefined && glassClass(variant(), size(), local.glass),
+        local.class
+      ),
     });
 
   const placement = () => local.tooltipPlacement ?? 'bottom';

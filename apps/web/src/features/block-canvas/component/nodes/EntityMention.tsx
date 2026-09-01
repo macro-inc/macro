@@ -9,7 +9,8 @@ import { HoverCard } from '@core/component/HoverCard';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
-import LockKey from '@phosphor-icons/core/regular/lock-key.svg';
+import LockKey from '@lucide/lock-keyhole.svg';
+// Bare '?' on a rounded-full chip; see DSSMedia.
 import Question from '@phosphor-icons/core/regular/question.svg';
 import { type PreviewItemNoAccess, useItemPreview } from '@queries/preview';
 import {
@@ -50,7 +51,7 @@ function ErrorMessage(props: {
           <div class="size-full flex flex-row items-center">
             <LockKey
               width={18 * (props.node.width / fileWidth) + 'px'}
-              class="mx-1 fill-failure bg-surface rounded-full"
+              class="mx-1 text-failure bg-surface rounded-full"
             />
             Unauthorized: Invalid file permissions
           </div>
@@ -59,7 +60,7 @@ function ErrorMessage(props: {
           <div class="size-full flex flex-row items-center px-2">
             <Question
               width={18 * (props.node.width / fileWidth) + 'px'}
-              class="mx-1 fill-ink-extra-muted bg-surface rounded-full"
+              class="mx-1 text-ink-extra-muted bg-surface rounded-full"
             />
             Error: Missing file
           </div>
@@ -68,7 +69,7 @@ function ErrorMessage(props: {
           <div class="size-full flex flex-row items-center px-2">
             <Question
               width={18 * (props.node.width / fileWidth) + 'px'}
-              class="mx-1 fill-ink-extra-muted bg-surface rounded-full"
+              class="mx-1 text-ink-extra-muted bg-surface rounded-full"
             />
             Error: Invalid file
           </div>

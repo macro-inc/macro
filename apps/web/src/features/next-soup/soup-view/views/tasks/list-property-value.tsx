@@ -1,5 +1,5 @@
 import { useMaybeBlockId } from '@core/block';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
+import CircleDashedEmpty from '@lucide/circle-dashed.svg';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';

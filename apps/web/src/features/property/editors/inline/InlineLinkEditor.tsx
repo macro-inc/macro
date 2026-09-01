@@ -1,7 +1,7 @@
 import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
-import LinkIcon from '@phosphor/link.svg';
-import DeleteIcon from '@phosphor/x.svg';
+import LinkIcon from '@lucide/link.svg';
+import DeleteIcon from '@lucide/x.svg';
 import { proxyResource } from '@service-unfurl/client';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';

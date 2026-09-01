@@ -1,6 +1,6 @@
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedTaskIcon } from '@icon/wide-task';
-import TagIcon from '@phosphor/tag.svg';
+import TagIcon from '@lucide/tag.svg';
 import type { Component } from 'solid-js';
 
 /**

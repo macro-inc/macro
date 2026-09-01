@@ -3,7 +3,7 @@ import { useBlockAliasedName, useBlockId } from '@core/block';
 import { TOKENS } from '@core/hotkey/tokens';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import GithubIcon from '@icon/mcp-github.svg';
-import GitBranch from '@phosphor/git-branch.svg';
+import GitBranch from '@lucide/git-branch.svg';
 import { useDocumentGithubPullRequestsQuery } from '@queries/storage/github-pull-requests';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { Button, Layer } from '@ui';

@@ -1,20 +1,19 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import BotIcon from '@icon/wide-bot.svg';
-import BellIcon from '@phosphor/bell-simple.svg';
-import BugIcon from '@phosphor/bug.svg';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CpuIcon from '@phosphor/cpu.svg';
-import CreditCardIcon from '@phosphor/credit-card.svg';
-import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
-import KeyIcon from '@phosphor/key.svg';
-import KeyboardIcon from '@phosphor/keyboard.svg';
-import PlugIcon from '@phosphor/plug.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import SwatchesIcon from '@phosphor/swatches.svg';
-import TagIcon from '@phosphor/tag-simple.svg';
-import UserIconPhosphor from '@phosphor/user.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
+import BellIcon from '@lucide/bell.svg';
+import BotIcon from '@lucide/bot.svg';
+import BugIcon from '@lucide/bug.svg';
+import BuildingsIcon from '@lucide/building-2.svg';
+import CpuIcon from '@lucide/cpu.svg';
+import CreditCardIcon from '@lucide/credit-card.svg';
+import KeyIcon from '@lucide/key.svg';
+import KeyboardIcon from '@lucide/keyboard.svg';
+import SwatchesIcon from '@lucide/palette.svg';
+import PlugIcon from '@lucide/plug.svg';
+import HardDrivesIcon from '@lucide/server.svg';
+import DeviceMobileIcon from '@lucide/smartphone.svg';
+import TagIcon from '@lucide/tag.svg';
+import UserIconPhosphor from '@lucide/user.svg';
+import UsersThreeIcon from '@lucide/users.svg';
 import { type Component, createMemo } from 'solid-js';
 import { useHasPermission } from '../context/user';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
@@ -84,7 +83,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   {
     label: 'Agents',
     items: [
-      { tab: 'Agents', label: 'Agents', icon: RobotIcon },
+      { tab: 'Agents', label: 'Agents', icon: BotIcon },
       { tab: 'Harness', label: 'Harness', icon: HardDrivesIcon },
     ],
   },

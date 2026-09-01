@@ -1,7 +1,7 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import { touchHandler } from '@core/directive/touchHandler';
 import type { IUser } from '@core/user/types';
-import TrashIcon from '@icon/square-trash.svg';
+import TrashIcon from '@lucide/trash-2.svg';
 import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';

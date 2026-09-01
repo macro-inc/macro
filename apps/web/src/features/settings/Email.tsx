@@ -20,11 +20,11 @@ import {
   useEmailLinksStatus,
 } from '@core/email-link';
 import GmailIcon from '@icon/mcp-gmail.svg';
-import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
-import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
-import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
-import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CalendarSlashIcon from '@lucide/calendar-off.svg?component-solid';
+import PlusIcon from '@lucide/plus.svg?component-solid';
+import ArrowsClockwiseIcon from '@lucide/refresh-cw.svg?component-solid';
+import SignatureIcon from '@lucide/signature.svg?component-solid';
+import XIcon from '@lucide/x.svg?component-solid';
 import {
   type BackfillProgress,
   estimateEtaSeconds,

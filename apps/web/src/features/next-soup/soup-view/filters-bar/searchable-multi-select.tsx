@@ -1,8 +1,8 @@
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CheckIcon from '@lucide/check.svg';
+import SearchIcon from '@lucide/search.svg';
 import { cn, Layer } from '@ui';
 import {
   type Accessor,

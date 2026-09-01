@@ -1,7 +1,7 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import Hash from '@phosphor-icons/core/regular/hash.svg';
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
-import Users from '@phosphor-icons/core/regular/users.svg';
+import Hash from '@lucide/hash.svg';
+import PencilSimple from '@lucide/pencil.svg';
+import Users from '@lucide/users.svg';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

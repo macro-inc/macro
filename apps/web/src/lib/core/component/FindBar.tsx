@@ -1,7 +1,7 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretUp from '@phosphor/caret-up.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import X from '@phosphor/x.svg';
+import CaretDown from '@lucide/chevron-down.svg';
+import CaretUp from '@lucide/chevron-up.svg';
+import MagnifyingGlass from '@lucide/search.svg';
+import X from '@lucide/x.svg';
 import { Button } from '@ui/components/Button';
 import { cn } from '@ui/utils/classname';
 import {

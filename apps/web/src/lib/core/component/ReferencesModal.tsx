@@ -1,7 +1,7 @@
 import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
-import Quotes from '@phosphor/quotes.svg';
+import Quotes from '@lucide/quote.svg';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { ItemType } from '@service-storage/client';
 import { Button, Tooltip } from '@ui';

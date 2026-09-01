@@ -1,6 +1,6 @@
 import { Combobox } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@lucide/check.svg';
+import XIcon from '@lucide/x.svg';
 import { Button, cn, Dropdown, Layer } from '@ui';
 import {
   type Accessor,
@@ -166,7 +166,7 @@ const ValueDropdownContent = (props: { filter: ConsolidatedFilter }) => {
     props.filter.values().some((v) => v.id === id);
 
   return (
-    <Dropdown.Content class="shadow-menu">
+    <Dropdown.Content>
       <Dropdown.Group>
         <For each={props.filter.availableOptions}>
           {(option) => {

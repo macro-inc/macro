@@ -8,7 +8,7 @@ import {
   type ThemeColorParams,
 } from '@core/email';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
-import DotsThree from '@phosphor/dots-three.svg';
+import DotsThree from '@lucide/ellipsis.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn } from '@ui';
 import {

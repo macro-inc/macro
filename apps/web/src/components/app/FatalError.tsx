@@ -1,7 +1,7 @@
-import { Telemetry } from '@macro-inc/observability';
+import HomeIcon from '@lucide/house.svg';
 
-import ResetIcon from '@phosphor/arrow-clockwise.svg';
-import HomeIcon from '@phosphor/house.svg';
+import ResetIcon from '@lucide/rotate-cw.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { Button, Dialog, Surface } from '@ui';
 import { Show } from 'solid-js';
 

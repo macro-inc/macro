@@ -8,7 +8,7 @@ import {
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, throwOnErr } from '@core/util/result';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowCounterClockwise from '@lucide/rotate-ccw.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,

@@ -5,8 +5,8 @@ import {
 } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GitMerge from '@lucide/git-merge.svg';
+import GitPullRequest from '@lucide/git-pull-request.svg';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

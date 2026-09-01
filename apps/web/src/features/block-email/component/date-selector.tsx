@@ -4,7 +4,7 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@lucide/search.svg';
 import { useSearchInputFocus } from '@property/utils';
 import { Surface } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';
@@ -304,7 +304,7 @@ export const DateSelector = (props: DateSelectorProps) => {
 
       <DateSelectorPortalWrapper disabled={props.disablePortal}>
         <Combobox.Content
-          class="rounded-xl size-auto z-action-menu menu-open-animation shadow-menu w-full max-w-70 text-ink bg-menu"
+          class="rounded-xl size-auto z-action-menu menu-open-animation glass-lg w-full max-w-70 text-ink bg-menu-glass"
           as={Surface}
           depth={3}
           on:keydown={handleKeyDown}

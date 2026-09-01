@@ -1,4 +1,4 @@
-import Tray from '@phosphor-icons/core/regular/tray.svg';
+import Tray from '@lucide/inbox.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';

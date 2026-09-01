@@ -1,9 +1,9 @@
 import type { CollectionNode } from '@kobalte/core';
 import { Listbox } from '@kobalte/core/listbox';
 import { Popover } from '@kobalte/core/popover';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CalendarBlankIcon from '@lucide/calendar.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
@@ -158,7 +158,7 @@ export function EventTimeInput(props: EventTimeInputProps) {
       <Popover.Portal>
         <Layer depth={4}>
           <Popover.Content
-            class="z-action-menu max-h-64 min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu p-1.5 shadow-menu menu-open-animation"
+            class="z-action-menu flex max-h-64 min-w-[var(--kb-popper-anchor-width)] flex-col rounded-xl border border-edge bg-menu-glass p-1.5 glass-lg menu-open-animation"
             style={{
               'z-index': 'calc(var(--z-index-action-menu) + 1)',
             }}
@@ -180,20 +180,23 @@ export function EventTimeInput(props: EventTimeInputProps) {
             <Popover.Title class="sr-only">
               Choose {props.label.toLowerCase()}
             </Popover.Title>
-            <Listbox<EventTimeOption>
-              ref={(element) => {
-                listbox = element;
-              }}
-              options={EVENT_TIME_OPTIONS}
-              optionValue="value"
-              optionTextValue="label"
-              value={selectedTime()}
-              onChange={selectTime}
-              selectionMode="single"
-              disallowEmptySelection
-              shouldFocusWrap
-              renderItem={(item) => <TimeOptionItem {...item} />}
-            />
+            {/* Scroll on an inner box, not on the glass node — see Select. */}
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
+              <Listbox<EventTimeOption>
+                ref={(element) => {
+                  listbox = element;
+                }}
+                options={EVENT_TIME_OPTIONS}
+                optionValue="value"
+                optionTextValue="label"
+                value={selectedTime()}
+                onChange={selectTime}
+                selectionMode="single"
+                disallowEmptySelection
+                shouldFocusWrap
+                renderItem={(item) => <TimeOptionItem {...item} />}
+              />
+            </div>
           </Popover.Content>
         </Layer>
       </Popover.Portal>
@@ -258,7 +261,7 @@ export function EventDateField(props: EventDateFieldProps) {
       <div class="hidden" ref={setPortalSearchRef} />
       <Popover.Portal mount={portalMount()}>
         <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-3 shadow-menu menu-open-animation">
+          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-3 glass-lg menu-open-animation">
             <Popover.Title class="sr-only">
               Choose {props.label.toLowerCase()} date
             </Popover.Title>

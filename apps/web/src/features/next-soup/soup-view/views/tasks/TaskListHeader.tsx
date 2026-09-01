@@ -3,8 +3,8 @@ import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context
 import { useListLayout } from '@entity/composed/list-entity/shared';
 import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
 import PriorityHigh from '@icon/wide-priority-high.svg';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import UsersIcon from '@phosphor/users.svg';
+import ArrowDownIcon from '@lucide/arrow-down.svg';
+import UsersIcon from '@lucide/users.svg';
 import { Tooltip } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show } from 'solid-js';

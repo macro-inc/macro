@@ -18,8 +18,8 @@ import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
-import CheckIcon from '@phosphor/check.svg?component-solid';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
+import CheckIcon from '@lucide/check.svg?component-solid';
+import PaperPlaneTilt from '@lucide/send.svg';
 import {
   blockNameToItemType,
   itemTypeToReferenceEntityType,

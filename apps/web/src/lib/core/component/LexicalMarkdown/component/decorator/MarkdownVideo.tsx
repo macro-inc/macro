@@ -3,13 +3,13 @@ import { debouncedDependent } from '@core/util/debounce';
 
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
+import VideoIcon from '@lucide/file-video.svg';
+import LoadingSpinner from '@lucide/loader-circle.svg';
+import XIcon from '@lucide/x.svg';
 import {
   $isVideoNode,
   type VideoDecoratorProps,
 } from '@macro-inc/lexical-core';
-import VideoIcon from '@phosphor/file-video.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
-import XIcon from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {

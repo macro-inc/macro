@@ -1,4 +1,4 @@
-import CheckIcon from '@phosphor-icons/core/regular/check.svg?component-solid';
+import CheckIcon from '@lucide/check.svg?component-solid';
 import { cn, Layer } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { StatusDot } from '../settings/integration-ui';

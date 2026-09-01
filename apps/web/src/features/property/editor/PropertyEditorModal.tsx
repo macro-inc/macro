@@ -10,10 +10,10 @@ import {
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
 import { type EntityData, InlineEntity, isTaskEntity } from '@entity';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PropertiesIcon from '@phosphor/sliders-horizontal.svg';
-import TagIcon from '@phosphor/tag-simple.svg';
+import CircleDashedEmpty from '@lucide/circle-dashed.svg';
+import PencilIcon from '@lucide/pencil.svg';
+import PropertiesIcon from '@lucide/sliders-horizontal.svg';
+import TagIcon from '@lucide/tag.svg';
 import { type CombinedEntity, getEntityName, getEntityType } from '@property';
 import { CreatePropertyModal } from '@property/component/modal/CreatePropertyModal';
 import { PropertyValueIcon } from '@property/component/propertyValue';

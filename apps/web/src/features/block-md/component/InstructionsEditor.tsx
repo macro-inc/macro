@@ -49,6 +49,7 @@ import {
 import { useCanEdit } from '@core/signal/permissions';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
+import WarningIcon from '@lucide/triangle-alert.svg';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   AwaitNode,
@@ -58,7 +59,6 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
-import WarningIcon from '@phosphor/warning.svg';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import type { EditorState } from 'lexical';

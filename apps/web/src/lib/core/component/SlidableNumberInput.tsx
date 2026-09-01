@@ -1,7 +1,7 @@
 import { activeTextEditorSignal } from '@block-canvas/signal/toolManager';
 import { clamp } from '@block-canvas/util/math';
 import { type Vector2, vec2 } from '@block-canvas/util/vector2';
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@lucide/chevron-down.svg';
 import { cn, Dropdown, Tooltip } from '@ui';
 import {
   type Component,
@@ -174,7 +174,7 @@ export function SlidableNumberInput(props: SlidableNumberInputProps) {
           <Dynamic
             component={props.icon}
             class={cn(
-              'fill-ink-muted ml-.5 mr-1 min-w-5',
+              'text-ink-muted ml-.5 mr-1 min-w-5',
               props.isSlidable && 'cursor-ew-resize'
             )}
             style={{

@@ -1,6 +1,6 @@
 import { openCreateContactModal } from '@app/features/companies/CreateContactModal';
 import { SidePanel } from '@components/app/side-panel';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { useCompanyQuery } from '@queries/crm/companies';
 import { Button } from '@ui';
 import { CompanyContactsSection } from './CompanyContactsSection';

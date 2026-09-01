@@ -1,7 +1,7 @@
 import type { TagFilterMode } from '@app/features/next-soup/filters/filter-store/types';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { Combobox } from '@kobalte/core/combobox';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@lucide/x.svg';
 import { Button, Dropdown, Layer, SingleSelectCheck } from '@ui';
 import {
   type Accessor,
@@ -67,7 +67,7 @@ const SingleValueSegment = (props: {
       >
         <ValueDisplay values={props.facet.values()} />
       </Dropdown.Trigger>
-      <Dropdown.Content class="shadow-menu">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={props.facet.options}>
             {(option) => (
@@ -108,7 +108,7 @@ const ModeSegment = (props: { mode: FacetModeVM }) => (
     >
       {MODE_OPTIONS.find((o) => o.id === props.mode.value())?.label}
     </Dropdown.Trigger>
-    <Dropdown.Content class="shadow-menu">
+    <Dropdown.Content>
       <Dropdown.Group>
         <For each={MODE_OPTIONS}>
           {(option) => (

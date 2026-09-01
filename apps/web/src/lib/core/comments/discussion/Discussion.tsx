@@ -11,8 +11,8 @@ import { channelReplyInputOffsetX } from '@channel/Thread/utils/thread-rail-geom
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { getDisplayName, tryMacroId } from '@core/user';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretDown from '@lucide/chevron-down.svg';
+import CaretRight from '@lucide/chevron-right.svg';
 import {
   createEffect,
   createMemo,

@@ -2,8 +2,8 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import type { ReminderEntity } from '@entity';
-import BellIcon from '@phosphor/bell-simple.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import BellIcon from '@lucide/bell.svg';
+import SpinnerIcon from '@lucide/loader-circle.svg';
 import {
   reminderSoupPatch,
   useReminderQuery,

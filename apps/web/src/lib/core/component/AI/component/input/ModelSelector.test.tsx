@@ -42,10 +42,10 @@ vi.mock('@core/component/AI/assets/anthropic.svg', () => ({
 vi.mock('@core/component/AI/assets/openai.svg', () => ({
   default: () => null,
 }));
-vi.mock('@phosphor-icons/core/regular/caret-down.svg?component-solid', () => ({
+vi.mock('@lucide/chevron-down.svg?component-solid', () => ({
   default: () => null,
 }));
-vi.mock('@phosphor-icons/core/regular/lock-simple.svg?component-solid', () => ({
+vi.mock('@lucide/lock.svg?component-solid', () => ({
   default: () => <span data-testid="lock-icon" />,
 }));
 

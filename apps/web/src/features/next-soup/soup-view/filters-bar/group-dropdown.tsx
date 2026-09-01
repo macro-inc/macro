@@ -2,7 +2,7 @@ import type {
   GroupOption,
   GroupOptionId,
 } from '@app/features/next-soup/soup-view/group-options';
-import StackSimpleIcon from '@phosphor/stack-simple.svg';
+import StackSimpleIcon from '@lucide/layers.svg';
 import { Dropdown, SingleSelectCheck, Tooltip } from '@ui';
 import { type Component, For, Show } from 'solid-js';
 
@@ -34,7 +34,7 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
           </Show>
         </Dropdown.Trigger>
       </Tooltip>
-      <Dropdown.Content class="shadow-menu">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={props.options}>
             {(option) => (

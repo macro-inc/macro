@@ -1,6 +1,6 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { TagDot } from '@property/tags/TagDot';
 import { DEFAULT_TAG_COLOR, type TAG_COLORS } from '@property/tags/tagColors';
 import { useAddPropertyOptionMutation } from '@queries/properties/options';
@@ -420,10 +420,7 @@ export function TagsMenu(props: {
               clickOutside(el, () => () => closeMenu());
             }}
           >
-            <Surface
-              depth={2}
-              class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
-            >
+            <Surface depth={2} class="py-1.5 glass-lg bg-menu-glass rounded-xl">
               <Show
                 when={createStep()}
                 fallback={

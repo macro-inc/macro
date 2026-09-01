@@ -21,7 +21,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import { openExternalUrl } from '@core/util/url';
 import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
 import Macro from '@icon/macro-logo.svg';
-import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowLeft from '@lucide/arrow-left.svg';
 import {
   CommandMenuEmptyState,
   CommandMenuHotkeyHint,

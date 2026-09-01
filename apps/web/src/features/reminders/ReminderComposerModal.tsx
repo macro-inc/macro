@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { type EntityData, InlineEntity } from '@entity';
-import BellIcon from '@phosphor/bell-simple.svg';
+import BellIcon from '@lucide/bell.svg';
 import {
   reminderTarget,
   useCreateReminderMutation,

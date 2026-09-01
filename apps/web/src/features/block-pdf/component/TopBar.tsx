@@ -38,10 +38,10 @@ import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { platformFetch } from '@core/util/platformFetch';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import Printer from '@phosphor/printer.svg';
-import Quotes from '@phosphor/quotes.svg';
+import DownloadIcon from '@lucide/download.svg';
+import Printer from '@lucide/printer.svg';
+import Quotes from '@lucide/quote.svg';
+import IconShared from '@lucide/share.svg';
 import {
   blockNameToItemType,
   storageServiceClient,

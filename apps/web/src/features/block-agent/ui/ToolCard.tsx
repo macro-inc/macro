@@ -9,7 +9,7 @@
  */
 
 import { Collapsible } from '@kobalte/core/collapsible';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@lucide/chevron-right.svg';
 import {
   createMemo,
   For,

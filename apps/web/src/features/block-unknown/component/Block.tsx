@@ -7,8 +7,8 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import ShareFat from '@icon/wide-share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@lucide/download.svg';
+import ShareFat from '@lucide/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { useGetFileBlob } from '../signal/blockData';

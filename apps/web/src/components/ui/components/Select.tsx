@@ -12,8 +12,8 @@ import type {
   SelectRootItemComponentProps,
 } from '@kobalte/core/select';
 import { Select as KobalteSelect } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { type Component, createSignal, type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Layer } from './Layer';
@@ -106,12 +106,25 @@ function SelectContent(props: SelectContentProps) {
         <Layer depth={local.depth ?? 3}>
           <KobalteSelect.Content
             class={cn(
-              'z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu p-1.5 shadow-menu menu-open-animation',
+              'z-action-menu flex max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] flex-col rounded-xl border border-edge bg-menu-glass p-1.5 glass-lg menu-open-animation',
               local.class
             )}
             {...rest}
           >
-            {local.children}
+            {/* The scroll lives on an inner box, never on the glass node: the
+                rim is an absolutely positioned ::after, and absolute children
+                of a scroll container are translated with the content, so a
+                scrolling glass node slides its own rim out of frame.
+
+                The box deliberately carries no padding of its own. Callers
+                override this surface's padding (the reminders dropdown passes
+                `w-56 p-0` and pads its listbox itself), so a fixed bleed here
+                would only cancel the default p-1.5 and would push every other
+                caller's content past the pane. Nothing inside a Select bleeds
+                with a negative margin, so there is none to preserve. */}
+            <div class="flex min-h-0 flex-1 flex-col overflow-y-auto [&>*]:shrink-0">
+              {local.children}
+            </div>
           </KobalteSelect.Content>
         </Layer>
       </KobalteSelect.Portal>

@@ -1,12 +1,12 @@
 import CorvuCalendar, {
   type RootSingleProps as CorvuCalendarRootSingleProps,
 } from '@corvu/calendar';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import ArrowDownIcon from '@lucide/arrow-down.svg';
+import ArrowUpIcon from '@lucide/arrow-up.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import CaretLeftIcon from '@lucide/chevron-left.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
 import {
   createMemo,
   createSignal,

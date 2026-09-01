@@ -5,7 +5,7 @@
  * while the turn is in flight — expanding to the reasoning text.
  */
 
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@lucide/chevron-right.svg';
 import { createSignal, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
 

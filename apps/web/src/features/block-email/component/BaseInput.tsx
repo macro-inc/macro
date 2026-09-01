@@ -41,17 +41,17 @@ import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
 import { $generateHtmlFromNodes } from '@lexical/html';
+import ChevronDown from '@lucide/chevron-down.svg';
+import CaretRight from '@lucide/chevron-right.svg';
+import DotsThree from '@lucide/ellipsis.svg';
+import Paperclip from '@lucide/paperclip.svg';
+import ArrowCounterClockwise from '@lucide/rotate-ccw.svg?component-solid';
+import Trash from '@lucide/trash.svg';
 import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
-import ChevronDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import Trash from '@phosphor/trash.svg';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   useAddForwardedAttachmentsMutation,
@@ -1707,7 +1707,14 @@ export function BaseInput(props: {
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
         isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-lg' : 'rounded-xl'
+        props.unframed ? 'rounded-lg' : 'rounded-xl',
+        // The drawer path makes this Surface its own scroll container, and the
+        // glass rim is an absolutely positioned ::after — absolute children of
+        // a scroller travel with the content, so the rim would slide out of the
+        // frame on a long compose. The sheet fills the viewport anyway, so
+        // floating-pane chrome has nothing to float over. Same reasoning as
+        // ChannelInput, which drops the glass on touch for its island chrome.
+        !props.unframed && !isMobileDrawer() && 'bg-menu-glass glass-input'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
       hideBorder={props.unframed}

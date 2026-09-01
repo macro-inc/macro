@@ -87,7 +87,25 @@ export const createAppViteConfig = (): UserConfigFn => {
         solid(),
         wasm(),
         tailwind(),
-        solidSvg({ defaultAsComponent: true }),
+        solidSvg({
+          defaultAsComponent: true,
+          // SVGO's preset-default drops `viewBox` from any SVG that carries a
+          // matching width/height. Phosphor's art had neither, so it was never
+          // hit; Lucide's ships width="24" height="24", and losing the viewBox
+          // means a CSS-sized icon *clips* the 24-unit artwork instead of
+          // scaling it. Keep the viewBox so icons scale from their CSS box.
+          svgo: {
+            enabled: true,
+            svgoConfig: {
+              plugins: [
+                {
+                  name: 'preset-default',
+                  params: { overrides: { removeViewBox: false } },
+                },
+              ],
+            },
+          },
+        }),
         tsconfigpaths({
           root: './',
         }),

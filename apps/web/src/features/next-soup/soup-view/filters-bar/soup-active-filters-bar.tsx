@@ -1,5 +1,5 @@
-import Plus from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import Plus from '@lucide/plus.svg';
+import XIcon from '@lucide/x.svg';
 import { Button, cn, Dropdown, Layer } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {

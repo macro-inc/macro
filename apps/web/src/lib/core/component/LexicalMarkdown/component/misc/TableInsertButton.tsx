@@ -9,7 +9,7 @@ import {
   getDOMCellFromTarget,
   getTableElement,
 } from '@lexical/table';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@lucide/plus.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {

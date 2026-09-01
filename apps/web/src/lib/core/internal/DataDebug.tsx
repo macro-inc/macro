@@ -1,7 +1,7 @@
 import { Bar } from '@core/component/TopBar/Bar';
 import { useContacts } from '@core/user';
-import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
-import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
+import Copy from '@lucide/copy.svg?component-solid';
+import Refresh from '@lucide/rotate-cw.svg?component-solid';
 import { useHistoryQuery } from '@queries/history/history';
 import { Button } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';

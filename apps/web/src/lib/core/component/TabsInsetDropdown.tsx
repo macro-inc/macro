@@ -1,5 +1,5 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDown from '@lucide/chevron-down.svg';
 import { cn, Dropdown, Layer } from '@ui';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 

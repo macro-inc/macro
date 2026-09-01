@@ -5,8 +5,8 @@ import {
   createPipedreamCatalogConnect,
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
-import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
-import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import PlugIcon from '@lucide/plug.svg?component-solid';
+import XIcon from '@lucide/x.svg?component-solid';
 import {
   useDeletePipedreamConnectionMutation,
   usePipedreamConnectionsQuery,

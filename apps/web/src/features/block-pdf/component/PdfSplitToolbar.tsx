@@ -5,7 +5,7 @@ import {
 } from '@components/app/split-layout/components/SplitToolbar';
 import { ENABLE_PDF_MARKUP } from '@core/constant/featureFlags';
 import { useCanEdit } from '@core/signal/permissions';
-import Tabs from '@phosphor/tabs.svg';
+import Tabs from '@lucide/panel-top.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { pdfDocumentProxy } from '../signal/document';

@@ -2,7 +2,7 @@ import { useIsNestedBlock } from '@core/block';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCanEdit } from '@core/signal/permissions';
-import Circuitry from '@phosphor/circuitry.svg';
+import Circuitry from '@lucide/cpu.svg';
 import { cn } from '@ui';
 import { nanoid } from 'nanoid';
 import {

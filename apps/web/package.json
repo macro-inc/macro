@@ -123,6 +123,7 @@
     "linkify-it": "^5.0.0",
     "livekit-client": "^2.18.0",
     "loro-crdt": "catalog:",
+    "lucide-static": "1.34.0",
     "nanoid": "^3.3.7",
     "neverthrow": "^8.2.0",
     "pdfjs-dist": "github:macro-inc/pdf.js#v2.16.52-web",

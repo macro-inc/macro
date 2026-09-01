@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
-import WideCopy from '@icon/wide-copy.svg';
-import IconCheck from '@phosphor/check.svg';
+import IconCheck from '@lucide/check.svg';
+import WideCopy from '@lucide/copy.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import { createSignal, Show } from 'solid-js';

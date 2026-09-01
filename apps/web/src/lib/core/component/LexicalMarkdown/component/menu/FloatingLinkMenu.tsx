@@ -5,13 +5,13 @@ import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
-import NewTab from '@phosphor/arrow-square-out.svg';
-import Check from '@phosphor/check-circle.svg';
-import Copy from '@phosphor/copy.svg';
-import Link from '@phosphor/link.svg';
-import Trash from '@phosphor/link-break.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import LinkText from '@phosphor/text-t.svg';
+import Check from '@lucide/circle-check.svg';
+import Copy from '@lucide/copy.svg';
+import NewTab from '@lucide/external-link.svg';
+import Link from '@lucide/link.svg';
+import Pencil from '@lucide/pencil.svg';
+import LinkText from '@lucide/type.svg';
+import Trash from '@lucide/unlink.svg';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { Button, Surface } from '@ui';
 import {
@@ -363,7 +363,7 @@ export function FloatingLinkMenu(props: {
             }}
             ref={menuRef}
           >
-            <Surface depth={2} class="rounded-xl bg-menu p-1.5 shadow-menu">
+            <Surface depth={2} class="rounded-xl glass-lg bg-menu-glass p-1.5">
               {props.children}
             </Surface>
           </div>

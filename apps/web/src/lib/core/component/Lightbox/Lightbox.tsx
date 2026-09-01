@@ -1,8 +1,8 @@
 import { Dialog, useDialogContext } from '@kobalte/core/dialog';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import XIcon from '@phosphor/x.svg';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import ClipboardIcon from '@lucide/clipboard.svg';
+import DownloadIcon from '@lucide/download.svg';
+import Spinner from '@lucide/loader-circle.svg?component-solid';
+import XIcon from '@lucide/x.svg';
 import { Button, cn } from '@ui';
 import {
   type Accessor,

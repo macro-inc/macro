@@ -1,5 +1,5 @@
 import { openExternalUrl } from '@core/util/url';
-import LinkIcon from '@phosphor/link.svg';
+import LinkIcon from '@lucide/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';

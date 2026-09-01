@@ -2,7 +2,7 @@ import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { formatVideoTimestamp } from '@core/util/duration';
-import Subtitles from '@phosphor/subtitles.svg';
+import Subtitles from '@lucide/subtitles.svg';
 import { senderFromStorageId } from '@queries/channel/message-sender';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';

@@ -1,5 +1,5 @@
 import { Collapsible } from '@kobalte/core/collapsible';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { cn } from '@ui';
 import { type ComponentProps, type JSX, Show, splitProps } from 'solid-js';
 

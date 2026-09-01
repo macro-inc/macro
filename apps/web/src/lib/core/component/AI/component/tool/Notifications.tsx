@@ -1,5 +1,5 @@
-import Check from '@phosphor-icons/core/regular/check.svg';
-import List from '@phosphor-icons/core/regular/list.svg';
+import Check from '@lucide/check.svg';
+import List from '@lucide/list.svg';
 import type { ListNotifications as ListNotificationsTool } from '@service-cognition/generated/tools/types';
 import { Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

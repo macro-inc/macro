@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CloseIcon from '@lucide/x.svg?component-solid';
 import { Button, Hotkey, Layer } from '@ui';
 
 interface EntitySelectionToolbarModalProps {

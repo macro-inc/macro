@@ -24,9 +24,9 @@ import {
   type ComboboxTriggerMode,
   useComboboxContext,
 } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@lucide/check.svg';
+import HashIcon from '@lucide/hash.svg';
+import XIcon from '@lucide/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Layer } from '@ui';
 import * as EmailValidator from 'email-validator';

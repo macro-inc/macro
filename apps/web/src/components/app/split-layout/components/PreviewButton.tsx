@@ -1,8 +1,8 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
-import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
+import EyeIcon from '@lucide/eye.svg?component-solid';
+import EyeSlashIcon from '@lucide/eye-off.svg?component-solid';
 import { Button, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';

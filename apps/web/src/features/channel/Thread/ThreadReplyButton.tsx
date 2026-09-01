@@ -1,5 +1,5 @@
 import { focusInput } from '@core/directive/focusInput';
-import IconPlus from '@phosphor/plus.svg';
+import IconPlus from '@lucide/plus.svg';
 import { cn } from '@ui';
 import { type JSX, splitProps } from 'solid-js';
 

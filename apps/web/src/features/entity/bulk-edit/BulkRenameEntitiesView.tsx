@@ -4,7 +4,7 @@ import {
   InlineEntity,
 } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CloseIcon from '@lucide/x.svg?component-solid';
 import { Button, cn, SegmentedControl } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 

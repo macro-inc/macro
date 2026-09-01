@@ -15,8 +15,8 @@ import {
   useIsConnectedSecondaryInbox,
 } from '@core/user';
 import MacroLogo from '@icon/macro-logo.svg';
-import RobotIcon from '@phosphor/robot.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import RobotIcon from '@lucide/bot.svg';
+import Trash from '@lucide/trash-2.svg?component-solid';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import {

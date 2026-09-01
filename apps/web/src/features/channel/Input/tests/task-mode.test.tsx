@@ -65,34 +65,31 @@ vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: (type?: string | null) => type ?? 'unknown',
 }));
 
-vi.mock('@phosphor-icons/core/regular/paperclip.svg?component-solid', () => ({
+vi.mock('@lucide/paperclip.svg?component-solid', () => ({
   default: () => <span data-testid="paperclip-icon" />,
 }));
 
-vi.mock('@phosphor/text-aa.svg', () => ({
+vi.mock('@lucide/case-sensitive.svg', () => ({
   default: () => <span data-testid="format-icon" />,
 }));
 
-vi.mock('@phosphor/trash.svg', () => ({
+vi.mock('@lucide/trash.svg', () => ({
   default: () => <span data-testid="trash-icon" />,
 }));
 
-vi.mock('@phosphor/x.svg', () => ({
+vi.mock('@lucide/x.svg', () => ({
   default: () => <span data-testid="close-icon" />,
 }));
 
-vi.mock('@phosphor/arrow-up.svg', () => ({
+vi.mock('@lucide/arrow-up.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
 
-vi.mock(
-  '@phosphor-icons/core/regular/paper-plane-right.svg?component-solid',
-  () => ({
-    default: () => <span data-testid="paper-plane-icon" />,
-  })
-);
+vi.mock('@lucide/send-horizontal.svg?component-solid', () => ({
+  default: () => <span data-testid="paper-plane-icon" />,
+}));
 
-vi.mock('@phosphor/spinner-gap.svg', () => ({
+vi.mock('@lucide/loader-circle.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));
 

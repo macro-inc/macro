@@ -27,14 +27,14 @@ import { formatDate } from '@core/util/date';
 import { matches } from '@core/util/match';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import EyeSlashDuo from '@lucide/eye-off.svg';
+import TrashSimple from '@lucide/trash-2.svg';
 import {
   $convertMentionToCard,
   $isDocumentMentionNode,
   DocumentCardNode,
   type DocumentMentionDecoratorProps,
 } from '@macro-inc/lexical-core';
-import EyeSlashDuo from '@phosphor/eye-slash.svg';
-import TrashSimple from '@phosphor/trash-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useEntityProperties } from '@property/hooks';

@@ -1,9 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
-import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import ArrowUpRightIcon from '@lucide/arrow-up-right.svg';
+import HardDrivesIcon from '@lucide/server.svg';
+import TerminalWindowIcon from '@lucide/square-terminal.svg';
 import {
   useCursorApiKeyStatusQuery,
   useCursorModelsQuery,

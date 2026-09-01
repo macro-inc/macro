@@ -1,4 +1,4 @@
-import Plus from '@phosphor-icons/core/regular/plus.svg';
+import Plus from '@lucide/plus.svg';
 import { Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';

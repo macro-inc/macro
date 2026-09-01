@@ -1,6 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ChevronLeftIcon from '@phosphor/caret-left.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
+import ChevronLeftIcon from '@lucide/chevron-left.svg';
+import ChevronRightIcon from '@lucide/chevron-right.svg';
 import { cn } from '@ui';
 import { type Accessor, Show } from 'solid-js';
 

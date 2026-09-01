@@ -1,4 +1,4 @@
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
+import CaretRight from '@lucide/chevron-right.svg?component-solid';
 import { cn } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 

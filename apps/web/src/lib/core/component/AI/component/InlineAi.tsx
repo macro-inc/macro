@@ -1,5 +1,5 @@
 import GridLoader from '@icon/macro-grid-noise-loader-4.svg';
-import PaperPlaneRight from '@phosphor/paper-plane-right.svg';
+import PaperPlaneRight from '@lucide/send-horizontal.svg';
 import { cn } from '@ui';
 import { createSignal, onMount } from 'solid-js';
 
@@ -92,8 +92,8 @@ export function InlineInputReady(props: InlineInputReadyProps) {
           height={20}
           class={cn(
             isEmpty()
-              ? 'text-ink-extra-muted/30 fill-ink-disabled'
-              : 'text-accent fill-accent!'
+              ? 'text-ink-extra-muted/30 text-ink-disabled'
+              : 'text-accent text-accent!'
           )}
         />
       </button>
@@ -140,7 +140,7 @@ export function InlineInputDisabled(props: InlineInputLoadingProps) {
         <PaperPlaneRight
           width={20}
           height={20}
-          class="text-ink-extra-muted/30 fill-ink-extra-muted"
+          class="text-ink-extra-muted/30 text-ink-extra-muted"
         />
       </div>
     </div>

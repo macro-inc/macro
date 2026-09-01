@@ -14,9 +14,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { whenSettled } from '@core/util/whenSettled';
 import { formatDateAndTime } from '@entity';
-import CopyIcon from '@phosphor/copy.svg';
-import RenameIcon from '@phosphor/pencil-line.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
+import CopyIcon from '@lucide/copy.svg';
+import RenameIcon from '@lucide/pencil-line.svg';
+import TrashIcon from '@lucide/trash-2.svg';
 import { scheduleToEntity } from '@queries/agent-schedule/entities';
 import {
   invalidateSchedules,

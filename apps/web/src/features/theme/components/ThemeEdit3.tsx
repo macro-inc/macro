@@ -3,9 +3,9 @@ import { StaticSplitLabel } from '@components/app/split-layout/components/SplitL
 import { toast } from '@core/component/Toast/Toast';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import ClipboardIcon from '@lucide/clipboard.svg';
 import { Button, Layer } from '@ui';
 import { createEffect, createSignal, onMount } from 'solid-js';
 import { DEFAULT_THEMES } from '../constants';

@@ -1,5 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { makePersisted } from '@solid-primitives/storage';
 import { cn, Tooltip } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';

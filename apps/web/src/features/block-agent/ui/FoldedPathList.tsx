@@ -1,5 +1,5 @@
 import { Tool } from '@core/component/AI/component/tool/Tool';
-import FileText from '@phosphor/file-text.svg';
+import FileText from '@lucide/file-text.svg';
 import { For } from 'solid-js';
 
 /** The full path list behind a truncated inline summary. */

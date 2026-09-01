@@ -1,9 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
-import CalendarCheckIcon from '@phosphor/calendar-check.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import GearIcon from '@phosphor/gear.svg';
+import CalendarCheckIcon from '@lucide/calendar-check.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
+import GearIcon from '@lucide/settings.svg';
 import { ButtonGroup, cn, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import { useCalendarConnectedInboxes } from '../hooks/use-calendar-connected-inboxes';

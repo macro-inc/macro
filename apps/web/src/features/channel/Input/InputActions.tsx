@@ -1,7 +1,7 @@
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
-import FormatIcon from '@phosphor/text-aa.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import FormatIcon from '@lucide/case-sensitive.svg';
+import PaperclipIcon from '@lucide/paperclip.svg?component-solid';
+import TrashIcon from '@lucide/trash.svg';
 import type { JSX } from 'solid-js';
 import { InputActionButton } from './ActionButton';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';

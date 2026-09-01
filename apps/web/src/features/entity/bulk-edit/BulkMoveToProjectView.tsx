@@ -9,8 +9,8 @@ import {
   InlineEntity,
 } from '@entity';
 import { Dialog } from '@kobalte/core/dialog';
-import FolderPlusIcon from '@phosphor-icons/core/regular/folder-plus.svg?component-solid';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import FolderPlusIcon from '@lucide/folder-plus.svg?component-solid';
+import CloseIcon from '@lucide/x.svg?component-solid';
 import { createProject, useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
 import { Button, cn } from '@ui';

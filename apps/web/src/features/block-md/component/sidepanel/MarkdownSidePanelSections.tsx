@@ -33,9 +33,9 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import CaretRightIcon from '@lucide/chevron-right.svg';
+import ClockIcon from '@lucide/clock.svg';
 import { useNotificationsForEntity } from '@notifications';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import ClockIcon from '@phosphor/clock.svg';
 import {
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,

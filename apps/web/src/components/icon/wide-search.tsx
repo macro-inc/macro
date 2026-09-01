@@ -18,7 +18,7 @@ export const AnimatedSearchIcon = (props: {
     >
       {/*<title>Animated search icon</title>*/}
       <defs>
-        {/* Clip path for the reflection - matches the glass circle */}
+        {/* Clip path for the reflection - matches the lens circle */}
         <clipPath id={clipId}>
           <circle cx="5.25" cy="5.25" r="5.25" />
         </clipPath>
@@ -77,9 +77,11 @@ export const AnimatedSearchIcon = (props: {
       `}</style>
 
       <g class="magnifying-glass">
-        {/* Magnifying glass circle (lens) */}
+        {/* Magnifying glass circle (lens). Named `lens`, not `glass`: `glass`
+            is a global utility in index.css, and a bare marker class on an SVG
+            node would silently pick up its backdrop-filter, shadows and rim. */}
         <circle
-          class="glass"
+          class="lens"
           cx="5.25"
           cy="5.25"
           r="4.6875"

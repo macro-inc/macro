@@ -1,9 +1,9 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CalendarIcon from '@lucide/calendar.svg';
+import CheckIcon from '@lucide/check.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
+import CaretRightIcon from '@lucide/chevron-right.svg';
 import { Dropdown, Hotkey, Calendar as MiniCalendar } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';

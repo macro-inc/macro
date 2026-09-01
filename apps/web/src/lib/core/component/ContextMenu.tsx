@@ -1,8 +1,8 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretRight from '@phosphor/caret-right.svg?component-solid';
-import CheckIcon from '@phosphor/check.svg?component-solid';
+import CheckIcon from '@lucide/check.svg?component-solid';
+import CaretRight from '@lucide/chevron-right.svg?component-solid';
 import {
   addCtrlJKMenuNavigation,
   cn,
@@ -302,7 +302,21 @@ function MobileConditionalOverlay(
 
 const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu ${MENU_SURFACE_SCOPE} shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
+/* The menu surface carries the glass, so the scroll has to live on an inner
+   box: the rim is an absolutely positioned ::after, and absolute children of
+   a scroll container are translated with the content, which would slide the
+   rim off a menu taller than its max height.
+
+   The box bleeds back through the surface's p-1.5 and re-pads its children,
+   because overflow-y-auto computes overflow-x to auto: a bare scroller would
+   clip MenuSeparator's -mx-1.5 instead of letting it reach the pane edge.
+   That cancellation is hard-coded, so it only holds while the surface keeps
+   p-1.5 — no caller overrides it today. Don't copy the bleed onto a surface
+   whose padding callers set (see Select, which stays a plain scroller). */
+export const MENU_SCROLL_CLASS =
+  'flex min-h-0 flex-col items-start overflow-y-auto [&>*]:shrink-0 -mx-1.5 w-[calc(100%+0.75rem)] px-1.5';
+
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu-glass ${MENU_SURFACE_SCOPE} glass-lg rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
@@ -424,7 +438,9 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
               ref={contentRef}
               onCloseAutoFocus={props.onCloseAutoFocus}
             >
-              {props.children}
+              <div class={cn(!props.overrideStyling && MENU_SCROLL_CLASS)}>
+                {props.children}
+              </div>
             </ContextMenu.Content>
           </Layer>
         }
@@ -435,7 +451,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
               class={cn(MENU_CONTENT_CLASS, props.class)}
               ref={contentRef}
             >
-              {props.children}
+              <div class={MENU_SCROLL_CLASS}>{props.children}</div>
             </ContextMenu.SubContent>
           </Layer>
         </ContextMenu.Portal>

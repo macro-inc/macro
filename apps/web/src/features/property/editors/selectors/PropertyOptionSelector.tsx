@@ -1,9 +1,9 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useKeyPressed } from '@core/util/useKeyPressed';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
+import CircleDashedEmpty from '@lucide/circle-dashed.svg';
+import LoadingSpinner from '@lucide/loader-circle.svg';
+import PlusIcon from '@lucide/plus.svg';
+import SearchIcon from '@lucide/search.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useSearchInputFocus } from '@property/utils';
 import { ERROR_MESSAGES } from '@property/utils/errorHandling';

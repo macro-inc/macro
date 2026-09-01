@@ -1,4 +1,4 @@
-import EnvelopeOpen from '@phosphor-icons/core/regular/envelope-open.svg';
+import EnvelopeOpen from '@lucide/mail-open.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 

@@ -1,6 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@lucide/check.svg';
 import { type ComponentProps, onCleanup, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import {
@@ -200,7 +200,10 @@ function DropdownContent(props: DropdownContentProps) {
       >
         <KobalteDropdownMenu.Content
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu bg-menu',
+            // Glass: the content is the pane (blur + rim + shadow) and goes
+            // transparent; the groups inside paint the menu color, which the
+            // redefined --color-menu makes translucent so the blur shows.
+            'flex flex-col rounded-xl size-auto z-action-menu menu-open-animation glass-lg bg-transparent [--color-menu:var(--color-menu-glass)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -209,7 +212,14 @@ function DropdownContent(props: DropdownContentProps) {
           onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
+          <div
+            // The scroll is bounded here rather than left to the glass node:
+            // callers put max-h + overflow-y-auto on Content, and the rim is an
+            // absolutely positioned ::after that would travel with the content.
+            // shrink-0 on the children keeps fixed-height rows from compressing
+            // instead of scrolling.
+            class="flex min-h-0 w-full flex-1 flex-col gap-(--app-border-width) overflow-y-auto [&>*]:shrink-0 bg-edge-muted/60"
+          >
             {local.children}
           </div>
         </KobalteDropdownMenu.Content>
@@ -242,7 +252,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu [--color-surface:var(--color-menu)]',
+            'flex flex-col rounded-xl size-auto z-action-menu menu-open-animation glass-lg bg-transparent [--color-menu:var(--color-menu-glass)] [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -250,7 +260,14 @@ function DropdownSubContent(props: DropdownSubContentProps) {
           {...rest}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
+          <div
+            // The scroll is bounded here rather than left to the glass node:
+            // callers put max-h + overflow-y-auto on Content, and the rim is an
+            // absolutely positioned ::after that would travel with the content.
+            // shrink-0 on the children keeps fixed-height rows from compressing
+            // instead of scrolling.
+            class="flex min-h-0 w-full flex-1 flex-col gap-(--app-border-width) overflow-y-auto [&>*]:shrink-0 bg-edge-muted/60"
+          >
             {local.children}
           </div>
         </KobalteDropdownMenu.SubContent>

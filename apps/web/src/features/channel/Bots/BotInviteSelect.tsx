@@ -3,7 +3,7 @@ import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@lucide/chevron-down.svg';
 import { useBotsQuery } from '@queries/bots/bots';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
@@ -133,7 +133,7 @@ export function BotInviteSelect(props: {
             <Combobox.Content
               as={Surface}
               depth={3}
-              class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 rounded-xl p-1.5 shadow-menu bg-menu"
+              class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 rounded-xl p-1.5 glass-lg bg-menu-glass"
             >
               <Show
                 when={availableBots().length > 0}

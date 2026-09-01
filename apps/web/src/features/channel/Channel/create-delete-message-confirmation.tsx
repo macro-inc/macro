@@ -1,4 +1,4 @@
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CloseIcon from '@lucide/x.svg?component-solid';
 import { Button, Dialog, Surface } from '@ui';
 import { createSignal, type JSX } from 'solid-js';
 import type { DeleteMessageInput } from './create-channel-message-actions';
