@@ -680,7 +680,7 @@ async fn send_notifications(
 
     let notifiable_message = filter_notifiable_message(ctx, link, new_message_provider_id).await?;
 
-    let Some(message) = notifiable_message else {
+    let Some(NotifiableMessage { message, is_signal }) = notifiable_message else {
         return Ok(());
     };
 
@@ -737,10 +737,10 @@ async fn send_notifications(
     let notification_entity =
         EntityType::EmailThread.with_entity_string(message.thread_db_id.to_string());
 
-    // Staff get APNS as well as the inbox / websocket row. Customers stay
-    // websocket-only so this dogfood does not turn on email lock-screen
-    // push for everyone. Split the send so a mixed owner/delegate set
-    // still creates one inbox row per recipient.
+    // Staff get a lock-screen alert only for Signal-tab mail. Noise stays
+    // inbox / websocket so this dogfood does not buzz the phone for every
+    // newsletter. Customers stay websocket-only. Split the send so a mixed
+    // owner/delegate set still creates one inbox row per recipient.
     if !staff_recipients.is_empty() {
         let request = SendNotificationRequestBuilder {
             notification_entity: notification_entity.clone(),
@@ -750,9 +750,12 @@ async fn send_notifications(
             recipient_ids: staff_recipients,
         }
         .into_request()
-        .with_conn_gateway()
-        .with_apns();
-        publish_new_email_notification(ctx, request).await;
+        .with_conn_gateway();
+        if is_signal {
+            publish_new_email_notification(ctx, request.with_apns()).await;
+        } else {
+            publish_new_email_notification(ctx, request).await;
+        }
     }
 
     if !customer_recipients.is_empty() {
@@ -797,11 +800,12 @@ fn partition_email_push_recipients(
 }
 
 /// Who should get a `new_email` inbox / websocket notification for a synced
-/// inbox message. Lock-screen APNS is attached separately, and only for
-/// `@macro.com` recipients.
+/// inbox message. Lock-screen APNS is attached separately: staff only, and
+/// only when the thread is on the Signal tab.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NewEmailNotifyPolicy {
-    /// Every non-sent, non-draft inbox message. Used for `@macro.com` dogfood.
+    /// Every non-sent, non-draft inbox message. Used for `@macro.com` dogfood
+    /// of the in-app inbox row. APNS is still Signal-only.
     AllInbox,
     /// Signal-tab messages only. Default for customers.
     SignalOnly,
@@ -831,13 +835,52 @@ fn new_email_preview_filter(thread_id: Uuid, policy: NewEmailNotifyPolicy) -> Ex
     }
 }
 
+/// A synced inbox message that should create a `new_email` notification.
+struct NotifiableMessage {
+    message: SimpleMessage,
+    /// True when the thread is on the Signal tab (inbox + importance + unshared).
+    is_signal: bool,
+}
+
+async fn thread_matches_notify_policy(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    thread_id: Uuid,
+    policy: NewEmailNotifyPolicy,
+) -> result::Result<bool, ProcessingError> {
+    let preview_filter = new_email_preview_filter(thread_id, policy);
+    let query = PreviewCursorQuery {
+        view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_ids: vec![link.id],
+        limit: 1,
+        query: models_pagination::Query::Sort(
+            models_pagination::SimpleSortMethod::UpdatedAt,
+            Some(Arc::new(preview_filter)),
+        ),
+        team_id: None,
+    };
+
+    let previews = EmailPgRepo::new(ctx.db.clone())
+        .previews_for_view_cursor(query, link.macro_id.clone())
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: anyhow::Error::new(e)
+                    .context("Failed to evaluate inbox notification membership"),
+            })
+        })?;
+
+    Ok(!previews.is_empty())
+}
+
 // filter out messages we don't want to send notifications for
 #[tracing::instrument(skip(ctx, link))]
 async fn filter_notifiable_message(
     ctx: &PubSubContext,
     link: &link::Link,
     new_message_provider_id: &str,
-) -> result::Result<Option<SimpleMessage>, ProcessingError> {
+) -> result::Result<Option<NotifiableMessage>, ProcessingError> {
     let new_message =
         email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
             &ctx.db,
@@ -861,33 +904,37 @@ async fn filter_notifiable_message(
         return Ok(None);
     }
 
-    // 2. Inbox view membership, scoped to this thread. SignalOnly also
-    //    requires Importance(true) AND Shared(exclude).
-    let preview_filter = new_email_preview_filter(
+    // 2. Signal-tab membership first: inbox + Importance + Shared(exclude).
+    //    A hit is enough for every policy, and is what unlocks staff APNS.
+    let is_signal = thread_matches_notify_policy(
+        ctx,
+        link,
         new_message.thread_db_id,
-        new_email_notify_policy(&link.macro_id),
-    );
+        NewEmailNotifyPolicy::SignalOnly,
+    )
+    .await?;
+    if is_signal {
+        return Ok(Some(NotifiableMessage {
+            message: new_message,
+            is_signal: true,
+        }));
+    }
 
-    let query = PreviewCursorQuery {
-        view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_ids: vec![link.id],
-        limit: 1,
-        query: models_pagination::Query::Sort(
-            models_pagination::SimpleSortMethod::UpdatedAt,
-            Some(Arc::new(preview_filter)),
-        ),
-        team_id: None,
-    };
+    // Staff dogfood still writes an in-app row for other inbox mail.
+    if new_email_notify_policy(&link.macro_id) == NewEmailNotifyPolicy::AllInbox
+        && thread_matches_notify_policy(
+            ctx,
+            link,
+            new_message.thread_db_id,
+            NewEmailNotifyPolicy::AllInbox,
+        )
+        .await?
+    {
+        return Ok(Some(NotifiableMessage {
+            message: new_message,
+            is_signal: false,
+        }));
+    }
 
-    let previews = EmailPgRepo::new(ctx.db.clone())
-        .previews_for_view_cursor(query, link.macro_id.clone())
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: anyhow::Error::new(e).context("Failed to evaluate Signal tab membership"),
-            })
-        })?;
-
-    Ok((!previews.is_empty()).then_some(new_message))
+    Ok(None)
 }
