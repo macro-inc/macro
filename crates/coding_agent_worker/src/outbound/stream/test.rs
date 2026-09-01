@@ -7,33 +7,6 @@ fn stream_scope_accepts_user_and_team() {
     assert!(stream_scope("workspace").is_err());
 }
 
-#[test]
-fn sse_parser_yields_data_and_skips_comments() {
-    let mut parser = SseParser::default();
-    let frames = parser.push(
-        ": keep-alive\n\n\
-         id: evt-1\n\
-         event: agent_trigger.new\n\
-         data: {\"ok\":true}\n\n\
-         data: still-incomplete",
-    );
-    assert_eq!(frames, vec![r#"{"ok":true}"#]);
-    assert_eq!(parser.push("\n\n"), vec!["still-incomplete"]);
-}
-
-#[test]
-fn sse_parser_joins_multiline_data_and_accepts_crlf() {
-    let mut parser = SseParser::default();
-    let frames = parser.push("data: {\"a\":1}\r\ndata: extra\r\n\r\n");
-    assert_eq!(frames, vec!["{\"a\":1}\nextra"]);
-}
-
-#[test]
-fn sse_parser_ignores_empty_and_comment_only_frames() {
-    let mut parser = SseParser::default();
-    assert!(parser.push(": keep-alive\n\n\n\n").is_empty());
-}
-
 #[tokio::test]
 async fn identify_bot_reads_the_id_from_bots_me() {
     let url = serve_once(
@@ -47,11 +20,17 @@ async fn identify_bot_reads_the_id_from_bots_me() {
 }
 
 #[tokio::test]
-async fn connect_reads_one_sse_envelope_then_closes() {
+async fn connect_yields_json_envelopes_and_skips_keep_alives_and_junk() {
+    // A keep-alive comment, an envelope, a non-JSON data frame, a CRLF
+    // multi-line envelope, then close.
     let url = serve_once(
         "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n\
+         : keep-alive\n\n\
+         id: evt-1\n\
          event: agent_trigger.new\n\
-         data: {\"hello\":\"stream\"}\n\n",
+         data: {\"hello\":\"stream\"}\n\n\
+         data: not json\n\n\
+         data: {\"multi\":\r\ndata: true}\r\n\r\n",
     )
     .await;
     let client = test_client(&url);
@@ -66,13 +45,27 @@ async fn connect_reads_one_sse_envelope_then_closes() {
         .await
         .expect("open the stream");
 
-    let envelope = stream
-        .next_envelope()
-        .await
-        .expect("read")
-        .expect("one envelope");
-    assert_eq!(envelope, serde_json::json!({"hello": "stream"}));
+    let first = stream.next_envelope().await.expect("read").expect("first");
+    assert_eq!(first, serde_json::json!({"hello": "stream"}));
+    let second = stream.next_envelope().await.expect("read").expect("second");
+    assert_eq!(second, serde_json::json!({"multi": true}));
     assert!(stream.next_envelope().await.expect("closed").is_none());
+}
+
+#[tokio::test]
+async fn connect_refuses_a_non_2xx_answer() {
+    let url = serve_once(
+        "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"message\":\"nope\"}",
+    )
+    .await;
+    let client = test_client(&url);
+
+    let error = client
+        .connect(WebhookScope::User, &[])
+        .await
+        .err()
+        .expect("a 403 is refused");
+    assert!(format!("{error:?}").contains("403"));
 }
 
 fn test_client(storage_url: &str) -> EventStreamClient {

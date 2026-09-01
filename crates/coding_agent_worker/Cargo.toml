@@ -27,11 +27,13 @@ crossterm = { workspace = true }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
 dashmap = { workspace = true }
+eventsource-stream = { workspace = true }
+futures = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 ratatui = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }
 # The gateway dial is `wss` on every deployment but a local stack, and
 # tokio-tungstenite's rustls feature selects no crypto provider.

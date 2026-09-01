@@ -1,13 +1,16 @@
 //! Live trigger stream: identify this bot, then hold
 //! `GET /webhook/events/stream` open as that bot acting for its owner.
 //!
-//! The body is Server-Sent Events. Each `data:` frame is the same broker
-//! envelope persisted webhooks deliver. Delivery is best-effort: a dropped
-//! connection misses events published while it was down.
+//! The body is Server-Sent Events, decoded by `eventsource-stream`. Each
+//! event's `data` is the same broker envelope persisted webhooks deliver.
+//! Delivery is best-effort: a dropped connection misses events published
+//! while it was down.
 
-use std::collections::VecDeque;
+use std::pin::Pin;
 
 use bot_id::BotId;
+use eventsource_stream::{Event, EventStreamError, Eventsource as _};
+use futures::{Stream, StreamExt as _};
 use rootcause::prelude::ResultExt as _;
 use serde::Deserialize;
 use webhook::domain::models::{WebhookFilter, WebhookScope};
@@ -25,49 +28,6 @@ pub fn stream_scope(bot_scope: &str) -> rootcause::Result<WebhookScope> {
         "user" => Ok(WebhookScope::User),
         "team" => Ok(WebhookScope::Team),
         other => rootcause::bail!("unsupported bot_scope `{other}`; expected `user` or `team`"),
-    }
-}
-
-/// Incremental Server-Sent Events parser: bytes in, `data:` payloads out.
-///
-/// Comments (`: keep-alive`) and frames with no data are dropped. `id` and
-/// `event` fields are ignored: the broker envelope is self-describing.
-#[derive(Debug, Default)]
-pub(crate) struct SseParser {
-    buf: String,
-}
-
-impl SseParser {
-    /// Append a chunk and return every complete data payload it finished.
-    pub(crate) fn push(&mut self, chunk: &str) -> Vec<String> {
-        self.buf.push_str(&chunk.replace("\r\n", "\n"));
-        let mut payloads = Vec::new();
-        while let Some(idx) = self.buf.find("\n\n") {
-            let frame = self.buf[..idx].to_owned();
-            self.buf.replace_range(..idx + 2, "");
-            if let Some(data) = frame_data(&frame) {
-                payloads.push(data);
-            }
-        }
-        payloads
-    }
-}
-
-fn frame_data(frame: &str) -> Option<String> {
-    let mut data_lines = Vec::new();
-    for line in frame.lines() {
-        if line.is_empty() || line.starts_with(':') {
-            continue;
-        }
-        let Some(rest) = line.strip_prefix("data:") else {
-            continue;
-        };
-        data_lines.push(rest.strip_prefix(' ').unwrap_or(rest));
-    }
-    if data_lines.is_empty() {
-        None
-    } else {
-        Some(data_lines.join("\n"))
     }
 }
 
@@ -152,9 +112,7 @@ impl EventStreamClient {
             rootcause::bail!("the service answered {status} to open the event stream: {message}");
         }
         Ok(EventStream {
-            response,
-            parser: SseParser::default(),
-            pending: VecDeque::new(),
+            events: Box::pin(response.bytes_stream().eventsource()),
         })
     }
 }
@@ -171,35 +129,29 @@ struct BotMe {
     id: BotId,
 }
 
+type SseEvents =
+    Pin<Box<dyn Stream<Item = Result<Event, EventStreamError<reqwest::Error>>> + Send>>;
+
 /// An open SSE response, yielding one broker envelope at a time.
 pub struct EventStream {
-    response: reqwest::Response,
-    parser: SseParser,
-    pending: VecDeque<serde_json::Value>,
+    events: SseEvents,
 }
 
 impl EventStream {
     /// The next complete JSON envelope, or `None` when the server closes.
+    ///
+    /// Keep-alive comments never surface as events; a `data` payload that is
+    /// not JSON is skipped rather than ending the stream.
     pub async fn next_envelope(&mut self) -> rootcause::Result<Option<serde_json::Value>> {
         loop {
-            if let Some(value) = self.pending.pop_front() {
-                return Ok(Some(value));
-            }
-            let Some(chunk) = self
-                .response
-                .chunk()
-                .await
-                .context("could not read the event stream")?
-            else {
+            let Some(event) = self.events.next().await else {
                 return Ok(None);
             };
-            let text = String::from_utf8_lossy(&chunk);
-            for data in self.parser.push(&text) {
-                match serde_json::from_str(&data) {
-                    Ok(value) => self.pending.push_back(value),
-                    Err(_) => {
-                        tracing::debug!("undecodable SSE data frame; skipped");
-                    }
+            let event = event.context("could not read the event stream")?;
+            match serde_json::from_str(&event.data) {
+                Ok(value) => return Ok(Some(value)),
+                Err(error) => {
+                    tracing::debug!(error = ?error, id = %event.id, "undecodable SSE data; skipped");
                 }
             }
         }
