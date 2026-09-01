@@ -23,7 +23,7 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
-    OpenSession, SessionAnnouncement, SpawnContainer,
+    OpenSession, SessionAnnouncement, SessionOrigin, SpawnContainer, TaskSessionAnnouncement,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
@@ -800,10 +800,7 @@ where
     #[tracing::instrument(err, skip(self, command), fields(
         %session_id,
         bot_id = %command.bot_id,
-        message_id = %command.origin.message_id,
-        channel_id = %command.origin.channel_id,
-        thread_id = %command.origin.thread_id,
-        agent.trigger.kind = "mention",
+        agent.trigger.kind = command.origin.kind(),
         agent.session.id = tracing::field::Empty,
     ))]
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
@@ -815,58 +812,86 @@ where
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
         let defaults = self.defaults.for_bot(bot_id);
         let repo_url = defaults.repo_url.clone();
-        let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
-        let prior_messages = self
-            .load_prompt_context(origin.channel_id, origin.message_id, Some(&origin.sender))
-            .await;
-        let composed_prompt = self
-            .prompt_composer
-            .compose(&origin.content, Some(&prior_messages))
-            .await?;
+        let owner = origin.owner().clone();
+        let sandbox_size = self.sessions.user_sandbox_size(&owner).await?;
+        let (name_source, composed_prompt) = match &origin {
+            SessionOrigin::Mention(mention) => {
+                let prior_messages = self
+                    .load_prompt_context(mention.channel_id, mention.message_id, Some(&owner))
+                    .await;
+                let composed = self
+                    .prompt_composer
+                    .compose(&mention.content, Some(&prior_messages))
+                    .await?;
+                (mention.content.clone(), composed)
+            }
+            SessionOrigin::TaskAssignment(assignment) => {
+                // No channel history to fold in: the task document itself is
+                // the context, and the prompt tells the agent to read it.
+                let composed = self
+                    .prompt_composer
+                    .compose(&assignment.prompt_markdown(), None)
+                    .await?;
+                (assignment.summary(), composed)
+            }
+        };
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.
         // Minted here, where the session's owner is in hand, and only here -
         // the token is scoped to this session and spends this person's
         // credentials, so there is nowhere else it could correctly come from.
-        let egress = self
-            .egress
-            .provision(session_id, &origin.sender, &repo_url)
-            .await?;
+        let egress = self.egress.provision(session_id, &owner, &repo_url).await?;
 
         self.sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
-                owner_id: origin.sender.clone(),
+                owner_id: owner.clone(),
                 bot_id,
-                thread_id: Some(origin.thread_id),
-                originating_message_id: Some(origin.message_id),
+                thread_id: origin.thread_id(),
+                originating_message_id: origin.message_id(),
                 model: runtime.model.clone(),
                 harness: runtime.harness.clone(),
                 repo_url: Some(repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
-                // A mention carries no instructions: the prompt is whatever
-                // was said in the channel, and nothing there states how the
+                // A trigger carries no instructions: the prompt is whatever
+                // was said or assigned, and nothing there states how the
                 // runtime should work.
                 instructions: None,
                 egress_token_hash: Some(egress.session_token_hash),
-                // This open came from the trigger pipeline seeing the mention.
+                // This open came from the trigger pipeline seeing the trigger.
             })
             .await?;
 
-        self.announcer
-            .announce(SessionAnnouncement {
-                session_id,
-                bot_id,
-                origin_channel_id: origin.channel_id,
-                origin_thread_id: origin.thread_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: origin.content.clone(),
-                triggered_by: origin.sender.clone(),
-            })
-            .await?;
+        match &origin {
+            SessionOrigin::Mention(mention) => {
+                self.announcer
+                    .announce(SessionAnnouncement {
+                        session_id,
+                        bot_id,
+                        origin_channel_id: mention.channel_id,
+                        origin_thread_id: mention.thread_id,
+                        prompted_message_id: MessageId::first(AuthorKind::User),
+                        prompted_content: mention.content.clone(),
+                        triggered_by: owner.clone(),
+                    })
+                    .await?;
+            }
+            SessionOrigin::TaskAssignment(assignment) => {
+                self.announcer
+                    .announce_task_assignment(TaskSessionAnnouncement {
+                        session_id,
+                        bot_id,
+                        task_id: assignment.task_id,
+                        prompted_message_id: MessageId::first(AuthorKind::User),
+                        prompted_content: assignment.summary(),
+                        triggered_by: owner.clone(),
+                    })
+                    .await?;
+            }
+        }
 
         let mcp_servers = egress.sandbox.acp_servers();
         let container = match self
@@ -905,14 +930,9 @@ where
         let AgentAction::Prompt(prompt) = &mut action else {
             unreachable!("a prompt constructor always returns a prompt action");
         };
-        prompt.set_name_source(origin.content);
+        prompt.set_name_source(name_source);
         self.sessions
-            .send_action(
-                session_id,
-                Some(origin.sender),
-                action,
-                AgentActionId::mint(),
-            )
+            .send_action(session_id, Some(owner), action, AgentActionId::mint())
             .await?;
         Ok(())
     }

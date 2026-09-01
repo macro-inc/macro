@@ -1,6 +1,7 @@
 //! Kafka worker that turns posted channel messages into agent-session events.
 
 mod config;
+mod task_assignment;
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_channel_event;
@@ -72,12 +73,20 @@ async fn run() -> anyhow::Result<()> {
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         LexicalReplyDetector::new(lexical),
         FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
-        ChannelThreadHistory::new(PgChannelsRepo::new(pool)),
+        ChannelThreadHistory::new(PgChannelsRepo::new(pool.clone())),
     );
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())?,
         macro_event_broker::GlobalSpawner,
     );
+
+    // Task assignments open sessions too, watched off the properties topic on
+    // the same terms as the channel-message loop below.
+    let mut task_trigger = tokio::spawn(task_assignment::supervise(
+        pool.clone(),
+        config.kafka_brokers.as_ref().to_owned(),
+    ));
+
     let consumer =
         KafkaEventConsumer::<AgentTriggerConsumerGroup>::from_env(config.kafka_brokers.as_ref())?;
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer)
@@ -97,6 +106,13 @@ async fn run() -> anyhow::Result<()> {
         tokio::select! {
             () = &mut shutdown => {
                 tracing::info!("agent trigger service shutting down");
+                break;
+            }
+            result = &mut task_trigger => {
+                run_error = Some(match result {
+                    Ok(()) => anyhow::anyhow!("agent task-assignment trigger stopped unexpectedly"),
+                    Err(error) => anyhow::anyhow!("agent task-assignment trigger task failed: {error}"),
+                });
                 break;
             }
             result = consumer.recv() => {

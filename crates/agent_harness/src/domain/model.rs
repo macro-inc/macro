@@ -23,7 +23,98 @@ pub struct MentionOrigin {
     pub content: String,
 }
 
-/// Open a new session for a mention.
+/// A task assignment that opens a session.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TaskAssignmentOrigin {
+    /// The task the agent was assigned to. Its discussion is where the
+    /// session announces itself and streams its replies.
+    pub task_id: Uuid,
+    /// Who assigned the agent. Owns the session and is credited for its
+    /// messages.
+    pub assigner: MacroUserIdStr<'static>,
+    /// The task's title when the assignment was observed. Absent when the
+    /// task row could not be read.
+    pub task_title: Option<String>,
+}
+
+impl TaskAssignmentOrigin {
+    /// One line naming the work, used as the session's name source and quoted
+    /// in the announcement.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        match &self.task_title {
+            Some(title) => format!("Do task: {title}"),
+            None => format!("Do task {}", self.task_id),
+        }
+    }
+
+    /// The markdown delivered as the session's first prompt.
+    #[must_use]
+    pub fn prompt_markdown(&self) -> String {
+        let title = match &self.task_title {
+            Some(title) => format!("\"{title}\""),
+            None => "(title unavailable)".to_owned(),
+        };
+        format!(
+            "You have been assigned a Macro task: {title} (task document id: `{task_id}`).\n\n\
+             Use your Macro tools to read the task document - its body, properties, \
+             and discussion - for the full requirements, then do the task. Your replies \
+             in this session are shown in the task's discussion, so finish by reporting \
+             what you did, or what is blocking you.",
+            task_id = self.task_id,
+        )
+    }
+}
+
+/// What opened a session, and everything the open needs from it.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SessionOrigin {
+    /// A bot mention in a channel message.
+    Mention(MentionOrigin),
+    /// The agent was assigned to a task.
+    TaskAssignment(TaskAssignmentOrigin),
+}
+
+impl SessionOrigin {
+    /// Who asked for the session; owns it and is credited for its messages.
+    #[must_use]
+    pub fn owner(&self) -> &MacroUserIdStr<'static> {
+        match self {
+            Self::Mention(mention) => &mention.sender,
+            Self::TaskAssignment(assignment) => &assignment.assigner,
+        }
+    }
+
+    /// The thread the session answers back into, when it came from one.
+    #[must_use]
+    pub fn thread_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Mention(mention) => Some(mention.thread_id),
+            Self::TaskAssignment(_) => None,
+        }
+    }
+
+    /// The channel message that opened the session, when one did.
+    #[must_use]
+    pub fn message_id(&self) -> Option<Uuid> {
+        match self {
+            Self::Mention(mention) => Some(mention.message_id),
+            Self::TaskAssignment(_) => None,
+        }
+    }
+
+    /// The trigger kind, for tracing.
+    #[must_use]
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Mention(_) => "mention",
+            Self::TaskAssignment(_) => "task_assignment",
+        }
+    }
+}
+
+/// Open a new session for a mention or a task assignment.
 ///
 /// Only for managed sessions - the ones whose sandbox this deployment
 /// provisions. External sessions are opened through
@@ -32,12 +123,12 @@ pub struct MentionOrigin {
 /// a plain create rather than a harness command.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenSession {
-    /// The bot that was mentioned.
+    /// The bot the session runs for.
     pub bot_id: BotId,
     /// Runtime configuration resolved for this bot when the trigger arrived.
     pub runtime: AgentRuntimeConfig,
-    /// The mention itself.
-    pub origin: MentionOrigin,
+    /// What asked for the session.
+    pub origin: SessionOrigin,
 }
 
 /// How a bot's sessions get a runtime — the closed set of first-party
@@ -239,6 +330,28 @@ pub struct AnnouncePrompt {
     pub content: String,
     /// Who mentioned the bot.
     pub sender: MacroUserIdStr<'static>,
+}
+
+/// Facts required to announce a session into the discussion of the task it
+/// was assigned to.
+///
+/// The channel counterpart is [`SessionAnnouncement`]; this posts a
+/// magic-chip comment into the task's discussion thread instead of a channel
+/// message, and the session's replies render into that chip.
+#[derive(Debug, Clone)]
+pub struct TaskSessionAnnouncement {
+    /// Agent session represented by the announcement.
+    pub session_id: AgentSessionId,
+    /// The bot the session runs for; the announcement posts as it.
+    pub bot_id: BotId,
+    /// The task whose discussion the announcement posts into.
+    pub task_id: Uuid,
+    /// Folded user message that prompts the anchored agent response.
+    pub prompted_message_id: MessageId,
+    /// Short description of the assignment, quoted back in the announcement.
+    pub prompted_content: String,
+    /// User whose assignment triggered the announcement.
+    pub triggered_by: MacroUserIdStr<'static>,
 }
 
 /// Facts required to announce one prompt into its originating context.

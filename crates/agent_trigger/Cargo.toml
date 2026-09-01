@@ -30,6 +30,11 @@ macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 channel_sender = { path = "../channel_sender" }
 macro_uuid = { path = "../macro_uuid" }
+models_properties = { path = "../models_properties" }
+# Only the domain vocabulary (the `macro.properties` event types); default
+# features would pull the whole properties service stack.
+properties = { path = "../properties", default-features = false }
+system_properties = { path = "../system_properties" }
 serde = { workspace = true }
 strum = { workspace = true }
 serde_json = { workspace = true }

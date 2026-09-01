@@ -33,7 +33,8 @@ use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults,
-    MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
+    MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults, SessionOrigin,
+    SpawnContainer, TaskAssignmentOrigin,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
@@ -62,13 +63,21 @@ fn open_command() -> OpenSession {
             harness: "opencode".to_owned(),
             instructions: String::new(),
         },
-        origin: MentionOrigin {
+        origin: SessionOrigin::Mention(MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),
             thread_id,
             message_id: thread_id,
             sender: sender(),
             content: "@claude fix the failing test".to_owned(),
-        },
+        }),
+    }
+}
+
+/// The mention an origin wraps; open-flow tests all start from one.
+fn mention_origin(origin: SessionOrigin) -> MentionOrigin {
+    match origin {
+        SessionOrigin::Mention(mention) => mention,
+        SessionOrigin::TaskAssignment(_) => panic!("expected a mention origin"),
     }
 }
 
@@ -321,7 +330,7 @@ async fn disconnected_session(
     repo: &InMemoryAgentSessionRepo,
     containers: &MockContainerManager,
 ) -> AgentSessionId {
-    let OpenSession { origin, .. } = open_command();
+    let origin = mention_origin(open_command().origin);
     // The coder bot: resume-on-disconnect only exists for managed sessions.
     let bot_id = bot_id::MACRO_CODER_BOT_ID;
     let id = AgentSessionId::new();
@@ -364,7 +373,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
     let (service, repo, containers, announcer, _runtimes) = harness();
     let command = open_command();
     let id = AgentSessionId::new();
-    let origin = command.origin.clone();
+    let origin = mention_origin(command.origin.clone());
 
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
@@ -410,6 +419,66 @@ async fn open_creates_announces_and_delivers_the_mention() {
         [vec![ContentBlock::from(context_prompt(
             "@claude fix the failing test"
         ))]]
+    );
+}
+
+#[tokio::test]
+async fn open_for_a_task_assignment_announces_into_the_task_and_delivers() {
+    let composer = PromptComposerMock::default();
+    let (service, repo, containers, announcer, _runtimes) =
+        harness_with_edges(PromptContextMock::default(), composer.clone());
+    let mut command = open_command();
+    let task_id = macro_uuid::Uuid::from_u128(0x7a);
+    let origin = TaskAssignmentOrigin {
+        task_id,
+        assigner: sender(),
+        task_title: Some("Fix the flaky test".to_owned()),
+    };
+    let expected_prompt = origin.prompt_markdown();
+    command.origin = SessionOrigin::TaskAssignment(origin);
+    let bot_id = command.bot_id;
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+
+    // The row exists without any channel linkage: the session belongs to the
+    // task, whose discussion carries the announcement.
+    let session = repo.get(id).await.expect("the session row exists");
+    assert_eq!(session.owner_id, sender());
+    assert_eq!(session.thread_id, None);
+    assert_eq!(session.originating_message_id, None);
+    assert!(announcer.announced().is_empty());
+    let announced = announcer.task_announced();
+    assert_eq!(announced.len(), 1);
+    assert_eq!(announced[0].task_id, task_id);
+    assert_eq!(announced[0].bot_id, bot_id);
+    assert_eq!(announced[0].triggered_by, sender());
+    assert_eq!(announced[0].prompted_content, "Do task: Fix the flaky test");
+    assert_eq!(
+        announced[0].prompted_message_id,
+        MessageId::first(AuthorKind::User)
+    );
+
+    // The prompt is composed without channel history and names the task.
+    assert_eq!(composer.calls(), [(expected_prompt.clone(), None)]);
+    assert_eq!(
+        prompts(&container.agent()),
+        [vec![ContentBlock::from(expected_prompt)]]
     );
 }
 
@@ -481,7 +550,7 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     );
     let mut command = open_command();
     command.runtime.instructions = "Diagnose first.".to_owned();
-    let raw = command.origin.content.clone();
+    let raw = mention_origin(command.origin.clone()).content;
     let id = AgentSessionId::new();
 
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -970,7 +1039,9 @@ async fn live_cursor_session(
     command.bot_id = bot_id::CURSOR_BOT_ID;
     command.runtime.kind = AgentKind::Cursor;
     command.runtime.harness = "cursor".to_owned();
-    command.origin.sender = sender();
+    if let SessionOrigin::Mention(origin) = &mut command.origin {
+        origin.sender = sender();
+    }
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {

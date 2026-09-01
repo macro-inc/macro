@@ -19,6 +19,9 @@ database_env_vars = { path = "../../crates/database_env_vars" }
 kafka_util = { path = "../../crates/kafka_util" }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_config = { path = "../../crates/macro_config" }
+macro_db_client = { path = "../../crates/macro_db_client" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+properties = { path = "../../crates/properties", default-features = false }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }

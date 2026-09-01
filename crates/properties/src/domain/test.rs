@@ -2609,6 +2609,87 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
 }
 
 #[tokio::test]
+async fn test_handle_task_assignees_property_skips_agent_assignees() {
+    let mut repo = MockPropertiesRepo::new();
+    let mut perm_service = MockPermissionService::new();
+    let mut notif_service = MockNotificationService::new();
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let entity_id = task_id.to_string();
+    let user = MacroUserIdStr::parse_from_str("macro|user1@macro.com").unwrap();
+    let bot = "bot|00000000-0000-0000-0000-00000000000a";
+
+    let value = Some(
+        models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+            references: [user.as_ref(), bot]
+                .iter()
+                .map(|id| models_properties::shared::EntityReference {
+                    entity_type: EntityType::User,
+                    entity_id: (*id).to_string(),
+                    specific_message_id: None,
+                })
+                .collect(),
+        },
+    );
+
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+
+    // Only the user assignee gets permissions and a notification; the agent's
+    // side effect is the trigger pipeline's, driven off the property event.
+    let entity_id_clone = entity_id.clone();
+    let expected_user = user.clone();
+    perm_service
+        .expect_grant_permissions_to_task()
+        .times(1)
+        .withf(move |user_ids, tid| {
+            user_ids.len() == 1 && user_ids.contains(&expected_user) && tid == entity_id_clone
+        })
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    notif_service
+        .expect_send_task_assigned()
+        .times(1)
+        .withf(|notification| notification.recipient_ids.len() == 1)
+        .returning(|_| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service), Some(notif_service));
+
+    let assigned_by = MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap();
+    service
+        .handle_task_assignees_property(&entity_id, value, Some(&assigned_by))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_handle_task_assignees_property_agent_only_assignees() {
+    let repo = MockPropertiesRepo::new();
+    let perm_service = MockPermissionService::new();
+    let notif_service = MockNotificationService::new();
+
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let entity_id = task_id.to_string();
+    let value = Some(
+        models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+            references: vec![models_properties::shared::EntityReference {
+                entity_type: EntityType::User,
+                entity_id: "bot|00000000-0000-0000-0000-00000000000a".to_string(),
+                specific_message_id: None,
+            }],
+        },
+    );
+
+    // No user assignees means no permission grant and no notification.
+    let service = PropertiesServiceImpl::new(repo, Some(perm_service), Some(notif_service));
+
+    let assigned_by = MacroUserIdStr::parse_from_str("macro|assigner@macro.com").unwrap();
+    service
+        .handle_task_assignees_property(&entity_id, value, Some(&assigned_by))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn test_handle_task_assignees_property_clearing_assignees() {
     let repo = MockPropertiesRepo::new();
     let perm_service = MockPermissionService::new();

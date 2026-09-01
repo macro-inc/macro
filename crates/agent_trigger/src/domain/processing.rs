@@ -4,12 +4,14 @@ use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::ports::AgentSessionRepo;
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use macro_event_broker::{EventBrokerError, MacroEvent as _, MacroEventBroker};
+use properties::domain::events::PropertyMacroEvent;
 
 use super::broker_events::AgentTriggerEventName;
 use super::service::{
     AgentBotLookup, AgentTriggerService, ChannelParticipationLookup, ImplicitTriggerJudge,
     ReplyDetector, TeamMembershipLookup, ThreadHistory,
 };
+use super::task_assignment::{TaskAssignmentTriggerService, TaskDirectory};
 
 /// Failure while evaluating or publishing one channel event.
 #[derive(Debug, thiserror::Error)]
@@ -64,6 +66,39 @@ where
             macro.event.id = %yielded.event().event_id,
             macro.event.type = event_type,
             "agent trigger yielded event"
+        );
+        publisher
+            .send_event(&yielded)?
+            .await
+            .map_err(ProcessChannelEventError::PublishTask)??;
+    }
+
+    Ok(())
+}
+
+/// Evaluate and publish all agent triggers yielded by one property event.
+///
+/// The property-topic sibling of [`process_channel_event`]: transport
+/// adapters retain ownership of decode and offset commit, and this owns
+/// evaluation and publication.
+pub async fn process_property_event<Bots, Teams, Tasks, Broker>(
+    trigger: &TaskAssignmentTriggerService<Bots, Teams, Tasks>,
+    publisher: &Broker,
+    event: &PropertyMacroEvent,
+) -> Result<(), ProcessChannelEventError>
+where
+    Bots: AgentBotLookup,
+    Teams: TeamMembershipLookup,
+    Tasks: TaskDirectory,
+    Broker: MacroEventBroker,
+{
+    let yielded_events = trigger.evaluate(&event.event().event).await?;
+    for yielded in yielded_events {
+        let event_type: &'static str = AgentTriggerEventName::from(&yielded.event().event).into();
+        tracing::info!(
+            macro.event.id = %yielded.event().event_id,
+            macro.event.type = event_type,
+            "agent task-assignment trigger yielded event"
         );
         publisher
             .send_event(&yielded)?

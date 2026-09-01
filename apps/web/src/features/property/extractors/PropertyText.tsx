@@ -1,4 +1,5 @@
 import { getDisplayNameParts, tryMacroId } from '@core/user';
+import { useAgentDirectory } from '@queries/agents/agents';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { Property } from '../types';
@@ -97,7 +98,10 @@ function UserPropertyText(props: {
   fallback?: JSX.Element;
   class?: string;
 }) {
+  const agentDirectory = useAgentDirectory();
   const text = () => {
+    const agent = agentDirectory().get(props.id);
+    if (agent) return agent.name;
     const parts = getDisplayNameParts(tryMacroId(props.id), {
       emailFallback: 'local-part',
     });

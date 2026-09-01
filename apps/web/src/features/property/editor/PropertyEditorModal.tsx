@@ -20,6 +20,7 @@ import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import { usePropertySelection } from '@property/hooks';
+import { useAssignableAgentUsers } from '@property/hooks/useAgentAssignees';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { canTagEntity, useDocTags } from '@property/tags';
 import { TagDot } from '@property/tags/TagDot';
@@ -1676,10 +1677,26 @@ function EntityPropertyEditor(props: {
       name: idToDisplayName(member.user_id),
     }));
 
+  // Task assignees can be agents too: assigning one opens an agent session
+  // on the task.
+  const isAssignees = () => {
+    const property = props.property;
+    if (!property) return false;
+    const definitionId =
+      'propertyDefinitionId' in property
+        ? property.propertyDefinitionId
+        : property.id;
+    return definitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
+  };
+  const assignableAgents = useAssignableAgentUsers();
+
   const { entities } = useEntitiesForProperty(
     () => props.property,
     props.searchValue,
-    { users: () => (isCompanyOwner() ? teamMembers() : undefined) }
+    {
+      users: () => (isCompanyOwner() ? teamMembers() : undefined),
+      agents: () => (isAssignees() ? assignableAgents() : undefined),
+    }
   );
   const [localSelectedRefs, setLocalSelectedRefs] = createSignal(
     props.property ? selectedEntityRefs(props.property) : []

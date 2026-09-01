@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use bot_id::BotIdStr;
 use entity_access::domain::models::EntityAccessAuth;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::cowlike::CowLike;
@@ -142,6 +143,12 @@ where
     }
 
     /// Handle task assignees property with permissions.
+    ///
+    /// Assignees are users (`macro|<email>`) or agents (`bot|<uuid>`). Only
+    /// user assignees get edit permission and a notification here; an agent
+    /// assignee's side effect - opening an agent session on the task - is
+    /// driven off the published property event by the trigger pipeline, which
+    /// is where the agent's availability to the assigner is decided.
     pub(crate) async fn handle_task_assignees_property(
         &self,
         entity_id: &str,
@@ -159,6 +166,7 @@ where
 
         let assignee_ids = references
             .iter()
+            .filter(|r| BotIdStr::parse_from_str(&r.entity_id).is_err())
             .map(|r| MacroUserIdStr::parse_from_str(&r.entity_id))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| PropertiesErr::Validation(e.to_string()))?;

@@ -198,15 +198,22 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     return isQuickAccessLoading();
   });
 
+  // Agents appended to a USER pool; no DM activity to augment with.
+  const agentEntities = (): CombinedEntity[] =>
+    (props.config.agents?.() ?? []).map(userToEntity);
+
   // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
     const specificEntityType = props.config.specificEntityType;
 
     // An explicit user pool replaces the quick-access people list.
     if (specificEntityType === 'USER' && props.config.users) {
-      return props.config
-        .users()
-        .map((user) => userToEntity(augmentUserWithDmActivity(user)));
+      return [
+        ...props.config
+          .users()
+          .map((user) => userToEntity(augmentUserWithDmActivity(user))),
+        ...agentEntities(),
+      ];
     }
 
     // For THREAD type, use email data (not in quickAccess yet)
@@ -247,6 +254,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       converted.push(...emails().map(threadMapper));
     }
 
+    if (specificEntityType === 'USER') {
+      converted.push(...agentEntities());
+    }
+
     return converted;
   });
 
@@ -275,6 +286,19 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     isChannelItem: isChannelEntity,
     getTimestamp: getEntityTimestampedItem,
   });
+
+  // Agents are a small, fixed pool riding along with a potentially huge
+  // people list; re-append any the display caps sliced off so they are always
+  // offerable (all of them when browsing, the matching ones when searching).
+  const ensureAgents = (list: CombinedEntity[], term: string) => {
+    const agents = agentEntities();
+    if (agents.length === 0) return list;
+    const matching = term
+      ? entitySearch(agents, term).map((result) => result.item)
+      : agents;
+    const listed = new Set(list.map((entity) => entity.id));
+    return [...list, ...matching.filter((entity) => !listed.has(entity.id))];
+  };
 
   const filteredEntities = createMemo(() => {
     const term = searchTerm();
@@ -314,7 +338,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
     }
 
-    return localResults;
+    return ensureAgents(localResults, term);
   });
 
   // Sort entities with selected items first when not searching. Self is

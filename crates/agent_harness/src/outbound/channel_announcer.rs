@@ -16,15 +16,26 @@ mod test;
 
 use std::sync::Arc;
 
+use bot_id::BotIdStr;
 use channel_sender::ChannelSender;
 use channels::domain::models::{PostMessageNotificationPolicy, PostMessageRequest};
 use channels::domain::ports::ChannelService;
+use connection_gateway_client::ConnectionGatewayClient;
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::AgentAnnouncementChip;
+use macro_db_client::annotations::create_comment::create_document_comment;
+use model::annotations::AnnotationIncrementalUpdate;
+use model::annotations::create::CreateCommentRequest;
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::SessionAnnouncement;
+use crate::domain::model::{SessionAnnouncement, TaskSessionAnnouncement};
 use crate::domain::ports::SessionAnnouncer;
+
+/// Marks a comment thread as belonging to a document's discussion rather than
+/// an inline annotation. Mirrors `DISCUSSION_MARK_PREFIX` in
+/// `apps/web/src/features/block-md/comments/discussionResource.ts`, which is
+/// what the task view filters discussion threads by.
+const DISCUSSION_MARK_PREFIX: &str = "DISCUSSION:";
 
 fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChip {
     AgentAnnouncementChip {
@@ -35,18 +46,42 @@ fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChi
     }
 }
 
-/// Posts session announcements as their session's bot through a
-/// [`ChannelService`].
+fn task_announcement_chip(announcement: &TaskSessionAnnouncement) -> AgentAnnouncementChip {
+    AgentAnnouncementChip {
+        agent_session_id: announcement.session_id.to_string(),
+        channel_id: None,
+        prompted_message: announcement.prompted_message_id,
+        status: "booting".to_owned(),
+    }
+}
+
+/// Posts session announcements as their session's bot: channel-thread
+/// announcements through a [`ChannelService`], task-assignment announcements
+/// as a comment in the task's discussion.
 pub struct ChannelAnnouncer<Channels> {
     channels: Arc<Channels>,
     lexical: LexicalClient,
+    pool: sqlx::PgPool,
+    gateway: Arc<ConnectionGatewayClient>,
 }
 
 impl<Channels> ChannelAnnouncer<Channels> {
-    /// Post through `channels`, with content composed by `lexical`. The
-    /// sender is per-announcement: whichever bot the session runs for.
-    pub fn new(channels: Arc<Channels>, lexical: LexicalClient) -> Self {
-        Self { channels, lexical }
+    /// Post through `channels` (or, for task assignments, straight into the
+    /// document comments in `pool`, pushing the live update through
+    /// `gateway`), with content composed by `lexical`. The sender is
+    /// per-announcement: whichever bot the session runs for.
+    pub fn new(
+        channels: Arc<Channels>,
+        lexical: LexicalClient,
+        pool: sqlx::PgPool,
+        gateway: Arc<ConnectionGatewayClient>,
+    ) -> Self {
+        Self {
+            channels,
+            lexical,
+            pool,
+            gateway,
+        }
     }
 }
 
@@ -80,6 +115,63 @@ where
             )
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+
+        Ok(())
+    }
+
+    async fn announce_task_assignment(&self, announcement: TaskSessionAnnouncement) -> Result<()> {
+        let chip = task_announcement_chip(&announcement);
+        let content = self
+            .lexical
+            .compose_agent_announcement(&announcement.prompted_content, &chip)
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+
+        let sender = BotIdStr::from(announcement.bot_id);
+        let task_id = announcement.task_id.to_string();
+        let request = CreateCommentRequest {
+            thread_id: None,
+            thread_metadata: Some(serde_json::json!({
+                "markId": format!("{DISCUSSION_MARK_PREFIX}{}", macro_uuid::Uuid::new_v4()),
+            })),
+            anchor: None,
+            text: content,
+            metadata: None,
+            mentions: None,
+        };
+        let response = create_document_comment(&self.pool, &task_id, sender.as_ref(), &request)
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+
+        // The same live update the comment API pushes, so an open task view
+        // renders the chip without a refresh. Best-effort: the comment is
+        // durable either way, and a viewer who reloads still sees it.
+        match serde_json::to_value(AnnotationIncrementalUpdate::CreateComment {
+            sender: sender.as_ref(),
+            document_id: &task_id,
+            response: &response,
+        }) {
+            Ok(update) => {
+                let _ = self
+                    .gateway
+                    .batch_send_message(
+                        "comment".to_owned(),
+                        update,
+                        vec![model_entity::EntityType::Document.with_entity_str(&task_id)],
+                    )
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(
+                            error = ?error,
+                            task_id = %task_id,
+                            "task announcement comment created, but its live update failed"
+                        );
+                    });
+            }
+            Err(error) => {
+                tracing::warn!(error = ?error, "failed to serialize a comment live update");
+            }
+        }
 
         Ok(())
     }

@@ -6,6 +6,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { AgentChannelScope } from '@service-storage/generated/schemas/agentChannelScope';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import { type Accessor, createMemo } from 'solid-js';
 import { agentKeys } from './keys';
 
 /**
@@ -48,6 +49,36 @@ export function useAgentsQuery() {
 
 export function invalidateAgents() {
   return queryClient.invalidateQueries({ queryKey: agentKeys.list.queryKey });
+}
+
+export type AgentDisplay = {
+  name: string;
+  handle: string;
+  avatarUrl?: string;
+};
+
+/**
+ * Agent display facts keyed by id, in both the canonical `bot|<uuid>`
+ * principal form and the bare uuid. For rendering agent ids (e.g. task
+ * assignees) that carry no name/avatar of their own.
+ */
+export function useAgentDirectory(): Accessor<
+  ReadonlyMap<string, AgentDisplay>
+> {
+  const agents = useAgentsQuery();
+  return createMemo(() => {
+    const map = new Map<string, AgentDisplay>();
+    for (const agent of agents.data ?? []) {
+      const display: AgentDisplay = {
+        name: agent.bot.name,
+        handle: agent.bot.handle,
+        avatarUrl: agent.bot.avatar_url ?? undefined,
+      };
+      map.set(`bot|${agent.bot.id}`, display);
+      map.set(agent.bot.id, display);
+    }
+    return map;
+  });
 }
 
 function invalidateAgentChannelBots(channelIds: string[]) {

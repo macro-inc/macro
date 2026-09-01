@@ -451,7 +451,12 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
         LexicalServiceUrl::new()?.to_string(),
     );
-    let announcer = ChannelAnnouncer::new(Arc::clone(&channel_service), lexical.clone());
+    let announcer = ChannelAnnouncer::new(
+        Arc::clone(&channel_service),
+        lexical.clone(),
+        pool.clone(),
+        Arc::clone(&connection_gateway),
+    );
     let prompt_composer = LexicalAgentPromptComposer::new(lexical);
     let prompt_context =
         ChannelPromptContextAdapter::new(channel_service, Arc::clone(&entity_access));
