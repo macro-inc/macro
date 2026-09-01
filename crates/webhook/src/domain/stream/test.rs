@@ -1,14 +1,15 @@
 use super::*;
 use crate::domain::models::WebhookFilter;
+use chrono::Utc;
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
     EntityPermission, RequiredPermission, TeamRole, UserTeamInfo,
 };
 use futures::StreamExt as _;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
-use uuid::{NoContext, Timestamp};
+use tokio::sync::broadcast;
+use uuid::Uuid;
 
 const SUBSCRIBER_ID: &str = "macro|reader@example.com";
 const DOCUMENT_ID: &str = "11111111-1111-1111-1111-111111111111";
@@ -18,12 +19,6 @@ const FOREIGN_WORKSPACE_ID: &str = "44444444-4444-4444-4444-444444444444";
 
 fn subscriber() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(SUBSCRIBER_ID.to_string()).expect("valid user id")
-}
-
-fn uuid_v7_at_ms(unix_ms: i64) -> Uuid {
-    let seconds = u64::try_from(unix_ms / 1000).expect("non-negative test timestamp");
-    let nanoseconds = u32::try_from(unix_ms % 1000).expect("in range") * 1_000_000;
-    Uuid::new_v7(Timestamp::from_unix(NoContext, seconds, nanoseconds))
 }
 
 fn normalized(event_name: &str, entity_id: &str) -> NormalizedWebhookEvent {
@@ -62,45 +57,6 @@ fn filter(events: &[&str]) -> WebhookFilters {
         events: events.iter().map(|event| event.to_string()).collect(),
         ids: None,
     }]
-}
-
-/// Source that yields queued candidates, then fails (ending the stream).
-struct FakeSource {
-    candidates: VecDeque<StreamCandidateEvent>,
-}
-
-impl WebhookStreamSource for FakeSource {
-    async fn next_event(&mut self) -> Result<StreamCandidateEvent, rootcause::Report> {
-        self.candidates
-            .pop_front()
-            .ok_or_else(|| rootcause::report!("fake source exhausted"))
-    }
-}
-
-#[derive(Clone, Default)]
-struct FakeSourceFactory {
-    candidates: Arc<Mutex<VecDeque<StreamCandidateEvent>>>,
-    opened_starts: Arc<Mutex<Vec<StreamStart>>>,
-}
-
-impl FakeSourceFactory {
-    fn with_candidates(candidates: Vec<StreamCandidateEvent>) -> Self {
-        Self {
-            candidates: Arc::new(Mutex::new(candidates.into())),
-            opened_starts: Arc::default(),
-        }
-    }
-}
-
-impl WebhookStreamSourceFactory for FakeSourceFactory {
-    type Source = FakeSource;
-
-    async fn open(&self, start: StreamStart) -> Result<Self::Source, WebhookStreamSourceOpenError> {
-        self.opened_starts.lock().unwrap().push(start);
-        Ok(FakeSource {
-            candidates: std::mem::take(&mut *self.candidates.lock().unwrap()),
-        })
-    }
 }
 
 /// Access service granting view access to a fixed entity id set.
@@ -238,27 +194,26 @@ impl WebhookWorkspaceResolver for FakeWorkspaceResolver {
     }
 }
 
-fn service(
-    factory: FakeSourceFactory,
-    access: FakeAccessService,
-) -> WebhookEventStreamServiceImpl<FakeSourceFactory, FakeAccessService, FakeWorkspaceResolver> {
+type TestService = WebhookEventStreamServiceImpl<FakeAccessService, FakeWorkspaceResolver>;
+
+fn service(access: FakeAccessService) -> (TestService, broadcast::Sender<StreamCandidateEvent>) {
     service_with_workspaces(
-        factory,
         access,
         vec![SUBSCRIBER_ID.to_string(), TEAM_WORKSPACE_ID.to_string()],
     )
 }
 
 fn service_with_workspaces(
-    factory: FakeSourceFactory,
     access: FakeAccessService,
     workspace_ids: Vec<String>,
-) -> WebhookEventStreamServiceImpl<FakeSourceFactory, FakeAccessService, FakeWorkspaceResolver> {
-    WebhookEventStreamServiceImpl::new(
-        factory,
+) -> (TestService, broadcast::Sender<StreamCandidateEvent>) {
+    let (sender, _) = broadcast::channel(16);
+    let service = WebhookEventStreamServiceImpl::new(
+        sender.clone(),
         Arc::new(access),
         FakeWorkspaceResolver { workspace_ids },
-    )
+    );
+    (service, sender)
 }
 
 #[test]
@@ -278,42 +233,9 @@ fn filter_accepts_its_events_and_optional_entity_ids() {
     assert!(channel_filter.accepts("channel.message_posted", "any-channel-id"));
 }
 
-#[test]
-fn stream_start_resumes_at_recent_cursor_and_rejects_stale_cursors() {
-    let now_ms = 1_756_000_000_000;
-    let window_ms = i64::try_from(MAX_REPLAY_WINDOW.as_millis()).expect("window fits in i64");
-
-    assert_eq!(
-        stream_start(None, now_ms).expect("no cursor is valid"),
-        StreamStart::Latest
-    );
-
-    let recent_ms = now_ms - 60_000;
-    let recent_id = uuid_v7_at_ms(recent_ms);
-    assert_eq!(
-        stream_start(Some(recent_id), now_ms).expect("recent cursor is valid"),
-        StreamStart::AtEvent {
-            event_id: recent_id,
-        }
-    );
-
-    let stale_ms = now_ms - 2 * window_ms;
-    let error = stream_start(Some(uuid_v7_at_ms(stale_ms)), now_ms)
-        .expect_err("cursor older than the replay window is rejected");
-    assert!(matches!(error, WebhookStreamError::BadRequest(_)));
-
-    let error = stream_start(Some(Uuid::new_v4()), now_ms).expect_err("v4 cursor is rejected");
-    assert!(matches!(error, WebhookStreamError::BadRequest(_)));
-
-    let future =
-        uuid_v7_at_ms(now_ms + i64::try_from(MAX_CURSOR_CLOCK_SKEW.as_millis()).unwrap() + 1);
-    let error = stream_start(Some(future), now_ms).expect_err("future cursor is rejected");
-    assert!(matches!(error, WebhookStreamError::BadRequest(_)));
-}
-
 #[tokio::test]
 async fn open_stream_delivers_only_matching_accessible_events() {
-    let factory = FakeSourceFactory::with_candidates(vec![
+    let candidates = vec![
         document_candidate("document.updated", DOCUMENT_ID),
         // Filter matches but the subscriber has no access: skipped.
         document_candidate("document.updated", OTHER_DOCUMENT_ID),
@@ -322,19 +244,21 @@ async fn open_stream_delivers_only_matching_accessible_events() {
         workspace_candidate("document.updated", SUBSCRIBER_ID),
         workspace_candidate("document.updated", TEAM_WORKSPACE_ID),
         workspace_candidate("document.updated", FOREIGN_WORKSPACE_ID),
-    ]);
-    let service = service(factory, FakeAccessService::allowing(&[DOCUMENT_ID]));
+    ];
+    let (service, sender) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
 
     let stream = service
         .open_stream(
             subscriber(),
             WebhookScope::Team,
             filter(&["document.updated"]),
-            None,
         )
         .await
         .expect("stream opens");
-    let delivered: Vec<NormalizedWebhookEvent> = stream.collect().await;
+    for candidate in candidates {
+        sender.send(candidate).unwrap();
+    }
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(2).collect().await;
 
     let delivered_entities: Vec<&str> = delivered
         .iter()
@@ -345,8 +269,7 @@ async fn open_stream_delivers_only_matching_accessible_events() {
 
 #[tokio::test]
 async fn team_scope_requires_team_membership() {
-    let service = service_with_workspaces(
-        FakeSourceFactory::default(),
+    let (service, _) = service_with_workspaces(
         FakeAccessService::allowing(&[]),
         vec![SUBSCRIBER_ID.to_string()],
     );
@@ -356,7 +279,6 @@ async fn team_scope_requires_team_membership() {
             subscriber(),
             WebhookScope::Team,
             filter(&["webhook.updated"]),
-            None,
         )
         .await
     else {
@@ -368,25 +290,27 @@ async fn team_scope_requires_team_membership() {
 
 #[tokio::test]
 async fn open_stream_checks_access_for_each_matching_event() {
-    let factory = FakeSourceFactory::with_candidates(vec![
+    let candidates = vec![
         document_candidate("document.updated", DOCUMENT_ID),
         document_candidate("document.updated", DOCUMENT_ID),
         document_candidate("document.updated", DOCUMENT_ID),
-    ]);
+    ];
     let access = FakeAccessService::allowing(&[DOCUMENT_ID]);
     let call_count = access.call_count.clone();
-    let service = service(factory, access);
+    let (service, sender) = service(access);
 
     let stream = service
         .open_stream(
             subscriber(),
             WebhookScope::Team,
             filter(&["document.updated"]),
-            None,
         )
         .await
         .expect("stream opens");
-    let delivered: Vec<NormalizedWebhookEvent> = stream.collect().await;
+    for candidate in candidates {
+        sender.send(candidate).unwrap();
+    }
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(3).collect().await;
 
     assert_eq!(delivered.len(), 3);
     assert_eq!(*call_count.lock().unwrap(), 3);
@@ -394,10 +318,7 @@ async fn open_stream_checks_access_for_each_matching_event() {
 
 #[tokio::test]
 async fn open_stream_rejects_empty_or_degenerate_filters() {
-    let service = service(
-        FakeSourceFactory::default(),
-        FakeAccessService::allowing(&[]),
-    );
+    let (service, _) = service(FakeAccessService::allowing(&[]));
 
     for filters in [
         vec![],
@@ -415,7 +336,7 @@ async fn open_stream_rejects_empty_or_degenerate_filters() {
         }],
     ] {
         let Err(error) = service
-            .open_stream(subscriber(), WebhookScope::Team, filters, None)
+            .open_stream(subscriber(), WebhookScope::Team, filters)
             .await
         else {
             panic!("degenerate filters must be rejected");
@@ -425,59 +346,35 @@ async fn open_stream_rejects_empty_or_degenerate_filters() {
 }
 
 #[tokio::test]
-async fn open_stream_passes_the_start_through_and_rejects_stale_cursors() {
-    let factory = FakeSourceFactory::default();
-    let opened_starts = factory.opened_starts.clone();
-    let service = service(factory, FakeAccessService::allowing(&[]));
-
-    drop(
-        service
-            .open_stream(
-                subscriber(),
-                WebhookScope::Team,
-                filter(&["document.updated"]),
-                None,
-            )
-            .await
-            .expect("stream opens"),
+async fn lagged_stream_skips_missed_events_and_continues() {
+    let (sender, _) = broadcast::channel(2);
+    let service = WebhookEventStreamServiceImpl::new(
+        sender.clone(),
+        Arc::new(FakeAccessService::allowing(&[DOCUMENT_ID])),
+        FakeWorkspaceResolver {
+            workspace_ids: vec![SUBSCRIBER_ID.to_string(), TEAM_WORKSPACE_ID.to_string()],
+        },
     );
-    let recent_ms = Utc::now().timestamp_millis() - 60_000;
-    let recent_id = uuid_v7_at_ms(recent_ms);
-    drop(
-        service
-            .open_stream(
-                subscriber(),
-                WebhookScope::Team,
-                filter(&["document.updated"]),
-                Some(recent_id),
-            )
-            .await
-            .expect("stream opens"),
-    );
-
-    let starts = opened_starts.lock().unwrap().clone();
-    assert_eq!(starts[0], StreamStart::Latest);
-    assert_eq!(
-        starts[1],
-        StreamStart::AtEvent {
-            event_id: recent_id,
-        }
-    );
-
-    let stale_cursor = uuid_v7_at_ms(
-        Utc::now().timestamp_millis()
-            - 2 * i64::try_from(MAX_REPLAY_WINDOW.as_millis()).expect("window fits in i64"),
-    );
-    let Err(error) = service
+    let mut stream = service
         .open_stream(
             subscriber(),
             WebhookScope::Team,
             filter(&["document.updated"]),
-            Some(stale_cursor),
         )
         .await
-    else {
-        panic!("stale cursor must be rejected");
-    };
-    assert!(matches!(error, WebhookStreamError::BadRequest(_)));
+        .expect("stream opens");
+
+    sender
+        .send(document_candidate("document.updated", DOCUMENT_ID))
+        .unwrap();
+    sender
+        .send(document_candidate("document.updated", DOCUMENT_ID))
+        .unwrap();
+    let latest = document_candidate("document.updated", DOCUMENT_ID);
+    let latest_id = latest.event.event_id.clone();
+    sender.send(latest).unwrap();
+
+    let delivered = stream.next().await.expect("stream continues after lag");
+    assert_ne!(delivered.event_id, latest_id);
+    assert_eq!(stream.next().await.unwrap().event_id, latest_id);
 }

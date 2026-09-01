@@ -1,14 +1,15 @@
-//! Process-level Kafka consumer feeding the local webhook stream hub.
+//! Process-level Kafka consumer feeding the local webhook stream channel.
 
 use crate::domain::ingestion::{
     WebhookEventIngestionError, agent_trigger_stream_candidate, channel_stream_candidate,
     document_stream_candidate, webhook_stream_candidate,
 };
-use crate::domain::stream::{StreamCandidateEvent, WebhookStreamCandidateSink};
+use crate::domain::stream::StreamCandidateEvent;
 use crate::topics::DeclaredMacroEvent;
 use kafka_util::{InitialOffset, KafkaEventConsumer, Ungrouped};
 use macro_event_broker::{KafkaConsumerAdapter, MacroEvent as _, MacroEventConsumerService};
 use std::time::Duration;
+use tokio::sync::broadcast;
 
 /// Time allowed for topic metadata lookup.
 const METADATA_TIMEOUT: Duration = Duration::from_secs(10);
@@ -18,9 +19,9 @@ type WebhookStreamKafkaConsumer =
     MacroEventConsumerService<DeclaredMacroEvent, WebhookStreamKafkaAdapter>;
 
 /// Consume broker events from now onward and publish normalized stream candidates.
-pub async fn run_webhook_stream_consumer<S: WebhookStreamCandidateSink>(
+pub async fn run_webhook_stream_consumer(
     brokers: &str,
-    sink: &S,
+    sender: &broadcast::Sender<StreamCandidateEvent>,
 ) -> Result<(), rootcause::Report> {
     let consumer = KafkaEventConsumer::<Ungrouped>::from_env(brokers)
         .map_err(|error| rootcause::report!(error))?;
@@ -39,7 +40,10 @@ pub async fn run_webhook_stream_consumer<S: WebhookStreamCandidateSink>(
             }
         };
         match candidate_from(&decoded) {
-            Ok(Some(candidate)) => sink.publish(candidate),
+            Ok(Some(candidate)) => {
+                // Having no active subscribers is expected; SSE delivery is best-effort.
+                let _ = sender.send(candidate);
+            }
             Ok(None) => {}
             Err(error) => {
                 tracing::warn!(error = ?error, "skipping non-streamable broker event");

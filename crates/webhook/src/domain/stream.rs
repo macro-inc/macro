@@ -7,19 +7,15 @@
 //! candidate event is checked against the caller's own entity access, and
 //! nothing is persisted.
 //!
-//! Replay is best-effort from one process's retained history: every event carries
-//! its UUIDv7 broker event id, and a reconnecting client resumes by presenting
-//! the last id it saw. Cursors older than [`MAX_REPLAY_WINDOW`] or absent from
-//! the local replay log require an out-of-band resync. A Kafka reconnect or
-//! request routed to another replica may leave an undetectable gap; clients must
-//! resync when continuity matters and always deduplicate by event id.
+//! Delivery is best-effort through a process-local broadcast channel. Slow or
+//! disconnected subscribers may miss events and must resync out of band when
+//! continuity matters.
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::models::{NormalizedWebhookEvent, WebhookFilters, WebhookScope};
 use crate::domain::ports::WebhookWorkspaceResolver;
-use chrono::Utc;
 use entity_access::domain::models::EntityType;
 use entity_access::domain::ports::EntityAccessService;
 use futures::StreamExt as _;
@@ -27,30 +23,11 @@ use futures::stream::BoxStream;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
-use uuid::Uuid;
+use tokio::sync::broadcast;
 
-/// Furthest back a reconnecting subscriber may resume; older cursors are
-/// rejected as bad requests.
-///
-/// Replay re-runs the per-event access checks below, so this window bounds the
-/// database load a resume can cause.
-pub const MAX_REPLAY_WINDOW: Duration = Duration::from_secs(10 * 60);
-
-/// Producer clock skew tolerated when validating UUIDv7 resume cursors.
-const MAX_CURSOR_CLOCK_SKEW: Duration = Duration::from_secs(60);
-
-/// Where a newly opened stream source begins reading.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StreamStart {
-    /// Only events published after the source opens.
-    Latest,
-    /// Verify this broker event is retained, then replay retained history.
-    AtEvent {
-        /// UUIDv7 broker event id supplied by the subscriber.
-        event_id: Uuid,
-    },
-}
+/// Number of events retained for each active subscriber before it starts
+/// missing events.
+pub const WEBHOOK_STREAM_CHANNEL_CAPACITY: usize = 1_024;
 
 /// Whose access decides who may see one candidate event.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,26 +55,10 @@ pub struct StreamCandidateEvent {
     pub audience: StreamAudience,
 }
 
-/// Sink for candidates consumed once and multiplexed to local subscribers.
-pub trait WebhookStreamCandidateSink: Send + Sync + 'static {
-    /// Publish one normalized candidate into the local stream source.
-    fn publish(&self, candidate: StreamCandidateEvent);
-}
-
-/// Failure to open a positioned stream source.
-#[derive(Debug, thiserror::Error)]
-pub enum WebhookStreamSourceOpenError {
-    /// The requested cursor predates the history retained by this process.
-    #[error(
-        "resume cursor does not identify a retained webhook event; resync and reconnect without Last-Event-ID"
-    )]
-    ReplayUnavailable,
-}
-
 /// Webhook event stream error.
 #[derive(Debug, thiserror::Error)]
 pub enum WebhookStreamError {
-    /// The request's filters or resume cursor are invalid.
+    /// The request's filters or scope are invalid.
     #[error("{0}")]
     BadRequest(String),
     /// Adapter or infrastructure failure.
@@ -111,29 +72,6 @@ impl From<rootcause::Report> for WebhookStreamError {
     }
 }
 
-/// Outbound port: an open, positioned source of candidate events.
-pub trait WebhookStreamSource: Send + 'static {
-    /// Await the next decodable candidate event.
-    ///
-    /// Implementations skip undecodable or non-deliverable records internally;
-    /// an error is terminal for the source.
-    fn next_event(
-        &mut self,
-    ) -> impl Future<Output = Result<StreamCandidateEvent, rootcause::Report>> + Send;
-}
-
-/// Outbound port: opens one positioned [`WebhookStreamSource`] per stream.
-pub trait WebhookStreamSourceFactory: Clone + Send + Sync + 'static {
-    /// Source type opened by this factory.
-    type Source: WebhookStreamSource;
-
-    /// Open a source positioned at `start`.
-    fn open(
-        &self,
-        start: StreamStart,
-    ) -> impl Future<Output = Result<Self::Source, WebhookStreamSourceOpenError>> + Send;
-}
-
 /// Inbound port for opening filtered, access-checked event streams.
 pub trait WebhookEventStreamService: Clone + Send + Sync + 'static {
     /// Open an event stream for `subscriber`.
@@ -141,88 +79,41 @@ pub trait WebhookEventStreamService: Clone + Send + Sync + 'static {
     /// `scope` selects the subscriber's personal or current team workspace for
     /// webhook lifecycle events. Entity events remain gated by entity access.
     ///
-    /// `last_event_id` is the UUIDv7 broker event id of the last event the
-    /// subscriber saw; when present, the source verifies that event is retained
-    /// and conservatively replays its retained history. An unavailable cursor
-    /// is rejected as a bad request rather than silently truncated. The stream
-    /// ends on any internal failure so subscribers reconnect and resume by id.
     fn open_stream(
         &self,
         subscriber: MacroUserIdStr<'static>,
         scope: WebhookScope,
         filters: WebhookFilters,
-        last_event_id: Option<Uuid>,
     ) -> impl Future<Output = Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError>>
     + Send;
 }
 
-/// Resolve where a stream should start, rejecting cursors older than the
-/// replay window.
-fn stream_start(
-    last_event_id: Option<Uuid>,
-    now_ms: i64,
-) -> Result<StreamStart, WebhookStreamError> {
-    let Some(last_event_id) = last_event_id else {
-        return Ok(StreamStart::Latest);
-    };
-    let timestamp = last_event_id.get_timestamp().ok_or_else(|| {
-        WebhookStreamError::BadRequest("last event id must be a UUIDv7 broker event id".to_string())
-    })?;
-    if last_event_id.get_version_num() != 7 {
-        return Err(WebhookStreamError::BadRequest(
-            "last event id must be a UUIDv7 broker event id".to_string(),
-        ));
-    }
-    let (seconds, nanoseconds) = timestamp.to_unix();
-    let event_ms = i64::try_from(seconds)
-        .ok()
-        .and_then(|seconds| seconds.checked_mul(1000))
-        .map(|millis| millis + i64::from(nanoseconds / 1_000_000))
-        .ok_or_else(|| {
-            WebhookStreamError::BadRequest("last event id timestamp is out of range".to_string())
-        })?;
-    let floor_ms = now_ms - i64::try_from(MAX_REPLAY_WINDOW.as_millis()).unwrap_or(i64::MAX);
-    if event_ms < floor_ms {
-        return Err(WebhookStreamError::BadRequest(format!(
-            "last event id is older than the {}-second replay window; \
-             resync and reconnect without Last-Event-ID",
-            MAX_REPLAY_WINDOW.as_secs()
-        )));
-    }
-    let max_future_ms =
-        now_ms.saturating_add(i64::try_from(MAX_CURSOR_CLOCK_SKEW.as_millis()).unwrap_or(i64::MAX));
-    if event_ms > max_future_ms {
-        return Err(WebhookStreamError::BadRequest(
-            "last event id cannot be in the future".to_string(),
-        ));
-    }
-    Ok(StreamStart::AtEvent {
-        event_id: last_event_id,
-    })
-}
-
 /// Webhook event stream service implementation.
-pub struct WebhookEventStreamServiceImpl<F, A, R> {
-    source_factory: F,
+pub struct WebhookEventStreamServiceImpl<A, R> {
+    sender: broadcast::Sender<StreamCandidateEvent>,
     entity_access_service: Arc<A>,
     workspace_resolver: R,
 }
 
-impl<F: Clone, A, R: Clone> Clone for WebhookEventStreamServiceImpl<F, A, R> {
+impl<A, R: Clone> Clone for WebhookEventStreamServiceImpl<A, R> {
     fn clone(&self) -> Self {
         Self {
-            source_factory: self.source_factory.clone(),
+            sender: self.sender.clone(),
             entity_access_service: self.entity_access_service.clone(),
             workspace_resolver: self.workspace_resolver.clone(),
         }
     }
 }
 
-impl<F, A, R> WebhookEventStreamServiceImpl<F, A, R> {
+impl<A, R> WebhookEventStreamServiceImpl<A, R> {
     /// Create a webhook event stream service.
-    pub fn new(source_factory: F, entity_access_service: Arc<A>, workspace_resolver: R) -> Self {
+    pub fn new(
+        sender: broadcast::Sender<StreamCandidateEvent>,
+        entity_access_service: Arc<A>,
+        workspace_resolver: R,
+    ) -> Self {
         Self {
-            source_factory,
+            sender,
             entity_access_service,
             workspace_resolver,
         }
@@ -230,17 +121,16 @@ impl<F, A, R> WebhookEventStreamServiceImpl<F, A, R> {
 }
 
 /// Owned per-stream state advanced by the unfold loop.
-struct StreamState<Src, A> {
-    source: Src,
+struct StreamState<A> {
+    receiver: broadcast::Receiver<StreamCandidateEvent>,
     entity_access_service: Arc<A>,
     subscriber: MacroUserIdStr<'static>,
     workspace_id: String,
     filters: WebhookFilters,
 }
 
-impl<Src, A> StreamState<Src, A>
+impl<A> StreamState<A>
 where
-    Src: WebhookStreamSource,
     A: EntityAccessService,
 {
     /// Whether the subscriber may see an event with this audience.
@@ -266,15 +156,16 @@ where
 
     /// Await the next event that matches the filters and passes access.
     ///
-    /// Returns `None` when the source or an access check fails: the stream
-    /// ends and the subscriber reconnects with its resume cursor, which
-    /// re-delivers anything in flight — at-least-once, not at-most-once.
+    /// Returns `None` when the channel closes or an access check fails.
     async fn next_delivered(&mut self) -> Option<NormalizedWebhookEvent> {
         loop {
-            let candidate = match self.source.next_event().await {
+            let candidate = match self.receiver.recv().await {
                 Ok(candidate) => candidate,
-                Err(error) => {
-                    tracing::error!(error = ?error, "webhook event stream source failed; ending stream");
+                Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                    tracing::warn!(skipped, "webhook event stream subscriber missed events");
+                    continue;
+                }
+                Err(broadcast::error::RecvError::Closed) => {
                     return None;
                 }
             };
@@ -308,9 +199,8 @@ fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookStreamError> 
     })
 }
 
-impl<F, A, R> WebhookEventStreamService for WebhookEventStreamServiceImpl<F, A, R>
+impl<A, R> WebhookEventStreamService for WebhookEventStreamServiceImpl<A, R>
 where
-    F: WebhookStreamSourceFactory,
     A: EntityAccessService,
     R: WebhookWorkspaceResolver,
 {
@@ -320,10 +210,8 @@ where
         subscriber: MacroUserIdStr<'static>,
         scope: WebhookScope,
         filters: WebhookFilters,
-        last_event_id: Option<Uuid>,
     ) -> Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError> {
         validate_filters(&filters)?;
-        let start = stream_start(last_event_id, Utc::now().timestamp_millis())?;
 
         let workspace_id = match scope {
             WebhookScope::User => subscriber.as_ref().to_string(),
@@ -346,14 +234,8 @@ where
                 })?,
         };
 
-        let source = self
-            .source_factory
-            .open(start)
-            .await
-            .map_err(|error| WebhookStreamError::BadRequest(error.to_string()))?;
-
         let state = StreamState {
-            source,
+            receiver: self.sender.subscribe(),
             entity_access_service: self.entity_access_service.clone(),
             subscriber,
             workspace_id,

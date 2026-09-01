@@ -129,7 +129,7 @@ use webhook::{
     inbound::stream_router::WebhookStreamRouterState,
     outbound::{
         http_validator::ReqwestWebhookValidationClient,
-        pg_repository::PgRepository as PgWebhookRepo, stream_hub::WebhookStreamHub,
+        pg_repository::PgRepository as PgWebhookRepo,
     },
 };
 
@@ -501,7 +501,7 @@ pub(crate) type DssWebhookState =
 
 /// Type alias for the service backing the webhook-event SSE endpoint.
 pub(crate) type DssSseStreamService =
-    WebhookEventStreamServiceImpl<WebhookStreamHub, EntityAccessService, PgWebhookRepo>;
+    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
 
 /// Type alias for the webhook-event SSE router state.
 pub(crate) type DssSseStreamState =

@@ -10,8 +10,6 @@ pub mod pg_delivery_repository;
 pub mod pg_repository;
 #[cfg(feature = "outbound")]
 pub mod sqs_queue;
-#[cfg(feature = "stream")]
-pub mod stream_hub;
 
 #[cfg(feature = "outbound")]
 pub use http_delivery::ReqwestWebhookDeliveryClient;
@@ -23,5 +21,3 @@ pub use pg_delivery_repository::PgWebhookDeliveryRepository;
 pub use pg_repository::PgRepository;
 #[cfg(feature = "outbound")]
 pub use sqs_queue::SqsWebhookQueue;
-#[cfg(feature = "stream")]
-pub use stream_hub::WebhookStreamHub;
