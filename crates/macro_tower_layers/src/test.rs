@@ -165,6 +165,76 @@ async fn request_span_records_the_matched_route() {
     );
 }
 
+#[tokio::test]
+async fn generated_request_id_is_recorded_on_span_and_propagated_to_response() {
+    let (subscriber, captured) = TracingCapture::new();
+    let _guard = set_default(subscriber);
+    let app = Router::new()
+        .route("/documents", get(|| async {}))
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/documents")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let request_id = response
+        .headers()
+        .get("x-request-id")
+        .expect("generated request ID should be propagated to the response")
+        .to_str()
+        .unwrap();
+    assert!(!request_id.is_empty());
+    assert_eq!(
+        captured
+            .initial_span_fields
+            .lock()
+            .unwrap()
+            .get("request.id")
+            .unwrap(),
+        &format!("\"{request_id}\"")
+    );
+}
+
+#[tokio::test]
+async fn incoming_request_id_is_preserved_on_span_and_response() {
+    let (subscriber, captured) = TracingCapture::new();
+    let _guard = set_default(subscriber);
+    let app = Router::new()
+        .route("/documents", get(|| async {}))
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/documents")
+                .header("x-request-id", "request-42")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response.headers().get("x-request-id").unwrap(),
+        "request-42"
+    );
+    assert_eq!(
+        captured
+            .initial_span_fields
+            .lock()
+            .unwrap()
+            .get("request.id")
+            .unwrap(),
+        "\"request-42\""
+    );
+}
+
 #[test]
 fn successful_response_records_telemetry_without_completion_event() {
     let (subscriber, captured) = TracingCapture::new();
