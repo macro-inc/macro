@@ -56,6 +56,7 @@ type InboxListProps = {
   state: InboxViewState;
   source: InboxDataSource;
   list: SplitListController;
+  ref?: (element: HTMLDivElement) => void;
 };
 
 /** Compact Inbox-card list used by the Activity-layout Inbox workspace. */
@@ -277,7 +278,10 @@ export function InboxList(props: InboxListProps) {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
-        ref={listRoot}
+        ref={(element) => {
+          listRoot = element;
+          props.ref?.(element);
+        }}
         role="grid"
         aria-label="Inbox"
         aria-multiselectable="true"

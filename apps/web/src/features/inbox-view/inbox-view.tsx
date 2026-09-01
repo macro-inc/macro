@@ -77,6 +77,8 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
   const orchestrator = useGlobalBlockOrchestrator();
   const notificationSource = useGlobalNotificationSource();
 
+  let listElement: HTMLDivElement | undefined;
+
   const list = panel.setList(() => {
     const dataSource = useInboxDataSource(props.state);
     const controller = createListController<
@@ -178,6 +180,9 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
         </InboxHeader>
         <Suspense fallback={<InboxFallback />}>
           <InboxList
+            ref={(element) => {
+              listElement = element;
+            }}
             state={props.state}
             source={list.dataSource}
             list={list.controller}
@@ -199,6 +204,7 @@ function InboxWorkspace(props: InboxWorkspaceProps) {
                 selectedEntity={entity()}
                 orchestrator={orchestrator}
                 splitPanelContext={panel}
+                onFocusOut={() => listElement?.focus({ preventScroll: true })}
               />
             )}
           </Show>
