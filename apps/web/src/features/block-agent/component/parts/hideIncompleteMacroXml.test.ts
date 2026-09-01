@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hideIncompleteMacroXml } from './TextPart';
+import { hideIncompleteMacroXml } from './hideIncompleteMacroXml';
 
 describe('hideIncompleteMacroXml', () => {
   const complete =
