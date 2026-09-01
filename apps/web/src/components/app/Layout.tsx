@@ -49,10 +49,7 @@ import {
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import {
-  ENABLE_REMINDERS_FLAG,
-  ENABLE_REMINDERS_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -463,13 +460,10 @@ function LayoutInner(props: RouteSectionProps) {
           <CreateChannelModal />
           <CreateCompanyModal />
           <CreateContactModal />
-          {/* Reactive, unlike the imperative ENABLE_REMINDERS() gate on the
+          {/* Reactive, unlike the imperative isFeatureEnabled(enableReminders) gate on the
               action: this decides whether the composer is mounted at all, so it
               has to pick up a late PostHog answer. */}
-          <ShowFeatureFlag
-            key={ENABLE_REMINDERS_FLAG}
-            enabledOverride={ENABLE_REMINDERS_OVERRIDE}
-          >
+          <ShowFeatureFlag flag={enableReminders}>
             <ReminderComposerModal />
           </ShowFeatureFlag>
           <Show when={isAddInboxDialogOpen()}>

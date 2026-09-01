@@ -12,13 +12,12 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
-  ENABLE_CALENDAR_UI,
-  ENABLE_INBOX_NOTIFIED_SORT_FLAG,
-  ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE,
-  ENABLE_REMINDERS,
-  ENABLE_SNIPPETS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableCalendarUi,
+  enableInboxNotifiedSort,
+  enableReminders,
+  enableSnippets,
+  enableSupportedSoupForeignEntities,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
@@ -106,22 +105,17 @@ export function useInboxDataSource(
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
-  const foreignEntities = useFeatureFlag(
-    ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-    { enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE }
-  );
-  const notifiedSort = useFeatureFlag(ENABLE_INBOX_NOTIFIED_SORT_FLAG, {
-    enabledOverride: ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE,
-  });
+  const foreignEntities = useFeatureFlag(enableSupportedSoupForeignEntities);
+  const notifiedSort = useFeatureFlag(enableInboxNotifiedSort);
 
   const facetContext = (): InboxFacetContext => ({ notificationSource });
 
   const capabilities = (): InboxQueryCapabilities => ({
-    calendar: ENABLE_CALENDAR_UI(),
+    calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
-    reminders: ENABLE_REMINDERS(),
-    snippets: ENABLE_SNIPPETS(),
+    reminders: isFeatureEnabled(enableReminders),
+    snippets: isFeatureEnabled(enableSnippets),
   });
 
   const viewContext = createMemo(

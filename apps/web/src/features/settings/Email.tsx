@@ -7,11 +7,10 @@ import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_EMAIL_SIGNATURES_FLAG,
-  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
-  ENABLE_MULTI_INBOX_OVERRIDE,
+  enableEmailSignatures,
+  enableMultiInbox,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import {
@@ -59,9 +58,7 @@ import {
 export function EmailCard() {
   const email = useEmail();
   const userId = useUserId();
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -418,9 +415,7 @@ function InboxRow(props: {
   onRemove: () => void;
   onTurnOffCalendar: () => void;
 }) {
-  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
-    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  });
+  const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   const calendarUiEnabled = useCalendarUiFlag();
   const showSignature = () => isSignatureExpanded(props.link.id);
   const signatureSectionId = `signature-section-${props.link.id}`;

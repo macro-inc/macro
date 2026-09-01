@@ -1,4 +1,7 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
@@ -220,7 +223,8 @@ export function useUserNotificationsQuery(
 ): UserNotificationsQuery {
   const queryEnabled = () => options?.().enabled !== false;
 
-  const usesGraphql = () => ENABLE_GRAPHQL_SOUP() && args().done !== true;
+  const usesGraphql = () =>
+    isFeatureEnabled(enableGraphqlSoup) && args().done !== true;
 
   const graphqlQuery = createGraphqlNotificationsQuery(args, () => ({
     enabled: queryEnabled() && usesGraphql(),
@@ -391,7 +395,7 @@ export function invalidateUserNotifications() {
 }
 
 async function refreshSoupAfterUncachedGraphqlWrite(): Promise<void> {
-  if (ENABLE_GRAPHQL_SOUP() && !graphqlCacheEnabled()) {
+  if (isFeatureEnabled(enableGraphqlSoup) && !graphqlCacheEnabled()) {
     await refreshActiveGraphqlSoupQueries();
   }
 }
@@ -630,24 +634,24 @@ function createNotificationsMutation(
 
     return {
       get isPending() {
-        return ENABLE_GRAPHQL_SOUP()
+        return isFeatureEnabled(enableGraphqlSoup)
           ? graphqlMutation.isPending
           : restMutation.isPending;
       },
       get error() {
-        return ENABLE_GRAPHQL_SOUP()
+        return isFeatureEnabled(enableGraphqlSoup)
           ? graphqlMutation.error
           : (restMutation.error ?? null);
       },
       mutate(variables) {
-        if (ENABLE_GRAPHQL_SOUP()) {
+        if (isFeatureEnabled(enableGraphqlSoup)) {
           graphqlMutation.mutate(variables);
         } else {
           restMutation.mutate(variables);
         }
       },
       async mutateAsync(variables) {
-        if (!ENABLE_GRAPHQL_SOUP()) {
+        if (!isFeatureEnabled(enableGraphqlSoup)) {
           return await restMutation.mutateAsync(variables);
         }
 

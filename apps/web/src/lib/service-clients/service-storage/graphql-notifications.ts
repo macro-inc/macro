@@ -1,4 +1,7 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { notificationServiceClient } from '../service-notification/client';
 import type { NotificationUpdateOperation } from './graphql/generated/graphql';
@@ -18,7 +21,7 @@ export type { NotificationUpdateOperation };
 export async function updateNotifications(
   args: GraphqlUpdateNotificationsArgs
 ): Promise<GraphqlUpdateNotificationsResult> {
-  if (!ENABLE_GRAPHQL_SOUP()) {
+  if (!isFeatureEnabled(enableGraphqlSoup)) {
     const request = { notificationIds: args.notificationIds };
     switch (args.operation) {
       case 'MARK_SEEN':

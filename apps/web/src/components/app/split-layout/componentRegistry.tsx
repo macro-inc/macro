@@ -32,10 +32,10 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  ENABLE_CRM,
-  ENABLE_NEW_APP_VIEWS_FLAG,
-  ENABLE_NEW_APP_VIEWS_OVERRIDE,
-  ENABLE_REMINDERS,
+  enableCrm,
+  enableNewAppViews,
+  enableReminders,
+  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
@@ -69,11 +69,9 @@ function usePageViewTracking(pageTitle: string) {
 function useNewAppViews() {
   const panel = useSplitPanelOrThrow();
   const posthog = usePosthog();
-  const flag = useFeatureFlag(ENABLE_NEW_APP_VIEWS_FLAG, {
-    enabledOverride: ENABLE_NEW_APP_VIEWS_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableNewAppViews);
   const ready = () =>
-    ENABLE_NEW_APP_VIEWS_OVERRIDE !== undefined || posthog.flagsLoaded();
+    enableNewAppViews.override !== undefined || posthog.flagsLoaded();
   const enabled = () => ready() && flag().enabled;
 
   createRenderEffect(() => {
@@ -333,7 +331,7 @@ registerComponent(
   withAuth(() => {
     // Registered even when the flag is closed so a bookmarked /reminders or a
     // restored split recovers to the inbox instead of an empty split.
-    if (!ENABLE_REMINDERS()) {
+    if (!isFeatureEnabled(enableReminders)) {
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('reminders');
@@ -508,7 +506,7 @@ registerComponent(
   withAuth(() => {
     // Registered even when the CRM feature is off so direct navigation /
     // restored splits redirect instead of throwing in resolveComponent.
-    if (!ENABLE_CRM()) {
+    if (!isFeatureEnabled(enableCrm)) {
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('companies');

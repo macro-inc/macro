@@ -52,11 +52,10 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
-  ENABLE_INBOX_NOTIFIED_SORT_FLAG,
-  ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE,
-  ENABLE_REMINDERS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableInboxNotifiedSort,
+  enableReminders,
+  enableSupportedSoupForeignEntities,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -268,7 +267,11 @@ const resolveTabId = (
   // A remembered tab can also be flag-gated out of the tab bar (see
   // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
   // off would leave a hidden tab active, still querying reminders.
-  if (view === 'inbox' && remembered === 'reminders' && !ENABLE_REMINDERS()) {
+  if (
+    view === 'inbox' &&
+    remembered === 'reminders' &&
+    !isFeatureEnabled(enableReminders)
+  ) {
     return config.default;
   }
   return remembered;
@@ -670,9 +673,7 @@ export const SoupViewContextProvider: FlowComponent<
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
   const isTeamAdmin = useIsTeamAdmin();
-  const notifiedSortFF = useFeatureFlag(ENABLE_INBOX_NOTIFIED_SORT_FLAG, {
-    enabledOverride: ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE,
-  });
+  const notifiedSortFF = useFeatureFlag(enableInboxNotifiedSort);
 
   // Sits below `activeTab`/`userId` because the page direction comes from the
   // active tab's preset, which some views resolve against user context.
@@ -926,10 +927,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const showSupportedForeignEntitiesFF = useFeatureFlag(
-    ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-    {
-      enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
-    }
+    enableSupportedSoupForeignEntities
   );
   // Create filter context for context-aware filter predicates
   const getFilterContext = (): FilterContext => ({

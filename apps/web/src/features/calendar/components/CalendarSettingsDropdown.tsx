@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
+import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRightIcon from '@phosphor/caret-right.svg';
@@ -42,9 +42,7 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
   const calendarView = useCalendarView();
   const accounts = useCalendarAccounts();
   const startAddInbox = useAddInboxFlow();
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const [turnOffTarget, setTurnOffTarget] =
     createSignal<TurnOffCalendarTarget | null>(null);
 

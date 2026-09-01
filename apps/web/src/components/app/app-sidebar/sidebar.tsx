@@ -51,8 +51,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
 import {
   ENABLE_CALLS,
-  ENABLE_CRM,
-  ENABLE_NEW_PRICING_OVERRIDE,
+  enableCrm,
+  enableNewPricing,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
@@ -1071,7 +1072,7 @@ const RECENT_LINK: SidebarItem = {
  * their correct positions.
  * Shared by the rendered sidebar (`AppSidebar.visibleLinks`) and the
  * always-mounted `GoToHotkeys` registrar so their link sets can't drift. Call
- * from a reactive context — it reads `ENABLE_CALLS()` / `ENABLE_CRM()`.
+ * from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
  * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
  * passed in because this runs outside a component; when false the link is
  * fully absent — row, `g s` hotkey, and command menu entry.
@@ -1106,14 +1107,14 @@ const buildSidebarLinks = (
     ];
   }
 
-  if (ENABLE_CALLS()) {
+  if (ENABLE_CALLS) {
     const idx = links.findIndex((l) => l.id === 'channels');
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
   }
 
-  if (ENABLE_CRM()) {
+  if (isFeatureEnabled(enableCrm)) {
     // Customers sits just after Channels (and Calls when present).
-    const anchorId = ENABLE_CALLS() ? 'calls' : 'channels';
+    const anchorId = ENABLE_CALLS ? 'calls' : 'channels';
     const idx = links.findIndex((l) => l.id === anchorId);
     links = [
       ...links.slice(0, idx + 1),
@@ -1176,9 +1177,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     { name: 'sidebar-premium-card-dismissed' }
   );
 
-  const newPricingFF = useFeatureFlag('enable-new-pricing', {
-    enabledOverride: ENABLE_NEW_PRICING_OVERRIDE,
-  });
+  const newPricingFF = useFeatureFlag(enableNewPricing);
 
   const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();

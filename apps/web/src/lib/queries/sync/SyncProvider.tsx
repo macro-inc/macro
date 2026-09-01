@@ -1,4 +1,7 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
 import {
   AGENT_SESSION_LOG_EVENT,
@@ -107,7 +110,7 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         );
       })
       .with({ type: 'notification_status_updated' }, () => {
-        if (ENABLE_GRAPHQL_SOUP()) return;
+        if (isFeatureEnabled(enableGraphqlSoup)) return;
         const result = notificationStatusUpdatePayloadSchema.safeParse(
           data.data
         );
