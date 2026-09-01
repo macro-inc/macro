@@ -735,6 +735,16 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
+    'magic-chip',
+    lazy(
+      () =>
+        import(
+          '@core/component/LexicalMarkdown/component/decorator/MagicChip/debug/Gallery'
+        )
+    )
+  );
+
+  registerComponent(
     'agent-replay',
     lazy(() => import('@app/features/block-agent/debug/replay/Replay'))
   );
