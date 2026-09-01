@@ -15,11 +15,11 @@ import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
 const VERSION = 1;
 
-export const QUOTE_REPLY_NODE_TYPE = 'quote-reply';
-export const QUOTE_REPLY_NODE_TAG = 'm-quote-reply';
+export const REPLY_TARGET_NODE_TYPE = 'reply-target';
+export const REPLY_TARGET_NODE_TAG = 'm-reply-target';
 
-/** The message reference and preview persisted by a quote-reply node. */
-export type QuoteReplyData = {
+/** The message reference and preview persisted by a reply-target node. */
+export type ReplyTargetData = {
   channelId: string;
   targetMessageId: string;
   targetThreadId: string;
@@ -27,8 +27,8 @@ export type QuoteReplyData = {
   senderId: string;
 };
 
-/** Return whether a value is a valid quote-reply-node payload. */
-export function isQuoteReplyData(value: unknown): value is QuoteReplyData {
+/** Return whether a value is a valid reply-target-node payload. */
+export function isReplyTargetData(value: unknown): value is ReplyTargetData {
   if (!value || typeof value !== 'object') return false;
   const data = value as Record<string, unknown>;
   return (
@@ -40,36 +40,36 @@ export function isQuoteReplyData(value: unknown): value is QuoteReplyData {
   );
 }
 
-/** Serialize quote-reply data into the internal Markdown representation. */
-export function buildQuoteReplyMarkdown(data: QuoteReplyData): string {
+/** Serialize reply-target data into the internal Markdown representation. */
+export function buildReplyTargetMarkdown(data: ReplyTargetData): string {
   const payload = JSON.stringify(data).replace(/</g, '\\u003c');
-  return `<${QUOTE_REPLY_NODE_TAG}>${payload}</${QUOTE_REPLY_NODE_TAG}>`;
+  return `<${REPLY_TARGET_NODE_TAG}>${payload}</${REPLY_TARGET_NODE_TAG}>`;
 }
 
-/** Remove one leading quote-reply block from internal Markdown. */
-export function stripLeadingQuoteReplyMarkdown(markdown: string): string {
+/** Remove one leading reply-target block from internal Markdown. */
+export function stripLeadingReplyTargetMarkdown(markdown: string): string {
   const pattern = new RegExp(
-    `^\\s*<${QUOTE_REPLY_NODE_TAG}>.*?<\\/${QUOTE_REPLY_NODE_TAG}>\\s*`,
+    `^\\s*<${REPLY_TARGET_NODE_TAG}>.*?<\\/${REPLY_TARGET_NODE_TAG}>\\s*`,
     's'
   );
   return markdown.replace(pattern, '');
 }
 
-/** Serialized form of a quote-reply node. */
-export type SerializedQuoteReplyNode = Spread<
-  QuoteReplyData,
+/** Serialized form of a reply-target node. */
+export type SerializedReplyTargetNode = Spread<
+  ReplyTargetData,
   SerializedLexicalNode
 >;
 
-/** Props passed to the application-provided quote-reply decorator. */
-export type QuoteReplyDecoratorProps = QuoteReplyData & {
+/** Props passed to the application-provided reply-target decorator. */
+export type ReplyTargetDecoratorProps = ReplyTargetData & {
   key: NodeKey;
   theme: EditorThemeClasses;
 };
 
 /** A block-level reference to another message in a channel thread. */
-export class QuoteReplyNode extends DecoratorNode<
-  DecoratorComponent<QuoteReplyDecoratorProps> | undefined
+export class ReplyTargetNode extends DecoratorNode<
+  DecoratorComponent<ReplyTargetDecoratorProps> | undefined
 > {
   __channelId: string;
   __targetMessageId: string;
@@ -77,12 +77,12 @@ export class QuoteReplyNode extends DecoratorNode<
   __displayText: string;
   __senderId: string;
 
-  static getType(): typeof QUOTE_REPLY_NODE_TYPE {
-    return QUOTE_REPLY_NODE_TYPE;
+  static getType(): typeof REPLY_TARGET_NODE_TYPE {
+    return REPLY_TARGET_NODE_TYPE;
   }
 
-  static clone(node: QuoteReplyNode): QuoteReplyNode {
-    return new QuoteReplyNode(
+  static clone(node: ReplyTargetNode): ReplyTargetNode {
+    return new ReplyTargetNode(
       node.__channelId,
       node.__targetMessageId,
       node.__targetThreadId,
@@ -108,25 +108,27 @@ export class QuoteReplyNode extends DecoratorNode<
     this.__senderId = senderId;
   }
 
-  static importJSON(serializedNode: SerializedQuoteReplyNode): QuoteReplyNode {
-    if (!isQuoteReplyData(serializedNode)) {
-      throw new Error('invalid quote-reply data');
+  static importJSON(
+    serializedNode: SerializedReplyTargetNode
+  ): ReplyTargetNode {
+    if (!isReplyTargetData(serializedNode)) {
+      throw new Error('invalid reply-target data');
     }
-    const node = $createQuoteReplyNode(serializedNode);
+    const node = $createReplyTargetNode(serializedNode);
     $applyIdFromSerialized(node, serializedNode);
     return node;
   }
 
-  exportJSON(): SerializedQuoteReplyNode {
+  exportJSON(): SerializedReplyTargetNode {
     return {
       ...super.exportJSON(),
       ...this.exportComponentProps(),
-      type: QUOTE_REPLY_NODE_TYPE,
+      type: REPLY_TARGET_NODE_TYPE,
       version: VERSION,
     };
   }
 
-  exportComponentProps(): QuoteReplyData {
+  exportComponentProps(): ReplyTargetData {
     return {
       channelId: this.__channelId,
       targetMessageId: this.__targetMessageId,
@@ -146,7 +148,7 @@ export class QuoteReplyNode extends DecoratorNode<
 
   createDOM(_config: EditorConfig): HTMLElement {
     const element = document.createElement('div');
-    element.setAttribute('data-quote-reply-node', this.__targetMessageId);
+    element.setAttribute('data-reply-target-node', this.__targetMessageId);
     return element;
   }
 
@@ -156,7 +158,7 @@ export class QuoteReplyNode extends DecoratorNode<
 
   exportDOM() {
     const element = document.createElement('div');
-    element.setAttribute('data-quote-reply-node', this.__targetMessageId);
+    element.setAttribute('data-reply-target-node', this.__targetMessageId);
     element.textContent = this.__displayText;
     return { element };
   }
@@ -174,7 +176,7 @@ export class QuoteReplyNode extends DecoratorNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const decorator = getDecorator<QuoteReplyDecoratorProps>(QuoteReplyNode);
+    const decorator = getDecorator<ReplyTargetDecoratorProps>(ReplyTargetNode);
     if (!decorator) return;
     return () =>
       decorator({
@@ -185,10 +187,10 @@ export class QuoteReplyNode extends DecoratorNode<
   }
 }
 
-/** Create a block-level channel quote-reply reference. */
-export function $createQuoteReplyNode(data: QuoteReplyData): QuoteReplyNode {
+/** Create a block-level channel reply-target reference. */
+export function $createReplyTargetNode(data: ReplyTargetData): ReplyTargetNode {
   return $applyNodeReplacement(
-    new QuoteReplyNode(
+    new ReplyTargetNode(
       data.channelId,
       data.targetMessageId,
       data.targetThreadId,
@@ -198,9 +200,9 @@ export function $createQuoteReplyNode(data: QuoteReplyData): QuoteReplyNode {
   );
 }
 
-/** Return whether a Lexical node is a quote-reply node. */
-export function $isQuoteReplyNode(
+/** Return whether a Lexical node is a reply-target node. */
+export function $isReplyTargetNode(
   node: LexicalNode | null | undefined
-): node is QuoteReplyNode {
-  return node instanceof QuoteReplyNode;
+): node is ReplyTargetNode {
+  return node instanceof ReplyTargetNode;
 }

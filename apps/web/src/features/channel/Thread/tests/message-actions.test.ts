@@ -2,7 +2,7 @@ import { URL_PARAMS } from '@channel/Channel/link';
 import { describe, expect, it } from 'vitest';
 import {
   buildMessageLink,
-  buildQuoteReplyValue,
+  buildReplyTargetValue,
   canDeleteMessage,
   canEditMessage,
   canReplyToMessage,
@@ -67,21 +67,21 @@ describe('message-actions helpers', () => {
     thread_id: 'thread-1',
   };
 
-  it('builds a quote-reply node before existing draft text', () => {
+  it('builds a reply-target node before existing draft text', () => {
     expect(
-      buildQuoteReplyValue({
+      buildReplyTargetValue({
         channelId: 'channel-1',
         message: threadReply,
         existingValue: 'draft',
       })
     ).toBe(
-      '<m-quote-reply>{"channelId":"channel-1","targetMessageId":"reply-1","targetThreadId":"thread-1","displayText":"first line second line","senderId":"macro|sender@example.com"}</m-quote-reply>\n\ndraft'
+      '<m-reply-target>{"channelId":"channel-1","targetMessageId":"reply-1","targetThreadId":"thread-1","displayText":"first line second line","senderId":"macro|sender@example.com"}</m-reply-target>\n\ndraft'
     );
   });
 
   it('uses browser-selected text for the reply preview', () => {
     expect(
-      buildQuoteReplyValue({
+      buildReplyTargetValue({
         channelId: 'channel-1',
         message: threadReply,
         selectedText: 'specific\nselection',
@@ -91,7 +91,7 @@ describe('message-actions helpers', () => {
 
   it('uses resolved decorator text for a bot reply preview', () => {
     expect(
-      buildQuoteReplyValue({
+      buildReplyTargetValue({
         channelId: 'channel-1',
         message: {
           ...threadReply,
@@ -105,7 +105,7 @@ describe('message-actions helpers', () => {
 
   it('drops an unresolved magic chip from the fallback preview', () => {
     expect(
-      buildQuoteReplyValue({
+      buildReplyTargetValue({
         channelId: 'channel-1',
         message: {
           ...threadReply,
@@ -116,22 +116,22 @@ describe('message-actions helpers', () => {
     ).toContain('"displayText":"> original prompt"');
   });
 
-  it('ignores a leading quote-reply block in the automatic preview', () => {
+  it('ignores a leading reply-target block in the automatic preview', () => {
     expect(
-      buildQuoteReplyValue({
+      buildReplyTargetValue({
         channelId: 'channel-1',
         message: {
           ...threadReply,
           content:
-            '<m-quote-reply>{"channelId":"channel-1","targetMessageId":"earlier-reply","targetThreadId":"thread-1","displayText":"earlier preview","senderId":"macro|earlier@example.com"}</m-quote-reply>\n\nmy response',
+            '<m-reply-target>{"channelId":"channel-1","targetMessageId":"earlier-reply","targetThreadId":"thread-1","displayText":"earlier preview","senderId":"macro|earlier@example.com"}</m-reply-target>\n\nmy response',
         },
       })
     ).toContain('"displayText":"my response"');
   });
 
-  it('does not add a quote-reply node for a top-level message', () => {
+  it('does not add a reply-target node for a top-level message', () => {
     expect(
-      buildQuoteReplyValue({
+      buildReplyTargetValue({
         channelId: 'channel-1',
         message: { ...threadReply, thread_id: null },
         existingValue: 'draft',

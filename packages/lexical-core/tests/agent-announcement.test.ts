@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildReplyTargetMarkdown } from '../nodes/ReplyTargetNode';
 import { composeAgentSessionAnnouncement } from '../utils/agent-announcement';
 import { markdownToSerializedEditorStateWithIds } from '../utils/markdown-state';
 import { quoteMarkdown } from '../utils/quote-markdown';
@@ -12,6 +13,16 @@ const chip = {
 
 const chipMarkdown =
   '<m-magic-chip>{"agentSessionId":"session-1","channelId":"channel-1","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>';
+
+const replyTarget = {
+  channelId: 'channel-1',
+  targetMessageId: 'message-1',
+  targetThreadId: 'thread-1',
+  displayText: '@claude fix the failing test it broke on main',
+  senderId: 'macro|user@example.com',
+};
+
+const replyTargetMarkdown = buildReplyTargetMarkdown(replyTarget);
 
 const channelLessChip = {
   agentSessionId: 'session-2',
@@ -38,57 +49,79 @@ describe('quoteMarkdown', () => {
 });
 
 describe('composeAgentSessionAnnouncement', () => {
-  it('quotes the prompt above the magic chip', () => {
+  it('places the structured reply target above the magic chip', () => {
     const markdown = composeAgentSessionAnnouncement({
-      promptMarkdown: '@claude fix the failing test\nit broke on main',
+      replyTarget,
       chip,
     });
 
-    expect(markdown).toBe(
-      `> @claude fix the failing test\n> it broke on main\n\n${chipMarkdown}`
-    );
+    expect(markdown).toBe(`${replyTargetMarkdown}\n\n${chipMarkdown}`);
   });
 
-  it('emits only the chip for a blank prompt', () => {
+  it('emits only the chip for a blank reply-target preview', () => {
     expect(
-      composeAgentSessionAnnouncement({ promptMarkdown: '   ', chip })
+      composeAgentSessionAnnouncement({
+        replyTarget: { ...replyTarget, displayText: '   ' },
+        chip,
+      })
     ).toBe(chipMarkdown);
   });
 
-  it('keeps a user-authored agent context tag visible in the quoted prompt', () => {
+  it('keeps user-authored markup in the reply-target display text', () => {
+    const displayText =
+      'visible\n\n<m-agent-context>{"version":1,"text":"private"}</m-agent-context>';
     expect(
       composeAgentSessionAnnouncement({
-        promptMarkdown:
-          'visible\n\n<m-agent-context>{"version":1,"text":"private"}</m-agent-context>',
+        replyTarget: { ...replyTarget, displayText },
         chip,
       })
     ).toBe(
-      `> visible\n> \n> <m-agent-context>{"version":1,"text":"private"}</m-agent-context>\n\n${chipMarkdown}`
+      `${buildReplyTargetMarkdown({ ...replyTarget, displayText: displayText.replace(/\s+/g, ' ') })}\n\n${chipMarkdown}`
+    );
+  });
+
+  it('omits a leading reply target from the announcement preview', () => {
+    const nestedReplyTarget = buildReplyTargetMarkdown({
+      ...replyTarget,
+      displayText: 'earlier message',
+    });
+
+    expect(
+      composeAgentSessionAnnouncement({
+        replyTarget: {
+          ...replyTarget,
+          displayText: `${nestedReplyTarget}\n\nnew response`,
+        },
+        chip,
+      })
+    ).toBe(
+      `${buildReplyTargetMarkdown({ ...replyTarget, displayText: 'new response' })}\n\n${chipMarkdown}`
     );
   });
 
   it('composes a session chip without a legacy dedicated channel', () => {
     expect(
       composeAgentSessionAnnouncement({
-        promptMarkdown: 'please look at this',
+        replyTarget: { ...replyTarget, displayText: 'please look at this' },
         chip: channelLessChip,
       })
     ).toBe(
-      '> please look at this\n\n<m-magic-chip>{"agentSessionId":"session-2","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>'
+      '<m-reply-target>{"channelId":"channel-1","targetMessageId":"message-1","targetThreadId":"thread-1","displayText":"please look at this","senderId":"macro|user@example.com"}</m-reply-target>\n\n<m-magic-chip>{"agentSessionId":"session-2","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>'
     );
   });
 
-  it('produces markdown the editor parses back into a quote and a chip', () => {
+  it('parses back into a reply target and a chip', () => {
     const markdown = composeAgentSessionAnnouncement({
-      promptMarkdown: 'please look at this',
+      replyTarget,
       chip,
     });
     const state = markdownToSerializedEditorStateWithIds(markdown);
 
     expect(state.root.children.map((child) => child.type)).toEqual([
-      'quote',
+      'reply-target',
       'magic-chip',
     ]);
+    expect(state.root.children[0]).toMatchObject(replyTarget);
     expect(state.root.children[1]).toMatchObject(chip);
   });
 });

@@ -3,9 +3,9 @@ import { $convertToMarkdownString } from '@lexical/markdown';
 import { describe, expect, it } from 'vitest';
 import { NodeReplacements, SupportedNodeTypes } from '../node-list';
 import {
-  buildQuoteReplyMarkdown,
-  stripLeadingQuoteReplyMarkdown,
-} from '../nodes/QuoteReplyNode';
+  buildReplyTargetMarkdown,
+  stripLeadingReplyTargetMarkdown,
+} from '../nodes/ReplyTargetNode';
 import { EXTERNAL_TRANSFORMERS } from '../transformers';
 import {
   markdownToSerializedEditorStateWithIds,
@@ -20,14 +20,14 @@ const data = {
   displayText: 'A one-line preview',
   senderId: 'macro|sender@example.com',
 };
-const markdown = buildQuoteReplyMarkdown(data);
+const markdown = buildReplyTargetMarkdown(data);
 
-describe('QuoteReplyNode', () => {
+describe('ReplyTargetNode', () => {
   it('round-trips through internal Markdown as a block decorator', () => {
     const state = markdownToSerializedEditorStateWithIds(markdown);
 
     expect(state.root.children[0]).toMatchObject({
-      type: 'quote-reply',
+      type: 'reply-target',
       ...data,
     });
     expect(serializedEditorStateToMarkdown(state)).toBe(markdown);
@@ -53,18 +53,18 @@ describe('QuoteReplyNode', () => {
 
   it('escapes a closing-tag injection in display text', () => {
     expect(
-      buildQuoteReplyMarkdown({
+      buildReplyTargetMarkdown({
         ...data,
-        displayText: '</m-quote-reply>still visible',
+        displayText: '</m-reply-target>still visible',
       })
-    ).not.toContain('</m-quote-reply>still visible');
+    ).not.toContain('</m-reply-target>still visible');
   });
 
-  it('strips one leading quote-reply block from Markdown', () => {
-    expect(stripLeadingQuoteReplyMarkdown(`${markdown}\n\nmy response`)).toBe(
+  it('strips one leading reply-target block from Markdown', () => {
+    expect(stripLeadingReplyTargetMarkdown(`${markdown}\n\nmy response`)).toBe(
       'my response'
     );
-    expect(stripLeadingQuoteReplyMarkdown(`before\n\n${markdown}`)).toBe(
+    expect(stripLeadingReplyTargetMarkdown(`before\n\n${markdown}`)).toBe(
       `before\n\n${markdown}`
     );
   });

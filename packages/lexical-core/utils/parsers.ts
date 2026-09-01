@@ -120,16 +120,19 @@ export function parseDocumentCards(text: string): string {
   );
 }
 
-/** Replace quote-reply nodes with their user-visible preview text. */
-export function parseQuoteReplies(text: string): string {
-  return text.replace(/<m-quote-reply>(.*?)<\/m-quote-reply>/gs, (_, json) => {
-    try {
-      const data = JSON.parse(json);
-      return data.displayText || '';
-    } catch {
-      return '';
+/** Replace reply-target nodes with their user-visible preview text. */
+export function parseReplyTargets(text: string): string {
+  return text.replace(
+    /<m-reply-target>(.*?)<\/m-reply-target>/gs,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return data.displayText || '';
+      } catch {
+        return '';
+      }
     }
-  });
+  );
 }
 
 export function parseSnapshots(text: string): string {
@@ -180,7 +183,7 @@ export function stripAgentContext(text: string): string {
  * - Snapshots: documentName (base64-encoded payload)
  * - Group mentions: @groupAlias (e.g., @here)
  * - Links: text (fallback to url)
- * - Quote replies: displayText
+ * - Reply targets: displayText
  */
 export function markdownToPlainText(markdown: string): string {
   const transforms: Array<(text: string) => string> = [
@@ -194,7 +197,7 @@ export function markdownToPlainText(markdown: string): string {
     parseSnapshots,
     parseDocumentCards,
     parseLinks,
-    parseQuoteReplies,
+    parseReplyTargets,
     stripAgentContext,
   ];
 
@@ -382,7 +385,7 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
   text = replaceJsonTag(
     text,
-    'm-quote-reply',
+    'm-reply-target',
     (data) => data.displayText || ''
   );
   text = replaceJsonTag(text, 'm-watermark', () => '');

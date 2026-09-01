@@ -27,7 +27,7 @@ import {
   type MagicChipNode,
   normalizedLanguage,
   type PasteNode,
-  type QuoteReplyNode,
+  type ReplyTargetNode,
   type SnapshotNode,
   SupportedNodeTypes,
   type TagMentionNode,
@@ -89,7 +89,7 @@ import { MagicChip as MagicChipDecorator } from '../decorator/MagicChip';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
-import { QuoteReply as QuoteReplyDecorator } from '../decorator/QuoteReply';
+import { ReplyTarget as ReplyTargetDecorator } from '../decorator/ReplyTarget';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
 import { TagMention as TagMentionDecorator } from '../decorator/TagMention';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
@@ -510,17 +510,17 @@ const AgentContext: TypedRenderableEntity<AgentContextNode> = {
   ),
 };
 
-const QuoteReply: TypedRenderableEntity<QuoteReplyNode> = {
-  guard: (node: LexicalNode): node is QuoteReplyNode =>
-    node.__type === 'quote-reply',
+const ReplyTarget: TypedRenderableEntity<ReplyTargetNode> = {
+  guard: (node: LexicalNode): node is ReplyTargetNode =>
+    node.__type === 'reply-target',
   render: (props) => (
-    // `data-quote-reply-node` mirrors the editor block wrapper so the shared
+    // `data-reply-target-node` mirrors the editor block wrapper so the shared
     // spacing rule applies in static markdown too.
     <div
       class="max-w-full"
-      data-quote-reply-node={props.node.__targetMessageId}
+      data-reply-target-node={props.node.__targetMessageId}
     >
-      <QuoteReplyDecorator
+      <ReplyTargetDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
         theme={props.theme}
@@ -894,7 +894,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(GroupMention),
   eraseRenderableEntity(Await),
   eraseRenderableEntity(AgentContext),
-  eraseRenderableEntity(QuoteReply),
+  eraseRenderableEntity(ReplyTarget),
   eraseRenderableEntity(MagicChip),
   eraseRenderableEntity(Snapshot),
   eraseRenderableEntity(Image),

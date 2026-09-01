@@ -5,7 +5,9 @@ mod config;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_channel_event;
 use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
-use agent_trigger::outbound::{ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector};
+use agent_trigger::outbound::{
+    ChannelThreadHistory, FastModelTriggerJudge, LexicalExplicitReplyDetector,
+};
 use anyhow::Context as _;
 use bots::domain::models::BotId;
 use bots::domain::ports::BotRepo as _;
@@ -80,7 +82,7 @@ async fn run() -> anyhow::Result<()> {
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(pool.clone()),
         PgAgentBotLookup(PgBotsRepo::new(pool.clone())),
-        LexicalReplyDetector::new(lexical),
+        LexicalExplicitReplyDetector::new(lexical),
         FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
         ChannelThreadHistory::new(PgChannelsRepo::new(pool)),
     );

@@ -51,9 +51,9 @@ import type {
   PullRequestMentionNode,
 } from './nodes/PullRequestMentionNode';
 import type {
-  QuoteReplyDecoratorProps,
-  QuoteReplyNode,
-} from './nodes/QuoteReplyNode';
+  ReplyTargetDecoratorProps,
+  ReplyTargetNode,
+} from './nodes/ReplyTargetNode';
 import type {
   SnapshotDecoratorProps,
   SnapshotNode,
@@ -131,9 +131,9 @@ export interface NodeDecoratorMap {
     klass: typeof PullRequestMentionNode;
     props: PullRequestMentionDecoratorProps;
   };
-  QuoteReplyNode: {
-    klass: typeof QuoteReplyNode;
-    props: QuoteReplyDecoratorProps;
+  ReplyTargetNode: {
+    klass: typeof ReplyTargetNode;
+    props: ReplyTargetDecoratorProps;
   };
   EquationNode: {
     klass: typeof EquationNode;

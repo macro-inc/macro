@@ -3,7 +3,9 @@
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_channel_event;
 use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
-use agent_trigger::outbound::{ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector};
+use agent_trigger::outbound::{
+    ChannelThreadHistory, FastModelTriggerJudge, LexicalExplicitReplyDetector,
+};
 use bot_id::BotId;
 use bots::domain::ports::BotRepo as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -73,7 +75,7 @@ async fn run(pool: PgPool, kafka_brokers: String, internal_api_key: String) -> a
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(pool.clone()),
         PgAgentBotLookup(PgBotsRepo::new(pool.clone())),
-        LexicalReplyDetector::new(lexical),
+        LexicalExplicitReplyDetector::new(lexical),
         FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
         ChannelThreadHistory::new(PgChannelsRepo::new(pool)),
     );

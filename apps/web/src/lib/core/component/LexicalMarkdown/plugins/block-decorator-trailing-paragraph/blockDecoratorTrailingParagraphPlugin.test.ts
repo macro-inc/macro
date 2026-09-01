@@ -2,7 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import { $createQuoteReplyNode, QuoteReplyNode } from '@macro-inc/lexical-core';
+import {
+  $createReplyTargetNode,
+  ReplyTargetNode,
+} from '@macro-inc/lexical-core';
 import {
   $createParagraphNode,
   $getRoot,
@@ -23,7 +26,7 @@ const quoteReplyData = {
 function createTestEditor() {
   const editor = createEditor({
     namespace: 'block-decorator-trailing-paragraph-test',
-    nodes: [QuoteReplyNode],
+    nodes: [ReplyTargetNode],
     onError: (error) => {
       throw error;
     },
@@ -38,7 +41,7 @@ describe('blockDecoratorTrailingParagraphPlugin', () => {
 
     editor.update(
       () => {
-        $getRoot().append($createQuoteReplyNode(quoteReplyData));
+        $getRoot().append($createReplyTargetNode(quoteReplyData));
       },
       { discrete: true }
     );
@@ -46,7 +49,7 @@ describe('blockDecoratorTrailingParagraphPlugin', () => {
     editor.read(() => {
       const children = $getRoot().getChildren();
       expect(children).toHaveLength(2);
-      expect(children[0]).toBeInstanceOf(QuoteReplyNode);
+      expect(children[0]).toBeInstanceOf(ReplyTargetNode);
       expect($isParagraphNode(children[1])).toBe(true);
     });
 
@@ -59,7 +62,7 @@ describe('blockDecoratorTrailingParagraphPlugin', () => {
     editor.update(
       () => {
         $getRoot().append(
-          $createQuoteReplyNode(quoteReplyData),
+          $createReplyTargetNode(quoteReplyData),
           $createParagraphNode()
         );
       },
@@ -87,7 +90,7 @@ describe('blockDecoratorTrailingParagraphPlugin', () => {
     editor.update(
       () => {
         $getRoot().append(
-          $createQuoteReplyNode(quoteReplyData),
+          $createReplyTargetNode(quoteReplyData),
           $createParagraphNode()
         );
       },

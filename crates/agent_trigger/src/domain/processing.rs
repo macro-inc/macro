@@ -7,7 +7,7 @@ use macro_event_broker::{EventBrokerError, MacroEvent as _, MacroEventBroker};
 
 use super::broker_events::AgentTriggerEventName;
 use super::service::{
-    AgentBotLookup, AgentTriggerService, ImplicitTriggerJudge, ReplyDetector, ThreadHistory,
+    AgentBotLookup, AgentTriggerService, ExplicitReplyDetector, ImplicitTriggerJudge, ThreadHistory,
 };
 
 /// Failure while evaluating or publishing one channel event.
@@ -36,7 +36,7 @@ pub async fn process_channel_event<Repo, Bots, Replies, Judge, History, Broker>(
 where
     Repo: AgentSessionRepo,
     Bots: AgentBotLookup,
-    Replies: ReplyDetector,
+    Replies: ExplicitReplyDetector,
     Judge: ImplicitTriggerJudge,
     History: ThreadHistory,
     Broker: MacroEventBroker,

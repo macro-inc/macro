@@ -3,14 +3,14 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
-import type { QuoteReplyDecoratorProps } from '@macro-inc/lexical-core';
+import type { ReplyTargetDecoratorProps } from '@macro-inc/lexical-core';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
 import { getBotDisplayName } from '@queries/channel/message-sender';
 import { createCallback } from '@solid-primitives/rootless';
 import { openDocument } from '../core/BlockLink';
 
-/** Single-line channel reply reference rendered by a QuoteReplyNode. */
-export function QuoteReply(props: QuoteReplyDecoratorProps) {
+/** Single-line channel reply reference rendered by a ReplyTargetNode. */
+export function ReplyTarget(props: ReplyTargetDecoratorProps) {
   const channelBots = useChannelBotsQuery(() => props.channelId);
   const senderName = () =>
     getBotDisplayName(props.senderId, undefined, channelBots.data) ||
@@ -34,15 +34,15 @@ export function QuoteReply(props: QuoteReplyDecoratorProps) {
   return (
     <button
       type="button"
-      class="group/quote-reply flex w-full min-w-0 items-center gap-1 py-1 text-left text-xs text-ink-muted rounded-md hover:bg-hover"
+      class="group/reply-target flex w-full min-w-0 items-center gap-1 py-1 text-left text-xs text-ink-muted rounded-md hover:bg-hover"
       aria-label={`Replying to ${senderName()}: ${props.displayText}`}
-      data-quote-reply-target-message-id={props.targetMessageId}
+      data-reply-target-target-message-id={props.targetMessageId}
       on:mousedown={(event) => event.preventDefault()}
       on:click={openTarget}
     >
       <svg
         viewBox="0 0 20 21.333"
-        class="ml-1 h-[1.333rem] w-5 shrink-0 overflow-visible text-edge transition-opacity group-hover/quote-reply:opacity-0"
+        class="ml-1 h-[1.333rem] w-5 shrink-0 overflow-visible text-edge transition-opacity group-hover/reply-target:opacity-0"
         fill="none"
         aria-hidden="true"
       >
@@ -53,10 +53,10 @@ export function QuoteReply(props: QuoteReplyDecoratorProps) {
           vector-effect="non-scaling-stroke"
         />
       </svg>
-      <span class="shrink-0 font-semibold text-ink-disabled transition-colors group-hover/quote-reply:text-ink-subtle">
+      <span class="shrink-0 font-semibold text-ink-disabled transition-colors group-hover/reply-target:text-ink-subtle">
         {senderName()}
       </span>
-      <div class="min-w-0 flex-1 overflow-hidden italic text-ink-subtle transition-colors group-hover/quote-reply:text-ink-muted">
+      <div class="min-w-0 flex-1 overflow-hidden italic text-ink-subtle transition-colors group-hover/reply-target:text-ink-muted">
         <StaticMarkdown
           markdown={props.displayText}
           theme={singleLineMarkdownTheme}

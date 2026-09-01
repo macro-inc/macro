@@ -10,7 +10,7 @@ import { createChannelMessageActions } from '../Channel/create-channel-message-a
 import { createDeleteMessageConfirmation } from '../Channel/create-delete-message-confirmation';
 import type { InputHandle, InputSnapshot } from '../Input';
 import { Thread } from '../Thread';
-import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
+import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { channelReplyInputOffsetX } from '../Thread/utils/thread-rail-geometry';
 import { useStandaloneThread } from './context';
 import { StandaloneThread } from './StandaloneThread';
@@ -47,7 +47,7 @@ function EditableThreadInner() {
       if (message.thread_id) {
         const current = replyInputState();
         const nextSnapshot: InputSnapshot = {
-          value: buildQuoteReplyValue({
+          value: buildReplyTargetValue({
             channelId: ctx.channelId(),
             message,
             selectedText,

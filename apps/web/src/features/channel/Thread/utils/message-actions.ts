@@ -1,9 +1,9 @@
 import { getChannelParams } from '@channel/Channel/link';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import {
-  buildQuoteReplyMarkdown,
+  buildReplyTargetMarkdown,
   markdownToPlainText,
-  stripLeadingQuoteReplyMarkdown,
+  stripLeadingReplyTargetMarkdown,
 } from '@macro-inc/lexical-core';
 import type { MessageData } from '../../Message';
 
@@ -63,7 +63,7 @@ function stripMagicChipMarkdown(markdown: string): string {
   return markdown.replace(/<m-magic-chip>.*?<\/m-magic-chip>/gs, '');
 }
 
-export function buildQuoteReplyValue(input: {
+export function buildReplyTargetValue(input: {
   channelId: string;
   message: Pick<MessageData, 'id' | 'content' | 'sender_id' | 'thread_id'>;
   selectedText?: string;
@@ -74,13 +74,13 @@ export function buildQuoteReplyValue(input: {
 
   const messageText = markdownToPlainText(
     stripMagicChipMarkdown(
-      stripLeadingQuoteReplyMarkdown(input.message.content)
+      stripLeadingReplyTargetMarkdown(input.message.content)
     )
   );
   const displayText = oneLinePreview(
     input.selectedText || input.renderedText || messageText
   );
-  const quoteReply = buildQuoteReplyMarkdown({
+  const replyTarget = buildReplyTargetMarkdown({
     channelId: input.channelId,
     targetMessageId: input.message.id,
     targetThreadId: input.message.thread_id,
@@ -90,8 +90,8 @@ export function buildQuoteReplyValue(input: {
   const existingValue = input.existingValue?.trimStart() ?? '';
 
   return existingValue
-    ? `${quoteReply}\n\n${existingValue}`
-    : `${quoteReply}\n\n${EMPTY_REPLY_PARAGRAPH}`;
+    ? `${replyTarget}\n\n${existingValue}`
+    : `${replyTarget}\n\n${EMPTY_REPLY_PARAGRAPH}`;
 }
 
 export function hasReactionFromUser(

@@ -148,7 +148,7 @@ describe('internal transformer fallbacks', () => {
     ['<m-image>{"alt":"missing url"}</m-image>', 'Unknown Image'],
     ['<m-video>{bad}</m-video>', 'Unknown Video'],
     ['<m-watermark>{bad}</m-watermark>', 'Unknown Watermark'],
-    ['<m-quote-reply>{bad}</m-quote-reply>', 'Unknown Quote Reply'],
+    ['<m-reply-target>{bad}</m-reply-target>', 'Unknown Reply Target'],
     [
       '<m-email-thread-embed>{bad}</m-email-thread-embed>',
       'Unknown Email Thread',
