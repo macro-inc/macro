@@ -181,6 +181,8 @@ impl SoupService for CountingSoupService {
                 let document_server_facts = matches!(&item, SoupItem::Document(_)).then_some(
                     soup::domain::models::SoupDocumentServerFacts {
                         is_email_attachment: false,
+                        is_important: true,
+                        status_option_ids: Vec::new(),
                     },
                 );
                 soup::domain::models::SoupProjectionHydration {
