@@ -4,17 +4,15 @@
 //! delivers every broker event that matches the caller's filters and passes
 //! the caller's entity access. Each SSE event's `id` is the UUIDv7 broker
 //! event id and its `event` is the event name; the `data` is the same broker
-//! envelope persisted webhooks deliver. Reconnecting clients present the
-//! standard `Last-Event-ID` header to resume; a cursor older than the replay
-//! window is rejected with 400, in which case clients must resync out of band
-//! and reconnect without the header. Clients must deduplicate by event id.
+//! envelope persisted webhooks deliver. Delivery is best-effort: disconnected
+//! or slow clients can miss events and must resync out of band when needed.
 
 use crate::domain::models::{WebhookFilters, WebhookScope};
 use crate::domain::stream::{WebhookEventStreamService, WebhookStreamError};
 use axum::{
     Json, Router,
     extract::{FromRef, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     response::{
         IntoResponse, Response,
         sse::{Event, KeepAlive, Sse},
@@ -28,7 +26,6 @@ use macro_authorization::{
 use model_error_response::ErrorResponse;
 use std::convert::Infallible;
 use std::time::Duration;
-use uuid::Uuid;
 
 /// Interval between SSE comment keep-alives.
 ///
@@ -101,23 +98,6 @@ fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStrea
         .map_err(|error| bad_request(format!("invalid `filters` JSON: {error}")))
 }
 
-/// Parse the standard SSE resume header into a broker event id.
-fn parse_last_event_id(headers: &HeaderMap) -> Result<Option<Uuid>, WebhookStreamHandlerError> {
-    let Some(value) = headers.get("last-event-id") else {
-        return Ok(None);
-    };
-    value
-        .to_str()
-        .ok()
-        .and_then(|value| Uuid::parse_str(value.trim()).ok())
-        .map(Some)
-        .ok_or_else(|| {
-            WebhookStreamHandlerError(WebhookStreamError::BadRequest(
-                "Last-Event-ID must be a broker event id".to_string(),
-            ))
-        })
-}
-
 /// Stream matching broker events to the caller over Server-Sent Events.
 #[utoipa::path(
     get,
@@ -135,13 +115,11 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
     State(state): State<WebhookStreamRouterState<St, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     Query(query): Query<StreamEventsQuery>,
-    headers: HeaderMap,
 ) -> Result<
     Sse<impl Stream<Item = Result<Event, Infallible>> + Send + 'static>,
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
-    let last_event_id = parse_last_event_id(&headers)?;
 
     let events = state
         .stream_service
@@ -149,7 +127,6 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
             authorization.authorization.user.macro_user_id,
             query.scope,
             filters,
-            last_event_id,
         )
         .await?;
 
@@ -160,8 +137,7 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
             .json_data(&event.broker_envelope)
         {
             Ok(sse_event) => Some(Ok(sse_event)),
-            // A broker envelope is already-parsed JSON; failure here is a bug,
-            // and the skipped event is still recoverable via reconnect-replay.
+            // A broker envelope is already-parsed JSON; failure here is a bug.
             Err(error) => {
                 tracing::error!(error = ?error, event_id = %event.event_id, "failed to encode SSE event");
                 None
