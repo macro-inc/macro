@@ -181,7 +181,7 @@ function DropdownContent(props: DropdownContentProps) {
   ]);
   const handleOpenAutoFocus = (event: Event) => {
     local.onOpenAutoFocus?.(event);
-    if (!event.defaultPrevented && contentRef) {
+    if (!event.defaultPrevented && contentRef && !isTouchDevice()) {
       highlightFirstMenuItemOnOpen(contentRef);
     }
   };

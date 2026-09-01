@@ -159,7 +159,10 @@ export function Notebook(props: {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
     return Object.keys(comments).length > 0;
   });
-  const showComments = () => hasComment() && !history.isOpen();
+  // On phones the margin is hidden entirely (no minimized rail); the touch
+  // comment drawer is the only comment surface. CommentMargin stays mounted
+  // inside the hidden wrapper — it hosts the drawer.
+  const showComments = () => hasComment() && !history.isOpen() && !isMobile();
 
   const currentEditorState = () => {
     const editor = md.editor;

@@ -8,6 +8,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
   type ParentProps,
   Show,
   untrack,
@@ -34,7 +35,10 @@ const CommentText = (props: { text: string; isThreaded?: boolean }) => {
 };
 
 function CommentContainer(
-  props: ParentProps<{ isThreaded?: boolean; isHighlighted?: boolean }>
+  props: ParentProps<{
+    isThreaded?: boolean;
+    isHighlighted?: boolean;
+  }>
 ) {
   return (
     <div
@@ -68,13 +72,18 @@ export function Comment(
     isOwned: boolean;
     isActive: boolean;
     isThreaded?: boolean;
+    actionsDropdown?: boolean;
   }>
 ) {
   const maybeBlockName = useMaybeBlockAliasedName();
   const commentsContext = useContext(CommentsContext);
 
-  const { commentOperations, setActiveThread, highlightedCommentId } =
-    commentsContext;
+  const {
+    commentOperations,
+    setActiveThread,
+    setMessageEditing,
+    highlightedCommentId,
+  } = commentsContext;
   const isHighlighted = createMemo(
     () => highlightedCommentId() === props.comment.id
   );
@@ -83,7 +92,14 @@ export function Comment(
   const date = () => props.comment.createdAt;
 
   const [textValue, setTextValue] = createSignal<string>(props.comment.text);
-  const [isEditing, setIsEditing] = createSignal<boolean>(false);
+  const [isEditing, setIsEditingSignal] = createSignal<boolean>(false);
+  // Report each edit-state transition to the drawer host (it hides its
+  // pinned reply composer while an edit is open). A wrapper instead of an
+  // effect keeps the reporting explicit at every mutation site.
+  const setIsEditing = (editing: boolean) => {
+    setIsEditingSignal(editing);
+    setMessageEditing?.(props.comment.id, editing);
+  };
 
   createEffect(() => {
     if (!untrack(isEditing)) return;
@@ -91,6 +107,10 @@ export function Comment(
       setIsEditing(false);
     }
   });
+
+  // The report must also retract on unmount (deletion mid-edit, or the
+  // drawer paging to another thread with an edit open).
+  onCleanup(() => setMessageEditing?.(props.comment.id, false));
 
   const copyLink = () => {
     if (!maybeBlockName) return;
@@ -128,6 +148,7 @@ export function Comment(
           <MessageTopRow
             isOwned={props.isOwned}
             isActive={props.isActive}
+            actionsDropdown={props.actionsDropdown}
             authorId={props.comment.author}
             date={date()}
             isNew={false}
@@ -155,6 +176,7 @@ export function Comment(
           isOwned={props.isOwned}
           isActive={props.isActive}
           isEditing
+          actionsDropdown={props.actionsDropdown}
           authorId={props.comment.author}
           date={date()}
           isResolved={false}
@@ -178,6 +200,7 @@ export function Comment(
         handleCancel={() => {
           setTextValue(textValue());
         }}
+        deactivateThreadOnCancel={false}
         setEditing={setIsEditing}
         textValue={textValue()}
       />
@@ -197,11 +220,16 @@ export function CommentReply(
     isOwned: boolean;
     isActive: boolean;
     isThreaded?: boolean;
+    actionsDropdown?: boolean;
   }>
 ) {
   const thisAuthor = useAuthor();
-  const { getCommentById, highlightedCommentId, documentId } =
-    useContext(CommentsContext);
+  const {
+    getCommentById,
+    highlightedCommentId,
+    documentId,
+    setMessageEditing,
+  } = useContext(CommentsContext);
   const maybeBlockName = useMaybeBlockAliasedName();
   const reply = createMemo(() => getCommentById(props.replyId));
   const isHighlighted = createMemo(
@@ -228,10 +256,18 @@ export function CommentReply(
     };
   };
 
-  const [isEditing, setIsEditing] = createSignal<boolean>(false);
+  const [isEditing, setIsEditingSignal] = createSignal<boolean>(false);
+  // As in Comment: explicit reporting at each mutation site, retracted on
+  // unmount.
+  const setIsEditing = (editing: boolean) => {
+    setIsEditingSignal(editing);
+    setMessageEditing?.(props.replyId, editing);
+  };
   const [textValue, setTextValue] = createSignal<string>('');
 
   createEffect(() => setTextValue(reply()?.text ?? ''));
+
+  onCleanup(() => setMessageEditing?.(props.replyId, false));
 
   const authorId = createMemo(() => reply()?.author ?? thisAuthor() ?? '');
   const date = () => reply()?.createdAt;
@@ -260,6 +296,7 @@ export function CommentReply(
               hideBottomMargin
               isOwned={props.isOwned}
               isActive={props.isActive}
+              actionsDropdown={props.actionsDropdown}
             />
             <CommentText text={reply()?.text ?? ''} />
             {props.children}
@@ -275,6 +312,7 @@ export function CommentReply(
             isEditing
             isOwned={props.isOwned}
             isActive={props.isActive}
+            actionsDropdown={props.actionsDropdown}
           />
           <EditInput
             handleCancel={() => {
@@ -288,6 +326,7 @@ export function CommentReply(
               setTextValue(newText);
               return result;
             }}
+            deactivateThreadOnCancel={false}
             hidePadding
             isReply
             setEditing={setIsEditing}

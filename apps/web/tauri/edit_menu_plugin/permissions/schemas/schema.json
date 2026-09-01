@@ -295,28 +295,16 @@
       "type": "string",
       "oneOf": [
         {
-          "description": "Enables the read_pasteboard_text command without any pre-configured scope.",
+          "description": "Enables the set_native_menu_suppressed command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-read-pasteboard-text",
-          "markdownDescription": "Enables the read_pasteboard_text command without any pre-configured scope."
+          "const": "allow-set-native-menu-suppressed",
+          "markdownDescription": "Enables the set_native_menu_suppressed command without any pre-configured scope."
         },
         {
-          "description": "Denies the read_pasteboard_text command without any pre-configured scope.",
+          "description": "Denies the set_native_menu_suppressed command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-read-pasteboard-text",
-          "markdownDescription": "Denies the read_pasteboard_text command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the stage_pasteboard_image command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-stage-pasteboard-image",
-          "markdownDescription": "Enables the stage_pasteboard_image command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the stage_pasteboard_image command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-stage-pasteboard-image",
-          "markdownDescription": "Denies the stage_pasteboard_image command without any pre-configured scope."
+          "const": "deny-set-native-menu-suppressed",
+          "markdownDescription": "Denies the set_native_menu_suppressed command without any pre-configured scope."
         }
       ]
     }
