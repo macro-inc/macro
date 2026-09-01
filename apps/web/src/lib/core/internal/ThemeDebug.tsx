@@ -35,12 +35,14 @@ const BUTTON_VARIANTS = [
   'cta',
 ] as const;
 const BUTTON_CONTENT_VARIANTS = ['outline', 'accent', 'strong', 'cta'] as const;
-const BUTTON_SIZES = ['sm', 'md', 'lg'] as const;
+const BUTTON_SIZES = ['sm', 'md', 'lg', 'xl'] as const;
+const BADGE_SIZES = ['sm', 'md', 'lg'] as const;
 const BADGE_VARIANTS = ['ghost', 'outline'] as const;
 const BUTTON_SIZE_LABELS = {
   sm: 'Small',
   md: 'Default',
   lg: 'Large',
+  xl: 'Extra Large',
 } as const;
 
 function ThemeDebug() {
@@ -341,19 +343,19 @@ function ThemeDebug() {
                     <Badge variant="outline" size="sm">
                       <span
                         aria-hidden="true"
-                        class="size-2 rounded-full bg-blue"
+                        class="size-2 rounded-full bg-folder"
                       />
                       tags
                     </Badge>
                     <Badge variant="outline" size="sm">
                       <span
                         aria-hidden="true"
-                        class="size-2 rounded-full bg-pink"
+                        class="size-2 rounded-full bg-snippet"
                       />
                       tags-ux
                     </Badge>
                     <Badge variant="outline" size="sm">
-                      <span class="inline-flex size-[1em] items-center justify-center rounded-full bg-pink text-surface-4">
+                      <span class="inline-flex size-[1em] items-center justify-center rounded-full bg-snippet text-surface-4">
                         <CheckIcon aria-hidden="true" class="size-[0.65em]" />
                       </span>
                       Completed
@@ -366,7 +368,7 @@ function ThemeDebug() {
                     </Badge>
                   </div>
                 </div>
-                <For each={BUTTON_SIZES}>
+                <For each={BADGE_SIZES}>
                   {(size) => (
                     <div class="flex flex-col items-start gap-2">
                       <span class="text-xs text-ink-extra-muted font-mono">

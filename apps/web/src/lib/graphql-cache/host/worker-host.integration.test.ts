@@ -62,6 +62,7 @@ function optimisticMutation(key: number, query: Operation['query']): Operation {
     url: 'http://integration.test',
     suspense: false,
     normalizedCacheOptimistic: {
+      uuid: '00000000-0000-4000-8000-000000000001',
       optimisticResponse: { held: true },
     },
   } as never);
@@ -169,6 +170,7 @@ class IntegrationCore {
         changed: [],
         affectedOps: [],
         reset: false,
+        upsertKind: { kind: 'inserted' },
         initialClaim: { kind: 'not-runnable' },
       };
     }

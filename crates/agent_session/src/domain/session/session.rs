@@ -3,7 +3,7 @@
 use std::collections::VecDeque;
 
 use agent_client_protocol::schema::v1::{
-    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
+    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse, McpServer,
     NewSessionRequest, NewSessionResponse, PermissionOptionKind, RequestId,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
     ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionId,
@@ -41,11 +41,15 @@ pub struct SessionMachine<Token> {
     /// carry it, so a reconnect re-enters the directory the session
     /// actually ran in.
     workspace: String,
+    /// MCP servers the agent is told to connect to. Carried by `session/new`,
+    /// `session/resume`, and `session/load` alike, because the agent process
+    /// behind a reconnect is fresh and holds no server from before.
+    mcp_servers: Vec<McpServer>,
 }
 
 impl<Token> SessionMachine<Token> {
     /// A fresh connection for `id`: booting, nothing queued.
-    pub fn new(id: AgentSessionId, workspace: String) -> Self {
+    pub fn new(id: AgentSessionId, workspace: String, mcp_servers: Vec<McpServer>) -> Self {
         Self {
             id,
             phase: SessionPhase::Booting,
@@ -53,11 +57,17 @@ impl<Token> SessionMachine<Token> {
             pending: VecDeque::new(),
             resume_session_id: None,
             workspace,
+            mcp_servers,
         }
     }
 
     /// A fresh connection that must restore an existing ACP session.
-    pub fn resume(id: AgentSessionId, session_id: SessionId, workspace: String) -> Self {
+    pub fn resume(
+        id: AgentSessionId,
+        session_id: SessionId,
+        workspace: String,
+        mcp_servers: Vec<McpServer>,
+    ) -> Self {
         Self {
             id,
             phase: SessionPhase::Booting,
@@ -65,6 +75,7 @@ impl<Token> SessionMachine<Token> {
             pending: VecDeque::new(),
             resume_session_id: Some(session_id),
             workspace,
+            mcp_servers,
         }
     }
 
@@ -374,7 +385,8 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            ResumeSessionRequest::new(session_id.clone(), self.workspace.clone()),
+            ResumeSessionRequest::new(session_id.clone(), self.workspace.clone())
+                .mcp_servers(self.mcp_servers.clone()),
             SessionOpening::Resume(session_id),
         )
     }
@@ -387,7 +399,8 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            LoadSessionRequest::new(session_id.clone(), self.workspace.clone()),
+            LoadSessionRequest::new(session_id.clone(), self.workspace.clone())
+                .mcp_servers(self.mcp_servers.clone()),
             SessionOpening::Load(session_id),
         )
     }
@@ -410,7 +423,7 @@ impl<Token> SessionMachine<Token> {
         agent_client_protocol::Error,
     > {
         self.build_session_request(
-            NewSessionRequest::new(self.workspace.clone()),
+            NewSessionRequest::new(self.workspace.clone()).mcp_servers(self.mcp_servers.clone()),
             SessionOpening::New,
         )
     }

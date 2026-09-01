@@ -1646,6 +1646,15 @@ export interface CalendarEventMetadata {
    * Whether the canonical source prohibits mutation.
    */
   isReadOnly: boolean;
+  /**
+   * The event's organizer (creator), when the source names one.
+   */
+  organizer?: CalendarEventOrganizer | null;
+  /**
+   * Free-text description, when the event carries one. May contain HTML from
+   * the source; clients render a plain-text preview.
+   */
+  description?: string | null;
 }
 /**
  * The instance a search row points at.
@@ -1662,6 +1671,20 @@ export interface CalendarEventSearchOccurrence {
    */
   occurrenceKey: string;
   time: CalendarEventSearchTime;
+}
+/**
+ * The event's organizer — its creator, in Google's model. Either field can be
+ * absent when the source does not name it.
+ */
+export interface CalendarEventOrganizer {
+  /**
+   * Display name, when the source provided one.
+   */
+  name?: string | null;
+  /**
+   * Organizer email address, when known.
+   */
+  email?: string | null;
 }
 export interface CalendarEventSearchResult {
   highlight: SearchHighlight;

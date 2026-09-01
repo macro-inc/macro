@@ -9,6 +9,7 @@ import {
   type OperationResult,
 } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
+import { validate as validateUuid } from 'uuid';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { filter, makeSubject, mergeMap, pipe } from 'wonka';
 
@@ -31,6 +32,7 @@ import {
   createGraphqlAddEntityPropertyMutation,
   createGraphqlBulkSaveEntityPropertiesMutation,
   createGraphqlEntityPropertiesQuery,
+  entityPropertyOptimisticMutationUuid,
   mapGraphqlEntityProperties,
 } from './entity';
 
@@ -169,6 +171,39 @@ describe('mapGraphqlEntityProperties', () => {
   it('retains the not-yet-loaded distinction', () => {
     expect(mapGraphqlEntityProperties(undefined, 'entity-1')).toBeUndefined();
     expect(mapGraphqlPropertiesMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('entityPropertyOptimisticMutationUuid', () => {
+  it('is stable per property slot and distinct across slots', () => {
+    const args = {
+      entityType: 'DOCUMENT' as const,
+      entityId: 'document-1',
+      propertyDefinitionId: 'property-1',
+    };
+    const uuid = entityPropertyOptimisticMutationUuid(args);
+
+    expect(validateUuid(uuid)).toBe(true);
+    expect(entityPropertyOptimisticMutationUuid(args)).toBe(uuid);
+    expect(
+      entityPropertyOptimisticMutationUuid({
+        ...args,
+        propertyDefinitionId: 'property-2',
+      })
+    ).not.toBe(uuid);
+    expect(
+      entityPropertyOptimisticMutationUuid({
+        ...args,
+        entityId: 'document-1:property',
+        propertyDefinitionId: '1',
+      })
+    ).not.toBe(
+      entityPropertyOptimisticMutationUuid({
+        ...args,
+        entityId: 'document-1',
+        propertyDefinitionId: 'property:1',
+      })
+    );
   });
 });
 

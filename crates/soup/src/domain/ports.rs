@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::domain::models::{
     AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SimpleSortRequest,
-    SoupErr, SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest,
-    grouping::ItemGroupingInfo,
+    SoupErr, SoupProjectionHydration, SoupPropertiesField, SoupRequest, TouchedEntity,
+    TouchedSoupRequest, grouping::ItemGroupingInfo,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -34,6 +34,13 @@ pub trait SoupRepo: Send + Sync + 'static {
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
 
+    /// Fetch expanded Soup items and optional document server facts from the
+    /// same authorized detail rows.
+    fn expanded_generic_cursor_soup_with_projection<'a>(
+        &self,
+        req: SimpleSortRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, Self::Err>> + Send;
+
     /// Fetch unexpanded soup items for a simple sorted cursor query.
     fn unexpanded_generic_cursor_soup<'a>(
         &self,
@@ -45,6 +52,13 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: AdvancedSortParams<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem<()>>, Self::Err>> + Send;
+
+    /// Fetch expanded Soup items by ID with optional document server facts
+    /// from the same authorized detail rows.
+    fn expanded_soup_by_ids_with_projection<'a>(
+        &self,
+        req: AdvancedSortParams<'a>,
+    ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, Self::Err>> + Send;
 
     /// Fetch unexpanded soup items for an explicit list of entity ids.
     fn unexpanded_soup_by_ids<'a>(
@@ -176,6 +190,30 @@ pub trait SoupService: Send + Sync + 'static {
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
 
+    /// Run a Soup query and retain authoritative document server facts for
+    /// expanded items.
+    ///
+    /// Implementations that do not opt into relation hydration leave every
+    /// item's server facts empty. The production service overrides this method.
+    fn get_user_soup_with_projection<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<SoupOutput<T, SoupProjectionHydration>, SoupErr>> + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        async move {
+            self.get_user_soup(req, team_receipt).await.map(|output| {
+                output.map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                })
+            })
+        }
+    }
+
     /// Run a soup query and attach entity properties to the returned page.
     fn get_user_soup_with_properties<T>(
         &self,
@@ -195,6 +233,31 @@ pub trait SoupService: Send + Sync + 'static {
     where
         SoupRequest<T>: IntoSoupReqAst,
         T: Clone + Serialize + Send;
+
+    /// Run a Soup query with frecency and authoritative document server facts
+    /// for expanded items.
+    fn get_user_soup_with_frecency_and_projection<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<
+        Output = Result<SoupOutput<T, SoupProjectionHydration<EnrichedSoupItem>>, SoupErr>,
+    > + Send
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        async move {
+            self.get_user_soup_with_frecency(req, team_receipt)
+                .await
+                .map(|output| {
+                    output.map(|item| SoupProjectionHydration {
+                        item,
+                        document_server_facts: None,
+                    })
+                })
+        }
+    }
 
     /// Run a soup query and attach both properties and frecency to the page.
     fn get_user_soup_with_properties_and_frecency<T>(
@@ -241,6 +304,20 @@ where
         (**self).get_user_soup(req, team_receipt).await
     }
 
+    async fn get_user_soup_with_projection<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, SoupProjectionHydration>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self)
+            .get_user_soup_with_projection(req, team_receipt)
+            .await
+    }
+
     async fn get_user_soup_with_properties<T>(
         &self,
         req: SoupRequest<T>,
@@ -266,6 +343,20 @@ where
     {
         (**self)
             .get_user_soup_with_frecency(req, team_receipt)
+            .await
+    }
+
+    async fn get_user_soup_with_frecency_and_projection<T>(
+        &self,
+        req: SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<T, SoupProjectionHydration<EnrichedSoupItem>>, SoupErr>
+    where
+        SoupRequest<T>: IntoSoupReqAst,
+        T: Clone + Serialize + Send,
+    {
+        (**self)
+            .get_user_soup_with_frecency_and_projection(req, team_receipt)
             .await
     }
 

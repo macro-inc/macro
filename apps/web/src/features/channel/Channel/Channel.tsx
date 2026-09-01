@@ -252,10 +252,8 @@ export function Channel(props: ChannelProps) {
   const messageById = () => messageIndex.byId;
   const keepMountedTargetThreadIndexes = createMemo(() => {
     const threadId = targetMessageController.activeTargetMessageId();
-    const hasPendingElementScroll =
-      targetMessageController.pendingScrollTargetId() !== undefined ||
-      targetMessageController.pendingTargetReplyId() !== undefined;
-    if (!threadId || !hasPendingElementScroll) return [];
+    if (!threadId || !targetMessageController.hasPendingElementScroll())
+      return [];
 
     const index = messageIndex.keys.indexOf(threadId);
     return index === -1 ? [] : [index];
@@ -707,7 +705,11 @@ export function Channel(props: ChannelProps) {
   );
 
   return (
-    <EntityLoadGate result={messagesLoadResult}>
+    <EntityLoadGate
+      result={messagesLoadResult}
+      loadErrorTitle="Unable to load this channel"
+      onRetry={() => void messagesQuery.refetch()}
+    >
       <DebugSuspense name="Channel.root">
         <deleteConfirmation.ConfirmationDialog />
         <StaticMarkdownContext>
@@ -744,10 +746,7 @@ export function Channel(props: ChannelProps) {
                           channelId={props.channelId}
                           keys={() => messageIndex.keys}
                           initialScrollTarget={threadListInitialScrollTarget()}
-                          initialScrollHandledByTargetElement={
-                            targetMessageController.pendingScrollTargetId() !==
-                            undefined
-                          }
+                          initialScrollHandledByTargetElement={targetMessageController.hasPendingElementScroll()}
                           keepMounted={keepMountedTargetThreadIndexes}
                           fullFrameScrollInsets={threadListScrollInsets}
                           shift={shift}

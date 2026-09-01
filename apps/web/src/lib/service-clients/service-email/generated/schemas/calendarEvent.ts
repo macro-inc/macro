@@ -8,6 +8,8 @@ import type { CalendarAttendee } from './calendarAttendee';
 import type { CalendarEventCalendarId } from './calendarEventCalendarId';
 import type { CalendarEventConferenceProvider } from './calendarEventConferenceProvider';
 import type { CalendarEventConferenceUrl } from './calendarEventConferenceUrl';
+import type { CalendarEventCreatorEmail } from './calendarEventCreatorEmail';
+import type { CalendarEventCreatorName } from './calendarEventCreatorName';
 import type { CalendarEventDescription } from './calendarEventDescription';
 import type { CalendarEventLocation } from './calendarEventLocation';
 import type { CalendarEventOrganizerEmail } from './calendarEventOrganizerEmail';
@@ -16,6 +18,7 @@ import type { EventReminders } from './eventReminders';
 import type { EventStatus } from './eventStatus';
 import type { EventTime } from './eventTime';
 import type { EventTransparency } from './eventTransparency';
+import type { EventType } from './eventType';
 import type { EventVisibility } from './eventVisibility';
 
 /**
@@ -32,8 +35,19 @@ projections stored before calendars were attributed. */
   conferenceUrl?: CalendarEventConferenceUrl;
   /** Entity creation time. */
   createdAt: string;
+  /** Provider-reported creator email. Distinct from the organizer when
+someone writes onto a calendar they do not own. Omitted from stored
+projections when unknown so events ingested before this field still
+compare equal. */
+  creatorEmail?: CalendarEventCreatorEmail;
+  /** Provider-reported creator display name. */
+  creatorName?: CalendarEventCreatorName;
   /** Optional event body. */
   description?: CalendarEventDescription;
+  /** Provider event type. Skipped when it is the regular type so
+projections stored before event types were modeled still compare
+equal. */
+  eventType?: EventType;
   /** RFC 5545 UID used to reconcile provider and email sources. */
   icalUid: string;
   /** Macro entity identifier. */

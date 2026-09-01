@@ -18,6 +18,14 @@ const serverHostLocal: Servers = {
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
 
+// The shared gateway ALB fronts DSS under a `/dss` path prefix. Unlike the
+// other services it is named with a `dev-` prefix rather than a `-dev` suffix,
+// so it cannot reuse `devServerSuffix`.
+const gatewayHost =
+  import.meta.env.MODE === 'development'
+    ? 'https://dev-gateway.macro.com'
+    : 'https://gateway.macro.com';
+
 const authLogoutUrl =
   import.meta.env.MODE === 'development'
     ? 'https://fusionauth-dev.macro.com/oauth2/logout?client_id=eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c&tenantId=5e13f524-8d32-0454-81f8-061936256aa4'
@@ -27,7 +35,7 @@ const serverHostRemote = {
   'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
   'auth-logout': authLogoutUrl,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
-  'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
+  'document-storage-service': `${gatewayHost}/dss`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
   'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,

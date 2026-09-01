@@ -7,16 +7,17 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::models::{
-    ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarBackfillClaim,
-    CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
-    CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-    CalendarEventPatch, CalendarEventUpsert, CalendarGrantIntent, CalendarLinkTokenIdentity,
-    CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
-    CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage,
-    CalendarReminderFiring, CalendarReminderSweepSummary, CalendarSyncStatus,
-    DisconnectedGoogleCalendar, DueCalendarReminder, GoogleCalendarSyncSnapshot,
-    GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel,
-    GoogleWatchConfig, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
+    CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
+    CalendarBackfillJobKey, CalendarCreationTarget, CalendarEvent, CalendarEventDraft,
+    CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert, CalendarGrantIntent,
+    CalendarLinkTokenIdentity, CalendarMentionPreview, CalendarMentionRequestItem,
+    CalendarOccurrence, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
+    CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
+    CalendarSyncStatus, DisconnectedGoogleCalendar, DueCalendarReminder,
+    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
+    GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
+    StoredGoogleCalendar, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -488,6 +489,25 @@ pub trait CalendarRepository: Send + Sync + 'static {
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventMutationTarget>, Report>> + Send;
 
+    /// The stored attendees of a canonical event. Used to carry each retained
+    /// attendee's RSVP and optional state forward when a mutation replaces the
+    /// attendee list, so adding or dropping one guest does not reset the rest.
+    fn get_event_attendees(
+        &self,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<CalendarAttendee>, Report>> + Send;
+
+    /// The override attendees of one occurrence, when it carries its own list.
+    /// `None` means the occurrence inherits the series attendees; `Some` (even
+    /// empty) is the occurrence's authoritative list, whose per-instance RSVPs
+    /// must win over the series when an occurrence-scoped mutation replaces the
+    /// attendee list.
+    fn get_occurrence_override_attendees(
+        &self,
+        event_id: Uuid,
+        recurrence_id: &str,
+    ) -> impl Future<Output = Result<Option<Vec<CalendarAttendee>>, Report>> + Send;
+
     /// Resolve the calendar a requester-created event lands in: the exact
     /// calendar when one is supplied, otherwise the supplied inbox's primary
     /// calendar, otherwise the requester's primary inbox's primary calendar.
@@ -756,6 +776,15 @@ pub trait CalendarReminderDispatchRepo: Send + Sync + 'static {
     fn complete_reminder_delivery(
         &self,
         firing: &CalendarReminderFiring,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Record when the event's latest reminder notification was delivered, so
+    /// recency-sorted listings surface the event at delivery time instead of
+    /// its last-modified time.
+    fn record_reminder_fired(
+        &self,
+        event_id: Uuid,
+        fired_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

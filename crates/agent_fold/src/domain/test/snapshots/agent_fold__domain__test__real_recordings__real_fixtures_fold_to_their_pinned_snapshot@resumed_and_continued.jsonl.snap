@@ -35,6 +35,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("ls /Users/eric/Code/macro/crates/agent_session/examples/ 2>/dev/null; ls /Users/eric/Code/macro/crates/agent_runtime_protocol/examples/ 2>/dev/null"),
+                            "description": String("Locate the example file's actual crate"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("\u{1b}[0m\u{1b}[01;34magent_session_recorder\u{1b}[0m\n\u{1b}[00magent_session_recorder.rs\u{1b}[0m\n\u{1b}[0m\u{1b}[00macp.rs\u{1b}[0m\n\u{1b}[00mevents.rs\u{1b}[0m\n\u{1b}[01;34mmock_container\u{1b}[0m\n\u{1b}[00mmock_container.rs\u{1b}[0m\n\u{1b}[00mwebsocket.rs\u{1b}[0m"),
+                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -47,6 +56,14 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             "/Users/eric/Code/macro/.zed/settings.json",
                         ],
                     },
+                    raw_input: Some(
+                        Object {
+                            "file_path": String("/Users/eric/Code/macro/.zed/settings.json"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("1\t{\n2\t  \"disable_ai\": false,\n3\t  \"show_edit_predictions\": false,\n4\t  \"lsp\": {\n5\t    \"biome\": {\n6\t      \"settings\": {\n7\t        \"config_path\": \"app/biome.jsonc\",\n8\t        \"require_config_file\": true,\n9\t      }\n10\t    }\n11\t  },\n12\t  \"languages\": {\n13\t    \"CSS\": {\n14\t      \"language_servers\": [\"tailwindcss-language-server\", \"!vscode-css-language-server\"]\n15\t    }\n16\t  },\n17\t  \"use_on_type_format\": false\n18\t}\n19\t"),
+                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -67,6 +84,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("grep -n -A 12 'agent_servers' ~/.config/zed/settings.json 2>/dev/null || echo \"not found in user settings\""),
+                            "description": String("Look for agent_servers in user Zed settings"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("127:\t\"agent_servers\": {\n128-    \"Recorded Claude\": {\n129-      \"type\": \"custom\",\n130-      \"command\": \"/bin/bash\",\n131-      \"args\": [\n132-        \"-c\",\n133-        \"exec env -u ANTHROPIC_API_KEY /Users/eric/Code/macro/target/debug/examples/agent_session_recorder\"\n134-      ]\n135-\t   }\n136-\t}\n137-}"),
+                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -85,6 +111,17 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             },
                         ],
                     },
+                    raw_input: Some(
+                        Object {
+                            "replace_all": Bool(false),
+                            "file_path": String("/Users/eric/Code/macro/crates/agent_session/examples/agent_session_recorder.rs"),
+                            "old_string": String("//! Build the recorder, then point an ACP client at the binary:\n//!\n//! ```text\n//! cargo build -p agent_session --example agent_session_recorder\n//! ```\n//!\n//! Zed `settings.json` (use an absolute path - Zed does not expand `~`; the\n//! `env -u` strips a stray API key from the environment so the session uses\n//! the subscription login):\n//!\n//! ```text\n//! \"agent_servers\": {\n//!   \"Recorded Claude\": {\n//!     \"type\": \"custom\",\n//!     \"command\": \"/bin/bash\",\n//!     \"args\": [\n//!       \"-c\",\n//!       \"exec env -u ANTHROPIC_API_KEY <repo>/target/debug/examples/agent_session_recorder\"\n//!     ]\n//!   }\n//! }\n//! ```"),
+                            "new_string": String("//! Install the recorder to `~/.cargo/bin`, then point an ACP client at the\n//! installed binary:\n//!\n//! ```text\n//! cargo install --path crates/agent_session --example agent_session_recorder\n//! ```\n//!\n//! Zed `settings.json` (the shell resolves the binary from `$HOME`, so no\n//! hardcoded paths; the `env -u` strips a stray API key from the environment\n//! so the session uses the subscription login):\n//!\n//! ```text\n//! \"agent_servers\": {\n//!   \"Recorded Claude\": {\n//!     \"type\": \"custom\",\n//!     \"command\": \"/bin/bash\",\n//!     \"args\": [\n//!       \"-c\",\n//!       \"exec env -u ANTHROPIC_API_KEY \\\"$HOME/.cargo/bin/agent_session_recorder\\\"\"\n//!     ]\n//!   }\n//! }\n//! ```"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("The file /Users/eric/Code/macro/crates/agent_session/examples/agent_session_recorder.rs has been updated successfully. (file state is current in your context — no need to Read it back)"),
+                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -97,6 +134,16 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             "/Users/eric/.config/zed/settings.json",
                         ],
                     },
+                    raw_input: Some(
+                        Object {
+                            "file_path": String("/Users/eric/.config/zed/settings.json"),
+                            "offset": Number(120),
+                            "limit": Number(20),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("120\t\t\"lsp\": {\n121\t\t\t\"biome\": {\n122\t\t\t\t\"settings\": {\n123\t\t\t\t\t\"config_path\": \"biome.jsonc\"\n124\t\t\t\t}\n125\t\t\t}\n126\t\t},\n127\t\t\"agent_servers\": {\n128\t    \"Recorded Claude\": {\n129\t      \"type\": \"custom\",\n130\t      \"command\": \"/bin/bash\",\n131\t      \"args\": [\n132\t        \"-c\",\n133\t        \"exec env -u ANTHROPIC_API_KEY /Users/eric/Code/macro/target/debug/examples/agent_session_recorder\"\n134\t      ]\n135\t\t   }\n136\t\t}\n137\t}\n138\t"),
+                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -115,6 +162,17 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             },
                         ],
                     },
+                    raw_input: Some(
+                        Object {
+                            "replace_all": Bool(false),
+                            "file_path": String("/Users/eric/.config/zed/settings.json"),
+                            "old_string": String("        \"exec env -u ANTHROPIC_API_KEY /Users/eric/Code/macro/target/debug/examples/agent_session_recorder\""),
+                            "new_string": String("        \"exec env -u ANTHROPIC_API_KEY \\\"$HOME/.cargo/bin/agent_session_recorder\\\"\""),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("The file /Users/eric/.config/zed/settings.json has been updated successfully. (file state is current in your context — no need to Read it back)"),
+                    ),
                 },
                 Text {
                     text: "Now installing the binary (release build, may take a few minutes):",
@@ -138,6 +196,16 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("SQLX_OFFLINE=true cargo install --path crates/agent_session --example agent_session_recorder 2>&1 | tail -5"),
+                            "description": String("Install agent_session_recorder example to ~/.cargo/bin"),
+                            "timeout": Number(600000),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("    aws-types@1.5.0 requires rustc 1.94.1\n    aws-types@1.5.0 requires rustc 1.94.1\n  Either upgrade rustc or select compatible dependency versions with\n  `cargo update <name>@<current-ver> --precise <compatible-ver>`\n  where `<compatible-ver>` is the latest version supporting rustc 1.94.0"),
+                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -158,6 +226,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("cat /Users/eric/Code/macro/rust-toolchain.toml 2>/dev/null; rustup show active-toolchain; rustc --version"),
+                            "description": String("Check pinned rust toolchain versions"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("[toolchain]\nchannel = \"1.94.0\"\ncomponents = [\"clippy\", \"rustfmt\", \"rust-analyzer\", \"rust-src\"]\n# The linux-gnu targets are required by `cargo x zigbuild` (the local\n# orchestrator cross-compiles service binaries for the runtime image). They\n# don't affect the fenix channel-manifest hash in nix/cloud-storage.nix (targets\n# are selected after the manifest is fetched), so adding one needs no hash bump.\ntargets = [\n  \"wasm32-unknown-unknown\",\n  \"aarch64-unknown-linux-gnu\",\n  \"x86_64-unknown-linux-gnu\",\n]\nrustup shim only supports commands used by cross\nrustc 1.94.0 (4a4ef493e 2026-03-02)"),
+                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -178,6 +255,16 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("SQLX_OFFLINE=true cargo install --locked --path crates/agent_session --example agent_session_recorder 2>&1 | tail -5"),
+                            "description": String("Install recorder with workspace lockfile"),
+                            "timeout": Number(600000),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("   Compiling bots v0.1.0 (/Users/eric/Code/macro/crates/bots)\n   Compiling agent_session v0.1.0 (/Users/eric/Code/macro/crates/agent_session)\n    Finished `release` profile [optimized] target(s) in 1m 38s\n  Installing /Users/eric/.cargo/bin/agent_session_recorder\n   Installed package `agent_session v0.1.0 (/Users/eric/Code/macro/crates/agent_session)` (executable `agent_session_recorder`)"),
+                    ),
                 },
                 Text {
                     text: "The install needed `--locked`, so I'll add that to the documented command too:",
@@ -199,6 +286,17 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             },
                         ],
                     },
+                    raw_input: Some(
+                        Object {
+                            "replace_all": Bool(false),
+                            "file_path": String("/Users/eric/Code/macro/crates/agent_session/examples/agent_session_recorder.rs"),
+                            "old_string": String("//! Install the recorder to `~/.cargo/bin`, then point an ACP client at the\n//! installed binary:\n//!\n//! ```text\n//! cargo install --path crates/agent_session --example agent_session_recorder\n//! ```"),
+                            "new_string": String("//! Install the recorder to `~/.cargo/bin` (`--locked` keeps the workspace\n//! lockfile's dependency versions, which the pinned toolchain requires), then\n//! point an ACP client at the installed binary:\n//!\n//! ```text\n//! cargo install --locked --path crates/agent_session --example agent_session_recorder\n//! ```"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("The file /Users/eric/Code/macro/crates/agent_session/examples/agent_session_recorder.rs has been updated successfully. (file state is current in your context — no need to Read it back)"),
+                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -219,6 +317,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("ls -la ~/.cargo/bin/agent_session_recorder"),
+                            "description": String("Verify installed binary exists"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("-rwxr-xr-x 1 eric staff 6109552 Aug  3 16:07 \u{1b}[0m\u{1b}[00;32m/Users/eric/.cargo/bin/agent_session_recorder\u{1b}[0m"),
+                    ),
                 },
                 Text {
                     text: "Done. The recorder is now installed at `~/.cargo/bin/agent_session_recorder` and Zed points at it instead of the debug build in `target/`.\n\nThree changes:\n\n1. **Doc comment** in `crates/agent_session/examples/agent_session_recorder.rs` — the build command is now `cargo install --locked --path crates/agent_session --example agent_session_recorder`, and the sample Zed config uses `\"$HOME/.cargo/bin/agent_session_recorder\"` (bash expands `$HOME`, so no hardcoded repo path).\n2. **`~/.config/zed/settings.json`** — the \"Recorded Claude\" agent server now execs the installed binary via `$HOME/.cargo/bin` instead of `/Users/eric/Code/macro/target/debug/examples/...`.\n3. **Ran the install** — it succeeded and the binary is in place. One wrinkle worth knowing: plain `cargo install` failed because it ignores `Cargo.lock` and resolved an `aws-types` that needs rustc 1.94.1 (the repo pins 1.94.0). `--locked` fixes that, which is why it's in the documented command.\n\nAfter future changes to the recorder, re-run the install command to refresh the binary — Zed no longer picks up `cargo build` output automatically.Yes — in your user-level Zed settings at `~/.config/zed/settings.json` (the `agent_servers` block wasn't in the project's `.zed/settings.json`). The \"Recorded Claude\" entry's command changed from:\n\n```\nexec env -u ANTHROPIC_API_KEY /Users/eric/Code/macro/target/debug/examples/agent_session_recorder\n```\n\nto:\n\n```\nexec env -u ANTHROPIC_API_KEY \"$HOME/.cargo/bin/agent_session_recorder\"\n```\n\nEverything else in the file is untouched. You may need to restart the agent server in Zed (or reopen the panel) for it to pick up the new command.",
@@ -312,6 +419,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("ls -la ~/.agent_runtime_sessions/ 2>&1"),
+                            "description": String("Check for session recordings directory"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("total 132\ndrwxr-xr-x   4 eric staff   128 Aug  3 16:08 \u{1b}[0m\u{1b}[01;34m.\u{1b}[0m\ndrwxr-x--- 131 eric staff  4192 Aug  3 16:12 \u{1b}[01;34m..\u{1b}[0m\n-rw-r--r--   1 eric staff 99509 Aug  3 16:12 2026-08-03T20-08-59Z.jsonl\ndrwxr-xr-x   9 eric staff   288 Aug  3 11:12 \u{1b}[01;34mclaude_config\u{1b}[0m"),
+                    ),
                 },
                 Permission {
                     tool_call: ToolUseId(
@@ -396,6 +512,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("jj log -r 'claude-recorder | @ | @-' --no-pager -T 'change_id.short() ++ \" \" ++ bookmarks ++ \" \" ++ description.first_line() ++ \"\\n\"' && jj st --no-pager"),
+                            "description": String("Show jj log around claude-recorder bookmark and working copy status"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("@  szwwkmusnqwv  fold\n○  zyrwruupsoys claude-recorder feat: claude recorder\n│\n~\nWorking copy changes:\nM .zed/settings.json\nM Cargo.lock\nM Cargo.toml\nA crates/agent_fold/Cargo.toml\nA crates/agent_fold/src/domain/error.rs\nA crates/agent_fold/src/domain/mod.rs\nA crates/agent_fold/src/domain/ports.rs\nA crates/agent_fold/src/inbound/comms_message.rs\nA crates/agent_fold/src/inbound/mod.rs\nA crates/agent_fold/src/lib.rs\nM crates/agent_session/examples/agent_session_recorder.rs\nWorking copy  (@) : szwwkmus 432cbf81 fold\nParent commit (@-): zyrwruup e5adf6d1 claude-recorder | feat: claude recorder\nWarning: These bookmarks have conflicts:\n  attachment-rework-integration\n  auto-deploy-lexical-service-paths\n  ci/gitlab-ci-migration\n  eric.hayes/macro-1558-duplicate-task-detection\n  fix-ai-stream-logging\n  fix-sfs-log-acl\n  improve-tracing\n  litellm\n  mcp-auth-fix\n  mcp-notion\n  remove-dps\n  scheduled-agents\n  sfs-monitoring\n  wolf/acp-cleanup\nHint: Use `jj bookmark list` to see details. Use `jj bookmark set <name> -r <rev>` to resolve."),
+                    ),
                 },
                 Permission {
                     tool_call: ToolUseId(
@@ -441,6 +566,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("jj squash --from @ --into claude-recorder --use-destination-message crates/agent_session/examples/agent_session_recorder.rs && jj st --no-pager"),
+                            "description": String("Squash example file change into claude-recorder commit"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("Rebased 1 descendant commits\nWorking copy  (@) now at: szwwkmus 3612559a fold\nParent commit (@-)      : zyrwruup 42fc9eef claude-recorder* | feat: claude recorder\nWorking copy changes:\nM .zed/settings.json\nM Cargo.lock\nM Cargo.toml\nA crates/agent_fold/Cargo.toml\nA crates/agent_fold/src/domain/error.rs\nA crates/agent_fold/src/domain/mod.rs\nA crates/agent_fold/src/domain/ports.rs\nA crates/agent_fold/src/inbound/comms_message.rs\nA crates/agent_fold/src/inbound/mod.rs\nA crates/agent_fold/src/lib.rs\nWorking copy  (@) : szwwkmus 3612559a fold\nParent commit (@-): zyrwruup 42fc9eef claude-recorder* | feat: claude recorder\nWarning: These bookmarks have conflicts:\n  attachment-rework-integration\n  auto-deploy-lexical-service-paths\n  ci/gitlab-ci-migration\n  eric.hayes/macro-1558-duplicate-task-detection\n  fix-ai-stream-logging\n  fix-sfs-log-acl\n  improve-tracing\n  litellm\n  mcp-auth-fix\n  mcp-notion\n  remove-dps\n  scheduled-agents\n  sfs-monitoring\n  wolf/acp-cleanup\nHint: Use `jj bookmark list` to see details. Use `jj bookmark set <name> -r <rev>` to resolve."),
+                    ),
                 },
                 Permission {
                     tool_call: ToolUseId(
@@ -489,6 +623,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("jj git push -b claude-recorder 2>&1"),
+                            "description": String("Push claude-recorder bookmark to remote"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("Changes to push to origin:\n  Move sideways bookmark claude-recorder from e5adf6d16c51 to 42fc9eef52a7\nremote: \nremote: GitHub found 21 vulnerabilities on macro-inc/macro's default branch (8 high, 8 moderate, 5 low). To find out more, visit:        \nremote:      https://github.com/macro-inc/macro/security/dependabot        \nremote:"),
+                    ),
                 },
                 Permission {
                     tool_call: ToolUseId(
@@ -534,6 +677,15 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                             0,
                         ),
                     },
+                    raw_input: Some(
+                        Object {
+                            "command": String("gh pr view claude-recorder --json number,title,url,state -q '\"\\(.number) \\(.title) \\(.state) \\(.url)\"' 2>&1"),
+                            "description": String("Confirm the PR picked up the push"),
+                        },
+                    ),
+                    raw_output: Some(
+                        String("5373 feat: claude recorder OPEN https://github.com/macro-inc/macro/pull/5373"),
+                    ),
                 },
                 Permission {
                     tool_call: ToolUseId(

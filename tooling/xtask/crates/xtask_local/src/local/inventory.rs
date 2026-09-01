@@ -258,6 +258,21 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
         no_default_features: false,
     },
+    RustService {
+        compose_name: "mcp_service",
+        cargo_bin: "mcp_service",
+        package: "mcp_service",
+        // No host port and no proxy route: its one local client is the agent
+        // egress proxy, which dials it across the compose network as
+        // `mcp-service`. (Interactive MCP clients like claude.ai only exist
+        // against deployed environments.)
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
 ];
 
 /// The Rust services that participate in `mode` (opt-in services list no modes,

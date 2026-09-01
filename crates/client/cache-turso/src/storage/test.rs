@@ -23,6 +23,7 @@ fn record(value: &str) -> Record {
 
 fn queued(label: &str) -> NewQueuedMutation {
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation::new(
             MutationRequest {
                 query: format!("mutation {label} {{ update {{ id }} }}"),
@@ -36,6 +37,54 @@ fn queued(label: &str) -> NewQueuedMutation {
             optimistic_data_json: "{}".into(),
             normalized_updates: RecordUpdates::default(),
         },
+    }
+}
+
+fn pending_projection(key: &str, owner: &str, updated_at: i64) -> PendingOptimisticProjection {
+    let token = |value| Token::new(value).unwrap();
+    PendingOptimisticProjection {
+        state: OptimisticProjectionState::Complete(predicate_index::IndexDocument {
+            record_key: PredicateRecordKey::new(key).unwrap(),
+            profile: Profile::new(token("profile-v1")),
+            partition: token("thing"),
+            exact_facts: vec![predicate_index::ExactFact {
+                attribute: token("owner"),
+                value: predicate_index::ExactValue::utf8(owner).unwrap(),
+            }],
+            integer_facts: vec![predicate_index::IntegerFact {
+                attribute: token("updated-at"),
+                value: updated_at,
+            }],
+            sort_facts: vec![predicate_index::IntegerFact {
+                attribute: token("updated-at"),
+                value: updated_at,
+            }],
+        }),
+        uncertainty: OptimisticUncertainty::Attributes([token("file-type")].into()),
+    }
+}
+
+fn authoritative_projection(key: &str, owner: &str) -> predicate_index::IndexDocument {
+    let token = |value| Token::new(value).unwrap();
+    predicate_index::IndexDocument {
+        record_key: PredicateRecordKey::new(key).unwrap(),
+        profile: Profile::new(token("profile-v1")),
+        partition: token("thing"),
+        exact_facts: vec![
+            predicate_index::ExactFact {
+                attribute: token("owner"),
+                value: predicate_index::ExactValue::utf8(owner).unwrap(),
+            },
+            predicate_index::ExactFact {
+                attribute: token("server-relation"),
+                value: predicate_index::ExactValue::new([1]).unwrap(),
+            },
+        ],
+        integer_facts: vec![],
+        sort_facts: vec![predicate_index::IntegerFact {
+            attribute: token("updated-at"),
+            value: 1,
+        }],
     }
 }
 
@@ -264,7 +313,7 @@ fn queue_diagnostics_use_the_created_at_covering_index_at_scale() {
         let storage = TursoStorage::open_in_memory("queue-diagnostics-plan").unwrap();
         raw_execute(
             &storage,
-            "WITH RECURSIVE values_to_insert(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM values_to_insert WHERE value < 10000) INSERT INTO mutation_queue (query, variables_json, created_at_ms) SELECT 'mutation Scale { scale }', '{}', 10001 - value FROM values_to_insert",
+            "WITH RECURSIVE values_to_insert(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM values_to_insert WHERE value < 10000) INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) SELECT printf('00000000-0000-4000-8000-%012d', value), 'mutation Scale { scale }', '{}', 10001 - value FROM values_to_insert",
             Vec::new(),
         );
         let plan = driver::query(
@@ -365,6 +414,407 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
 }
 
 #[test]
+fn partial_uuid_index_rejects_two_current_rows_but_allows_superseded_history() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("partial-current-uuid-index").unwrap();
+        let uuid = uuid::Uuid::new_v4();
+        let mut first = queued("First");
+        first.uuid = uuid;
+        let first_id = storage.enqueue_mutation(first).await.unwrap();
+
+        assert!(
+            driver::execute(
+                &storage.connection(),
+                "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                vec![text(&uuid.to_string()), text("mutation Duplicate { x }"), text("{}"), Value::from_i64(2)],
+            )
+            .is_err()
+        );
+        raw_execute(
+            &storage,
+            "UPDATE mutation_queue SET superseded = 1 WHERE id = ?1",
+            vec![Value::from_i64(mutation_id_to_sql(first_id).unwrap())],
+        );
+        assert_eq!(
+            raw_execute(
+                &storage,
+                "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                vec![
+                    text(&uuid.to_string()),
+                    text("mutation Current { x }"),
+                    text("{}"),
+                    Value::from_i64(3)
+                ],
+            ),
+            1
+        );
+    });
+}
+
+#[test]
+fn enqueue_atomically_replaces_one_effective_shadow_per_key() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("shadow-enqueue").unwrap();
+        let key = PredicateRecordKey::new("Thing:1").unwrap();
+        let first = storage
+            .enqueue_mutation_with_shadow(
+                queued("First"),
+                vec![pending_projection("Thing:1", "user-1", 10)],
+            )
+            .await
+            .unwrap();
+        let loaded = storage
+            .load_optimistic_projections(std::slice::from_ref(&key))
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(loaded.owner, first);
+        assert!(
+            loaded
+                .uncertainty
+                .affects(&Token::new("file-type").unwrap())
+        );
+
+        let second = storage
+            .enqueue_mutation_with_shadow(
+                queued("Second"),
+                vec![pending_projection("Thing:1", "user-2", 20)],
+            )
+            .await
+            .unwrap();
+        let loaded = storage
+            .load_optimistic_projections(&[key])
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(loaded.owner, second);
+        assert!(second > first);
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_index_documents"),
+            1
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_exact_facts"),
+            1
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_integer_facts"),
+            1
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_sort_facts"),
+            1
+        );
+
+        storage.arm_fault(TestFault::After {
+            site: TestFaultSite::Enqueue,
+            index: 1,
+        });
+        assert!(
+            storage
+                .enqueue_mutation_with_shadow(
+                    queued("Failed"),
+                    vec![pending_projection("Thing:2", "user-3", 30)],
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_index_documents"),
+            1
+        );
+    });
+}
+
+#[test]
+fn incomplete_optimistic_projection_kinds_survive_persistence_and_reload() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("shadow-incomplete-kinds").unwrap();
+        let kinds = [
+            ProjectionIncompleteKind::Dirty,
+            ProjectionIncompleteKind::Missing,
+            ProjectionIncompleteKind::IncompatibleVersion,
+        ];
+        let keys = (1..=3)
+            .map(|index| PredicateRecordKey::new(format!("Thing:{index}")).unwrap())
+            .collect::<Vec<_>>();
+        let projections = keys
+            .iter()
+            .zip(kinds.iter().copied())
+            .map(|(record_key, kind)| PendingOptimisticProjection {
+                state: OptimisticProjectionState::Incomplete {
+                    record_key: record_key.clone(),
+                    profile: Profile::new(Token::new("profile-v1").unwrap()),
+                    partition: Token::new("thing").unwrap(),
+                    kind,
+                },
+                uncertainty: OptimisticUncertainty::default(),
+            })
+            .collect();
+        let owner = storage
+            .enqueue_mutation_with_shadow(queued("Incomplete"), projections)
+            .await
+            .unwrap();
+
+        let rows = driver::query(
+            &storage.connection(),
+            "SELECT state, incomplete_kind FROM optimistic_index_documents ORDER BY record_key",
+            Vec::new(),
+        )
+        .unwrap();
+        for (row, kind) in rows.iter().zip(kinds) {
+            assert_eq!(required_i64(row, 0).unwrap(), 2);
+            assert_eq!(required_i64(row, 1).unwrap(), projection_state_code(kind));
+        }
+
+        let loaded = storage.load_optimistic_projections(&keys).await.unwrap();
+        for ((projection, record_key), kind) in loaded.into_iter().zip(&keys).zip(kinds) {
+            let projection = projection.unwrap();
+            assert_eq!(projection.owner, owner);
+            assert!(matches!(
+                projection.state,
+                OptimisticProjectionState::Incomplete {
+                    record_key: loaded_key,
+                    kind: loaded_kind,
+                    ..
+                } if loaded_key == *record_key && loaded_kind == kind
+            ));
+        }
+    });
+}
+
+#[test]
+fn settlement_fences_queue_identity_and_atomically_replaces_affected_shadows() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("shadow-settlement").unwrap();
+        let key = PredicateRecordKey::new("Thing:1").unwrap();
+        let first = storage
+            .enqueue_mutation_with_shadow(
+                queued("First"),
+                vec![pending_projection("Thing:1", "user-1", 10)],
+            )
+            .await
+            .unwrap();
+        let second = storage
+            .enqueue_mutation_with_shadow(
+                queued("Second"),
+                vec![pending_projection("Thing:1", "user-2", 20)],
+            )
+            .await
+            .unwrap();
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        let claim = token("runner", claimed.lease_generation);
+        let replacement = storage
+            .load_optimistic_projections(std::slice::from_ref(&key))
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+
+        assert!(
+            !storage
+                .discard_mutation_with_shadow(
+                    first,
+                    claim.clone(),
+                    OptimisticShadowReconciliation {
+                        expected_queue: vec![first],
+                        affected_keys: vec![key.clone()],
+                        replacements: vec![],
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
+
+        let reconciliation = OptimisticShadowReconciliation {
+            expected_queue: vec![first, second],
+            affected_keys: vec![key.clone()],
+            replacements: vec![replacement.clone()],
+        };
+        storage.arm_fault(TestFault::After {
+            site: TestFaultSite::Discard,
+            index: 0,
+        });
+        assert!(
+            storage
+                .discard_mutation_with_shadow(first, claim.clone(), reconciliation.clone())
+                .await
+                .is_err()
+        );
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
+        assert_eq!(
+            storage
+                .load_optimistic_projections(std::slice::from_ref(&key))
+                .await
+                .unwrap()
+                .pop()
+                .flatten(),
+            Some(replacement)
+        );
+
+        assert!(
+            storage
+                .discard_mutation_with_shadow(first, claim, reconciliation)
+                .await
+                .unwrap()
+        );
+        assert_eq!(
+            storage
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .iter()
+                .map(|mutation| mutation.id)
+                .collect::<Vec<_>>(),
+            vec![second]
+        );
+        assert_eq!(
+            storage
+                .load_optimistic_projections(&[key])
+                .await
+                .unwrap()
+                .pop()
+                .flatten()
+                .unwrap()
+                .owner,
+            second
+        );
+    });
+}
+
+#[test]
+fn optimistic_shadow_hierarchy_enforces_unique_keys_owners_and_cascades() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("shadow-cascades").unwrap();
+        let first = storage.enqueue_mutation(queued("First")).await.unwrap();
+        let second = storage.enqueue_mutation(queued("Second")).await.unwrap();
+        let connection = storage.connection();
+
+        raw_execute(
+            &storage,
+            "INSERT INTO optimistic_index_documents (id, owner_mutation_id, record_key, profile, partition, state) VALUES (100, ?1, 'Thing:1', 'profile-v1', 'thing', 0)",
+            vec![Value::from_i64(mutation_id_to_sql(second).unwrap())],
+        );
+        for (sql, parameters) in [
+            (
+                "INSERT INTO optimistic_exact_facts (document_id, attribute, value) VALUES (100, 'owner', ?1)",
+                vec![Value::from_blob(b"user-1".to_vec())],
+            ),
+            (
+                "INSERT INTO optimistic_integer_facts (document_id, attribute, value) VALUES (100, 'updated-at', 10)",
+                vec![],
+            ),
+            (
+                "INSERT INTO optimistic_sort_facts (document_id, attribute, value) VALUES (100, 'updated-at', 10)",
+                vec![],
+            ),
+            (
+                "INSERT INTO optimistic_uncertain_attributes (document_id, attribute) VALUES (100, 'file-type')",
+                vec![],
+            ),
+        ] {
+            raw_execute(&storage, sql, parameters);
+        }
+        assert!(
+            driver::execute(
+                &connection,
+                "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state) VALUES (?1, 'Thing:1', 'profile-v1', 'thing', 0)",
+                vec![Value::from_i64(mutation_id_to_sql(second).unwrap())],
+            )
+            .is_err()
+        );
+        assert!(
+            driver::execute(
+                &connection,
+                "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state) VALUES (999, 'Thing:missing-owner', 'profile-v1', 'thing', 0)",
+                vec![],
+            )
+            .is_err()
+        );
+
+        raw_execute(
+            &storage,
+            "DELETE FROM mutation_queue WHERE id = ?1",
+            vec![Value::from_i64(mutation_id_to_sql(first).unwrap())],
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_index_documents"),
+            1
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_exact_facts"),
+            1
+        );
+
+        raw_execute(
+            &storage,
+            "DELETE FROM optimistic_index_documents WHERE id = 100",
+            vec![],
+        );
+        for table in [
+            "optimistic_exact_facts",
+            "optimistic_integer_facts",
+            "optimistic_sort_facts",
+            "optimistic_uncertain_attributes",
+        ] {
+            assert_eq!(
+                raw_scalar(&storage, &format!("SELECT COUNT(*) FROM {table}")),
+                0
+            );
+        }
+
+        raw_execute(
+            &storage,
+            "INSERT INTO optimistic_index_documents (id, owner_mutation_id, record_key, profile, partition, state) VALUES (101, ?1, 'Thing:2', 'profile-v1', 'thing', 1)",
+            vec![Value::from_i64(mutation_id_to_sql(second).unwrap())],
+        );
+        raw_execute(
+            &storage,
+            "DELETE FROM mutation_queue WHERE id = ?1",
+            vec![Value::from_i64(mutation_id_to_sql(second).unwrap())],
+        );
+        assert_eq!(
+            raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_index_documents"),
+            0
+        );
+    });
+}
+
+#[test]
+fn invalid_shadow_state_requests_reset_on_reopen() {
+    let database = TursoMemoryDatabase::new("invalid-shadow-state.db");
+    let mut storage = database.open("scope").unwrap();
+    let owner = block_on(storage.enqueue_mutation(queued("Owner"))).unwrap();
+    raw_execute(
+        &storage,
+        "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state) VALUES (?1, 'Thing:1', 'profile-v1', 'thing', 99)",
+        vec![Value::from_i64(mutation_id_to_sql(owner).unwrap())],
+    );
+    storage.try_close().unwrap();
+
+    let error = database.open("scope").unwrap_err();
+    assert_eq!(
+        error.physical_reset_reason(),
+        Some(PhysicalResetReason::Invariant)
+    );
+}
+
+#[test]
 fn quick_check_requires_exactly_one_ok_text_row() {
     assert!(validate_quick_check_rows(&[vec![text("ok")]]).is_ok());
     for rows in [
@@ -404,6 +854,10 @@ fn every_metadata_mismatch_and_missing_schema_requests_physical_reset() {
             (
                 "queue-diagnostics-index",
                 "DROP INDEX mutation_queue_created_at_ms_idx",
+            ),
+            (
+                "queue-current-uuid-index",
+                "DROP INDEX mutation_queue_current_uuid_idx",
             ),
             ("search-table", "DROP TABLE search_documents"),
             ("search-index", "DROP INDEX search_documents_browse_idx"),
@@ -461,6 +915,8 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
         )"#,
         r#"create table 'mutation_queue' (
             'id' integer /* AUTOINCREMENT UNIQUE CHECK COLLATE */ primary key autoincrement,
+            "uuid" text not null,
+            [superseded] integer default ((0)) not null,
             "query" text not null,
             [operation_name] text,
             `variables_json` text not null,
@@ -474,6 +930,7 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
             "created_at_ms" integer not null
         )"#,
         "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
+        "CREATE UNIQUE INDEX mutation_queue_current_uuid_idx ON mutation_queue(uuid) WHERE superseded = 0",
         r#"create table `optimistic_layers` (
             `mutation_id` integer primary key,
             [optimistic_data_json] text not null,
@@ -764,8 +1221,9 @@ fn corrupt_keys_blobs_queue_relationships_and_numerics_request_reset() {
         let storage = TursoStorage::open_in_memory("missing-layer").unwrap();
         raw_execute(
             &storage,
-            "INSERT INTO mutation_queue (query, variables_json, created_at_ms) VALUES (?1, ?2, ?3)",
+            "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
             vec![
+                text("00000000-0000-4000-8000-000000000001"),
                 text("mutation Missing { x }"),
                 text("{}"),
                 Value::from_i64(0),
@@ -846,14 +1304,36 @@ fn corrupt_keys_blobs_queue_relationships_and_numerics_request_reset() {
             );
         }
 
+        for (name, assignment) in [
+            ("invalid-uuid", "uuid = 'not-a-uuid'"),
+            ("invalid-superseded", "superseded = 2"),
+        ] {
+            let mut storage = TursoStorage::open_in_memory(name).unwrap();
+            let id = storage.enqueue_mutation(queued(name)).await.unwrap();
+            raw_execute(
+                &storage,
+                &format!("UPDATE mutation_queue SET {assignment} WHERE id = ?1"),
+                vec![Value::from_i64(mutation_id_to_sql(id).unwrap())],
+            );
+            assert_eq!(
+                storage
+                    .load_mutation_queue()
+                    .await
+                    .unwrap_err()
+                    .physical_reset_reason(),
+                Some(PhysicalResetReason::Invariant)
+            );
+        }
+
         for invalid_id in [0, -1] {
             let storage =
                 TursoStorage::open_in_memory(&format!("invalid-id-{invalid_id}")).unwrap();
             raw_execute(
                 &storage,
-                "INSERT INTO mutation_queue (id, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO mutation_queue (id, uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5)",
                 vec![
                     Value::from_i64(invalid_id),
+                    text("00000000-0000-4000-8000-000000000002"),
                     text("mutation Invalid { x }"),
                     text("{}"),
                     Value::from_i64(0),
@@ -1115,6 +1595,113 @@ fn operation_reset_classes_survive_successful_rollback_and_latching() {
             assert_eq!(
                 storage.try_close().unwrap(),
                 TursoStorageCloseOutcome::ResetRequired(reason)
+            );
+        }
+    });
+}
+
+#[test]
+fn record_and_projection_patch_roll_back_together_on_storage_fault() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("atomic-record-projection-patch").unwrap();
+        let projection_key = PredicateRecordKey::new("Thing:1").unwrap();
+        storage
+            .put_batch_with_projections(
+                vec![(key("Thing:1"), record("old"))],
+                vec![ProjectionMutation::Replace(authoritative_projection(
+                    "Thing:1", "owner-1",
+                ))],
+            )
+            .await
+            .unwrap();
+
+        storage.arm_fault(TestFault::After {
+            site: TestFaultSite::Put,
+            index: 0,
+        });
+        storage
+            .put_batch_with_projections(
+                vec![(key("Thing:1"), record("new"))],
+                vec![ProjectionMutation::Patch {
+                    record_key: projection_key.clone(),
+                    profile: Profile::new(Token::new("profile-v1").unwrap()),
+                    partition: Token::new("thing").unwrap(),
+                    exact: vec![predicate_index::ExactAttributePatch {
+                        attribute: Token::new("owner").unwrap(),
+                        values: vec![predicate_index::ExactValue::utf8("owner-2").unwrap()],
+                    }],
+                    integers: vec![],
+                    sorts: vec![],
+                }],
+            )
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            storage.get_batch(&[key("Thing:1")]).await.unwrap(),
+            vec![Some(record("old"))]
+        );
+        let states = storage
+            .load_projection_states(&[projection_key])
+            .await
+            .unwrap();
+        let [Some(ProjectionState::Complete(projection))] = states.as_slice() else {
+            panic!("old complete projection survives the failed transaction");
+        };
+        assert!(projection.exact_facts.iter().any(|fact| {
+            fact.attribute == Token::new("owner").unwrap()
+                && fact.value == predicate_index::ExactValue::utf8("owner-1").unwrap()
+        }));
+        assert!(projection.exact_facts.iter().any(|fact| {
+            fact.attribute == Token::new("server-relation").unwrap()
+                && fact.value == predicate_index::ExactValue::new([1]).unwrap()
+        }));
+    });
+}
+
+#[test]
+fn every_uuid_upsert_fault_rolls_back_queue_layer_and_shadow_changes() {
+    block_on(async {
+        for fault_index in 0..=3 {
+            let mut storage =
+                TursoStorage::open_in_memory(&format!("uuid-upsert-fault-{fault_index}")).unwrap();
+            let uuid = uuid::Uuid::new_v4();
+            let mut first = queued("First");
+            first.uuid = uuid;
+            storage
+                .enqueue_mutation_with_shadow(
+                    first,
+                    vec![pending_projection("Thing:1", "user-1", 10)],
+                )
+                .await
+                .unwrap();
+            let queue_before = storage.load_mutation_queue().await.unwrap();
+            let shadow_before = storage
+                .load_optimistic_projections(&[PredicateRecordKey::new("Thing:1").unwrap()])
+                .await
+                .unwrap();
+
+            let mut replacement = queued("Replacement");
+            replacement.uuid = uuid;
+            storage.arm_fault(TestFault::After {
+                site: TestFaultSite::Enqueue,
+                index: fault_index,
+            });
+            storage
+                .enqueue_mutation_with_shadow(
+                    replacement,
+                    vec![pending_projection("Thing:1", "user-2", 20)],
+                )
+                .await
+                .unwrap_err();
+
+            assert_eq!(storage.load_mutation_queue().await.unwrap(), queue_before);
+            assert_eq!(
+                storage
+                    .load_optimistic_projections(&[PredicateRecordKey::new("Thing:1").unwrap()])
+                    .await
+                    .unwrap(),
+                shadow_before
             );
         }
     });
@@ -1524,14 +2111,32 @@ fn predicate_query_plan_uses_fact_indexes_and_never_scans_record_blobs() {
     assert!(
         details
             .iter()
-            .any(|detail| detail.contains("exact_facts_lookup_idx"))
+            .any(|detail| detail.contains("exact_facts_lookup_idx")),
+        "{details:#?}"
     );
     assert!(
         details
             .iter()
-            .any(|detail| detail.contains("integer_facts_lookup_idx"))
+            .any(|detail| detail.contains("integer_facts_lookup_idx")),
+        "{details:#?}"
     );
+    for index in [
+        "optimistic_exact_facts_lookup_idx",
+        "optimistic_integer_facts_lookup_idx",
+        "sort_facts_lookup_idx",
+        "optimistic_sort_facts_lookup_idx",
+    ] {
+        assert!(
+            details.iter().any(|detail| detail.contains(index)),
+            "missing {index}: {details:#?}"
+        );
+    }
     assert!(details.iter().all(|detail| !detail.contains("records")));
+    assert!(
+        details
+            .iter()
+            .all(|detail| !detail.contains("mutation_queue"))
+    );
 }
 
 #[test]

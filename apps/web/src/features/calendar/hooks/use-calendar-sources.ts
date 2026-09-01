@@ -21,6 +21,8 @@ export function useCalendarSources() {
       id: calendar.id,
       name: calendarDisplayLabel(calendar, spansInboxes),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
+      emailAddress: calendar.emailAddress,
+      isPrimary: calendar.isPrimary,
     }));
   });
   const sourceById = createMemo(

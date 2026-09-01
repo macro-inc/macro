@@ -8,6 +8,7 @@ import type { ConferenceChange } from '@service-email/generated/schemas/conferen
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventType } from '@service-storage/generated/schemas/eventType';
 import {
   addDays,
   addHours,
@@ -73,6 +74,8 @@ export interface EventEditorInitialValues {
   conference: EventEditorConferenceChoice;
   /** Per-user reminder configuration; absent means the calendar default. */
   reminders?: EventReminders;
+  /** Provider event type of the edited event; absent for new events. */
+  eventType?: EventType;
 }
 
 /** Calendar option displayed by the event editor. */
@@ -134,6 +137,7 @@ export function defaultEditorInitialValues(
     description: '',
     conference: 'none',
     reminders: undefined,
+    eventType: undefined,
   };
 }
 
@@ -169,14 +173,23 @@ function initialConferenceChoice(
     : 'existing';
 }
 
+/**
+ * Guest emails an existing event seeds into the editor: every attendee except
+ * the viewer when they are a mere guest. The organizer is kept even when it is
+ * the viewer, so a replacement attendee list submitted by the organizer never
+ * drops them.
+ */
+export function eventGuestEmails(event: CalendarEvent): string[] {
+  return event.attendees
+    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
+    .map((attendee) => attendee.email);
+}
+
 /** Converts an existing event into values for the shared editor. */
 export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
-  const guests = event.attendees
-    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
-    .map((attendee) => attendee.email)
-    .join(', ');
+  const guests = eventGuestEmails(event).join(', ');
 
   if (event.allDay) {
     const start = isDateOnly(event.start)
@@ -197,6 +210,7 @@ export function calendarEventToEditorInitialValues(
       description: event.description ?? '',
       conference: initialConferenceChoice(event),
       reminders: event.reminders,
+      eventType: event.eventType,
     };
   }
 
@@ -212,6 +226,7 @@ export function calendarEventToEditorInitialValues(
     description: event.description ?? '',
     conference: initialConferenceChoice(event),
     reminders: event.reminders,
+    eventType: event.eventType,
   };
 }
 

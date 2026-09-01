@@ -70,24 +70,23 @@ function textNodeToFormats(node: TextNode): string[] {
 
 const colors: Record<DebugNodeType, string> = {
   root: 'text-accent bg-accent/15 border border-accent/30',
-  text: 'text-accent-30 bg-accent-30/15 border border-accent-30/30',
-  heading1: 'text-accent-60 bg-accent-60/15 border border-accent-60/30',
-  heading2: 'text-accent-90 bg-accent-90/15 border border-accent-90/30',
-  heading3: 'text-accent-120 bg-accent-120/15 border border-accent-120/30',
-  paragraph: 'text-accent-150 bg-accent-150/15 border border-accent-150/30',
-  'list-bullet': 'text-accent-180 bg-accent-180/15 border border-accent-180/30',
-  'list-check': 'text-accent-210 bg-accent-210/15 border border-accent-210/30',
-  'list-number': 'text-accent-240 bg-accent-240/15 border border-accent-240/30',
-  code: 'text-accent-270 bg-accent-270/15 border border-accent-270/30',
-  'custom-code': 'text-accent-300 bg-accent-300/15 border border-accent-300/30',
-  quote: 'text-accent-330 bg-accent-330/15 border border-accent-330/30',
-  listitem: 'text-accent-30 bg-accent-30/15 border border-accent-30/30',
-  link: 'text-accent-90 bg-accent-90/15 border border-accent-90/30',
-  autolink: 'text-accent-120 bg-accent-120/15 border border-accent-120/30',
-  image: 'text-accent-150 bg-accent-150/15 border border-accent-150/30',
-  mark: 'text-accent-270 bg-accent-270/15 border border-accent-270/30',
-  'comment-mark':
-    'text-accent-300 bg-accent-300/15 border border-accent-300/30',
+  text: 'text-red bg-red/15 border border-red/30',
+  heading1: 'text-orange bg-orange/15 border border-orange/30',
+  heading2: 'text-yellow bg-yellow/15 border border-yellow/30',
+  heading3: 'text-lime bg-lime/15 border border-lime/30',
+  paragraph: 'text-green bg-green/15 border border-green/30',
+  'list-bullet': 'text-teal bg-teal/15 border border-teal/30',
+  'list-check': 'text-cyan bg-cyan/15 border border-cyan/30',
+  'list-number': 'text-blue bg-blue/15 border border-blue/30',
+  code: 'text-violet bg-violet/15 border border-violet/30',
+  'custom-code': 'text-purple bg-purple/15 border border-purple/30',
+  quote: 'text-pink bg-pink/15 border border-pink/30',
+  listitem: 'text-red bg-red/15 border border-red/30',
+  link: 'text-yellow bg-yellow/15 border border-yellow/30',
+  autolink: 'text-lime bg-lime/15 border border-lime/30',
+  image: 'text-green bg-green/15 border border-green/30',
+  mark: 'text-violet bg-violet/15 border border-violet/30',
+  'comment-mark': 'text-purple bg-purple/15 border border-purple/30',
 };
 
 const selectionColors = {
@@ -346,14 +345,14 @@ export function LexicalStateDebugger(props: {
                         <span class="px-1 text-ink-extra-muted">{node.id}</span>
                       </Show>
                       <Show when={node.peerId}>
-                        <span class="bg-accent-30/15 border border-accent-30/30 text-accent-30 mx-0.5">
+                        <span class="bg-red/15 border border-red/30 text-red mx-0.5">
                           Peer ID: {node.peerId}
                         </span>
                       </Show>
                       <Show
                         when={node.sharedPeers && node.sharedPeers.length > 0}
                       >
-                        <span class="bg-accent-30/15 border border-accent-30/30 text-accent-30 mx-0.5">
+                        <span class="bg-red/15 border border-red/30 text-red mx-0.5">
                           <For each={node.sharedPeers}>
                             {(id) => <span>{id}</span>}
                           </For>
@@ -366,7 +365,7 @@ export function LexicalStateDebugger(props: {
                       </span>
                       <For each={node.styles}>
                         {(style) => (
-                          <span class="bg-accent-60/15 border border-accent-60/30 text-accent-60 mx-0.5">
+                          <span class="bg-orange/15 border border-orange/30 text-orange mx-0.5">
                             {style}
                           </span>
                         )}
@@ -383,7 +382,7 @@ export function LexicalStateDebugger(props: {
                           node.type === 'mark' || node.type === 'comment-mark'
                         }
                       >
-                        <span class="bg-accent-90/15 border border-accent-90/30 text-accent-90 mx-0.5">
+                        <span class="bg-yellow/15 border border-yellow/30 text-yellow mx-0.5">
                           {markNodeKeysToIDs.get(node.key)?.join(', ') ?? ''}
                         </span>
                         <Show when={node.type === 'comment-mark'}>
@@ -397,12 +396,10 @@ export function LexicalStateDebugger(props: {
                               <Show when={commentNode()}>
                                 {(commentNode) => (
                                   <span
-                                    class="bg-accent-90/15 border border-accent-90/30 text-accent-90 mx-0.5"
+                                    class="bg-yellow/15 border border-yellow/30 text-yellow mx-0.5"
                                     classList={{
-                                      'bg-accent-30/30':
-                                        commentNode().getIsDraft(),
-                                      'bg-accent-30/5':
-                                        !commentNode().getIsDraft(),
+                                      'bg-red/30': commentNode().getIsDraft(),
+                                      'bg-red/5': !commentNode().getIsDraft(),
                                     }}
                                   >
                                     {commentNode().getThreadId() ?? 'NO # ID'}

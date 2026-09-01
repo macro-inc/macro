@@ -23,7 +23,7 @@ use super::{
 };
 
 fn machine() -> SessionMachine<u32> {
-    SessionMachine::new(AgentSessionId::TEST_A, "/workspace".to_owned())
+    SessionMachine::new(AgentSessionId::TEST_A, "/workspace".to_owned(), Vec::new())
 }
 
 fn command(text: &str, token: u32) -> Input<u32> {
@@ -238,6 +238,7 @@ fn reconnect_uses_session_resume_when_the_agent_supports_it() {
         AgentSessionId::TEST_A,
         "acp-42".into(),
         "/workspace".to_owned(),
+        Vec::new(),
     );
     machine.handle(command("continue", 1));
     machine.handle(acp_ready());
@@ -274,6 +275,7 @@ fn reconnect_falls_back_to_session_load() {
         AgentSessionId::TEST_A,
         "acp-42".into(),
         "/workspace".to_owned(),
+        Vec::new(),
     );
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION)
@@ -290,6 +292,7 @@ fn reconnect_stops_when_the_agent_cannot_restore_sessions() {
         AgentSessionId::TEST_A,
         "acp-42".into(),
         "/workspace".to_owned(),
+        Vec::new(),
     );
     machine.handle(command("cannot continue", 1));
     machine.handle(acp_ready());
@@ -708,7 +711,11 @@ fn sent_cwds(effects: &[Effect<u32>], method: &str) -> Vec<String> {
 
 #[test]
 fn session_new_carries_the_sessions_workspace() {
-    let mut machine = SessionMachine::new(AgentSessionId::TEST_A, "/home/operator/code".to_owned());
+    let mut machine = SessionMachine::new(
+        AgentSessionId::TEST_A,
+        "/home/operator/code".to_owned(),
+        Vec::new(),
+    );
     machine.handle(acp_ready());
     let effects = machine.handle(initialized());
 
@@ -722,6 +729,7 @@ fn resume_carries_the_sessions_workspace() {
         AgentSessionId::TEST_A,
         "acp-42".into(),
         "/home/operator/code".to_owned(),
+        Vec::new(),
     );
     machine.handle(acp_ready());
     let effects = machine.handle(initialized_with(
@@ -766,6 +774,7 @@ fn a_ready_connection_still_picks_resume_for_a_session_that_has_one() {
         AgentSessionId::TEST_A,
         "acp-42".into(),
         "/workspace".to_owned(),
+        Vec::new(),
     );
 
     let opening = machine.handle(Input::Ready {
@@ -784,6 +793,7 @@ fn a_ready_connection_that_cannot_restore_stops_the_session() {
         AgentSessionId::TEST_A,
         "acp-42".into(),
         "/workspace".to_owned(),
+        Vec::new(),
     );
 
     let effects = machine.handle(Input::Ready {

@@ -1,0 +1,74 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                event.owner_id,\n                event.title,\n                event.time_zone AS \"event_time_zone?\",\n                occurrence.starts_at,\n                occurrence.ends_at,\n                occurrence.start_date,\n                occurrence.end_date,\n                canonical_source.calendar_time_zone AS \"calendar_time_zone?\",\n                CASE WHEN EXISTS (\n                        SELECT 1\n                        FROM calendar_event_overrides override\n                        WHERE override.event_id = event.id\n                          AND override.recurrence_id = occurrence.recurrence_id\n                          AND override.attendees_overridden\n                     )\n                     THEN EXISTS (\n                        SELECT 1\n                        FROM calendar_event_override_attendees attendee\n                        JOIN email_links owner_inbox\n                          ON owner_inbox.macro_id = event.owner_id\n                         AND lower(owner_inbox.email_address::text) = attendee.email\n                        WHERE attendee.event_id = event.id\n                          AND attendee.recurrence_id = occurrence.recurrence_id\n                          AND attendee.response_status = 'declined'\n                     )\n                     ELSE EXISTS (\n                        SELECT 1\n                        FROM calendar_event_attendees attendee\n                        JOIN email_links owner_inbox\n                          ON owner_inbox.macro_id = event.owner_id\n                         AND lower(owner_inbox.email_address::text) = attendee.email\n                        WHERE attendee.event_id = event.id\n                          AND attendee.response_status = 'declined'\n                     )\n                END AS \"declined!\"\n            FROM calendar_event_reminder_firings firing\n            JOIN calendar_events event ON event.id = firing.event_id\n            JOIN calendar_event_occurrences occurrence\n                ON occurrence.event_id = firing.event_id\n               AND occurrence.occurrence_key = firing.occurrence_key\n            JOIN LATERAL (\n                SELECT calendar.time_zone AS calendar_time_zone\n                FROM calendar_event_sources source\n                JOIN calendars calendar ON calendar.id = source.calendar_id\n                JOIN calendar_accounts account ON account.id = source.account_id\n                WHERE source.event_id = event.id\n                  AND NOT calendar.is_deleted\n                  AND account.sync_status <> 'disabled'\n                ORDER BY\n                    source.source_sequence DESC,\n                    source.source_updated_at DESC,\n                    source.last_seen_at DESC,\n                    source.id DESC\n                LIMIT 1\n            ) canonical_source ON true\n            WHERE firing.event_id = $1\n              AND firing.occurrence_key = $2\n              AND firing.minutes_before = $3\n              AND firing.fire_at = $4\n              AND firing.fire_at > $5\n              AND event.status <> 'cancelled'\n              AND NOT occurrence.is_cancelled\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "event_time_zone?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "ends_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "start_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "end_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 7,
+        "name": "calendar_time_zone?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "declined!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "dd4f3ff26fd5c8c3f30f135559175d052a10ea7ef88c811c0dec8508bfc5d09a"
+}

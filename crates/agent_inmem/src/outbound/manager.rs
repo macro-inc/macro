@@ -32,6 +32,10 @@ pub struct SessionFacts {
     pub owner: MacroUserIdStr<'static>,
     /// Model id stamped on the session row.
     pub model: String,
+    /// Instructions stamped on the session row, folded into every turn's
+    /// system prompt. Immutable for the session's life, so a reattach that
+    /// finds a live conversation leaves what is stored alone.
+    pub instructions: Option<String>,
     /// The ACP session id the row carries, when one was ever negotiated. A
     /// cold attach hydrates its rebuilt conversation under this id so the
     /// harness's `session/resume` keeps it.
@@ -92,6 +96,7 @@ impl InMemAgentManager {
             self.store.entry(facts.id).or_insert_with(|| SessionState {
                 acp_session_id: facts.acp_session_id.clone(),
                 model: facts.model.clone(),
+                instructions: facts.instructions.clone(),
                 history,
             });
         }

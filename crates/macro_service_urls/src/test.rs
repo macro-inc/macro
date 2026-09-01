@@ -193,8 +193,8 @@ crate::service_url! {
         #[derive(Debug, Clone)]
         pub TestDocumentStorageServiceUrl {
             local: "http://localhost:8086",
-            dev: "https://cloud-storage-dev.macro.com",
-            prod: "https://cloud-storage.macro.com",
+            dev: "https://dev-gateway.macro.com/dss",
+            prod: "https://gateway.macro.com/dss",
         },
         #[derive(Debug, Clone)]
         pub TestEmailServiceUrl {
@@ -220,7 +220,7 @@ fn grouped_macro_resolves_all_service_urls() {
 
     assert_eq!(
         service_urls.test_document_storage_service_url.as_ref(),
-        "https://cloud-storage-dev.macro.com",
+        "https://dev-gateway.macro.com/dss",
     );
     assert_eq!(
         service_urls.test_email_service_url.as_ref(),
@@ -234,7 +234,7 @@ fn grouped_defaults_do_not_check_overrides() {
 
     assert_eq!(
         service_urls.test_document_storage_service_url.as_ref(),
-        "https://cloud-storage.macro.com",
+        "https://gateway.macro.com/dss",
     );
     assert_eq!(
         service_urls.test_email_service_url.as_ref(),
@@ -330,7 +330,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
-        "https://cloud-storage-dev.macro.com",
+        "https://dev-gateway.macro.com/dss",
     );
     assert_eq!(
         service_urls.websocket_service_url.as_ref(),
@@ -397,7 +397,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
-        "https://cloud-storage.macro.com",
+        "https://gateway.macro.com/dss",
     );
     assert_eq!(
         service_urls.websocket_service_url.as_ref(),

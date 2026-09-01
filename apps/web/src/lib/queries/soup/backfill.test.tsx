@@ -4,21 +4,45 @@ import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   loadSoupBackfillCheckpoint,
+  runSoupBackfill,
   runSoupBackfills,
   type SoupBackfillParams,
   useSoupBackfills,
 } from './backfill';
 
+const featureFlagMocks = vi.hoisted(() => ({
+  useFeatureFlag: vi.fn(),
+}));
+
 const graphqlMocks = vi.hoisted(() => ({
+  getGraphqlSoupCacheHost: vi.fn(),
   hydrateGraphqlSoup: vi.fn(),
+}));
+
+const leaderMocks = vi.hoisted(() => ({
+  createTabLeaderSignal: vi.fn(),
+}));
+
+const telemetryMocks = vi.hoisted(() => ({
+  anonymousSpan: vi.fn(),
+}));
+
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: featureFlagMocks.useFeatureFlag,
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_BACKFILL: true,
+  ENABLE_GRAPHQL_SOUP_FLAG: 'enable-graphql-soup',
+  ENABLE_GRAPHQL_SOUP_OVERRIDE: undefined,
 }));
 
 vi.mock('@core/cross-tab/tab-leader', () => ({
-  createTabLeaderSignal: () => () => true,
+  createTabLeaderSignal: leaderMocks.createTabLeaderSignal,
+}));
+
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: { anonymousSpan: telemetryMocks.anonymousSpan },
 }));
 
 vi.mock('@service-storage/graphql/generated/graphql', () => ({
@@ -26,7 +50,7 @@ vi.mock('@service-storage/graphql/generated/graphql', () => ({
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupCacheHost: () => ({}),
+  getGraphqlSoupCacheHost: graphqlMocks.getGraphqlSoupCacheHost,
   hydrateGraphqlSoup: graphqlMocks.hydrateGraphqlSoup,
 }));
 
@@ -51,11 +75,21 @@ function BackfillRunner(props: { userId: string }) {
 describe('runSoupBackfills', () => {
   beforeEach(() => {
     localStorage.clear();
+    featureFlagMocks.useFeatureFlag
+      .mockReset()
+      .mockReturnValue(() => ({ enabled: true, payload: undefined }));
+    graphqlMocks.getGraphqlSoupCacheHost.mockReset().mockReturnValue({});
     graphqlMocks.hydrateGraphqlSoup.mockReset();
+    leaderMocks.createTabLeaderSignal.mockReset().mockReturnValue(() => true);
+    telemetryMocks.anonymousSpan.mockReset().mockImplementation(() => ({
+      setAttr: vi.fn(),
+      end: vi.fn(),
+    }));
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('runs each lane to completion before starting the next lane', async () => {
@@ -97,8 +131,33 @@ describe('runSoupBackfills', () => {
     );
   });
 
+  it('does not checkpoint a page whose required v2 capsule ingestion fails', async () => {
+    const projectionFailure = new Error(
+      'SoupBackfill page contains an incomplete required cache projection'
+    );
+    const fetchPage = vi.fn(async () => {
+      throw projectionFailure;
+    });
+
+    await expect(
+      Effect.runPromise(
+        runSoupBackfill('user-1', lane('projection-v2', fetchPage))
+      )
+    ).rejects.toMatchObject({ cause: projectionFailure });
+
+    expect(fetchPage).toHaveBeenCalledOnce();
+    expect(loadSoupBackfillCheckpoint('user-1', 'projection-v2')).toMatchObject(
+      {
+        nextCursor: null,
+        pagesFetched: 0,
+        completed: false,
+      }
+    );
+  });
+
   it('continues to later lanes after a lane exhausts its retries', async () => {
     vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const failedFetch = vi.fn(async () => {
       throw new Error('failed lane');
     });
@@ -122,6 +181,54 @@ describe('runSoupBackfills', () => {
     expect(loadSoupBackfillCheckpoint('user-1', 'later-lane').completed).toBe(
       true
     );
+    expect(warn).toHaveBeenCalledWith(
+      '[graphql-soup-backfill] lane failed after retries',
+      expect.objectContaining({ checkpointId: 'failed-lane' })
+    );
+    const telemetryAttributes = telemetryMocks.anonymousSpan.mock.results
+      .flatMap((result) => result.value.setAttr.mock.calls)
+      .filter(([name]) => name === 'cache.backfill_state');
+    expect(telemetryAttributes).toContainEqual([
+      'cache.backfill_state',
+      'failed',
+    ]);
+  });
+
+  it('starts after the GraphQL flag becomes enabled', async () => {
+    const [enabled, setEnabled] = createSignal(false);
+    featureFlagMocks.useFeatureFlag.mockReturnValue(() => ({
+      enabled: enabled(),
+      payload: undefined,
+    }));
+    graphqlMocks.hydrateGraphqlSoup.mockResolvedValue({ nextCursor: null });
+
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    expect(graphqlMocks.hydrateGraphqlSoup).not.toHaveBeenCalled();
+
+    setEnabled(true);
+
+    await vi.waitFor(() =>
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled()
+    );
+    rendered.unmount();
+  });
+
+  it('starts when only the cache host becomes available', async () => {
+    vi.useFakeTimers();
+    let cacheHost: object | undefined;
+    graphqlMocks.getGraphqlSoupCacheHost.mockImplementation(() => cacheHost);
+    graphqlMocks.hydrateGraphqlSoup.mockResolvedValue({ nextCursor: null });
+
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    expect(graphqlMocks.getGraphqlSoupCacheHost).toHaveBeenCalledOnce();
+    expect(graphqlMocks.hydrateGraphqlSoup).not.toHaveBeenCalled();
+
+    cacheHost = {};
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(graphqlMocks.getGraphqlSoupCacheHost).toHaveBeenCalledTimes(2);
+    expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled();
+    rendered.unmount();
   });
 
   it('cancels the current backfill and starts a new one when the user changes', async () => {

@@ -29,6 +29,8 @@ pub struct LocalEnv {
     /// `http://localhost:{FRONTEND_PORT}`, so this must track the serving
     /// mode or every OAuth signup dead-ends on an unused port.
     frontend_port: u16,
+    /// Browser-facing route to document cognition's MCP OAuth callback.
+    mcp_public_url: String,
     infra: InfraEnv,
     storage: StorageEnv,
     queues: QueueEnv,
@@ -42,7 +44,17 @@ pub struct LocalEnv {
 impl LocalEnv {
     /// Build the local env for `instance` in `Local` mode (dev sources its env
     /// from Doppler, not here).
-    pub fn for_instance(mode: Mode, instance: &Instance, static_frontend: bool) -> Self {
+    ///
+    /// `egress_public_url` is the run's Cursor egress tunnel, when one opened:
+    /// it replaces the in-network egress address so the MCP servers the
+    /// harness hands a Cursor cloud agent are reachable from outside the
+    /// compose network. `None` (no tunnel) keeps the in-network address.
+    pub fn for_instance(
+        mode: Mode,
+        instance: &Instance,
+        static_frontend: bool,
+        egress_public_url: Option<&str>,
+    ) -> Self {
         let name = instance.name();
         LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
@@ -53,11 +65,12 @@ impl LocalEnv {
             } else {
                 instance.port(Port::Frontend)
             },
+            mcp_public_url: format!("http://localhost:{}/cognition", instance.port(Port::Proxy)),
             infra: InfraEnv::local(),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
-            agent_harness: AgentHarnessEnv::local(instance.project_name()),
+            agent_harness: AgentHarnessEnv::local(instance.project_name(), egress_public_url),
             service_auth: ServiceAuthEnv::for_instance(name),
             fusionauth: FusionAuthEnv::for_instance(instance),
             boot_stubs: BootStubEnv,
@@ -71,6 +84,15 @@ impl LocalEnv {
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
+        env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
+        // Pipedream's hosted Connect UI refuses to be opened from an origin
+        // outside this list, and document_cognition's own local default only
+        // names port 3000 - a named instance's frontend lives on a derived
+        // port, so connecting an app there would fail at the consent popup.
+        env.insert(
+            "PIPEDREAM_ALLOWED_ORIGINS".into(),
+            format!("http://localhost:{}", self.frontend_port),
+        );
         // Calendar ingestion/sync ships dark (both flags default off in
         // deployed envs); local stacks keep it on for development.
         env.insert("CALENDAR_SYNC_ENABLED".into(), "true".into());
@@ -270,8 +292,8 @@ impl MailEnv {
 /// Daytona account is involved. `DAYTONA_API_KEY` is seeded empty so Doppler
 /// cannot bill Daytona, while still leaving the key in the map for
 /// `DAYTONA_API_KEY=... DEV_DANGEROUS_LOCAL_CONTAINERS=false just run_local`.
-/// `GITHUB_TOKEN` is left to Doppler / process env so a local sandbox can
-/// still clone.
+/// The sandbox holds no GitHub credential at all: it clones through the
+/// egress proxy.
 ///
 /// Two managed bots: `@coder` (`HARNESS_BOT_ID`) gets a sandbox from the
 /// local Docker provider, and `@macro` runs in-process on the in-memory ACP
@@ -284,12 +306,21 @@ struct AgentHarnessEnv {
     /// `crates/agent_harness/container` to this tag (BuildKit cache is the
     /// freshness check).
     image: &'static str,
-    /// Network sandboxes join, so this service can dial their sidecars.
+    /// Network sandboxes join, so this service can dial their sidecars and a
+    /// sandbox can dial its egress proxy. Both are containers, so neither can
+    /// use the host's loopback to reach the other.
     network: String,
+    /// The egress proxy as its clients dial it: the run's Cursor egress
+    /// tunnel when one opened, otherwise the in-network address.
+    egress_base_url: String,
+    /// Macro's own MCP server as the egress proxy dials it. In-network and
+    /// cleartext, which the proxy permits only under `ENVIRONMENT=local`:
+    /// this hop never leaves the compose bridge.
+    macro_mcp_url: &'static str,
 }
 
 impl AgentHarnessEnv {
-    fn local(project_name: &str) -> Self {
+    fn local(project_name: &str, egress_public_url: Option<&str>) -> Self {
         AgentHarnessEnv {
             // bot_id::MACRO_CODER_BOT_ID, a first-party bot with no row.
             bot_id: "00000000-0000-0000-0000-00000000a9e7",
@@ -297,6 +328,19 @@ impl AgentHarnessEnv {
             image: super::sandbox_image::DEFAULT_LOCAL_TAG,
             // Compose names a network `<project>_<network>`.
             network: format!("{project_name}_services"),
+            // With a tunnel, every client - the Cursor cloud, but also local
+            // sandboxes - dials the public hostname; one URL both renderings
+            // agree on beats a second config knob, and the extra hop only
+            // exists on a dev stack. Without one, the service's hyphenated
+            // network alias, not its compose name: a sandbox's git
+            // percent-encodes `_` in a host before matching
+            // `credential.<url>.helper`, so an underscore here means the
+            // scoped credential helper never fires and the clone prompts for
+            // a password it has no terminal to read.
+            egress_base_url: egress_public_url
+                .unwrap_or("http://agent-harness-service:8102")
+                .to_owned(),
+            macro_mcp_url: "http://mcp-service:8080/mcp",
         }
     }
 
@@ -307,6 +351,8 @@ impl AgentHarnessEnv {
         env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());
         env.insert("LOCAL_CONTAINER_IMAGE".into(), self.image.into());
         env.insert("LOCAL_CONTAINER_NETWORK".into(), self.network.clone());
+        env.insert("EGRESS_BASE_URL".into(), self.egress_base_url.clone());
+        env.insert("MACRO_MCP_URL".into(), self.macro_mcp_url.into());
     }
 }
 
@@ -491,15 +537,7 @@ impl BootStubEnv {
             "GITHUB_CLIENT_SECRET".into(),
             "local-github-client-secret".into(),
         );
-        env.insert(
-            "GITHUB_IDP_ID".into(),
-            "99999999-9999-4999-8999-999999999999".into(),
-        );
-        // Clone token for local sandboxes. Empty here so `--no-doppler` still
-        // has the key for `GITHUB_TOKEN=... just run_local`; Doppler overlays
-        // a real token when present. Not in `to_env`, so a local stack does
-        // not wipe Doppler's value the way it wipes `DAYTONA_API_KEY`.
-        env.insert("GITHUB_TOKEN".into(), String::new());
+        env.insert("GITHUB_IDP_ID".into(), identity::GITHUB_IDP_ID.into());
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(

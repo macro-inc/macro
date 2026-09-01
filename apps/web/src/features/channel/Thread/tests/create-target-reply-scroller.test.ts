@@ -76,8 +76,9 @@ describe('createTargetReplyScroller', () => {
     document.body.append(scrollElement);
 
     let targetRect = rect(1000, 1050);
-    vi.spyOn(scrollElement, 'getBoundingClientRect').mockReturnValue(
-      rect(0, 600)
+    let scrollRect = rect(0, 600);
+    vi.spyOn(scrollElement, 'getBoundingClientRect').mockImplementation(
+      () => scrollRect
     );
     vi.spyOn(target, 'getBoundingClientRect').mockImplementation(
       () => targetRect
@@ -96,7 +97,19 @@ describe('createTargetReplyScroller', () => {
       setTargetRect: (next: DOMRect) => {
         targetRect = next;
       },
+      setScrollRect: (next: DOMRect) => {
+        scrollRect = next;
+      },
     };
+  };
+
+  /** A touch event carrying one contact point, as the scroll surface sees it. */
+  const touchEvent = (type: string, x: number, y: number) => {
+    const event = new Event(type, { bubbles: true });
+    Object.defineProperty(event, 'touches', {
+      value: [{ clientX: x, clientY: y }],
+    });
+    return event;
   };
 
   it('waits for the expanded thread row measurement before positioning', async () => {
@@ -219,6 +232,60 @@ describe('createTargetReplyScroller', () => {
 
     expect(fixture.scrollIntoView).not.toHaveBeenCalled();
     expect(onSettled).not.toHaveBeenCalled();
+    expect(ResizeObserverMock.instances[0].disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('waits for a measured scroll surface before releasing the target', async () => {
+    const fixture = createFixture();
+    // The app opened into a squished viewport: nothing has a box yet, so every
+    // "is the target on screen?" comparison passes against 0x0 rects.
+    fixture.setScrollRect(rect(0, 0));
+    fixture.setTargetRect(rect(0, 0));
+    fixture.target.scrollIntoView = vi.fn();
+
+    const onSettled = vi.fn();
+    const scroller = createTargetReplyScroller({
+      getTarget: () => fixture.target,
+    });
+
+    expect(scroller.scrollToIndex(0, onSettled)).toBe(true);
+    ResizeObserverMock.instances[0].trigger();
+    await Promise.resolve();
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    vi.advanceTimersByTime(2000);
+    expect(onSettled).not.toHaveBeenCalled();
+
+    // Layout settles and the target lands.
+    fixture.setScrollRect(rect(0, 600));
+    fixture.setTargetRect(rect(275, 325));
+    vi.advanceTimersByTime(200);
+
+    expect(onSettled).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the target through a tap and releases it on a drag', () => {
+    const fixture = createFixture();
+    const onSettled = vi.fn();
+    const scroller = createTargetReplyScroller({
+      getTarget: () => fixture.target,
+    });
+
+    expect(scroller.scrollToIndex(0, onSettled)).toBe(true);
+    flushAnimationFrame();
+
+    // A tap — pressing a message, or the stray touch while the channel opens.
+    fixture.scrollElement.dispatchEvent(touchEvent('touchstart', 100, 100));
+    fixture.scrollElement.dispatchEvent(touchEvent('touchmove', 102, 103));
+    fixture.scrollElement.dispatchEvent(touchEvent('touchend', 102, 103));
+    expect(onSettled).not.toHaveBeenCalled();
+
+    // A drag hands the scroll back to the user.
+    fixture.scrollElement.dispatchEvent(touchEvent('touchstart', 100, 100));
+    fixture.scrollElement.dispatchEvent(touchEvent('touchmove', 100, 140));
+
+    expect(onSettled).toHaveBeenCalledOnce();
     expect(ResizeObserverMock.instances[0].disconnect).toHaveBeenCalledOnce();
   });
 

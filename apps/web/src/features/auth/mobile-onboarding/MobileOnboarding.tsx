@@ -107,7 +107,7 @@ export function MobileOnboarding() {
           <div class="mx-auto w-full max-w-md shrink-0 px-6 pt-6 pb-6">
             <Button
               variant="strong"
-              size="lg"
+              size="xl"
               class="w-full"
               onClick={onContinue}
             >

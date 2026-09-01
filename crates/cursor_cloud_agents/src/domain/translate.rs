@@ -150,14 +150,14 @@ impl TranslateMachine {
     /// Force every call still open to a terminal status, for a turn that
     /// ended without Cursor ever reporting one.
     ///
-    /// A cancelled turn abandons the stream (see
-    /// [`crate::domain::service::CursorSessionService::cancel`]) rather than
-    /// waiting for Cursor's own terminal `tool_call` frame, so a call still
-    /// running at that moment would otherwise never receive one — the
-    /// client is left rendering it in progress forever. `Failed` is the
-    /// honest status to close it with: ACP v1 has no `cancelled` tool-call
-    /// status, and Cursor never actually reported an outcome for these, so
-    /// `Completed` would claim a success nobody witnessed.
+    /// A cancelled run's `result` frame is the turn's terminal signal; it
+    /// does not always carry a completed `tool_call` for work that was
+    /// mid-flight. A call still running at that moment would otherwise never
+    /// receive one — the client is left rendering it in progress forever.
+    /// `Failed` is the honest status to close it with: ACP v1 has no
+    /// `cancelled` tool-call status, and Cursor never actually reported an
+    /// outcome for these, so `Completed` would claim a success nobody
+    /// witnessed.
     pub fn close_open_calls(&mut self) -> Vec<SessionUpdate> {
         self.open
             .drain()

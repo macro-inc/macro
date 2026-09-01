@@ -18,6 +18,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::ContainerManager;
 use crate::domain::model::{AgentKind, SpawnContainer};
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
+use crate::testing::helpers::egress::test_egress;
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("owner@example.com").unwrap()
@@ -35,6 +36,8 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         repo_url: Some("https://github.com/macro/macro".to_owned()),
         workspace: "/workspace".to_owned(),
         sandbox_size: agent_session::domain::model::SandboxSize::Default,
+        instructions: None,
+        egress_token_hash: None,
     }
 }
 
@@ -64,8 +67,8 @@ async fn container_session_runs_and_logs_end_to_end() {
         .spawn(SpawnContainer {
             session_id: id,
             kind: AgentKind::SandboxedCoder,
-            repo_url: "https://github.com/macro/macro".to_owned(),
             size: agent_session::domain::model::SandboxSize::Default,
+            egress: test_egress(),
         })
         .await
         .unwrap();

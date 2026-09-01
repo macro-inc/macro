@@ -237,6 +237,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Free-text description, when the event carries one. May contain HTML from\nthe source; clients render a plain-text preview."
+          },
           "isReadOnly": {
             "type": "boolean",
             "description": "Whether the canonical source prohibits mutation."
@@ -256,6 +260,17 @@
               }
             ]
           },
+          "organizer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEventOrganizer",
+                "description": "The event's organizer (creator), when the source names one."
+              }
+            ]
+          },
           "status": {
             "type": "string",
             "description": "Canonical status (`confirmed`, `tentative`, `cancelled`)."
@@ -267,6 +282,20 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "CalendarEventOrganizer": {
+        "type": "object",
+        "description": "The event's organizer — its creator, in Google's model. Either field can be\nabsent when the source does not name it.",
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "Organizer email address, when known."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name, when the source provided one."
           }
         }
       },

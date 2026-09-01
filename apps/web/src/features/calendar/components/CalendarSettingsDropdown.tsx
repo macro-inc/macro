@@ -297,19 +297,20 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
               <For each={calendarView.sources()}>
                 {(source) => (
                   <Checkbox
-                    as="label"
                     checked={calendarView.isSourceVisible(source.id)}
                     onChange={(checked) =>
                       controls.changeSourceVisibility(source.id, checked)
                     }
                     class={DRAWER_ROW_CLASS}
                   >
-                    <span
-                      aria-hidden="true"
-                      class="size-2.5 shrink-0 rounded-sm"
-                      style={{ 'background-color': source.color }}
-                    />
-                    <span class="min-w-0 flex-1 truncate">{source.name}</span>
+                    <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        class="size-2.5 shrink-0 rounded-sm"
+                        style={{ 'background-color': source.color }}
+                      />
+                      <span class="min-w-0 flex-1 truncate">{source.name}</span>
+                    </Checkbox.Label>
                     <Checkbox.Control />
                   </Checkbox>
                 )}
@@ -321,12 +322,13 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           <MobileDrawer.Label>Display</MobileDrawer.Label>
           <MobileDrawer.Section class="flex shrink-0 flex-col">
             <Checkbox
-              as="label"
               checked={calendarView.displaySettings.showWeekends}
               onChange={controls.changeShowWeekends}
               class={DRAWER_ROW_CLASS}
             >
-              <span class="min-w-0 flex-1 truncate">Show weekends</span>
+              <Checkbox.Label class="min-w-0 flex-1 truncate">
+                Show weekends
+              </Checkbox.Label>
               <Checkbox.Control />
             </Checkbox>
           </MobileDrawer.Section>

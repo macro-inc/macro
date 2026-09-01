@@ -17,6 +17,7 @@
     "device-info:default",
     "edit-menu:allow-set-native-menu-suppressed",
     "pasteboard:allow-read-pasteboard-text",
+    "network-status:allow-watch-status",
     "pasteboard:allow-stage-pasteboard-image",
     "photo-library:allow-pick-photo-library-images",
     "call-kit:allow-register-listener",

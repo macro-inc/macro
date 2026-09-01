@@ -71,10 +71,13 @@ impl AccessRepository for PgAccessRepository {
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
             .map_err(anyhow_access_error)?;
-        Ok(
-            queries::document_access::get_document_access(&self.pool, &document_uuid, &source_ids)
-                .await?,
+        Ok(queries::document_access::get_document_access(
+            &self.pool,
+            &document_uuid,
+            &source_ids,
+            user_id,
         )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -270,8 +273,13 @@ impl AccessRepository for PgAccessRepository {
 
         let access = match entity_type {
             EntityType::Document => {
-                queries::document_access::get_document_access(&self.pool, &entity_uuid, &source_ids)
-                    .await
+                queries::document_access::get_document_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                    None,
+                )
+                .await
             }
             EntityType::Chat => {
                 queries::chat_access::get_chat_access(&self.pool, &entity_uuid, &source_ids).await

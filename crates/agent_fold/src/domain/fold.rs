@@ -310,6 +310,14 @@ struct Turn {
     /// Where this turn's plan sits in the agent message's parts, so later
     /// plan updates can replace it.
     plan_position: Option<usize>,
+    /// Whether closing this turn needs an agent message to record its stop
+    /// reason on, minting one if the agent never produced a part.
+    ///
+    /// True for a turn a prompt opened: the user's bubble is then the
+    /// transcript's newest turn message, and readers take one without a stop
+    /// reason to mean the agent is still working. False for a turn a control
+    /// opened (`/compact`), whose own message readers skip.
+    expects_reply: bool,
 }
 
 impl FoldState {
@@ -501,6 +509,7 @@ impl FoldState {
             tool_positions: HashMap::new(),
             permission_positions: HashMap::new(),
             plan_position: None,
+            expects_reply: true,
         });
 
         changed
@@ -536,6 +545,7 @@ impl FoldState {
             tool_positions: HashMap::new(),
             permission_positions: HashMap::new(),
             plan_position: None,
+            expects_reply: false,
         });
         Some(Changed::new(message))
     }
@@ -643,34 +653,17 @@ impl FoldState {
             return None;
         }
 
-        // Give the turn an agent message if the runtime never opened one, so
-        // the stop reason - and with it the error - has a message to sit on.
-        let agent = match self.turn.as_ref()?.agent {
-            Some(agent) => agent,
-            None => {
-                let turn_id = self.turn.as_ref()?.id;
-                let agent = self.messages.len();
-                self.messages.push(FoldedMessage {
-                    id: turn_id,
-                    author: Author::Agent,
-                    request_id: None,
-                    parts: NonEmpty::one(MessagePart::Text {
-                        text: String::new(),
-                    }),
-                    stop: None,
-                });
-                if let Some(turn) = self.turn.as_mut() {
-                    turn.agent = Some(agent);
-                }
-                agent
-            }
+        // An error is worth showing under any turn, control's included, so
+        // this mints unconditionally where a clean close does not.
+        let turn = self.turn.take()?;
+        let (agent, changed) = match turn.agent {
+            Some(agent) => (agent, Changed::updated(agent)),
+            None => self.mint_agent_message(turn.id),
         };
-
-        self.turn = None;
         self.messages[agent].stop = Some(StopReason::Failed {
             message: message.to_owned(),
         });
-        Some(Changed::new(agent))
+        Some(changed)
     }
 
     /// Handle a `session/update`.
@@ -755,6 +748,8 @@ impl FoldState {
                 &call.locations,
                 call.meta.as_ref(),
             ),
+            raw_input: call.raw_input.clone().map(Box::new),
+            raw_output: call.raw_output.clone().map(Box::new),
         };
 
         // A repeated open for the same id patches in place rather than
@@ -796,6 +791,8 @@ impl FoldState {
             label,
             status,
             detail,
+            raw_input,
+            raw_output,
             ..
         }) = parts.get_mut(position)
         else {
@@ -825,6 +822,13 @@ impl FoldState {
             fields.locations.as_deref(),
             update.meta.as_ref(),
         );
+
+        if let Some(found) = fields.raw_input {
+            *raw_input = Some(Box::new(found));
+        }
+        if let Some(found) = fields.raw_output {
+            *raw_output = Some(Box::new(found));
+        }
 
         Some(Changed::updated(message))
     }
@@ -1067,15 +1071,46 @@ impl FoldState {
 
     /// Close the open turn, recording on its agent message how it stopped.
     ///
-    /// Unlike the batch fold this replaces, closing does not emit the agent
-    /// message - it has been in [`State::messages`] since the agent's first
-    /// part. All that is left is the stop reason, so a turn that stopped for
-    /// no stated reason, or that the agent never answered, changes nothing.
+    /// Usually the agent message has been in [`State::messages`] since the
+    /// agent's first part, and all that is left is the stop reason. When the
+    /// agent produced nothing at all, one is minted to carry it: readers ask
+    /// whether a turn is running by looking for a stop reason on the
+    /// transcript's tail, so recording none anywhere reads as working
+    /// forever. That is a stop pressed before the first chunk - a first
+    /// prompt spends ~10s creating the Cursor agent - which answers
+    /// `session/prompt` with `cancelled` and nothing to stamp it on.
     fn close_turn(&mut self, stop: Option<StopReason>) -> Option<Changed> {
+        let Some(stop) = stop else {
+            // Nothing to record, so nothing to mint a message for.
+            self.turn = None;
+            return None;
+        };
         let turn = self.turn.take()?;
-        let message = turn.agent?;
-        self.messages[message].stop = Some(stop?);
-        Some(Changed::updated(message))
+        let (message, changed) = match turn.agent {
+            Some(message) => (message, Changed::updated(message)),
+            // A turn a control opened is skipped by those readers, so an
+            // empty agent bubble under its line would be noise, not a fix.
+            None if !turn.expects_reply => return None,
+            None => self.mint_agent_message(turn.id),
+        };
+        self.messages[message].stop = Some(stop);
+        Some(changed)
+    }
+
+    /// Mint the agent message a turn never opened, so a stop reason has
+    /// somewhere to sit. Reported as new: the client has not seen it.
+    fn mint_agent_message(&mut self, turn: TurnId) -> (usize, Changed) {
+        let message = self.messages.len();
+        self.messages.push(FoldedMessage {
+            id: turn,
+            author: Author::Agent,
+            request_id: None,
+            parts: NonEmpty::one(MessagePart::Text {
+                text: String::new(),
+            }),
+            stop: None,
+        });
+        (message, Changed::new(message))
     }
 
     /// Add a part to the open turn's agent message, creating that message if
@@ -1141,6 +1176,7 @@ impl FoldState {
             tool_positions: HashMap::new(),
             permission_positions: HashMap::new(),
             plan_position: None,
+            expects_reply: true,
         });
     }
 

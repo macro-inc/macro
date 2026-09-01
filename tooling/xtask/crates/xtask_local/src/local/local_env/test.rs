@@ -6,7 +6,7 @@ use crate::local::instance::{Instance, Port};
 /// authoritative local env on top (mirrors `env_layer::resolve`).
 fn local_env() -> BTreeMap<String, String> {
     let instance = Instance::derive(None, None).expect("default instance derives");
-    let local = LocalEnv::for_instance(Mode::Local, &instance, true);
+    let local = LocalEnv::for_instance(Mode::Local, &instance, true, None);
     let mut env = local.boot_stub_env();
     env.extend(local.to_env());
     env
@@ -35,6 +35,7 @@ fn emits_required_keys() {
         "FUSIONAUTH_API_KEY_SECRET_KEY",
         "FUSIONAUTH_PUBLIC_URL",
         "FUSIONAUTH_OAUTH_REDIRECT_URI",
+        "MCP_PUBLIC_URL",
         "JWT_SECRET_KEY",
         // Boot-blocking stubs — service config loaders require these even in a
         // no-doppler stack (see `BootStubEnv`).
@@ -87,7 +88,6 @@ fn emits_required_keys() {
         "CAL_EVENT_TYPE_CONTENT_NAMES_KEY",
         "META_PIXEL_ID",
         "META_ACCESS_TOKEN",
-        "GITHUB_TOKEN",
         "DEV_DANGEROUS_LOCAL_CONTAINERS",
         "LOCAL_CONTAINER_IMAGE",
         "LOCAL_CONTAINER_NETWORK",
@@ -107,7 +107,7 @@ fn emits_required_keys() {
 #[test]
 fn boot_stubs_do_not_overlap_authoritative_env() {
     let instance = Instance::derive(None, None).expect("default instance derives");
-    let local = LocalEnv::for_instance(Mode::Local, &instance, true);
+    let local = LocalEnv::for_instance(Mode::Local, &instance, true, None);
     let authoritative = local.to_env();
     for key in local.boot_stub_env().keys() {
         assert!(
@@ -150,8 +150,13 @@ fn boot_stubs_are_local_only() {
 
 #[test]
 fn internal_auth_values_are_authoritative_local_env() {
-    let env =
-        LocalEnv::for_instance(Mode::Local, &Instance::derive(None, None).unwrap(), true).to_env();
+    let env = LocalEnv::for_instance(
+        Mode::Local,
+        &Instance::derive(None, None).unwrap(),
+        true,
+        None,
+    )
+    .to_env();
     let expected = env.get("INTERNAL_API_SECRET_KEY");
 
     assert_eq!(env.get("INTERNAL_API_KEY"), expected);
@@ -241,8 +246,8 @@ fn aws_creds_are_dummy() {
 fn instance_secrets_are_scoped_but_identity_is_fixed() {
     let default = Instance::derive(None, None).unwrap();
     let agent_a = Instance::derive(Some("agent-a"), None).unwrap();
-    let a = LocalEnv::for_instance(Mode::Local, &default, true).to_env();
-    let b = LocalEnv::for_instance(Mode::Local, &agent_a, true).to_env();
+    let a = LocalEnv::for_instance(Mode::Local, &default, true, None).to_env();
+    let b = LocalEnv::for_instance(Mode::Local, &agent_a, true, None).to_env();
 
     assert_ne!(
         a.get("SERVICE_INTERNAL_AUTH_KEY"),
@@ -260,8 +265,8 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
 fn fusionauth_public_url_uses_the_instance_host_port() {
     let default = Instance::derive(None, None).unwrap();
     let named = Instance::derive(Some("2508"), None).unwrap();
-    let default_env = LocalEnv::for_instance(Mode::Local, &default, true).to_env();
-    let named_env = LocalEnv::for_instance(Mode::Local, &named, true).to_env();
+    let default_env = LocalEnv::for_instance(Mode::Local, &default, true, None).to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true, None).to_env();
     let named_public_url = format!("http://localhost:{}", named.port(Port::FusionAuth));
 
     assert_eq!(
@@ -286,9 +291,9 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
         Some("true")
     );
     assert_eq!(env.get("DAYTONA_API_KEY").map(String::as_str), Some(""));
-    // Present so `GITHUB_TOKEN=... just run_local` overlays, but empty in a
-    // no-Doppler stack. Doppler would supply a real token above this stub.
-    assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some(""));
+    // No `GITHUB_TOKEN`: the sandbox clones through the egress proxy, which
+    // holds the credential on its behalf.
+    assert!(!env.contains_key("GITHUB_TOKEN"));
     // No `CURSOR_API_KEY`: `@cursor` sessions run on the key each user
     // registers in settings, so there is no deployment-wide one to stub.
     assert!(!env.contains_key("CURSOR_API_KEY"));
@@ -300,9 +305,14 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
 #[test]
 fn local_sandboxes_join_the_instances_compose_network() {
     let named = Instance::derive(Some("2508"), None).unwrap();
-    let default_env =
-        LocalEnv::for_instance(Mode::Local, &Instance::derive(None, None).unwrap(), true).to_env();
-    let named_env = LocalEnv::for_instance(Mode::Local, &named, true).to_env();
+    let default_env = LocalEnv::for_instance(
+        Mode::Local,
+        &Instance::derive(None, None).unwrap(),
+        true,
+        None,
+    )
+    .to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true, None).to_env();
 
     assert_eq!(
         default_env
@@ -317,5 +327,38 @@ fn local_sandboxes_join_the_instances_compose_network() {
     assert_eq!(
         default_env.get("LOCAL_CONTAINER_IMAGE").map(String::as_str),
         Some("macro-agent-harness:latest")
+    );
+}
+
+#[test]
+fn mcp_public_url_uses_the_proxy_cognition_route() {
+    let default = Instance::derive(None, None).unwrap();
+    let named = Instance::derive(Some("2508"), None).unwrap();
+    let default_env = LocalEnv::for_instance(Mode::Local, &default, true, None).to_env();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true, None).to_env();
+    let named_public_url = format!("http://localhost:{}/cognition", named.port(Port::Proxy));
+
+    assert_eq!(
+        default_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        Some("http://localhost:8090/cognition")
+    );
+    assert_eq!(
+        named_env.get("MCP_PUBLIC_URL").map(String::as_str),
+        Some(named_public_url.as_str())
+    );
+}
+
+/// In-network address, not localhost: a sandbox's localhost is its own. The
+/// host is hyphenated because a sandbox's git percent-encodes `_` before
+/// matching `credential.<url>.helper`, so the compose service name would leave
+/// the scoped helper silently unfired.
+#[test]
+fn the_egress_base_url_is_the_hyphenated_in_network_alias() {
+    let named = Instance::derive(Some("2508"), None).unwrap();
+    let named_env = LocalEnv::for_instance(Mode::Local, &named, true, None).to_env();
+
+    assert_eq!(
+        named_env.get("EGRESS_BASE_URL").map(String::as_str),
+        Some("http://agent-harness-service:8102")
     );
 }

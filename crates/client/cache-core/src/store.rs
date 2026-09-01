@@ -7,17 +7,22 @@
 //! `Send`.
 
 use crate::predicate::{
-    PredicateIndexStorage, PredicateQueryResult, ProjectionMutation, ProjectionState,
+    OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
+    PredicateQueryResult, ProjectionMutation, ProjectionState, StagedOptimisticProjection,
+    StagedOptimisticProjectionOwner, apply_authoritative_projection_patch,
 };
 use crate::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
-    QueuedMutation,
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
+    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
 };
 use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
-use predicate_index::{IndexDocument, RecordKey as PredicateRecordKey, evaluate_reference};
-use std::collections::{BTreeMap, HashMap};
+use predicate_index::{
+    EffectiveOptimisticProjection, IndexDocument, PendingOptimisticProjection,
+    RecordKey as PredicateRecordKey, evaluate_reference,
+};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -93,11 +98,85 @@ pub trait Storage: MaybeSend {
         async { Ok(Vec::new()) }
     }
 
-    /// Atomically appends a mutation and its optimistic layer to the queue.
+    /// Atomically inserts or replaces a mutation by its caller UUID.
     fn enqueue_mutation(
         &mut self,
         entry: NewQueuedMutation,
-    ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend;
+    ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend {
+        let now_ms = entry.mutation.created_at_ms;
+        async move {
+            self.upsert_mutation_with_shadow(
+                entry,
+                now_ms,
+                OptimisticUpsertReconciliation::default(),
+            )
+            .await
+            .map(|result| result.id)
+        }
+    }
+
+    /// Convenience upsert that assigns all supplied shadows to the new tail row.
+    fn enqueue_mutation_with_shadow(
+        &mut self,
+        entry: NewQueuedMutation,
+        projections: Vec<PendingOptimisticProjection>,
+    ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend {
+        let now_ms = entry.mutation.created_at_ms;
+        let mut affected_keys = projections
+            .iter()
+            .map(|projection| projection.state.record_key().clone())
+            .collect::<Vec<_>>();
+        affected_keys.sort();
+        let mut replacements = projections
+            .into_iter()
+            .map(|projection| StagedOptimisticProjection {
+                owner: StagedOptimisticProjectionOwner::Enqueued,
+                state: projection.state,
+                uncertainty: projection.uncertainty,
+            })
+            .collect::<Vec<_>>();
+        replacements.sort_by(|left, right| left.state.record_key().cmp(right.state.record_key()));
+        let reconciliation = OptimisticUpsertReconciliation {
+            expected_queue: None,
+            affected_keys,
+            replacements,
+        };
+        async move {
+            self.upsert_mutation_with_shadow(entry, now_ms, reconciliation)
+                .await
+                .map(|result| result.id)
+        }
+    }
+
+    /// Atomically inserts or replaces a mutation, its layer, and effective shadows.
+    ///
+    /// A live UUID collision retains and supersedes the old row. Any other
+    /// collision removes the old row. Storage resolves `Enqueued` projection
+    /// owners to the fresh ID assigned inside the same transaction and rejects
+    /// an expected queue snapshot that no longer matches.
+    fn upsert_mutation_with_shadow(
+        &mut self,
+        entry: NewQueuedMutation,
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+    ) -> impl Future<Output = Result<MutationUpsertResult, Self::Error>> + MaybeSend;
+
+    /// Loads authoritative projection states aligned with `keys`.
+    fn load_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend {
+        async { Ok(vec![None; keys.len()]) }
+    }
+
+    /// Loads current effective optimistic shadows aligned with `keys`.
+    fn load_optimistic_projections(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error>> + MaybeSend
+    {
+        async { Ok(vec![None; keys.len()]) }
+    }
 
     /// Loads the complete mutation queue in ascending id order.
     fn load_mutation_queue(
@@ -151,6 +230,19 @@ pub trait Storage: MaybeSend {
         projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
+    /// Atomically commits authority, removes the strict head, and reconciles shadows.
+    fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
+        let _ = reconciliation;
+        self.complete_mutation_with_projections(id, claim, entries, projections)
+    }
+
     /// Atomically removes a permanently failed mutation and its optimistic
     /// layer. Returns `false` when the claim is stale.
     fn discard_mutation(
@@ -158,6 +250,17 @@ pub trait Storage: MaybeSend {
         id: MutationId,
         claim: MutationClaimToken,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
+
+    /// Atomically removes the strict head and reconciles affected shadows.
+    fn discard_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
+        let _ = reconciliation;
+        self.discard_mutation(id, claim)
+    }
 
     /// Drops records, queued mutations, and optimistic layers (logout or
     /// identity mismatch).
@@ -170,16 +273,20 @@ pub struct InMemoryStorage {
     records: HashMap<EntityKey<'static>, Record>,
     search_documents: HashMap<(SearchProfile, EntityKey<'static>), SearchDocument>,
     projections: HashMap<PredicateRecordKey, ProjectionState>,
-    mutations: BTreeMap<
-        MutationId,
-        (
-            crate::queue::StoredMutation,
-            crate::queue::PersistedOptimisticLayer,
-        ),
-    >,
+    optimistic_projections: HashMap<PredicateRecordKey, EffectiveOptimisticProjection>,
+    mutations: BTreeMap<MutationId, InMemoryQueuedMutation>,
     next_mutation_id: MutationId,
     record_get_count: Arc<AtomicUsize>,
     search_catalog_load_count: Arc<AtomicUsize>,
+    mutation_queue_load_count: Arc<AtomicUsize>,
+}
+
+#[derive(Clone, Debug)]
+struct InMemoryQueuedMutation {
+    uuid: uuid::Uuid,
+    superseded: bool,
+    mutation: crate::queue::StoredMutation,
+    optimistic: crate::queue::PersistedOptimisticLayer,
 }
 
 impl InMemoryStorage {
@@ -203,6 +310,11 @@ impl InMemoryStorage {
     /// Number of compact catalog loads (test diagnostics).
     pub fn search_catalog_load_count(&self) -> usize {
         self.search_catalog_load_count.load(Ordering::Relaxed)
+    }
+
+    /// Number of full mutation-queue loads (test diagnostics).
+    pub fn mutation_queue_load_count(&self) -> usize {
+        self.mutation_queue_load_count.load(Ordering::Relaxed)
     }
 }
 
@@ -292,25 +404,122 @@ impl Storage for InMemoryStorage {
         Ok(documents)
     }
 
-    async fn enqueue_mutation(
+    async fn upsert_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
-    ) -> Result<MutationId, Self::Error> {
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+    ) -> Result<MutationUpsertResult, Self::Error> {
+        debug_assert!(reconciliation.validate().is_ok());
+        if let Some(expected) = &reconciliation.expected_queue {
+            let actual = self
+                .mutations
+                .iter()
+                .map(|(id, queued)| MutationQueueSnapshot {
+                    id: *id,
+                    uuid: queued.uuid,
+                    superseded: queued.superseded,
+                    lease_owner: queued.mutation.lease_owner.clone(),
+                    lease_generation: queued.mutation.lease_generation,
+                    lease_expires_at_ms: queued.mutation.lease_expires_at_ms,
+                    next_attempt_at_ms: queued.mutation.next_attempt_at_ms,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(&actual, expected, "stale in-memory mutation upsert plan");
+        }
+
+        let collision = self
+            .mutations
+            .iter()
+            .find(|(_, queued)| queued.uuid == entry.uuid && !queued.superseded)
+            .map(|(id, queued)| {
+                (
+                    *id,
+                    queued
+                        .mutation
+                        .lease_expires_at_ms
+                        .is_some_and(|expiry| expiry > now_ms),
+                )
+            });
+        let kind = match collision {
+            None => MutationUpsertKind::Inserted,
+            Some((id, true)) => {
+                self.mutations
+                    .get_mut(&id)
+                    .expect("collision exists")
+                    .superseded = true;
+                MutationUpsertKind::AppendedAfterActive { active_id: id }
+            }
+            Some((id, false)) => {
+                self.mutations.remove(&id);
+                MutationUpsertKind::ReplacedPending { removed_id: id }
+            }
+        };
+
         self.next_mutation_id += 1;
         let id = self.next_mutation_id;
-        self.mutations
-            .insert(id, (entry.mutation, entry.optimistic));
-        Ok(id)
+        self.mutations.insert(
+            id,
+            InMemoryQueuedMutation {
+                uuid: entry.uuid,
+                superseded: false,
+                mutation: entry.mutation,
+                optimistic: entry.optimistic,
+            },
+        );
+        for key in reconciliation.affected_keys {
+            self.optimistic_projections.remove(&key);
+        }
+        for replacement in reconciliation.replacements {
+            let owner = match replacement.owner {
+                StagedOptimisticProjectionOwner::Existing(owner) => owner,
+                StagedOptimisticProjectionOwner::Enqueued => id,
+            };
+            debug_assert!(self.mutations.contains_key(&owner));
+            self.optimistic_projections.insert(
+                replacement.state.record_key().clone(),
+                EffectiveOptimisticProjection {
+                    owner,
+                    state: replacement.state,
+                    uncertainty: replacement.uncertainty,
+                },
+            );
+        }
+        Ok(MutationUpsertResult { id, kind })
+    }
+
+    async fn load_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<ProjectionState>>, Self::Error> {
+        Ok(keys
+            .iter()
+            .map(|key| self.projections.get(key).cloned())
+            .collect())
+    }
+
+    async fn load_optimistic_projections(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error> {
+        Ok(keys
+            .iter()
+            .map(|key| self.optimistic_projections.get(key).cloned())
+            .collect())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        self.mutation_queue_load_count
+            .fetch_add(1, Ordering::Relaxed);
         Ok(self
             .mutations
             .iter()
-            .map(|(id, (mutation, optimistic))| QueuedMutation {
+            .map(|(id, queued)| QueuedMutation {
                 id: *id,
-                mutation: mutation.clone(),
-                optimistic: optimistic.clone(),
+                uuid: queued.uuid,
+                superseded: queued.superseded,
+                mutation: queued.mutation.clone(),
+                optimistic: queued.optimistic.clone(),
             })
             .collect())
     }
@@ -322,7 +531,7 @@ impl Storage for InMemoryStorage {
             oldest_created_at_ms: self
                 .mutations
                 .values()
-                .map(|(mutation, _)| mutation.created_at_ms)
+                .map(|queued| queued.mutation.created_at_ms)
                 .min(),
         })
     }
@@ -331,9 +540,10 @@ impl Storage for InMemoryStorage {
         &mut self,
         request: MutationClaimRequest,
     ) -> Result<Option<ClaimedMutation>, Self::Error> {
-        let Some((&id, (mutation, optimistic))) = self.mutations.iter_mut().next() else {
+        let Some((&id, queued)) = self.mutations.iter_mut().next() else {
             return Ok(None);
         };
+        let mutation = &mut queued.mutation;
         if mutation
             .next_attempt_at_ms
             .is_some_and(|next| next > request.now_ms)
@@ -353,8 +563,10 @@ impl Storage for InMemoryStorage {
         Ok(Some(ClaimedMutation {
             queued: QueuedMutation {
                 id,
+                uuid: queued.uuid,
+                superseded: queued.superseded,
                 mutation: mutation.clone(),
-                optimistic: optimistic.clone(),
+                optimistic: queued.optimistic.clone(),
             },
             lease_generation: generation,
         }))
@@ -367,12 +579,13 @@ impl Storage for InMemoryStorage {
         next_attempt_at_ms: i64,
         error: String,
     ) -> Result<bool, Self::Error> {
-        let Some((mutation, _)) = self.mutations.get_mut(&id) else {
+        let Some(queued) = self.mutations.get_mut(&id) else {
             return Ok(false);
         };
-        if !claim_matches(mutation, &claim) {
+        if !claim_matches(&queued.mutation, &claim) {
             return Ok(false);
         }
+        let mutation = &mut queued.mutation;
         mutation.next_attempt_at_ms = Some(next_attempt_at_ms);
         mutation.last_error = Some(error);
         mutation.lease_owner = None;
@@ -397,10 +610,10 @@ impl Storage for InMemoryStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<bool, Self::Error> {
-        let Some((mutation, _)) = self.mutations.get(&id) else {
+        let Some(queued) = self.mutations.get(&id) else {
             return Ok(false);
         };
-        if !claim_matches(mutation, &claim) {
+        if !claim_matches(&queued.mutation, &claim) {
             return Ok(false);
         }
         for (key, record) in entries {
@@ -414,6 +627,53 @@ impl Storage for InMemoryStorage {
         }
         apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
+        self.optimistic_projections
+            .retain(|_, projection| projection.owner != id);
+        Ok(true)
+    }
+
+    async fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        if reconciliation.validate(id).is_err()
+            || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
+        {
+            return Ok(false);
+        }
+        let Some(queued) = self.mutations.get(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(&queued.mutation, &claim) {
+            return Ok(false);
+        }
+        for replacement in &reconciliation.replacements {
+            if replacement.owner == id || !self.mutations.contains_key(&replacement.owner) {
+                return Ok(false);
+            }
+        }
+        for (key, record) in entries {
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != &key);
+            for document in project_search_documents(&key, &record) {
+                self.search_documents
+                    .insert((document.profile, key.clone()), document);
+            }
+            self.records.insert(key, record);
+        }
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
+        self.mutations.remove(&id);
+        for key in reconciliation.affected_keys {
+            self.optimistic_projections.remove(&key);
+        }
+        for replacement in reconciliation.replacements {
+            self.optimistic_projections
+                .insert(replacement.state.record_key().clone(), replacement);
+        }
         Ok(true)
     }
 
@@ -422,13 +682,48 @@ impl Storage for InMemoryStorage {
         id: MutationId,
         claim: MutationClaimToken,
     ) -> Result<bool, Self::Error> {
-        let Some((mutation, _)) = self.mutations.get(&id) else {
+        let Some(queued) = self.mutations.get(&id) else {
             return Ok(false);
         };
-        if !claim_matches(mutation, &claim) {
+        if !claim_matches(&queued.mutation, &claim) {
             return Ok(false);
         }
         self.mutations.remove(&id);
+        self.optimistic_projections
+            .retain(|_, projection| projection.owner != id);
+        Ok(true)
+    }
+
+    async fn discard_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        if reconciliation.validate(id).is_err()
+            || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
+        {
+            return Ok(false);
+        }
+        let Some(queued) = self.mutations.get(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(&queued.mutation, &claim) {
+            return Ok(false);
+        }
+        for replacement in &reconciliation.replacements {
+            if replacement.owner == id || !self.mutations.contains_key(&replacement.owner) {
+                return Ok(false);
+            }
+        }
+        self.mutations.remove(&id);
+        for key in reconciliation.affected_keys {
+            self.optimistic_projections.remove(&key);
+        }
+        for replacement in reconciliation.replacements {
+            self.optimistic_projections
+                .insert(replacement.state.record_key().clone(), replacement);
+        }
         Ok(true)
     }
 
@@ -436,6 +731,7 @@ impl Storage for InMemoryStorage {
         self.records.clear();
         self.search_documents.clear();
         self.projections.clear();
+        self.optimistic_projections.clear();
         self.mutations.clear();
         Ok(())
     }
@@ -458,47 +754,80 @@ impl PredicateIndexStorage for InMemoryStorage {
         &self,
         query: &predicate_index::ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, Self::Error> {
-        let query_descriptor = query.as_query();
-        let queried_partitions = query_descriptor
+        let descriptor = query.as_query();
+        let queried_partitions = descriptor
             .partitions
             .iter()
             .map(|partition| &partition.partition)
-            .collect::<std::collections::HashSet<_>>();
-        if self.projections.values().any(|projection| {
-            projection.profile() == &query_descriptor.profile
+            .collect::<HashSet<_>>();
+        if self.projections.iter().any(|(key, projection)| {
+            !self.optimistic_projections.contains_key(key)
+                && projection.profile() == &descriptor.profile
                 && queried_partitions.contains(projection.partition())
                 && matches!(projection, ProjectionState::Incomplete { .. })
         }) {
             return Ok(PredicateQueryResult::Incomplete);
         }
 
+        let mut has_relevant_shadow = false;
+        for (key, projection) in &self.optimistic_projections {
+            let current_scope = projection.state.profile() == &descriptor.profile
+                && queried_partitions.contains(projection.state.partition());
+            let shadows_queried_authority = self.projections.get(key).is_some_and(|authority| {
+                authority.profile() == &descriptor.profile
+                    && queried_partitions.contains(authority.partition())
+            });
+            if !current_scope && !shadows_queried_authority {
+                continue;
+            }
+            has_relevant_shadow = true;
+            if current_scope
+                && matches!(
+                    projection.state,
+                    predicate_index::OptimisticProjectionState::Incomplete { .. }
+                )
+            {
+                return Ok(PredicateQueryResult::Incomplete);
+            }
+            if current_scope
+                && query
+                    .dependent_attributes(projection.state.partition())
+                    .iter()
+                    .any(|attribute| projection.uncertainty.affects(attribute))
+            {
+                return Ok(PredicateQueryResult::Incomplete);
+            }
+        }
+
         let documents = self
             .projections
-            .values()
-            .filter_map(|projection| match projection {
+            .iter()
+            .filter(|(key, _)| !self.optimistic_projections.contains_key(*key))
+            .filter_map(|(_, projection)| match projection {
                 ProjectionState::Complete(document) => Some(document.clone()),
                 ProjectionState::Incomplete { .. } => None,
             })
+            .chain(
+                self.optimistic_projections
+                    .values()
+                    .filter_map(|projection| match &projection.state {
+                        predicate_index::OptimisticProjectionState::Complete(document) => {
+                            Some(document.clone())
+                        }
+                        predicate_index::OptimisticProjectionState::Deleted { .. }
+                        | predicate_index::OptimisticProjectionState::Incomplete { .. } => None,
+                    }),
+            )
             .collect::<Vec<IndexDocument>>();
-        Ok(PredicateQueryResult::Complete(
-            evaluate_reference(query, &documents)
-                .into_iter()
-                .map(|hit| hit.record_key)
-                .collect(),
-        ))
-    }
-
-    async fn get_index_documents(
-        &self,
-        keys: &[PredicateRecordKey],
-    ) -> Result<Vec<Option<IndexDocument>>, Self::Error> {
-        Ok(keys
-            .iter()
-            .map(|key| match self.projections.get(key) {
-                Some(ProjectionState::Complete(document)) => Some(document.clone()),
-                Some(ProjectionState::Incomplete { .. }) | None => None,
-            })
-            .collect())
+        let keys = evaluate_reference(query, &documents)
+            .into_iter()
+            .map(|hit| hit.record_key)
+            .collect();
+        Ok(if has_relevant_shadow {
+            PredicateQueryResult::Optimistic(keys)
+        } else {
+            PredicateQueryResult::Complete(keys)
+        })
     }
 }
 
@@ -513,6 +842,25 @@ fn apply_in_memory_projection_mutations(
                     document.record_key.clone(),
                     ProjectionState::Complete(document),
                 );
+            }
+            ProjectionMutation::Patch {
+                record_key,
+                profile,
+                partition,
+                exact,
+                integers,
+                sorts,
+            } => {
+                let state = apply_authoritative_projection_patch(
+                    projections.get(&record_key),
+                    &record_key,
+                    &profile,
+                    &partition,
+                    &exact,
+                    &integers,
+                    &sorts,
+                );
+                projections.insert(record_key, state);
             }
             ProjectionMutation::MarkIncomplete {
                 record_key,

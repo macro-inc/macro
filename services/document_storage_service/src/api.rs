@@ -216,6 +216,9 @@ fn api_router(state: ApiContext) -> Router {
         .merge(bots::inbound::axum_router::bots_router(
             state.bots_state.clone(),
         ))
+        .merge(harnesses::inbound::axum_router::harnesses_router(
+            state.harnesses_state.clone(),
+        ))
         .merge(
             bots::inbound::channel_webhook_router::channel_scoped_bot_router(
                 state.channel_bot_webhook_state.clone(),
@@ -224,6 +227,12 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/favorites",
             favorites::inbound::axum_router::favorites_router(state.favorites_state.clone()),
+        )
+        .nest(
+            "/user-api-keys",
+            user_api_key::inbound::axum_router::user_api_key_router(
+                state.user_api_key_state.clone(),
+            ),
         )
         .nest(
             "/reminders",

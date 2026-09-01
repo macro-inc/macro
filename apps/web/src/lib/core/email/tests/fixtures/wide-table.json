@@ -1,0 +1,6 @@
+{
+  "name": "wide-table",
+  "description": "Fixed-width 836px table. At 360px the viewer should floor zoom at 0.7 and scroll. At 800px it should shrink slightly without hitting the floor.",
+  "container_widths": [360, 800],
+  "body_html_sanitized": "<table width=\"836\" cellpadding=\"0\" cellspacing=\"0\"><tr><td style=\"padding:16px;font-size:16px;\">Panelist invitation for a designed newsletter table.</td></tr></table>"
+}

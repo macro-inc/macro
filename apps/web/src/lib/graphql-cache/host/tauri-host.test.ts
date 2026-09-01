@@ -217,17 +217,23 @@ describe('createTauriCacheHost', () => {
       changed: ['A:1'],
       affectedOps: [],
       reset: false,
+      upsertKind: { kind: 'inserted' as const },
       initialClaim: { kind: 'not-runnable' as const },
     };
     invokeMock.mockImplementation((command: string) => {
       if (command === 'graphql_cache_enqueue_optimistic_mutation') {
         return Promise.resolve(optimistic);
       }
-      if (
-        command === 'graphql_cache_commit_optimistic_write' ||
-        command === 'graphql_cache_rollback_optimistic_write'
-      ) {
+      if (command === 'graphql_cache_commit_optimistic_write') {
         return Promise.resolve({ changed: [], affectedOps: [], reset: false });
+      }
+      if (command === 'graphql_cache_rollback_optimistic_write') {
+        return Promise.resolve({
+          kind: 'rolled-back',
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        });
       }
       return Promise.resolve(null);
     });
@@ -245,6 +251,7 @@ describe('createTauriCacheHost', () => {
     };
     const begun = await host.enqueueOptimisticMutation(
       {
+        uuid: '00000000-0000-4000-8000-000000000004',
         query: 'mutation { m }',
         data: { m: 1 },
         linkPatches: [patch],
@@ -259,6 +266,7 @@ describe('createTauriCacheHost', () => {
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_enqueue_optimistic_mutation',
       expect.objectContaining({
+        uuid: '00000000-0000-4000-8000-000000000004',
         linkPatches: [patch],
         createdAtMs: 123,
         owner: 'runner',
@@ -446,7 +454,11 @@ describe('createTauriCacheHost', () => {
       let settled = false;
       void host
         .enqueueOptimisticMutation(
-          { query: 'mutation Rename { rename { id } }', data: {} },
+          {
+            uuid: '00000000-0000-4000-8000-000000000101',
+            query: 'mutation Rename { rename { id } }',
+            data: {},
+          },
           { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 1_010 }
         )
         .then(

@@ -61,7 +61,7 @@ export function MediaGallery(props: {
       <Show
         when={hasMedia()}
         fallback={
-          <div class="px-6 py-3 text-sm text-ink-faint">
+          <div class="px-6 py-3 text-sm text-ink-subtle">
             No photos or videos in this channel yet.
           </div>
         }

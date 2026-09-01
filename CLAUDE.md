@@ -87,6 +87,8 @@ cargo test -p {crate}
 
 `just test` does not exist. Leave `SQLX_OFFLINE` unset when you run `cargo test`. Run `just prepare_db` only if you changed SQL queries.
 
+Email rendering snapshots (Playwright HTML fixtures, not inbox e2e) live in `apps/web/src/lib/core/email/tests`. Run `just test-email-rendering`. Add a fixture under `fixtures/` then `just test-email-rendering-update`.
+
 ### Pre Commit
 ```bash
 cargo fmt                   # format
@@ -255,6 +257,10 @@ The migration included comprehensive indexes:
 
 - New code uses `rootcause` for error handling — it's preferred over `anyhow` (see docs/STYLE_GUIDE.md CS-46)
 - In code still on anyhow: prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))` for early returns - it's more concise and idiomatic
+
+### Agent Guide Maintenance
+
+`docs/AGENT_GUIDE/` documents how agents drive the web app through a browser (routes, UI affordances, interaction patterns, completion signals). When you change how a part of the app works or how users/agents interact with it — routes, creation flows, editor behavior, AI surfaces, composer semantics — update the corresponding guide file in the same change.
 
 ### Documentation Requirements
 

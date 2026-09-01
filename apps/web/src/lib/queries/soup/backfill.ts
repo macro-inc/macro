@@ -1,5 +1,11 @@
-import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  ENABLE_GRAPHQL_BACKFILL,
+  ENABLE_GRAPHQL_SOUP_FLAG,
+  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
+import { Telemetry } from '@macro-inc/observability';
 import { SoupBackfillDocument } from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,
@@ -23,6 +29,9 @@ const EMAIL_CONTENT_PAGE_LIMIT = 5;
 const PAGE_DELAY_MS = 2_000;
 const BACKFILL_RETRY_COUNT = 5;
 const BACKFILL_RETRY_SCHEDULE = Schedule.exponential('1 second');
+const CACHE_HOST_RETRY_COUNT = 6;
+const CACHE_HOST_RETRY_SCHEDULE = Schedule.exponential('100 millis');
+const BACKFILL_PROGRESS_PAGE_INTERVAL = 10;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
 type SoupBackfillFetchPage = (
@@ -234,6 +243,35 @@ export function resetSoupBackfillCheckpoint(
   }
 }
 
+type SoupBackfillTelemetryState =
+  | 'started'
+  | 'progress'
+  | 'completed'
+  | 'failed';
+
+function recordSoupBackfillTelemetry(input: {
+  checkpointId: string;
+  durationMs?: number;
+  pagesFetched: number;
+  state: SoupBackfillTelemetryState;
+  totalPagesFetched: number;
+}): void {
+  try {
+    const span = Telemetry.anonymousSpan('graphql_cache.backfill');
+    span.setAttr('cache.backfill_lane', input.checkpointId);
+    span.setAttr('cache.backfill_version', BACKFILL_VERSION);
+    span.setAttr('cache.backfill_state', input.state);
+    span.setAttr('cache.backfill_pages_fetched', input.pagesFetched);
+    span.setAttr('cache.backfill_total_pages_fetched', input.totalPagesFetched);
+    if (input.durationMs !== undefined) {
+      span.setAttr('cache.duration_ms', input.durationMs);
+    }
+    span.end();
+  } catch {
+    // Observability must never affect cache hydration.
+  }
+}
+
 function and<T>(left: T | null | undefined, right: T): T {
   return left ? ({ and: { left, right } } as T) : right;
 }
@@ -282,7 +320,8 @@ export function withUpdatedSince(
 
 export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   userId: string,
-  params: SoupBackfillParams
+  params: SoupBackfillParams,
+  onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void
 ) {
   let checkpoint = yield* Effect.sync(() =>
     loadSoupBackfillCheckpoint(userId, params.checkpointId)
@@ -339,9 +378,10 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
           }
         : {}),
     };
-    yield* Effect.sync(() =>
-      saveSoupBackfillCheckpoint(checkpoint, params.checkpointId)
-    );
+    yield* Effect.sync(() => {
+      saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+      onCheckpoint?.(checkpoint);
+    });
 
     if (checkpoint.completed) return;
 
@@ -357,36 +397,115 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
   yield* Effect.forEach(
     lanes,
     (lane) =>
-      runSoupBackfill(userId, lane).pipe(
-        Effect.retry({
-          times: BACKFILL_RETRY_COUNT,
-          schedule: BACKFILL_RETRY_SCHEDULE,
-        }),
-        Effect.ignore
-      ),
+      Effect.gen(function* () {
+        const startedAt = Date.now();
+        const initialCheckpoint = yield* Effect.sync(() =>
+          loadSoupBackfillCheckpoint(userId, lane.checkpointId)
+        );
+        const initialPagesFetched = initialCheckpoint.pagesFetched;
+        yield* Effect.sync(() =>
+          recordSoupBackfillTelemetry({
+            checkpointId: lane.checkpointId,
+            pagesFetched: 0,
+            state: 'started',
+            totalPagesFetched: initialPagesFetched,
+          })
+        );
+
+        yield* runSoupBackfill(userId, lane, (checkpoint) => {
+          const pagesFetched = checkpoint.pagesFetched - initialPagesFetched;
+          if (
+            !checkpoint.completed &&
+            pagesFetched % BACKFILL_PROGRESS_PAGE_INTERVAL === 0
+          ) {
+            recordSoupBackfillTelemetry({
+              checkpointId: lane.checkpointId,
+              durationMs: Date.now() - startedAt,
+              pagesFetched,
+              state: 'progress',
+              totalPagesFetched: checkpoint.pagesFetched,
+            });
+          }
+        }).pipe(
+          Effect.retry({
+            times: BACKFILL_RETRY_COUNT,
+            schedule: BACKFILL_RETRY_SCHEDULE,
+          }),
+          Effect.matchEffect({
+            onFailure: (error) =>
+              Effect.sync(() => {
+                const checkpoint = loadSoupBackfillCheckpoint(
+                  userId,
+                  lane.checkpointId
+                );
+                recordSoupBackfillTelemetry({
+                  checkpointId: lane.checkpointId,
+                  durationMs: Date.now() - startedAt,
+                  pagesFetched: checkpoint.pagesFetched - initialPagesFetched,
+                  state: 'failed',
+                  totalPagesFetched: checkpoint.pagesFetched,
+                });
+                console.warn(
+                  '[graphql-soup-backfill] lane failed after retries',
+                  { checkpointId: lane.checkpointId, error }
+                );
+              }),
+            onSuccess: () =>
+              Effect.sync(() => {
+                const checkpoint = loadSoupBackfillCheckpoint(
+                  userId,
+                  lane.checkpointId
+                );
+                recordSoupBackfillTelemetry({
+                  checkpointId: lane.checkpointId,
+                  durationMs: Date.now() - startedAt,
+                  pagesFetched: checkpoint.pagesFetched - initialPagesFetched,
+                  state: 'completed',
+                  totalPagesFetched: checkpoint.pagesFetched,
+                });
+              }),
+          })
+        );
+      }),
     { concurrency: 1, discard: true }
   );
 });
 
+const waitForGraphqlSoupCacheHost = Effect.suspend(() =>
+  getGraphqlSoupCacheHost() === undefined
+    ? Effect.fail('cache-host-unavailable' as const)
+    : Effect.void
+).pipe(
+  Effect.retry({
+    times: CACHE_HOST_RETRY_COUNT,
+    schedule: CACHE_HOST_RETRY_SCHEDULE,
+  })
+);
+
 /**
  * Runs the checkpointed backfill Effect while this tab owns leadership.
- * Interrupting the fiber cancels the active fetch or inter-page sleep.
+ * Interrupting the fiber cancels cache readiness waits, active fetches, and
+ * inter-page sleeps.
  */
 export function useSoupBackfills(userId: string): void {
+  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
+    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  });
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
   );
 
   createEffect(() => {
-    if (
-      !ENABLE_GRAPHQL_BACKFILL ||
-      getGraphqlSoupCacheHost() === undefined ||
-      !isLeader()
-    ) {
+    if (!ENABLE_GRAPHQL_BACKFILL || !graphqlSoupFlag().enabled || !isLeader()) {
       return;
     }
 
-    const fiber = Effect.runFork(runSoupBackfills(userId));
+    const fiber = Effect.runFork(
+      waitForGraphqlSoupCacheHost.pipe(
+        Effect.flatMap(() => runSoupBackfills(userId)),
+        Effect.ignore
+      )
+    );
     onCleanup(() => {
       Effect.runFork(Fiber.interrupt(fiber));
     });

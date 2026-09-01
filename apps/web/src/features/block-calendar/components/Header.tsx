@@ -25,6 +25,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { CalendarSearch } from './CalendarSearch';
 import { useOpenEventComposer } from './use-open-event-composer';
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
@@ -189,6 +190,7 @@ export function Header() {
                 </Button>
               </div>
             </Show>
+            <CalendarSearch />
             <CalendarSettingsDropdown isNarrow={sidePanel?.isNarrow()} />
           </div>
         </HeaderIsland>

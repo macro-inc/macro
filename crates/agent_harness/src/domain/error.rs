@@ -27,7 +27,7 @@ pub enum HarnessError {
     /// whose session never answers. Closing that needs a way to post a failure
     /// back to the thread, which [`crate::domain::ports::SessionAnnouncer`]
     /// does not have — it announces sessions and nothing else.
-    #[error("connect your Cursor account in Settings → Connections to use @cursor")]
+    #[error("connect your Cursor account in Settings → Agents → Harness to use @cursor")]
     CursorNotConnected,
     /// The agent would not open an ACP session.
     #[error("acp handshake failed: {0}")]
@@ -50,6 +50,10 @@ pub enum HarnessError {
     /// A session command worker stopped before reporting its result.
     #[error("agent session {0} command worker stopped")]
     CommandWorkerStopped(AgentSessionId),
+    /// The sandbox's egress environment could not be prepared: no signing
+    /// key, no repository, or the owner's connected servers could not be read.
+    #[error("failed to provision sandbox egress: {0}")]
+    Egress(rootcause::Report),
     /// The session link could not be posted back to the mention's thread.
     #[error("failed to announce the agent session: {0}")]
     Announce(rootcause::Report),
@@ -59,4 +63,15 @@ pub enum HarnessError {
     /// A prompt could not be composed for the agent runtime.
     #[error("failed to compose agent prompt: {0}")]
     PromptComposition(rootcause::Report),
+    /// A live peer manages the session but published no address to forward
+    /// to. Transient by construction: only a replica from before addresses
+    /// existed, or one whose first heartbeat has not landed, has no address.
+    #[error("agent session {0} is managed by a live replica with no forwarding address")]
+    ManagerUnreachable(AgentSessionId),
+    /// Forwarding a command to the session's managing replica failed.
+    #[error("failed to forward an agent session command: {0}")]
+    Forward(rootcause::Report),
+    /// A bot's persisted agent runtime configuration could not be loaded.
+    #[error("failed to resolve agent runtime configuration: {0}")]
+    RuntimeDirectory(rootcause::Report),
 }

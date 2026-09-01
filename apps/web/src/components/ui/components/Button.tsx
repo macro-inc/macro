@@ -49,12 +49,13 @@ export const buttonVariants = createVariants(
       sm: CONTROL_SIZE_VARIANTS.sm,
       md: CONTROL_SIZE_VARIANTS.md,
       lg: `${CONTROL_SIZE_VARIANTS.lg} rounded-lg`,
+      xl: "h-12 gap-2 px-4 text-base rounded-lg [&>svg:not([class*='size-'])]:size-5",
       'icon-lg':
         "size-11 aspect-square p-2 [&>svg:not([class*='size-'])]:size-7",
       'icon-md':
         "size-9 aspect-square p-1.5 [&>svg:not([class*='size-'])]:size-6",
       'icon-sm':
-        "size-6 aspect-square p-0.5 [&>svg:not([class*='size-'])]:size-5",
+        "size-6 aspect-square p-1 [&>svg:not([class*='size-'])]:size-4",
     },
   },
   {

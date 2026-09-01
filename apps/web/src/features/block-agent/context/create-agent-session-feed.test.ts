@@ -6,7 +6,6 @@
  * ordered store without a refetch.
  */
 
-import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createRoot } from 'solid-js';
@@ -232,54 +231,6 @@ describe('createAgentSessionFeed live updates', () => {
     await flush();
 
     expect(feed.session()?.name).toBe('New Name');
-  });
-
-  /**
-   * The link out to the provider is minted inside the first prompt, so the
-   * snapshot the block loaded predates it. Nothing announces it, so a settled
-   * turn is the cue to look again.
-   */
-  it('picks up the external agent link once the first turn settles', async () => {
-    let calls = 0;
-    worker.getSession = async () => {
-      calls += 1;
-      return {
-        isErr: () => false,
-        value: {
-          id: 'session',
-          name: 'Agent Session',
-          modifiedAt: '2026-08-24T12:00:00Z',
-          harness: 'claude-code',
-          botId: CURSOR_BOT_ID,
-          // The agent exists only from the second read onwards.
-          external:
-            calls > 1
-              ? {
-                  provider: 'cursor',
-                  name: 'Add a health check',
-                  url: 'https://cursor.com/agents/bc-1',
-                }
-              : undefined,
-        },
-      };
-    };
-    const { createAgentSessionFeed } = await import(
-      './create-agent-session-feed'
-    );
-
-    worker.messages = [
-      message(0, 'user', 'add a health check'),
-      message(0, 'agent', 'done', { kind: 'end_turn' }),
-    ];
-    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
-    await flush();
-    await flush();
-    await flush();
-
-    expect(feed.working()).toBe(false);
-    expect(feed.session()?.external?.url).toBe(
-      'https://cursor.com/agents/bc-1'
-    );
   });
 
   it('does not re-read the snapshot for a session with no provider', async () => {

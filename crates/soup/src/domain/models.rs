@@ -1029,11 +1029,50 @@ fn reminder_or_is_sets_only(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilt
     }
 }
 
+/// Authoritative document facts that are unavailable as direct Soup fields.
+///
+/// This value is internal hydration state. It is deliberately separate from
+/// public Soup entity models so relation-backed facts do not become business
+/// fields on [`models_soup::document::SoupDocument`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoupDocumentServerFacts {
+    /// Whether `document_email` contains a row for the document.
+    pub is_email_attachment: bool,
+}
+
+/// An authorized Soup item and any server-only facts read by the same
+/// hydration operation.
+///
+/// `document_server_facts` is populated only when authoritative document
+/// relation state was loaded. Projects, chats, unsupported entities, and
+/// unenriched hydration paths leave it empty because they have no supplement
+/// to emit.
+#[derive(Debug, Clone)]
+pub struct SoupProjectionHydration<Item = SoupItem<()>> {
+    /// Authorized Soup item returned to the caller.
+    pub item: Item,
+    /// Relation-backed document facts unavailable in direct Soup fields.
+    pub document_server_facts: Option<SoupDocumentServerFacts>,
+}
+
+impl<Item> SoupProjectionHydration<Item> {
+    /// Map the hydrated item while preserving its authoritative server facts.
+    pub fn map<F, Mapped>(self, map: F) -> SoupProjectionHydration<Mapped>
+    where
+        F: FnOnce(Item) -> Mapped,
+    {
+        SoupProjectionHydration {
+            item: map(self.item),
+            document_server_facts: self.document_server_facts,
+        }
+    }
+}
+
 /// A Soup result with both optional enrichments represented in one model.
 ///
 /// Service methods decide which fields to populate. An unfetched enrichment
 /// remains empty without changing the response model.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct EnrichedSoupItem {
     /// The Soup item with its property projection.

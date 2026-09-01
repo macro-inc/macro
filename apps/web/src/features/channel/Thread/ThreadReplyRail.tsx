@@ -4,6 +4,8 @@ import { Show } from 'solid-js';
 type ThreadReplyRailProps = {
   /** Grouped replies continue the spine without another avatar branch. */
   grouped?: boolean;
+  /** Stop at this row's avatar branch instead of continuing through the row. */
+  terminal?: boolean;
 };
 
 /**
@@ -19,7 +21,9 @@ export function ThreadReplyRail(props: ThreadReplyRailProps) {
 
   return (
     <>
-      <div class={cn(railClass, 'inset-y-0')} style={{ left: railLeft }} />
+      <Show when={!props.terminal}>
+        <div class={cn(railClass, 'inset-y-0')} style={{ left: railLeft }} />
+      </Show>
       <Show when={!props.grouped}>
         <div
           class={cn(railClass, 'top-0 channel-rail-bottom rounded-bl-[14px]')}

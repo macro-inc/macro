@@ -15,9 +15,9 @@ use crate::domain::{
         CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel, EntityMention,
         GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ResolvedChannelMessage,
-        SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
-        UserName, fallback_user_name,
+        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ReferencedShareItemType,
+        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
+        TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
 };
@@ -2354,6 +2354,7 @@ impl ChannelRepo for PgChannelsRepo {
         entity_id: &str,
         user_id: &str,
     ) -> Result<Vec<AttachmentEntityReference>, Self::Err> {
+        let entity_types = ReferencedShareItemType::reference_lookup_types(entity_type);
         let attachment_references_fut = async {
             sqlx::query_as!(
                 AttachmentChannelReference,
@@ -2371,14 +2372,14 @@ impl ChannelRepo for PgChannelsRepo {
                 JOIN comms_messages m ON a.message_id = m.id
                 JOIN comms_channels c ON a.channel_id = c.id
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
-                WHERE a.entity_type = $1
+                WHERE a.entity_type = ANY($1)
                   AND a.entity_id  = $2
                   AND cp.user_id   = $3
                   AND cp.left_at  IS NULL
                   AND m.deleted_at IS NULL
                 ORDER BY a.created_at DESC
                 "#,
-                entity_type,
+                &entity_types,
                 entity_id,
                 user_id,
             )
@@ -2404,14 +2405,14 @@ impl ChannelRepo for PgChannelsRepo {
                 JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
                 JOIN comms_channels c ON m.channel_id = c.id
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
-                WHERE em.entity_type = $1
+                WHERE em.entity_type = ANY($1)
                   AND em.entity_id  = $2
                   AND cp.user_id   = $3
                   AND cp.left_at  IS NULL
                   AND m.deleted_at IS NULL
                 ORDER BY em.created_at DESC
                 "#,
-                entity_type,
+                &entity_types,
                 entity_id,
                 user_id,
             )
@@ -2431,12 +2432,12 @@ impl ChannelRepo for PgChannelsRepo {
                     em.user_id,
                     em.created_at
                 FROM comms_entity_mentions em
-                WHERE em.entity_type = $1
+                WHERE em.entity_type = ANY($1)
                   AND em.entity_id  = $2
                   AND em.source_entity_type != 'message'
                 ORDER BY em.created_at DESC
                 "#,
-                entity_type,
+                &entity_types,
                 entity_id,
             )
             .fetch_all(&self.pool)
@@ -3354,6 +3355,9 @@ impl ChannelRepo for PgChannelsRepo {
 
         let mut inserted = Vec::with_capacity(attachments.len());
         for attachment in attachments {
+            let entity_type = ReferencedShareItemType::from_raw(&attachment.entity_type)
+                .map(ReferencedShareItemType::as_str)
+                .unwrap_or(attachment.entity_type.as_str());
             let row = sqlx::query_as!(
                 MutatedAttachmentRow,
                 r#"
@@ -3372,7 +3376,7 @@ impl ChannelRepo for PgChannelsRepo {
                 macro_uuid::generate_uuid_v7(),
                 message_id,
                 channel_id,
-                attachment.entity_type,
+                entity_type,
                 attachment.entity_id,
                 attachment.width,
                 attachment.height,

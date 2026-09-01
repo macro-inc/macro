@@ -467,6 +467,9 @@ export function SplitFileMenu(props: {
 
   const copyLinkOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
+    // Some entities have no shareable link (a reminder resolves to no block, so
+    // its URL is dead); skip the item rather than copy one that won't open.
+    if (entity && !copyLinkAction.canExecute(entity)) return undefined;
     // Foreign PRs link out via their entity URL (GitHub); the block-derived
     // fallback would mint an internal /pr URL that doesn't resolve, so omit
     // the item when the entity is unavailable.
