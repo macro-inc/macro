@@ -123,4 +123,28 @@ describe('ActionMenu', () => {
       expect.objectContaining({ selectedText: 'this phrase' })
     );
   });
+
+  it('passes resolved decorator text to Reply', () => {
+    const onReply = vi.fn();
+    const { container } = render(() => (
+      <Root message={message} actions={{ onReply }}>
+        <div data-message-content>
+          <div data-message-reply-preview>Resolved bot response</div>
+        </div>
+        <ActionMenu />
+      </Root>
+    ));
+    const root = container.querySelector<HTMLElement>('[data-message]')!;
+
+    fireEvent.pointerEnter(root);
+    const reply = container.querySelector<HTMLButtonElement>(
+      '[data-message-action="reply"]'
+    )!;
+    fireEvent.pointerDown(reply);
+    fireEvent.click(reply);
+
+    expect(onReply).toHaveBeenCalledWith(
+      expect.objectContaining({ renderedText: 'Resolved bot response' })
+    );
+  });
 });

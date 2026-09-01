@@ -59,18 +59,27 @@ function oneLinePreview(text: string): string {
   return text.trim().replace(/\s+/g, ' ');
 }
 
+function stripMagicChipMarkdown(markdown: string): string {
+  return markdown.replace(/<m-magic-chip>.*?<\/m-magic-chip>/gs, '');
+}
+
 export function buildQuoteReplyValue(input: {
   channelId: string;
   message: Pick<MessageData, 'id' | 'content' | 'sender_id' | 'thread_id'>;
   selectedText?: string;
+  renderedText?: string;
   existingValue?: string;
 }): string {
   if (!input.message.thread_id) return input.existingValue ?? '';
 
   const messageText = markdownToPlainText(
-    stripLeadingQuoteReplyMarkdown(input.message.content)
+    stripMagicChipMarkdown(
+      stripLeadingQuoteReplyMarkdown(input.message.content)
+    )
   );
-  const displayText = oneLinePreview(input.selectedText || messageText);
+  const displayText = oneLinePreview(
+    input.selectedText || input.renderedText || messageText
+  );
   const quoteReply = buildQuoteReplyMarkdown({
     channelId: input.channelId,
     targetMessageId: input.message.id,

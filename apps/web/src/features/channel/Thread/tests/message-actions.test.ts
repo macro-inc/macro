@@ -89,6 +89,33 @@ describe('message-actions helpers', () => {
     ).toContain('"displayText":"specific selection"');
   });
 
+  it('uses resolved decorator text for a bot reply preview', () => {
+    expect(
+      buildQuoteReplyValue({
+        channelId: 'channel-1',
+        message: {
+          ...threadReply,
+          content:
+            '> original prompt\n\n<m-magic-chip>{"agentSessionId":"session-1","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>',
+        },
+        renderedText: 'The resolved bot response',
+      })
+    ).toContain('"displayText":"The resolved bot response"');
+  });
+
+  it('drops an unresolved magic chip from the fallback preview', () => {
+    expect(
+      buildQuoteReplyValue({
+        channelId: 'channel-1',
+        message: {
+          ...threadReply,
+          content:
+            '> original prompt\n\n<m-magic-chip>{"agentSessionId":"session-1","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>',
+        },
+      })
+    ).toContain('"displayText":"> original prompt"');
+  });
+
   it('ignores a leading quote-reply block in the automatic preview', () => {
     expect(
       buildQuoteReplyValue({

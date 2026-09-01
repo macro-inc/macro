@@ -43,7 +43,7 @@ function EditableThreadInner() {
     deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
     removeReaction: removeReactionMutation.mutate,
-    onReply: ({ message, selectedText }) => {
+    onReply: ({ message, selectedText, renderedText }) => {
       if (message.thread_id) {
         const current = replyInputState();
         const nextSnapshot: InputSnapshot = {
@@ -51,6 +51,7 @@ function EditableThreadInner() {
             channelId: ctx.channelId(),
             message,
             selectedText,
+            renderedText,
             existingValue: current?.value,
           }),
           mentions: current?.mentions ?? [],

@@ -24,6 +24,10 @@ Hover a message for its action menu. `Reply` on a top-level message opens that t
 an existing thread reply, it inserts a one-line quote-reply reference into the composer;
 clicking the reference navigates back to that reply. If text in the message is
 browser-selected before `Reply` is clicked, the reference previews only the selected text.
+For agent-session messages, the reference previews the resolved answer or current activity
+rather than the internal Magic Chip marker.
+The composer always keeps an editable empty line after a block reference, including after
+the user deletes that line, so clicking below the reference can restore the text caret.
 
 ## Channel tabs
 

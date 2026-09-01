@@ -414,7 +414,11 @@ export function Channel(props: ChannelProps) {
     return state;
   };
 
-  const openQuoteReplyInput = (message: MessageData, selectedText?: string) => {
+  const openQuoteReplyInput = (
+    message: MessageData,
+    selectedText?: string,
+    renderedText?: string
+  ) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
     const beforeSnapshot = state.replyInputState();
@@ -423,6 +427,7 @@ export function Channel(props: ChannelProps) {
         channelId: props.channelId,
         message,
         selectedText,
+        renderedText,
         existingValue: beforeSnapshot?.value,
       }),
       mentions: beforeSnapshot?.mentions ?? [],
@@ -457,7 +462,7 @@ export function Channel(props: ChannelProps) {
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
       if (ctx.message.thread_id) {
-        openQuoteReplyInput(ctx.message, ctx.selectedText);
+        openQuoteReplyInput(ctx.message, ctx.selectedText, ctx.renderedText);
         return;
       }
       openReplyInput(ctx.message);

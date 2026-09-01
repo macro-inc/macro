@@ -25,6 +25,8 @@ export type MessageActionContext = {
   emoji?: string;
   /** Browser-selected text within this message at the time Reply was chosen. */
   selectedText?: string;
+  /** Resolved text exposed by a dynamic decorator for use in reply previews. */
+  renderedText?: string;
 };
 
 export type MessageActionHandler = (

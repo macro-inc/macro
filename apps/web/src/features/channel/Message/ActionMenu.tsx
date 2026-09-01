@@ -17,7 +17,10 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { getSelectedMessageText } from './browser-selection';
+import {
+  getRenderedMessageReplyText,
+  getSelectedMessageText,
+} from './browser-selection';
 import {
   useMessage,
   useMessageActionMenuVisibility,
@@ -89,6 +92,7 @@ function ActionMenuContent(props: ActionMenuProps) {
   const actionMenuVisibility = useMessageActionMenuVisibility();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
   let selectedReplyText: string | undefined;
+  let renderedReplyText: string | undefined;
 
   const handleEmojiMenuOpenChange = (isOpen: boolean) => {
     setEmojiMenuOpen(isOpen);
@@ -247,6 +251,10 @@ function ActionMenuContent(props: ActionMenuProps) {
                       event.currentTarget,
                       message().id
                     );
+                    renderedReplyText = getRenderedMessageReplyText(
+                      event.currentTarget,
+                      message().id
+                    );
                   }}
                   onClick={(event) => {
                     const selectedText =
@@ -258,10 +266,20 @@ function ActionMenuContent(props: ActionMenuProps) {
                           ))
                         : undefined;
                     selectedReplyText = undefined;
+                    const renderedText =
+                      action.id === 'reply'
+                        ? (renderedReplyText ??
+                          getRenderedMessageReplyText(
+                            event.currentTarget,
+                            message().id
+                          ))
+                        : undefined;
+                    renderedReplyText = undefined;
                     void action.onClick?.({
                       message: message(),
                       event,
                       selectedText,
+                      renderedText,
                     });
                   }}
                 />
