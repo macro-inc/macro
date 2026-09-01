@@ -9,6 +9,7 @@ import {
   DISCARD_DRAFT_COMMENT_COMMAND,
   SET_COMMENT_THREAD_ID_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
+import { isMobile } from '@core/mobile/isMobile';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type {
   CreateCommentRequest,
@@ -165,6 +166,10 @@ export const useSetNodeCommentThreadId = () => {
 export function useScrollToCommentThread() {
   const blockElement = blockElementSignal.get;
   const documentId = useBlockId();
+  // Captured at setup: block stores resolve their block context at access
+  // time, which the returned callback no longer has.
+  const threads = threadStore.get;
+  const [marks] = markStore;
 
   const scrollIntoView = (el: HTMLElement) => {
     el.scrollIntoView({
@@ -175,6 +180,20 @@ export function useScrollToCommentThread() {
   };
 
   return async (threadId: number) => {
+    // On phones the margin is display:none (the drawer is the only comment
+    // surface), so its measure containers can't be scrolled to. Scroll to
+    // the thread's mark in the editor itself — the same element the
+    // drawer's pager scrolls to.
+    if (isMobile()) {
+      const anchorId = threads[threadId]?.anchorId;
+      const markElement =
+        anchorId != null
+          ? Object.values(marks[anchorId]?.markNodes ?? {})[0]
+          : undefined;
+      markElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     const measureContainerId = threadMeasureContainerId(documentId, threadId);
     let measureContainer = document.getElementById(measureContainerId);
     const blockEl = blockElement();

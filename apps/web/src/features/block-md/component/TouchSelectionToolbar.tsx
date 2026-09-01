@@ -227,12 +227,22 @@ export function TouchSelectionToolbar(props: {
     setOptionWidths(widths);
     const arrow = measureArrowRef?.querySelector<HTMLElement>('button');
     if (arrow && arrow.offsetWidth > 0) setArrowWidth(arrow.offsetWidth);
-    setPageIndex(0);
     return true;
   };
 
+  let lastOptionKeys: string | undefined;
   createEffect(() => {
-    options();
+    // Reset paging only when the option *set* changes (e.g. caret mode vs.
+    // selection mode) — a cosmetic rerender of the same options (the Share
+    // icon flipping to a check, the Tasks label while converting) keeps the
+    // user's page; the clamp effect below handles any repartition.
+    const keys = options()
+      .map((option) => option.key)
+      .join('\n');
+    if (keys !== lastOptionKeys) {
+      lastOptionKeys = keys;
+      setPageIndex(0);
+    }
     // Measure synchronously (a forced layout read) so the very first paint
     // already shows the paged layout — deferring to an animation frame lets
     // one unmeasured, full-width frame flash. Falls back a frame if layout
