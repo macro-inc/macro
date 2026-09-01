@@ -23,6 +23,8 @@ export type MessageActionContext = {
   message: MessageData;
   event?: MessageActionEvent;
   emoji?: string;
+  /** Browser-selected text within this message at the time Reply was chosen. */
+  selectedText?: string;
 };
 
 export type MessageActionHandler = (

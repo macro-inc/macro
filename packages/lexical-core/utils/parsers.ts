@@ -120,6 +120,18 @@ export function parseDocumentCards(text: string): string {
   );
 }
 
+/** Replace quote-reply nodes with their user-visible preview text. */
+export function parseQuoteReplies(text: string): string {
+  return text.replace(/<m-quote-reply>(.*?)<\/m-quote-reply>/gs, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return data.displayText || '';
+    } catch {
+      return '';
+    }
+  });
+}
+
 export function parseSnapshots(text: string): string {
   return text.replace(/<m-snapshot>(.*?)<\/m-snapshot>/g, (_, encoded) => {
     try {
@@ -168,27 +180,25 @@ export function stripAgentContext(text: string): string {
  * - Snapshots: documentName (base64-encoded payload)
  * - Group mentions: @groupAlias (e.g., @here)
  * - Links: text (fallback to url)
+ * - Quote replies: displayText
  */
 export function markdownToPlainText(markdown: string): string {
-  return stripAgentContext(
-    parseLinks(
-      parseDocumentCards(
-        parseSnapshots(
-          parseTagMentions(
-            parsePullRequestMentions(
-              parseDocumentMentions(
-                parseGroupMentions(
-                  parseDateMentions(
-                    parseContactMentions(parseUserMentions(markdown))
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
-    )
-  );
+  const transforms: Array<(text: string) => string> = [
+    parseUserMentions,
+    parseContactMentions,
+    parseDateMentions,
+    parseGroupMentions,
+    parseDocumentMentions,
+    parsePullRequestMentions,
+    parseTagMentions,
+    parseSnapshots,
+    parseDocumentCards,
+    parseLinks,
+    parseQuoteReplies,
+    stripAgentContext,
+  ];
+
+  return transforms.reduce((text, transform) => transform(text), markdown);
 }
 
 /**
@@ -211,6 +221,7 @@ type MentionTagPayload = {
   emailOrDomain?: string;
   displayFormat?: string;
   groupAlias?: string;
+  displayText?: string;
   equation?: string;
 };
 
@@ -369,6 +380,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
+  text = replaceJsonTag(
+    text,
+    'm-quote-reply',
+    (data) => data.displayText || ''
+  );
   text = replaceJsonTag(text, 'm-watermark', () => '');
 
   // Anything still tagged is an unrecognized m-* node: drop it entirely so

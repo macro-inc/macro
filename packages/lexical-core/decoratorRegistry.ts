@@ -51,6 +51,10 @@ import type {
   PullRequestMentionNode,
 } from './nodes/PullRequestMentionNode';
 import type {
+  QuoteReplyDecoratorProps,
+  QuoteReplyNode,
+} from './nodes/QuoteReplyNode';
+import type {
   SnapshotDecoratorProps,
   SnapshotNode,
 } from './nodes/SnapshotNode';
@@ -126,6 +130,10 @@ export interface NodeDecoratorMap {
   PullRequestMentionNode: {
     klass: typeof PullRequestMentionNode;
     props: PullRequestMentionDecoratorProps;
+  };
+  QuoteReplyNode: {
+    klass: typeof QuoteReplyNode;
+    props: QuoteReplyDecoratorProps;
   };
   EquationNode: {
     klass: typeof EquationNode;

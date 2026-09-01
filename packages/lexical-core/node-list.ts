@@ -36,6 +36,7 @@ import { InlineSearchNode } from './nodes/InlineSearchNode';
 import { MagicChipNode } from './nodes/MagicChipNode';
 import { PasteNode } from './nodes/PasteNode';
 import { PullRequestMentionNode } from './nodes/PullRequestMentionNode';
+import { QuoteReplyNode } from './nodes/QuoteReplyNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { SnapshotNode } from './nodes/SnapshotNode';
 import { TagMentionNode } from './nodes/TagMentionNode';
@@ -81,6 +82,7 @@ export const SupportedNodeTypes = [
   ContactMentionNode,
   DateMentionNode,
   PullRequestMentionNode,
+  QuoteReplyNode,
   GroupMentionNode,
   InlineSearchNode,
   UnlinkedTextNode,

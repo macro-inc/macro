@@ -1,9 +1,9 @@
+import { isQuoteReplyMarkdown } from '@macro-inc/lexical-core/utils/quote-reply';
 import { OpenAPIRoute } from 'chanfana';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { handleEndpointError } from '../lib/error-handler';
 import { standardErrorResponses } from '../lib/schemas';
-import { isQuoteReplyMarkdown } from '@macro-inc/lexical-core/utils/quote-reply';
 
 const quoteReplyRequest = z.object({
   markdown: z.string(),
@@ -17,7 +17,7 @@ export class QuoteReplyEndpoint extends OpenAPIRoute {
   schema = {
     summary: 'Detect whether markdown is a quote-reply',
     description:
-      'Parses a macro markdown string as Lexical editor state and reports whether it is composed as a quote-reply: a leading blockquote quoting the replied-to message, followed by the reply itself.',
+      'Parses a macro markdown string as Lexical editor state and reports whether it is composed as an explicit reply: a leading quote-reply node or legacy blockquote, followed by the reply itself.',
     request: {
       body: {
         content: {

@@ -37,9 +37,8 @@ pub trait AgentBotLookup: Send + Sync + 'static {
     fn has_agent(&self, bot_id: BotId) -> impl Future<Output = Result<bool>> + Send;
 }
 
-/// Detects whether a message is composed as a quote-reply - a leading
-/// blockquote followed by the reply itself, the shape the editor produces
-/// when replying to a message.
+/// Detects whether a message is composed as an explicit reply: a leading
+/// quote-reply node (or legacy blockquote) followed by the author's response.
 #[cfg_attr(test, mockall::automock)]
 pub trait ReplyDetector: Send + Sync + 'static {
     /// Whether this markdown is a quote-reply.

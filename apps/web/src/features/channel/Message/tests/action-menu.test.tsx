@@ -93,4 +93,34 @@ describe('ActionMenu', () => {
 
     expect(container.querySelector('[data-message-hover-actions]')).toBeNull();
   });
+
+  it('passes browser-selected message text to Reply', () => {
+    const onReply = vi.fn();
+    const { container } = render(() => (
+      <Root message={message} actions={{ onReply }}>
+        <div data-message-content>only this phrase should be quoted</div>
+        <ActionMenu />
+      </Root>
+    ));
+    const root = container.querySelector<HTMLElement>('[data-message]')!;
+    const content = container.querySelector<HTMLElement>(
+      '[data-message-content]'
+    )!;
+    const range = document.createRange();
+    range.setStart(content.firstChild!, 5);
+    range.setEnd(content.firstChild!, 16);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    fireEvent.pointerEnter(root);
+    const reply = container.querySelector<HTMLButtonElement>(
+      '[data-message-action="reply"]'
+    )!;
+    fireEvent.pointerDown(reply);
+    fireEvent.click(reply);
+
+    expect(onReply).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedText: 'this phrase' })
+    );
+  });
 });

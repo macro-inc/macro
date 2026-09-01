@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildQuoteReplyMarkdown } from '../nodes/QuoteReplyNode';
 import { isQuoteReplyMarkdown } from '../utils/quote-reply';
 
 describe('isQuoteReplyMarkdown', () => {
@@ -12,6 +13,19 @@ describe('isQuoteReplyMarkdown', () => {
     expect(
       isQuoteReplyMarkdown('> first line\n> second line\n\nlooks right to me')
     ).toBe(true);
+  });
+
+  it('detects a quote-reply node followed by a response', () => {
+    const reply = buildQuoteReplyMarkdown({
+      channelId: 'channel-1',
+      targetMessageId: 'reply-1',
+      targetThreadId: 'thread-1',
+      displayText: 'please fix this',
+      senderId: 'macro|sender@example.com',
+    });
+
+    expect(isQuoteReplyMarkdown(`${reply}\n\nyes, on it`)).toBe(true);
+    expect(isQuoteReplyMarkdown(reply)).toBe(false);
   });
 
   it('rejects plain text', () => {

@@ -414,13 +414,15 @@ export function Channel(props: ChannelProps) {
     return state;
   };
 
-  const openQuoteReplyInput = (message: MessageData) => {
+  const openQuoteReplyInput = (message: MessageData, selectedText?: string) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
     const beforeSnapshot = state.replyInputState();
     const nextSnapshot: InputSnapshot = {
       value: buildQuoteReplyValue({
-        quotedContent: message.content,
+        channelId: props.channelId,
+        message,
+        selectedText,
         existingValue: beforeSnapshot?.value,
       }),
       mentions: beforeSnapshot?.mentions ?? [],
@@ -455,7 +457,7 @@ export function Channel(props: ChannelProps) {
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
       if (ctx.message.thread_id) {
-        openQuoteReplyInput(ctx.message);
+        openQuoteReplyInput(ctx.message, ctx.selectedText);
         return;
       }
       openReplyInput(ctx.message);
@@ -905,7 +907,7 @@ export function Channel(props: ChannelProps) {
                               getTargetMessage={() => {
                                 const target = unifiedInput.replyTarget();
                                 if (target?.message) return target.message;
-                                // A restored quote-reply has no resolvable
+                                // A restored referenced reply has no resolvable
                                 // message (messageById only indexes thread
                                 // roots) — don't misattribute it to the root.
                                 if (target?.replyId) return undefined;

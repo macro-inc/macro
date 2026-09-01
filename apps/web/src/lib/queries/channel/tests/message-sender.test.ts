@@ -1,6 +1,11 @@
+import {
+  MACRO_CODER_NAME,
+  MACRO_CODER_PRINCIPAL_ID,
+} from '@core/constant/macroCoder';
 import { describe, expect, it } from 'vitest';
 import {
   type ChannelMessageWithMaybeSender,
+  getBotDisplayName,
   normalizeChannelMessageSender,
   senderFromStorageId,
 } from '../message-sender';
@@ -80,5 +85,26 @@ describe('message sender normalization', () => {
       name: 'Deploy Bot',
       avatar_url: 'https://example.com/bot.png',
     });
+  });
+
+  it('resolves bot names from channel bot data', () => {
+    expect(
+      getBotDisplayName('bot|00000000-0000-0000-0000-000000000001', undefined, [
+        {
+          id: '00000000-0000-0000-0000-000000000001',
+          name: 'Deploy Bot',
+        },
+      ])
+    ).toBe('Deploy Bot');
+  });
+
+  it('resolves built-in agent names without channel bot data', () => {
+    expect(getBotDisplayName(MACRO_CODER_PRINCIPAL_ID)).toBe(MACRO_CODER_NAME);
+  });
+
+  it('uses a generic label rather than exposing an unknown bot UUID', () => {
+    expect(getBotDisplayName('bot|00000000-0000-0000-0000-000000000002')).toBe(
+      'Bot'
+    );
   });
 });

@@ -349,8 +349,9 @@ impl LexicalClient {
     }
 
     /// Parses `markdown` via the lexical service and reports whether it is
-    /// composed as a quote-reply: a leading blockquote followed by the reply
-    /// itself, the shape the editor produces when replying to a message.
+    /// composed as an explicit reply: a leading quote-reply node or legacy
+    /// blockquote followed by the reply itself, the shape the editor produces
+    /// when replying to a message.
     #[tracing::instrument(skip(self, markdown), err)]
     pub async fn is_quote_reply(&self, markdown: &str) -> Result<bool> {
         let url = format!("{}/quote-reply", self.url);

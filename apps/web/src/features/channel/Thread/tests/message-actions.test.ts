@@ -60,30 +60,56 @@ describe('message-actions helpers', () => {
     ).toBe(false);
   });
 
-  it('builds quote reply markdown before existing draft text', () => {
+  const threadReply = {
+    id: 'reply-1',
+    content: 'first line\nsecond line',
+    sender_id: 'macro|sender@example.com',
+    thread_id: 'thread-1',
+  };
+
+  it('builds a quote-reply node before existing draft text', () => {
     expect(
       buildQuoteReplyValue({
-        quotedContent: 'first line\nsecond line',
+        channelId: 'channel-1',
+        message: threadReply,
         existingValue: 'draft',
       })
-    ).toBe('> first line\n> second line\n\ndraft');
+    ).toBe(
+      '<m-quote-reply>{"channelId":"channel-1","targetMessageId":"reply-1","targetThreadId":"thread-1","displayText":"first line second line","senderId":"macro|sender@example.com"}</m-quote-reply>\n\ndraft'
+    );
   });
 
-  it('does not insert a quote for empty quoted content', () => {
+  it('uses browser-selected text for the reply preview', () => {
     expect(
       buildQuoteReplyValue({
-        quotedContent: '   \n  ',
+        channelId: 'channel-1',
+        message: threadReply,
+        selectedText: 'specific\nselection',
+      })
+    ).toContain('"displayText":"specific selection"');
+  });
+
+  it('ignores a leading quote-reply block in the automatic preview', () => {
+    expect(
+      buildQuoteReplyValue({
+        channelId: 'channel-1',
+        message: {
+          ...threadReply,
+          content:
+            '<m-quote-reply>{"channelId":"channel-1","targetMessageId":"earlier-reply","targetThreadId":"thread-1","displayText":"earlier preview","senderId":"macro|earlier@example.com"}</m-quote-reply>\n\nmy response',
+        },
+      })
+    ).toContain('"displayText":"my response"');
+  });
+
+  it('does not add a quote-reply node for a top-level message', () => {
+    expect(
+      buildQuoteReplyValue({
+        channelId: 'channel-1',
+        message: { ...threadReply, thread_id: null },
         existingValue: 'draft',
       })
     ).toBe('draft');
-  });
-
-  it('flattens existing quote markers instead of nesting blockquotes', () => {
-    expect(
-      buildQuoteReplyValue({
-        quotedContent: '> first line\n>> second line',
-      })
-    ).toBe('> first line\n> second line\n\n ');
   });
 
   it('detects if user already reacted with the default emoji', () => {

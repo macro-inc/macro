@@ -3,15 +3,16 @@ import { $convertFromMarkdownString } from '@lexical/markdown';
 import { $isQuoteNode } from '@lexical/rich-text';
 import { $getRoot } from 'lexical';
 import { NodeReplacements, SupportedNodeTypes } from '../node-list';
+import { $isQuoteReplyNode } from '../nodes/QuoteReplyNode';
 import { ALL_TRANSFORMERS } from '../transformers';
 
 /**
- * Whether a macro markdown string is composed as a quote-reply: a leading
- * blockquote quoting the replied-to message, followed by the reply itself —
- * the shape `buildQuoteReplyValue` produces in the channel input.
+ * Whether a macro markdown string is composed as an explicit reply: a leading
+ * quote-reply node (or legacy blockquote), followed by the author's response.
  *
- * A bare blockquote with nothing after it is not a reply; there is no message
- * of the author's own.
+ * A bare reference with nothing after it is not a reply; there is no message
+ * of the author's own. The legacy function name is retained for API
+ * compatibility with lexical-service and its clients.
  */
 export function isQuoteReplyMarkdown(markdown: string): boolean {
   const editor = createHeadlessEditor({
@@ -28,7 +29,7 @@ export function isQuoteReplyMarkdown(markdown: string): boolean {
   return editor.getEditorState().read(() => {
     const [first, ...rest] = $getRoot().getChildren();
     return (
-      $isQuoteNode(first) &&
+      ($isQuoteReplyNode(first) || $isQuoteNode(first)) &&
       rest.some((node) => node.getTextContent().trim() !== '')
     );
   });

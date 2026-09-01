@@ -20,6 +20,11 @@ Placeholder `Type @ to share with #<name>`. Click it, `type_text`, press Enter t
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
 files`, `Format`, a `Task` switch (turns the message into a task), `Send message` button.
 
+Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
+an existing thread reply, it inserts a one-line quote-reply reference into the composer;
+clicking the reference navigates back to that reply. If text in the message is
+browser-selected before `Reply` is clicked, the reference previews only the selected text.
+
 ## Channel tabs
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,
