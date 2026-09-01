@@ -3,16 +3,15 @@ import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMe
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
 import { createMarkdownFile } from '@core/util/create';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import WideFileMd from '@icon/wide-file-md.svg';
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { generateTitle } from '@service-cognition/client';
 import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button } from '@ui';
+import { Button, CopyButton } from '@ui';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { AssistantMessageParts } from './AssistantMessageParts';
 
@@ -49,51 +48,17 @@ export function AssistantMessage(props: {
   isStreaming?: true;
   ttft?: number;
 }) {
-  const [copied, setCopied] = createSignal(false);
   const [isLoading, setIsLoading] = createSignal<boolean>(false);
   let markdownRootRef!: HTMLDivElement;
 
   const toolUsageMessageIncomplete = createMemo(() => false);
-  const handleCopy = async () => {
+  const copyAssistantResponse = async () => {
     const text = extractMessageText(props.message.content);
     const cleanedText = text.replace(/\[\[.*?\]\]/g, '');
-    const html = markdownRootRef?.outerHTML ?? null;
-    if (!html) {
-      try {
-        await navigator.clipboard.writeText(cleanedText);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {
-        console.error('Failed to copy text to clipboard');
-      }
-      return;
-    }
-
-    const clipboardItem = new ClipboardItem({
-      'text/plain': new Blob([cleanedText], { type: 'text/plain' }),
-      'text/html': new Blob([html], { type: 'text/html' }),
+    return await writeClipboardData({
+      'text/plain': cleanedText,
+      'text/html': markdownRootRef?.outerHTML,
     });
-    let written = false;
-    // Try rich and plain first. Not available in all browsers and contexts.
-    try {
-      await navigator.clipboard.write([clipboardItem]);
-      written = true;
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback to plain text
-    }
-
-    if (!written) {
-      try {
-        await navigator.clipboard.writeText(cleanedText);
-        written = true;
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {
-        console.error('Failed to copy text to clipboard');
-      }
-    }
   };
 
   // TODO correctly convert to MD
@@ -195,22 +160,14 @@ export function AssistantMessage(props: {
                     <WideFileMd />
                   </Show>
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
+                <CopyButton
                   noTouchResize
                   class="p-1 text-ink-extra-muted hover:text-ink-muted"
-                  tooltip={
-                    copied()
-                      ? 'Copied assistant response'
-                      : 'Copy assistant response'
-                  }
-                  onClick={handleCopy}
-                >
-                  <Show when={!copied()} fallback={<CheckIcon />}>
-                    <ClipboardIcon />
-                  </Show>
-                </Button>
+                  label="Copy assistant response"
+                  successLabel="Copied assistant response"
+                  failureLabel="Couldn't copy assistant response"
+                  copy={copyAssistantResponse}
+                />
                 <Show when={props.ttft && ENABLE_TTFT}>
                   <div class="flex flex-row items-center space-x-1 text-xs font-mono bg-surface px-2 py-1">
                     <span class="text-ink-muted">Time to first token:</span>

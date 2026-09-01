@@ -63,6 +63,8 @@ export async function writeClipboardData(
     if (wrote) return true;
   }
 
+  if (typeof clipboard.writeText !== 'function') return false;
+
   return clipboard
     .writeText(text)
     .then(() => true)

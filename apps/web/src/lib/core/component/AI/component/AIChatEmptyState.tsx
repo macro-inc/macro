@@ -1,13 +1,8 @@
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import { Button } from '@ui';
+import { CopyButton } from '@ui';
 import { For } from 'solid-js';
 import { CLI_COMMANDS, MACRO_MCP_CONFIG } from './mcpConstants';
-import { useClipboardCopy } from './useClipboardCopy';
 
 export function AiChatEmptyState() {
-  const { copiedKey, copy } = useClipboardCopy();
-
   return (
     <div class="w-full p-4 text-ink md:p-5">
       <div class="flex flex-col gap-4">
@@ -29,24 +24,7 @@ export function AiChatEmptyState() {
               <div class="overflow-hidden rounded-md border border-edge-muted bg-surface/70">
                 <div class="flex items-center justify-between gap-3 border-b border-edge-muted px-4 py-2">
                   <span class="text-sm text-ink-muted">{item.label}</span>
-                  <Button
-                    variant={copiedKey() === item.key ? 'outline' : 'ghost'}
-                    size="sm"
-                    class="shrink-0"
-                    onClick={() => copy(item.key, item.command)}
-                  >
-                    {copiedKey() === item.key ? (
-                      <>
-                        <CheckIcon class="size-3.5" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <ClipboardIcon class="size-3.5" />
-                        Copy
-                      </>
-                    )}
-                  </Button>
+                  <CopyButton text={item.command} labeled class="shrink-0" />
                 </div>
                 <pre class="overflow-x-auto px-4 py-3 text-[12px]/5 text-ink select-text cursor-text whitespace-pre-wrap break-all">
                   <code>{item.command}</code>
@@ -65,24 +43,7 @@ export function AiChatEmptyState() {
               <span class="text-xs text-ink-muted">
                 Paste under `mcpServers`
               </span>
-              <Button
-                variant={copiedKey() === 'json' ? 'outline' : 'ghost'}
-                size="sm"
-                class="shrink-0"
-                onClick={() => copy('json', MACRO_MCP_CONFIG)}
-              >
-                {copiedKey() === 'json' ? (
-                  <>
-                    <CheckIcon class="size-3.5" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <ClipboardIcon class="size-3.5" />
-                    Copy
-                  </>
-                )}
-              </Button>
+              <CopyButton text={MACRO_MCP_CONFIG} labeled class="shrink-0" />
             </div>
           </div>
           <pre class="overflow-x-auto p-4 text-[12px]/5 text-ink select-text cursor-text">
