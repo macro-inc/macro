@@ -18475,6 +18475,7 @@ dependencies = [
  "dotenvy",
  "indexmap 2.14.0",
  "indicatif",
+ "jsonwebtoken 10.3.0",
  "libc",
  "macro_aws_config",
  "macro_env_var",

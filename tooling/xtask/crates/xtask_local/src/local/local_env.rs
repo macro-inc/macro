@@ -19,6 +19,43 @@ use std::collections::BTreeMap;
 use super::instance::{Instance, Port};
 use super::{Mode, identity, resources};
 
+const MACRO_API_TOKEN_PRIVATE_KEY: &str = r#"-----BEGIN RSA PRIVATE KEY-----
+MIIEogIBAAKCAQEAlR0tDzyTkQuUyGg1zHKyvR5O2h2oQQV61MbaqojLL9G1VNQL
+flHcqLI0XBglzRR0el21pRaNZYgguf78DpOF08KvWmKSpcqLM4P/F0GG5T4fT08a
+kkXJH0+nejy4oa8CvnbDT/1C0H6gONQHzLFlzydtAlk2bjeXWaWrro0X9YTILRZS
+QmPkN/4A/9xDdI2LTHP8VdcopYh1Uj+VFtFF9x7qpjXRkRlOHzD2Lj0qtmFY68v7
+8aFtMbrCp8OmE5sg/6vOFTjz/dcjpdHPa++ab4zZbyQjbfy7RQdG/2zki8N3znMP
+aa5JO4R5/Ot48vLAOowM9GR0FVYMBPqT0voECwIDAQABAoIBADX//mDtsY0N8iAP
+aSg0g1ksoCaqJdQCPYTPzMGET3zuR2pEbjMdRzlKa97MGehmV3Y2+ICkJamWvi9N
+UY+fyg+xidpEJ1JmAroxu4/6+XSMZj9M6NT+88JkkMSaN8zJuccq8DlIAMnLiY96
+7aYpujJmVzpJ/4WzmRpsfjt0ui/9i9fefnZBFPFnNK16jrJ2RQBokglMKmpUg+yL
+lVdPp57RS38LcBKEbMb6C20iMtZ+ZNxPF4rgzXEJyNRjl0Gh9ukjbnxm8aDkj/Xy
+MHizGM0SnZ7VIkclu5CgtOM59V3HSG6ilifj9JkfkEe1pHHp71hVSHz8RF2NjfXa
+rLRnuCkCgYEAzu97s4VMKXG5IvX2/m64sUJL/rB4WmtCl4x6Ru+gM+vUEmpmE1VF
+FimOF0U10CsSKkJ51ZVVcdldQCO8uZD52N0iBJSVkzXcMUQUQs25NrAkmhqdqwQk
+qm7KXXDBO1to3cMKeVUkrb5/uJpzsxOtctqYdqRkGsEGrGJJ+w8ByvkCgYEAuHgO
+tgH5dI9wnyV1MlRlFT/60rvJq4GRD6zkR59/kGx6pvUfjl0s3+OoOi2Fco7girt2
+1gznpfYgFRzE8Q9LKZCl3kdquNEEadoyRpERhYYKWW20FyYqFAPVrjdnjebrD/D1
+wYzBsQyylzpwsgOCUX9raQczb2Ua+9L8EwCCZCMCgYAjyzjSbJQn9wvXCESY7f30
+a0tJ2qx2t2blX98mtfw3/urH5K+TWISCuN1jGQ2d3FVgCe+ZCiOldbuzhHr4fiM5
+Z8ailDDrLb3Qp735cCxBUWaDYWc0VZsh/9fxIbfK1Jzm/v2ozxlxFCpzfAPXTegK
+ndURcI4AMrM8ziON0aK1wQKBgEj8Z4Wn3lU586tkHKyfK6duuwTp++75wrVbCK81
+8jjoUtcAIU4om3qyDnuGS0h6M2lwpqImVPkbGrJ/wYRHMsvtSVNbGmSpfn+LL10w
+RKh50lpzx09pcDifE8psbXJ9rP+PrQy5bmFozrh7DN/B96vbKFpT2Qv4CuccIVQ7
+XVvVAoGAahMpYHYDr+BsB2On8xd5rzkDpUeDwiWCyCaZTb7BjrpWhv5K35GOWkYh
+rS9MdSsDAdjiHGRRkX9C6oTx4w4pfxKSN65wAO6gI22oVrcWAMIR7CACmJHnIMxV
+wuFWLzXAeE7o05XSvntpugiYm2fkekCTRoJM9OdIfrxLC4fTIeA=
+-----END RSA PRIVATE KEY-----"#;
+const MACRO_API_TOKEN_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlR0tDzyTkQuUyGg1zHKy
+vR5O2h2oQQV61MbaqojLL9G1VNQLflHcqLI0XBglzRR0el21pRaNZYgguf78DpOF
+08KvWmKSpcqLM4P/F0GG5T4fT08akkXJH0+nejy4oa8CvnbDT/1C0H6gONQHzLFl
+zydtAlk2bjeXWaWrro0X9YTILRZSQmPkN/4A/9xDdI2LTHP8VdcopYh1Uj+VFtFF
+9x7qpjXRkRlOHzD2Lj0qtmFY68v78aFtMbrCp8OmE5sg/6vOFTjz/dcjpdHPa++a
+b4zZbyQjbfy7RQdG/2zki8N3znMPaa5JO4R5/Ot48vLAOowM9GR0FVYMBPqT0voE
+CwIDAQAB
+-----END PUBLIC KEY-----"#;
+
 /// The full local environment for one instance.
 pub struct LocalEnv {
     environment: &'static str,
@@ -544,18 +581,16 @@ impl BootStubEnv {
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),
         );
-        // macro_auth's `JwtValidationArgs` (used by every service that mounts
-        // the auth middleware) reads these at boot. The keys are only parsed
-        // when a Macro API token is actually validated — normal local auth
-        // uses FusionAuth JWTs — so dummies are fine.
+        // The local E2E browser authenticates with a Macro API token, so these
+        // deterministic local-only keys must be a valid pair.
         env.insert("MACRO_API_TOKEN_ISSUER".into(), "local".into());
         env.insert(
             "MACRO_API_TOKEN_PUBLIC_KEY".into(),
-            "local-macro-api-token-public-key".into(),
+            MACRO_API_TOKEN_PUBLIC_KEY.into(),
         );
         env.insert(
             "MACRO_API_TOKEN_PRIVATE_SECRET_KEY".into(),
-            "local-macro-api-token-private-key".into(),
+            MACRO_API_TOKEN_PRIVATE_KEY.into(),
         );
         env.insert("MACRO_API_TOKEN_EXPIRY_SECONDS".into(), "3600".into());
         // email_service's GCP pubsub queue (gmail watch notifications) and

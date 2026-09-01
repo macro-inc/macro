@@ -37,6 +37,11 @@ infra/local/generated/
 **/.webhook.json
 /artifacts
 
+# Local verification proof runs (traces, doctor logs, transcripts).
+.cursor/verification/
+# Cursor hook session state.
+.cursor/hooks/state/
+
 # Raw SSE captures from CURSOR_ACP_RECORD_DIR; sanitize into
 # crates/cursor_acp/fixtures/real/ before committing one.
 /recordings/

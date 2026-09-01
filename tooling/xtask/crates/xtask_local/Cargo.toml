@@ -50,6 +50,9 @@ libc = "0.2"
 macro_env_var = { path = "../../../../crates/macro_env_var" }
 xtask_paths = { path = "../xtask_paths" }
 
+[dev-dependencies]
+jsonwebtoken = { workspace = true }
+
 [features]
 # Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by
 # default so a plain build avoids compiling bundled librdkafka; the just recipes
