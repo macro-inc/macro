@@ -237,9 +237,6 @@ export function MessageContainer(props: MessageContainerProps) {
               'bg-hover': props.isFocused,
               'border-edge': props.isFocused,
               'border-edge-muted': !props.isFocused,
-              'z-1': props.isFocused,
-              'shadow-md': props.isFocused,
-              'shadow-drop-shadow': props.isFocused,
             }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
