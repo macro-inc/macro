@@ -523,6 +523,7 @@
         "document-storage-service"
         "email-service"
         "image-proxy-service"
+        "mcp-server"
         "notification-service"
         "static-file-service"
         "unfurl-service"
