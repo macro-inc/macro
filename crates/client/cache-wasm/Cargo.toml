@@ -42,4 +42,5 @@ wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
+uuid = { workspace = true, features = ["js"] }
 wasm-bindgen-test = { workspace = true }

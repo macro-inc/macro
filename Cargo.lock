@@ -2970,6 +2970,7 @@ dependencies = [
  "soup-filter-cache-adapter",
  "soup-filter-projection",
  "turso-opfs",
+ "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
