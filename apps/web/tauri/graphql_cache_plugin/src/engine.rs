@@ -110,7 +110,11 @@ pub struct EnqueueOptimisticMutationResultWire {
 
 /// Queue collision outcome serialized for the webview.
 #[derive(Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum MutationUpsertKindWire {
     /// A new UUID was appended.
     Inserted,
@@ -184,7 +188,11 @@ pub struct ClaimedMutationWire {
 
 /// Tagged result of deferring or discarding a failed queue attempt.
 #[derive(Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum DeferOptimisticWriteResultWire {
     /// Retry state was retained normally.
     Deferred,
@@ -200,7 +208,11 @@ pub enum DeferOptimisticWriteResultWire {
 
 /// Tagged result of permanently failing or superseding a queue attempt.
 #[derive(Debug, Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum RollbackOptimisticWriteResultWire {
     /// The current mutation permanently failed.
     RolledBack {

@@ -181,6 +181,50 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
     JsFuture::from(promise).await.expect("promise resolves")
 }
 
+fn empty_js_write_result() -> JsWriteResult {
+    JsWriteResult {
+        revision: "0".to_string(),
+        changed: Vec::new(),
+        affected_ops: Vec::new(),
+        reset: false,
+        revalidations: Vec::new(),
+    }
+}
+
+#[wasm_bindgen_test]
+fn tagged_wire_enum_fields_are_camel_case() {
+    assert_eq!(
+        serde_json::to_value(JsMutationUpsertKind::ReplacedPending {
+            removed_transaction_id: "1".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "replaced-pending", "removedTransactionId": "1"})
+    );
+    assert_eq!(
+        serde_json::to_value(JsMutationUpsertKind::AppendedAfterActive {
+            active_transaction_id: "2".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "appended-after-active", "activeTransactionId": "2"})
+    );
+    assert_eq!(
+        serde_json::to_value(JsDeferOptimisticWriteResult::DiscardedSuperseded {
+            replacement_transaction_id: "3".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "3"
+    );
+    assert_eq!(
+        serde_json::to_value(JsRollbackOptimisticWriteResult::DiscardedSuperseded {
+            replacement_transaction_id: "4".to_string(),
+            result: empty_js_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "4"
+    );
+}
+
 async fn assert_closed(promise: js_sys::Promise) {
     let error = JsFuture::from(promise)
         .await

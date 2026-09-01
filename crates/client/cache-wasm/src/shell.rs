@@ -179,7 +179,11 @@ struct JsEnqueueOptimisticMutationResult {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 enum JsMutationUpsertKind {
     Inserted,
     ReplacedPending { removed_transaction_id: String },
@@ -331,7 +335,11 @@ struct JsRevisionResult {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 enum JsDeferOptimisticWriteResult {
     Deferred,
     DiscardedSuperseded {
@@ -342,7 +350,11 @@ enum JsDeferOptimisticWriteResult {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 enum JsRollbackOptimisticWriteResult {
     RolledBack {
         #[serde(flatten)]

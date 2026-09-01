@@ -250,6 +250,7 @@ impl TursoStorage {
                     &connection,
                     QUEUE_INSERT,
                     vec![
+                        text("00000000-0000-4000-8000-000000000001"),
                         text("mutation BrowserTestCorrupt { __typename }"),
                         Value::Null,
                         text("{}"),

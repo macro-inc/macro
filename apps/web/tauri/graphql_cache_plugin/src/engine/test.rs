@@ -68,6 +68,50 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
     .unwrap()
 }
 
+fn empty_write_result() -> WriteResultWire {
+    WriteResultWire {
+        revision: "0".to_string(),
+        changed: Vec::new(),
+        affected_ops: Vec::new(),
+        reset: false,
+        revalidations: Vec::new(),
+    }
+}
+
+#[test]
+fn tagged_wire_enum_fields_are_camel_case() {
+    assert_eq!(
+        serde_json::to_value(MutationUpsertKindWire::ReplacedPending {
+            removed_transaction_id: "1".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "replaced-pending", "removedTransactionId": "1"})
+    );
+    assert_eq!(
+        serde_json::to_value(MutationUpsertKindWire::AppendedAfterActive {
+            active_transaction_id: "2".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "appended-after-active", "activeTransactionId": "2"})
+    );
+    assert_eq!(
+        serde_json::to_value(DeferOptimisticWriteResultWire::DiscardedSuperseded {
+            replacement_transaction_id: "3".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "3"
+    );
+    assert_eq!(
+        serde_json::to_value(RollbackOptimisticWriteResultWire::DiscardedSuperseded {
+            replacement_transaction_id: "4".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "4"
+    );
+}
+
 #[test]
 fn write_then_read_round_trips() {
     let handle = spawn_handle();
