@@ -2,6 +2,7 @@ import { useBlockId } from '@core/block';
 import { ENABLE_LIVE_INDICATORS } from '@core/constant/featureFlags';
 import { createWebsocketEventEffect } from '@macro-inc/collaboration/websocket';
 import { type FromWebsocketMessage, ws } from '@service-connection/websocket';
+import type { Accessor } from 'solid-js';
 import { createStore, unwrap } from 'solid-js/store';
 import { z } from 'zod';
 
@@ -24,8 +25,13 @@ createWebsocketEventEffect(
     setIndicatorStore(update.entity_id, update.user_ids);
   }
 );
+
+export const useEntityIndicators = (entityId: Accessor<string | undefined>) => {
+  if (!ENABLE_LIVE_INDICATORS) return () => [] as string[];
+  return () => unwrap(indicatorStore[entityId() ?? '']) ?? [];
+};
+
 export const useUserIndicators = () => {
-  if (!ENABLE_LIVE_INDICATORS) return () => [];
-  const indicators = () => unwrap(indicatorStore[useBlockId()]);
-  return indicators;
+  const blockId = useBlockId();
+  return useEntityIndicators(() => blockId);
 };

@@ -24,7 +24,6 @@ import {
   ChannelTabProvider,
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
-import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
 import {
   CHANNEL_TABS,
   type ChannelTabId,
@@ -46,6 +45,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
+import { EntityLiveIndicators } from '@core/component/LiveIndicators';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
@@ -257,7 +257,11 @@ function NewTop(props: { channelId: string }) {
           </HeaderIsland>
         </SplitHeaderRight>
       </Show>
-      <ChannelTopBarLiveIndicators />
+      <SplitHeaderRight>
+        <div class="-order-1 touch:hidden">
+          <EntityLiveIndicators entityType="channel" />
+        </div>
+      </SplitHeaderRight>
     </Suspense>
   );
 }

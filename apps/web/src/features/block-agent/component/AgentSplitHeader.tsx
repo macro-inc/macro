@@ -9,6 +9,7 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { EntityLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
@@ -19,8 +20,10 @@ import LinkIcon from '@phosphor/link.svg';
 import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
+import { EntityType } from '@service-connection/generated/schemas/entityType';
 import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { isPlaceholderSessionId } from '../context/pending-session';
 
 /** 'claude-code' → 'Claude Code'; the fallback when the fold has no title. */
 export function harnessTitle(harness: string | undefined): string {
@@ -48,6 +51,10 @@ export function AgentSplitHeader(props: {
   // block id is the one thing here that is not a shareable session id.
   const { sessionId } = useAgentSession();
   const userId = useUserId();
+  const trackableSessionId = () => {
+    const id = sessionId();
+    return id && !isPlaceholderSessionId(id) ? id : undefined;
+  };
   const title = () => {
     const persistedName = props.session?.name;
     if (persistedName && persistedName !== 'Agent Session')
@@ -126,6 +133,12 @@ export function AgentSplitHeader(props: {
           into the title menu via `menuTools` below instead. */}
       <Show when={!isMobile()}>
         <SplitHeaderRight>
+          <div class="-order-1 touch:hidden">
+            <EntityLiveIndicators
+              entityType={EntityType.agent_session}
+              entityId={trackableSessionId}
+            />
+          </div>
           <div class="order-[1000] flex items-center gap-1">
             <For each={tools}>
               {(tool) => (
