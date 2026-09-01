@@ -69,8 +69,8 @@ impl MacroEventBroker for RecordingEventBroker {
     }
 }
 
-#[test]
-fn publishes_one_document_event_per_unlinked_document() {
+#[tokio::test]
+async fn publishes_one_document_event_per_unlinked_document() {
     let broker = RecordingEventBroker::default();
     let first = "11111111-1111-1111-1111-111111111111".to_string();
     let second = "22222222-2222-2222-2222-222222222222".to_string();

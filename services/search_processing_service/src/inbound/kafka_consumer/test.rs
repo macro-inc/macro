@@ -1393,7 +1393,7 @@ fn maps_all_channel_lifecycle_events_to_index_actions() {
 #[test]
 fn maps_all_document_lifecycle_events_to_index_actions() {
     let cases = document_event_cases();
-    assert_eq!(cases.len(), 9);
+    assert_eq!(cases.len(), 10);
 
     for (event, expected) in cases {
         let serialized = serde_json::to_value(&event).expect("serializable document event");
