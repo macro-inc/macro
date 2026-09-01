@@ -141,8 +141,7 @@ export function AgentSessionProvider(
   // Anything the service can only deliver over a live transport: a prompt on
   // the wire, or a model change waiting to be seen in the fold.
   const awaitingRuntime = () =>
-    composer.sendingId() !== undefined ||
-    composer.changingModel() !== undefined;
+    composer.sending() || composer.changingModel() !== undefined;
   const resuming = () => isDisconnected(status.status()) && awaitingRuntime();
 
   return (

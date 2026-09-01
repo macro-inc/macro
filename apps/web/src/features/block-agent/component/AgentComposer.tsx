@@ -1,18 +1,12 @@
 /**
  * The block's composer container: reads the composer controller from the
- * session context and drives the dumb `AgentInput` and `QueuedPromptList`
- * with derived props. All block-level state stays on this side of the
- * boundary.
+ * session context and drives the dumb `AgentInput` with derived props. All
+ * block-level state stays on this side of the boundary.
  */
 
 import { Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import {
-  AgentInput,
-  AgentModelSelector,
-  ComposerNotice,
-  QueuedPromptList,
-} from '../ui';
+import { AgentInput, AgentModelSelector, ComposerNotice } from '../ui';
 
 export function AgentComposer() {
   const {
@@ -34,18 +28,14 @@ export function AgentComposer() {
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>
-      <QueuedPromptList
-        prompts={composer.queue()}
-        sendingId={composer.sendingId()}
-        failed={composer.sendFailed()}
-        onRetry={composer.retry}
-        onRemove={composer.remove}
-      />
       <AgentInput
         placeholder="Message the agent, @mention anything"
         autofocus={autofocus}
         busy={composer.busy()}
-        disabled={loadFailed()}
+        // Prompts go straight to the service, so sending needs a session to
+        // post to — a block whose create is still on the wire can be typed
+        // into, but not sent from, until the id lands.
+        disabled={loadFailed() || pending()}
         commands={() => metadata()?.availableCommands ?? []}
         onSend={composer.send}
         onStop={composer.stop}

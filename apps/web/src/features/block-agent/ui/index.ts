@@ -27,10 +27,6 @@ export { FoldedTerminal } from './FoldedTerminal';
 export { PierreDiff } from './PierreDiff';
 export { QuestionAnswers, type QuestionAnswersProps } from './QuestionAnswers';
 export {
-  QueuedPromptList,
-  type QueuedPromptListProps,
-} from './QueuedPromptList';
-export {
   type SessionStatusLike,
   SessionStatusPill,
 } from './SessionStatusPill';

@@ -48,8 +48,8 @@ export function AgentInput(props: AgentInputProps) {
   const [markdown, setMarkdown] = createSignal('');
   let bodyRef: HTMLDivElement | undefined;
 
-  // Sending while busy is allowed — the block queues prompts and flushes
-  // them when the running turn settles.
+  // Sending while busy is allowed — the service queues prompts behind the
+  // running turn.
   const canSend = () => markdown().trim().length > 0 && !props.disabled;
 
   // Same content-driven switch as ChatInput: once the editor body wraps past
