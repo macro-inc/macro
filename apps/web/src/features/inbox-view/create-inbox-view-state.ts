@@ -3,7 +3,7 @@ import {
   normalizeFacetSelection,
 } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
-import { createStore, produce } from 'solid-js/store';
+import { createStore, produce, reconcile } from 'solid-js/store';
 import {
   type CreateInboxViewPersistenceOptions,
   createInboxViewPersistence,
@@ -83,7 +83,7 @@ export function createInboxViewState(
     }
 
     const facets = { ...state.facets, [facetId]: [...next] };
-    setState('facets', normalizeFacetSelection(facets));
+    setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
 
   return {
@@ -99,7 +99,7 @@ export function createInboxViewState(
 
     facets: () => state.facets,
     setFacetOption,
-    clearFacets: () => setState('facets', {}),
+    clearFacets: () => setState('facets', reconcile({})),
 
     snapshot: (): InboxViewSnapshot => ({
       tab: state.tab,
