@@ -2,9 +2,9 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDeleteMessageConfirmation } from '../create-delete-message-confirmation';
 
 vi.mock('@phosphor-icons/core/regular/x.svg?component-solid', () => ({
@@ -18,6 +18,7 @@ const deleteInput = {
 };
 
 describe('createDeleteMessageConfirmation', () => {
+  afterEach(cleanup);
   it('does not delete until the dialog is confirmed', async () => {
     const deleteMessage = vi.fn();
     const { requestDelete, ConfirmationDialog } =
@@ -61,6 +62,6 @@ describe('createDeleteMessageConfirmation', () => {
 
     expect(deleteMessage).toHaveBeenCalledTimes(1);
     expect(deleteMessage).toHaveBeenCalledWith(deleteInput);
-    expect(screen.queryByText('Delete message')).toBeNull();
+    expect(screen.queryAllByText('Delete message')).toHaveLength(0);
   });
 });
