@@ -2,7 +2,8 @@ use crate::{
     domain::{
         models::{
             AdvancedSortParams, GroupedSortRequest, SimpleSortQuery, SimpleSortRequest,
-            SoupPropertiesField, TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
+            SoupProjectionHydration, SoupPropertiesField, TouchedEntity, TouchedSoupRequest,
+            grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -43,13 +44,25 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> Result<Vec<SoupItem<()>>, Self::Err> {
+        Ok(self
+            .expanded_generic_cursor_soup_with_projection(req)
+            .await?
+            .into_iter()
+            .map(|hydration| hydration.item)
+            .collect())
+    }
+
+    async fn expanded_generic_cursor_soup_with_projection<'a>(
+        &self,
+        req: SimpleSortRequest<'a>,
+    ) -> Result<Vec<SoupProjectionHydration>, Self::Err> {
         let calendar_req = req.clone();
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
             SimpleSortQuery::ItemsAndFrecencyFilter(query) => {
                 // Extract the EntityFilterAst from the tuple (Frecency, EntityFilterAst)
-                expanded::dynamic::expanded_dynamic_cursor_soup(
+                expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
                     &self.pool.0,
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
@@ -61,7 +74,7 @@ impl SoupRepo for PgSoupRepo {
                 .await?
             }
             SimpleSortQuery::ItemsFilter(ast) => {
-                expanded::dynamic::expanded_dynamic_cursor_soup(
+                expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
                     &self.pool.0,
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
@@ -73,7 +86,7 @@ impl SoupRepo for PgSoupRepo {
                 .await?
             }
             SimpleSortQuery::FilterFrecency(f) => {
-                expanded::by_cursor::no_frecency_expanded_generic_soup(
+                expanded::by_cursor::no_frecency_expanded_generic_soup_with_projection(
                     &self.pool.0,
                     req.user_id,
                     req.limit,
@@ -82,7 +95,7 @@ impl SoupRepo for PgSoupRepo {
                 .await?
             }
             SimpleSortQuery::NoFilter(f) => {
-                expanded::by_cursor::expanded_generic_cursor_soup(
+                expanded::by_cursor::expanded_generic_cursor_soup_with_projection(
                     &self.pool.0,
                     req.user_id,
                     req.limit,
@@ -91,8 +104,16 @@ impl SoupRepo for PgSoupRepo {
                 .await?
             }
         };
-        items.extend(calendar_event::cursor_soup(&self.pool.0, calendar_req).await?);
-        sort_and_truncate(&mut items, sort, limit);
+        items.extend(
+            calendar_event::cursor_soup(&self.pool.0, calendar_req)
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                }),
+        );
+        sort_and_truncate_hydrations(&mut items, sort, limit);
         Ok(items)
     }
 
@@ -134,10 +155,34 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: AdvancedSortParams<'a>,
     ) -> Result<Vec<SoupItem<()>>, Self::Err> {
+        Ok(self
+            .expanded_soup_by_ids_with_projection(req)
+            .await?
+            .into_iter()
+            .map(|hydration| hydration.item)
+            .collect())
+    }
+
+    async fn expanded_soup_by_ids_with_projection<'a>(
+        &self,
+        req: AdvancedSortParams<'a>,
+    ) -> Result<Vec<SoupProjectionHydration>, Self::Err> {
         let calendar_req = req.clone();
-        let mut items =
-            expanded::by_ids::expanded_soup_by_ids(&self.pool.0, req.user_id, req.entities).await?;
-        items.extend(calendar_event::by_ids(&self.pool.0, calendar_req).await?);
+        let mut items = expanded::by_ids::expanded_soup_by_ids_with_projection(
+            &self.pool.0,
+            req.user_id,
+            req.entities,
+        )
+        .await?;
+        items.extend(
+            calendar_event::by_ids(&self.pool.0, calendar_req)
+                .await?
+                .into_iter()
+                .map(|item| SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
+                }),
+        );
         Ok(items)
     }
 
@@ -196,6 +241,21 @@ impl SoupRepo for PgSoupRepo {
     ) -> Result<Vec<TouchedEntity>, Self::Err> {
         touched::touched_soup_page(&self.pool.0, req).await
     }
+}
+
+fn sort_and_truncate_hydrations(
+    items: &mut Vec<SoupProjectionHydration>,
+    sort: models_pagination::SimpleSortMethod,
+    limit: u16,
+) {
+    let mut sort_on = SoupItem::sort_on(sort);
+    items.sort_by(|left, right| {
+        sort_on(&right.item)
+            .last_val
+            .cmp(&sort_on(&left.item).last_val)
+            .then_with(|| right.item.id().cmp(&left.item.id()))
+    });
+    items.truncate(usize::from(limit));
 }
 
 fn sort_and_truncate(
@@ -292,7 +352,11 @@ pub(crate) async fn populate_properties(
 #[macro_export]
 macro_rules! map_soup_type {
     () => {
-        |r| match r.item_type.as_ref() {
+        |r| $crate::map_soup_type!(@item r)
+    };
+    (@item $row:ident) => {{
+        let r = $row;
+        match r.item_type.as_ref() {
             "document" => Ok(::models_soup::item::SoupItem::Document(
                 ::models_soup::document::SoupDocument {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
@@ -375,6 +439,28 @@ macro_rules! map_soup_type {
             _ => Err(sqlx::Error::TypeNotFound {
                 type_name: r.item_type,
             }),
+        }
+    }};
+}
+
+/// Maps statically checked expanded Soup rows into an item plus authoritative
+/// server-only document facts from that same row.
+#[macro_export]
+macro_rules! map_soup_projection_hydration {
+    () => {
+        |r| {
+            let document_server_facts = match r.item_type.as_ref() {
+                "document" => Some($crate::domain::models::SoupDocumentServerFacts {
+                    is_email_attachment: r.is_email_attachment,
+                }),
+                _ => None,
+            };
+            $crate::map_soup_type!(@item r).map(|item| {
+                $crate::domain::models::SoupProjectionHydration {
+                    item,
+                    document_server_facts,
+                }
+            })
         }
     };
 }

@@ -13,6 +13,7 @@ chrono = { workspace = true }
 clap = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
 email_db_client = { path = "../../crates/email_db_client" }
+email_utils = { path = "../../crates/email_utils" }
 entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 fusionauth = { path = "../../crates/fusionauth" }

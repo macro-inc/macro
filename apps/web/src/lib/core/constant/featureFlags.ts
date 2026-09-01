@@ -47,6 +47,16 @@ export function resolveFeatureFlag(
 export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
 
 /**
+ * Switches Inbox and Tasks from the current SoupView implementations to the
+ * new composable view implementations. Override locally with
+ * VITE_ENABLE_NEW_APP_VIEWS.
+ */
+export const ENABLE_NEW_APP_VIEWS_FLAG = 'enable-new-app-views';
+export const ENABLE_NEW_APP_VIEWS_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_NEW_APP_VIEWS'
+);
+
+/**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *
  * @returns true in macro.com, false otherwise
@@ -610,6 +620,32 @@ export function ENABLE_CALENDAR_UI(): boolean {
     return ENABLE_CALENDAR_UI_OVERRIDE;
   }
   return analytics.posthog.isFeatureEnabled(ENABLE_CALENDAR_UI_FLAG) ?? false;
+}
+
+// Calendar event search UI: the Search view's Calendar type (and calendar
+// rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
+// — opening a hit needs the calendar block — so it only takes effect where
+// `enable-calendar-ui` is also on. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_CALENDAR_SEARCH_UI.
+export const ENABLE_CALENDAR_SEARCH_UI_FLAG = 'enable-calendar-search-ui';
+export const ENABLE_CALENDAR_SEARCH_UI_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CALENDAR_SEARCH_UI') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites (soup filter presets). Gated by
+ * the calendar UI too. For reactive UI, prefer `useCalendarSearchUiFlag()`.
+ */
+export function ENABLE_CALENDAR_SEARCH_UI(): boolean {
+  if (!ENABLE_CALENDAR_UI()) {
+    return false;
+  }
+  if (ENABLE_CALENDAR_SEARCH_UI_OVERRIDE !== undefined) {
+    return ENABLE_CALENDAR_SEARCH_UI_OVERRIDE;
+  }
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_CALENDAR_SEARCH_UI_FLAG) ?? false
+  );
 }
 
 // The "Enable calendar" prompt on phones. Off by default everywhere,

@@ -15,6 +15,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 model-error-response = { path = "../model-error-response" }
 reqwest.workspace = true
+url.workspace = true
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 schemars.workspace = true
 serde.workspace = true

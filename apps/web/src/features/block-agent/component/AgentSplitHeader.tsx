@@ -3,7 +3,6 @@ import {
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -17,16 +16,11 @@ import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import LinkIcon from '@phosphor/link.svg';
-import TreeStructure from '@phosphor/tree-structure.svg';
 import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import {
-  ORIGIN_THREAD_DRAWER_ID,
-  sessionOriginThread,
-} from '../context/origin-thread';
 
 /** 'claude-code' → 'Claude Code'; the fallback when the fold has no title. */
 export function harnessTitle(harness: string | undefined): string {
@@ -60,7 +54,6 @@ export function AgentSplitHeader(props: {
       return persistedName;
     return props.title ?? persistedName ?? harnessTitle(props.session?.harness);
   };
-  const originThreadDrawer = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
 
   const rename = async (name: string) => {
     const id = sessionId();
@@ -83,13 +76,6 @@ export function AgentSplitHeader(props: {
   };
 
   const tools: BlockTool[] = [
-    {
-      label: 'Discussion Thread',
-      icon: TreeStructure,
-      action: originThreadDrawer.toggle,
-      isActive: originThreadDrawer.isOpen,
-      condition: () => sessionOriginThread(props.session) !== undefined,
-    },
     {
       label: () => {
         const provider = props.session?.external?.provider;

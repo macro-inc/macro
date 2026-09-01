@@ -15,7 +15,7 @@
 use std::{collections::VecDeque, time::Duration};
 
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_client_protocol::schema::v1::SessionId;
+use agent_client_protocol::schema::v1::{McpServer, SessionId};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
@@ -88,10 +88,14 @@ where
     Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
 {
+    // One argument per fact the actor owns; a struct here would only move the
+    // same list one level down.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         id: AgentSessionId,
         acp_session_id: Option<SessionId>,
         workspace: String,
+        mcp_servers: Vec<McpServer>,
         connector: Connector,
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
@@ -117,8 +121,8 @@ where
             handshake_seen,
             handshake,
             machine: match acp_session_id {
-                None => SessionMachine::new(id, workspace),
-                Some(session_id) => SessionMachine::resume(id, session_id, workspace),
+                None => SessionMachine::new(id, workspace, mcp_servers),
+                Some(session_id) => SessionMachine::resume(id, session_id, workspace, mcp_servers),
             },
             logs,
             commands,

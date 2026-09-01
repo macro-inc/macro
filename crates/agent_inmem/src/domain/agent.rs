@@ -40,6 +40,16 @@ mod test;
 /// cancelled, so it cannot wedge the session's turn lock forever.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
+/// What one turn reads out of its session's state before running.
+struct TurnInput {
+    /// The conversation so far plus the prompt being answered.
+    messages: Vec<ChatMessage>,
+    /// Model the turn runs on.
+    model: String,
+    /// The session's instructions, for the engine's system prompt.
+    instructions: Option<String>,
+}
+
 /// Everything one agent task serves its session from.
 pub struct AgentState {
     /// The Macro session this agent runs.
@@ -94,15 +104,19 @@ impl AgentState {
         }
     }
 
-    /// The messages and model for a turn answering `prompt`.
-    fn turn_input(&self, prompt: &str) -> (Vec<ChatMessage>, String) {
+    /// Everything from the session's state that a turn answering `prompt`
+    /// runs from.
+    fn turn_input(&self, prompt: &str) -> TurnInput {
         self.store.get(&self.session_id).map_or_else(
-            || (messages_for_turn(&[], prompt), String::new()),
-            |state| {
-                (
-                    messages_for_turn(&state.history, prompt),
-                    state.model.clone(),
-                )
+            || TurnInput {
+                messages: messages_for_turn(&[], prompt),
+                model: String::new(),
+                instructions: None,
+            },
+            |state| TurnInput {
+                messages: messages_for_turn(&state.history, prompt),
+                model: state.model.clone(),
+                instructions: state.instructions.clone(),
             },
         )
     }
@@ -275,10 +289,15 @@ async fn run_turn(
     cancel: CancellationToken,
 ) -> StopReason {
     let _turn = state.turn_lock.lock().await;
-    let (messages, model) = state.turn_input(&prompt);
+    let TurnInput {
+        messages,
+        model,
+        instructions,
+    } = state.turn_input(&prompt);
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
         model,
+        instructions,
         messages,
         cancel: cancel.clone(),
     });

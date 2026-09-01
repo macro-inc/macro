@@ -162,7 +162,8 @@ export function createCalendarEventFormController(
       popupMinutes(
         resolveReminderOverrides(
           values.reminders,
-          calendarOptionFor(values.calendarId)?.defaultReminders
+          calendarOptionFor(values.calendarId)?.defaultReminders,
+          values.eventType
         )
       )
     );

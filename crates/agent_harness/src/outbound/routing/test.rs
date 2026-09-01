@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::sandbox::SandboxResizeEffect;
+use crate::testing::helpers::egress::test_egress;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
@@ -65,6 +66,11 @@ impl ContainerManager for TaggedManager {
         Ok(TaggedTransport)
     }
 
+    async fn session_token(&self, _session: AgentSessionId) -> Result<Option<String>> {
+        self.record("session_token");
+        Ok(None)
+    }
+
     async fn teardown(&self, _session: AgentSessionId) -> Result<()> {
         self.record("teardown");
         Ok(())
@@ -88,6 +94,13 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never creates sessions")
     }
 
+    async fn find_by_egress_token_hash(
+        &self,
+        _egress_token_hash: &str,
+    ) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the router never looks sessions up by egress token")
+    }
+
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
             id,
@@ -103,6 +116,7 @@ impl AgentSessionRepo for FixedBotSessions {
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             sandbox_size: SandboxSize::Default,
+            instructions: None,
             acp_session_id: None,
             external: None,
             status: SessionStatus::NoMessages,
@@ -178,8 +192,8 @@ fn spawn_for(kind: AgentKind) -> SpawnContainer {
     SpawnContainer {
         session_id: AgentSessionId::new(),
         kind,
-        repo_url: "https://github.com/macro-inc/macro".to_owned(),
         size: SandboxSize::Default,
+        egress: test_egress(),
     }
 }
 
@@ -217,6 +231,23 @@ async fn resume_and_teardown_route_by_the_stored_bot() {
         sandbox.clone(),
         cursor.clone(),
         FixedBotSessions(bot_id::CURSOR_BOT_ID),
+    );
+
+    let session = AgentSessionId::new();
+    router.resume(session).await.expect("resume");
+    router.teardown(session).await.expect("teardown");
+    assert_eq!(cursor.calls(), ["cursor:resume", "cursor:teardown"]);
+    assert!(sandbox.calls().is_empty());
+}
+
+#[tokio::test]
+async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
+    let sandbox = TaggedManager::new("sandbox");
+    let cursor = TaggedManager::new("cursor");
+    let router = RoutedContainerManager::new(
+        sandbox.clone(),
+        cursor.clone(),
+        FixedBotSessions(BotId::TEST_A),
     );
 
     let session = AgentSessionId::new();

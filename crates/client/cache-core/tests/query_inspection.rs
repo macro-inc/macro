@@ -13,6 +13,7 @@ use cache_core::queue::{
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{EntityKey, Record};
 use pollster::block_on;
+use predicate_index::PendingOptimisticProjection;
 use serde_json::{Value as Json, json};
 
 const GROUP_QUERY: &str = r#"
@@ -119,11 +120,14 @@ impl Storage for OwnerOnlyStorage {
         self.0.delete_batch(keys).await
     }
 
-    async fn enqueue_mutation(
+    async fn enqueue_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
+        projections: Vec<PendingOptimisticProjection>,
     ) -> Result<MutationId, Self::Error> {
-        self.0.enqueue_mutation(entry).await
+        self.0
+            .enqueue_mutation_with_shadow(entry, projections)
+            .await
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {

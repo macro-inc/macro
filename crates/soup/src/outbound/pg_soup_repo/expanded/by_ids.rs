@@ -1,7 +1,11 @@
-use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
+use crate::{
+    domain::models::SoupProjectionHydration, map_soup_projection_hydration,
+    outbound::pg_soup_repo::type_err,
+};
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::{Entity, EntityType};
+#[cfg(test)]
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -16,11 +20,11 @@ use uuid::Uuid;
 /// have explicit permissions on them. Project items themselves are excluded from results -
 /// only documents and chats are returned. Result order is unspecified.
 #[tracing::instrument(err, skip(db, entities))]
-pub async fn expanded_soup_by_ids<'a>(
+async fn expanded_soup_by_ids_hydrated<'a>(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
     entities: impl IntoIterator<Item = &'a Entity<'a>>,
-) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let mut document_ids = Vec::new();
     let mut chat_ids = Vec::new();
 
@@ -38,7 +42,7 @@ pub async fn expanded_soup_by_ids<'a>(
     let status_property_id = SystemPropertyKey::STATUS_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let items: Vec<SoupItem<()>> = sqlx::query!(
+    let items: Vec<SoupProjectionHydration> = sqlx::query!(
         r#"
         WITH user_source_ids AS (
             SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp
@@ -73,6 +77,11 @@ pub async fn expanded_soup_by_ids<'a>(
                 NULL as "is_persistent",
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
+                EXISTS (
+                    SELECT 1
+                    FROM document_email de
+                    WHERE de.document_id = d.id
+                ) as "is_email_attachment!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE
                     WHEN dt.sub_type = 'task'
@@ -132,6 +141,7 @@ pub async fn expanded_soup_by_ids<'a>(
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
                 NULL as "sub_type",
+                false as "is_email_attachment!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 NULL as "is_completed",
                 c."deletedAt"::timestamptz as "deleted_at"
@@ -155,9 +165,34 @@ pub async fn expanded_soup_by_ids<'a>(
         completed_option_id,     // $4
         status_property_id,      // $5
     )
-    .try_map(map_soup_type!())
+    .try_map(map_soup_projection_hydration!())
     .fetch_all(db)
     .await?;
 
     Ok(items)
+}
+
+/// Returns expanded authorized items by ID with optional document server facts.
+#[tracing::instrument(err, skip(db, entities))]
+pub async fn expanded_soup_by_ids_with_projection<'a>(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    entities: impl IntoIterator<Item = &'a Entity<'a>>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    expanded_soup_by_ids_hydrated(db, user_id, entities).await
+}
+
+/// Returns expanded authorized items by ID without projection metadata.
+#[cfg(test)]
+#[tracing::instrument(err, skip(db, entities))]
+pub async fn expanded_soup_by_ids<'a>(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    entities: impl IntoIterator<Item = &'a Entity<'a>>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    Ok(expanded_soup_by_ids_hydrated(db, user_id, entities)
+        .await?
+        .into_iter()
+        .map(|hydration| hydration.item)
+        .collect())
 }

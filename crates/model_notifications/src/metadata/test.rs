@@ -1,4 +1,7 @@
 use super::*;
+use notification::domain::models::apple::{
+    APNSPushNotification, Alert, AlertDictionary, PushNotificationData,
+};
 
 fn uid(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(value).unwrap().into_owned()
@@ -750,6 +753,111 @@ fn reminder_body_is_bounded_for_the_push_payload() {
     assert_eq!(body.chars().count(), 513, "512 chars plus the ellipsis");
     assert!(body.ends_with('…'));
     assert!(body.len() < 4_096, "must fit inside the APNS payload limit");
+}
+
+fn new_email_metadata() -> NewEmailMetadata {
+    NewEmailMetadata {
+        sender: Some("Ada Lovelace".to_string()),
+        to_email: "teo@macro.com".to_string(),
+        thread_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa".to_string(),
+        subject: "Quarterly plan".to_string(),
+        snippet: "Here is the draft".to_string(),
+    }
+}
+
+fn new_email_apns(metadata: &NewEmailMetadata) -> APNSPushNotification<PushNotificationData> {
+    let entity = EntityType::EmailThread.with_entity_str(&metadata.thread_id);
+    let notification_id = Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap();
+    metadata
+        .as_apns(None, &entity, notification_id)
+        .expect("new_email should build an APNS alert")
+}
+
+fn new_email_alert(metadata: &NewEmailMetadata) -> AlertDictionary {
+    match new_email_apns(metadata).aps.alert {
+        Some(Alert::Dictionary(alert)) => alert,
+        other => panic!("expected dictionary alert, got {other:?}"),
+    }
+}
+
+#[test]
+fn new_email_title_prefers_sender() {
+    assert_eq!(
+        new_email_metadata().format_title(None).unwrap(),
+        "Ada Lovelace"
+    );
+}
+
+#[test]
+fn new_email_apns_matches_gmail_layout() {
+    let metadata = new_email_metadata();
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(alert.subtitle.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+
+    let apns = new_email_apns(&metadata);
+    assert_eq!(
+        apns.aps.thread_id.as_deref(),
+        Some(metadata.thread_id.as_str())
+    );
+    assert_eq!(
+        apns.push_notification_data.notification_id,
+        Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap()
+    );
+
+    let json = serde_json::to_value(&apns).unwrap();
+    assert_eq!(json["aps"]["alert"]["title"], "Ada Lovelace");
+    assert_eq!(json["aps"]["alert"]["subtitle"], "Quarterly plan");
+    assert_eq!(json["aps"]["alert"]["body"], "Here is the draft");
+}
+
+#[test]
+fn new_email_apns_falls_back_to_subject_without_sender() {
+    let mut metadata = new_email_metadata();
+    metadata.sender = None;
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.subtitle, None);
+    assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+}
+
+#[test]
+fn new_email_apns_treats_blank_sender_as_missing() {
+    let mut metadata = new_email_metadata();
+    metadata.sender = Some("   ".to_string());
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.subtitle, None);
+}
+
+#[test]
+fn new_email_apns_omits_blank_subject_subtitle() {
+    let mut metadata = new_email_metadata();
+    metadata.subject = "  ".to_string();
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(alert.subtitle, None);
+}
+
+#[test]
+fn new_email_collapse_key_is_per_thread() {
+    let entity = EntityType::EmailThread.with_entity_str("ignored");
+    let first = new_email_metadata();
+    let mut second = first.clone();
+    second.thread_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb".to_string();
+
+    assert_ne!(
+        first.collapse_key(&entity).into_hashed().into_inner(),
+        second.collapse_key(&entity).into_hashed().into_inner()
+    );
+    assert_eq!(
+        first.collapse_key(&entity).into_hashed().into_inner(),
+        first.collapse_key(&entity).into_hashed().into_inner()
+    );
 }
 
 /// A reminder metadata collapse key, hashed for comparison.

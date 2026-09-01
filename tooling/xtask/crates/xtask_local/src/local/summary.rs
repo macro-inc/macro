@@ -85,13 +85,16 @@ pub fn stop_command(instance: &Instance) -> String {
 /// Print the mode/instance/endpoints block after a successful startup.
 /// `frontend_url` differs by flow: the dev-server origin for `run_local`, the
 /// proxy-served bundle for headless `stack up`; `mailpit_url` follows the same
-/// direct-versus-single-origin distinction.
+/// direct-versus-single-origin distinction. `shared_app_url` is the public
+/// app tunnel when `--with-cf-tunnel` opened one — passed explicitly because,
+/// unlike the egress tunnel, it is not written into the env.
 pub fn print(
     mode: Mode,
     instance: &Instance,
     env: &ResolvedEnv,
     frontend_url: &str,
     mailpit_url: &str,
+    shared_app_url: Option<&str>,
 ) {
     let key = Style::new().dim();
     let link = Style::new().cyan();
@@ -147,6 +150,18 @@ pub fn print(
         );
         row("Receive webhooks at", sdk_webhook::relay_url().to_string());
     }
+    // The Cursor egress tunnel, when one opened this run: a public
+    // `EGRESS_BASE_URL` is always a tunnel, and the in-network default is not
+    // worth a row.
+    if let Some(url) = env.merged.get("EGRESS_BASE_URL")
+        && url.starts_with("https://")
+    {
+        row("cursor egress", url.clone());
+    }
+    // The public app tunnel (`--with-cf-tunnel`) — the URL to hand a friend.
+    if let Some(url) = shared_app_url {
+        row("shared app", url.to_string());
+    }
     // The frontend and mailpit rows come from the caller (they differ by
     // flow); the rest of the endpoint list is shared with `status-local`.
     for (label, url, _port) in endpoint_rows(instance) {
@@ -166,6 +181,13 @@ pub fn print(
     if let Some(url) = dd_logs_url() {
         row("dd logs", url);
     }
+    if port_open(9222) {
+        row("chrome (cdp)", "http://localhost:9222".into());
+    }
+    if port_open(6080) {
+        // Watch what an agent is doing in the shared browser, live.
+        row("chrome (watch)", "http://localhost:6080/vnc.html".into());
+    }
 
     row("logs", logs_command(instance, &env.generated_path));
     row("stop", stop_command(instance));
@@ -174,12 +196,17 @@ pub fn print(
 
 /// The trace viewer for the OTel spans the web app emits, if one is running.
 ///
-/// The viewers are global (fixed ports, one per machine, started manually via
-/// compose profiles — see `docker/docker-compose.yml`), so this probes rather
-/// than consulting the instance: the Jaeger UI on 16686, else a Datadog agent
-/// on the OTLP port 4318, whose traces land in the Datadog APM UI under the
-/// `env:` its compose profile sets (`DD_ENV`, default `local`).
+/// The viewers are global (fixed ports, one per machine, started via compose
+/// profiles — see `docker/docker-compose.yml`), so this probes rather than
+/// consulting the instance: Grafana (the LGTM stack) on 3001, the Jaeger UI
+/// on 16686, else a Datadog agent on the OTLP port 4318, whose traces land in
+/// the Datadog APM UI under the `env:` its compose profile sets (`DD_ENV`,
+/// default `local`).
 fn traces_url() -> Option<String> {
+    if port_open(3001) {
+        // Grafana Explore fronts both Tempo (traces) and Loki (logs).
+        return Some("http://localhost:3001/explore".into());
+    }
     if port_open(16686) {
         return Some("http://localhost:16686".into());
     }
@@ -193,10 +220,10 @@ fn traces_url() -> Option<String> {
 }
 
 /// The Datadog Logs Explorer for the OTel log records the web app emits —
-/// only when the Datadog agent is the running collector (Jaeger has no log
-/// UI; its OTLP logs are dropped).
+/// only when the Datadog agent is the running collector (LGTM's logs live in
+/// Grafana/Loki; Jaeger has no log UI and drops OTLP logs).
 fn dd_logs_url() -> Option<String> {
-    if port_open(16686) || !port_open(4318) {
+    if port_open(3001) || port_open(16686) || !port_open(4318) {
         return None;
     }
     Some(format!(

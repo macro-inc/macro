@@ -4,8 +4,8 @@ import { Show } from 'solid-js';
 type ThreadReplyRailProps = {
   /** Grouped replies continue the spine without another avatar branch. */
   grouped?: boolean;
-  /** An unread thread paints its complete rail path with the accent. */
-  newMessage?: boolean;
+  /** Stop at this row's avatar branch instead of continuing through the row. */
+  terminal?: boolean;
 };
 
 /**
@@ -14,20 +14,19 @@ type ThreadReplyRailProps = {
  * short of the reply avatar.
  */
 export function ThreadReplyRail(props: ThreadReplyRailProps) {
-  const railClass = () =>
-    cn(
-      'pointer-events-none absolute -z-1 channel-rail-left border-rail',
-      props.newMessage && 'border-accent'
-    );
+  const railClass =
+    'pointer-events-none absolute -z-1 channel-rail-left border-thread-rail';
   const railLeft =
     'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)';
 
   return (
     <>
-      <div class={cn(railClass(), 'inset-y-0')} style={{ left: railLeft }} />
+      <Show when={!props.terminal}>
+        <div class={cn(railClass, 'inset-y-0')} style={{ left: railLeft }} />
+      </Show>
       <Show when={!props.grouped}>
         <div
-          class={cn(railClass(), 'top-0 channel-rail-bottom rounded-bl-[14px]')}
+          class={cn(railClass, 'top-0 channel-rail-bottom rounded-bl-[14px]')}
           style={{
             left: railLeft,
             width:

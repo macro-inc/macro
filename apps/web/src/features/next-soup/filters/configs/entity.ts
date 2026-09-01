@@ -2,6 +2,7 @@ import { getEntityProjectId } from '@entity';
 import { defineQueryFilters } from '../filter-store/compile';
 import {
   activeAgentFilter as activeAgentPredicate,
+  calendarEventFilter as calendarEventPredicate,
   callsFilter as callsPredicate,
   channelsFilter as channelsPredicate,
   crmCompanyActiveFilter as crmCompanyActivePredicate,
@@ -10,6 +11,7 @@ import {
   doneRemindersFilter as doneRemindersPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
   firedRemindersFilter as firedRemindersPredicate,
+  notDoneRemindersFilter as notDoneRemindersPredicate,
   projectFilter as projectPredicate,
   remindersFilter as remindersPredicate,
   scheduledRemindersFilter as scheduledRemindersPredicate,
@@ -68,6 +70,15 @@ export const callsFilter = config({
   query: defineQueryFilters({}, { skipTargets: ['callf'] }),
 });
 
+// Calendar events are searchable by title. Scoping to them alone means
+// NIL-excluding every other entity type's id target while leaving `calf`
+// untouched, which is exactly what skipping `calf` produces.
+export const calendarFilter = config({
+  id: 'calendar',
+  predicate: calendarEventPredicate,
+  query: defineQueryFilters({}, { skipTargets: ['calf'] }),
+});
+
 export const crmCompanyFilter = config({
   id: 'crm-company',
   predicate: crmCompanyPredicate,
@@ -109,6 +120,19 @@ export const scheduledRemindersFilter = config({
       reminderCompleted: false,
       reminderFired: false,
     },
+  }),
+});
+
+// Everything not done — fired and scheduled together — for a single inbox
+// tab. Unlike Active/Scheduled it does not split on `reminderFired`, so both
+// ends share one `comp:false` query; the page limit is generous enough for an
+// inbox, and `soupQueryExcludesDone` still drops a reminder the moment it is
+// marked done.
+export const notDoneRemindersFilter = config({
+  id: 'reminders-not-done',
+  predicate: notDoneRemindersPredicate,
+  query: defineQueryFilters({
+    include: { includeReminders: true, reminderCompleted: false },
   }),
 });
 

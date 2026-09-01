@@ -1,22 +1,12 @@
-import { cn } from '@ui/utils/classname';
-import type { Accessor } from 'solid-js';
 import { threadConnectorStyle } from './utils/thread-rail-geometry';
 
-type ThreadReplyRailProps = {
-  isReplying: Accessor<boolean>;
-  firstThreadReplyNewMessage?: boolean;
-};
-
-export function ThreadReplyRailDecorations(props: ThreadReplyRailProps) {
+export function ThreadReplyRailDecorations() {
   return (
     <>
       {/* Branch elbow: continues the root message's rail segment and stops
           short of the first reply's avatar by the shared rail clearance. */}
       <div
-        class={cn(
-          'pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-rail rounded-bl-[14px]',
-          props.firstThreadReplyNewMessage && 'border-accent'
-        )}
+        class="pointer-events-none absolute top-0 -z-1 channel-rail-left channel-rail-bottom border-thread-rail rounded-bl-[14px]"
         style={{
           left: threadConnectorStyle.left,
           width: threadConnectorStyle.width,

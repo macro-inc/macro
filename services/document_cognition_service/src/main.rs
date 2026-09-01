@@ -30,12 +30,12 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState,
+    MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+    ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
+    StaticFileServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -152,6 +152,7 @@ async fn main() -> anyhow::Result<()> {
                 default_user_id: None,
             },
             macro_authorization::NoBotAuthorizer,
+            PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
         )));
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
@@ -690,7 +691,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized onboarding service");
 
-    let mcp_public_url = DocumentCognitionServiceUrl::new()?;
+    let mcp_public_url = &config.mcp_public_url;
     let mcp_client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
         format!("{mcp_public_url}/mcp/servers/auth/client-metadata"),
         format!("{mcp_public_url}/mcp/servers/auth/callback"),

@@ -20,10 +20,11 @@
 import { ScrollToBottomOverlay } from '@channel/Channel/ScrollToBottomOverlay';
 import type { ThreadListScrollState } from '@channel/Channel/ThreadList';
 import { Scroll } from '@ui';
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { Message } from './AgentMessage';
+import { ReplyToSelection } from './ReplyToSelection';
 
 /** The channel's `NEAR_BOTTOM_THRESHOLD`: within this, the view follows. */
 const NEAR_BOTTOM_PX = 50;
@@ -33,13 +34,14 @@ const SETTLE_MS = 1000;
 const ITEM_SIZE = 96;
 
 export function Transcript() {
-  const { messages, loadFailed } = useAgentSession();
+  const { messages, quoteSelection } = useAgentSession();
 
   let scrollRef: HTMLDivElement | undefined;
   let handle: VirtualizerHandle | undefined;
   let cancelPin: (() => void) | undefined;
   let growthObserver: ResizeObserver | undefined;
   let viewportObserver: ResizeObserver | undefined;
+  const [transcriptEl, setTranscriptEl] = createSignal<HTMLDivElement>();
 
   onCleanup(() => {
     cancelPin?.();
@@ -157,7 +159,7 @@ export function Transcript() {
   };
 
   return (
-    <div class="relative flex-1 min-h-0">
+    <div class="relative flex-1 min-h-0" ref={setTranscriptEl}>
       <Scroll scrollRef={attachScroller}>
         <div
           class="flex flex-col [overflow-anchor:none]"
@@ -165,11 +167,6 @@ export function Transcript() {
         >
           {/* Bottom-align short transcripts, chat-style. */}
           <div aria-hidden style={{ 'flex-grow': 1 }} />
-          <Show when={loadFailed()}>
-            <div class="w-full max-w-3xl mx-auto px-4 py-4 text-sm text-ink-muted">
-              Couldn't load this agent session.
-            </div>
-          </Show>
           <div ref={observeGrowth}>
             <Virtualizer
               ref={(virtualizer) => {
@@ -205,6 +202,7 @@ export function Transcript() {
         scrollState={scrollState}
         onScrollToBottom={pinToBottom}
       />
+      <ReplyToSelection container={transcriptEl()} onReply={quoteSelection} />
     </div>
   );
 }

@@ -1,16 +1,103 @@
 //! Outbound capabilities required by the harness domain.
 
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::{AgentSessionId, SandboxSize};
+use agent_session::domain::model::{AgentSessionId, ReplicaAddress, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
+use harness_id::HarnessId;
 
-use super::error::Result;
-use super::model::{PriorChannelMessage, SessionAnnouncement, SpawnContainer};
+use macro_user_id::user_id::MacroUserIdStr;
+
+use super::error::{HarnessError, Result};
+use super::model::{
+    AgentRuntimeConfig, HarnessCommand, PriorChannelMessage, ProvisionedEgress, SandboxEgress,
+    SessionAnnouncement, SpawnContainer,
+};
 use super::sandbox::SandboxResizeEffect;
+
+/// Delivers a session's command to the replica that manages its live actor.
+///
+/// The receiving side executes without re-resolving management (a forward is
+/// single-hop by contract, so two replicas with momentarily different views
+/// cannot bounce a command between each other). Success means the peer ran
+/// the command to completion - the response is the acknowledgment - so a
+/// caller that awaited a forward has the same guarantee as one that executed
+/// locally.
+pub trait CommandForwarder: Send + Sync + 'static {
+    /// Run `command` for `session` on the replica at `target`.
+    fn forward(
+        &self,
+        target: &ReplicaAddress,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// A forwarder for deployments with exactly one replica, where a live peer
+/// cannot exist: being asked to forward is itself the error, loudly, rather
+/// than a silent local fallback that would mask a mis-wiring.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPeers;
+
+impl CommandForwarder for NoPeers {
+    async fn forward(
+        &self,
+        target: &ReplicaAddress,
+        session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> Result<()> {
+        Err(HarnessError::Forward(rootcause::report!(
+            "this deployment has no command forwarding, yet {target} manages session {session}"
+        )))
+    }
+}
 
 #[cfg(test)]
 mod test;
+
+/// Resolves which registered harness currently serves a bot's sessions.
+///
+/// Resolved at bind time, not stamped at session creation, so rebinding an
+/// agent to another harness re-routes its existing sessions.
+pub trait HarnessBindings: Send + Sync + 'static {
+    /// The bot's current harness binding, or `None` for an unbound bot.
+    fn harness_for(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+}
+
+/// Durable attach/detach bookkeeping for harness runtime connections.
+///
+/// The registry itself is in-process liveness; this is what lets the rest of
+/// the product (the harness settings page) see whether a daemon is up.
+/// Methods take `Arc<Self>` and return owned futures so the registry can fire
+/// them from its own background tasks.
+pub trait HarnessPresence: Send + Sync + 'static {
+    /// A runtime attached for this harness.
+    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+
+    /// This harness's runtime connection closed.
+    fn disconnected(
+        self: Arc<Self>,
+        harness: HarnessId,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+}
+
+/// Resolves the runtime configuration for a bot that may receive agent
+/// session triggers.
+pub trait AgentRuntimeDirectory: Send + Sync + 'static {
+    /// Return a runtime profile for a managed agent, an external profile for a
+    /// BYOA bot, or `None` when the bot has no agent configuration.
+    fn runtime_for(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<AgentRuntimeConfig>>> + Send;
+}
 
 /// Loads messages preceding a channel-originated agent prompt.
 pub trait ChannelPromptContext: Send + Sync + 'static {
@@ -73,6 +160,45 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         bot: BotId,
         session: AgentSessionId,
     ) -> impl Future<Output = Option<RuntimeAttachment<Self::Connector>>> + Send;
+
+    /// The harness a bot's sessions currently bind to, without attaching
+    /// anything. `None` for an unbound bot. Same resolution as [`bind`], for
+    /// callers that need to know which harness serves a bot rather than to
+    /// route to it.
+    fn bound_harness(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+}
+
+/// Mints the one secret a sandbox is given, and the config that points it at
+/// the egress proxy.
+///
+/// A port rather than domain code because both halves are adapter work the
+/// domain has no business knowing: signing a JWT needs a key, and enumerating
+/// the owner's MCP servers needs their rows. What the domain keeps is *when* -
+/// once, at spawn, for the session's own owner.
+pub trait SandboxEgressProvisioner: Send + Sync + 'static {
+    /// The egress environment for one session, on behalf of `owner`, and the
+    /// hash its session row must carry for that environment to mean anything.
+    fn provision(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+        repo_url: &str,
+    ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
+
+    /// The egress environment rebuilt around a token that already exists.
+    ///
+    /// For reattaching to a sandbox that was spawned earlier: the sandbox
+    /// still holds its raw token (the row holds only the hash), so nothing is
+    /// minted - but the owner's connected servers are listed fresh, so an app
+    /// connected since the spawn is advertised on the next attach.
+    fn restore(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        session_token: String,
+    ) -> impl Future<Output = Result<SandboxEgress>> + Send;
 }
 
 /// Provisions the container transports agent sessions run through.
@@ -110,6 +236,21 @@ pub trait ContainerManager: Send + Sync + 'static {
         &self,
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Self::Transport>> + Send;
+
+    /// The raw egress session token the session's container holds, if this
+    /// provider's containers hold one.
+    ///
+    /// The harness keeps only the token's hash, so on a reattach the running
+    /// container is the one place the raw token still exists - it was handed
+    /// exactly one, at spawn, in its environment. Providers whose sessions
+    /// carry no egress environment (the in-process agent, Cursor's cloud)
+    /// answer `None`.
+    ///
+    /// Only meaningful for a running container; call it after [`Self::resume`].
+    fn session_token(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
 
     /// Destroy a session's container for good.
     ///

@@ -6,10 +6,10 @@ use crate::domain::{
         CalendarBackfillFailureDisposition, CalendarBackfillJobKey, CalendarCreationTarget,
         CalendarEvent, CalendarEventMutationTarget, CalendarEventSource, CalendarOccurrence,
         CalendarSyncStatus, DisconnectedGoogleCalendar, EventReminders, EventStatus, EventTime,
-        EventTransparency, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES,
-        GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleEventSource,
-        GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig, ProviderCalendar,
-        StoredGoogleCalendar,
+        EventTransparency, EventType, EventVisibility, GOOGLE_CALENDAR_FULL_SCOPE,
+        GOOGLE_CALENDAR_SCOPES, GoogleBackfillRunReport, GoogleCalendarSyncSnapshot,
+        GoogleEventSource, GoogleEventSyncBatch, GoogleWatchChannel, GoogleWatchConfig,
+        ProviderCalendar, StoredGoogleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventWrite, CalendarRepository, GoogleCalendarProvider,
@@ -97,6 +97,18 @@ impl CalendarRepository for FakeRepo {
         _requester_id: &str,
         _event_id: Uuid,
     ) -> Result<Option<CalendarEventMutationTarget>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn get_event_attendees(&self, _event_id: Uuid) -> Result<Vec<CalendarAttendee>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn get_occurrence_override_attendees(
+        &self,
+        _event_id: Uuid,
+        _recurrence_id: &str,
+    ) -> Result<Option<Vec<CalendarAttendee>>, Report> {
         unreachable!("mutation lookups are not exercised by sync tests")
     }
 
@@ -206,6 +218,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             status: EventStatus::Confirmed,
             visibility: EventVisibility::Default,
             transparency: EventTransparency::Opaque,
+            event_type: EventType::Default,
             time: EventTime::Timed {
                 starts_at,
                 ends_at,
@@ -214,6 +227,8 @@ fn valid_upsert() -> CalendarEventUpsert {
             recurrence_lines: Vec::new(),
             organizer_email: None,
             organizer_name: None,
+            creator_email: None,
+            creator_name: None,
             conference_url: None,
             conference_provider: None,
             sequence: 0,

@@ -13,23 +13,32 @@ name = "agent_harness_service_openapi"
 path = "src/openapi.rs"
 
 [dependencies]
+agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
 ai_tools = { path = "../../crates/ai_tools" }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
 agent_session = { path = "../../crates/agent_session" }
-agent_trigger = { path = "../../crates/agent_trigger" }
+agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }
 aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
+harness_id = { path = "../../crates/harness_id" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 aws-sdk-kms = { workspace = true }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
+github = { path = "../../crates/github", default-features = false, features = [
+  "outbound",
+  "ports",
+  "sync",
+] }
+pipedream_mcp = { path = "../../crates/pipedream_mcp" }
+url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
@@ -39,6 +48,7 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }
+rootcause = { workspace = true }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }
@@ -53,6 +63,7 @@ macro_authorization = { path = "../../crates/macro_authorization", default-featu
 ] }
 macro_cors = { path = "../../crates/macro_cors" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+reqwest = { workspace = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }

@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_client_protocol::schema::v1::{RequestId, Response, SessionId};
+use agent_client_protocol::schema::v1::{McpServer, RequestId, Response, SessionId};
 use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
 };
@@ -136,6 +136,14 @@ fn acp_session_of(frame: &RawJsonRpcMessage) -> Option<SessionId> {
 pub struct RuntimeAttachment<Connector> {
     pub(crate) connector: Connector,
     pub(crate) handshake: watch::Sender<HandshakeStatus>,
+    /// MCP servers the agent is told to connect to when this attachment's
+    /// session is established (`session/new`, `session/load`,
+    /// `session/resume`).
+    ///
+    /// Per attachment rather than per session row because it is computed
+    /// fresh at each attach - the set follows what the owner has connected
+    /// *now*, not what they had connected when the session was created.
+    pub(crate) mcp_servers: Vec<McpServer>,
 }
 
 impl<Connector> RuntimeAttachment<Connector> {
@@ -148,7 +156,16 @@ impl<Connector> RuntimeAttachment<Connector> {
         Self {
             connector,
             handshake,
+            mcp_servers: Vec::new(),
         }
+    }
+
+    /// The MCP servers the agent is handed when this attachment's session is
+    /// established.
+    #[must_use]
+    pub fn mcp_servers(mut self, mcp_servers: Vec<McpServer>) -> Self {
+        self.mcp_servers = mcp_servers;
+        self
     }
 }
 
@@ -268,6 +285,9 @@ where
                 frames,
             },
             handshake: self.handshake.clone(),
+            // External runtimes hold no egress environment; the sessions
+            // they serve are not handed proxied MCP servers.
+            mcp_servers: Vec::new(),
         }
     }
 

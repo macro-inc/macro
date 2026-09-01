@@ -22,11 +22,7 @@ function FileLevelSpacer(props: { size: FileListSize }) {
 }
 
 function _CaretSpacer(props: { size: FileListSize }) {
-  return (
-    <div
-      class={cn('caret-spacer min-h-full', FILE_LIST_CARET_WIDTH[props.size])}
-    />
-  );
+  return <div class={cn('min-h-full', FILE_LIST_CARET_WIDTH[props.size])} />;
 }
 
 function _Caret(props: { isExpanded: boolean; size: FileListSize }) {

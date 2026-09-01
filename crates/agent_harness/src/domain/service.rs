@@ -6,6 +6,7 @@ use std::sync::Arc;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::error::AgentSessionError;
+use agent_session::domain::model::SessionManagement;
 use agent_session::domain::model::{
     AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId, SandboxSize,
 };
@@ -22,11 +23,11 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
-    OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
+    OpenSession, SessionAnnouncement, SpawnContainer,
 };
 use crate::domain::ports::{
-    AgentPromptComposer, ChannelPromptContext, ContainerManager, RuntimeConnections,
-    SessionAnnouncer,
+    AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
+    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::sandbox::SandboxResizeEffect;
 
@@ -38,15 +39,56 @@ struct QueuedCommand {
     /// The caller's span, carried across the queue so the work the worker does
     /// on its own task still hangs off whatever triggered it.
     span: tracing::Span,
+    /// Whether the worker resolves the session's managing replica before
+    /// executing. Commands admitted at an ingress route; a command received
+    /// *as* a forward executes here unconditionally, which is what makes
+    /// forwarding single-hop - two replicas with momentarily different lease
+    /// views cannot bounce a command between each other.
+    route: bool,
 }
 
-struct AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer> {
+/// [`CommandForwarder`], object-safe.
+///
+/// Held erased inside the service so forwarding does not become an eighth
+/// type parameter on every impl block; the public port keeps its natural
+/// `impl Future` shape and this shim boxes at the one internal call site.
+trait ErasedForwarder: Send + Sync + 'static {
+    fn forward<'a>(
+        &'a self,
+        target: &'a agent_session::domain::model::ReplicaAddress,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
+}
+
+impl<F: CommandForwarder> ErasedForwarder for F {
+    fn forward<'a>(
+        &'a self,
+        target: &'a agent_session::domain::model::ReplicaAddress,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(CommandForwarder::forward(self, target, session, command))
+    }
+}
+
+struct AgentHarnessInner<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+> {
     sessions: Sessions,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
     prompt_context: PromptContext,
     prompt_composer: PromptComposer,
+    egress: Egress,
+    forwarder: Box<dyn ErasedForwarder>,
     defaults: HarnessDefaults,
 }
 
@@ -58,15 +100,32 @@ pub struct AgentHarnessService<
     Runtimes,
     PromptContext,
     PromptComposer,
+    Egress,
 > {
     inner: Arc<
-        AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>,
+        AgentHarnessInner<
+            Sessions,
+            Containers,
+            Announcer,
+            Runtimes,
+            PromptContext,
+            PromptComposer,
+            Egress,
+        >,
     >,
     workers: Arc<SessionWorkers>,
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
-    AgentHarnessService<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+    AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+    >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
@@ -74,8 +133,13 @@ where
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     /// Build the orchestrator from its ports.
+    ///
+    /// One argument per port, however many ports there are: bundling some of
+    /// them into a struct would only move the same list one level down.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         sessions: Sessions,
         containers: Containers,
@@ -83,6 +147,8 @@ where
         runtimes: Runtimes,
         prompt_context: PromptContext,
         prompt_composer: PromptComposer,
+        egress: Egress,
+        forwarder: impl CommandForwarder,
         defaults: impl Into<HarnessDefaults>,
     ) -> Self {
         Self {
@@ -93,6 +159,8 @@ where
                 runtimes,
                 prompt_context,
                 prompt_composer,
+                egress,
+                forwarder: Box::new(forwarder),
                 defaults: defaults.into(),
             }),
             workers: Arc::new(DashMap::new()),
@@ -108,7 +176,32 @@ where
     pub fn execute(
         &self,
         session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<()>> + Send + 'static {
+        self.enqueue(session_id, command, true)
+    }
+
+    /// [`execute`](Self::execute), without resolving which replica manages
+    /// the session first.
+    ///
+    /// The entry point for commands received *as* forwards: the sender
+    /// already resolved management to this replica, and re-resolving here is
+    /// what could bounce a command between two replicas whose lease views
+    /// momentarily differ. Forwarding is single-hop; this is the second hop's
+    /// half of that contract.
+    pub fn execute_here(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<()>> + Send + 'static {
+        self.enqueue(session_id, command, false)
+    }
+
+    fn enqueue(
+        &self,
+        session_id: AgentSessionId,
         mut command: HarnessCommand,
+        route: bool,
     ) -> impl Future<Output = Result<()>> + Send + 'static {
         let caller = tracing::Span::current();
         let result = loop {
@@ -118,6 +211,7 @@ where
                 command,
                 completed,
                 span: caller.clone(),
+                route,
             };
 
             match commands.send(queued) {
@@ -205,12 +299,19 @@ where
     }
 }
 
-/// The harness is what holds a session's live resources, so it is what the
-/// control routes notify. Both operations go through the per-session queue, so
-/// a teardown cannot land in the middle of an open and a model change cannot
-/// overtake the prompt it was meant to follow.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
-    AgentSessionNotificationRecipient
+/// The receiving half of command forwarding: what the internal forward route
+/// calls, implemented by the harness as [`AgentHarnessService::execute_here`].
+pub trait ForwardedCommands: Send + Sync + 'static {
+    /// Run a command a peer already routed to this replica.
+    fn execute_forwarded(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+    ForwardedCommands
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -218,6 +319,7 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
         Runtimes,
         PromptContext,
         PromptComposer,
+        Egress,
     >
 where
     Sessions: AgentSessionService,
@@ -226,6 +328,40 @@ where
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+{
+    async fn execute_forwarded(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> Result<()> {
+        self.execute_here(session_id, command).await
+    }
+}
+
+/// The harness is what holds a session's live resources, so it is what the
+/// control routes notify. Both operations go through the per-session queue, so
+/// a teardown cannot land in the middle of an open and a model change cannot
+/// overtake the prompt it was meant to follow.
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+    AgentSessionNotificationRecipient
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: ChannelPromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     async fn session_deleted(
         &self,
@@ -260,6 +396,21 @@ where
             .await
             .map_err(into_session_error)
     }
+
+    async fn session_harness(
+        &self,
+        id: AgentSessionId,
+    ) -> agent_session::domain::error::Result<Option<harness_id::HarnessId>> {
+        // The row is the source of truth for which bot the session runs, and
+        // the binding resolves the bot's current harness the same way `bind`
+        // does at delivery time.
+        let session = self.inner.sessions.get_session(id).await?;
+        self.inner
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)
+    }
 }
 
 /// External sessions create the row and announce - the magic-chip message
@@ -269,7 +420,7 @@ where
 /// The announcement is best-effort: a session a runtime is about to serve
 /// must not die because the courtesy post failed, most plainly when the bot
 /// cannot post in the claimed channel.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
     agent_session::domain::ports::SessionOpener
     for AgentHarnessService<
         Sessions,
@@ -278,6 +429,7 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
         Runtimes,
         PromptContext,
         PromptComposer,
+        Egress,
     >
 where
     Sessions: AgentSessionService,
@@ -286,6 +438,7 @@ where
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     async fn open_external_session(
         &self,
@@ -306,6 +459,10 @@ where
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
+                instructions: request.instructions,
+                // No sandbox: the runtime dials in and reaches the network on
+                // its operator's own terms, so there is no egress token.
+                egress_token_hash: None,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.
             })
@@ -366,11 +523,21 @@ where
             .sessions
             .user_sandbox_size(&request.owner)
             .await?;
+        let session_id = AgentSessionId::new();
+        // Same ordering as the trigger path's open: the token has to be minted
+        // before the row, because the row is what carries the hash that makes
+        // it mean anything.
+        let egress = self
+            .inner
+            .egress
+            .provision(session_id, &request.owner, &defaults.repo_url)
+            .await
+            .map_err(into_session_error)?;
         let session = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
-                id: AgentSessionId::new(),
+                id: session_id,
                 owner_id: request.owner.clone(),
                 bot_id: defaults.bot_id,
                 thread_id: None,
@@ -381,17 +548,20 @@ where
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
+                instructions: request.instructions,
+                egress_token_hash: Some(egress.session_token_hash),
             })
             .await?;
 
+        let mcp_servers = egress.sandbox.acp_servers();
         let container = match self
             .inner
             .containers
             .spawn(SpawnContainer {
                 session_id: session.id,
-                kind: AgentKind::of(session.bot_id),
-                repo_url: defaults.repo_url.clone(),
+                kind: AgentKind::for_session(session.bot_id, &session.harness),
                 size: sandbox_size,
+                egress: egress.sandbox,
             })
             .await
         {
@@ -417,7 +587,10 @@ where
         };
         self.inner
             .sessions
-            .attach_session(session.id, RuntimeAttachment::solo(container))
+            .attach_session(
+                session.id,
+                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+            )
             .await?;
 
         if let Some(prompt) = initial_prompt {
@@ -465,8 +638,16 @@ fn into_session_error(error: HarnessError) -> AgentSessionError {
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
-    AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+    AgentHarnessInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+    >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
@@ -474,34 +655,126 @@ where
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
-    async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
-        match &command {
-            HarnessCommand::Open(open)
-                if AgentKind::of(open.bot_id) == AgentKind::Cursor
-                    && !is_macro_staff(&open.origin.sender) =>
-            {
-                return Err(AgentSessionError::Forbidden.into());
-            }
-            HarnessCommand::Deliver(deliver) => {
-                let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id) == AgentKind::Cursor
-                    && !deliver.actor.as_ref().is_some_and(is_macro_staff)
-                {
-                    return Err(AgentSessionError::Forbidden.into());
-                }
-            }
-            HarnessCommand::Open(_)
-            | HarnessCommand::SetSandboxSize(_)
-            | HarnessCommand::Delete => {}
+    /// Execute where the session's live actor is: locally when nobody (or
+    /// this replica) manages it, on the managing peer otherwise.
+    ///
+    /// A failed forward re-reads the lease once: the one legitimate reason a
+    /// live manager refuses its own session is that it died mid-flight, and
+    /// then its heartbeat going stale is what lets this replica take over. A
+    /// manager that is alive but unreachable stays an error - executing
+    /// locally anyway is how two actors end up on one session.
+    /// The routing decision is recorded on the span, not only logged: which of
+    /// the three answers the lease gave, which peer it named, and whether the
+    /// command left this process. Those are the fields you group by when a
+    /// replica is mishandling commands, and a log line cannot be aggregated.
+    #[tracing::instrument(
+        err,
+        skip(self, command),
+        fields(
+            %session_id,
+            agent.session.management = tracing::field::Empty,
+            agent.session.manager_replica = tracing::field::Empty,
+            agent.command.forwarded = tracing::field::Empty,
+            agent.command.stale_fallback = tracing::field::Empty,
+        )
+    )]
+    async fn route_then_execute(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> Result<()> {
+        let span = tracing::Span::current();
+        // Open never routes: it is what creates the session row this routing
+        // would read, and a fresh id has no manager to defer to.
+        if matches!(command, HarnessCommand::Open(_)) {
+            span.record("agent.session.management", "open");
+            span.record("agent.command.forwarded", false);
+            return self.execute(session_id, command).await;
         }
+        let manager = match self.sessions.management(session_id).await? {
+            SessionManagement::Unmanaged => {
+                span.record("agent.session.management", "unmanaged");
+                span.record("agent.command.forwarded", false);
+                return self.execute(session_id, command).await;
+            }
+            SessionManagement::Ours => {
+                span.record("agent.session.management", "ours");
+                span.record("agent.command.forwarded", false);
+                return self.execute(session_id, command).await;
+            }
+            SessionManagement::Peer(manager) => manager,
+        };
+        span.record("agent.session.management", "peer");
+        span.record(
+            "agent.session.manager_replica",
+            tracing::field::display(manager.replica),
+        );
+        let Some(address) = manager.address else {
+            // Recorded false deliberately: the command stayed here, but as an
+            // error rather than a local execution.
+            span.record("agent.command.forwarded", false);
+            return Err(HarnessError::ManagerUnreachable(session_id));
+        };
+        span.record("agent.command.forwarded", true);
+        tracing::info!(%session_id, peer = %manager.replica, "forwarding an agent session command");
+        match self
+            .forwarder
+            .forward(&address, session_id, command.clone())
+            .await
+        {
+            Ok(()) => Ok(()),
+            Err(forward_error) => match self.sessions.management(session_id).await? {
+                SessionManagement::Unmanaged | SessionManagement::Ours => {
+                    // Worth aggregating rather than only logging: routine
+                    // fallbacks mean heartbeats are not keeping up, which is a
+                    // different problem from an occasional dead peer.
+                    span.record("agent.command.stale_fallback", true);
+                    tracing::warn!(
+                        error = ?forward_error,
+                        %session_id,
+                        "the managing replica went stale mid-forward; executing locally"
+                    );
+                    self.execute(session_id, command).await
+                }
+                SessionManagement::Peer(_) => Err(forward_error),
+            },
+        }
+    }
 
+    async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
         match command {
             HarnessCommand::Open(command) => self.open(session_id, command).await,
             HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
             HarnessCommand::SetSandboxSize(size) => self.apply_sandbox_size(session_id, size).await,
             HarnessCommand::Delete => self.delete(session_id).await,
         }
+    }
+
+    /// The MCP servers to advertise when reattaching to an existing container.
+    ///
+    /// The raw session token exists in exactly one place after spawn - the
+    /// container's own environment - so it is read back from there and wrapped
+    /// in a fresh listing of the owner's connected servers. A container that
+    /// holds no token (a provider whose sessions carry no egress environment,
+    /// or a sandbox from before tokens existed) gets no servers, which is
+    /// also everything it could do with them.
+    #[tracing::instrument(err, skip(self, owner), fields(%session_id, %owner))]
+    async fn resumed_mcp_servers(
+        &self,
+        session_id: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
+        let Some(session_token) = self.containers.session_token(session_id).await? else {
+            tracing::debug!("container holds no egress token; restoring no MCP servers");
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .egress
+            .restore(owner, session_token)
+            .await?
+            .acp_servers())
     }
 
     /// Release everything the session holds, then delete it.
@@ -534,7 +807,7 @@ where
         // runs in Cursor's cloud, the in-memory bot has no sandbox, and an
         // external bot provisions its own. For all three, the size is only
         // recorded below as a preference.
-        if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
+        if AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::SandboxedCoder
             && effect != SandboxResizeEffect::NoOp
         {
             if effect == SandboxResizeEffect::Restart {
@@ -543,8 +816,14 @@ where
             self.containers.resize(session_id, size).await?;
             if effect == SandboxResizeEffect::Restart {
                 let container = self.containers.resume(session_id).await?;
+                let mcp_servers = self
+                    .resumed_mcp_servers(session_id, &session.owner_id)
+                    .await?;
                 self.sessions
-                    .attach_session(session_id, RuntimeAttachment::solo(container))
+                    .attach_session(
+                        session_id,
+                        RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                    )
                     .await?;
             }
         }
@@ -565,7 +844,11 @@ where
         agent.session.id = tracing::field::Empty,
     ))]
     async fn open(&self, session_id: AgentSessionId, command: OpenSession) -> Result<()> {
-        let OpenSession { bot_id, origin } = command;
+        let OpenSession {
+            bot_id,
+            runtime,
+            origin,
+        } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
         let defaults = self.defaults.for_bot(bot_id);
         let repo_url = defaults.repo_url.clone();
@@ -578,6 +861,16 @@ where
             .compose(&origin.content, Some(&prior_messages))
             .await?;
 
+        // Provisioned before the session exists, because the row is what makes
+        // the token mean anything: it carries the hash the proxy recognises.
+        // Minted here, where the session's owner is in hand, and only here -
+        // the token is scoped to this session and spends this person's
+        // credentials, so there is nowhere else it could correctly come from.
+        let egress = self
+            .egress
+            .provision(session_id, &origin.sender, &repo_url)
+            .await?;
+
         self.sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
@@ -585,12 +878,17 @@ where
                 bot_id,
                 thread_id: Some(origin.thread_id),
                 originating_message_id: Some(origin.message_id),
-                model: defaults.model.clone(),
-                harness: defaults.harness.clone(),
+                model: runtime.model.clone(),
+                harness: runtime.harness.clone(),
                 repo_url: Some(repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
+                // A mention carries no instructions: the prompt is whatever
+                // was said in the channel, and nothing there states how the
+                // runtime should work.
+                instructions: None,
+                egress_token_hash: Some(egress.session_token_hash),
                 // This open came from the trigger pipeline seeing the mention.
             })
             .await?;
@@ -607,13 +905,14 @@ where
             })
             .await?;
 
+        let mcp_servers = egress.sandbox.acp_servers();
         let container = match self
             .containers
             .spawn(SpawnContainer {
                 session_id,
-                kind: AgentKind::of(bot_id),
-                repo_url,
+                kind: runtime.kind,
                 size: sandbox_size,
+                egress: egress.sandbox,
             })
             .await
         {
@@ -634,7 +933,10 @@ where
             }
         };
         self.sessions
-            .attach_session(session_id, RuntimeAttachment::solo(container))
+            .attach_session(
+                session_id,
+                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+            )
             .await?;
         let mut action = AgentAction::prompt(composed_prompt);
         let AgentAction::Prompt(prompt) = &mut action else {
@@ -707,10 +1009,16 @@ where
             // wire.
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id).is_managed() {
+                if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
+                    let mcp_servers = self
+                        .resumed_mcp_servers(session_id, &session.owner_id)
+                        .await?;
                     self.sessions
-                        .attach_session(session_id, RuntimeAttachment::solo(container))
+                        .attach_session(
+                            session_id,
+                            RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                        )
                         .await?;
                 } else {
                     // An external runtime is not ours to start - only its
@@ -809,10 +1117,19 @@ async fn run_session_worker<
     Runtimes,
     PromptContext,
     PromptComposer,
+    Egress,
 >(
     session_id: AgentSessionId,
     inner: Arc<
-        AgentHarnessInner<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer>,
+        AgentHarnessInner<
+            Sessions,
+            Containers,
+            Announcer,
+            Runtimes,
+            PromptContext,
+            PromptComposer,
+            Egress,
+        >,
     >,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
@@ -822,14 +1139,23 @@ async fn run_session_worker<
     Runtimes: RuntimeConnections,
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand {
             command,
             completed,
             span,
+            route,
         } = queued;
-        let result = inner.execute(session_id, command).instrument(span).await;
+        let result = if route {
+            inner
+                .route_then_execute(session_id, command)
+                .instrument(span)
+                .await
+        } else {
+            inner.execute(session_id, command).instrument(span).await
+        };
         let _ = completed.send(result);
     }
 }

@@ -36,6 +36,7 @@ export function ThreadRow(props: ThreadRowProps) {
             {(id) => <ChannelCreatedIndicator channelId={id()} />}
           </Show>
           <NewDivider
+            createdAt={props.message.created_at}
             listMeta={props.listMeta}
             onDismiss={props.onDismissNewMessages}
           />
@@ -51,7 +52,7 @@ export function ThreadRow(props: ThreadRowProps) {
               rows. */}
           <Show when={props.listMeta?.threadRailBelow}>
             <div
-              class="pointer-events-none absolute -z-1 channel-rail-left border-rail left-(--left-of-channel-rail) bottom-0"
+              class="pointer-events-none absolute -z-1 channel-rail-left border-thread-rail left-(--left-of-channel-rail) bottom-0"
               style={{
                 top: props.listMeta?.isGroupedWithPrevious
                   ? '0'

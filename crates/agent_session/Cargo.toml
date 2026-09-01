@@ -11,6 +11,7 @@ test-utils = ["dep:mockall", "agent_fold/test-utils"]
 [dependencies]
 
 agent-client-protocol = { workspace = true }
+harness_id = { path = "../harness_id" }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 dashmap = { workspace = true }
@@ -50,6 +51,8 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 agent-client-protocol = { workspace = true }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
+harness_id = { path = "../harness_id", features = ["test-utils"] }
+model_user = { path = "../model_user" }
 non_empty = { path = "../non_empty" }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 axum = { workspace = true, features = ["ws"] }

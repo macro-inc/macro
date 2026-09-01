@@ -34,7 +34,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.NOTIFICATION_SERVICE_URL]: 'https://notifications-dev.macro.com',
   [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://auth-service-dev.macro.com',
   [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]:
-    'https://cloud-storage-dev.macro.com',
+    'https://dev-gateway.macro.com/dss',
   [ServiceUrl.CONNECTION_GATEWAY_URL]:
     'https://connection-gateway-dev.macro.com',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
@@ -53,7 +53,7 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.STATIC_FILE_SERVICE_URL]: 'https://static-file-service.macro.com',
   [ServiceUrl.NOTIFICATION_SERVICE_URL]: 'https://notifications.macro.com',
   [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://auth-service.macro.com',
-  [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]: 'https://cloud-storage.macro.com',
+  [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]: 'https://gateway.macro.com/dss',
   [ServiceUrl.CONNECTION_GATEWAY_URL]: 'https://connection-gateway.macro.com',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
     'https://document-cognition.macro.com',

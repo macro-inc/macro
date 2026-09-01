@@ -1,8 +1,15 @@
 //! Service implementation for the MCP OAuth broker.
 
+#[cfg(test)]
+mod test;
+
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
-use std::{future::Future, sync::Arc, time::Duration};
+use std::{
+    future::Future,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use super::{
     models::{
@@ -116,16 +123,17 @@ where
             .refresh_token
             .ok_or(TokenExchangeError::RefreshTokenRequired)?;
 
-        let (access_token, new_refresh_token) = self
+        let tokens = self
             .oauth_provider
             .refresh_access_token(&refresh_token)
             .await
             .map_err(TokenExchangeError::RefreshFailed)?;
 
         Ok(TokenResponse {
-            access_token,
-            refresh_token: new_refresh_token,
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
             token_type: "Bearer",
+            expires_in: Some(tokens.expires_in),
         })
     }
 
@@ -168,6 +176,7 @@ where
             access_token: issued.access_token,
             refresh_token: issued.refresh_token,
             token_type: "Bearer",
+            expires_in: issued.access_token_expires_at.map(seconds_until),
         })
     }
 }
@@ -306,21 +315,29 @@ where
 
         let code = params.code.ok_or(CompleteCallbackError::MissingCode)?;
 
-        let (access_token, refresh_token) = self
+        let tokens = self
             .oauth_provider
             .exchange_authorization_code(&code)
             .await
             .map_err(CompleteCallbackError::AuthorizationCodeExchangeFailed)?;
+
+        // The client may sit on the broker code for up to `AUTHORIZATION_CODE_TTL`
+        // before redeeming it, so record when the upstream token actually expires
+        // and count down from that at token exchange rather than replaying a stale
+        // `expires_in`.
+        let access_token_expires_at =
+            SystemTime::now().checked_add(Duration::from_secs(tokens.expires_in));
 
         let issued_code = uuid::Uuid::new_v4().to_string();
         self.inflight_auth
             .insert_issued(
                 &issued_code,
                 IssuedAuthorizationCode {
-                    access_token,
-                    refresh_token,
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token,
                     code_challenge: pending.code_challenge,
                     redirect_uri: pending.client_redirect_uri.clone(),
+                    access_token_expires_at,
                 },
             )
             .await
@@ -351,6 +368,15 @@ where
     async fn cleanup_expired(&self) -> anyhow::Result<()> {
         self.inflight_auth.cleanup_expired().await
     }
+}
+
+/// Seconds from now until `deadline`, saturating at zero for a deadline that
+/// has already passed.
+fn seconds_until(deadline: SystemTime) -> u64 {
+    deadline
+        .duration_since(SystemTime::now())
+        .map(|remaining| remaining.as_secs())
+        .unwrap_or(0)
 }
 
 fn is_allowed_redirect_uri(uri: &str) -> bool {

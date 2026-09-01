@@ -4,6 +4,7 @@ import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
+import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
@@ -24,6 +25,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { splitBackInterceptor } from '../back-interceptor';
 import {
   type SplitBottomPanelRegistration,
   type SplitFileMenuActionGroups,
@@ -32,7 +34,9 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
+import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
+import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
@@ -71,8 +75,13 @@ export function SplitPanel(props: SplitPanelProps) {
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
+  const ownedSlots = createOwnedSlots();
 
   const splitLayoutHelpers = useSplitLayout();
+  const isNotUnifiedList = () => {
+    const content = props.handle.content();
+    return content.type !== 'component' || !isListViewID(content.id);
+  };
 
   registerSplitHotkeys({
     // Leaving a piece of content should return you to the list you reached it
@@ -88,10 +97,7 @@ export function SplitPanel(props: SplitPanelProps) {
         referredFrom: 'hotkey',
       });
     },
-    isNotUnifiedList: () => {
-      const content = props.handle.content();
-      return !isListViewID(content.id);
-    },
+    isNotUnifiedList,
     isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
@@ -218,6 +224,46 @@ export function SplitPanel(props: SplitPanelProps) {
     const activeId = manager.activeSplitId();
     return activeId === props.split.id || activeId === peerId;
   });
+
+  const usesComposableLayout = () =>
+    props.split.mount.kind === 'component' &&
+    props.split.mount.meta.splitPanelLayout === 'composable';
+
+  const MountedContent = () => (
+    <SplitPanelControllerProvider
+      controller={{
+        canGoBack: props.handle.canGoBack,
+        goBack: () => {
+          if (splitBackInterceptor()?.()) return;
+          props.handle.goBack();
+        },
+        canGoForward: props.handle.canGoForward,
+        goForward: props.handle.goForward,
+        canClose: () => {
+          const manager = globalSplitManager();
+          return manager
+            ? shouldShowSplitCloseButton(manager, props.handle)
+            : false;
+        },
+        close: props.handle.close,
+      }}
+    >
+      <Suspense>
+        <SoupViewContextProvider soup={nextSoup}>
+          <BlockOpenTrackingDelayContext.Provider
+            value={
+              props.handle.isViewerSplit()
+                ? PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS
+                : 0
+            }
+          >
+            <Dynamic component={props.split.mount.element} />
+          </BlockOpenTrackingDelayContext.Provider>
+        </SoupViewContextProvider>
+      </Suspense>
+    </SplitPanelControllerProvider>
+  );
+
   return (
     <SoupContextProvider soup={nextSoup}>
       <SplitPanelContext.Provider
@@ -245,6 +291,7 @@ export function SplitPanel(props: SplitPanelProps) {
           setTitleFileMenuTrigger,
           titleFileMenuActions,
           setTitleFileMenuActions,
+          replaceOwnedSlot: ownedSlots.replace,
           panelSize,
           panelRef,
         }}
@@ -316,83 +363,85 @@ export function SplitPanel(props: SplitPanelProps) {
               )}
               depth={isTouchDevice() ? 0 : 1}
             >
-              <Panel.Header
-                class={cn(
-                  'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
-                  'z-split-panel-chrome',
-                  // On mobile/tablet the header collapses to a zero-height grid row;
-                  // SplitHeader overlays the body as floating islands.
-                  'touch:min-h-0 touch:border-b-0',
-                  shouldHideSplitHeader() && 'hidden'
-                )}
-              >
-                <SplitHeader
-                  ref={setHeaderRef}
-                  collapseController={headerCollapseController}
-                />
-              </Panel.Header>
+              <Show
+                when={usesComposableLayout()}
+                fallback={
+                  <>
+                    <Panel.Header
+                      class={cn(
+                        'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                        'z-split-panel-chrome',
+                        // On mobile/tablet the header collapses to a zero-height grid row;
+                        // SplitHeader overlays the body as floating islands.
+                        'touch:min-h-0 touch:border-b-0',
+                        shouldHideSplitHeader() && 'hidden'
+                      )}
+                    >
+                      <SplitHeader
+                        ref={setHeaderRef}
+                        collapseController={headerCollapseController}
+                      />
+                    </Panel.Header>
 
-              <Panel.Toolbar
-                class={cn(
-                  'items-start overflow-visible',
-                  !hasToolbarContent() && 'hidden',
-                  isTouchDevice() && 'hidden',
-                  'border-b-0'
-                )}
-              >
-                <SplitToolbar
-                  ref={setToolbarRef}
-                  collapseController={toolbarCollapseController}
-                />
-              </Panel.Toolbar>
+                    <Panel.Toolbar
+                      class={cn(
+                        'items-start overflow-visible',
+                        !hasToolbarContent() && 'hidden',
+                        isTouchDevice() && 'hidden',
+                        'border-b-0'
+                      )}
+                    >
+                      <SplitToolbar
+                        ref={setToolbarRef}
+                        collapseController={toolbarCollapseController}
+                      />
+                    </Panel.Toolbar>
 
-              <Panel.Body>
-                <div class="@container/split size-full min-h-0 overflow-hidden relative flex flex-col">
-                  <div
-                    class={cn(
-                      'min-h-0 min-w-0 overflow-hidden relative',
-                      bottomPanel() ? 'h-1/2' : 'h-full'
-                    )}
-                  >
-                    <Suspense>
-                      <SoupViewContextProvider soup={nextSoup}>
-                        <BlockOpenTrackingDelayContext.Provider
-                          value={
-                            props.handle.isViewerSplit()
-                              ? PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS
-                              : 0
-                          }
+                    <Panel.Body>
+                      <div class="@container/split size-full min-h-0 overflow-hidden relative flex flex-col">
+                        <div
+                          class={cn(
+                            'min-h-0 min-w-0 overflow-hidden relative',
+                            bottomPanel() ? 'h-1/2' : 'h-full'
+                          )}
                         >
-                          <Dynamic component={props.split.mount.element} />
-                        </BlockOpenTrackingDelayContext.Provider>
-                      </SoupViewContextProvider>
-                    </Suspense>
-                  </div>
-                  <Show when={bottomPanel()}>
-                    {(panel) => (
-                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
-                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
-                          <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-content-secondary">
-                            {panel().title}
-                          </h3>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            label="Close"
-                            onClick={() => panel().onClose?.()}
-                          >
-                            <CloseIcon />
-                          </Button>
+                          <MountedContent />
                         </div>
-                        <div class="min-h-0 flex-1 overflow-hidden">
-                          {panel().content()}
-                        </div>
+                        <Show when={bottomPanel()}>
+                          {(panel) => (
+                            <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
+                              <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
+                                <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-ink-muted">
+                                  {panel().title}
+                                </h3>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  label="Close"
+                                  onClick={() => panel().onClose?.()}
+                                >
+                                  <CloseIcon />
+                                </Button>
+                              </div>
+                              <div class="min-h-0 flex-1 overflow-hidden">
+                                {panel().content()}
+                              </div>
+                            </div>
+                          )}
+                        </Show>
                       </div>
-                    )}
-                  </Show>
+                      <MobileTopEdgeFade />
+                    </Panel.Body>
+                  </>
+                }
+              >
+                <div
+                  class="size-full min-h-0 min-w-0 overflow-hidden"
+                  style={{ 'grid-area': '1 / 1 / -1 / -1' }}
+                >
+                  <MountedContent />
                 </div>
-                <MobileTopEdgeFade />
-              </Panel.Body>
+              </Show>
             </Panel>
           </div>
         </SplitDrawerGroup>

@@ -1,9 +1,11 @@
 ## Development Commands
+- Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
 - `bun run check`: check typescript changes 
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
+- Email rendering snapshots (Playwright HTML fixtures, not inbox e2e) live in `src/lib/core/email/tests`. Run `just test-email-rendering`. Add a fixture under `fixtures/` then `just test-email-rendering-update`.
 
 ## Development Patterns
 

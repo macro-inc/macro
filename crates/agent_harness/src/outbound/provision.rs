@@ -27,8 +27,31 @@ const ENSURE_READY_SCRIPT: &str = include_str!(concat!(
     "/container/ensure_ready.sh"
 ));
 
+#[cfg(test)]
+mod test;
+
 /// Wrap the readiness recipe as one command for provider exec APIs.
 #[must_use]
 pub fn ensure_ready_command() -> String {
     format!("bash -c '{}'", ENSURE_READY_SCRIPT.replace('\'', r"'\''"))
+}
+
+/// Read the egress session token back out of a running container.
+///
+/// The container was handed the raw token in its environment at spawn and the
+/// harness keeps only the hash, so on reattach this is where the token comes
+/// from.
+#[must_use]
+pub fn session_token_command() -> String {
+    format!("printenv {}", crate::domain::model::SESSION_TOKEN_VARIABLE)
+}
+
+/// The token as [`session_token_command`]'s output carries it.
+///
+/// `None` for empty output: a container with no token in its environment
+/// answers a blank line, and a blank Authorization header is worse than none.
+#[must_use]
+pub fn parse_session_token(output: &str) -> Option<String> {
+    let token = output.trim();
+    (!token.is_empty()).then(|| token.to_owned())
 }

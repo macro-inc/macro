@@ -227,8 +227,8 @@ impl ServiceUrlVarErr {
 ///         #[derive(Debug, Clone)]
 ///         pub struct DocumentStorageServiceUrl {
 ///             local: "http://localhost:8086",
-///             dev: "https://cloud-storage-dev.macro.com",
-///             prod: "https://cloud-storage.macro.com",
+///             dev: "https://dev-gateway.macro.com/dss",
+///             prod: "https://gateway.macro.com/dss",
 ///         }
 ///     }
 ///
@@ -515,8 +515,8 @@ service_url! {
         /// Document storage service API URL.
         pub DocumentStorageServiceUrl {
             local: "http://localhost:8086",
-            dev: "https://cloud-storage-dev.macro.com",
-            prod: "https://cloud-storage.macro.com",
+            dev: "https://dev-gateway.macro.com/dss",
+            prod: "https://gateway.macro.com/dss",
         },
         /// WebSocket service URL.
         pub WebsocketServiceUrl {

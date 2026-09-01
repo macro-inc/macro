@@ -19,7 +19,6 @@ use agent_runtime_protocol::domain::ports::{Transport, TransportError, Transport
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use agent_session::domain::service::AgentSessionService;
-use bot_id::BotId;
 
 #[cfg(test)]
 mod test;
@@ -67,11 +66,9 @@ impl TransportSender<ToRuntimeMessage> for RoutedSender {
     }
 }
 
-/// The in-memory runtime and the bot whose sessions it serves.
+/// The shared in-memory runtime used by every in-memory agent session.
 pub struct InMemRuntime {
-    /// Sessions of this bot run in-process.
-    pub bot: BotId,
-    /// Their provisioner.
+    /// In-memory session provisioner.
     pub manager: InMemAgentManager,
 }
 
@@ -120,17 +117,18 @@ where
             .get_session(session)
             .await
             .map_err(HarnessError::Session)?;
-        if let Some(inmem) = &self.inmem
-            && row.bot_id == inmem.bot
+        if self.inmem.is_some()
+            && AgentKind::for_session(row.bot_id, &row.harness) == AgentKind::InMemory
         {
             return Ok(Route::InMem(SessionFacts {
                 id: session,
                 owner: row.owner_id,
                 model: row.model,
+                instructions: row.instructions,
                 acp_session_id: row.acp_session_id,
             }));
         }
-        if AgentKind::of(row.bot_id) == AgentKind::InMemory {
+        if AgentKind::for_session(row.bot_id, &row.harness) == AgentKind::InMemory {
             return Err(HarnessError::Container(format!(
                 "session {session} belongs to the in-process bot, which this deployment does not serve"
             )));
@@ -191,6 +189,15 @@ where
                 .resume(session)
                 .await
                 .map(RoutedTransport::Sandbox),
+        }
+    }
+
+    /// An in-process session has no container and no egress environment, so
+    /// there is no token to read back; sandboxes delegate to their provider.
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        match self.route(session).await? {
+            Route::InMem(_) => Ok(None),
+            Route::Sandbox => self.sandbox.session_token(session).await,
         }
     }
 

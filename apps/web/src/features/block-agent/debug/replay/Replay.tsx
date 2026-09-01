@@ -210,7 +210,7 @@ export default function AgentReplay() {
           </Knob>
           <button
             type="button"
-            class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-muted"
+            class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-hover"
             disabled={!recording()}
             onClick={mount}
           >
@@ -223,7 +223,7 @@ export default function AgentReplay() {
             <div class="flex items-center gap-3">
               <button
                 type="button"
-                class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-muted"
+                class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-hover"
                 onClick={() =>
                   playing() ? session().driver.pause() : session().driver.play()
                 }
@@ -232,7 +232,7 @@ export default function AgentReplay() {
               </button>
               <button
                 type="button"
-                class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-muted"
+                class="rounded border border-edge-muted px-2 py-0.5 text-xs text-ink-muted hover:bg-hover"
                 onClick={() => session().driver.step()}
               >
                 step

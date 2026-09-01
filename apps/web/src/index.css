@@ -322,11 +322,11 @@ body.tauri-ios {
   --color-alert-ink: var(--color-warning-ink);
 
   /* Utility outputs. */
-  --color-channel-rail: color-mix(in oklch, var(--color-edge) 90%, var(--color-ink));
-  --color-channel-rail-active: var(--color-accent);
+  /* Thread rail segments overlap to form continuous paths, so this must stay
+     opaque or their intersections render darker than the straight runs. */
+  --color-thread-rail: color-mix(in oklch, var(--color-surface) 90%, var(--color-ink));
   --color-modal-overlay: oklch(0 0 0 / 0.25);
   --color-drop-shadow: oklch(0.15 0 0 / 0.04);
-  --color-rail: var(--color-channel-rail);
   --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
   --color-list-hover: color-mix(in oklch, var(--color-hover) 65%, transparent);
   --color-list-highlighted: var(--color-hover);
@@ -361,19 +361,6 @@ body.tauri-ios {
   --color-default:     var(--color-content-1);
   --color-email:       var(--color-default);
 
-  /* Compatibility aliases for existing syntax-highlight classes. */
-  --color-accent-30:  var(--color-red);
-  --color-accent-60:  var(--color-orange);
-  --color-accent-90:  var(--color-yellow);
-  --color-accent-120: var(--color-lime);
-  --color-accent-150: var(--color-green);
-  --color-accent-180: var(--color-teal);
-  --color-accent-210: var(--color-cyan);
-  --color-accent-240: var(--color-blue);
-  --color-accent-270: var(--color-violet);
-  --color-accent-300: var(--color-purple);
-  --color-accent-330: var(--color-pink);
-
   /* Font families */
   --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-serif: "Playfair Display Variable", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
@@ -391,6 +378,8 @@ body.tauri-ios {
   --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
   --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
+  --animate-accordion-down: accordion-down 150ms ease-out;
+  --animate-accordion-up: accordion-up 150ms ease-out;
 
   /* Z-index scale — the single source of truth for stacking. Classes come
      from these tokens (`--z-index-foo` -> `z-foo`).
@@ -488,6 +477,11 @@ body.tauri-ios {
 @custom-variant light-mode (&:where(html[data-theme-light="true"] *));
 @custom-variant dark-mode (&:where(html[data-theme-light="false"] *));
 
+/* Dark surfaces need a larger ink step for the thread path to remain visible.
+   Both inputs stay opaque, so overlapping rail segments still render evenly. */
+html[data-theme-light='false'] {
+  --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
+}
 
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
    and other floating mobile controls. Consumers add their own shape classes
@@ -543,6 +537,15 @@ body.tauri-ios {
 
   :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
     user-select: text;
+  }
+
+  /* iOS answers a long-press on an image with its own callout ("Share", "Save
+     to Photos", "Copy"), which preempts the app's own long-press affordances
+     (e.g. the channel message action drawer). Suppress it everywhere; the
+     zero-specificity selector lets a component opt back in if it ever needs
+     the native menu. */
+  :where(img) {
+    -webkit-touch-callout: none;
   }
 
   :where(*) {
@@ -666,6 +669,16 @@ body.tauri-ios {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to   { height: var(--kb-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--kb-accordion-content-height); }
+  to   { height: 0; }
 }
 
 @keyframes typing-dot {

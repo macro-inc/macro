@@ -1,8 +1,8 @@
 use crate::domain::models::{
     AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters, ChannelType,
     ChannelWithParticipants, CreateChannelRequest, CreateEntityMentionOptions, GetChannelsParams,
-    GetChannelsRequest, GetThreadReplyRowsRequest, MessagePageDirection, NotificationFilters,
-    ParticipantRole, PatchChannelRequest,
+    GetChannelsRequest, GetThreadReplyRowsRequest, MessagePageDirection, NewChannelAttachment,
+    NotificationFilters, ParticipantRole, PatchChannelRequest,
 };
 use crate::domain::ports::{ChannelListRepo, ChannelRepo};
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
@@ -2875,6 +2875,71 @@ async fn attachment_references_merges_channel_and_generic_newest_first(
         matches!(refs[1], AttachmentEntityReference::Channel(_)),
         "older channel reference should come second"
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_treats_email_alias_as_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // Share-menu attachments historically stored entity_type = 'email'.
+    // Referencium queries 'thread', so the lookup must accept both.
+    sqlx::query(
+        r#"
+        INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_id, width, height, created_at)
+        VALUES (
+            '00000000-0000-0000-0000-00000000a0e1',
+            '00000000-0000-0000-0000-000000000001',
+            '00000000-0000-0000-0000-000000000c01',
+            'email',
+            'email-share-1',
+            NULL,
+            NULL,
+            '2024-01-01 10:05:00+00'
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let repo = repo(pool);
+    let by_thread = repo
+        .get_attachment_references("thread", "email-share-1", USER_A)
+        .await?;
+    let by_email = repo
+        .get_attachment_references("email", "email-share-1", USER_A)
+        .await?;
+
+    assert_eq!(channel_refs(&by_thread).len(), 1);
+    assert_eq!(channel_refs(&by_email).len(), 1);
+    assert_eq!(channel_refs(&by_thread)[0].message_id, MSG1);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn add_attachments_normalizes_email_to_thread(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let inserted = repo(pool)
+        .add_attachments(
+            MSG1,
+            CH1,
+            vec![NewChannelAttachment {
+                entity_type: "email".to_string(),
+                entity_id: "email-norm-1".to_string(),
+                width: None,
+                height: None,
+            }],
+        )
+        .await?;
+
+    assert_eq!(inserted.len(), 1);
+    assert_eq!(inserted[0].entity_type, "thread");
+    assert_eq!(inserted[0].entity_id, "email-norm-1");
     Ok(())
 }
 
