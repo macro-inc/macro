@@ -11,9 +11,15 @@ use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 
-use crate::api::context::{ApiContext, AuthorizationService};
+use crate::api::{
+    context::{ApiContext, AuthorizationService},
+    signup_policy::shared_mailbox_grant_user_data,
+};
 
 const GMAIL_IDP_NAME: &str = "google_gmail";
+
+#[cfg(test)]
+mod test;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct RelocateInboxGrantRequest {
@@ -31,6 +37,24 @@ pub struct RelocateInboxGrantRequest {
 pub struct RelocateInboxGrantResponse {
     /// The dedicated FusionAuth user that now holds the mailbox grant.
     pub shared_fusionauth_user_id: String,
+}
+
+enum SharedMailboxUserCreation<'a> {
+    WithDesiredId {
+        id: &'a str,
+        data: serde_json::Value,
+    },
+    GeneratedId {
+        data: serde_json::Value,
+    },
+}
+
+fn shared_mailbox_user_creation(desired_user_id: Option<&str>) -> SharedMailboxUserCreation<'_> {
+    let data = shared_mailbox_grant_user_data();
+    match desired_user_id {
+        Some(id) => SharedMailboxUserCreation::WithDesiredId { id, data },
+        None => SharedMailboxUserCreation::GeneratedId { data },
+    }
 }
 
 /// Provisions a dedicated FusionAuth user for a shared mailbox and relocates the mailbox's
@@ -88,13 +112,19 @@ pub async fn handler(
                 password: Cow::Owned(uuid::Uuid::new_v4().to_string()),
                 username: Some(Cow::Borrowed(&email)),
             };
-            let created = match &desired_user_id {
-                Some(id) => {
-                    auth.create_user_with_id(id, user, true, IpAddr::V4(Ipv4Addr::LOCALHOST))
-                        .await
+            let created = match shared_mailbox_user_creation(desired_user_id.as_deref()) {
+                SharedMailboxUserCreation::WithDesiredId { id, data } => {
+                    auth.create_user_with_id_and_data(
+                        id,
+                        user,
+                        true,
+                        IpAddr::V4(Ipv4Addr::LOCALHOST),
+                        data,
+                    )
+                    .await
                 }
-                None => {
-                    auth.create_user(user, true, IpAddr::V4(Ipv4Addr::LOCALHOST))
+                SharedMailboxUserCreation::GeneratedId { data } => {
+                    auth.create_user_with_data(user, true, IpAddr::V4(Ipv4Addr::LOCALHOST), data)
                         .await
                 }
             };
