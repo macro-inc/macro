@@ -89,7 +89,10 @@ export function InlineTaskProperties() {
         >
           <For each={inlineProperties()}>
             {(property) => (
-              <InlinePropertyValue property={property} class="bg-surface-2 border border-edge" />
+              <InlinePropertyValue
+                property={property}
+                class="bg-surface-2 border border-edge"
+              />
             )}
           </For>
           <InlineFetchedEntityTagsPill
