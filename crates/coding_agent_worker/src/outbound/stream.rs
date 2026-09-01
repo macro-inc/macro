@@ -24,11 +24,9 @@ const BOT_ACTING_USER_HEADER: &str = "x-macro-bot-for-macro-user-id";
 
 /// Map the daemon's `bot_scope` config onto the stream query's workspace scope.
 pub fn stream_scope(bot_scope: &str) -> rootcause::Result<WebhookScope> {
-    match bot_scope {
-        "user" => Ok(WebhookScope::User),
-        "team" => Ok(WebhookScope::Team),
-        other => rootcause::bail!("unsupported bot_scope `{other}`; expected `user` or `team`"),
-    }
+    bot_scope.parse().map_err(|_| {
+        rootcause::report!("unsupported bot_scope `{bot_scope}`; expected `user` or `team`")
+    })
 }
 
 /// Client for the storage service's live event stream, acting as one bot.
@@ -99,7 +97,7 @@ impl EventStreamClient {
                     .get(format!("{}/webhook/events/stream", self.base))
                     .header(reqwest::header::ACCEPT, "text/event-stream")
                     .query(&[
-                        ("scope", scope_as_str(scope)),
+                        ("scope", scope.to_string().as_str()),
                         ("filters", filters.as_str()),
                     ]),
             )
@@ -114,13 +112,6 @@ impl EventStreamClient {
         Ok(EventStream {
             events: Box::pin(response.bytes_stream().eventsource()),
         })
-    }
-}
-
-fn scope_as_str(scope: WebhookScope) -> &'static str {
-    match scope {
-        WebhookScope::User => "user",
-        WebhookScope::Team => "team",
     }
 }
 

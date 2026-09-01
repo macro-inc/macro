@@ -92,6 +92,7 @@ serde_json = { workspace = true, optional = true }
 webhook_signature = { path = "../webhook_signature", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, optional = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "time"], optional = true }
 tokio-retry = { workspace = true, optional = true }
