@@ -1259,18 +1259,18 @@ export function normalizedCacheExchange(
                     data: result.data,
                   }
                 );
-                const effects = operationCacheEffects(result.data);
-                if (effects.some((effect) => effect.kind === 'delete')) {
-                  // Commit already normalized the complete result. Replay only
-                  // mixed explicit effects so their final write/delete order is
-                  // identical to a non-optimistic operation.
-                  await applyOperationCacheEffects(op, effects);
-                }
-                revalidateAfterCommit(committed.revalidations ?? [], op);
                 if (committed.kind === 'committed-superseded') {
                   replacementTransactionId = committed.replacementTransactionId;
                   disposition = 'superseded';
                 } else {
+                  const effects = operationCacheEffects(result.data);
+                  if (effects.some((effect) => effect.kind === 'delete')) {
+                    // Commit already normalized the complete result. Replay only
+                    // mixed explicit effects so their final write/delete order is
+                    // identical to a non-optimistic operation.
+                    await applyOperationCacheEffects(op, effects);
+                  }
+                  revalidateAfterCommit(committed.revalidations ?? [], op);
                   disposition = 'committed';
                 }
               }
