@@ -782,6 +782,12 @@ export function BaseInput(props: {
     };
   }
 
+  // Content uploads still in flight, including ones started by earlier saves.
+  // attachmentID only proves the draft record exists, and the send path treats
+  // a resolved save as "attachments ready", so a save must not resolve while
+  // any of these are pending.
+  const inFlightAttachmentUploads = new Set<Promise<void>>();
+
   async function executeSaveDraft(skipSoupRefetch = false) {
     if (sendMutation.isPending || pendingDeletion || pendingSend) {
       return;
@@ -841,8 +847,9 @@ export function BaseInput(props: {
         { type: 'local' }
       >[];
 
+      let uploadRun: Promise<void> | undefined;
       if (attachments.length) {
-        await uploadAttachmentMutation.mutateAsync({
+        uploadRun = uploadAttachmentMutation.mutateAsync({
           draftID: draftId,
           attachments: attachments.map((a) => a.file),
           linkId: headerLinkId(),
@@ -851,7 +858,19 @@ export function BaseInput(props: {
           onAttachmentUploadFailed: (file) =>
             form().attachments.clearAttachmentID(file),
         });
+        const tracked = uploadRun.then(
+          () => undefined,
+          () => undefined
+        );
+        inFlightAttachmentUploads.add(tracked);
+        tracked.then(() => inFlightAttachmentUploads.delete(tracked));
       }
+
+      while (inFlightAttachmentUploads.size) {
+        await Promise.all([...inFlightAttachmentUploads]);
+      }
+      // Settled by the drain above, this only rethrows this save's own failure
+      if (uploadRun) await uploadRun;
 
       // Sync forwarded attachments
       const forwardedAttachments = form()

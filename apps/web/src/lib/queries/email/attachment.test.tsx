@@ -109,6 +109,28 @@ describe('useUploadDraftAttachmentsMutation', () => {
     expect(toastFailureMock).not.toHaveBeenCalled();
   });
 
+  it('removes the record and clears the id when the content upload throws', async () => {
+    uploadToPresignedUrlMock.mockRejectedValue(new Error('network dropped'));
+    const onAttachmentUploadFailed = vi.fn();
+    const attachment = file();
+
+    const mutation = renderHook(() => useUploadDraftAttachmentsMutation());
+    await expect(
+      mutation.mutateAsync({
+        draftID: 'draft-1',
+        attachments: [attachment],
+        onAttachmentUploadFailed,
+      })
+    ).rejects.toThrow('Upload failed');
+
+    expect(removeDraftAttachmentMock).toHaveBeenCalledWith(
+      { draftID: 'draft-1', attachmentID: 'att-1' },
+      undefined
+    );
+    expect(onAttachmentUploadFailed).toHaveBeenCalledWith(attachment);
+    expect(toastFailureMock).toHaveBeenCalledWith('Failed to save attachments');
+  });
+
   it('removes the record and clears the id when the content upload fails', async () => {
     uploadToPresignedUrlMock.mockResolvedValue(
       err([{ code: 'SERVER_ERROR', message: 'upload failed' }])

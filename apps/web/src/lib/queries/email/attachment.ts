@@ -61,12 +61,28 @@ export const useUploadDraftAttachmentsMutation = (
 
         params.onAttachmentAdded?.(attachment, result.attachment_id);
 
-        const uploadedResponse = await uploadToPresignedUrl({
-          presignedUrl: result.upload_url,
-          sha,
-          buffer: arrayBuffer,
-          type: result.content_type,
-        });
+        // Any content-upload failure must become an UploadDraftAttachmentError
+        // so onError removes the record and clears the id -- a plain throw from
+        // the fetch (network drop, abort) would otherwise leave the id in
+        // place and the broken record would never be retried.
+        let uploadedResponse: Awaited<ReturnType<typeof uploadToPresignedUrl>>;
+        try {
+          uploadedResponse = await uploadToPresignedUrl({
+            presignedUrl: result.upload_url,
+            sha,
+            buffer: arrayBuffer,
+            type: result.content_type,
+          });
+        } catch (cause) {
+          throw new UploadDraftAttachmentError(
+            'Upload failed',
+            { cause },
+            {
+              attachmentID: result.attachment_id,
+              file: attachment,
+            }
+          );
+        }
 
         if (uploadedResponse.isErr()) {
           const uploadError = uploadedResponse.error[0] ?? {
