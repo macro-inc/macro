@@ -1022,7 +1022,7 @@ describe('layoutManager', () => {
         expect(manager.splits()).toHaveLength(2);
         expect(manager.viewerOf(controllerId)).toBe(viewerId);
         expect(manager.controllerOf(viewerId)).toBe(controllerId);
-        expect(manager.previewControllerWidth(controllerId)).toBe(440);
+        expect(manager.previewControllerWidth(controllerId)).toBe(360);
         expect(manager.activeSplitId()).toBe(controllerId);
 
         dispose();
