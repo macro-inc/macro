@@ -1,7 +1,7 @@
 import { Checkbox as KobalteCheckbox } from '@kobalte/core/checkbox';
 import CheckIcon from '@phosphor/check.svg';
 import MinusIcon from '@phosphor/minus.svg';
-import type { ComponentProps, JSX } from 'solid-js';
+import type { ComponentProps } from 'solid-js';
 import { splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 
@@ -52,33 +52,12 @@ function CheckboxIndicator(props: IndicatorProps) {
   );
 }
 
-type ClickHandler = JSX.EventHandlerUnion<HTMLElement, MouseEvent>;
-type ClickEvent = MouseEvent & { currentTarget: HTMLElement; target: Element };
-
-function callClickHandler(
-  handler: ClickHandler | undefined,
-  event: ClickEvent
-) {
-  if (typeof handler === 'function') handler(event);
-  else if (handler) handler[0](handler[1], event);
-}
-
 function CheckboxControl(props: ControlProps) {
-  const [local, rest] = splitProps(props, ['class', 'children', 'onClick']);
+  const [local, rest] = splitProps(props, ['class', 'children']);
   return (
     <>
       <KobalteCheckbox.Input class="peer sr-only" />
-      <KobalteCheckbox.Control
-        class={cn(CONTROL_CLASS, local.class)}
-        onClick={(event) => {
-          /* The control toggles the checkbox itself. Under a <label> root the
-             browser would also forward the click to the hidden input and
-             toggle a second time, cancelling out the first. */
-          if (event.currentTarget.closest('label')) event.preventDefault();
-          callClickHandler(local.onClick, event);
-        }}
-        {...rest}
-      >
+      <KobalteCheckbox.Control class={cn(CONTROL_CLASS, local.class)} {...rest}>
         {local.children ?? <CheckboxIndicator />}
       </KobalteCheckbox.Control>
     </>

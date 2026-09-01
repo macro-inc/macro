@@ -20,24 +20,25 @@ function renderControls() {
       }}
     />
   ));
-  return { container, onVisibilityChange, visible };
+  const query = (selector: string) => {
+    const element = container.querySelector(selector);
+    if (!element) throw new Error(`missing ${selector}`);
+    return element;
+  };
+  return { query, onVisibilityChange, visible };
 }
 
 describe('SourceControls', () => {
-  it('toggles when the row is clicked', () => {
-    const { container, onVisibilityChange, visible } = renderControls();
-    const label = container.querySelector('label');
-    if (!label) throw new Error('missing label');
-    fireEvent.click(label);
+  it('toggles when the source name is clicked', () => {
+    const { query, onVisibilityChange, visible } = renderControls();
+    fireEvent.click(query('label'));
     expect(onVisibilityChange).toHaveBeenCalledWith('cal-1', false);
     expect(visible()).toBe(false);
   });
 
-  it('toggles when the checkbox control itself is clicked', () => {
-    const { container, onVisibilityChange, visible } = renderControls();
-    const control = container.querySelector('[id$="-control"]');
-    if (!control) throw new Error('missing checkbox control');
-    fireEvent.click(control);
+  it('toggles when the checkbox control is clicked', () => {
+    const { query, onVisibilityChange, visible } = renderControls();
+    fireEvent.click(query('[id$="-control"]'));
     expect(onVisibilityChange).toHaveBeenCalledWith('cal-1', false);
     expect(visible()).toBe(false);
   });
