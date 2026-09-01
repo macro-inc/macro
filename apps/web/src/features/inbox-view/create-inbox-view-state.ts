@@ -82,7 +82,11 @@ export function createInboxViewState(
       next.delete(optionId);
     }
 
-    const facets = { ...state.facets, [facetId]: [...next] };
+    setFacetOptions(facetId, [...next]);
+  };
+
+  const setFacetOptions = (facetId: string, optionIds: string[]) => {
+    const facets = { ...state.facets, [facetId]: optionIds };
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
 
@@ -99,6 +103,7 @@ export function createInboxViewState(
 
     facets: () => state.facets,
     setFacetOption,
+    setFacetOptions,
     clearFacets: () => setState('facets', reconcile({})),
 
     snapshot: (): InboxViewSnapshot => ({

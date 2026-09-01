@@ -35,7 +35,28 @@ const FILTER_GROUPS = INBOX_FILTER_GROUPS.map((group) => ({
 }));
 
 function isSelected(state: InboxViewState, groupId: string, optionId: string) {
-  return state.facets()[groupId]?.includes(optionId) ?? false;
+  const selectedIds = state.facets()[groupId] ?? [];
+  if (groupId === 'read' && optionId === 'all') {
+    return selectedIds.length === 0;
+  }
+
+  return selectedIds.includes(optionId);
+}
+
+function setSelected(
+  state: InboxViewState,
+  groupId: string,
+  optionId: string,
+  selected: boolean
+) {
+  if (groupId === 'read') {
+    if (!selected) return;
+
+    state.setFacetOptions(groupId, optionId === 'all' ? [] : [optionId]);
+    return;
+  }
+
+  state.setFacetOption(groupId, optionId, selected);
 }
 
 function scrollAccordionItemToTop(
@@ -80,7 +101,7 @@ export function InboxFilterDropdown(props: { state: InboxViewState }) {
           isSelected(props.state, groupId, optionId)
         }
         onSelectionChange={(groupId, optionId, selected) =>
-          props.state.setFacetOption(groupId, optionId, selected)
+          setSelected(props.state, groupId, optionId, selected)
         }
         onClear={props.state.clearFacets}
         label="Filter Inbox"
@@ -137,8 +158,10 @@ export function InboxFilterDrawer(props: { state: InboxViewState }) {
                     {(group) => {
                       const activeCount = createMemo(
                         () =>
-                          group.options.filter((option) =>
-                            isSelected(props.state, group.id, option.id)
+                          group.options.filter(
+                            (option) =>
+                              option.id !== group.defaultOptionId &&
+                              isSelected(props.state, group.id, option.id)
                           ).length
                       );
 
@@ -176,14 +199,21 @@ export function InboxFilterDrawer(props: { state: InboxViewState }) {
                                 return (
                                   <button
                                     type="button"
-                                    role="checkbox"
+                                    role={
+                                      group.selectionMode === 'single'
+                                        ? 'radio'
+                                        : 'checkbox'
+                                    }
                                     aria-checked={selected()}
                                     class="not-last:mb-px flex w-full items-center gap-3 bg-surface px-3 py-2.5 text-left text-sm transition-colors hover:bg-hover"
                                     onClick={() =>
-                                      props.state.setFacetOption(
+                                      setSelected(
+                                        props.state,
                                         group.id,
                                         option.id,
-                                        !selected()
+                                        group.selectionMode === 'single'
+                                          ? true
+                                          : !selected()
                                       )
                                     }
                                   >

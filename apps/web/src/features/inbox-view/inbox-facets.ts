@@ -139,7 +139,26 @@ const typeOptions: Record<InboxTypeFilter, InboxFacetOption> = {
   },
 };
 
-export const INBOX_FILTER_GROUPS = [
+type InboxFilterGroup = {
+  id: string;
+  label: string;
+  selectionMode?: 'single' | 'multiple';
+  defaultOptionId?: string;
+  options: { id: string; label: string }[];
+};
+
+export const INBOX_FILTER_GROUPS: InboxFilterGroup[] = [
+  {
+    id: 'read',
+    label: 'Status',
+    selectionMode: 'single',
+    defaultOptionId: 'all',
+    options: [
+      { id: 'unread', label: 'Unread' },
+      { id: 'read', label: 'Read' },
+      { id: 'all', label: 'All' },
+    ],
+  },
   {
     id: 'type',
     label: 'Type',
