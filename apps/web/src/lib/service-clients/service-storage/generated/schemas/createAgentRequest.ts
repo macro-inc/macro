@@ -10,6 +10,7 @@ import type { CreateAgentRequestAvatarUrl } from './createAgentRequestAvatarUrl'
 import type { CreateAgentRequestDescription } from './createAgentRequestDescription';
 import type { CreateAgentRequestHarnessId } from './createAgentRequestHarnessId';
 import type { CreateAgentRequestTeamId } from './createAgentRequestTeamId';
+import type { McpServerRef } from './mcpServerRef';
 
 /**
  * Request to create a persisted AI agent.
@@ -32,6 +33,10 @@ export interface CreateAgentRequest {
   harness_id?: CreateAgentRequestHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** User-registered MCP servers the agent may use. Each must be registered
+by the caller. Macro's own MCP server is always available and never
+listed here. */
+  mcp_servers?: McpServerRef[];
   /** Display name. */
   name: string;
   /** Team owner. Omit for a private, user-owned agent. */

@@ -115,6 +115,11 @@ export type Agent = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * User-registered MCP servers the agent may use, in the configured
+     * order. Macro's own MCP server is not listed: every agent has it.
+     */
+    mcp_servers: Array<McpServerRef>;
 };
 
 /**
@@ -2784,6 +2789,12 @@ export type CreateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * User-registered MCP servers the agent may use. Each must be registered
+     * by the caller. Macro's own MCP server is always available and never
+     * listed here.
+     */
+    mcp_servers?: Array<McpServerRef>;
     /**
      * Display name.
      */
@@ -6070,6 +6081,27 @@ export type LocationResponseV3 = {
 
 export type MacroUserIdStr = string;
 
+/**
+ * One user-registered MCP server, as an agent's configuration names it.
+ *
+ * The reference carries no credentials and no owner: it says *which* server,
+ * and whoever runs the agent resolves it against their own registrations at
+ * session time.
+ */
+export type McpServerRef = {
+    kind: 'native';
+    /**
+     * The server URL exactly as the user registered it.
+     */
+    url: string;
+} | {
+    /**
+     * Pipedream app name slug, e.g. `linear`.
+     */
+    app_slug: string;
+    kind: 'pipedream';
+};
+
 export type Mentions = {
     mentionId: string;
     users: Array<string>;
@@ -8609,6 +8641,12 @@ export type UpdateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * User-registered MCP servers the agent may use. Each must be registered
+     * by the caller. Macro's own MCP server is always available and never
+     * listed here.
+     */
+    mcp_servers?: Array<McpServerRef>;
     /**
      * Display name.
      */

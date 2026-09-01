@@ -3,6 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use agent_session::domain::model::AgentSessionId;
+use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::error::Result;
@@ -38,6 +39,7 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
+        _bot: BotId,
         repo_url: &str,
     ) -> Result<ProvisionedEgress> {
         self.provisioned
@@ -54,6 +56,7 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
     async fn restore(
         &self,
         _owner: &MacroUserIdStr<'static>,
+        _bot: BotId,
         session_token: String,
     ) -> Result<SandboxEgress> {
         Ok(SandboxEgress {

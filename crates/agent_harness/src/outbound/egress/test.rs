@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::model::{AgentKind, AgentRuntimeConfig};
 
 fn slug(name: &str) -> McpServerSlug {
     McpServerSlug::parse(name).expect("a valid app slug")
@@ -67,6 +68,55 @@ impl ConnectionStore for FixedConnections {
     }
 }
 
+/// A directory answering one fixed selection for every bot, or nothing.
+struct FixedSelection(Option<McpServerSelection>);
+
+impl AgentRuntimeDirectory for FixedSelection {
+    async fn runtime_for(&self, _bot: BotId) -> Result<Option<AgentRuntimeConfig>> {
+        Ok(self.0.clone().map(|mcp_servers| AgentRuntimeConfig {
+            kind: AgentKind::SandboxedCoder,
+            model: "model".to_owned(),
+            harness: "opencode".to_owned(),
+            instructions: String::new(),
+            mcp_servers,
+        }))
+    }
+}
+
+fn owner() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")
+}
+
+fn provisioner(
+    connections: Vec<pipedream_mcp::domain::models::PipedreamConnection>,
+    selection: Option<McpServerSelection>,
+) -> EgressProvisioner<FixedConnections, FixedSelection> {
+    EgressProvisioner::new(
+        Arc::new(FixedConnections(connections)),
+        Arc::new(FixedSelection(selection)),
+        "https://egress.macro.com",
+    )
+}
+
+async fn provisioned_slugs(
+    provisioner: &EgressProvisioner<FixedConnections, FixedSelection>,
+) -> Vec<String> {
+    provisioner
+        .provision(
+            AgentSessionId::new(),
+            &owner(),
+            BotId::TEST_A,
+            "https://github.com/macro-inc/macro",
+        )
+        .await
+        .expect("provisioned")
+        .sandbox
+        .mcp_servers
+        .iter()
+        .map(ToString::to_string)
+        .collect()
+}
+
 fn connection(app_slug: &str, enabled: bool) -> pipedream_mcp::domain::models::PipedreamConnection {
     pipedream_mcp::domain::models::PipedreamConnection {
         user_id: MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
@@ -82,48 +132,90 @@ fn connection(app_slug: &str, enabled: bool) -> pipedream_mcp::domain::models::P
 /// refuses is skipped rather than repaired into something dialable.
 #[tokio::test]
 async fn lists_enabled_app_slugs_verbatim() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![
+    let provisioner = provisioner(
+        vec![
             connection("linear", true),
             connection("google_sheets", true),
             connection("datadog", false),
             connection("Not A Slug!", true),
-        ])),
-        "https://egress.macro.com",
+        ],
+        Some(McpServerSelection::AllConnected),
     );
 
-    let provisioned = provisioner
-        .provision(
-            AgentSessionId::new(),
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "https://github.com/macro-inc/macro",
-        )
-        .await
-        .expect("provisioned");
+    assert_eq!(
+        provisioned_slugs(&provisioner).await,
+        ["linear", "google_sheets"]
+    );
+}
 
-    let slugs: Vec<String> = provisioned
-        .sandbox
-        .mcp_servers
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    assert_eq!(slugs, ["linear", "google_sheets"]);
+/// An agent that names its servers gets exactly those, in its own order, and
+/// only where the owner has the app connected and enabled: the agent's
+/// configuration chooses among the owner's credentials, it never adds any.
+#[tokio::test]
+async fn a_selecting_agent_gets_only_the_owners_connected_servers_it_named() {
+    let provisioner = provisioner(
+        vec![
+            connection("linear", true),
+            connection("google_sheets", true),
+            connection("datadog", false),
+        ],
+        Some(McpServerSelection::Selected(vec![
+            McpServerRef::pipedream("google_sheets"),
+            McpServerRef::pipedream("datadog"),
+            McpServerRef::pipedream("notion"),
+            McpServerRef::pipedream("linear"),
+        ])),
+    );
+
+    assert_eq!(
+        provisioned_slugs(&provisioner).await,
+        ["google_sheets", "linear"]
+    );
+}
+
+/// A native-stack server has no route on the proxy yet, so naming one adds
+/// nothing to the list - and takes nothing away from the rest.
+#[tokio::test]
+async fn native_servers_are_not_advertised_yet() {
+    let provisioner = provisioner(
+        vec![connection("linear", true)],
+        Some(McpServerSelection::Selected(vec![
+            McpServerRef::native("https://mcp.grafana.com/mcp"),
+            McpServerRef::pipedream("linear"),
+        ])),
+    );
+
+    assert_eq!(provisioned_slugs(&provisioner).await, ["linear"]);
+}
+
+/// An agent that selected nothing, and a bot the directory does not know,
+/// both get only Macro's own server: neither is a reason to hand out every
+/// credential the owner holds.
+#[tokio::test]
+async fn an_empty_selection_and_an_unknown_bot_advertise_nothing() {
+    let connections = vec![connection("linear", true)];
+
+    let empty = provisioner(
+        connections.clone(),
+        Some(McpServerSelection::Selected(Vec::new())),
+    );
+    assert!(provisioned_slugs(&empty).await.is_empty());
+
+    let unknown = provisioner(connections, None);
+    assert!(provisioned_slugs(&unknown).await.is_empty());
 }
 
 /// `restore` rebuilds the same environment around a token that already
 /// exists: nothing is minted, and the server list is read fresh.
 #[tokio::test]
 async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![connection("linear", true)])),
-        "https://egress.macro.com",
+    let provisioner = provisioner(
+        vec![connection("linear", true)],
+        Some(McpServerSelection::AllConnected),
     );
 
     let restored = provisioner
-        .restore(
-            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "already-minted-token".to_owned(),
-        )
+        .restore(&owner(), BotId::TEST_A, "already-minted-token".to_owned())
         .await
         .expect("restored");
 

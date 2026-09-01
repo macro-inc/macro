@@ -20,6 +20,7 @@ axum = { workspace = true, features = ["ws"] }
 base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
 harness_id = { path = "../harness_id" }
+mcp_server_ref = { path = "../mcp_server_ref" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 channels = { path = "../channels", features = ["ports"] }

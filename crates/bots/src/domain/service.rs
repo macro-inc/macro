@@ -6,7 +6,7 @@ use super::{
         Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId,
         BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
         CreateBotTokenRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-        HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
+        HarnessId, HarnessOwner, McpServerRef, PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -56,6 +56,7 @@ struct AgentFields<'a> {
     default_model: &'a str,
     channel_scope: AgentChannelScope,
     channel_ids: &'a [Uuid],
+    mcp_servers: &'a [McpServerRef],
 }
 
 impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
@@ -68,6 +69,7 @@ impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
+            mcp_servers: &req.mcp_servers,
         }
     }
 }
@@ -82,6 +84,7 @@ impl<'a> From<&'a UpdateAgentRequest> for AgentFields<'a> {
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
+            mcp_servers: &req.mcp_servers,
         }
     }
 }
@@ -95,6 +98,7 @@ fn validate_agent_fields(
         default_model,
         channel_scope,
         channel_ids,
+        mcp_servers,
     }: AgentFields<'_>,
 ) -> Result<(), BotError> {
     validate_handle(handle)?;
@@ -126,6 +130,16 @@ fn validate_agent_fields(
     if default_model.trim().is_empty() {
         return Err(BotError::BadRequest(
             "agent default model must not be empty".to_string(),
+        ));
+    }
+    if mcp_servers
+        .iter()
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+        != mcp_servers.len()
+    {
+        return Err(BotError::BadRequest(
+            "agent mcp servers must be unique".to_string(),
         ));
     }
 
@@ -281,6 +295,34 @@ where
         Ok(())
     }
 
+    /// Ensure every MCP server an agent names is one the caller registered.
+    ///
+    /// The caller's registrations, not the owner's: a team agent is configured
+    /// by a person, and the servers it may use are the ones that person can
+    /// see in their own settings. At run time each session resolves the same
+    /// references against its own owner's registrations, so nothing here
+    /// grants anyone another person's credentials.
+    async fn ensure_mcp_servers_registered(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        mcp_servers: &[McpServerRef],
+    ) -> Result<(), BotError> {
+        if mcp_servers.is_empty() {
+            return Ok(());
+        }
+        let registered = self
+            .repo
+            .user_has_mcp_servers(caller, mcp_servers)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+        if !registered {
+            return Err(BotError::BadRequest(
+                "agent mcp servers must be registered in the caller's connections".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     async fn owner_for_agent_update(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -391,6 +433,9 @@ where
             return Err(BotError::Unauthorized);
         }
 
+        self.ensure_mcp_servers_registered(caller.clone(), &req.mcp_servers)
+            .await?;
+
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
@@ -441,6 +486,9 @@ where
         {
             return Err(BotError::Unauthorized);
         }
+
+        self.ensure_mcp_servers_registered(caller.clone(), &req.mcp_servers)
+            .await?;
 
         let owner = self
             .owner_for_agent_update(caller.clone(), &current, req.team_id)

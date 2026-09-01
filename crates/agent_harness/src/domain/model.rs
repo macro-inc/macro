@@ -8,6 +8,7 @@ use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+pub use mcp_server_ref::McpServerRef;
 /// Where a mention happened.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
@@ -130,6 +131,25 @@ pub struct AgentRuntimeConfig {
     pub harness: String,
     /// Configured agent instructions, reserved for a dedicated runtime transport.
     pub instructions: String,
+    /// Which of the session owner's registered MCP servers the agent is handed.
+    pub mcp_servers: McpServerSelection,
+}
+
+/// Which of a session owner's registered MCP servers an agent may use.
+///
+/// Macro's own server is outside this: every session has it. What varies is
+/// the owner's connected apps, and whether the agent takes all of them or
+/// only the ones its configuration names. Either way the servers are the
+/// *owner's* - a reference the owner has not connected is silently absent,
+/// because the agent's configurer's credentials are never anyone else's to
+/// spend.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum McpServerSelection {
+    /// Every server the owner has connected. The fixed first-party bots,
+    /// whose configuration predates per-agent selection, keep this.
+    AllConnected,
+    /// Exactly the servers the agent's configuration names, in that order.
+    Selected(Vec<McpServerRef>),
 }
 
 /// Where a prompt came from, when it came from somewhere the session should

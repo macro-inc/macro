@@ -530,7 +530,12 @@ where
         let egress = self
             .inner
             .egress
-            .provision(session_id, &request.owner, &defaults.repo_url)
+            .provision(
+                session_id,
+                &request.owner,
+                defaults.bot_id,
+                &defaults.repo_url,
+            )
             .await
             .map_err(into_session_error)?;
         let session = self
@@ -723,11 +728,12 @@ where
     /// holds no token (a provider whose sessions carry no egress environment,
     /// or a sandbox from before tokens existed) gets no servers, which is
     /// also everything it could do with them.
-    #[tracing::instrument(err, skip(self, owner), fields(%session_id, %owner))]
+    #[tracing::instrument(err, skip(self, owner), fields(%session_id, %owner, %bot))]
     async fn resumed_mcp_servers(
         &self,
         session_id: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
+        bot: BotId,
     ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
         let Some(session_token) = self.containers.session_token(session_id).await? else {
             tracing::debug!("container holds no egress token; restoring no MCP servers");
@@ -735,7 +741,7 @@ where
         };
         Ok(self
             .egress
-            .restore(owner, session_token)
+            .restore(owner, bot, session_token)
             .await?
             .acp_servers())
     }
@@ -780,7 +786,7 @@ where
             if effect == SandboxResizeEffect::Restart {
                 let container = self.containers.resume(session_id).await?;
                 let mcp_servers = self
-                    .resumed_mcp_servers(session_id, &session.owner_id)
+                    .resumed_mcp_servers(session_id, &session.owner_id, session.bot_id)
                     .await?;
                 self.sessions
                     .attach_session(
@@ -831,7 +837,7 @@ where
         // credentials, so there is nowhere else it could correctly come from.
         let egress = self
             .egress
-            .provision(session_id, &origin.sender, &repo_url)
+            .provision(session_id, &origin.sender, bot_id, &repo_url)
             .await?;
 
         self.sessions
@@ -975,7 +981,7 @@ where
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
-                        .resumed_mcp_servers(session_id, &session.owner_id)
+                        .resumed_mcp_servers(session_id, &session.owner_id, session.bot_id)
                         .await?;
                     self.sessions
                         .attach_session(

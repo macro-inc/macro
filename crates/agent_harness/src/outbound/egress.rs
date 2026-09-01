@@ -1,7 +1,8 @@
 //! Handing a sandbox its one secret, and telling opencode where to spend it.
 //!
-//! Two adapter concerns the domain has no business with: minting a token, and
-//! listing the owner's Pipedream-connected apps, which needs their rows.
+//! Three adapter concerns the domain has no business with: minting a token,
+//! listing the owner's Pipedream-connected apps (which needs their rows), and
+//! asking the agent's configuration which of those apps the session may use.
 //!
 //! Both the minting and the hashing are `agent_egress`'s, not a second
 //! implementation of either. The two ends of this token are written in
@@ -10,14 +11,15 @@
 //! unauthenticated".
 
 use agent_egress::domain::model::{McpServerSlug, RepoSlug, SessionToken};
+use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use pipedream_mcp::domain::ports::ConnectionStore;
 use std::sync::Arc;
 use url::Url;
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::{ProvisionedEgress, SandboxEgress};
-use crate::domain::ports::SandboxEgressProvisioner;
+use crate::domain::model::{McpServerRef, McpServerSelection, ProvisionedEgress, SandboxEgress};
+use crate::domain::ports::{AgentRuntimeDirectory, SandboxEgressProvisioner};
 use agent_session::domain::model::AgentSessionId;
 
 #[cfg(test)]
@@ -29,25 +31,50 @@ mod test;
 const GITHUB_HOST: &str = "github.com";
 
 /// Mints session tokens and gathers the MCP servers a sandbox may dial.
-pub struct EgressProvisioner<Connections> {
+pub struct EgressProvisioner<Connections, Runtimes> {
     connections: Arc<Connections>,
+    runtimes: Arc<Runtimes>,
     base_url: String,
 }
 
-impl<Connections> EgressProvisioner<Connections>
+impl<Connections, Runtimes> EgressProvisioner<Connections, Runtimes>
 where
     Connections: ConnectionStore,
+    Runtimes: AgentRuntimeDirectory,
 {
-    /// Build the provisioner over the Pipedream connection store and the
-    /// egress proxy's public address.
-    pub fn new(connections: Arc<Connections>, base_url: impl Into<String>) -> Self {
+    /// Build the provisioner over the Pipedream connection store, the
+    /// directory that knows each agent's MCP selection, and the egress
+    /// proxy's public address.
+    pub fn new(
+        connections: Arc<Connections>,
+        runtimes: Arc<Runtimes>,
+        base_url: impl Into<String>,
+    ) -> Self {
         Self {
             connections,
+            runtimes,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
         }
     }
 
-    /// The slugs of the owner's enabled Pipedream connections, verbatim.
+    /// Which of the owner's servers `bot`'s sessions are handed.
+    ///
+    /// A bot the directory does not know gets only Macro's own server: a
+    /// session is being opened for it, so refusing outright would be wrong,
+    /// but handing an unconfigured agent every credential its owner holds
+    /// would be worse.
+    async fn selection(&self, bot: BotId) -> Result<McpServerSelection> {
+        match self.runtimes.runtime_for(bot).await? {
+            Some(runtime) => Ok(runtime.mcp_servers),
+            None => {
+                tracing::warn!(%bot, "no runtime configuration for the session's bot; advertising no connected MCP servers");
+                Ok(McpServerSelection::Selected(Vec::new()))
+            }
+        }
+    }
+
+    /// The slugs of the owner's enabled Pipedream connections that `bot`'s
+    /// configuration lets its sessions use, verbatim.
     ///
     /// `app_slug`, exactly as the proxy resolves it - the same value at both
     /// ends by equality is what makes a server entry dialable, and there is
@@ -55,15 +82,22 @@ where
     /// in the list: every session has it, on its own route. An app the owner
     /// turned off is left out here as well as refused by the proxy: an agent
     /// that can see a server in its list will try it, and a tool call that
-    /// always fails is worse than a tool that is absent.
-    async fn slugs(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<McpServerSlug>> {
+    /// always fails is worse than a tool that is absent. An app the agent
+    /// names but the owner never connected is left out for the same reason,
+    /// and because the owner's credentials are the only ones a session spends.
+    async fn slugs(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        bot: BotId,
+    ) -> Result<Vec<McpServerSlug>> {
+        let selection = self.selection(bot).await?;
         let records = self.connections.list(owner).await.map_err(|error| {
             HarnessError::Egress(rootcause::report!(
                 "could not list Pipedream connections: {error:?}"
             ))
         })?;
 
-        let slugs: Vec<McpServerSlug> = records
+        let connected: Vec<McpServerSlug> = records
             .into_iter()
             .filter(|record| record.enabled)
             .filter_map(|record| {
@@ -81,6 +115,40 @@ where
                 slug
             })
             .collect();
+
+        let slugs = match selection {
+            McpServerSelection::AllConnected => connected,
+            McpServerSelection::Selected(servers) => servers
+                .iter()
+                .filter_map(|server| match server {
+                    McpServerRef::Pipedream { app_slug } => {
+                        let slug = connected.iter().find(|slug| slug.as_str() == app_slug);
+                        if slug.is_none() {
+                            tracing::debug!(
+                                %owner,
+                                %bot,
+                                app_slug,
+                                "the agent names a Pipedream app the owner has not connected; skipped"
+                            );
+                        }
+                        slug.cloned()
+                    }
+                    // The proxy resolves only Pipedream-connected apps today;
+                    // a native-stack server has no route it could be
+                    // advertised under, so it is left out rather than listed
+                    // as something the agent will fail to dial.
+                    McpServerRef::Native { url } => {
+                        tracing::warn!(
+                            %owner,
+                            %bot,
+                            url,
+                            "the agent names a native MCP server, which the egress proxy does not yet serve; skipped"
+                        );
+                        None
+                    }
+                })
+                .collect(),
+        };
         tracing::debug!(
             mcp_servers = slugs.len(),
             "advertising the owner's connected MCP servers"
@@ -89,15 +157,17 @@ where
     }
 }
 
-impl<Connections> SandboxEgressProvisioner for EgressProvisioner<Connections>
+impl<Connections, Runtimes> SandboxEgressProvisioner for EgressProvisioner<Connections, Runtimes>
 where
     Connections: ConnectionStore,
+    Runtimes: AgentRuntimeDirectory,
 {
-    #[tracing::instrument(err, skip(self), fields(%session, %owner))]
+    #[tracing::instrument(err, skip(self), fields(%session, %owner, %bot))]
     async fn provision(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
+        bot: BotId,
         repo_url: &str,
     ) -> Result<ProvisionedEgress> {
         // Validated even though nothing here uses it: it is the deployment's
@@ -112,21 +182,22 @@ where
             sandbox: SandboxEgress {
                 base_url: self.base_url.clone(),
                 session_token: token.as_str().to_owned(),
-                mcp_servers: self.slugs(owner).await?,
+                mcp_servers: self.slugs(owner, bot).await?,
             },
         })
     }
 
-    #[tracing::instrument(err, skip(self, session_token), fields(%owner))]
+    #[tracing::instrument(err, skip(self, session_token), fields(%owner, %bot))]
     async fn restore(
         &self,
         owner: &MacroUserIdStr<'static>,
+        bot: BotId,
         session_token: String,
     ) -> Result<SandboxEgress> {
         Ok(SandboxEgress {
             base_url: self.base_url.clone(),
             session_token,
-            mcp_servers: self.slugs(owner).await?,
+            mcp_servers: self.slugs(owner, bot).await?,
         })
     }
 }

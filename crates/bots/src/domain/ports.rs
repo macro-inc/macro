@@ -4,7 +4,7 @@ use super::models::{
     Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotToken,
     BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
     CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-    HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
+    HarnessId, HarnessOwner, McpServerRef, PatchBotRequest, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -45,6 +45,14 @@ pub trait BotRepo: Send + Sync + 'static {
         &self,
         caller: MacroUserIdStr<'static>,
         channel_ids: &[Uuid],
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Check whether the caller has registered every supplied MCP server, on
+    /// whichever stack each reference names.
+    fn user_has_mcp_servers(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        servers: &[McpServerRef],
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Create an owned bot.

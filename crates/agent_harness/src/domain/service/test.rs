@@ -33,7 +33,8 @@ use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults,
-    MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
+    McpServerSelection, MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults,
+    SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
@@ -61,6 +62,7 @@ fn open_command() -> OpenSession {
             model: "agent-model".to_owned(),
             harness: "opencode".to_owned(),
             instructions: String::new(),
+            mcp_servers: McpServerSelection::AllConnected,
         },
         origin: MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),

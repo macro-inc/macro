@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+pub use mcp_server_ref::McpServerRef;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -224,6 +225,9 @@ pub struct Agent {
     pub channel_scope: AgentChannelScope,
     /// Selected channel ids. Empty for a global agent.
     pub channel_ids: Vec<Uuid>,
+    /// User-registered MCP servers the agent may use, in the configured
+    /// order. Macro's own MCP server is not listed: every agent has it.
+    pub mcp_servers: Vec<McpServerRef>,
 }
 
 /// Request to create a persisted AI agent.
@@ -255,6 +259,11 @@ pub struct CreateAgentRequest {
     /// Selected channels. Must be non-empty only for `selected` scope.
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
+    /// User-registered MCP servers the agent may use. Each must be registered
+    /// by the caller. Macro's own MCP server is always available and never
+    /// listed here.
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerRef>,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -286,6 +295,11 @@ pub struct UpdateAgentRequest {
     /// Selected channels. Must be non-empty only for `selected` scope.
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
+    /// User-registered MCP servers the agent may use. Each must be registered
+    /// by the caller. Macro's own MCP server is always available and never
+    /// listed here.
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerRef>,
 }
 
 /// Channel containing a bot.

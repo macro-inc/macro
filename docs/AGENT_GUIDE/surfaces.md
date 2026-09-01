@@ -58,8 +58,13 @@ Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; `Log out`.
+Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth, and the MCP servers /
+connected apps the user registers), `MCP server` (setup snippets for Claude Code / Codex CLI /
+Claude.ai / ChatGPT / IDE), `Bots`; Agents (behind `enable-chat-v3-agents`) → `Agents`
+(create / edit persistent agents: profile, system prompt, harness + model, **MCP servers** —
+Macro's own server is always on, every other server is a toggle over what the user registered
+in `Connections` — channel scope, team/private share), `Harness` (register macrod daemons);
+`Log out`.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 ## Notifications

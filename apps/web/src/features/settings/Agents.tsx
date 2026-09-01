@@ -3,6 +3,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import MacroLogo from '@icon/macro-logo.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -23,8 +24,11 @@ import {
   useCursorModelsQuery,
 } from '@queries/auth/cursor-api-key';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { useMcpServersQuery } from '@queries/mcp-servers';
+import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
-import { Avatar, Button, Dialog, Panel } from '@ui';
+import type { McpServerRef } from '@service-storage/generated/schemas/mcpServerRef';
+import { Avatar, Button, Dialog, Panel, ToggleSwitch } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot } from '../channel/Bots/botPermissions';
@@ -68,6 +72,25 @@ type HarnessModel = {
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
 
+/**
+ * One MCP server the user registered in Connections, as the agent form offers
+ * it. Macro's own server is not an option: every agent has it.
+ */
+type McpServerOption = {
+  ref: McpServerRef;
+  name: string;
+  /** Turned on in Connections. A server turned off there is still listed so
+   *  the selection survives, but the agent will not reach it until it is on. */
+  enabled: boolean;
+};
+
+/** Stable identity for a server reference, for equality and list keys. */
+function mcpServerKey(ref: McpServerRef): string {
+  return ref.kind === 'native'
+    ? `native:${ref.url}`
+    : `pipedream:${ref.app_slug}`;
+}
+
 const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
   name: 'In-memory',
@@ -105,6 +128,26 @@ export function Agents() {
   const cursorConnected = () => cursorStatus.data?.registered ?? false;
   const cursorModels = useCursorModelsQuery(cursorConnected);
   const harnessesQuery = useHarnessesQuery();
+  // The agent form offers the same servers the Connections tab manages, from
+  // whichever stack the flag shows there; the other stack's rows are not
+  // something the user can see or change, so they are not offered.
+  const pipedreamMcp = usePipedreamMcpFlag();
+  const nativeMcpServersQuery = useMcpServersQuery({ neverSuspend: true });
+  const pipedreamConnectionsQuery = usePipedreamConnectionsQuery({
+    neverSuspend: true,
+  });
+  const mcpServerOptions = (): readonly McpServerOption[] =>
+    pipedreamMcp()
+      ? (pipedreamConnectionsQuery.data ?? []).map((connection) => ({
+          ref: { kind: 'pipedream', app_slug: connection.app_slug },
+          name: connection.server_name,
+          enabled: connection.enabled,
+        }))
+      : (nativeMcpServersQuery.data ?? []).map((server) => ({
+          ref: { kind: 'native', url: server.url },
+          name: server.server_name,
+          enabled: server.enabled,
+        }));
   const connectedHarnesses = (): readonly ConnectedHarness[] => [
     IN_MEMORY_HARNESS,
     ...(cursorConnected()
@@ -281,6 +324,7 @@ export function Agents() {
       <Show when={creating()}>
         <AgentDialog
           connectedHarnesses={connectedHarnesses()}
+          mcpServerOptions={mcpServerOptions()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
           canMakePrivate
@@ -294,6 +338,7 @@ export function Agents() {
           <AgentDialog
             agent={agent}
             connectedHarnesses={connectedHarnesses()}
+            mcpServerOptions={mcpServerOptions()}
             currentTeamId={currentTeamId()}
             canShareWithTeam={canShareWithTeam()}
             canMakePrivate={canMakePrivate(agent)}
@@ -497,6 +542,7 @@ function AgentDeleteDialog(props: {
 function AgentDialog(props: {
   agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
+  mcpServerOptions: readonly McpServerOption[];
   currentTeamId?: string;
   canShareWithTeam: boolean;
   canMakePrivate: boolean;
@@ -532,6 +578,41 @@ function AgentDialog(props: {
   const [selectedChannelIds, setSelectedChannelIds] = createSignal<string[]>(
     props.agent?.channel_ids ?? []
   );
+  const [selectedMcpServers, setSelectedMcpServers] = createSignal<
+    McpServerRef[]
+  >(props.agent?.mcp_servers ?? []);
+  const isMcpServerSelected = (ref: McpServerRef) =>
+    selectedMcpServers().some(
+      (selected) => mcpServerKey(selected) === mcpServerKey(ref)
+    );
+  const setMcpServerSelected = (ref: McpServerRef, selected: boolean) =>
+    setSelectedMcpServers((current) => {
+      const rest = current.filter(
+        (existing) => mcpServerKey(existing) !== mcpServerKey(ref)
+      );
+      return selected ? [...rest, ref] : rest;
+    });
+  // Servers the agent already names that Connections no longer lists - taken
+  // down, or on the stack the flag hides - stay visible so saving the form
+  // never silently drops them; the user can still switch them off here.
+  const mcpServerRows = (): readonly (McpServerOption & {
+    connected: boolean;
+  })[] => [
+    ...props.mcpServerOptions.map((option) => ({ ...option, connected: true })),
+    ...selectedMcpServers()
+      .filter(
+        (ref) =>
+          !props.mcpServerOptions.some(
+            (option) => mcpServerKey(option.ref) === mcpServerKey(ref)
+          )
+      )
+      .map((ref) => ({
+        ref,
+        name: ref.kind === 'native' ? ref.url : ref.app_slug,
+        enabled: false,
+        connected: false,
+      })),
+  ];
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
@@ -593,6 +674,7 @@ function AgentDialog(props: {
       // built-ins keep sending their own slug with no harness id.
       harness: harness?.kind === 'macrod' ? 'macrod' : (harness?.id ?? ''),
       harnessId: harness?.kind === 'macrod' ? harness.id : undefined,
+      mcpServers: selectedMcpServers(),
       name: name().trim(),
       instructions: instructions().trim(),
       teamId: selectedTeamId(),
@@ -791,6 +873,44 @@ function AgentDialog(props: {
             </AgentFormSection>
 
             <AgentFormSection
+              title="MCP servers"
+              description="Tools the agent can reach. Macro is always on; register more servers in Connections."
+            >
+              <ul class="flex flex-col divide-y divide-edge-muted">
+                <McpServerRow
+                  name="Macro"
+                  description="Macro's own tools. Always available to every agent."
+                  checked
+                  disabled
+                />
+                <For each={mcpServerRows()}>
+                  {(row) => (
+                    <McpServerRow
+                      name={row.name}
+                      description={
+                        !row.connected
+                          ? 'Not in your Connections any more'
+                          : row.enabled
+                            ? undefined
+                            : 'Turned off in Connections'
+                      }
+                      checked={isMcpServerSelected(row.ref)}
+                      onChange={(checked) =>
+                        setMcpServerSelected(row.ref, checked)
+                      }
+                    />
+                  )}
+                </For>
+              </ul>
+              <Show when={props.mcpServerOptions.length === 0}>
+                <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                  No MCP servers registered yet. Connect apps in Settings →
+                  Connections to offer them here.
+                </p>
+              </Show>
+            </AgentFormSection>
+
+            <AgentFormSection
               title="Channels"
               description="Choose whether this agent is global or channel-specific."
             >
@@ -889,6 +1009,33 @@ function AgentDialog(props: {
         </Panel.Footer>
       </Panel>
     </Dialog>
+  );
+}
+
+/** One MCP server toggle in the agent form. */
+function McpServerRow(props: {
+  name: string;
+  description?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange?: (checked: boolean) => void;
+}) {
+  return (
+    <li class="flex items-center gap-3 py-2.5">
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-sm font-medium text-ink">{props.name}</div>
+        <Show when={props.description}>
+          <div class="truncate text-xs text-ink-muted">{props.description}</div>
+        </Show>
+      </div>
+      <ToggleSwitch
+        size="md"
+        label={<span class="sr-only">Use {props.name}</span>}
+        checked={props.checked}
+        disabled={props.disabled}
+        onChange={props.onChange}
+      />
+    </li>
   );
 }
 

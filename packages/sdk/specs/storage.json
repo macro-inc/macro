@@ -12505,7 +12505,8 @@
           "harness",
           "default_model",
           "channel_scope",
-          "channel_ids"
+          "channel_ids",
+          "mcp_servers"
         ],
         "properties": {
           "bot": {
@@ -12546,6 +12547,13 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerRef"
+            },
+            "description": "User-registered MCP servers the agent may use, in the configured\norder. Macro's own MCP server is not listed: every agent has it."
           }
         }
       },
@@ -16389,6 +16397,13 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerRef"
+            },
+            "description": "User-registered MCP servers the agent may use. Each must be registered\nby the caller. Macro's own MCP server is always available and never\nlisted here."
           },
           "name": {
             "type": "string",
@@ -21777,6 +21792,41 @@
       "MacroUserIdStr": {
         "type": "string"
       },
+      "McpServerRef": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A native-stack server, identified by its streamable HTTP URL.",
+            "required": ["url", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["native"]
+              },
+              "url": {
+                "type": "string",
+                "description": "The server URL exactly as the user registered it."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A Pipedream-connected app, identified by Pipedream's app slug.",
+            "required": ["app_slug", "kind"],
+            "properties": {
+              "app_slug": {
+                "type": "string",
+                "description": "Pipedream app name slug, e.g. `linear`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["pipedream"]
+              }
+            }
+          }
+        ],
+        "description": "One user-registered MCP server, as an agent's configuration names it.\n\nThe reference carries no credentials and no owner: it says *which* server,\nand whoever runs the agent resolves it against their own registrations at\nsession time."
+      },
       "Mentions": {
         "type": "object",
         "required": ["users", "mentionId"],
@@ -25984,6 +26034,13 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerRef"
+            },
+            "description": "User-registered MCP servers the agent may use. Each must be registered\nby the caller. Macro's own MCP server is always available and never\nlisted here."
           },
           "name": {
             "type": "string",

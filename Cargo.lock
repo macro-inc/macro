@@ -261,6 +261,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mcp_server_ref",
  "mockall",
  "model_user",
  "pipedream_mcp",
@@ -2778,6 +2779,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "mcp_server_ref",
  "mockall",
  "model-error-response",
  "rand 0.9.4",
@@ -10102,6 +10104,17 @@ dependencies = [
  "pipedream_mcp",
  "serde_json",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "mcp_server_ref"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "utoipa",
  "workspace-hack",
 ]
 

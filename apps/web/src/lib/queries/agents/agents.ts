@@ -5,6 +5,7 @@ import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { AgentChannelScope } from '@service-storage/generated/schemas/agentChannelScope';
+import type { McpServerRef } from '@service-storage/generated/schemas/mcpServerRef';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { agentKeys } from './keys';
 
@@ -24,6 +25,11 @@ export type CreateAgentParams = {
   harness: string;
   /** The registered macrod harness to run on; omit for built-in harnesses. */
   harnessId?: string;
+  /**
+   * User-registered MCP servers the agent may use. Macro's own server is
+   * always on and never listed.
+   */
+  mcpServers: McpServerRef[];
   name: string;
   instructions: string;
   teamId?: string;
@@ -74,6 +80,7 @@ export function useCreateAgentMutation() {
           handle: vars.handle,
           harness: vars.harness,
           harness_id: vars.harnessId,
+          mcp_servers: vars.mcpServers,
           name: vars.name,
           instructions: vars.instructions,
           team_id: vars.teamId,
@@ -105,6 +112,7 @@ export function useUpdateAgentMutation() {
           handle: vars.handle,
           harness: vars.harness,
           harness_id: vars.harnessId,
+          mcp_servers: vars.mcpServers,
           name: vars.name,
           instructions: vars.instructions,
           team_id: vars.teamId,

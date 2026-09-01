@@ -2,8 +2,8 @@ use super::*;
 use crate::domain::{
     models::{
         AgentChannelScope, BotChannelListCaller, BotChannelType, CreateAgentRequest,
-        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchBotRequest,
-        UpdateAgentRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, McpServerRef,
+        PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotService},
     service::BotServiceImpl,
@@ -82,6 +82,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         default_model: "cursor-small".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
+        mcp_servers: Vec::new(),
     }
 }
 
@@ -98,6 +99,7 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
         default_model: "claude-sonnet-4-5".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
+        mcp_servers: Vec::new(),
     }
 }
 
@@ -1610,5 +1612,173 @@ async fn team_harnesses_back_member_agents_but_not_team_agents_on_private_harnes
         .await?;
     assert_eq!(cleared.harness_id, None);
 
+    Ok(())
+}
+
+async fn insert_native_mcp_server(pool: &PgPool, user_id: &str, url: &str) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO mcp_servers (user_id, url, server_name)
+        VALUES ($1, $2, 'Test server')
+        "#,
+        user_id,
+        url,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn insert_pipedream_connection(
+    pool: &PgPool,
+    user_id: &str,
+    app_slug: &str,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO pipedream_mcp_connections (user_id, app_slug, server_name, account_id)
+        VALUES ($1, $2, $3, 'apn_test')
+        "#,
+        user_id,
+        app_slug,
+        app_slug,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn stored_mcp_servers(pool: &PgPool, bot_id: BotId) -> anyhow::Result<Vec<(String, String)>> {
+    Ok(sqlx::query!(
+        r#"
+        SELECT kind, server_ref
+        FROM agent_mcp_servers
+        WHERE bot_id = $1
+        ORDER BY position
+        "#,
+        bot_id.as_uuid(),
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|row| (row.kind, row.server_ref))
+    .collect())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn agent_mcp_servers_round_trip_in_configured_order(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    insert_pipedream_connection(&pool, USER_OWNER, "linear").await?;
+    insert_native_mcp_server(&pool, USER_OWNER, "https://mcp.grafana.com/mcp").await?;
+    let service = service(&pool);
+
+    let mut request = create_agent_req("bug-fixer", AgentChannelScope::All);
+    request.mcp_servers = vec![
+        McpServerRef::native("https://mcp.grafana.com/mcp"),
+        McpServerRef::pipedream("linear"),
+    ];
+    let created = service.create_agent(user_id(USER_OWNER), request).await?;
+    assert_eq!(
+        created.mcp_servers,
+        vec![
+            McpServerRef::native("https://mcp.grafana.com/mcp"),
+            McpServerRef::pipedream("linear"),
+        ]
+    );
+
+    let listed = service.list_agents(user_id(USER_OWNER)).await?;
+    assert_eq!(listed[0].mcp_servers, created.mcp_servers);
+    let fetched = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("created agent should be addressable by bot id");
+    assert_eq!(fetched.mcp_servers, created.mcp_servers);
+    assert_eq!(
+        stored_mcp_servers(&pool, created.bot.id).await?,
+        vec![
+            (
+                "native".to_string(),
+                "https://mcp.grafana.com/mcp".to_string()
+            ),
+            ("pipedream".to_string(), "linear".to_string()),
+        ]
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn updating_an_agent_replaces_its_mcp_servers(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    insert_pipedream_connection(&pool, USER_OWNER, "linear").await?;
+    insert_pipedream_connection(&pool, USER_OWNER, "notion").await?;
+    let service = service(&pool);
+
+    let mut create = create_agent_req("bug-fixer", AgentChannelScope::All);
+    create.mcp_servers = vec![McpServerRef::pipedream("linear")];
+    let created = service.create_agent(user_id(USER_OWNER), create).await?;
+
+    let mut update = update_agent_req("bug-fixer", AgentChannelScope::All);
+    update.mcp_servers = vec![McpServerRef::pipedream("notion")];
+    let updated = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, update)
+        .await?;
+    assert_eq!(updated.mcp_servers, vec![McpServerRef::pipedream("notion")]);
+    assert_eq!(
+        stored_mcp_servers(&pool, created.bot.id).await?,
+        vec![("pipedream".to_string(), "notion".to_string())]
+    );
+
+    let mut cleared = update_agent_req("bug-fixer", AgentChannelScope::All);
+    cleared.mcp_servers = Vec::new();
+    let cleared = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, cleared)
+        .await?;
+    assert!(cleared.mcp_servers.is_empty());
+    assert!(stored_mcp_servers(&pool, created.bot.id).await?.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn agent_mcp_servers_must_be_registered_by_the_caller_and_unique(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    insert_user(&pool, USER_OTHER).await?;
+    insert_pipedream_connection(&pool, USER_OTHER, "linear").await?;
+    let service = service(&pool);
+
+    // Somebody else's connection is not the caller's to hand an agent.
+    let mut request = create_agent_req("bug-fixer", AgentChannelScope::All);
+    request.mcp_servers = vec![McpServerRef::pipedream("linear")];
+    let error = service
+        .create_agent(user_id(USER_OWNER), request)
+        .await
+        .expect_err("unregistered mcp servers must be refused");
+    assert!(matches!(error, BotError::BadRequest(_)), "{error:?}");
+
+    // A native URL the caller never added is refused the same way.
+    let mut request = create_agent_req("bug-fixer", AgentChannelScope::All);
+    request.mcp_servers = vec![McpServerRef::native("https://mcp.example.com/mcp")];
+    let error = service
+        .create_agent(user_id(USER_OWNER), request)
+        .await
+        .expect_err("unregistered mcp servers must be refused");
+    assert!(matches!(error, BotError::BadRequest(_)), "{error:?}");
+
+    // Duplicates are a bad request before any lookup happens.
+    insert_pipedream_connection(&pool, USER_OWNER, "linear").await?;
+    let mut request = create_agent_req("bug-fixer", AgentChannelScope::All);
+    request.mcp_servers = vec![
+        McpServerRef::pipedream("linear"),
+        McpServerRef::pipedream("linear"),
+    ];
+    let error = service
+        .create_agent(user_id(USER_OWNER), request)
+        .await
+        .expect_err("duplicate mcp servers must be refused");
+    assert!(matches!(error, BotError::BadRequest(_)), "{error:?}");
+
+    // Nothing above created an agent.
+    assert!(service.list_agents(user_id(USER_OWNER)).await?.is_empty());
     Ok(())
 }

@@ -8,6 +8,7 @@
 import type { AgentChannelScope } from './agentChannelScope';
 import type { AgentHarnessId } from './agentHarnessId';
 import type { Bot } from './bot';
+import type { McpServerRef } from './mcpServerRef';
 
 /**
  * A persisted user- or team-owned AI agent.
@@ -26,4 +27,7 @@ export interface Agent {
   harness_id?: AgentHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** User-registered MCP servers the agent may use, in the configured
+order. Macro's own MCP server is not listed: every agent has it. */
+  mcp_servers: McpServerRef[];
 }

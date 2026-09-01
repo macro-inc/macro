@@ -595,6 +595,7 @@ use utoipa::OpenApi;
             bots::domain::models::AgentChannelScope,
             bots::domain::models::CreateAgentRequest,
             bots::domain::models::UpdateAgentRequest,
+            bots::domain::models::McpServerRef,
             bots::domain::models::Bot,
             bots::domain::models::BotKind,
             bots::domain::models::BotOwner,

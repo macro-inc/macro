@@ -1,7 +1,7 @@
 //! Postgres-backed runtime profiles for fixed and database-backed agents.
 
 use agent_harness::domain::error::{HarnessError, Result};
-use agent_harness::domain::model::{AgentKind, AgentRuntimeConfig};
+use agent_harness::domain::model::{AgentKind, AgentRuntimeConfig, McpServerSelection};
 use agent_harness::domain::ports::AgentRuntimeDirectory;
 use bot_id::BotId;
 use bots::domain::ports::BotRepo;
@@ -39,6 +39,9 @@ impl AgentRuntimeDirectory for PgAgentRuntimeDirectory {
                 model: agent.default_model,
                 harness: agent.harness,
                 instructions: agent.instructions,
+                // A persisted agent names its servers; the fixed profiles
+                // above keep every connected one.
+                mcp_servers: McpServerSelection::Selected(agent.mcp_servers),
             }))
     }
 }

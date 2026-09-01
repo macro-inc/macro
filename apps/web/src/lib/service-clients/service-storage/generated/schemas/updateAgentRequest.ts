@@ -6,6 +6,7 @@
  */
 
 import type { AgentChannelScope } from './agentChannelScope';
+import type { McpServerRef } from './mcpServerRef';
 import type { UpdateAgentRequestAvatarUrl } from './updateAgentRequestAvatarUrl';
 import type { UpdateAgentRequestDescription } from './updateAgentRequestDescription';
 import type { UpdateAgentRequestHarnessId } from './updateAgentRequestHarnessId';
@@ -32,6 +33,10 @@ export interface UpdateAgentRequest {
   harness_id?: UpdateAgentRequestHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** User-registered MCP servers the agent may use. Each must be registered
+by the caller. Macro's own MCP server is always available and never
+listed here. */
+  mcp_servers?: McpServerRef[];
   /** Display name. */
   name: string;
   /** Team owner. Omit to make the agent private to the caller. */

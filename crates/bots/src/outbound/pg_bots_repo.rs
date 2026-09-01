@@ -8,7 +8,7 @@ use crate::domain::{
         Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId,
         BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
         CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessId, HarnessOwner,
-        PatchBotRequest, UpdateAgentRequest,
+        McpServerRef, PatchBotRequest, UpdateAgentRequest,
     },
     ports::BotRepo,
 };
@@ -30,6 +30,33 @@ impl PgBotsRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+}
+
+/// Record the MCP servers an agent may use, in the order given.
+async fn insert_agent_mcp_servers(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    bot_id: BotId,
+    servers: &[McpServerRef],
+) -> anyhow::Result<()> {
+    if servers.is_empty() {
+        return Ok(());
+    }
+    let (kinds, refs, positions) = mcp_server_columns(servers);
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_mcp_servers (bot_id, kind, server_ref, position)
+        SELECT $1, kind, server_ref, position
+        FROM UNNEST($2::text[], $3::text[], $4::int4[]) AS s(kind, server_ref, position)
+        "#,
+        bot_id.as_uuid(),
+        &kinds,
+        &refs,
+        &positions,
+    )
+    .execute(&mut **tx)
+    .await
+    .context("failed to record the agent's mcp servers")?;
+    Ok(())
 }
 
 fn principal_id(bot_id: BotId) -> String {
@@ -112,6 +139,8 @@ struct AgentRow {
     default_model: String,
     channel_scope: String,
     channel_ids: Vec<Uuid>,
+    mcp_server_kinds: Vec<String>,
+    mcp_server_refs: Vec<String>,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -122,6 +151,7 @@ impl TryFrom<AgentRow> for Agent {
             .channel_scope
             .parse::<AgentChannelScope>()
             .map_err(anyhow::Error::msg)?;
+        let mcp_servers = mcp_servers_from_columns(row.mcp_server_kinds, row.mcp_server_refs)?;
         let bot = BotRow {
             id: row.id,
             kind: row.kind,
@@ -147,8 +177,49 @@ impl TryFrom<AgentRow> for Agent {
             default_model: row.default_model,
             channel_scope,
             channel_ids: row.channel_ids,
+            mcp_servers,
         })
     }
+}
+
+/// Zip the two parallel columns an agent's MCP servers are read as.
+///
+/// Both arrays come from the same ordered subquery, so a length mismatch is
+/// a query bug rather than data, and is reported as one.
+fn mcp_servers_from_columns(
+    kinds: Vec<String>,
+    refs: Vec<String>,
+) -> anyhow::Result<Vec<McpServerRef>> {
+    if kinds.len() != refs.len() {
+        anyhow::bail!(
+            "agent mcp server columns disagree: {} kinds, {} refs",
+            kinds.len(),
+            refs.len()
+        );
+    }
+    kinds
+        .into_iter()
+        .zip(refs)
+        .map(|(kind, server_ref)| {
+            McpServerRef::from_columns(&kind, server_ref).map_err(anyhow::Error::msg)
+        })
+        .collect()
+}
+
+/// The parallel column vectors an agent's MCP servers are written as.
+fn mcp_server_columns(servers: &[McpServerRef]) -> (Vec<String>, Vec<String>, Vec<i32>) {
+    let kinds = servers
+        .iter()
+        .map(|server| server.kind().as_str().to_owned())
+        .collect();
+    let refs = servers
+        .iter()
+        .map(|server| server.reference().to_owned())
+        .collect();
+    let positions = (0..servers.len())
+        .map(|position| i32::try_from(position).expect("an agent never names 2^31 mcp servers"))
+        .collect();
+    (kinds, refs, positions)
 }
 
 #[derive(Debug)]
@@ -341,6 +412,8 @@ impl BotRepo for PgBotsRepo {
             .context("failed to add agent to selected channels")?;
         }
 
+        insert_agent_mcp_servers(&mut tx, bot_id, &req.mcp_servers).await?;
+
         tx.commit()
             .await
             .context("failed to commit agent creation transaction")?;
@@ -353,6 +426,7 @@ impl BotRepo for PgBotsRepo {
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
+            mcp_servers: req.mcp_servers,
         })
     }
 
@@ -469,6 +543,18 @@ impl BotRepo for PgBotsRepo {
             .context("failed to replace the agent's selected channels")?;
         }
 
+        sqlx::query!(
+            r#"
+            DELETE FROM agent_mcp_servers
+            WHERE bot_id = $1
+            "#,
+            bot_id.as_uuid(),
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to clear the agent's previous mcp servers")?;
+        insert_agent_mcp_servers(&mut tx, bot_id, &req.mcp_servers).await?;
+
         tx.commit()
             .await
             .context("failed to commit agent update transaction")?;
@@ -481,6 +567,7 @@ impl BotRepo for PgBotsRepo {
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
+            mcp_servers: req.mcp_servers,
         }))
     }
 
@@ -516,7 +603,19 @@ impl BotRepo for PgBotsRepo {
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
                     ORDER BY p.channel_id
-                ) AS "channel_ids!"
+                ) AS "channel_ids!",
+                ARRAY(
+                    SELECT m.kind
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.position
+                ) AS "mcp_server_kinds!",
+                ARRAY(
+                    SELECT m.server_ref
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.position
+                ) AS "mcp_server_refs!"
             FROM bots b
             INNER JOIN agent_configs a ON a.bot_id = b.id
             WHERE b.kind = 'owned'
@@ -557,6 +656,42 @@ impl BotRepo for PgBotsRepo {
         .fetch_one(&self.pool)
         .await
         .context("failed to check agent channel membership")
+    }
+
+    async fn user_has_mcp_servers(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        servers: &[McpServerRef],
+    ) -> Result<bool, Self::Err> {
+        let (kinds, refs, _) = mcp_server_columns(servers);
+        // Each reference is looked up in the registry its kind names. The
+        // registries are keyed by (user, identifier), so the caller's own
+        // rows are the only ones that can match.
+        sqlx::query_scalar!(
+            r#"
+            SELECT COUNT(*) = CARDINALITY($2::text[]) AS "has_servers!"
+            FROM UNNEST($2::text[], $3::text[]) AS wanted(kind, server_ref)
+            WHERE (
+                wanted.kind = 'native'
+                AND EXISTS (
+                    SELECT 1 FROM mcp_servers s
+                    WHERE s.user_id = $1 AND s.url = wanted.server_ref
+                )
+            ) OR (
+                wanted.kind = 'pipedream'
+                AND EXISTS (
+                    SELECT 1 FROM pipedream_mcp_connections p
+                    WHERE p.user_id = $1 AND p.app_slug = wanted.server_ref
+                )
+            )
+            "#,
+            caller.as_ref(),
+            &kinds,
+            &refs,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check agent mcp server registrations")
     }
 
     async fn create_owned_bot(
@@ -806,7 +941,19 @@ impl BotRepo for PgBotsRepo {
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
                     ORDER BY p.channel_id
-                ) AS "channel_ids!"
+                ) AS "channel_ids!",
+                ARRAY(
+                    SELECT m.kind
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.position
+                ) AS "mcp_server_kinds!",
+                ARRAY(
+                    SELECT m.server_ref
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.position
+                ) AS "mcp_server_refs!"
             FROM bots b
             INNER JOIN agent_configs a ON a.bot_id = b.id
             WHERE b.id = $1

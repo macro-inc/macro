@@ -178,13 +178,20 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 /// domain has no business knowing: signing a JWT needs a key, and enumerating
 /// the owner's MCP servers needs their rows. What the domain keeps is *when* -
 /// once, at spawn, for the session's own owner.
+///
+/// Both halves take the session's `bot`, because which of the owner's servers
+/// a session is handed is the agent's decision
+/// ([`crate::domain::model::McpServerSelection`]), and only the agent's
+/// configuration can answer it.
 pub trait SandboxEgressProvisioner: Send + Sync + 'static {
-    /// The egress environment for one session, on behalf of `owner`, and the
-    /// hash its session row must carry for that environment to mean anything.
+    /// The egress environment for one session, on behalf of `owner` and for
+    /// the agent `bot`, and the hash its session row must carry for that
+    /// environment to mean anything.
     fn provision(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
+        bot: BotId,
         repo_url: &str,
     ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
 
@@ -197,6 +204,7 @@ pub trait SandboxEgressProvisioner: Send + Sync + 'static {
     fn restore(
         &self,
         owner: &MacroUserIdStr<'static>,
+        bot: BotId,
         session_token: String,
     ) -> impl Future<Output = Result<SandboxEgress>> + Send;
 }

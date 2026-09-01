@@ -77,6 +77,40 @@ export const listAgentsResponseItem = zod
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
       ),
+    mcp_servers: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['native']),
+                url: zod
+                  .string()
+                  .describe(
+                    'The server URL exactly as the user registered it.'
+                  ),
+              })
+              .describe(
+                'A native-stack server, identified by its streamable HTTP URL.'
+              ),
+            zod
+              .object({
+                app_slug: zod
+                  .string()
+                  .describe('Pipedream app name slug, e.g. `linear`.'),
+                kind: zod.enum(['pipedream']),
+              })
+              .describe(
+                "A Pipedream-connected app, identified by Pipedream's app slug."
+              ),
+          ])
+          .describe(
+            "One user-registered MCP server, as an agent's configuration names it.\n\nThe reference carries no credentials and no owner: it says \*which\* server,\nand whoever runs the agent resolves it against their own registrations at\nsession time."
+          )
+      )
+      .describe(
+        "User-registered MCP servers the agent may use, in the configured\norder. Macro's own MCP server is not listed: every agent has it."
+      ),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -112,6 +146,41 @@ export const createAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp_servers: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['native']),
+                url: zod
+                  .string()
+                  .describe(
+                    'The server URL exactly as the user registered it.'
+                  ),
+              })
+              .describe(
+                'A native-stack server, identified by its streamable HTTP URL.'
+              ),
+            zod
+              .object({
+                app_slug: zod
+                  .string()
+                  .describe('Pipedream app name slug, e.g. `linear`.'),
+                kind: zod.enum(['pipedream']),
+              })
+              .describe(
+                "A Pipedream-connected app, identified by Pipedream's app slug."
+              ),
+          ])
+          .describe(
+            "One user-registered MCP server, as an agent's configuration names it.\n\nThe reference carries no credentials and no owner: it says \*which\* server,\nand whoever runs the agent resolves it against their own registrations at\nsession time."
+          )
+      )
+      .optional()
+      .describe(
+        "User-registered MCP servers the agent may use. Each must be registered\nby the caller. Macro's own MCP server is always available and never\nlisted here."
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -156,6 +225,41 @@ export const updateAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp_servers: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['native']),
+                url: zod
+                  .string()
+                  .describe(
+                    'The server URL exactly as the user registered it.'
+                  ),
+              })
+              .describe(
+                'A native-stack server, identified by its streamable HTTP URL.'
+              ),
+            zod
+              .object({
+                app_slug: zod
+                  .string()
+                  .describe('Pipedream app name slug, e.g. `linear`.'),
+                kind: zod.enum(['pipedream']),
+              })
+              .describe(
+                "A Pipedream-connected app, identified by Pipedream's app slug."
+              ),
+          ])
+          .describe(
+            "One user-registered MCP server, as an agent's configuration names it.\n\nThe reference carries no credentials and no owner: it says \*which\* server,\nand whoever runs the agent resolves it against their own registrations at\nsession time."
+          )
+      )
+      .optional()
+      .describe(
+        "User-registered MCP servers the agent may use. Each must be registered\nby the caller. Macro's own MCP server is always available and never\nlisted here."
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -234,6 +338,40 @@ export const updateAgentResponse = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp_servers: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['native']),
+                url: zod
+                  .string()
+                  .describe(
+                    'The server URL exactly as the user registered it.'
+                  ),
+              })
+              .describe(
+                'A native-stack server, identified by its streamable HTTP URL.'
+              ),
+            zod
+              .object({
+                app_slug: zod
+                  .string()
+                  .describe('Pipedream app name slug, e.g. `linear`.'),
+                kind: zod.enum(['pipedream']),
+              })
+              .describe(
+                "A Pipedream-connected app, identified by Pipedream's app slug."
+              ),
+          ])
+          .describe(
+            "One user-registered MCP server, as an agent's configuration names it.\n\nThe reference carries no credentials and no owner: it says \*which\* server,\nand whoever runs the agent resolves it against their own registrations at\nsession time."
+          )
+      )
+      .describe(
+        "User-registered MCP servers the agent may use, in the configured\norder. Macro's own MCP server is not listed: every agent has it."
       ),
   })
   .describe('A persisted user- or team-owned AI agent.');

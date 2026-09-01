@@ -13,7 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::*;
-use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand};
+use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand, McpServerSelection};
 
 fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
     Some(AgentRuntimeConfig {
@@ -27,6 +27,7 @@ fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
         }
         .to_owned(),
         instructions: "configured instructions".to_owned(),
+        mcp_servers: McpServerSelection::AllConnected,
     })
 }
 

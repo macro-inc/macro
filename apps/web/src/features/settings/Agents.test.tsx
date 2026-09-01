@@ -60,6 +60,24 @@ vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => harnessMocks.query,
 }));
 
+const mcpMocks = vi.hoisted(() => ({
+  pipedreamFlag: true,
+  pipedream: { data: [] as unknown[] },
+  native: { data: [] as unknown[] },
+}));
+
+vi.mock('@core/pipedream/flag', () => ({
+  usePipedreamMcpFlag: () => () => mcpMocks.pipedreamFlag,
+}));
+
+vi.mock('@queries/mcp-servers', () => ({
+  useMcpServersQuery: () => mcpMocks.native,
+}));
+
+vi.mock('@queries/pipedream-connectors', () => ({
+  usePipedreamConnectionsQuery: () => mcpMocks.pipedream,
+}));
+
 vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => agentMocks.query,
   useCreateAgentMutation: () => ({
@@ -123,6 +141,9 @@ beforeEach(() => {
   agentMocks.currentTeam = { team: { id: 'team-1' } };
   agentMocks.isTeamOwner = false;
   harnessMocks.query.data = [];
+  mcpMocks.pipedreamFlag = true;
+  mcpMocks.pipedream.data = [];
+  mcpMocks.native.data = [];
 });
 
 const MACROD_HARNESS = {
@@ -284,6 +305,7 @@ describe('Agents', () => {
         description: 'Finds and fixes bugs.',
         handle: 'bug-fixer',
         harness: 'in-memory',
+        mcpServers: [],
         name: 'Bug resolver',
         instructions: 'Fix the root cause.',
         teamId: undefined,
@@ -505,6 +527,7 @@ describe('Agents', () => {
         defaultModel: Model.sonnet5,
         handle: 'bug-fixer',
         harness: 'in-memory',
+        mcpServers: [],
         name: 'Bug fixer',
         instructions: 'Fix the root cause and add tests.',
         teamId: 'team-1',
@@ -592,11 +615,78 @@ describe('Agents', () => {
         handle: 'bug-fixer',
         harness: 'macrod',
         harnessId: MACROD_HARNESS.id,
+        mcpServers: [],
         name: 'Bug fixer',
         instructions: '',
         teamId: undefined,
       });
     });
+  });
+
+  it('offers registered MCP servers as toggles with Macro always on', async () => {
+    mcpMocks.pipedream.data = [
+      { app_slug: 'linear', server_name: 'Linear', enabled: true },
+      { app_slug: 'notion', server_name: 'Notion', enabled: false },
+    ];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    const macro = within(dialog).getByRole('switch', { name: 'Use Macro' });
+    expect(macro).toHaveProperty('checked', true);
+    expect(macro).toHaveProperty('disabled', true);
+    expect(within(dialog).getByText('Turned off in Connections')).toBeTruthy();
+
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Bug fixer' },
+    });
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Use Linear' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+
+    await waitFor(() => {
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mcpServers: [{ kind: 'pipedream', app_slug: 'linear' }],
+        })
+      );
+    });
+  });
+
+  it("keeps an agent's MCP servers that Connections no longer lists", () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          description: null,
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet5,
+        channel_scope: 'all',
+        channel_ids: [],
+        mcp_servers: [{ kind: 'pipedream', app_slug: 'datadog' }],
+      },
+    ];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+
+    const dialog = screen.getByRole('dialog');
+    const datadog = within(dialog).getByRole('switch', { name: 'Use datadog' });
+    expect(datadog).toHaveProperty('checked', true);
+    expect(
+      within(dialog).getByText('Not in your Connections any more')
+    ).toBeTruthy();
   });
 
   it('preselects the bound macrod harness when editing', () => {

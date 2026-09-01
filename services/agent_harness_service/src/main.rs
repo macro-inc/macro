@@ -25,7 +25,8 @@ use agent_egress::outbound::mcp_credentials::PipedreamMcpCredentials;
 use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{
-    AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, SessionDefaults,
+    AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, McpServerSelection,
+    SessionDefaults,
 };
 use agent_harness::domain::ports::AgentRuntimeDirectory as _;
 use agent_harness::domain::service::AgentHarnessService;
@@ -376,6 +377,7 @@ async fn run() -> anyhow::Result<()> {
             model: config.harness_model.clone(),
             harness: config.harness_slug.clone(),
             instructions: String::new(),
+            mcp_servers: McpServerSelection::AllConnected,
         },
     )];
     if let Some(inmem_bot) = inmem_bot {
@@ -386,6 +388,7 @@ async fn run() -> anyhow::Result<()> {
                 model: config.inmem_model.clone(),
                 harness: config.inmem_harness_slug.clone(),
                 instructions: String::new(),
+                mcp_servers: McpServerSelection::AllConnected,
             },
         ));
     }
@@ -396,10 +399,13 @@ async fn run() -> anyhow::Result<()> {
             model: config.harness_model.clone(),
             harness: "cursor".to_owned(),
             instructions: String::new(),
+            mcp_servers: McpServerSelection::AllConnected,
         },
     ));
-    let runtime_directory =
-        PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
+    let runtime_directory = Arc::new(PgAgentRuntimeDirectory::new(
+        PgBotsRepo::new(pool.clone()),
+        fixed_runtimes.clone(),
+    ));
     // Logged because the failure mode this replaced was silent: a harness that
     // resolved no in-process bot booted healthy, passed its health check, and
     // dropped every in-process-bot mention as ForeignBot with nothing to show
@@ -512,7 +518,11 @@ async fn run() -> anyhow::Result<()> {
         HarnessKeyedConnections::new(PgHarnessBindings::new(pool.clone()), Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
-        EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
+        EgressProvisioner::new(
+            Arc::clone(&mcp_connections),
+            Arc::clone(&runtime_directory),
+            config.egress_base_url.clone(),
+        ),
         HttpCommandForwarder::new(config.internal_api_key.clone())
             .map_err(|error| anyhow::anyhow!("failed to build the command forwarder: {error}"))?,
         defaults,
