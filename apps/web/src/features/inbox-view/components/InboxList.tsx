@@ -12,6 +12,7 @@ import {
   SoupEntityContextMenu,
   viewedProjectIdFromContent,
 } from '@app/features/soup';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
@@ -74,6 +75,9 @@ export function InboxList(props: InboxListProps) {
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [isPullRefreshing, setIsPullRefreshing] = createSignal(false);
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
   let scrollOffset = DEFAULT_INBOX_LIST_STATE.scrollOffset;
   const readListState = (): InboxListStateSnapshot => ({
@@ -215,8 +219,9 @@ export function InboxList(props: InboxListProps) {
 
   function showsEmptyViewport() {
     return (
-      !props.source.isLoading() &&
-      (Boolean(props.source.error()) || rows().length === 0)
+      forceEmptyState() ||
+      (!props.source.isLoading() &&
+        (Boolean(props.source.error()) || rows().length === 0))
     );
   }
 
@@ -320,7 +325,11 @@ export function InboxList(props: InboxListProps) {
           }}
         >
           <Show
-            when={!props.source.isLoading() || isPullRefreshing()}
+            when={
+              forceEmptyState() ||
+              !props.source.isLoading() ||
+              isPullRefreshing()
+            }
             fallback={
               <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
                 <SpinnerIcon
@@ -331,7 +340,7 @@ export function InboxList(props: InboxListProps) {
             }
           >
             <Show
-              when={!props.source.error()}
+              when={forceEmptyState() || !props.source.error()}
               fallback={
                 <div
                   ref={setEmptyViewport}
@@ -349,7 +358,7 @@ export function InboxList(props: InboxListProps) {
               }
             >
               <Show
-                when={rows().length > 0}
+                when={!forceEmptyState() && rows().length > 0}
                 fallback={
                   <div
                     ref={setEmptyViewport}
