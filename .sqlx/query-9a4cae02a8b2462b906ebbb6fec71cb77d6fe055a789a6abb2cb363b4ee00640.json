@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                ht.id AS token_id,\n                h.id AS harness_id,\n                h.owner_user_id,\n                h.team_id,\n                h.created_by\n            FROM harness_tokens ht\n            JOIN harnesses h ON h.id = ht.harness_id\n            WHERE ht.token_hash = $1\n              AND ht.revoked_at IS NULL\n              AND h.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_by",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "9a4cae02a8b2462b906ebbb6fec71cb77d6fe055a789a6abb2cb363b4ee00640"
+}

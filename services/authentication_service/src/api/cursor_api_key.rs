@@ -10,16 +10,11 @@
 //! that needs it: a user who has lost their key rotates it at Cursor and pastes
 //! a new one.
 
+use crate::api::context::ApiContext;
 use axum::{
     Router,
     routing::{delete, get, put},
 };
-use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
-
-use crate::api::context::ApiContext;
-
-#[cfg(test)]
-mod test;
 
 pub(in crate::api) mod delete_cursor_api_key;
 pub(in crate::api) mod get_cursor_api_key;
@@ -37,13 +32,6 @@ pub fn router() -> Router<ApiContext> {
         .route("/models", get(list_cursor_models::handler))
         // The model new sessions start on.
         .route("/default-model", put(put_cursor_default_model::handler))
-}
-
-fn require_macro_staff(user_id: &MacroUserIdStr<'_>) -> Result<(), CursorApiKeyError> {
-    if user_id.email_part().domain_part() != "macro.com" {
-        return Err(CursorApiKeyError::NotMacroStaff);
-    }
-    Ok(())
 }
 
 /// What settings needs to render the Cursor connection.
@@ -74,11 +62,8 @@ pub enum CursorApiKeyError {
     /// The supplied value does not look like a Cursor API key.
     #[error("value does not look like a Cursor API key")]
     MalformedKey,
-    /// Cursor agents are currently restricted to Macro staff.
-    #[error("Cursor agents are only available to Macro staff")]
-    NotMacroStaff,
-    /// An operation that needs a connected account was attempted without one —
-    /// e.g. choosing a model before pasting a key.
+    /// An operation that needs a connected account was attempted without one,
+    /// such as listing the account's available models before pasting a key.
     #[error("connect a Cursor API key first")]
     NotConnected,
     /// Cursor's own API could not be reached or refused the request — listing
@@ -97,7 +82,6 @@ impl axum::response::IntoResponse for CursorApiKeyError {
         let status = match self {
             // A shape this service cannot use is the client's mistake.
             Self::MalformedKey => StatusCode::BAD_REQUEST,
-            Self::NotMacroStaff => StatusCode::FORBIDDEN,
             Self::NotConnected => StatusCode::CONFLICT,
             Self::CursorUnavailable => StatusCode::BAD_GATEWAY,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,

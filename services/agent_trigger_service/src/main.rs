@@ -4,11 +4,11 @@ mod config;
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_channel_event;
-use agent_trigger::domain::service::{AgentBotLookup, AgentTriggerService};
-use agent_trigger::outbound::{ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector};
+use agent_trigger::domain::service::AgentTriggerService;
+use agent_trigger::outbound::{
+    BotRepoAgentLookup, ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector,
+};
 use anyhow::Context as _;
-use bots::domain::models::BotId;
-use bots::domain::ports::BotRepo as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::domain::broker_events::ChannelMacroEvent;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
@@ -44,18 +44,6 @@ fn commit_message(consumer: &TriggerConsumer, message: &BorrowedMessage<'_>) -> 
         .map_err(|error| anyhow::anyhow!("failed to commit channel event offset: {error:?}"))
 }
 
-struct PgAgentBotLookup(PgBotsRepo);
-
-impl AgentBotLookup for PgAgentBotLookup {
-    async fn has_agent(&self, bot_id: BotId) -> agent_session::domain::error::Result<bool> {
-        self.0
-            .get_bot(bot_id)
-            .await
-            .map(|bot| bot.is_some_and(|bot| bot.has_agent))
-            .map_err(agent_session::domain::error::AgentSessionError::Unknown)
-    }
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let entrypoint = MacroEntrypoint::default().init();
@@ -79,7 +67,9 @@ async fn run() -> anyhow::Result<()> {
     );
     let trigger = AgentTriggerService::new(
         PgAgentSessionRepo::new(pool.clone()),
-        PgAgentBotLookup(PgBotsRepo::new(pool.clone())),
+        BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
+        BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
+        BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         LexicalReplyDetector::new(lexical),
         FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
         ChannelThreadHistory::new(PgChannelsRepo::new(pool)),

@@ -27,7 +27,7 @@ pub enum HarnessError {
     /// whose session never answers. Closing that needs a way to post a failure
     /// back to the thread, which [`crate::domain::ports::SessionAnnouncer`]
     /// does not have — it announces sessions and nothing else.
-    #[error("connect your Cursor account in Settings → Connections to use @cursor")]
+    #[error("connect your Cursor account in Settings → Agents → Harness to use @cursor")]
     CursorNotConnected,
     /// The agent would not open an ACP session.
     #[error("acp handshake failed: {0}")]
@@ -71,4 +71,7 @@ pub enum HarnessError {
     /// Forwarding a command to the session's managing replica failed.
     #[error("failed to forward an agent session command: {0}")]
     Forward(rootcause::Report),
+    /// A bot's persisted agent runtime configuration could not be loaded.
+    #[error("failed to resolve agent runtime configuration: {0}")]
+    RuntimeDirectory(rootcause::Report),
 }

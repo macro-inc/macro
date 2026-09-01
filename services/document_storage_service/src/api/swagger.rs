@@ -254,7 +254,22 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_activity_handler,
         channels::inbound::axum_router::post_activity_handler,
 
+        // harnesses
+        harnesses::inbound::axum_router::create_pairing_handler,
+        harnesses::inbound::axum_router::get_pairing_handler,
+        harnesses::inbound::axum_router::approve_pairing_handler,
+        harnesses::inbound::axum_router::claim_pairing_handler,
+        harnesses::inbound::axum_router::list_harnesses_handler,
+        harnesses::inbound::axum_router::delete_harness_handler,
+        harnesses::inbound::axum_router::list_bound_agents_handler,
+        harnesses::inbound::axum_router::get_self_harness_handler,
+        harnesses::inbound::axum_router::delete_self_harness_handler,
+        harnesses::inbound::axum_router::list_harness_sessions_handler,
+
         // bots
+        bots::inbound::axum_router::create_agent_handler,
+        bots::inbound::axum_router::list_agents_handler,
+        bots::inbound::axum_router::update_agent_handler,
         bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
@@ -561,7 +576,25 @@ use utoipa::OpenApi;
             ApiActivity,
             PostActivityRequest,
 
+            // Harnesses
+            harnesses::domain::models::Harness,
+            harnesses::domain::models::HarnessOwner,
+            harnesses::domain::models::HarnessAgent,
+            harnesses::domain::models::HarnessSession,
+            harnesses::domain::models::RequestedHarnessScope,
+            harnesses::domain::models::CreatePairingRequest,
+            harnesses::domain::models::CreatedPairing,
+            harnesses::domain::models::PairingDetails,
+            harnesses::domain::models::ApprovePairingRequest,
+            harnesses::domain::models::ClaimPairingRequest,
+            harnesses::domain::models::ClaimedPairing,
+            harnesses::inbound::axum_router::PendingClaimResponse,
+
             // Bots
+            bots::domain::models::Agent,
+            bots::domain::models::AgentChannelScope,
+            bots::domain::models::CreateAgentRequest,
+            bots::domain::models::UpdateAgentRequest,
             bots::domain::models::Bot,
             bots::domain::models::BotKind,
             bots::domain::models::BotOwner,

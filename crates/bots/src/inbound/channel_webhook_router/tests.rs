@@ -1,7 +1,8 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
-    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
+    CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    PatchBotRequest, UpdateAgentRequest,
 };
 use axum::{
     Router,
@@ -152,6 +153,27 @@ impl TestBotService {
 }
 
 impl BotService for TestBotService {
+    async fn create_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        unimplemented!()
+    }
+
     async fn create_bot(
         &self,
         _caller: MacroUserIdStr<'static>,

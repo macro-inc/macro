@@ -4,7 +4,7 @@ use cursor_cloud_agents::domain::ports::CursorAgents;
 use macro_authorization::{MacroAuthorizationExtractor, UserOnly};
 use utoipa::ToSchema;
 
-use super::{CursorApiKeyError, require_macro_staff};
+use super::CursorApiKeyError;
 use crate::api::context::{ApiContext, AuthorizationService};
 
 /// One model the settings dropdown can offer.
@@ -54,7 +54,6 @@ pub async fn handler(
     user_context: MacroAuthorizationExtractor<AuthorizationService, UserOnly>,
 ) -> Result<Json<CursorModelsResponse>, CursorApiKeyError> {
     let user_id = &user_context.authorization.macro_user_id;
-    require_macro_staff(user_id)?;
 
     let stored = cursor_api_key::store::get_cursor_api_key(&ctx.db, user_id.as_ref())
         .await
