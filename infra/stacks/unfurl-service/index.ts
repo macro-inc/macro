@@ -1,9 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import {
-  getServiceUrl,
-  ServiceUrl,
-  stack,
-} from '../../packages/shared';
+import { getServiceUrl, ServiceUrl, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { UnfurlService } from './unfurl-service';
 
