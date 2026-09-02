@@ -1905,6 +1905,7 @@ export type ChannelCreatedMetadata = {
      * Type of channel that was created.
      */
     channel_type: ChannelType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * Active participants after creation (including the owner).
      */

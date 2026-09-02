@@ -15259,6 +15259,17 @@
             "$ref": "#/components/schemas/ChannelType",
             "description": "Type of channel that was created."
           },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User the actor created the channel for, when the actor is a bot."
+              }
+            ]
+          },
           "participant_user_ids": {
             "type": "array",
             "items": {
