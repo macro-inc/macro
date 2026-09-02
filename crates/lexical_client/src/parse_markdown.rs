@@ -35,14 +35,31 @@ struct MentionsRequest<'a> {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct ExplicitReplyRequest<'a> {
+struct ExtractReplyRequest<'a> {
     markdown: &'a str,
+}
+
+/// The leading `ReplyTargetNode` extracted from markdown by the lexical
+/// service `/extract-reply` endpoint, when the markdown is an explicit reply.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractedExplicitReply {
+    /// Channel containing the targeted message.
+    pub channel_id: String,
+    /// Targeted channel message.
+    pub target_message_id: String,
+    /// Thread containing the targeted message.
+    pub target_thread_id: String,
+    /// Static one-line preview rendered by the reply target.
+    pub display_text: String,
+    /// Sender of the targeted message — who the author replied to.
+    pub sender_id: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ExplicitReplyResponse {
-    is_explicit_reply: bool,
+struct ExtractReplyResponse {
+    reply: Option<ExtractedExplicitReply>,
 }
 
 /// An entity mention extracted from markdown by the lexical service
@@ -362,22 +379,25 @@ impl LexicalClient {
         Ok(data.markdown)
     }
 
-    /// Parses `markdown` via the lexical service and reports whether it starts
-    /// with a `ReplyTargetNode` followed by the author's non-empty reply.
+    /// Parses `markdown` via the lexical service and returns the leading
+    /// `ReplyTargetNode` when it is followed by the author's non-empty reply.
     /// Standard Markdown blockquotes carry no reply semantics.
     #[tracing::instrument(skip(self, markdown), err)]
-    pub async fn is_explicit_reply(&self, markdown: &str) -> Result<bool> {
-        let url = format!("{}/explicit-reply", self.url);
+    pub async fn extract_explicit_reply(
+        &self,
+        markdown: &str,
+    ) -> Result<Option<ExtractedExplicitReply>> {
+        let url = format!("{}/extract-reply", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&ExplicitReplyRequest { markdown })
+                .json(&ExtractReplyRequest { markdown })
                 .send()
                 .await?,
         )
         .await?;
-        let data: ExplicitReplyResponse = response.json().await.context("unexpected response")?;
-        Ok(data.is_explicit_reply)
+        let data: ExtractReplyResponse = response.json().await.context("unexpected response")?;
+        Ok(data.reply)
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
@@ -483,5 +503,30 @@ mod tests {
             }
             _ => panic!("expected dssImage node"),
         }
+    }
+
+    #[test]
+    fn extract_reply_response_deserializes_a_target() {
+        let json = r#"{
+            "reply": {
+                "channelId": "channel-1",
+                "targetMessageId": "message-1",
+                "targetThreadId": "thread-1",
+                "displayText": "please fix this",
+                "senderId": "bot|00000000-0000-0000-0000-00000000b07a"
+            }
+        }"#;
+
+        let response: ExtractReplyResponse = serde_json::from_str(json).unwrap();
+        let reply = response.reply.expect("reply");
+        assert_eq!(reply.channel_id, "channel-1");
+        assert_eq!(reply.target_message_id, "message-1");
+        assert_eq!(reply.sender_id, "bot|00000000-0000-0000-0000-00000000b07a");
+    }
+
+    #[test]
+    fn extract_reply_response_deserializes_null() {
+        let response: ExtractReplyResponse = serde_json::from_str(r#"{ "reply": null }"#).unwrap();
+        assert!(response.reply.is_none());
     }
 }

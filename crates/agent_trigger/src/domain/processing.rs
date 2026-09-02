@@ -7,7 +7,7 @@ use macro_event_broker::{EventBrokerError, MacroEvent as _, MacroEventBroker};
 
 use super::broker_events::AgentTriggerEventName;
 use super::service::{
-    AgentBotLookup, AgentTriggerService, ChannelParticipationLookup, ExplicitReplyDetector,
+    AgentBotLookup, AgentTriggerService, ChannelParticipationLookup, ExplicitReplyExtractor,
     ImplicitTriggerJudge, TeamMembershipLookup, ThreadHistory,
 };
 
@@ -39,7 +39,7 @@ where
     Bots: AgentBotLookup,
     Teams: TeamMembershipLookup,
     Channels: ChannelParticipationLookup,
-    Replies: ExplicitReplyDetector,
+    Replies: ExplicitReplyExtractor,
     Judge: ImplicitTriggerJudge,
     History: ThreadHistory,
     Broker: MacroEventBroker,
