@@ -41,7 +41,7 @@ const serverHostRemote = {
   'unfurl-service': `${gatewayHost}/unfurl`,
   contacts: `${gatewayHost}/contacts`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
-  'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
+  'image-proxy-service': `${gatewayHost}/image-proxy`,
   'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
   'agent-harness': `https://agent-harness${devServerSuffix}.macro.com`,
 } as const;

@@ -576,8 +576,8 @@ service_url! {
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",
-            dev: "https://image-proxy-dev.macro.com",
-            prod: "https://image-proxy.macro.com",
+            dev: "https://dev-gateway.macro.com/image-proxy",
+            prod: "https://gateway.macro.com/image-proxy",
         },
         /// Lexical conversion service API URL.
         pub LexicalServiceUrl {
