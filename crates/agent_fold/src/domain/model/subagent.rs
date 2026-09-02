@@ -22,10 +22,11 @@ pub struct SubagentResult {
     pub agent_id: Option<String>,
     /// The model the subagent ran on.
     pub model: Option<String>,
-    /// Wall-clock time the subagent took.
-    pub duration_ms: Option<u64>,
-    /// Tokens the subagent consumed.
-    pub tokens: Option<u64>,
+    /// Wall-clock time the subagent took. `u32` because the browser
+    /// contract forbids 64-bit integers; 49 days of milliseconds is plenty.
+    pub duration_ms: Option<u32>,
+    /// Tokens the subagent consumed. `u32` for the same reason.
+    pub tokens: Option<u32>,
     /// How many tools the subagent called.
     pub tool_uses: Option<u32>,
     /// What kinds of tools the subagent called.

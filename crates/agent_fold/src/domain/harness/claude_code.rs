@@ -110,16 +110,21 @@ fn agent_result(response: &Value) -> SubagentResult {
             .and_then(Value::as_str)
             .map(ToOwned::to_owned)
     };
-    let u64_at = |key: &str| response.get(key).and_then(Value::as_u64);
+    let u32_at = |key: &str| {
+        response
+            .get(key)
+            .and_then(Value::as_u64)
+            .and_then(|count| u32::try_from(count).ok())
+    };
     SubagentResult {
         text,
         error: (response.get("status").and_then(Value::as_str) == Some("failed"))
             .then(|| string("error").unwrap_or_else(|| "subagent failed".to_owned())),
         agent_id: string("agentId"),
         model: string("resolvedModel"),
-        duration_ms: u64_at("totalDurationMs"),
-        tokens: u64_at("totalTokens"),
-        tool_uses: u64_at("totalToolUseCount").and_then(|count| u32::try_from(count).ok()),
+        duration_ms: u32_at("totalDurationMs"),
+        tokens: u32_at("totalTokens"),
+        tool_uses: u32_at("totalToolUseCount"),
         stats: response.get("toolStats").map(tool_stats),
     }
 }
