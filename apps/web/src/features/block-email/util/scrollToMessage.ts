@@ -70,9 +70,11 @@ function scrollPaddingInset(
   edge: 'top' | 'bottom'
 ): number {
   const style = getComputedStyle(container);
-  return parseFloat(
-    edge === 'top' ? style.scrollPaddingTop : style.scrollPaddingBottom
-  ) || 0;
+  return (
+    parseFloat(
+      edge === 'top' ? style.scrollPaddingTop : style.scrollPaddingBottom
+    ) || 0
+  );
 }
 
 export function alignmentDelta(

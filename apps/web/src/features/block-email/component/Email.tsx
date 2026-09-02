@@ -53,8 +53,8 @@ import {
   pageThenAdvanceDelta,
   revealMessageAfterLayout,
   type ScrollAlign,
-  scrollToListStartDelta,
   scrollToListEndDelta,
+  scrollToListStartDelta,
   scrollToMessage,
   threadMessageIsExpanded,
 } from '../util/scrollToMessage';

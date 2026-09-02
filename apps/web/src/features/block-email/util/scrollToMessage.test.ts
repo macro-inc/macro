@@ -12,8 +12,8 @@ import {
   nearestDelta,
   pageThenAdvanceDelta,
   revealDelta,
-  scrollToListStartDelta,
   scrollToListEndDelta,
+  scrollToListStartDelta,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from './scrollToMessage';
@@ -298,16 +298,28 @@ describe('scrollToListStartDelta', () => {
 describe('scrollToListEndDelta', () => {
   it('scrolls the leftover distance to the bottom', () => {
     const container = document.createElement('div');
-    Object.defineProperty(container, 'scrollHeight', { value: 1200, writable: true });
-    Object.defineProperty(container, 'clientHeight', { value: 800, writable: true });
+    Object.defineProperty(container, 'scrollHeight', {
+      value: 1200,
+      writable: true,
+    });
+    Object.defineProperty(container, 'clientHeight', {
+      value: 800,
+      writable: true,
+    });
     container.scrollTop = 200;
     expect(scrollToListEndDelta(container)).toBe(200);
   });
 
   it('is zero when the list is already at the bottom', () => {
     const container = document.createElement('div');
-    Object.defineProperty(container, 'scrollHeight', { value: 1200, writable: true });
-    Object.defineProperty(container, 'clientHeight', { value: 800, writable: true });
+    Object.defineProperty(container, 'scrollHeight', {
+      value: 1200,
+      writable: true,
+    });
+    Object.defineProperty(container, 'clientHeight', {
+      value: 800,
+      writable: true,
+    });
     container.scrollTop = 400;
     expect(scrollToListEndDelta(container)).toBe(0);
   });
