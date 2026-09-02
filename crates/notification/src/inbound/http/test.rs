@@ -686,7 +686,7 @@ impl NotificationReader for PresignedTestService {
 
 const HMAC_KEY: &[u8] = b"test-key";
 
-const NOTIFICATION_BASE_URL: &str = "https://notifications.macro.com";
+const LEGACY_NOTIFICATION_ORIGIN: &str = "https://notifications.macro.com";
 
 fn presigned_router() -> Router {
     let hmac_key = Hmac::<Sha256>::new_from_slice(HMAC_KEY).unwrap();
@@ -722,7 +722,7 @@ fn signed_disable_uri_at(origin: &str, notification_type: &str, user_id: &str) -
 }
 
 fn signed_disable_uri(notification_type: &str, user_id: &str) -> String {
-    signed_disable_uri_at(NOTIFICATION_BASE_URL, notification_type, user_id)
+    signed_disable_uri_at(LEGACY_NOTIFICATION_ORIGIN, notification_type, user_id)
 }
 
 fn presigned_get(uri: &str, host: &str) -> Request<axum::body::Body> {

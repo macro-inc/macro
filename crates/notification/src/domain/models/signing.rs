@@ -10,11 +10,6 @@ mod test;
 const SIG_PARAM: &str = "sig";
 
 /// Append `path` onto `base` without discarding `base`'s existing path.
-///
-/// `Url::set_path` and `Url::join` with an absolute path both replace the
-/// entire path, so a service URL that already carries a gateway prefix
-/// (for example `/notification`) would sign a different URL than the one
-/// clients request.
 pub fn append_path(mut base: Url, path: &str) -> Url {
     let prefix = base.path().trim_end_matches('/');
     let suffix = path.trim_start_matches('/');
