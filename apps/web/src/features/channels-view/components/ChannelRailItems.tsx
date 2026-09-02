@@ -2,7 +2,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
-import { Entity, type ChannelEntity } from '@entity';
+import { type ChannelEntity, Entity } from '@entity';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
 import { cn, Tooltip } from '@ui';

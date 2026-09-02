@@ -35,13 +35,13 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import {
-  SplitPanelContext,
-  type SplitPanelContextType,
-} from './split-layout/context';
-import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from './split-layout/components/PriorityCollapseOverflowSensor';
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from './split-layout/context';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
