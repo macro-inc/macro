@@ -328,7 +328,8 @@ async fn main() -> anyhow::Result<()> {
         documents::outbound::editing_worker_client::ReqwestEditingWorkerClient::new(
             config.ai_editing_worker_url.clone(),
             std::sync::Arc::new(reqwest::Client::new()),
-        ),
+        )
+        .with_internal_auth_key(Some(config.internal_api_key.to_string())),
         config.document_permission_jwt.as_ref().to_string(),
     );
 

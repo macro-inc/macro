@@ -28,9 +28,12 @@ pub struct EditUsage {
 /// Port for applying AI-driven edits to a document via the editing worker.
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
-    /// Apply AI-driven edits to `document_id` using a pre-minted `document_token`.
+    /// Apply AI-driven edits using a pseudonymous `observability_user_id` and
+    /// a pre-minted `document_token`. The pseudonym is stable only while its
+    /// derivation secret remains unchanged.
     fn edit(
         &self,
+        observability_user_id: &str,
         document_id: &str,
         document_token: &DocumentPermissionToken,
         instructions: &str,

@@ -5403,6 +5403,7 @@ dependencies = [
  "foreign_entity",
  "futures",
  "hex",
+ "hmac 0.12.1",
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "kafka_util",

@@ -302,7 +302,8 @@ pub async fn build_tool_service_context_from_env(
         (*entity_access_service).clone(),
         lexical_client,
         sync_client.as_ref().clone(),
-        ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
+        ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new()))
+            .with_internal_auth_key(Some(env.internal_api_key.to_string())),
         env.document_permission_jwt.to_string(),
     );
 

@@ -17,8 +17,8 @@ export type Bindings = {
   TRACES_DB: D1Database | undefined;
   /** Shared admin key gating the trace-read endpoint; validated via getEnv. */
   TRACE_ADMIN_KEY: string | undefined;
-  /** Org internal service-to-service key; accepted on the trace endpoints via
-   * the `x-internal-auth-key` header (used by the delete-document worker). */
+  /** Org internal service-to-service key; authenticates trace administration
+   * and pseudonymous edit attribution via `x-internal-auth-key`. */
   INTERNAL_API_KEY: string | undefined;
 };
 

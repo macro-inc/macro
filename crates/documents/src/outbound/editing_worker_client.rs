@@ -5,6 +5,9 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
 use std::sync::Arc;
 
+#[cfg(test)]
+mod test;
+
 /// Reqwest-backed client for the AI editing worker.
 #[derive(Clone)]
 pub struct ReqwestEditingWorkerClient {
@@ -28,7 +31,8 @@ impl ReqwestEditingWorkerClient {
         Self::new(worker_url, Arc::new(Client::new()))
     }
 
-    /// Set the internal auth key used to authenticate `delete_traces` calls.
+    /// Set the internal auth key used to authenticate trace deletion and AI
+    /// edit attribution. Without a key, edits remain supported but unattributed.
     pub fn with_internal_auth_key(mut self, internal_auth_key: Option<String>) -> Self {
         self.internal_auth_key = internal_auth_key;
         self
@@ -39,11 +43,12 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     #[tracing::instrument(skip_all, fields(document_id), err)]
     async fn edit(
         &self,
+        observability_user_id: &str,
         document_id: &str,
         document_token: &DocumentPermissionToken,
         instructions: &str,
     ) -> anyhow::Result<EditResult> {
-        let request_body = serde_json::json!({
+        let mut request_body = serde_json::json!({
             "documentToken": document_token.as_str(),
             "documentId": document_id,
             "prompt": instructions,
@@ -75,19 +80,24 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             },
             "interpret": false,
         });
+        if self.internal_auth_key.is_some() {
+            request_body["userId"] = observability_user_id.into();
+        }
 
         // Propagate the current trace so the worker's spans join this
         // service's trace instead of rooting their own.
         let mut headers = reqwest::header::HeaderMap::new();
         macro_tower_layers::inject_trace_headers(&mut headers);
 
-        let edit_resp = self
+        let mut request = self
             .client
             .post(format!("{}/edit", self.worker_url))
             .headers(headers)
-            .json(&request_body)
-            .send()
-            .await?;
+            .json(&request_body);
+        if let Some(internal_auth_key) = self.internal_auth_key.as_deref() {
+            request = request.header("x-internal-auth-key", internal_auth_key);
+        }
+        let edit_resp = request.send().await?;
 
         let status = edit_resp.status();
         if !status.is_success() {
