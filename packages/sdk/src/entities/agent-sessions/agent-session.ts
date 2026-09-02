@@ -141,8 +141,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
         path: { session_id: this.id },
       }),
     );
-    return entries.map(
-      (entry) => new QueuedAction(this.client, this.id, entry),
+    return entries.map((entry) =>
+      QueuedAction.from(this.client, this.id, entry),
     );
   }
 
