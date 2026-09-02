@@ -63,7 +63,6 @@ import { EmojiMenu } from '../menu/EmojiMenu';
 import { FloatingFormatMenu } from '../menu/FloatingFormatMenu';
 import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu } from '../menu/MentionsMenu';
-import type { MentionBucketId } from '../menu/MentionsMenu/MentionsMenuController';
 import { SnippetsMenu } from '../menu/SnippetsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
@@ -110,8 +109,6 @@ interface MarkdownTextareaProps {
   portalScope?: PortalScope;
   useBlockBoundary?: boolean;
   onDocumentMention?: (mention: HistoryItem) => void;
-  /** Restrict the entity categories shown in the @-mention menu. */
-  mentionSources?: MentionBucketId[];
   onEscape?: (e: KeyboardEvent) => boolean;
   onTab?: (e: KeyboardEvent) => boolean;
   captureEditor?: (editor: LexicalEditor) => void;
@@ -390,7 +387,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           onDocumentMention={(item) => {
             if (isHistoryItem(item)) props.onDocumentMention?.(item);
           }}
-          sources={props.mentionSources}
           useBlockBoundary={props.useBlockBoundary}
           portalScope={props.portalScope}
         />

@@ -140,15 +140,14 @@ export function EventForm(props: EventFormProps) {
               <MarkdownTextarea
                 initialHtml={state().description}
                 editable={() => !fieldIsDisabled('description')}
-                onChange={(markdown, editor) => {
+                onChange={(_markdown, editor) => {
                   if (!editor) return;
                   controller.setField(
                     'description',
-                    prepareCalendarDescription(markdown)
+                    prepareCalendarDescription(editor)
                   );
                 }}
                 placeholder="Add description..."
-                mentionSources={['documents']}
                 portalScope="local"
                 domRef={(element) =>
                   element.setAttribute('aria-label', 'Description')

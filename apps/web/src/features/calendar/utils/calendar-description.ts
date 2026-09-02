@@ -1,42 +1,18 @@
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
+import { $generateHtmlFromNodes } from '@lexical/html';
+import type { LexicalEditor } from 'lexical';
 
-const DOCUMENT_MENTION_PATTERN =
-  /<m-document-mention>(.*?)<\/m-document-mention>/g;
+/** Prepare exported editor HTML for calendar providers and invitation emails. */
+export function prepareCalendarDescriptionFromHtml(
+  generatedHtml: string
+): string {
+  const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
+  convertDocumentMentionsToLinks(parsed.body);
+  return parsed.body.innerHTML;
+}
 
-/** Convert internal mention markup to links understood by calendar providers. */
-export function prepareCalendarDescription(markdown: string): string {
-  return markdown.replace(
-    DOCUMENT_MENTION_PATTERN,
-    (serializedMention, serializedInfo: string) => {
-      try {
-        const info = JSON.parse(serializedInfo) as Record<string, unknown>;
-        if (
-          typeof info.documentId !== 'string' ||
-          typeof info.documentName !== 'string' ||
-          typeof info.blockName !== 'string'
-        ) {
-          return serializedMention;
-        }
-
-        const container = document.createElement('div');
-        const mention = document.createElement('span');
-        mention.textContent = info.documentName;
-        mention.setAttribute('data-document-mention', 'true');
-        mention.setAttribute('data-document-id', info.documentId);
-        mention.setAttribute('data-document-name', info.documentName);
-        mention.setAttribute('data-block-name', info.blockName);
-        if (info.blockParams && typeof info.blockParams === 'object') {
-          mention.setAttribute(
-            'data-block-params',
-            JSON.stringify(info.blockParams)
-          );
-        }
-        container.append(mention);
-        convertDocumentMentionsToLinks(container);
-        return container.innerHTML;
-      } catch {
-        return serializedMention;
-      }
-    }
-  );
+/** Export all mention types as email-compatible HTML. */
+export function prepareCalendarDescription(editor: LexicalEditor): string {
+  const generatedHtml = editor.read(() => $generateHtmlFromNodes(editor));
+  return prepareCalendarDescriptionFromHtml(generatedHtml);
 }
