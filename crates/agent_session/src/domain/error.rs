@@ -28,6 +28,8 @@ pub enum AgentSessionError {
     QueuedControlNotFound,
     #[error("only queued prompts can be edited")]
     QueuedControlNotEditable,
+    #[error("a queued prompt cannot be edited to say nothing; remove it instead")]
+    EmptyQueuedPrompt,
     #[error("agent session {0} has too many queued actions")]
     ControlQueueFull(AgentSessionId),
     #[error(

@@ -83,7 +83,13 @@ export function AgentComposer() {
         commands={() => metadata()?.availableCommands ?? []}
         onSend={composer.send}
         onStop={composer.stop}
-        onNavigateUp={() => focusQueueBottom?.()}
+        // Installed only while a queue row exists to land on: an installed
+        // handler claims the keys (Up, and the shared plugin's other
+        // leave-at-start keys), which must keep their defaults when there is
+        // nowhere to go.
+        onNavigateUp={
+          queuedItems().length > 0 ? () => focusQueueBottom?.() : undefined
+        }
         registerFocus={(focus) => {
           focusInput = focus;
         }}

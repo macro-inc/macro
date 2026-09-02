@@ -9,6 +9,11 @@
  * Request body for editing a queued prompt.
  */
 export interface EditQueuedActionRequest {
-  /** The new raw prompt text, replacing the old wholesale. */
+  /**
+   * The new raw prompt text, replacing the old wholesale. Never blank: a
+prompt with nothing to say is a removal, and there is an endpoint for
+that.
+   * @minLength 1
+   */
   prompt: string;
 }

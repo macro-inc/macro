@@ -876,7 +876,7 @@
       "AgentActionId": {
         "type": "string",
         "format": "uuid",
-        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid; frames logged before\nthe prefix was dropped carry `agent_session:{uuid}`, which\n[`Self::from_request_id`] still reads. The machine's own handshake request\nids (`agent_session:{session}:{n}`) parse as neither and stay `None`."
+        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
       },
       "AgentPromptAction": {
         "type": "object",
@@ -1179,7 +1179,8 @@
         "properties": {
           "prompt": {
             "type": "string",
-            "description": "The new raw prompt text, replacing the old wholesale."
+            "description": "The new raw prompt text, replacing the old wholesale. Never blank: a\nprompt with nothing to say is a removal, and there is an endpoint for\nthat.",
+            "minLength": 1
           }
         }
       },

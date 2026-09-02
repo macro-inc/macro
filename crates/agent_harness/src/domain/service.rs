@@ -448,19 +448,28 @@ where
         id: AgentSessionId,
         action_id: AgentActionId,
         prompt: String,
+        actor: Option<MacroUserIdStr<'static>>,
     ) -> agent_session::domain::error::Result<()> {
-        self.execute(id, HarnessCommand::EditQueued { action_id, prompt })
-            .await
-            .map(drop)
-            .map_err(into_session_error)
+        self.execute(
+            id,
+            HarnessCommand::EditQueued {
+                action_id,
+                prompt,
+                actor,
+            },
+        )
+        .await
+        .map(drop)
+        .map_err(into_session_error)
     }
 
     async fn remove_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
     ) -> agent_session::domain::error::Result<()> {
-        self.execute(id, HarnessCommand::RemoveQueued { action_id })
+        self.execute(id, HarnessCommand::RemoveQueued { action_id, actor })
             .await
             .map(drop)
             .map_err(into_session_error)
@@ -873,17 +882,21 @@ where
             {
                 return Err(AgentSessionError::Forbidden.into());
             }
-            HarnessCommand::Deliver(deliver) => {
+            // The queue mutations sit behind the same staff gate as delivery:
+            // an edited entry is delivered later under its original identity,
+            // so rewriting (or dropping) what a Cursor session is about to
+            // run is the same privilege as prompting it.
+            HarnessCommand::Deliver(DeliverAction { actor, .. })
+            | HarnessCommand::EditQueued { actor, .. }
+            | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
                 if AgentKind::of(session.bot_id) == AgentKind::Cursor
-                    && !deliver.actor.as_ref().is_some_and(is_macro_staff)
+                    && !actor.as_ref().is_some_and(is_macro_staff)
                 {
                     return Err(AgentSessionError::Forbidden.into());
                 }
             }
             HarnessCommand::Open(_)
-            | HarnessCommand::EditQueued { .. }
-            | HarnessCommand::RemoveQueued { .. }
             | HarnessCommand::TurnEnded
             | HarnessCommand::SessionStopped
             | HarnessCommand::SetSandboxSize(_)
@@ -906,7 +919,9 @@ where
                 self.deliver(session_id, command).await?;
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::EditQueued { action_id, prompt } => {
+            HarnessCommand::EditQueued {
+                action_id, prompt, ..
+            } => {
                 queue_result(
                     self.queues.edit_prompt(session_id, action_id, prompt),
                     session_id,
@@ -914,7 +929,7 @@ where
                 self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::RemoveQueued { action_id } => {
+            HarnessCommand::RemoveQueued { action_id, .. } => {
                 queue_result(self.queues.remove(session_id, action_id), session_id)?;
                 self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
@@ -939,6 +954,13 @@ where
             }
             HarnessCommand::Delete => {
                 self.delete(session_id).await?;
+                // The queue and busy mark die with the session: a deleted
+                // session's entries will never dispatch, and leaving them
+                // would leak them for the life of the process. The published
+                // empty snapshot is the viewers' goodbye.
+                self.busy.remove(&session_id);
+                self.queues.drop_session(session_id);
+                self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
             }
         }
@@ -965,6 +987,7 @@ where
                     action: command.action,
                     actor: command.actor,
                     announce: command.announce,
+                    announced: false,
                     created_at: chrono::Utc::now(),
                 },
             ),
@@ -1010,15 +1033,47 @@ where
 
     /// Deliver the oldest queued action, marking the session busy on success.
     ///
+    /// The chip is announced here, before delivery, so it exists to anchor
+    /// the turn the agent streams into - and it is announced *at most once*
+    /// per entry: the claimed entry remembers a successful announce, so a
+    /// dispatch that fails after the chip posted retries without posting a
+    /// second one.
+    ///
     /// A failed dispatch puts the entry back at the front: it stays next in
     /// line for the next turn end or the next prompt, and stays visible in
     /// the queue meanwhile. The error still propagates, so a caller whose
     /// own action triggered this dispatch hears about it.
     #[tracing::instrument(err, skip(self), fields(%session_id))]
     async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<()> {
-        let Some(entry) = self.queues.claim_next(session_id) else {
+        let Some(mut entry) = self.queues.claim_next(session_id) else {
             return Ok(());
         };
+
+        if !entry.announced {
+            let announcement = match self
+                .announcement(
+                    session_id,
+                    &entry.action,
+                    entry.actor.as_ref(),
+                    entry.announce.clone(),
+                )
+                .await
+            {
+                Ok(announcement) => announcement,
+                Err(error) => {
+                    self.queues.requeue_front(session_id, entry);
+                    return Err(error);
+                }
+            };
+            if let Some(announcement) = announcement {
+                if let Err(error) = self.announcer.announce(announcement).await {
+                    self.queues.requeue_front(session_id, entry);
+                    return Err(error);
+                }
+                entry.announced = true;
+            }
+        }
+
         let command = DeliverAction {
             id: entry.action_id,
             action: entry.action.clone(),
@@ -1226,12 +1281,13 @@ where
         Ok(())
     }
 
-    /// Do one thing in a session that already exists.
+    /// Compose and deliver one action to the session's runtime.
     ///
-    /// Three steps, in this order: persist whatever the action changes about
-    /// the session, work out whether anyone needs telling, then deliver it.
-    /// Announcing before delivery means the chip exists to anchor the turn
-    /// the agent streams into.
+    /// Announcing is not this function's business: the chip belongs to
+    /// dispatch (see [`Self::dispatch_next`]), which is the only path an
+    /// announceable action - a prompt from somewhere the session answers back
+    /// into - ever travels. `announce` here is only the prompt's channel
+    /// context source.
     #[tracing::instrument(err, skip(self, command), fields(agent.session.id = %session_id))]
     async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
         let DeliverAction {
@@ -1241,7 +1297,6 @@ where
             announce,
         } = command;
 
-        let raw_action = action.clone();
         if let AgentAction::Prompt(prompt) = &mut action {
             let raw_prompt = prompt.prompt.clone();
             let prior_messages = if let Some(origin) = announce.as_ref() {
@@ -1257,17 +1312,6 @@ where
                 .compose(&raw_prompt, prior_messages.as_deref())
                 .await?;
             prompt.set_name_source(raw_prompt);
-        }
-
-        let announcement = self
-            .announcement(session_id, &raw_action, actor.as_ref(), announce)
-            .await?;
-
-        // Announced before the prompt is delivered, as `open` does: the chip
-        // anchors the turn the agent is about to stream into, so it has to
-        // exist before the response can arrive.
-        if let Some(announcement) = announcement {
-            self.announcer.announce(announcement).await?;
         }
 
         match self

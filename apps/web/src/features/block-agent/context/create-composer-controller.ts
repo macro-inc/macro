@@ -86,7 +86,9 @@ export function createComposerController(options: {
     const result = await agentHarnessServiceClient
       .control(sessionId, { type: 'prompt', prompt: markdown })
       .catch(() => undefined);
-    setState('inflightPrompts', (count) => count - 1);
+    // Floored: a session switch resets the count while this POST is still
+    // out, and its settle must not drive the new session's count negative.
+    setState('inflightPrompts', (count) => Math.max(0, count - 1));
     if (result === undefined || result.isErr()) {
       toast.failure('Message could not be sent');
     }
@@ -189,6 +191,9 @@ export function createComposerController(options: {
     previousSessionId = sessionId;
     if (acquired) return;
     setState({
+      // A send still on the wire belongs to the previous session; its
+      // eventual settle must not keep this one's stop control up.
+      inflightPrompts: 0,
       requestedModel: undefined,
       requestedActionId: undefined,
       stopping: false,

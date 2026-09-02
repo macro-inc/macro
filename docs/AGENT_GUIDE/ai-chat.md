@@ -55,6 +55,8 @@ transcript (and in the originating channel thread).
 
 - Sending is never blocked by a running turn. A prompt sent mid-turn is queued
   **server-side** and dispatches automatically when the current turn ends, one per turn.
+  The queue holds at most 50 entries; past that a send is refused with an error rather
+  than queued.
 - Queued prompts render as a list between the transcript and the input, newest at the
   top — the prompt about to be sent sits at the bottom, immediately above the input.
   Each row shows a `Queued` label (with `by {user}` when someone else queued it —

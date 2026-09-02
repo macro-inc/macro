@@ -613,19 +613,26 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// Replace a queued prompt's text. [`AgentSessionError::QueuedControlNotFound`]
     /// once it has dispatched; [`AgentSessionError::QueuedControlNotEditable`]
     /// for a queued action that carries no text.
+    ///
+    /// `actor` is the user responsible, judged by the same gates as sending:
+    /// whoever may not prompt a session may not rewrite what it is about to
+    /// be prompted with.
     fn edit_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,
         prompt: String,
+        actor: Option<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Remove a queued action before it dispatches.
-    /// [`AgentSessionError::QueuedControlNotFound`] once it has.
+    /// [`AgentSessionError::QueuedControlNotFound`] once it has. `actor` as
+    /// on [`Self::edit_queued_control`].
     fn remove_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Resize this session's sandbox and remember `size` as the owner's default.

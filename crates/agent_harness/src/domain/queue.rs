@@ -47,6 +47,10 @@ pub struct QueuedEntry {
     /// Where to announce the prompt at dispatch, when it came from somewhere
     /// the session should answer back into.
     pub announce: Option<AnnounceOrigin>,
+    /// Whether the chip has been posted. Set by the dispatch that posts it,
+    /// and carried through a requeue, so a dispatch that fails *after*
+    /// announcing retries without posting a second chip.
+    pub announced: bool,
     /// When it was accepted.
     pub created_at: DateTime<Utc>,
 }
@@ -156,6 +160,12 @@ impl SessionQueues {
                 Err(QueueError::NotEditable)
             }
         }
+    }
+
+    /// Forget a session's queue wholesale - for a session that is being
+    /// deleted, whose entries will never dispatch.
+    pub fn drop_session(&self, session: AgentSessionId) {
+        self.queues.remove(&session);
     }
 
     /// Remove a waiting entry.

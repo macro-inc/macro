@@ -1374,11 +1374,16 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
     let third = service.control_event(id, prompt("third")).await.unwrap();
 
     service
-        .edit_queued_control(id, second.action_id, "second, rewritten".to_owned())
+        .edit_queued_control(
+            id,
+            second.action_id,
+            "second, rewritten".to_owned(),
+            Some(sender()),
+        )
         .await
         .expect("a waiting prompt is editable");
     service
-        .remove_queued_control(id, third.action_id)
+        .remove_queued_control(id, third.action_id, Some(sender()))
         .await
         .expect("a waiting prompt is removable");
 
@@ -1392,12 +1397,12 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
 
     // Dispatched means gone: there is no un-sending.
     let error = service
-        .remove_queued_control(id, second.action_id)
+        .remove_queued_control(id, second.action_id, Some(sender()))
         .await
         .expect_err("a dispatched prompt is not removable");
     assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
     let error = service
-        .edit_queued_control(id, third.action_id, "resurrect".to_owned())
+        .edit_queued_control(id, third.action_id, "resurrect".to_owned(), Some(sender()))
         .await
         .expect_err("a removed prompt is gone");
     assert!(matches!(error, AgentSessionError::QueuedControlNotFound));

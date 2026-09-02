@@ -9,6 +9,7 @@ fn prompt_entry(text: &str) -> QueuedEntry {
         action: AgentAction::prompt(text),
         actor: None,
         announce: None,
+        announced: false,
         created_at: Utc::now(),
     }
 }
@@ -106,6 +107,7 @@ fn only_prompts_are_editable() {
         action: AgentAction::Compact,
         actor: None,
         announce: None,
+        announced: false,
         created_at: Utc::now(),
     };
     queues.enqueue(session, compact.clone()).unwrap();

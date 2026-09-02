@@ -12,9 +12,9 @@ frame, and read back off that frame as `request_id` on the folded message
 it derives.
 
 Minted only by the server at accept time, as a v7 uuid so ids sort by mint
-time. On the wire and in JSON it is the bare uuid; frames logged before
-the prefix was dropped carry `agent_session:{uuid}`, which
-[`Self::from_request_id`] still reads. The machine's own handshake request
-ids (`agent_session:{session}:{n}`) parse as neither and stay `None`.
+time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
+request id is the whole ownership test: the server is the only writer of
+runtime-bound frames. The machine's own handshake request ids
+(`agent_session:{session}:{n}`) are not uuids and stay `None`.
  */
 export type AgentActionId = string;

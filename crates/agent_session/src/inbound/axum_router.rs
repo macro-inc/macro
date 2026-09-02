@@ -282,9 +282,10 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(error @ AgentSessionError::QueuedControlNotFound) => {
                 (StatusCode::NOT_FOUND, error.to_string()).into_response()
             }
-            Self::Domain(error @ AgentSessionError::QueuedControlNotEditable) => {
-                (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
-            }
+            Self::Domain(
+                error @ (AgentSessionError::QueuedControlNotEditable
+                | AgentSessionError::EmptyQueuedPrompt),
+            ) => (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response(),
             Self::Domain(error @ AgentSessionError::ControlQueueFull(_)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
             }
@@ -446,7 +447,10 @@ pub struct AgentSessionQueueResponse {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EditQueuedActionRequest {
-    /// The new raw prompt text, replacing the old wholesale.
+    /// The new raw prompt text, replacing the old wholesale. Never blank: a
+    /// prompt with nothing to say is a removal, and there is an endpoint for
+    /// that.
+    #[schema(min_length = 1)]
     pub prompt: String,
 }
 
@@ -732,12 +736,14 @@ pub async fn get_agent_session_queue_handler<
 >(
     _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<AgentSessionQueueResponse>, AgentSessionApiError> {
-    let entries = state
-        .recipient
-        .queued_controls(AgentSessionId::new_from_uuid(session_id))
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
         .await?;
+
+    let entries = state.recipient.queued_controls(session_id).await?;
     Ok(Json(AgentSessionQueueResponse {
         entries: entries.into_iter().map(Into::into).collect(),
     }))
@@ -763,7 +769,11 @@ pub async fn get_agent_session_queue_handler<
     )
 )]
 /// Replace a queued prompt's text before it dispatches.
-#[tracing::instrument(skip_all, fields(session_id = %session_id, %action_id), err(Debug))]
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), session_id = %session_id, %action_id),
+    err(Debug)
+)]
 pub async fn edit_queued_action_handler<
     R: AgentSessionNotificationRecipient,
     Access: EntityAccessService,
@@ -771,15 +781,28 @@ pub async fn edit_queued_action_handler<
 >(
     _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path((session_id, action_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<EditQueuedActionRequest>,
 ) -> Result<StatusCode, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+    if request.prompt.trim().is_empty() {
+        return Err(AgentSessionError::EmptyQueuedPrompt.into());
+    }
+
+    let actor = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone());
     state
         .recipient
         .edit_queued_control(
-            AgentSessionId::new_from_uuid(session_id),
+            session_id,
             AgentActionId::from_uuid(action_id),
             request.prompt,
+            actor,
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)
@@ -804,7 +827,11 @@ pub async fn edit_queued_action_handler<
 )]
 /// Remove a queued action before it dispatches. There is no un-sending: an
 /// action that already went out answers 404.
-#[tracing::instrument(skip_all, fields(session_id = %session_id, %action_id), err(Debug))]
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), session_id = %session_id, %action_id),
+    err(Debug)
+)]
 pub async fn remove_queued_action_handler<
     R: AgentSessionNotificationRecipient,
     Access: EntityAccessService,
@@ -812,14 +839,20 @@ pub async fn remove_queued_action_handler<
 >(
     _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path((session_id, action_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
+    let actor = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone());
     state
         .recipient
-        .remove_queued_control(
-            AgentSessionId::new_from_uuid(session_id),
-            AgentActionId::from_uuid(action_id),
-        )
+        .remove_queued_control(session_id, AgentActionId::from_uuid(action_id), actor)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -197,11 +197,17 @@ pub enum HarnessCommand {
         action_id: AgentActionId,
         /// The new raw prompt text.
         prompt: String,
+        /// The user responsible, judged by the same gates as sending: whoever
+        /// may not prompt a session may not rewrite what it is about to be
+        /// prompted with.
+        actor: Option<MacroUserIdStr<'static>>,
     },
     /// Remove a queued action before it dispatches.
     RemoveQueued {
         /// The queue entry to remove.
         action_id: AgentActionId,
+        /// The user responsible, as on [`Self::EditQueued`].
+        actor: Option<MacroUserIdStr<'static>>,
     },
     /// The session's runtime answered its in-flight turn: clear the busy
     /// mark and dispatch the next queued action. Internal - enqueued by the
