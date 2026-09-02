@@ -168,7 +168,11 @@ r#"
                 ARRAY(
                     SELECT status_option_id::uuid
                     FROM jsonb_array_elements_text(
-                        COALESCE(ep_status.values->'value', '[]'::jsonb)
+                        CASE
+                            WHEN jsonb_typeof(ep_status.values->'value') = 'array'
+                            THEN ep_status.values->'value'
+                            ELSE '[]'::jsonb
+                        END
                     ) AS status_option_id
                 ) as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
@@ -398,7 +402,11 @@ r#"
                 ARRAY(
                     SELECT status_option_id::uuid
                     FROM jsonb_array_elements_text(
-                        COALESCE(ep_status.values->'value', '[]'::jsonb)
+                        CASE
+                            WHEN jsonb_typeof(ep_status.values->'value') = 'array'
+                            THEN ep_status.values->'value'
+                            ELSE '[]'::jsonb
+                        END
                     ) AS status_option_id
                 ) as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",

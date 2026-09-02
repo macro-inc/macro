@@ -29,7 +29,7 @@ use models_soup::item::SoupItem;
 use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashSet;
 use std::sync::Arc;
-use system_properties::StatusOption;
+use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
 macro_rules! unwrap_enum {
@@ -5577,6 +5577,70 @@ async fn projection_hydration_carries_viewer_relative_facts_from_flat_and_by_id_
         plan.to_string().contains("document_email_pkey"),
         "attachment existence lookup must use document_email_pkey: {plan}"
     );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn projection_status_extraction_treats_non_array_values_as_empty(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    let json_null_status_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let scalar_status_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    sqlx::query!(
+        r#"UPDATE entity_properties
+           SET values = CASE entity_id
+               WHEN $1 THEN 'null'::jsonb
+               ELSE '{"type":"String","value":"not-an-array"}'::jsonb
+           END
+           WHERE entity_id IN ($1, $2)
+             AND entity_type = 'TASK'
+             AND property_definition_id = $3"#,
+        json_null_status_id,
+        scalar_status_id,
+        SystemPropertyKey::STATUS_UUID,
+    )
+    .execute(&db)
+    .await?;
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let flat = expanded_dynamic_cursor_soup_with_projection(
+        &db,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::default()),
+            exclude_frecency: false,
+        },
+    )
+    .await?;
+
+    for id in [json_null_status_id, scalar_status_id] {
+        let id = Uuid::parse_str(id)?;
+        let facts = flat
+            .iter()
+            .find(|hydration| hydration.item.id() == id)
+            .and_then(|hydration| hydration.document_server_facts.as_ref())
+            .expect("task document server facts are hydrated");
+        assert!(facts.status_option_ids.is_empty());
+    }
+
+    let entities = [json_null_status_id, scalar_status_id]
+        .map(|id| EntityType::Document.with_entity_string(id.to_string()));
+    let by_id = expanded_soup_by_ids_with_projection(&db, user_id, &entities).await?;
+    assert_eq!(by_id.len(), 2);
+    assert!(by_id.iter().all(|hydration| {
+        hydration
+            .document_server_facts
+            .as_ref()
+            .is_some_and(|facts| facts.status_option_ids.is_empty())
+    }));
 
     Ok(())
 }
