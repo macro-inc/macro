@@ -198,11 +198,10 @@ export async function fetchOlderMessages(
   fetchNextPage: () => unknown
 ): Promise<void> {
   const previousScrollHeight = list.scrollHeight;
-  const previousScrollTop = list.scrollTop;
   try {
     await fetchNextPage();
     requestAnimationFrame(() => {
-      adjustScrollAfterPrepend(list, previousScrollHeight, previousScrollTop);
+      adjustScrollAfterPrepend(list, previousScrollHeight, list.scrollTop);
     });
   } catch {
     return;

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   adjustScrollAfterPrepend,
   alignmentDelta,
+  fetchOlderMessages,
   hiddenMessagesControl,
   isTruncatedMiddleMessage,
   listNeedsOlderPage,
@@ -283,5 +284,28 @@ describe('listNeedsOlderPage', () => {
     );
     expect(listNeedsOlderPage({ ...ready, isFetching: true })).toBe(false);
     expect(listNeedsOlderPage({ ...ready, hasMore: false })).toBe(false);
+  });
+});
+
+describe('fetchOlderMessages', () => {
+  it('uses live scrollTop after the fetch completes', async () => {
+    vi.useFakeTimers();
+    const list = document.createElement('div');
+    let scrollHeight = 200;
+    Object.defineProperty(list, 'scrollHeight', { get: () => scrollHeight });
+    Object.defineProperty(list, 'clientHeight', { get: () => 150 });
+    list.scrollTop = 10;
+
+    const fetchNextPage = vi.fn(async () => {
+      list.scrollTop = 40;
+      scrollHeight = 400;
+    });
+
+    const pending = fetchOlderMessages(list, fetchNextPage);
+    await vi.runAllTimersAsync();
+    await pending;
+
+    expect(list.scrollTop).toBe(240);
+    vi.useRealTimers();
   });
 });

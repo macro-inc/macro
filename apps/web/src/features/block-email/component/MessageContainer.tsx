@@ -254,7 +254,7 @@ export function MessageContainer(props: MessageContainerProps) {
               props.isFocused
                 ? 'z-1 border border-transparent outline-none ring-2 ring-accent/40'
                 : cn(
-                    'border border-edge-muted outline-none',
+                    'border border-edge-muted outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-transparent',
                     props.allowHover &&
                       'hover:z-1 light-mode:hover:shadow-md light-mode:hover:shadow-drop-shadow'
                   )
