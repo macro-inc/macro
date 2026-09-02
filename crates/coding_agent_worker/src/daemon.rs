@@ -17,6 +17,9 @@ use crate::outbound::stream::EventStreamClient;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 
+#[cfg(test)]
+mod test;
+
 /// How often the bound-agent set is re-read so a newly bound agent starts
 /// triggering without a restart. Short on purpose: a mention sent before the
 /// stream covers the new agent is dropped for good, so this interval is the
@@ -95,13 +98,14 @@ impl Daemon {
         !self.task.is_finished()
     }
 
-    /// Stop serving: drop the stream and end the reconnect loop.
+    /// Stop serving without waiting for an in-flight network request or trigger.
     ///
     /// A live harness bridge (the WebSocket + spawned harness process) is not
     /// torn down here; it dies with the process, and a restarted daemon's
     /// fresh dial displaces it at the gateway.
     pub async fn stop(self) {
         self.cancel.cancel();
+        self.task.abort();
         let _ = self.task.await;
         tracing::info!("daemon stopped");
     }
