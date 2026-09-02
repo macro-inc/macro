@@ -89,7 +89,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
         >
           <div
             data-slot="sender"
-            class="flex items-center gap-2 min-w-0 text-sm"
+            class="macro-thread-message-header-row gap-2 min-w-0 text-sm"
           >
             <div class="shrink-0 flex justify-center items-center size-6">
               <UserIcon
@@ -109,7 +109,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
             {snippet()}
           </div>
           <Show when={props.message.internal_date_ts}>
-            <span data-slot="date" class="justify-self-end">
+            <span
+              data-slot="date"
+              class="macro-thread-message-header-row justify-self-end"
+            >
               <Tooltip
                 as="span"
                 label={formatFullDate(props.message.internal_date_ts!)}

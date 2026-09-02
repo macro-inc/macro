@@ -1,4 +1,5 @@
 import { useEmail } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretRight from '@phosphor/caret-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn, Tooltip } from '@ui';
@@ -131,7 +132,7 @@ function CollapsedRecipientList(props: {
 
 function HeaderTopRow(props: {
   senderName: string;
-  isHovering: boolean;
+  showHeaderToggle: boolean;
   isExpanded: boolean;
   onToggle: () => void;
   message: ApiMessage;
@@ -161,8 +162,8 @@ function HeaderTopRow(props: {
         </span>
         <div
           classList={{
-            'opacity-0': !props.isHovering && !props.isExpanded,
-            'opacity-100': props.isHovering || props.isExpanded,
+            'opacity-0': !props.showHeaderToggle,
+            'opacity-100': props.showHeaderToggle,
           }}
         >
           <Tooltip
@@ -175,6 +176,7 @@ function HeaderTopRow(props: {
             <Button
               variant="ghost"
               size="icon-sm"
+              noTouchResize
               onClick={(e) => {
                 e.stopPropagation();
                 props.onToggle();
@@ -182,7 +184,7 @@ function HeaderTopRow(props: {
             >
               <CaretRight
                 class={cn(
-                  'size-3! text-ink-muted/30 transition-transform',
+                  'size-3! text-ink-muted transition-transform',
                   props.isExpanded && 'rotate-90'
                 )}
               />
@@ -219,6 +221,11 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
 
   const senderName = () => getSenderDisplayName(props.message, userEmail());
 
+  const showHeaderToggle = () =>
+    isHovering() ||
+    props.expandedHeader() ||
+    (isTouchDevice() && props.isBodyExpanded());
+
   const handleHeaderClick = (e: MouseEvent) => {
     const id = props.message.db_id;
     if (id) props.setFocusedMessageId(id);
@@ -232,16 +239,18 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   return (
     <div
       class="ph-no-capture flex flex-col w-full"
-      style={{ 'min-height': 'var(--user-icon-width)' }}
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
       <Show when={props.isBodyExpanded()}>
-        <div class="flex items-center gap-2" onClick={handleHeaderClick}>
+        <div
+          class="macro-thread-message-header-row gap-2"
+          onClick={handleHeaderClick}
+        >
           {props.avatar}
           <HeaderTopRow
             senderName={senderName()}
-            isHovering={isHovering()}
+            showHeaderToggle={showHeaderToggle()}
             isExpanded={props.expandedHeader()}
             onToggle={() => props.setExpandedHeader(!props.expandedHeader())}
             message={props.message}

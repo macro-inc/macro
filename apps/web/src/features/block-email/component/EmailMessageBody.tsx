@@ -328,7 +328,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
 
   return (
     <div
-      class="ph-no-capture flex flex-col pt-1"
+      class="ph-no-capture flex flex-col [&_.md-p:first-child]:mt-0 [&_.md-p:last-child]:mb-0"
       onPointerDown={() => {
         if (!props.isBodyExpanded() && props.message.db_id) {
           props.setExpandedMessageBody(props.message.db_id);
