@@ -15,14 +15,43 @@ use super::agent_catalog::DetectedAgent;
 use super::config_form::SETTINGS;
 use super::{App, Mode, Quickstart, QuickstartMode, Tab};
 
-const ACCENT: Color = Color::Cyan;
-const OK: Color = Color::Green;
-const WARN: Color = Color::Yellow;
-const ERR: Color = Color::Red;
-const DIM: Color = Color::DarkGray;
+struct Theme {
+    background: Color,
+    surface: Color,
+    text: Color,
+    muted: Color,
+    border: Color,
+    accent: Color,
+    accent_text: Color,
+    success: Color,
+    warning: Color,
+    error: Color,
+}
+
+// Macro orange is the product's `--color-orange` token (#f97316). Keeping the
+// complete palette here makes a future brand or contrast adjustment one edit.
+const THEME: Theme = Theme {
+    background: Color::Rgb(21, 17, 14),
+    surface: Color::Rgb(33, 26, 20),
+    text: Color::Rgb(255, 248, 240),
+    muted: Color::Rgb(199, 185, 171),
+    border: Color::Rgb(128, 106, 85),
+    accent: Color::Rgb(249, 115, 22),
+    accent_text: Color::Rgb(24, 13, 5),
+    success: Color::Rgb(74, 222, 128),
+    warning: Color::Rgb(255, 178, 36),
+    error: Color::Rgb(255, 107, 107),
+};
+
+const ACCENT: Color = THEME.accent;
+const OK: Color = THEME.success;
+const WARN: Color = THEME.warning;
+const ERR: Color = THEME.error;
+const DIM: Color = THEME.muted;
 const SPINNER: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
 pub(crate) fn render(frame: &mut Frame, app: &App) {
+    render_background(frame);
     let [header, tabs, body, footer] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -56,6 +85,7 @@ pub(crate) fn render_quickstart(
     setup: &Quickstart,
     config_path: &std::path::Path,
 ) {
+    render_background(frame);
     let area = centered(70, 18, frame.area());
     frame.render_widget(Clear, area);
     let editing = match &setup.mode {
@@ -164,7 +194,10 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         Vec::new()
     };
     let mut spans = vec![
-        Span::styled(" macrod ", Style::new().fg(Color::Black).bg(ACCENT).bold()),
+        Span::styled(
+            " macrod ",
+            Style::new().fg(THEME.accent_text).bg(ACCENT).bold(),
+        ),
         Span::raw(" "),
         Span::styled(name, Style::new().bold()),
         Span::raw("  "),
@@ -179,9 +212,10 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
     ));
     let title = Line::from(spans);
     let block = Block::default()
+        .style(Style::new().fg(THEME.text).bg(THEME.surface))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(DIM));
+        .border_style(Style::new().fg(THEME.border));
     frame.render_widget(Paragraph::new(title).block(block), area);
 }
 
@@ -381,7 +415,7 @@ fn render_config(frame: &mut Frame, app: &App, area: Rect) {
             let value: Span = match editing {
                 Some((edit_index, buffer)) if edit_index == index => Span::styled(
                     format!("{buffer}▏"),
-                    Style::new().fg(Color::Black).bg(ACCENT),
+                    Style::new().fg(THEME.accent_text).bg(ACCENT),
                 ),
                 _ => {
                     let shown = app.form.display(*setting, &app.config);
@@ -507,7 +541,7 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
         for (key, action) in hints {
             spans.push(Span::styled(
                 format!(" {key} "),
-                Style::new().fg(Color::Black).bg(DIM),
+                Style::new().fg(THEME.background).bg(DIM),
             ));
             spans.push(Span::styled(format!(" {action}  "), Style::new().fg(DIM)));
         }
@@ -538,9 +572,9 @@ fn render_confirm_delete(frame: &mut Frame, app: &App) {
         ),
         Line::raw(""),
         Line::from(vec![
-            Span::styled(" y ", Style::new().fg(Color::Black).bg(ERR)),
+            Span::styled(" y ", Style::new().fg(THEME.background).bg(ERR)),
             Span::raw(" remove   "),
-            Span::styled(" esc ", Style::new().fg(Color::Black).bg(DIM)),
+            Span::styled(" esc ", Style::new().fg(THEME.background).bg(DIM)),
             Span::raw(" keep"),
         ]),
     ];
@@ -607,21 +641,30 @@ fn render_pairing(
 
 fn card(title: impl Into<String>) -> Block<'static> {
     Block::default()
+        .style(Style::new().fg(THEME.text).bg(THEME.surface))
         .title(format!(" {} ", title.into()))
         .title_style(Style::new().fg(ACCENT).bold())
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::new().fg(DIM))
+        .border_style(Style::new().fg(THEME.border))
         .padding(Padding::horizontal(1))
 }
 
 fn modal(title: &str, color: Color) -> Block<'static> {
     Block::default()
+        .style(Style::new().fg(THEME.text).bg(THEME.surface))
         .title(format!(" {title} "))
         .title_style(Style::new().fg(color).bold())
         .borders(Borders::ALL)
         .border_type(BorderType::Double)
         .border_style(Style::new().fg(color))
+}
+
+fn render_background(frame: &mut Frame) {
+    frame.render_widget(
+        Block::default().style(Style::new().fg(THEME.text).bg(THEME.background)),
+        frame.area(),
+    );
 }
 
 fn field<'a>(label: &str, value: Span<'a>) -> Line<'a> {
