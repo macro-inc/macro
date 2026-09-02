@@ -2,7 +2,10 @@ import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Layer } from '@ui';
 import { createEffect, createUniqueId, Show } from 'solid-js';
-import { prepareCalendarDescription } from '../../utils/calendar-description';
+import {
+  calendarDescriptionToEditorHtml,
+  exportCalendarDescription,
+} from '../../utils/calendar-description';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventDateTimeRangeFields } from './EventDateTimeRangeFields';
 import {
@@ -58,6 +61,13 @@ export function EventForm(props: EventFormProps) {
     props.disabledFields?.[field] === true;
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
     formIsDisabled() || fieldIsReadOnly(field);
+
+  // The editor cannot hand the provider's string back: Lexical re-serializes
+  // whatever it loads. Only content that exports differently from what was
+  // loaded counts as an edit, so an untouched description stays byte-for-byte
+  // what the event was opened with.
+  const initialDescription = state().description;
+  let loadedDescription: string | undefined;
 
   createEffect(() => {
     const option = controller.selectedCalendarOption();
@@ -136,15 +146,22 @@ export function EventForm(props: EventFormProps) {
               class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
             />
 
-            <div class="h-12">
+            <div class="h-12 overflow-y-auto">
               <MarkdownTextarea
-                initialHtml={state().description}
+                type="calendar"
+                initialHtml={calendarDescriptionToEditorHtml(
+                  initialDescription
+                )}
                 editable={() => !fieldIsDisabled('description')}
+                onInitialized={(editor) => {
+                  loadedDescription = exportCalendarDescription(editor);
+                }}
                 onChange={(_markdown, editor) => {
                   if (!editor) return;
+                  const next = exportCalendarDescription(editor);
                   controller.setField(
                     'description',
-                    prepareCalendarDescription(editor)
+                    next === loadedDescription ? initialDescription : next
                   );
                 }}
                 placeholder="Add description..."
