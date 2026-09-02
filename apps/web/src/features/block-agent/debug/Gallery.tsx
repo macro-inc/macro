@@ -159,6 +159,70 @@ const FIXTURE_MESSAGE: FoldedMessage = {
       ],
       outcome: { kind: 'selected', optionId: 'allow' },
     },
+    {
+      kind: 'tool_use',
+      id: 'demo-subagent',
+      name: { kind: 'native', name: 'Agent' },
+      status: 'completed',
+      detail: {
+        kind: 'subagent',
+        agentType: 'general-purpose',
+        description: 'Check the arithmetic',
+        prompt: 'Run `python3 -c "print(5+5)"` and report the output.',
+        background: false,
+        children: [
+          {
+            kind: 'tool_use',
+            id: 'demo-subagent-bash',
+            name: { kind: 'native', name: 'Bash' },
+            status: 'completed',
+            detail: {
+              kind: 'terminal',
+              command: 'python3 -c "print(5+5)"',
+              output: '10',
+              exitCode: 0,
+            },
+          },
+        ],
+        result: {
+          text: 'Output: `10`',
+          error: null,
+          agentId: 'af2647314187b6bf1',
+          model: 'claude-opus-5[1m]',
+          durationMs: 3485,
+          tokens: 26077,
+          toolUses: 1,
+          stats: null,
+        },
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-macro',
+      name: { kind: 'mcp', server: 'macro', tool: 'BrandNewTool' },
+      status: 'completed',
+      detail: {
+        kind: 'macro',
+        input: { query: 'fold' },
+        output: { hits: 3 },
+        error: null,
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-email',
+      name: { kind: 'mcp', server: 'macro', tool: 'SendEmail' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          subject: 'Fold status',
+          body: 'Hi Alice,\n\nThe fold now knows which harness it is reading.',
+          to: [{ email: 'alice@example.com', name: 'Alice' }],
+        },
+        outcome: { kind: 'pending' },
+      },
+    },
   ],
 };
 
