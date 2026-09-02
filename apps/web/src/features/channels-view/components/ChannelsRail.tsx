@@ -1,4 +1,5 @@
 import { CommandState } from '@app/features/command';
+import { useViewTabHotkeys } from '@app/components/view-shell';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import {
   useGlobalBlockOrchestrator,
@@ -35,7 +36,7 @@ import { Key } from '@solid-primitives/keyed';
 import { cn, Tooltip } from '@ui';
 import { createMemo, createUniqueId, type JSX, Show } from 'solid-js';
 import { useChannelsView } from '../channels-view-context';
-import type { ChannelsGroup } from '../types';
+import type { ChannelsGroup, ChannelsTab } from '../types';
 
 function createTabLabel(label: string, icon: JSX.Element) {
   return (
@@ -56,6 +57,7 @@ const CHANNEL_TABS = [
     label: createTabLabel('Recents', <ChatTextIcon />),
   },
 ];
+const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 
 type ChannelRailRow =
   | {
@@ -453,6 +455,14 @@ export function ChannelsRail(props: {
   const currentUserId = useUserId();
   const notificationSource = useGlobalNotificationSource();
   const listDomId = createUniqueId();
+
+  useViewTabHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    ids: () => CHANNEL_TAB_IDS,
+    activeId: () => state.tab,
+    setActiveId: setTab,
+  });
 
   const unreadChannelIds = createMemo(() => {
     const ids = new Set<string>();
