@@ -8,7 +8,7 @@ use bot_id::BotId;
 
 use super::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand,
-    MentionOrigin, OpenSession,
+    MentionOrigin, OpenSession, SessionOrigin, TaskAssignmentOrigin,
 };
 
 /// What one trigger event asks this deployment to do.
@@ -41,6 +41,9 @@ pub fn agent_trigger_bot_id(event: &AgentTriggerTopicEvent) -> Option<BotId> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
             Some(mentioned.bot_id)
+        }
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TaskAssigned(assigned)) => {
+            Some(assigned.bot_id)
         }
         AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
             Some(metadata.bot_id)
@@ -77,7 +80,7 @@ pub fn route_agent_trigger(
                 HarnessCommand::Open(OpenSession {
                     bot_id: mentioned.bot_id,
                     runtime,
-                    origin: MentionOrigin {
+                    origin: SessionOrigin::Mention(MentionOrigin {
                         channel_id: message.channel_id,
                         // A top-level mention roots its own thread; a mention
                         // inside a thread answers into that thread.
@@ -85,7 +88,27 @@ pub fn route_agent_trigger(
                         message_id: message.message_id,
                         sender,
                         content: message.content,
-                    },
+                    }),
+                }),
+            ))
+        }
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TaskAssigned(assigned)) => {
+            // Like a mention's open: only managed runtimes are ours to open.
+            // An external bot's runtime learns of the assignment through its
+            // own feed and opens the session itself.
+            let Some(runtime) = runtime.filter(|runtime| runtime.kind.is_managed()) else {
+                return Err(Skipped::ForeignBot);
+            };
+            Ok(RoutedTrigger::Command(
+                AgentSessionId::new(),
+                HarnessCommand::Open(OpenSession {
+                    bot_id: assigned.bot_id,
+                    runtime,
+                    origin: SessionOrigin::TaskAssignment(TaskAssignmentOrigin {
+                        task_id: assigned.task_id,
+                        assigner: assigned.assigned_by,
+                        task_title: assigned.task_title,
+                    }),
                 }),
             ))
         }

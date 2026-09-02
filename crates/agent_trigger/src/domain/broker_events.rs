@@ -33,6 +33,21 @@ pub struct AgentBotMentionedEvent {
     pub message: ChannelMessagePostedMetadata,
 }
 
+/// A session opened by assigning an agent to a task.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentTaskAssignedEvent {
+    /// The agent that was assigned.
+    pub bot_id: BotId,
+    /// The task the agent was assigned to.
+    pub task_id: macro_uuid::Uuid,
+    /// Who assigned the agent. Owns the session and is credited for its
+    /// messages.
+    pub assigned_by: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// The task's title when the assignment was observed, for the prompt and
+    /// the session's name. Absent when the task row could not be read.
+    pub task_title: Option<String>,
+}
+
 /// Events that open a new session.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,6 +55,8 @@ pub struct AgentBotMentionedEvent {
 pub enum NewAgentSessionEvent {
     /// Opened by a bot mention in a top-level channel message.
     TopLevelMentioned(AgentBotMentionedEvent),
+    /// Opened by assigning the agent to a task.
+    TaskAssigned(AgentTaskAssignedEvent),
 }
 
 /// A message for a session that already exists.
@@ -111,6 +128,7 @@ impl AgentSessionMacroEvent {
     pub fn new_session(event: NewAgentSessionEvent) -> Self {
         let bot_id = match &event {
             NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id,
+            NewAgentSessionEvent::TaskAssigned(assigned) => assigned.bot_id,
         };
         Self::new(bot_id, AgentTriggerTopicEvent::New(event))
     }

@@ -36,6 +36,7 @@ ports = []
 [dependencies]
 activity = { path = "../activity", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
+bot_id = { path = "../bot_id" }
 anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }

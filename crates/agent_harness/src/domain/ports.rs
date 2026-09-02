@@ -15,7 +15,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::error::{HarnessError, Result};
 use super::model::{
     AgentRuntimeConfig, HarnessCommand, PriorChannelMessage, ProvisionedEgress, SandboxEgress,
-    SessionAnnouncement, SpawnContainer,
+    SessionAnnouncement, SpawnContainer, TaskSessionAnnouncement,
 };
 use super::sandbox::SandboxResizeEffect;
 
@@ -128,12 +128,19 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
     ) -> impl Future<Output = Result<String>> + Send;
 }
 
-/// Posts a pointer to a new agent session into its originating thread.
+/// Posts a pointer to a new agent session into its originating context - the
+/// mention's thread, or the discussion of the task the agent was assigned to.
 pub trait SessionAnnouncer: Send + Sync + 'static {
-    /// Publish one session announcement.
+    /// Publish one session announcement into its originating channel thread.
     fn announce(
         &self,
         announcement: SessionAnnouncement,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Publish one session announcement into its task's discussion.
+    fn announce_task_assignment(
+        &self,
+        announcement: TaskSessionAnnouncement,
     ) -> impl Future<Output = Result<()>> + Send;
 }
 

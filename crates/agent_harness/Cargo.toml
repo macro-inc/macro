@@ -24,6 +24,10 @@ channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 channels = { path = "../channels", features = ["ports"] }
 lexical_client = { path = "../lexical_client" }
+connection_gateway_client = { path = "../connection_gateway_client" }
+macro_db_client = { path = "../macro_db_client" }
+model = { path = "../model" }
+model-entity = { path = "../model-entity" }
 dashmap = { workspace = true }
 futures = { workspace = true }
 kafka_util = { path = "../kafka_util" }

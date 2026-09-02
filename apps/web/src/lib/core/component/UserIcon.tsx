@@ -17,6 +17,7 @@ import {
 import MacroLogo from '@icon/macro-logo.svg';
 import RobotIcon from '@phosphor/robot.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import { useAgentDirectory } from '@queries/agents/agents';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import {
@@ -142,6 +143,15 @@ export function UserIcon(props: UserIconProps) {
     props.id ? tryMacroId(props.id) : undefined
   );
 
+  // Agent avatars are looked up by id: assignee-style callers only hold the
+  // `bot|<uuid>` principal, unlike channel messages whose sender carries its
+  // own avatar_url.
+  const agentDirectory = useAgentDirectory();
+  const botAvatarUrl = () =>
+    props.id && isBotPrincipalId(props.id)
+      ? agentDirectory().get(props.id)?.avatarUrl
+      : undefined;
+
   const displayName = () => getDisplayName(macroId());
 
   const email = createMemo(() => {
@@ -197,7 +207,7 @@ export function UserIcon(props: UserIconProps) {
           class={cn('bg-surface text-accent ring ring-edge-muted', props.class)}
         >
           <Show
-            when={props.photoUrl}
+            when={props.photoUrl ?? botAvatarUrl()}
             fallback={
               <Avatar.Fallback>
                 <RobotIcon class="size-[62%]" />

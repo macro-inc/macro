@@ -29,3 +29,13 @@ also show up in Files/`All` and in AI-chat document listings.
 
 In any channel composer, toggle the `Task` switch before sending to create a task from the
 message.
+
+## Assigning an agent
+
+The assignee picker lists the account's AI agents (robot avatar) alongside people. Assigning
+an agent to a task opens a new agent session prompted with the task: the agent posts a
+comment into the task's discussion containing the magic chip that streams its progress, and
+the chip links to the session (`/app/agent/<session-id>`). Unassigning does not stop a
+session already opened; re-assigning the same agent later opens a fresh session. Only agents
+the assigner may use are actionable (their own, their team's, or system agents) — an agent
+the assigner does not own is stored as an assignee but opens nothing.

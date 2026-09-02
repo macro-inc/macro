@@ -1,8 +1,8 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
-    ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentBotMentionedEvent, AgentTaskAssignedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
+    ChannelKind, ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
 use bot_id::{BotId, MACRO_CODER_BOT_ID};
 use channel_sender::ChannelSender;
@@ -13,7 +13,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::*;
-use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand};
+use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand, SessionOrigin};
 
 fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
     Some(AgentRuntimeConfig {
@@ -58,6 +58,15 @@ fn mentioned(bot: BotId, sender: ChannelSender<'static>) -> AgentTriggerTopicEve
     ))
 }
 
+fn task_assigned(bot: BotId) -> AgentTriggerTopicEvent {
+    AgentTriggerTopicEvent::New(NewAgentSessionEvent::TaskAssigned(AgentTaskAssignedEvent {
+        bot_id: bot,
+        task_id: Uuid::from_u128(7),
+        assigned_by: user(),
+        task_title: Some("Fix the tests".to_owned()),
+    }))
+}
+
 fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
     AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
         bot_id: bot,
@@ -82,11 +91,14 @@ fn a_mention_for_our_bot_opens_a_session() {
     assert_eq!(open.runtime.kind, AgentKind::InMemory);
     assert_eq!(open.runtime.model, "configured-model");
     assert_eq!(open.runtime.instructions, "configured instructions");
-    assert_eq!(open.origin.message_id, Uuid::from_u128(2));
+    let SessionOrigin::Mention(origin) = open.origin else {
+        panic!("a mention should open with a mention origin");
+    };
+    assert_eq!(origin.message_id, Uuid::from_u128(2));
     // A top-level mention roots its own thread.
-    assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
-    assert_eq!(open.origin.sender, user());
-    assert_eq!(open.origin.content, "@claude fix the tests");
+    assert_eq!(origin.thread_id, Uuid::from_u128(2));
+    assert_eq!(origin.sender, user());
+    assert_eq!(origin.content, "@claude fix the tests");
 }
 
 #[test]
@@ -107,7 +119,40 @@ fn a_threaded_mention_answers_into_its_thread() {
     else {
         panic!("a new-session event should open");
     };
-    assert_eq!(open.origin.thread_id, thread);
+    let SessionOrigin::Mention(origin) = open.origin else {
+        panic!("a mention should open with a mention origin");
+    };
+    assert_eq!(origin.thread_id, thread);
+}
+
+#[test]
+fn a_task_assignment_for_our_bot_opens_a_session() {
+    let routed = route_agent_trigger(task_assigned(BotId::TEST_A), runtime(AgentKind::InMemory))
+        .expect("an assignment for our bot should yield work");
+
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
+        panic!("a new-session event should open");
+    };
+    assert_eq!(open.bot_id, BotId::TEST_A);
+    let SessionOrigin::TaskAssignment(origin) = open.origin else {
+        panic!("an assignment should open with a task origin");
+    };
+    assert_eq!(origin.task_id, Uuid::from_u128(7));
+    assert_eq!(origin.assigner, user());
+    assert_eq!(origin.task_title.as_deref(), Some("Fix the tests"));
+}
+
+#[test]
+fn a_task_assignment_for_an_external_bot_is_skipped() {
+    assert_eq!(
+        route_agent_trigger(task_assigned(BotId::TEST_A), runtime(AgentKind::External))
+            .unwrap_err(),
+        Skipped::ForeignBot,
+    );
+    assert_eq!(
+        route_agent_trigger(task_assigned(BotId::TEST_A), None).unwrap_err(),
+        Skipped::ForeignBot,
+    );
 }
 
 #[test]

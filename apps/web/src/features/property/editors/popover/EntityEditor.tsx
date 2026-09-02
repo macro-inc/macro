@@ -1,6 +1,7 @@
 import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useAssignableAgentUsers } from '@property/hooks/useAgentAssignees';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
@@ -45,6 +46,11 @@ function EntityEditorBody(props: EntityEditorProps) {
   // team roster instead of the default quick-access people pool.
   const isCompanyOwner =
     property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
+  // Task assignees can be agents too: assigning one opens an agent session
+  // on the task.
+  const isAssignees =
+    property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES;
+  const assignableAgents = useAssignableAgentUsers();
   const teamQuery = useCurrentTeamQuery();
   const teamMembers = (): IUser[] =>
     (teamQuery.data?.members ?? []).map((member) => ({
@@ -100,6 +106,7 @@ function EntityEditorBody(props: EntityEditorProps) {
             specificEntityType: property.specificEntityType,
             selfFilter: props.selfFilter,
             users: isCompanyOwner ? teamMembers : undefined,
+            agents: isAssignees ? assignableAgents : undefined,
           }}
           selectedOptions={() => entityReferencesToIdSet(selectedRefs())}
           setSelectedOptions={(newOptions, entityInfo) => {

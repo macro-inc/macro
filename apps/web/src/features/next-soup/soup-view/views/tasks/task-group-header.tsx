@@ -2,20 +2,29 @@ import type { GroupHeaderProps } from '@app/features/next-soup/create-soup-state
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { UserIcon } from '@core/component/UserIcon';
-import { getDisplayName, type MacroId, tryMacroId } from '@core/user';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
+import { getDisplayName, tryMacroId } from '@core/user';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
 import CircleDashed from '@phosphor/circle-dashed.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { useAgentDirectory } from '@queries/agents/agents';
 import { cn, Layer } from '@ui';
 import { createMemo, Match, Switch } from 'solid-js';
 
 const AssigneeGroupContent = (props: {
-  assigneeId: MacroId;
+  assigneeId: string;
   fallbackLabel: string;
 }) => {
-  const assigneeName = () =>
-    getDisplayName(props.assigneeId, { emailFallback: 'local-part' });
+  const agentDirectory = useAgentDirectory();
+  const assigneeName = () => {
+    const agent = agentDirectory().get(props.assigneeId);
+    if (agent) return agent.name;
+    const macroId = tryMacroId(props.assigneeId);
+    return macroId
+      ? getDisplayName(macroId, { emailFallback: 'local-part' })
+      : '';
+  };
   return (
     <>
       <UserIcon
@@ -58,7 +67,9 @@ export const TaskGroupHeader = (
     ) {
       return;
     }
-    return tryMacroId(props.group.key);
+    const key = props.group.key;
+    if (isBotPrincipalId(key)) return key;
+    return tryMacroId(key);
   });
 
   const statusTint = createMemo(() => {

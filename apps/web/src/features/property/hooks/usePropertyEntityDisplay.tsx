@@ -4,6 +4,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useChannelName } from '@core/context/channels';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { useAgentDirectory } from '@queries/agents/agents';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
@@ -82,10 +83,15 @@ export function usePropertyEntityDisplay(
   };
   const channelName = createMemo(() => channelNameWrapper()?.());
 
+  // A USER entity id may be an agent (`bot|<uuid>`), which no user-name
+  // utility resolves.
+  const agentDirectory = useAgentDirectory();
   const userNameWrapper = () => {
     const eType = entityType();
     if (eType === 'USER') {
-      return () => getDisplayName(tryMacroId(entityId()));
+      return () =>
+        agentDirectory().get(entityId())?.name ??
+        getDisplayName(tryMacroId(entityId()));
     }
   };
   const userName = createMemo(() => userNameWrapper()?.() ?? '');

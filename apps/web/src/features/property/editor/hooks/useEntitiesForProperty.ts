@@ -33,6 +33,9 @@ export function useEntitiesForProperty(
     /** Explicit pool for USER pickers (e.g. company owner → team members);
      * when it returns a list, it replaces the quick-access people list. */
     users?: Accessor<IUser[] | undefined>;
+    /** Synthetic agent users (`bot|<uuid>` ids) appended to a USER pool
+     * (e.g. task assignees → assignable agents). */
+    agents?: Accessor<IUser[] | undefined>;
   }
 ) {
   const [searchTerm, setSearchTerm] = createSignal('');
@@ -95,6 +98,10 @@ export function useEntitiesForProperty(
       .map((entity) => threadMapper(entity as EmailEntity));
   });
 
+  // Agents appended to a USER pool; no DM activity to augment with.
+  const agentEntities = (): CombinedEntity[] =>
+    (options?.agents?.() ?? []).map(userToEntity);
+
   // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
     const entityType = specificEntityType();
@@ -103,9 +110,10 @@ export function useEntitiesForProperty(
     if (entityType === 'USER') {
       const pool = options?.users?.();
       if (pool) {
-        return pool.map((user) =>
-          userToEntity(augmentUserWithDmActivity(user))
-        );
+        return [
+          ...pool.map((user) => userToEntity(augmentUserWithDmActivity(user))),
+          ...agentEntities(),
+        ];
       }
     }
 
@@ -147,6 +155,10 @@ export function useEntitiesForProperty(
       converted.push(...emails().map(threadMapper));
     }
 
+    if (entityType === 'USER') {
+      converted.push(...agentEntities());
+    }
+
     return converted;
   });
 
@@ -158,6 +170,19 @@ export function useEntitiesForProperty(
     getTimestamp: getEntityTimestampedItem,
   });
 
+  // Agents are a small, fixed pool riding along with a potentially huge
+  // people list; re-append any the display cap sliced off so they are always
+  // offerable (all of them when browsing, the matching ones when searching).
+  const ensureAgents = (list: CombinedEntity[], query: string) => {
+    const agents = agentEntities();
+    if (agents.length === 0) return list;
+    const matching = query
+      ? entitySearch(agents, query).map((result) => result.item)
+      : agents;
+    const listed = new Set(list.map((entity) => entity.id));
+    return [...list, ...matching.filter((entity) => !listed.has(entity.id))];
+  };
+
   // get filtered entities based on search query
   const filteredEntities = createMemo(() => {
     const query = searchTerm();
@@ -168,7 +193,10 @@ export function useEntitiesForProperty(
 
     // When no search query, sort self to top BEFORE slicing
     if (!query) {
-      return sortEntitiesWithSelfFirst(available, userId).slice(0, MAX_RESULTS);
+      return ensureAgents(
+        sortEntitiesWithSelfFirst(available, userId).slice(0, MAX_RESULTS),
+        query
+      );
     }
 
     const localResults = entitySearch(available, query)
@@ -181,7 +209,7 @@ export function useEntitiesForProperty(
       return [...localResults, ...serverResults].slice(0, MAX_RESULTS);
     }
 
-    return localResults;
+    return ensureAgents(localResults, query);
   });
 
   return {
