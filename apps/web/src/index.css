@@ -930,62 +930,6 @@ a {
   @container (width < 936px) { padding-inline: calc(var(--spacing) * 4); }
 }
 
-@utility macro-thread-message-list {
-  scroll-padding-top: 1rem;
-  scroll-padding-bottom: 1rem;
-  scroll-behavior: smooth;
-
-  @media (prefers-reduced-motion: reduce) {
-    scroll-behavior: auto;
-  }
-}
-
-@utility macro-thread-message-header-row {
-  display: flex;
-  align-items: center;
-  min-height: 1.5rem;
-}
-
-@utility macro-thread-collapsed-row {
-  display: grid;
-  grid-template-columns: 7rem minmax(0, 1fr) 4.5rem;
-  align-items: center;
-  column-gap: calc(var(--spacing) * 2);
-
-  & > [data-slot='snippet'] {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  @container (width < 480px) {
-    grid-template-columns: minmax(0, 1fr) auto;
-    row-gap: calc(var(--spacing) * 2);
-
-    & > [data-slot='sender'] {
-      grid-column: 1;
-      grid-row: 1;
-      min-width: 0;
-    }
-
-    & > [data-slot='snippet'] {
-      grid-column: 1 / -1;
-      grid-row: 2;
-      display: -webkit-box;
-      overflow: hidden;
-      text-overflow: unset;
-      white-space: normal;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-    }
-
-    & > [data-slot='date'] {
-      grid-column: 2;
-      grid-row: 1;
-    }
-  }
-}
-
 @utility macro-message-margin {
   @container (width < 936px) { margin-inline: calc(var(--spacing) * 4); }
   @container (width < 640px) { margin-inline: calc(var(--spacing) * 2); }

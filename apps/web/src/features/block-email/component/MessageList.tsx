@@ -89,7 +89,7 @@ export function MessageList(props: MessageListProps) {
   return (
     <div
       class={cn(
-        'macro-thread-message-list pt-1 pb-6 w-full flex flex-col items-center gap-2 overflow-y-scroll overflow-x-hidden [overflow-anchor:none] scrollbar-hidden text-sm',
+        'pt-1 pb-6 w-full flex flex-col items-center gap-2 overflow-y-scroll overflow-x-hidden [overflow-anchor:none] scrollbar-hidden text-sm scroll-pt-4 scroll-pb-4 scroll-smooth motion-reduce:scroll-auto',
         'touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)]',
         props.underScrollsBottom &&
           'touch:pb-[calc(var(--mobile-content-inset-bottom,0)+1.5rem)]'

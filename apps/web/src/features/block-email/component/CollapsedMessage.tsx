@@ -42,11 +42,8 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   });
 
   return (
-    <div class="macro-thread-collapsed-row min-w-0">
-      <div
-        data-slot="sender"
-        class="macro-thread-message-header-row gap-2 min-w-0 text-sm"
-      >
+    <div class="min-w-0 grid grid-cols-[7rem_minmax(0,1fr)_4.5rem] items-center gap-x-2 @max-[480px]:grid-cols-[minmax(0,1fr)_auto] @max-[480px]:gap-y-2">
+      <div class="flex items-center min-h-6 gap-2 min-w-0 text-sm @max-[480px]:col-start-1 @max-[480px]:row-start-1">
         <div class="shrink-0 flex justify-center items-center size-6">
           <UserIcon
             {...senderIconProps()}
@@ -61,14 +58,11 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           </EmailUserTooltip>
         </div>
       </div>
-      <div data-slot="snippet" class="min-w-0 text-sm text-ink-extra-muted">
+      <div class="min-w-0 text-sm text-ink-extra-muted overflow-hidden text-ellipsis whitespace-nowrap @max-[480px]:col-span-full @max-[480px]:row-start-2 @max-[480px]:whitespace-normal @max-[480px]:line-clamp-2">
         {snippet()}
       </div>
       <Show when={props.message.internal_date_ts}>
-        <span
-          data-slot="date"
-          class="macro-thread-message-header-row justify-self-end"
-        >
+        <span class="flex items-center min-h-6 justify-self-end @max-[480px]:col-start-2 @max-[480px]:row-start-1">
           <Tooltip
             as="span"
             label={formatFullDate(props.message.internal_date_ts!)}

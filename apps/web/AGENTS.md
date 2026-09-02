@@ -16,6 +16,7 @@
 
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.
+- Prefer wrapping the setter over `createEffect(() => { if (signal()) sideEffect() })`. When setting focus/selection should also clear another stop, blur a control, or scroll, put that work in the setter (or a named helper the setter calls) so the action is explicit at the call site — not a distant effect watching the signal.
 - Use createMemo only when you need referential stability or the derivation is expensive. Cheap derivations (() => a() + b()) don't need it regardless of subscriber count.
 - Before rolling your own reactive utility, check solid-primitives first.
 
@@ -28,6 +29,7 @@
 ## Styling
 - Use semantic color tokens, not raw Tailwind color classes.
 - Do not add cursor-pointer to clickable elements.
+- Prefer styling in the component (Tailwind classes on the markup) so styling lives next to structure. Reserve `@utility` in `index.css` for styles that are widely shared across many components — not one-off or two-component layouts.
 
 ## TS
 - For exhaustive switch statements use `match` from `ts-pattern`.

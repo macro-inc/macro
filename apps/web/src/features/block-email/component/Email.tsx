@@ -181,7 +181,6 @@ function EmailContent(props: EmailViewProps) {
   const canRunInitialEmailScroll = () =>
     !isTouchDevice() || splitPanel?.isPanelActive() !== false;
 
-  const [hiddenChipFocused, setHiddenChipFocused] = createSignal(false);
   const [keyboardSelecting, setKeyboardSelecting] = createSignal(false);
   const [listAnchor, setListAnchor] = createSignal<'title' | 'composer'>();
   let lastPointer = { x: Number.NaN, y: Number.NaN };
@@ -210,7 +209,7 @@ function EmailContent(props: EmailViewProps) {
   };
 
   const leaveHiddenChip = () => {
-    setHiddenChipFocused(false);
+    context.messages.setHiddenChipFocused(false);
     const list = untrack(context.messagesListRef);
     const button = list ? hiddenMessagesControl(list) : undefined;
     if (button && document.activeElement === button) {
@@ -218,12 +217,6 @@ function EmailContent(props: EmailViewProps) {
       blockElement()?.focus({ preventScroll: true });
     }
   };
-
-  createEffect(() => {
-    if (context.messages.focusedID()) {
-      untrack(leaveHiddenChip);
-    }
-  });
 
   /**
    * Performs scrolling to a message and updates focus.
@@ -374,7 +367,7 @@ function EmailContent(props: EmailViewProps) {
     const button = hiddenMessagesControl(list);
     if (!button) return false;
     context.messages.setFocused(undefined);
-    setHiddenChipFocused(true);
+    context.messages.setHiddenChipFocused(true);
     scrollListBy(list, nearestDelta(list, button));
     return true;
   };
@@ -433,7 +426,8 @@ function EmailContent(props: EmailViewProps) {
 
     const keyboard = (() => {
       if (!keyboardSelecting()) return undefined;
-      if (hiddenChipFocused()) return { kind: 'hidden-chip' } as const;
+      if (context.messages.hiddenChipFocused())
+        return { kind: 'hidden-chip' } as const;
       const anchor = listAnchor();
       if (anchor === 'title' || anchor === 'composer') {
         return { kind: anchor } as const;
@@ -593,7 +587,7 @@ function EmailContent(props: EmailViewProps) {
     hotkey: 'enter',
     description: 'Reply to message',
     keyDownHandler: () => {
-      if (hiddenChipFocused()) {
+      if (context.messages.hiddenChipFocused()) {
         const messages = untrack(context.messages.list);
         const next = adjacentStop(
           shownStops({ length: messages.length, showMiddle: true }),
@@ -659,7 +653,7 @@ function EmailContent(props: EmailViewProps) {
         return false;
       }
 
-      if (hiddenChipFocused()) {
+      if (context.messages.hiddenChipFocused()) {
         clearSelection();
         return true;
       }
@@ -727,22 +721,6 @@ function EmailContent(props: EmailViewProps) {
         context.messages.setBottomReplyOpen(true);
       }
     }
-  });
-
-  createEffect((prev: boolean | undefined) => {
-    const currentFocusedId = context.messages.focusedID();
-    const messages = context.messages.list();
-    if (!currentFocusedId || !messages.length) return true;
-    const exists = messages.some((m) => m.db_id === currentFocusedId);
-    if (!exists) return false;
-    if (prev === false) {
-      revealMessageAfterLayout(
-        currentFocusedId,
-        messages,
-        untrack(context.messagesListRef)
-      );
-    }
-    return true;
   });
 
   const emailReplyInfo = createMemo(() => {
@@ -876,12 +854,12 @@ function EmailContent(props: EmailViewProps) {
                     title={props.title}
                     underScrollsBottom={!replyInputInFlow()}
                     showMiddleMessages={showMiddleMessages()}
-                    hiddenChipFocused={hiddenChipFocused()}
+                    hiddenChipFocused={context.messages.hiddenChipFocused()}
                     allowRowHover={!keyboardSelecting()}
                     onHiddenChipFocus={() => {
                       armKeyboardPointer();
                       context.messages.setFocused(undefined);
-                      setHiddenChipFocused(true);
+                      context.messages.setHiddenChipFocused(true);
                     }}
                     onOpenMiddle={() => {
                       leaveHiddenChip();

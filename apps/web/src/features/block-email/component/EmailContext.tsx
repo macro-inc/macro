@@ -16,6 +16,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { useEmail, useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
+import { blockElementSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import {
   recipientEntityMapper,
@@ -73,6 +74,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ReplyType } from '../util/replyType';
+import { hiddenMessagesControl } from '../util/scrollToMessage';
 import type { HoveredThreadStop } from '../util/threadStops';
 
 /**
@@ -116,6 +118,8 @@ type EmailContextValues = {
     setTargetMessageID: (id: string | undefined) => void;
     focusedID: Accessor<string | undefined>;
     setFocused: (messageID: string | undefined) => void;
+    hiddenChipFocused: Accessor<boolean>;
+    setHiddenChipFocused: (focused: boolean) => void;
     hovered: Accessor<HoveredThreadStop | undefined>;
     setHovered: (stop: HoveredThreadStop | undefined) => void;
     expandedBodyIds: Record<string, boolean>;
@@ -248,6 +252,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   );
 
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
+  const [hiddenChipFocused, setHiddenChipFocused] = createSignal(false);
   const [hoveredStop, setHoveredStop] = createSignal<HoveredThreadStop>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
   const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
@@ -822,6 +827,20 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     HTMLDivElement | undefined
   >(undefined);
 
+  /** Selecting a message clears the hidden-chip stop explicitly (no createEffect). */
+  const setFocused = (messageID: string | undefined) => {
+    if (messageID) {
+      setHiddenChipFocused(false);
+      const list = messagesListRef();
+      const button = list ? hiddenMessagesControl(list) : undefined;
+      if (button && document.activeElement === button) {
+        button.blur();
+        blockElementSignal.get()?.focus({ preventScroll: true });
+      }
+    }
+    setFocusedMessageId(messageID);
+  };
+
   const isContainerFilled = () => {
     const messageList = messagesListRef();
     const containerRef = messagesContainerRef();
@@ -922,7 +941,9 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           },
           messages: {
             focusedID: focusedMessageId,
-            setFocused: setFocusedMessageId,
+            setFocused,
+            hiddenChipFocused,
+            setHiddenChipFocused,
             hovered: hoveredStop,
             setHovered: setHoveredStop,
             targetMessageID: targetMessageId,

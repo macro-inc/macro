@@ -247,7 +247,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
     >
       <Show when={props.isBodyExpanded()}>
         <div
-          class="macro-thread-message-header-row gap-2"
+          class="flex items-center min-h-6 gap-2"
           onClick={handleHeaderClick}
         >
           {props.avatar}
