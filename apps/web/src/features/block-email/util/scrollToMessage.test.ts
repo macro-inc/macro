@@ -240,7 +240,7 @@ describe('adjustScrollAfterPrepend', () => {
     expect(container.scrollTop).toBe(0);
   });
 
-  it('keeps the newest cards on screen when the first page did not overflow', () => {
+  it('leaves the title pinned when the first page did not overflow', () => {
     const container = document.createElement('div');
     let scrollHeight = 200;
     Object.defineProperty(container, 'scrollHeight', {
@@ -250,7 +250,7 @@ describe('adjustScrollAfterPrepend', () => {
     container.scrollTop = 0;
     scrollHeight = 500;
     adjustScrollAfterPrepend(container, 200, 0);
-    expect(container.scrollTop).toBe(300);
+    expect(container.scrollTop).toBe(0);
   });
 });
 

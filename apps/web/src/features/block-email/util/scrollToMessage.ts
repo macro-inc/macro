@@ -176,8 +176,7 @@ export function adjustScrollAfterPrepend(
 ): void {
   const delta = container.scrollHeight - previousScrollHeight;
   if (delta <= 0) return;
-  const wasOverflowing = previousScrollHeight > container.clientHeight;
-  if (previousScrollTop <= 0 && wasOverflowing) return;
+  if (previousScrollTop <= 0) return;
   container.scrollTop = previousScrollTop + delta;
 }
 
