@@ -1,5 +1,6 @@
 import { render } from '@solidjs/testing-library';
 import * as Effect from 'effect/Effect';
+import * as Fiber from 'effect/Fiber';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -184,6 +185,89 @@ describe('runSoupBackfills', () => {
     expect(
       loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
     ).toMatchObject({
+      completed: true,
+      scanStartedAt: null,
+      updatedSince: '2026-09-02T12:01:00.000Z',
+    });
+  });
+
+  it('atomically checkpoints and resumes an interrupted email catch-up pass', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-09-02T12:00:00.000Z');
+    let holdCatchUp = true;
+    let markCatchUpStarted!: () => void;
+    const catchUpStarted = new Promise<void>((resolve) => {
+      markCatchUpStarted = resolve;
+    });
+    const fetchPage = vi.fn(
+      (
+        _input: Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0],
+        options: Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[1]
+      ) => {
+        if (fetchPage.mock.calls.length === 1) {
+          vi.setSystemTime('2026-09-02T12:01:00.000Z');
+          return Promise.resolve({ nextCursor: null });
+        }
+        if (holdCatchUp) {
+          markCatchUpStarted();
+          const signal = options?.signal;
+          if (!signal) throw new Error('expected a backfill abort signal');
+          return new Promise<{ nextCursor: string | null }>(
+            (_resolve, reject) =>
+              signal.addEventListener(
+                'abort',
+                () =>
+                  reject(
+                    signal.reason ?? new DOMException('Aborted', 'AbortError')
+                  ),
+                { once: true }
+              )
+          );
+        }
+        return Promise.resolve({ nextCursor: null });
+      }
+    );
+    const params = {
+      ...lane('email-thread-pages', fetchPage),
+      catchUpAfterInitialPass: true,
+    };
+
+    const fiber = Effect.runFork(runSoupBackfill('user-1', params));
+    await catchUpStarted;
+
+    expect(
+      loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+    ).toMatchObject({
+      nextCursor: null,
+      pagesFetched: 1,
+      completed: false,
+      completedAt: null,
+      scanStartedAt: '2026-09-02T12:01:00.000Z',
+      updatedSince: '2026-09-02T12:00:00.000Z',
+    });
+
+    await Effect.runPromise(Fiber.interrupt(fiber));
+    holdCatchUp = false;
+    await Effect.runPromise(runSoupBackfill('user-1', params));
+
+    expect(fetchPage).toHaveBeenCalledTimes(3);
+    expect(fetchPage.mock.calls[2]?.[0]).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: {
+            tree: {
+              literal: {
+                updatedAt: { gte: '2026-09-02T12:00:00.000Z' },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(
+      loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+    ).toMatchObject({
+      pagesFetched: 2,
       completed: true,
       scanStartedAt: null,
       updatedSince: '2026-09-02T12:01:00.000Z',

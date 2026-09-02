@@ -380,39 +380,50 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
         fetchPage(input, { signal })
       );
 
-      const completed = page.nextCursor == null;
+      const passCompleted = page.nextCursor == null;
+      const transitionToCatchUp = passCompleted && catchUpPassPending;
+      const passCompletedAt = passCompleted ? new Date().toISOString() : null;
       checkpoint = {
         ...checkpoint,
         nextCursor: page.nextCursor ?? null,
         pagesFetched: checkpoint.pagesFetched + 1,
-        completed,
-        ...(completed
-          ? {
-              // Use the pass start rather than its completion time so updates
-              // made while this pass was running are included by the catch-up.
-              updatedSince: checkpoint.scanStartedAt ?? checkpoint.updatedSince,
-              completedAt: new Date().toISOString(),
-              scanStartedAt: null,
-            }
+        // Atomically persist the required catch-up as in progress instead of
+        // exposing a completed lane between the two passes.
+        completed: passCompleted && !transitionToCatchUp,
+        ...(passCompleted
+          ? transitionToCatchUp
+            ? {
+                // Filter from the full pass start, while using its completion
+                // as the resumable catch-up pass watermark.
+                updatedSince:
+                  checkpoint.scanStartedAt ?? checkpoint.updatedSince,
+                completedAt: null,
+                scanStartedAt: passCompletedAt,
+              }
+            : {
+                // Use the pass start rather than its completion time so updates
+                // made while this pass was running are included next time.
+                updatedSince:
+                  checkpoint.scanStartedAt ?? checkpoint.updatedSince,
+                completedAt: passCompletedAt,
+                scanStartedAt: null,
+              }
           : {}),
       };
+      if (transitionToCatchUp) catchUpPassPending = false;
       yield* Effect.sync(() => {
         saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
         onCheckpoint?.(checkpoint);
       });
 
-      if (checkpoint.completed) break;
+      if (passCompleted) break;
 
       yield* Effect.sleep(params.pageDelayMs ?? PAGE_DELAY_MS);
     }
 
-    if (!catchUpPassPending) return;
-
-    catchUpPassPending = false;
-    // Do not expose the initial cursor exhaustion as lane completion. Start
-    // the narrowed pass immediately so entities that moved ahead of the
-    // VIEWED_UPDATED cursor are hydrated in this invocation.
-    yield* Effect.sync(startPass);
+    if (checkpoint.completed) return;
+    // The only incomplete terminal-page state is the atomic transition above.
+    // Continue directly into its narrowed catch-up pass.
   }
 });
 
