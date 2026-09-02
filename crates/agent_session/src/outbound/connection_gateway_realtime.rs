@@ -33,12 +33,12 @@
 //! identified by that session plus the session-local `"{turn}:{author}"` id
 //! the fold derives.
 
+use crate::domain::model::QueuedActionDto;
 use crate::domain::model::{
     AgentSessionId, AgentSessionLog, AgentSessionRenamed, LogAppended, Message,
     StoredAgentSessionLog,
 };
 use crate::domain::ports::{AgentSessionQueueChanged, AgentSessionRealtime};
-use crate::inbound::axum_router::QueuedActionDto;
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;

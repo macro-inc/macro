@@ -50,7 +50,7 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
-    OpenExternalAgentSession, OpenManagedSession, QueuedControl, SessionOpener, SessionThread,
+    OpenExternalAgentSession, OpenManagedSession, SessionOpener, SessionThread,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -393,43 +393,10 @@ pub struct ControlResponse {
     pub status: ControlStatusDto,
 }
 
-/// One action waiting in a session's queue.
-///
-/// Clients deserialize this, so both derives are used.
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct QueuedActionDto {
-    /// The id the action was accepted under.
-    pub action_id: AgentActionId,
-    /// What kind of action waits - `prompt` or `compact`; only
-    /// turn-occupying actions are ever queued.
-    pub kind: String,
-    /// The prompt's raw text, present for prompts only. What an edit
-    /// replaces.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub prompt: Option<String>,
-    /// The user who queued it, absent when a bot acted on nobody's behalf.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub actor_user_id: Option<String>,
-    /// When it was accepted.
-    pub created_at: DateTime<Utc>,
-}
-
-impl From<QueuedControl> for QueuedActionDto {
-    fn from(queued: QueuedControl) -> Self {
-        let prompt = match &queued.action {
-            AgentAction::Prompt(action) => Some(action.prompt.clone()),
-            _ => None,
-        };
-        Self {
-            action_id: queued.action_id,
-            kind: queued.action.as_ref().to_owned(),
-            prompt,
-            actor_user_id: queued.actor.map(|actor| actor.to_string()),
-            created_at: queued.created_at,
-        }
-    }
-}
+// The queue entry's wire shape lives in the domain (`QueuedActionDto`,
+// re-exported here) because two transports serve it byte-identically: this
+// router's GET and the realtime queue snapshot.
+pub use crate::domain::model::QueuedActionDto;
 
 /// Response body for a session's queue: everything waiting, oldest first.
 ///
