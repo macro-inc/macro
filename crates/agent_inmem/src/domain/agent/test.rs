@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
@@ -61,6 +62,7 @@ where
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
+        client_renders_forms: AtomicBool::new(false),
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -352,4 +354,202 @@ async fn a_prompt_for_an_unknown_session_is_refused() {
         );
     })
     .await;
+}
+
+/// Like [`with_agent`], but the client advertises form elicitation and
+/// answers every `elicitation/create` with `answer`, recording what it was
+/// asked.
+async fn with_asking_agent<Out>(
+    answer: agent_client_protocol::schema::v1::ElicitationAction,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
+) -> (Vec<SessionNotification>, Vec<CreateElicitationRequest>, Out) {
+    use agent_client_protocol::schema::v1::{
+        ClientCapabilities, CreateElicitationResponse, ElicitationCapabilities,
+        ElicitationFormCapabilities,
+    };
+
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("test-model".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        engine: Arc::new(ScriptedEngine::new(vec![])),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        client_renders_forms: AtomicBool::new(false),
+    });
+
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    let notifications = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let asked = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let out = Client
+        .builder()
+        .on_receive_notification(
+            {
+                let notifications = Arc::clone(&notifications);
+                async move |notification: SessionNotification, _connection| {
+                    notifications.lock().unwrap().push(notification);
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .on_receive_request(
+            {
+                let asked = Arc::clone(&asked);
+                async move |request: CreateElicitationRequest, responder, _connection| {
+                    asked.lock().unwrap().push(request);
+                    responder.respond(CreateElicitationResponse::new(answer.clone()))
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(
+                        InitializeRequest::new(ProtocolVersion::V1).client_capabilities(
+                            ClientCapabilities::new().elicitation(
+                                ElicitationCapabilities::new()
+                                    .form(ElicitationFormCapabilities::new()),
+                            ),
+                        ),
+                    )
+                    .block_task()
+                    .await?;
+                let session = connection
+                    .send_request(NewSessionRequest::new("/"))
+                    .block_task()
+                    .await?;
+                Ok(scenario(connection, session.session_id).await)
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    let notifications = notifications.lock().unwrap().clone();
+    let asked = asked.lock().unwrap().clone();
+    (notifications, asked, out)
+}
+
+fn spoken(notifications: &[SessionNotification]) -> String {
+    notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn ask_sends_a_form_elicitation_and_echoes_the_accepted_answer() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue, ElicitationMode,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("blue".to_owned()),
+        )])));
+    let (notifications, asked, response) =
+        with_asking_agent(answer, async |connection, session| {
+            connection
+                .send_request(text_prompt(
+                    &session,
+                    "/ask What is the best colour? | red | blue | green",
+                ))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(asked.len(), 1, "exactly one question was asked");
+    assert_eq!(asked[0].message, "What is the best colour?");
+    let ElicitationMode::Form(form) = &asked[0].mode else {
+        panic!("a form was asked");
+    };
+    let field = form
+        .requested_schema
+        .properties
+        .get(ASK_FIELD)
+        .expect("the one field");
+    let agent_client_protocol::schema::v1::ElicitationPropertySchema::String(field) = field else {
+        panic!("a string field");
+    };
+    assert_eq!(
+        field.one_of.as_ref().map(|options| options
+            .iter()
+            .map(|option| option.value.as_str())
+            .collect::<Vec<_>>()),
+        Some(vec!["red", "blue", "green"])
+    );
+    assert_eq!(
+        form.requested_schema.required.as_deref(),
+        Some(&[ASK_FIELD.to_owned()][..])
+    );
+    assert_eq!(spoken(&notifications), "You answered: blue");
+}
+
+#[tokio::test]
+async fn ask_reports_a_decline_and_a_free_text_question_has_no_options() {
+    use agent_client_protocol::schema::v1::{ElicitationAction, ElicitationMode};
+
+    let (notifications, asked, response) =
+        with_asking_agent(ElicitationAction::Decline, async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "/ask Name the service"))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    let ElicitationMode::Form(form) = &asked[0].mode else {
+        panic!("a form was asked");
+    };
+    let agent_client_protocol::schema::v1::ElicitationPropertySchema::String(field) =
+        &form.requested_schema.properties[ASK_FIELD]
+    else {
+        panic!("a string field");
+    };
+    assert!(field.one_of.is_none(), "free text has no options");
+    assert_eq!(spoken(&notifications), "You declined to answer.");
+}
+
+#[tokio::test]
+async fn ask_without_form_support_explains_instead_of_asking() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let (notifications, response) = with_agent(engine, async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "/ask anything?"))
+            .block_task()
+            .await
+            .expect("the ask should complete")
+    })
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert!(
+        spoken(&notifications).contains("did not advertise form elicitation"),
+        "got {:?}",
+        spoken(&notifications)
+    );
 }

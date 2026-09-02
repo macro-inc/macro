@@ -9,18 +9,21 @@
 //! [`RuntimeAttachment::solo`]: agent_session::domain::connection::RuntimeAttachment::solo
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, Implementation,
-    InitializeRequest, InitializeResponse, Meta, NewSessionRequest, NewSessionResponse,
-    PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
+    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, CreateElicitationRequest,
+    ElicitationAction, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption,
+    Implementation, InitializeRequest, InitializeResponse, Meta, NewSessionRequest,
+    NewSessionResponse, PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
     SessionCapabilities, SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
     SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    StringPropertySchema, ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate,
+    ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
@@ -51,6 +54,18 @@ pub const META_NAMESPACE: &str = "macro";
 /// The one tool in the Macro toolset that delegates to another agent.
 const SUBAGENT_TOOL: &str = "Subagent";
 
+/// Slash command that asks the user a question through `elicitation/create`
+/// instead of running the model: `/ask <question>` for free text, or
+/// `/ask <question> | option | option` for a single select.
+///
+/// A test rig, deliberately: the fastest way to drive the whole elicitation
+/// path (hold, render, answer, fold) end to end without an external agent or
+/// a model. The agent's own tools do not ask questions yet.
+pub const ASK_COMMAND: &str = "/ask";
+
+/// The property the `/ask` form's one field is sent back under.
+const ASK_FIELD: &str = "answer";
+
 /// What one turn reads out of its session's state before running.
 struct TurnInput {
     /// The conversation so far plus the prompt being answered.
@@ -77,6 +92,9 @@ pub struct AgentState {
     /// Serializes turns: the client may queue prompts, the engine runs one at
     /// a time.
     pub turn_lock: tokio::sync::Mutex<()>,
+    /// Whether the client advertised `elicitation.form` on `initialize`. The
+    /// protocol forbids asking a mode the client did not advertise.
+    pub client_renders_forms: AtomicBool,
 }
 
 impl AgentState {
@@ -170,14 +188,25 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .builder()
         .name("macro-inmem")
         .on_receive_request(
-            async move |request: InitializeRequest, responder, _connection| {
-                responder.respond(
-                    InitializeResponse::new(request.protocol_version)
-                        .agent_capabilities(AgentCapabilities::new().session_capabilities(
-                            SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
-                        ))
-                        .agent_info(Implementation::new(AGENT_NAME, env!("CARGO_PKG_VERSION"))),
-                )
+            {
+                let state = Arc::clone(&state);
+                async move |request: InitializeRequest, responder, _connection| {
+                    let renders_forms = request
+                        .client_capabilities
+                        .elicitation
+                        .as_ref()
+                        .is_some_and(|elicitation| elicitation.form.is_some());
+                    state
+                        .client_renders_forms
+                        .store(renders_forms, Ordering::Relaxed);
+                    responder.respond(
+                        InitializeResponse::new(request.protocol_version)
+                            .agent_capabilities(AgentCapabilities::new().session_capabilities(
+                                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                            ))
+                            .agent_info(Implementation::new(AGENT_NAME, env!("CARGO_PKG_VERSION"))),
+                    )
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )
@@ -228,6 +257,27 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             )),
                         ));
                         return responder.respond(PromptResponse::new(StopReason::EndTurn));
+                    }
+                    if let Some(question) = prompt.trim().strip_prefix(ASK_COMMAND) {
+                        let question = question.trim().to_owned();
+                        let cancel = state.begin_turn();
+                        connection.spawn({
+                            let connection = connection.clone();
+                            async move {
+                                let stop = run_ask(
+                                    &state,
+                                    &connection,
+                                    request.session_id,
+                                    prompt,
+                                    question,
+                                    cancel,
+                                )
+                                .await;
+                                let _ = responder.respond(PromptResponse::new(stop));
+                                Ok(())
+                            }
+                        })?;
+                        return Ok(());
                     }
 
                     let cancel = state.begin_turn();
@@ -374,6 +424,103 @@ async fn run_turn(
     } else {
         StopReason::EndTurn
     }
+}
+
+/// Run an `/ask` turn: send the question as a form elicitation, wait for the
+/// client's answer, and say back what it was.
+///
+/// Runs inside a spawned connection task, outside the dispatch loop, which is
+/// what makes `block_task` safe here - the loop stays free to deliver the
+/// answer (and a `session/cancel`, which the session machine turns into a
+/// `cancel` answer before the notification arrives).
+async fn run_ask(
+    state: &AgentState,
+    connection: &ConnectionTo<Client>,
+    acp_session_id: SessionId,
+    prompt: String,
+    question: String,
+    cancel: CancellationToken,
+) -> StopReason {
+    let _turn = state.turn_lock.lock().await;
+
+    let say = |text: String| {
+        let _ = connection.send_notification(SessionNotification::new(
+            acp_session_id.clone(),
+            SessionUpdate::AgentMessageChunk(ContentChunk::new(ContentBlock::from(text.clone()))),
+        ));
+        text
+    };
+
+    if !state.client_renders_forms.load(Ordering::Relaxed) {
+        let text = say(
+            "This client did not advertise form elicitation, so there is no way to ask.".to_owned(),
+        );
+        state.push_turn(prompt, vec![AssistantMessagePart::Text { text }]);
+        return StopReason::EndTurn;
+    }
+
+    let (message, options) = parse_ask(&question);
+    let mut field = StringPropertySchema::new().title("Answer");
+    if !options.is_empty() {
+        field = field.one_of(
+            options
+                .iter()
+                .map(|option| EnumOption::new(option.clone(), option.clone()))
+                .collect::<Vec<_>>(),
+        );
+    }
+    let schema = ElicitationSchema::new().property(ASK_FIELD, field, true);
+    let request = CreateElicitationRequest::new(
+        ElicitationFormMode::new(ElicitationSessionScope::new(acp_session_id.clone()), schema),
+        message,
+    );
+
+    let answer = connection.send_request(request).block_task().await;
+    let text = match answer {
+        Ok(response) => match response.action {
+            ElicitationAction::Accept(accept) => {
+                let value = accept
+                    .content
+                    .as_ref()
+                    .and_then(|content| content.get(ASK_FIELD))
+                    .and_then(|value| serde_json::to_value(value).ok())
+                    .map(|value| match value {
+                        serde_json::Value::String(text) => text,
+                        other => other.to_string(),
+                    })
+                    .unwrap_or_else(|| "nothing".to_owned());
+                format!("You answered: {value}")
+            }
+            ElicitationAction::Decline => "You declined to answer.".to_owned(),
+            ElicitationAction::Cancel => "The question was cancelled.".to_owned(),
+            _ => "You answered in a way this agent does not understand.".to_owned(),
+        },
+        Err(error) => format!("The client refused the question: {error}"),
+    };
+    let text = say(text);
+    state.push_turn(prompt, vec![AssistantMessagePart::Text { text }]);
+
+    if cancel.is_cancelled() {
+        StopReason::Cancelled
+    } else {
+        StopReason::EndTurn
+    }
+}
+
+/// Split `/ask`'s argument into the question and its options: everything
+/// before the first `|` is the question, each `|`-separated piece after it
+/// an option. No `|` means free text.
+fn parse_ask(question: &str) -> (String, Vec<String>) {
+    let mut pieces = question
+        .split('|')
+        .map(str::trim)
+        .filter(|piece| !piece.is_empty());
+    let message = pieces
+        .next()
+        .map(str::to_owned)
+        .unwrap_or_else(|| "What would you like?".to_owned());
+    let options = pieces.map(str::to_owned).collect();
+    (message, options)
 }
 
 /// The `session/update` a stream part renders as, if any.

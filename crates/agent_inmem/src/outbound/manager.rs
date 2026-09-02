@@ -6,6 +6,7 @@
 //! and the conversation store those tasks read.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::channel::Channel;
@@ -110,6 +111,7 @@ impl InMemAgentManager {
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),
             turn_lock: tokio::sync::Mutex::new(()),
+            client_renders_forms: AtomicBool::new(false),
         });
         let session_id = facts.id;
         let task = tokio::spawn(async move {
