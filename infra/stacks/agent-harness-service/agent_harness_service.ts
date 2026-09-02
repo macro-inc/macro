@@ -4,8 +4,9 @@ import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  DEFAULT_DEREGISTRATION_DELAY_SECONDS,
+  DEFAULT_TARGET_GROUP_HEALTH_CHECK,
   EcsDeploymentFailureAlarm,
-  ServiceTargetGroup,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
@@ -285,7 +286,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     // ALB-to-service holes for the egress port.
     // Not `${BASE_NAME}-egress`: with the helper's `-tg` suffix that is 36
     // chars, and target group names cap at 32.
-    const egress = new ServiceTargetGroup(
+    const egress = new DedicatedListenerTargetGroup(
       `agent-harness-egress-${stack}`,
       {
         listenerArn: listener.arn,
@@ -592,6 +593,95 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         },
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,
+      },
+      { parent: this }
+    );
+  }
+}
+
+type DedicatedListenerTargetGroupArgs = {
+  tags: { [key: string]: string };
+  listenerArn: pulumi.Output<string>;
+  vpcId: pulumi.Output<string> | string;
+  containerPort: number;
+  healthCheckPath: string;
+  hostHeaders: string[];
+  priority: number;
+  serviceSecurityGroupId: pulumi.Output<string>;
+  albSecurityGroupId: pulumi.Output<string>;
+};
+
+class DedicatedListenerTargetGroup extends pulumi.ComponentResource {
+  public readonly target_group: aws.lb.TargetGroup;
+
+  constructor(
+    name: string,
+    args: DedicatedListenerTargetGroupArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    // Keep the ServiceTargetGroup type token so Pulumi does not replace the live egress rule.
+    super('my:components:ServiceTargetGroup', name, {}, opts);
+
+    this.target_group = new aws.lb.TargetGroup(
+      `${name}-target-group`,
+      {
+        name: `${name}-tg`,
+        port: args.containerPort,
+        protocol: 'HTTP',
+        targetType: 'ip',
+        vpcId: args.vpcId,
+        deregistrationDelay: DEFAULT_DEREGISTRATION_DELAY_SECONDS,
+        healthCheck: {
+          path: args.healthCheckPath,
+          protocol: 'HTTP',
+          ...DEFAULT_TARGET_GROUP_HEALTH_CHECK,
+        },
+        tags: args.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.lb.ListenerRule(
+      `${name}-listener-rule`,
+      {
+        listenerArn: args.listenerArn,
+        priority: args.priority,
+        conditions: [{ hostHeader: { values: args.hostHeaders } }],
+        actions: [
+          {
+            type: 'forward',
+            targetGroupArn: this.target_group.arn,
+          },
+        ],
+        tags: args.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.vpc.SecurityGroupIngressRule(
+      `${name}-security-group-ingress-service-to-alb`,
+      {
+        securityGroupId: args.serviceSecurityGroupId,
+        description: 'Allow inbound traffic from ALB',
+        referencedSecurityGroupId: args.albSecurityGroupId,
+        fromPort: args.containerPort,
+        toPort: args.containerPort,
+        ipProtocol: 'tcp',
+        tags: args.tags,
+      },
+      { parent: this }
+    );
+
+    new aws.vpc.SecurityGroupEgressRule(
+      `${name}-security-group-egress-alb-to-service`,
+      {
+        description: `Allow traffic to ${name}`,
+        securityGroupId: args.albSecurityGroupId,
+        referencedSecurityGroupId: args.serviceSecurityGroupId,
+        fromPort: args.containerPort,
+        ipProtocol: 'tcp',
+        toPort: args.containerPort,
+        tags: args.tags,
       },
       { parent: this }
     );
