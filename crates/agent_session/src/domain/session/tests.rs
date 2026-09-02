@@ -930,3 +930,343 @@ fn the_handshake_result_is_announced_for_the_connection() {
         })
     );
 }
+
+// ---------------------------------------------------------------------------
+// Elicitation: held for the user, never answered by the machine itself.
+// ---------------------------------------------------------------------------
+
+mod elicitation {
+    use super::*;
+    use agent_client_protocol::schema::v1::{
+        ClientRequest, CreateElicitationRequest, CreateElicitationResponse, ElicitationAction,
+        ElicitationFormMode, ElicitationRequestScope, ElicitationSchema, ElicitationSessionScope,
+        ElicitationUrlMode, InitializeRequest, SessionId,
+    };
+    use agent_runtime_protocol::domain::action::{ElicitationAnswer, ElicitationRequestId};
+    use std::collections::BTreeMap;
+
+    fn live_machine() -> SessionMachine<u32> {
+        let mut machine = machine();
+        begin_opening(&mut machine);
+        machine.handle(session_opened("acp-42"));
+        machine
+    }
+
+    fn create(id: RequestId, request: CreateElicitationRequest) -> Input<u32> {
+        let (method, params) = request.to_untyped_message().unwrap().into_parts();
+        frame(RawJsonRpcMessage::request(method, params, id).unwrap())
+    }
+
+    fn form_for(session: &'static str) -> CreateElicitationRequest {
+        CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new(SessionId::new(session)),
+                ElicitationSchema::new(),
+            ),
+            "Which approach?",
+        )
+    }
+
+    fn answer(id: ElicitationRequestId, answer: ElicitationAnswer, token: u32) -> Input<u32> {
+        Input::Command {
+            from: Some(
+                MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            ),
+            action: AgentAction::respond_elicitation(id, answer),
+            action_id: AgentActionId::mint(),
+            token,
+        }
+    }
+
+    /// Every JSON-RPC response the machine sent, as `(id, result)`.
+    fn sent_responses(
+        effects: &[Effect<u32>],
+    ) -> Vec<(
+        RequestId,
+        Result<serde_json::Value, agent_client_protocol::Error>,
+    )> {
+        effects
+            .iter()
+            .filter_map(|effect| match effect {
+                Effect::Send {
+                    message:
+                        ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(
+                            Response::Result { id, result },
+                        ))),
+                    ..
+                } => Some((id.clone(), Ok(result.clone()))),
+                Effect::Send {
+                    message:
+                        ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(
+                            Response::Error { id, error },
+                        ))),
+                    ..
+                } => Some((id.clone(), Err(error.clone()))),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn refusals(effects: &[Effect<u32>]) -> Vec<RequestId> {
+        sent_responses(effects)
+            .into_iter()
+            .filter_map(|(id, result)| match result {
+                Err(error) if error.code == agent_client_protocol::ErrorCode::InvalidParams => {
+                    Some(id)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn initialize_advertises_both_elicitation_modes() {
+        let mut machine = machine();
+        let effects = machine.handle(acp_ready());
+        let Effect::Send {
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+            ..
+        } = &effects[1]
+        else {
+            panic!("initialize is sent");
+        };
+        let ClientRequest::InitializeRequest(initialize) =
+            ClientRequest::parse_message(&request.method, &request.params).unwrap()
+        else {
+            panic!("the first request is initialize");
+        };
+        let _: &InitializeRequest = &initialize;
+        let elicitation = initialize
+            .client_capabilities
+            .elicitation
+            .expect("elicitation is advertised");
+        assert!(elicitation.form.is_some(), "form mode is advertised");
+        assert!(elicitation.url.is_some(), "url mode is advertised");
+
+        // And on the wire, exactly the shape the protocol documents.
+        let params = serde_json::to_value(&request.params).unwrap();
+        assert_eq!(
+            params["clientCapabilities"]["elicitation"],
+            serde_json::json!({ "form": {}, "url": {} })
+        );
+    }
+
+    #[test]
+    fn a_form_elicitation_is_held_not_answered() {
+        let mut machine = live_machine();
+
+        let effects = machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        assert!(
+            matches!(effects[..], [Effect::Log { .. }]),
+            "held: {effects:?}"
+        );
+        assert_eq!(machine.pending_elicitation(), Some(&RequestId::Number(0)));
+        assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+    }
+
+    #[test]
+    fn a_url_elicitation_is_held_too() {
+        let mut machine = live_machine();
+        let request = CreateElicitationRequest::new(
+            ElicitationUrlMode::new(
+                ElicitationSessionScope::new(SessionId::new("acp-42")),
+                "github-oauth-1",
+                "https://agent.example.com/connect?elicitationId=github-oauth-1",
+            ),
+            "Authorize GitHub",
+        );
+
+        let effects = machine.handle(create(RequestId::Str("el-1".to_owned()), request));
+
+        assert!(matches!(effects[..], [Effect::Log { .. }]));
+        assert_eq!(
+            machine.pending_elicitation(),
+            Some(&RequestId::Str("el-1".to_owned()))
+        );
+    }
+
+    #[test]
+    fn a_second_elicitation_while_one_is_held_is_refused_and_the_first_kept() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let effects = machine.handle(create(RequestId::Number(1), form_for("acp-42")));
+
+        assert_eq!(refusals(&effects), [RequestId::Number(1)]);
+        assert_eq!(machine.pending_elicitation(), Some(&RequestId::Number(0)));
+    }
+
+    #[test]
+    fn request_scoped_and_foreign_session_elicitations_are_refused() {
+        let mut machine = live_machine();
+
+        let request_scoped = CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationRequestScope::new(RequestId::Number(12)),
+                ElicitationSchema::new(),
+            ),
+            "Workspace name?",
+        );
+        let effects = machine.handle(create(RequestId::Number(0), request_scoped));
+        assert_eq!(refusals(&effects), [RequestId::Number(0)]);
+
+        let effects = machine.handle(create(RequestId::Number(1), form_for("acp-other")));
+        assert_eq!(refusals(&effects), [RequestId::Number(1)]);
+
+        assert_eq!(machine.pending_elicitation(), None);
+    }
+
+    #[test]
+    fn an_unknown_mode_is_refused() {
+        let mut machine = live_machine();
+        let params = serde_json::json!({
+            "sessionId": "acp-42",
+            "mode": "_hologram",
+            "message": "Look here",
+            "projector": "left"
+        });
+        let effects = machine.handle(frame(
+            RawJsonRpcMessage::request(
+                "elicitation/create".to_owned(),
+                params,
+                RequestId::Number(7),
+            )
+            .unwrap(),
+        ));
+
+        assert_eq!(refusals(&effects), [RequestId::Number(7)]);
+        assert_eq!(machine.pending_elicitation(), None);
+    }
+
+    #[test]
+    fn an_answer_with_the_held_id_goes_out_as_a_response_and_frees_the_slot() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let content = BTreeMap::from([("strategy".to_owned(), serde_json::json!("balanced"))]);
+        let effects = machine.handle(answer(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Accept {
+                content: Some(content),
+            },
+            1,
+        ));
+
+        let responses = sent_responses(&effects);
+        assert_eq!(responses.len(), 1, "exactly one response: {effects:?}");
+        let (id, result) = &responses[0];
+        assert_eq!(*id, RequestId::Number(0));
+        let response: CreateElicitationResponse =
+            serde_json::from_value(result.clone().unwrap()).unwrap();
+        assert!(matches!(response.action, ElicitationAction::Accept(_)));
+        assert!(matches!(
+            effects.last(),
+            Some(Effect::Complete {
+                token: 1,
+                result: Ok(())
+            })
+        ));
+        assert_eq!(machine.pending_elicitation(), None);
+
+        // Answering again is a conflict: nothing is held any more.
+        let effects = machine.handle(answer(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Decline,
+            2,
+        ));
+        assert!(matches!(
+            effects[..],
+            [Effect::Complete {
+                token: 2,
+                result: Err(AgentSessionError::ElicitationNotPending(_))
+            }]
+        ));
+    }
+
+    #[test]
+    fn an_answer_with_the_wrong_id_is_refused_and_the_slot_kept() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let effects = machine.handle(answer(
+            ElicitationRequestId::Number(99),
+            ElicitationAnswer::Decline,
+            1,
+        ));
+
+        assert!(matches!(
+            effects[..],
+            [Effect::Complete {
+                token: 1,
+                result: Err(AgentSessionError::ElicitationNotPending(_))
+            }]
+        ));
+        assert_eq!(machine.pending_elicitation(), Some(&RequestId::Number(0)));
+    }
+
+    #[test]
+    fn an_answer_before_the_session_is_live_is_refused_not_queued() {
+        let mut machine = machine();
+
+        let effects = machine.handle(answer(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Cancel,
+            1,
+        ));
+
+        assert!(matches!(
+            effects[..],
+            [Effect::Complete {
+                token: 1,
+                result: Err(AgentSessionError::ElicitationNotPending(_))
+            }]
+        ));
+        assert_eq!(machine.pending_count(), 0);
+    }
+
+    #[test]
+    fn a_stop_cancels_the_held_elicitation_before_cancelling_the_turn() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let effects = machine.handle(stop(1));
+
+        let responses = sent_responses(&effects);
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].0, RequestId::Number(0));
+        let response: CreateElicitationResponse =
+            serde_json::from_value(responses[0].1.clone().unwrap()).unwrap();
+        assert!(matches!(response.action, ElicitationAction::Cancel));
+
+        // The cancel answer precedes the cancel notification.
+        let order: Vec<&str> = effects
+            .iter()
+            .filter_map(|effect| match effect {
+                Effect::Send {
+                    message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(_))),
+                    ..
+                } => Some("answer"),
+                Effect::Send {
+                    message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Notification(n))),
+                    ..
+                } if n.method.as_ref() == "session/cancel" => Some("cancel"),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(order, ["answer", "cancel"]);
+        assert_eq!(machine.pending_elicitation(), None);
+    }
+
+    #[test]
+    fn a_closed_connection_drops_the_held_elicitation_without_answering() {
+        let mut machine = live_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let effects = machine.handle(Input::Closed(CloseReason::TransportClosed));
+
+        assert!(sent_responses(&effects).is_empty());
+        assert_eq!(machine.pending_elicitation(), None);
+        assert_eq!(machine.status(), RuntimeStatus::Dead);
+    }
+}

@@ -199,7 +199,10 @@ impl FoldState {
                         AgentAction::Stop => {
                             self.record_control(Control::Stop, None, entry.user_id.clone())
                         }
-                        AgentAction::Prompt(_) => None,
+                        // `control_from_runtime` never yields these: a prompt
+                        // is folded below, and an elicitation answer is a
+                        // response frame, correlated by the agent's id.
+                        AgentAction::Prompt(_) | AgentAction::RespondElicitation(_) => None,
                     });
                 }
                 StepChange::message(match &acp.0 {
