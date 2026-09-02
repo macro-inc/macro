@@ -518,6 +518,12 @@ service_url! {
             dev: "https://dev-gateway.macro.com/convert",
             prod: "https://gateway.macro.com/convert",
         },
+        /// Search processing service API URL.
+        pub SearchProcessingServiceUrl {
+            local: "http://localhost:8092",
+            dev: "https://dev-gateway.macro.com/search-processing",
+            prod: "https://gateway.macro.com/search-processing",
+        },
         /// Connection gateway HTTP API URL.
         pub ConnectionGatewayUrl {
             local: "http://localhost:8082",
