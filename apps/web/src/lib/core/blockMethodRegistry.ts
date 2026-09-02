@@ -16,11 +16,15 @@ export type SharedBlockSpec = {
 type EmptySpec = {};
 type AssertSpec<T> = T extends BlockMethodSpec ? T : EmptySpec;
 
+type ChannelBlockSpec = {
+  focusInput: () => Promise<void>;
+};
+
 export interface BlockMethodRegistry {
   call: EmptySpec;
   calendar: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
-  channel: EmptySpec;
+  channel: AssertSpec<ChannelBlockSpec>;
   write: EmptySpec;
   pdf: EmptySpec;
   html: EmptySpec;

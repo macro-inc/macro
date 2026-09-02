@@ -479,6 +479,11 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       const handle = await awaitMessagesHandle();
       handle?.goToLatest();
     },
+    focusInput: async () => {
+      setActiveTab(DEFAULT_CHANNEL_TAB);
+      const handle = await awaitMessagesHandle();
+      handle?.focusInput();
+    },
   });
 
   const onChannelReady = (handle: ChannelHandle) => {

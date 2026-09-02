@@ -153,6 +153,7 @@ export type ChannelMessagesStateSnapshot = {
 export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
   goToLatest: () => void;
+  focusInput: () => void;
   getMessagesStateSnapshot: () => ChannelMessagesStateSnapshot | undefined;
 };
 
@@ -207,6 +208,9 @@ export function Channel(props: ChannelProps) {
     createSignal<InputSnapshot>();
   const [channelInputHandle, setChannelInputHandle] =
     createSignal<InputHandle>();
+  const focusInput = () => {
+    channelInputHandle()?.focus();
+  };
 
   const messagesQuery = useChannelMessagesQuery(
     () => props.channelId,
@@ -699,6 +703,7 @@ export function Channel(props: ChannelProps) {
         props.onHandleReady({
           goToMessage,
           goToLatest,
+          focusInput,
           getMessagesStateSnapshot,
         });
     })

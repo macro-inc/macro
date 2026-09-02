@@ -508,7 +508,11 @@ export function ChannelInput(props: ChannelInputProps) {
   };
 
   return (
-    <Input.Root input={inputState.view()} commands={inputState.commands}>
+    <Input.Root
+      input={inputState.view()}
+      commands={inputState.commands}
+      data-allow-focus-in-preview=""
+    >
       <Show when={isCollapsed()}>
         {/* File picker opened from the CollapsedInput attach button. */}
         <input

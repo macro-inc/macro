@@ -1,7 +1,20 @@
 import { CommandState } from '@app/features/command';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
+import {
+  withSplitPanelOwner,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import {
+  createListController,
+  listOwnedSlotName,
+  type ListScrollHandle,
+  useListInteractions,
+} from '@app/components/list';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
@@ -20,7 +33,7 @@ import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Tooltip } from '@ui';
-import { createMemo, type JSX, Show } from 'solid-js';
+import { createMemo, createUniqueId, type JSX, Show } from 'solid-js';
 import { useChannelsView } from '../channels-view-context';
 import type { ChannelsGroup } from '../types';
 
@@ -43,6 +56,38 @@ const CHANNEL_TABS = [
     label: createTabLabel('Recents', <ChatTextIcon />),
   },
 ];
+
+type ChannelRailRow =
+  | {
+      kind: 'section';
+      id: `section:${ChannelsGroup}`;
+      group: ChannelsGroup;
+    }
+  | {
+      kind: 'conversation';
+      id: `channel:${string}`;
+      group?: ChannelsGroup;
+      channel: ChannelEntity;
+    };
+
+const sectionRow = (group: ChannelsGroup): ChannelRailRow => ({
+  kind: 'section',
+  id: `section:${group}`,
+  group,
+});
+
+const conversationRow = (
+  channel: ChannelEntity,
+  group?: ChannelsGroup
+): ChannelRailRow => ({
+  kind: 'conversation',
+  id: `channel:${channel.id}`,
+  group,
+  channel,
+});
+
+const rowKeyForChannel = (channelId: string) => `channel:${channelId}`;
+const rowKeyForSection = (group: ChannelsGroup) => `section:${group}`;
 
 function channelInitials(name: string) {
   const words = name.replace(/^#+/, '').trim().split(/\s+/).filter(Boolean);
@@ -101,10 +146,12 @@ function ChannelAvatar(props: { channel: ChannelEntity; size?: 'sm' | 'md' }) {
 }
 
 type ChannelOptionProps = {
+  id: string;
   channel: ChannelEntity;
   unread: boolean;
   selected: boolean;
-  onSelect: () => void;
+  focused: boolean;
+  onActivate: () => void;
 };
 
 function ChannelOption(props: ChannelOptionProps) {
@@ -115,7 +162,10 @@ function ChannelOption(props: ChannelOptionProps) {
       class="w-full channels-slim:size-10"
     >
       <button
+        id={props.id}
         type="button"
+        role="treeitem"
+        tabIndex={-1}
         class={cn(
           'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent',
           'channels-slim:size-10 channels-slim:min-h-10 channels-slim:self-center channels-slim:justify-center channels-slim:rounded-full channels-slim:px-0 channels-slim:py-0',
@@ -124,10 +174,12 @@ function ChannelOption(props: ChannelOptionProps) {
             : 'h-8',
           props.selected
             ? 'bg-active text-ink'
-            : 'text-ink-muted hover:bg-hover hover:text-ink'
+            : props.focused
+              ? 'bg-hover text-ink'
+              : 'text-ink-muted hover:bg-hover hover:text-ink'
         )}
         aria-current={props.selected ? 'page' : undefined}
-        onClick={props.onSelect}
+        onClick={props.onActivate}
       >
         <ChannelAvatar channel={props.channel} />
         <span class="min-w-0 flex-1 truncate text-sm font-medium channels-slim:hidden">
@@ -148,13 +200,15 @@ function ChannelOption(props: ChannelOptionProps) {
 }
 
 type ConversationCardProps = {
+  id: string;
   channel: ChannelEntity;
   senderId?: string;
   mentionedCurrentUser: boolean;
   unread: boolean;
   selected: boolean;
+  focused: boolean;
   showTooltip: boolean;
-  onSelect: () => void;
+  onActivate: () => void;
 };
 
 function formatDetailedTimestamp(timestamp: DateValue) {
@@ -208,14 +262,21 @@ function ConversationCard(props: ConversationCardProps) {
       class="w-full channels-slim:size-10 channels-slim:self-center"
     >
       <button
+        id={props.id}
         type="button"
+        role="treeitem"
+        tabIndex={-1}
         class={cn(
           'w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
           'channels-slim:flex channels-slim:size-10 channels-slim:items-center channels-slim:justify-center channels-slim:rounded-full channels-slim:px-0 channels-slim:py-0',
-          props.selected ? 'bg-active' : 'bg-transparent hover:bg-hover'
+          props.selected
+            ? 'bg-active'
+            : props.focused
+              ? 'bg-hover'
+              : 'bg-transparent hover:bg-hover'
         )}
         aria-current={props.selected ? 'page' : undefined}
-        onClick={props.onSelect}
+        onClick={props.onActivate}
       >
         <div class="flex min-w-0 items-start gap-3 overflow-hidden channels-slim:justify-center">
           <div class="relative shrink-0">
@@ -302,35 +363,41 @@ function ConversationCard(props: ConversationCardProps) {
 }
 
 type CollapsibleSectionProps = {
+  id: string;
   group: ChannelsGroup;
   title: string;
   narrowIcon: JSX.Element;
   unreadCount: number;
+  focused: boolean;
+  onActivate: () => void;
   action: () => JSX.Element;
   children: JSX.Element;
 };
 
 function CollapsibleSection(props: CollapsibleSectionProps) {
-  const { state, setGroupOpen } = useChannelsView();
+  const { state } = useChannelsView();
   const open = () => state.expandedGroups[props.group];
-  const toggle = () => setGroupOpen(props.group, !open());
 
   return (
     <section class="flex flex-col gap-1 channels-slim:items-center">
       <div
         class={cn(
           'flex h-9 w-full items-center rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent',
-          'channels-slim:h-10 channels-slim:justify-center'
+          'channels-slim:h-10 channels-slim:justify-center',
+          props.focused && 'bg-hover text-ink-muted'
         )}
       >
         <button
+          id={props.id}
           type="button"
+          role="treeitem"
+          tabIndex={-1}
           class={cn(
             'relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent',
             'channels-slim:size-10 channels-slim:min-w-10 channels-slim:flex-none channels-slim:justify-center channels-slim:rounded-full channels-slim:px-0'
           )}
           aria-expanded={open()}
-          onClick={toggle}
+          onClick={props.onActivate}
         >
           <CaretDownIcon
             class={cn(
@@ -379,9 +446,13 @@ export function ChannelsRail(props: {
   channels: ChannelEntity[];
   mode: 'full' | 'slim';
 }) {
-  const { state, setSelectedChannelId, setTab } = useChannelsView();
+  const { state, setGroupOpen, setSelectedChannelId, setTab } =
+    useChannelsView();
+  const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
   const currentUserId = useUserId();
   const notificationSource = useGlobalNotificationSource();
+  const listDomId = createUniqueId();
 
   const unreadChannelIds = createMemo(() => {
     const ids = new Set<string>();
@@ -424,6 +495,97 @@ export function ChannelsRail(props: {
         )
       )
   );
+  const visibleRows = createMemo<ChannelRailRow[]>(() => {
+    if (state.tab === 'recents') {
+      return recentConversations().map((channel) => conversationRow(channel));
+    }
+
+    const rows: ChannelRailRow[] = [sectionRow('channels')];
+    if (state.expandedGroups.channels) {
+      rows.push(
+        ...teamChannels().map((channel) => conversationRow(channel, 'channels'))
+      );
+    }
+
+    rows.push(sectionRow('direct-messages'));
+    if (state.expandedGroups['direct-messages']) {
+      rows.push(
+        ...directMessages().map((channel) =>
+          conversationRow(channel, 'direct-messages')
+        )
+      );
+    }
+
+    return rows;
+  });
+
+  async function focusChannelInput(channelId: string) {
+    const handle = await orchestrator.getBlockHandle(channelId, 'channel');
+    await handle?.focusInput();
+  }
+
+  const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
+    createListController<ChannelRailRow>({
+      items: visibleRows,
+      getKey: (row) => row.id,
+      isSelectable: () => false,
+      initialFocusKey:
+        state.selectedChannelId === undefined
+          ? undefined
+          : rowKeyForChannel(state.selectedChannelId),
+      onActivate: ({ item, reason }) => {
+        if (item.kind === 'section') {
+          setGroupOpen(item.group, !state.expandedGroups[item.group]);
+          return;
+        }
+
+        setSelectedChannelId(item.channel.id);
+        if (reason === 'keyboard') {
+          void focusChannelInput(item.channel.id);
+        }
+      },
+    })
+  );
+
+  const domIdForRow = (rowId: string) => `${listDomId}-${rowId}`;
+  let listRoot: HTMLDivElement | undefined;
+  const scrollHandle: ListScrollHandle = {
+    scrollToIndex: (index) => {
+      const row = list.items.at(index);
+      if (!row) return;
+
+      document
+        .getElementById(domIdForRow(row.id))
+        ?.scrollIntoView({ block: 'nearest' });
+    },
+  };
+
+  withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () =>
+    useListInteractions({
+      controller: list,
+      scopeId: panel.splitHotkeyScope,
+      scrollHandle: () => scrollHandle,
+      enabled: panel.isPanelActive,
+      navigation: {
+        onNavigate: (event) => {
+          listRoot?.focus({ preventScroll: true });
+
+          const row = event.result?.item;
+          if (row?.kind === 'conversation') {
+            setSelectedChannelId(row.channel.id);
+          }
+        },
+      },
+      disclosure: {
+        getKey: (row) => row.group,
+        isExpanded: (group) => state.expandedGroups[group as ChannelsGroup],
+        setExpanded: (group, expanded) =>
+          setGroupOpen(group as ChannelsGroup, expanded),
+        getFocusKey: (group) => rowKeyForSection(group as ChannelsGroup),
+      },
+    })
+  );
+
   const mentionsCurrentUser = (channel: ChannelEntity) => {
     const userId = currentUserId()?.toLocaleLowerCase();
 
@@ -433,6 +595,13 @@ export function ChannelsRail(props: {
           (mention) => mention.toLocaleLowerCase() === userId
         )
     );
+  };
+  const activateRow = (rowId: string) => {
+    list.activate.key(rowId, { reason: 'pointer' });
+  };
+  const activeDescendant = () => {
+    const rowId = list.focus.key();
+    return rowId === undefined ? undefined : domIdForRow(rowId);
   };
 
   const createChannelAction = () => (
@@ -508,7 +677,15 @@ export function ChannelsRail(props: {
         />
       </div>
 
-      <div class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto pt-3">
+      <div
+        ref={(element) => {
+          listRoot = element;
+        }}
+        role="tree"
+        tabIndex={-1}
+        aria-activedescendant={activeDescendant()}
+        class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto pt-3 outline-none"
+      >
         <Show
           when={state.tab === 'browse'}
           fallback={
@@ -524,13 +701,19 @@ export function ChannelsRail(props: {
                 <Key each={recentConversations()} by={(channel) => channel.id}>
                   {(channel) => (
                     <ConversationCard
+                      id={domIdForRow(rowKeyForChannel(channel().id))}
                       channel={channel()}
                       senderId={channel().latestRootMessage?.senderId}
                       mentionedCurrentUser={mentionsCurrentUser(channel())}
                       unread={unreadChannelIds().has(channel().id)}
                       selected={state.selectedChannelId === channel().id}
+                      focused={
+                        list.focus.key() === rowKeyForChannel(channel().id)
+                      }
                       showTooltip={props.mode === 'slim'}
-                      onSelect={() => setSelectedChannelId(channel().id)}
+                      onActivate={() =>
+                        activateRow(rowKeyForChannel(channel().id))
+                      }
                     />
                   )}
                 </Key>
@@ -540,10 +723,13 @@ export function ChannelsRail(props: {
         >
           <div class="flex flex-col gap-3 px-4 channels-slim:px-2">
             <CollapsibleSection
+              id={domIdForRow(rowKeyForSection('channels'))}
               group="channels"
               title="Channels"
               narrowIcon={<ChannelIcon />}
               unreadCount={unreadTeamChannelCount()}
+              focused={list.focus.key() === rowKeyForSection('channels')}
+              onActivate={() => activateRow(rowKeyForSection('channels'))}
               action={createChannelAction}
             >
               <Show
@@ -557,10 +743,16 @@ export function ChannelsRail(props: {
                 <Key each={teamChannels()} by={(channel) => channel.id}>
                   {(channel) => (
                     <ChannelOption
+                      id={domIdForRow(rowKeyForChannel(channel().id))}
                       channel={channel()}
                       unread={unreadChannelIds().has(channel().id)}
                       selected={state.selectedChannelId === channel().id}
-                      onSelect={() => setSelectedChannelId(channel().id)}
+                      focused={
+                        list.focus.key() === rowKeyForChannel(channel().id)
+                      }
+                      onActivate={() =>
+                        activateRow(rowKeyForChannel(channel().id))
+                      }
                     />
                   )}
                 </Key>
@@ -568,10 +760,15 @@ export function ChannelsRail(props: {
             </CollapsibleSection>
 
             <CollapsibleSection
+              id={domIdForRow(rowKeyForSection('direct-messages'))}
               group="direct-messages"
               title="DMs"
               narrowIcon={<ChatTeardropIcon />}
               unreadCount={unreadDirectMessageCount()}
+              focused={list.focus.key() === rowKeyForSection('direct-messages')}
+              onActivate={() =>
+                activateRow(rowKeyForSection('direct-messages'))
+              }
               action={createDirectMessageAction}
             >
               <Show
@@ -585,10 +782,16 @@ export function ChannelsRail(props: {
                 <Key each={directMessages()} by={(channel) => channel.id}>
                   {(channel) => (
                     <ChannelOption
+                      id={domIdForRow(rowKeyForChannel(channel().id))}
                       channel={channel()}
                       unread={unreadChannelIds().has(channel().id)}
                       selected={state.selectedChannelId === channel().id}
-                      onSelect={() => setSelectedChannelId(channel().id)}
+                      focused={
+                        list.focus.key() === rowKeyForChannel(channel().id)
+                      }
+                      onActivate={() =>
+                        activateRow(rowKeyForChannel(channel().id))
+                      }
                     />
                   )}
                 </Key>
