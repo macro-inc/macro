@@ -67,10 +67,17 @@ impl FoldState {
         };
 
         // A repeated open for the same id patches in place rather than
-        // duplicating the row.
+        // duplicating the row. A subagent's children were pushed by their own
+        // frames, which a re-announcement of the parent does not carry, so
+        // they are kept.
         if let Some(at) = self.tool_positions.get(&id).cloned() {
             let message = at.message;
             if let Some(existing @ MessagePart::ToolUse { .. }) = self.part_at_mut(&at) {
+                let mut tool = tool;
+                if let (Some(kept), Some(children)) = (existing.children_mut(), tool.children_mut())
+                {
+                    children.append(kept);
+                }
                 *existing = tool;
             }
             return Some(Changed::updated(message));

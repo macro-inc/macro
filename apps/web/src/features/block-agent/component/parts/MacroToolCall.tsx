@@ -34,7 +34,7 @@ export function MacroToolCall(props: {
     () =>
       props.detail.error == null &&
       deserializeToolCall({
-        id: props.common.label,
+        id: props.common.id,
         name: props.common.label,
         json: props.detail.input,
       }).isOk()
@@ -44,7 +44,7 @@ export function MacroToolCall(props: {
     <Show when={chatRenders()} fallback={<GenericMacroToolCall {...props} />}>
       <ErrorBoundary fallback={<GenericMacroToolCall {...props} />}>
         <RenderTool
-          tool_id={props.common.label}
+          tool_id={props.common.id}
           name={props.common.label}
           json={props.detail.input}
           response={

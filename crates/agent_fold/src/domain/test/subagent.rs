@@ -186,6 +186,39 @@ fn the_fixtures_name_their_harnesses() {
     }
 }
 
+/// A harness that re-announces a subagent call (a repeated `tool_call` for the
+/// same id) does not re-send the children's frames, so they are kept.
+#[test]
+fn a_reannounced_subagent_keeps_its_children() {
+    let log = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"go"}]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"_meta":{"claudeCode":{"toolName":"Agent","subagent":true}},"toolCallId":"a","sessionUpdate":"tool_call","rawInput":{"prompt":"do it"},"status":"in_progress","title":"Task","kind":"think"}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"_meta":{"claudeCode":{"toolName":"Bash","parentToolUseId":"a"}},"toolCallId":"c","sessionUpdate":"tool_call","rawInput":{"command":"ls"},"status":"completed","title":"ls","kind":"execute"}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"_meta":{"claudeCode":{"toolName":"Agent","subagent":true}},"toolCallId":"a","sessionUpdate":"tool_call","rawInput":{"prompt":"do it","description":"Do it"},"status":"completed","title":"Do it","kind":"think"}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#;
+    let (messages, warnings) = capturing_warnings(|| fold(parse_log(log)));
+    assert_eq!(warnings, vec![]);
+    let agent = agent_message(&messages);
+    let [part] = subagent_parts(agent)[..] else {
+        panic!("one subagent: {:#?}", agent.parts);
+    };
+    let MessagePart::ToolUse {
+        status,
+        detail:
+            ToolDetail::Subagent {
+                description,
+                children,
+                ..
+            },
+        ..
+    } = part
+    else {
+        unreachable!()
+    };
+    assert_eq!(*status, ToolStatus::Completed);
+    assert_eq!(description.as_deref(), Some("Do it"));
+    assert_eq!(children.len(), 1, "the child survived the re-announcement");
+}
+
 /// A child whose parent the fold never saw lands at top level, with a
 /// warning, rather than vanishing.
 #[test]

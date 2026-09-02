@@ -11,6 +11,8 @@ import type { ToolStatus } from '../../ui';
 
 /** Row-level facts common to every tool card, derived once by the dispatcher. */
 export type ToolCallCommon = {
+  /** The ACP tool call id. */
+  id: string;
   label: string;
   status: ToolStatus;
   /** The chat block's failed treatment: faded row, quiet trailing label. */

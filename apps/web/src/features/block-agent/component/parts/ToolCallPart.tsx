@@ -33,6 +33,7 @@ export function ToolCallPart(props: {
   // The chat block's failed-tool treatment: the same row, faded, with a quiet
   // trailing label — not a separate error card.
   const common = (): ToolCallCommon => ({
+    id: props.part.id,
     label: toolLabel(props.part.name),
     status: props.part.status,
     muted: failed(),
