@@ -11998,6 +11998,75 @@
         }
       }
     },
+    "/webhook/events/stream": {
+      "get": {
+        "tags": ["webhook"],
+        "summary": "Stream matching broker events to the caller over Server-Sent Events.",
+        "operationId": "stream_events",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Personal or team workspace whose webhook lifecycle events are delivered.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WebhookScope"
+            }
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "description": "URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-Sent Events stream of matching broker events",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook/webhooks": {
       "get": {
         "tags": ["webhook"],
@@ -26528,7 +26597,7 @@
       },
       "WebhookScope": {
         "type": "string",
-        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.",
+        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used. `Display`/`FromStr`\nspell the same names as serde, for query strings and config values.",
         "enum": ["user", "team"]
       },
       "WebhookStatus": {

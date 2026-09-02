@@ -2,7 +2,6 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
-import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
@@ -37,8 +36,7 @@ import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
-import { useSplitList } from '../useSplitList';
-import { useSplitListNavigationHotkeys } from '../useSplitListNavigationHotkeys';
+import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
@@ -77,6 +75,7 @@ export function SplitPanel(props: SplitPanelProps) {
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
+  const ownedSlots = createOwnedSlots();
 
   const splitLayoutHelpers = useSplitLayout();
   const isNotUnifiedList = () => {
@@ -110,20 +109,6 @@ export function SplitPanel(props: SplitPanelProps) {
     closeSplit: () => props.handle.close(),
     goBack: () => props.handle.goBack(),
     splitHotkeyScope,
-  });
-
-  const splitList = useSplitList();
-
-  useSplitListNavigationHotkeys({
-    splitHotkeyScope,
-    list: splitList.list,
-    handle: props.handle,
-    openEntityInSplit: (entity, options) => {
-      void openEntityInSplitFromUnifiedList(entity, {
-        splitHandle: props.handle,
-        ...options,
-      });
-    },
   });
 
   const nextSoup = createSoupState({
@@ -306,8 +291,7 @@ export function SplitPanel(props: SplitPanelProps) {
           setTitleFileMenuTrigger,
           titleFileMenuActions,
           setTitleFileMenuActions,
-          list: splitList.list,
-          setList: splitList.setList,
+          replaceOwnedSlot: ownedSlots.replace,
           panelSize,
           panelRef,
         }}

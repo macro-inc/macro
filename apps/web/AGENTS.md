@@ -7,6 +7,44 @@
 - `bun run knip`: to check for dead code
 - Email rendering snapshots (Playwright HTML fixtures, not inbox e2e) live in `src/lib/core/email/tests`. Run `just test-email-rendering`. Add a fixture under `fixtures/` then `just test-email-rendering-update`.
 
+## Verifying a change in a real browser
+
+Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
+
+A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
+
+```sh
+cd apps/web && PORT=3003 bun run dev   # any free port in 3000-3009
+```
+
+`import.meta.env.MODE === 'development'` resolves the service clients to `https://dev.macro.com` and the browser's existing dev cookies authenticate, so `http://localhost:<port>/app` loads the real workspace. Notes:
+
+- Never assume port 3000 or 3002 is yours. Check with `lsof -nP -iTCP:<port> -sTCP:LISTEN -t` and confirm the owner's worktree via `lsof -p <pid> | awk '$4=="cwd"'`. Take a free port instead of killing another session's server, and reuse one only if its cwd is this worktree.
+- The `.cursor/*.sh` scripts and the `run-app` skill are **Cursor Cloud** entry points. On a local machine they prompt for sudo and are the wrong tool. Only backend (Rust) changes need the local stack.
+- First run in a fresh worktree spends a few minutes on `just ensure-cache-wasm` / `just ensure-agent-fold-wasm` before Vite serves.
+- That tab is pointed at **real dev data**. Treat creates, edits, and deletes as real, and discard drafts you open.
+
+### Instrumenting a flash, blank, or remount
+
+A screenshot cannot distinguish a repaint from a remount, and automated browser tabs usually run with `document.visibilityState === 'hidden'`, where `requestAnimationFrame` never fires — do not sample per frame. Tag the nodes you care about and let a `MutationObserver` record every change to a summary string:
+
+```js
+window.__inst = { log: [], seq: 0 };
+const I = window.__inst;
+const tag = (el) => (el.dataset.instId ||= String(++I.seq));
+const snap = () => [...document.querySelectorAll('.fc')].map(tag).join(',');
+I.last = snap();
+new MutationObserver(() => {
+  const s = snap();
+  if (s !== I.last) {
+    I.log.push({ t: Math.round(performance.now()), from: I.last, to: s });
+    I.last = s;
+  }
+}).observe(document.body, { childList: true, subtree: true });
+```
+
+Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
+
 ## Development Patterns
 
 ### General
@@ -16,8 +54,10 @@
 
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.
+- Prefer wrapping the setter over `createEffect(() => { if (signal()) sideEffect() })`. When setting focus/selection should also clear another stop, blur a control, or scroll, put that work in the setter (or a named helper the setter calls) so the action is explicit at the call site — not a distant effect watching the signal.
 - Use createMemo only when you need referential stability or the derivation is expensive. Cheap derivations (() => a() + b()) don't need it regardless of subscriber count.
 - Before rolling your own reactive utility, check solid-primitives first.
+- Never read a solid-query `query.data` unguarded from a component body or an eager `createMemo`. `data` is a resource read: while the query is pending it suspends the caller's nearest `<Suspense>`, which detaches and re-attaches that whole subtree — a blank flash, lost scroll position, remounted editors. Gate the read on status (`query.isSuccess ? query.data : fallback`, or check `isPending`/`isLoading` first); every other field is a plain store read and is safe. Remember `createMemo` runs immediately, so a guard inside a `<Show>`/`<Match>` further down does not save you. This has blanked the calendar grid twice — see `focusTarget` in `src/features/block-calendar/CalendarBlockAdapter.tsx` and `useSystemSkillsQuery`.
 
 ## UI / Components
 - Prefer composition over configurability. Follow slot-based patterns (see src/features/channel, src/features/entity, or Kobalte).
@@ -28,6 +68,7 @@
 ## Styling
 - Use semantic color tokens, not raw Tailwind color classes.
 - Do not add cursor-pointer to clickable elements.
+- Prefer styling in the component (Tailwind classes on the markup) so styling lives next to structure. Reserve `@utility` in `index.css` for styles that are widely shared across many components — not one-off or two-component layouts.
 
 ## TS
 - For exhaustive switch statements use `match` from `ts-pattern`.

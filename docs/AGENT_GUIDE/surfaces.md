@@ -30,7 +30,10 @@ tags, updated time. Clicking a row opens the doc.
 
 Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
 `Calendar settings`, and a mini month picker in the side panel. Events require connecting a
-Google account (`Connect calendar`).
+Google account (`Connect calendar`). The `Calendar settings` (gear) menu has an `Accounts`
+section listing each connected account with a per-account `Enable` (grant calendar) or
+`Turn off` action, plus `Connect another account` to connect a new Google account
+(email + calendar).
 
 ## Calls — `/app/component/calls`
 

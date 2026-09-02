@@ -30,8 +30,6 @@ pub enum FieldKind {
     Text,
     /// A string that may be absent; an empty edit removes the key.
     OptionalText,
-    /// An integer port.
-    Port,
     /// A string array, edited comma-separated.
     List,
     /// `private` / `team`, toggled rather than typed.
@@ -94,18 +92,6 @@ pub const FIELDS: &[Field] = &[
         key: "web_url",
         kind: FieldKind::OptionalText,
     },
-    Field {
-        label: "Webhook port",
-        section: "server",
-        key: "port",
-        kind: FieldKind::Port,
-    },
-    Field {
-        label: "Webhook public URL",
-        section: "server",
-        key: "public_url",
-        kind: FieldKind::Text,
-    },
 ];
 
 /// The config document being viewed and edited.
@@ -145,10 +131,6 @@ impl ConfigForm {
                         .join(", ")
                 })
                 .unwrap_or_default(),
-            (FieldKind::Port, Some(Item::Value(value))) => value
-                .as_integer()
-                .map(|port| port.to_string())
-                .unwrap_or_default(),
             (FieldKind::Scope, item) => item.and_then(Item::as_str).unwrap_or("private").to_owned(),
             (_, Some(Item::Value(value))) => value.as_str().unwrap_or_default().to_owned(),
             _ => String::new(),
@@ -174,12 +156,6 @@ impl ConfigForm {
                 } else {
                     section[field.key] = value(input);
                 }
-            }
-            FieldKind::Port => {
-                let port: u16 = input
-                    .parse()
-                    .map_err(|_| format!("{} must be a port number", field.label))?;
-                section[field.key] = value(i64::from(port));
             }
             FieldKind::List => {
                 let mut array = toml_edit::Array::new();

@@ -27787,6 +27787,23 @@ export const editProjectV2Response = zod.object({
 });
 
 /**
+ * @summary Stream matching broker events to the caller over Server-Sent Events.
+ */
+export const streamEventsQueryParams = zod.object({
+  scope: zod
+    .enum(['user', 'team'])
+    .describe(
+      'Personal or team workspace whose webhook lifecycle events are delivered.'
+    ),
+  filters: zod
+    .string()
+    .optional()
+    .describe(
+      'URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.'
+    ),
+});
+
+/**
  * @summary List the caller's webhooks.
  */
 export const listWebhooksResponse = zod
@@ -27893,7 +27910,7 @@ export const createWebhookBody = zod
     scope: zod
       .enum(['user', 'team'])
       .describe(
-        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.'
+        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used. `Display`\/`FromStr`\nspell the same names as serde, for query strings and config values.'
       ),
   })
   .describe(

@@ -294,6 +294,7 @@ use utoipa::OpenApi;
         webhook::inbound::axum_router::list_webhooks,
         webhook::inbound::axum_router::patch_webhook,
         webhook::inbound::axum_router::validate_webhook,
+        webhook::inbound::stream_router::stream_events,
         call::inbound::axum_router::ring_status_handler,
         call::inbound::axum_router::transcript_handler,
 

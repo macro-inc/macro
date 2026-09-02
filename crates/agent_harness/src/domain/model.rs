@@ -235,7 +235,7 @@ pub struct AnnouncePrompt {
     pub bot_id: BotId,
     /// Where the mention was posted.
     pub origin: AnnounceOrigin,
-    /// The mention's text, quoted in the announcement.
+    /// The mention's text, shown in the announcement's reply target.
     pub content: String,
     /// Who mentioned the bot.
     pub sender: MacroUserIdStr<'static>,
@@ -252,9 +252,11 @@ pub struct SessionAnnouncement {
     pub origin_channel_id: Uuid,
     /// Thread where the announcement should be posted.
     pub origin_thread_id: Uuid,
+    /// Channel message targeted by the announcement.
+    pub origin_message_id: Uuid,
     /// Folded user message that prompts the anchored agent response.
     pub prompted_message_id: MessageId,
-    /// Text of the prompting message, quoted back in the announcement.
+    /// Text of the prompting message, shown in the reply target.
     pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,

@@ -19,6 +19,7 @@ export {
   createStaticListDataSource,
   type ListDataSource,
 } from './list-data-source';
+export { listOwnedSlotName } from './owned-slots';
 export type {
   ListActivateOptions,
   ListActivation,

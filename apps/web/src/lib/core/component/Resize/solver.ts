@@ -382,18 +382,25 @@ export function createResizeSolver(params: {
   // Preview Pair would keep its crushed proportions after space frees up).
   createEffect(() => {
     const ps = panelsInOrder();
+    const zoneSize = params.size();
+    const gutter = params.gutter();
+
+    // A zero (or negative) zone size means it's unmeasured or hidden. Solving
+    // against it collapses every panel to zero, and since the observer may not
+    // fire again that sticks. Keep the last good layout, and leave the pending
+    // solve kind untouched so it still applies on the next real solve.
+    if (zoneSize <= 0) return;
+
     const solveKind = nextSolveKind;
     nextSolveKind = 'automatic';
 
-    const usable = getUsable(ps.length, params.size(), params.gutter());
+    const usable = getUsable(ps.length, zoneSize, gutter);
     const solvePanels =
       solveKind === 'automatic'
         ? applyRedistributionPreferences(ps, usable)
         : ps;
 
-    setLayout(
-      computeFractionalShares(solvePanels, params.size(), params.gutter())
-    );
+    setLayout(computeFractionalShares(solvePanels, zoneSize, gutter));
   });
 
   function addPanel(panel: PanelConfig, ndx?: number) {

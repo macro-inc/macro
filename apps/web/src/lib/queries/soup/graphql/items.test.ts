@@ -332,7 +332,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       const names =
         currentRevision === REVISION_2
           ? ['Network item', 'Realtime item']
-          : currentRevision === '5'
+          : currentRevision === '6'
             ? ['Latest local item']
             : ['Replacement durable item'];
       return {
@@ -347,7 +347,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         const names =
           currentRevision === REVISION_2
             ? ['Network item', 'Realtime item']
-            : currentRevision === '5'
+            : currentRevision === '6'
               ? ['Latest local item']
               : ['Replacement durable item'];
         return {
@@ -411,21 +411,25 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     await vi.waitFor(() => expect(entityFilterMock).toHaveBeenCalledTimes(2));
     currentRevision = '5';
     notifyCacheChanged('5');
-    await vi.waitFor(() => {
-      expect(query.data()?.entities.map((item) => item.name)).toEqual([
-        'Latest local item',
-      ]);
-    });
+    currentRevision = '6';
+    notifyCacheChanged('6');
+    await Promise.resolve();
+    expect(entityFilterMock).toHaveBeenCalledTimes(2);
+    expect(query.data()?.entities.map((item) => item.name)).toEqual([
+      'New network item',
+    ]);
     resolveRevision4({
       kind: 'complete',
       revision: '4',
       keys: ['GraphqlSoupDocument:stale'],
       optimistic: false,
     });
-    await Promise.resolve();
-    expect(query.data()?.entities.map((item) => item.name)).toEqual([
-      'Latest local item',
-    ]);
+    await vi.waitFor(() => {
+      expect(entityFilterMock).toHaveBeenCalledTimes(3);
+      expect(query.data()?.entities.map((item) => item.name)).toEqual([
+        'Latest local item',
+      ]);
+    });
 
     currentRevision = REVISION_0;
     notifyGenerationChanged();

@@ -16,6 +16,7 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
+import { createOwnedSlots } from '../utils/createOwnedSlots';
 
 false && clickOutside;
 
@@ -58,6 +59,7 @@ function PopoverSplitModal(props: {
     createSignal<() => void>();
   const [titleFileMenuActions, setTitleFileMenuActions] =
     createSignal<SplitFileMenuActionGroups>();
+  const ownedSlots = createOwnedSlots();
 
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
@@ -134,14 +136,7 @@ function PopoverSplitModal(props: {
     setTitleFileMenuTrigger,
     titleFileMenuActions,
     setTitleFileMenuActions,
-    list: () => undefined,
-    setList: (factory) => {
-      if (import.meta.env.DEV) {
-        console.warn('Popover splits do not register lists');
-      }
-
-      return factory();
-    },
+    replaceOwnedSlot: ownedSlots.replace,
     headerCollapser: { register: () => () => {} },
     toolbarCollapser: { register: () => () => {} },
   };

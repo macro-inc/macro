@@ -16,6 +16,7 @@ type TabsInsetProps = {
   value?: string;
   defaultValue?: string;
   class?: string;
+  trackClass?: string;
   depth?: 0 | 1 | 2 | 3 | 4;
   fullWidth?: boolean;
 } & Omit<SegmentedControlRootProps, 'defaultValue'>;
@@ -27,6 +28,7 @@ export const TabsInset = (props: TabsInsetProps) => {
     'defaultValue',
     'disabled',
     'class',
+    'trackClass',
     'depth',
     'fullWidth',
   ]);
@@ -53,7 +55,8 @@ export const TabsInset = (props: TabsInsetProps) => {
         <div
           class={cn(
             'relative flex items-center border border-edge-muted bg-surface rounded-lg p-0.5 has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
-            local.fullWidth && 'w-full'
+            local.fullWidth && 'w-full',
+            local.trackClass
           )}
         >
           <For each={local.list}>

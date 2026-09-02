@@ -8955,7 +8955,8 @@ export type WebhookFilter = {
 /**
  * Scope that owns a newly-created webhook.
  *
- * Clients serialize this, so both derives are used.
+ * Clients serialize this, so both derives are used. `Display`/`FromStr`
+ * spell the same names as serde, for query strings and config values.
  */
 export type WebhookScope = 'user' | 'team';
 
@@ -14009,6 +14010,49 @@ export type EditProjectV2Responses = {
 };
 
 export type EditProjectV2Response = EditProjectV2Responses[keyof EditProjectV2Responses];
+
+export type StreamEventsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Personal or team workspace whose webhook lifecycle events are delivered.
+         */
+        scope: WebhookScope;
+        /**
+         * URL-encoded JSON array of webhook filters, identical to the persisted
+         * webhook `filters` field.
+         */
+        filters?: string;
+    };
+    url: '/webhook/events/stream';
+};
+
+export type StreamEventsErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type StreamEventsError = StreamEventsErrors[keyof StreamEventsErrors];
+
+export type StreamEventsResponses = {
+    /**
+     * Server-Sent Events stream of matching broker events
+     */
+    200: string;
+};
+
+export type StreamEventsResponse = StreamEventsResponses[keyof StreamEventsResponses];
 
 export type ListWebhooksData = {
     body?: never;

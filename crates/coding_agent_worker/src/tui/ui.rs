@@ -65,10 +65,7 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         .unwrap_or_else(|| "macrod".to_owned());
 
     let serving: Vec<Span> = if app.serving() {
-        vec![
-            Span::styled("  ⏵ serving ", Style::new().fg(OK)),
-            Span::styled(format!(":{}", app.config.server.port), Style::new().fg(DIM)),
-        ]
+        vec![Span::styled("  ⏵ serving SSE", Style::new().fg(OK))]
     } else if app.paired() {
         vec![Span::styled("  ⏸ daemon stopped", Style::new().fg(ERR))]
     } else {

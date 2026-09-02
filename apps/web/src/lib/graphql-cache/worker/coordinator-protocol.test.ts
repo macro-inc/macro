@@ -57,6 +57,19 @@ describe('coordinator runtime protocol', () => {
         data: { user: { id: 'user-1' } },
       })
     ).toBe(false);
+    const enqueue = {
+      id: 2,
+      kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000001',
+      query: 'mutation Update { update }',
+      data: { update: true },
+      createdAtMs: 1,
+      owner: 'runner',
+      nowMs: 1,
+      leaseExpiresAtMs: 1_001,
+    };
+    expect(isCacheRequest(enqueue)).toBe(true);
+    expect(isCacheRequest({ ...enqueue, uuid: undefined })).toBe(false);
     expect(
       isCacheRequest({
         id: 2,

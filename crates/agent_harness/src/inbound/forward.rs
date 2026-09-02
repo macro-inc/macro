@@ -72,6 +72,21 @@ where
 }
 
 /// Execute a command a peer replica forwarded to this one.
+///
+/// Instrumented because this is the far half of the hop: the request carries
+/// the sending replica's `traceparent`, which the tracing layer turns into a
+/// parent link, so this span shows a forwarded command executing under the
+/// span that routed it instead of as an unrelated root. `outcome` distinguishes
+/// the three answers the sender can get without reading the response body.
+#[tracing::instrument(
+    name = "harness.forward.receive",
+    skip_all,
+    fields(
+        agent.session.id = %session_id,
+        agent.command.forwarded = true,
+        agent.command.outcome = tracing::field::Empty,
+    )
+)]
 async fn forward_handler<Harness, Auth>(
     State(state): State<ForwardGatewayState<Harness, Auth>>,
     _caller: MacroAuthorizationExtractor<Auth, InternalOnly>,
@@ -83,8 +98,12 @@ where
     Auth: MacroAuthorizationService,
 {
     let session_id = AgentSessionId::new_from_uuid(session_id);
+    let span = tracing::Span::current();
     match state.harness.execute_forwarded(session_id, command).await {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Ok(()) => {
+            span.record("agent.command.outcome", "executed");
+            StatusCode::NO_CONTENT.into_response()
+        }
         // Surfaced with its own status so the sender can tell "the actor is
         // not here after all" from an execution failure: the sender's
         // fallback re-reads the lease on any error, but a 409 is the signal
@@ -92,12 +111,16 @@ where
         Err(HarnessError::Disconnected(id))
         | Err(HarnessError::Session(
             agent_session::domain::error::AgentSessionError::Disconnected(id),
-        )) => (
-            StatusCode::CONFLICT,
-            format!("session {id} is not attached here"),
-        )
-            .into_response(),
+        )) => {
+            span.record("agent.command.outcome", "not_attached_here");
+            (
+                StatusCode::CONFLICT,
+                format!("session {id} is not attached here"),
+            )
+                .into_response()
+        }
         Err(error) => {
+            span.record("agent.command.outcome", "failed");
             tracing::error!(error = ?error, %session_id, "a forwarded command failed");
             (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()).into_response()
         }

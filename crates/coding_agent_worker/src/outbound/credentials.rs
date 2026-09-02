@@ -2,8 +2,7 @@
 //! bearer token that proves it.
 //!
 //! Written once by pairing and read at every boot, in a state file next to
-//! the config - the same shape as the webhook feed state. Losing the file is
-//! recoverable by pairing again.
+//! the config. Losing the file is recoverable by pairing again.
 
 use std::path::{Path, PathBuf};
 
@@ -16,9 +15,9 @@ mod test;
 
 /// Whether the harness is private to its owner or shared with a team.
 ///
-/// Persisted because the webhook feed the daemon registers must live in the
-/// matching workspace: a team harness's feed subscribes in the team workspace
-/// so teammates' agents' triggers reach it.
+/// Persisted because the event stream must live in the matching workspace: a
+/// team harness listens in the team workspace so teammates' agents' triggers
+/// reach it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HarnessScope {

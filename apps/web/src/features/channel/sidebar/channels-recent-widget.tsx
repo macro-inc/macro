@@ -1,3 +1,4 @@
+import { makeMuteAction } from '@app/features/next-soup/actions';
 import {
   compileToAst,
   defineQueryFilters,
@@ -198,6 +199,9 @@ function ChannelRow(props: {
   onFloatingOpenChange?: (open: boolean) => void;
 }) {
   const notificationSource = useGlobalNotificationSource();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
   const openChannel = useOpenChannel();
 
   const entity = () => props.channel.entity;
@@ -300,6 +304,19 @@ function ChannelRow(props: {
             <MenuSeparator />
             <MenuGroup>
               <MenuItem text="Mark as read" onClick={markAllAsRead} />
+            </MenuGroup>
+          </Show>
+          <Show when={muteAction.canExecute(entity())}>
+            <MenuSeparator />
+            <MenuGroup>
+              <MenuItem
+                text={
+                  muteAction.isMuted(entity())
+                    ? 'Unmute notifications'
+                    : 'Mute notifications'
+                }
+                onClick={() => void muteAction.execute([entity()])}
+              />
             </MenuGroup>
           </Show>
         </ContextMenuContent>

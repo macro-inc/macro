@@ -100,6 +100,50 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
+  it('reports a successful stale commit as superseded', async () => {
+    const commitOptimisticWrite = vi.fn().mockResolvedValue({
+      kind: 'committed-superseded',
+      replacementTransactionId: '2',
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+      revalidations: [],
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    messages.length = 0;
+
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'commit-optimistic-write',
+      transactionId: '1',
+      leaseOwner: 'runner',
+      leaseGeneration: '1',
+      query: 'mutation Update { update }',
+      data: { update: true },
+    });
+
+    expect(messages).toContainEqual({
+      kind: 'mutation-settled',
+      settlement: {
+        transactionId: '1',
+        status: 'superseded',
+        replacementTransactionId: '2',
+      },
+    });
+  });
+
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
     let resolveEnqueue!: (result: {
@@ -108,6 +152,10 @@ describe('CacheWorkerCore', () => {
       changed: string[];
       affectedOps: string[];
       reset: false;
+      upsertKind: {
+        kind: 'replaced-pending';
+        removedTransactionId: string;
+      };
       initialClaim: { kind: 'not-runnable' };
     }) => void;
     const enqueueOptimisticMutation = vi.fn(() => {
@@ -118,6 +166,10 @@ describe('CacheWorkerCore', () => {
         changed: string[];
         affectedOps: string[];
         reset: false;
+        upsertKind: {
+          kind: 'replaced-pending';
+          removedTransactionId: string;
+        };
         initialClaim: { kind: 'not-runnable' };
       }>((resolve) => {
         resolveEnqueue = (result) => {
@@ -150,6 +202,7 @@ describe('CacheWorkerCore', () => {
     const enqueue = core.handleRequest(port, {
       id: 2,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000007',
       query: 'mutation Update { update }',
       data: { update: true },
       createdAtMs: 10,
@@ -180,6 +233,10 @@ describe('CacheWorkerCore', () => {
       changed: ['Thing:1'],
       affectedOps: ['client:query'],
       reset: false,
+      upsertKind: {
+        kind: 'replaced-pending',
+        removedTransactionId: '0',
+      },
       initialClaim: { kind: 'not-runnable' },
     });
     await Promise.all([enqueue, read]);
@@ -189,6 +246,14 @@ describe('CacheWorkerCore', () => {
       kind: 'ops-affected',
       opIds: ['client:query'],
       keys: ['Thing:1'],
+    });
+    expect(messages).toContainEqual({
+      kind: 'mutation-settled',
+      settlement: {
+        transactionId: '0',
+        status: 'superseded',
+        replacementTransactionId: '1',
+      },
     });
   });
 
@@ -431,7 +496,7 @@ describe('CacheWorkerCore', () => {
       return { kind: 'hit' as const, data: { opId } };
     });
     const enqueueOptimisticMutation = vi.fn(
-      async (_originOpId: string | undefined, query: string) => {
+      async (_originOpId: string | undefined, _uuid: string, query: string) => {
         order.push(`enqueue:${query}`);
         return {
           transactionId: query,
@@ -439,6 +504,7 @@ describe('CacheWorkerCore', () => {
           changed: [],
           affectedOps: [],
           reset: false,
+          upsertKind: { kind: 'inserted' as const },
           initialClaim: { kind: 'not-runnable' as const },
         };
       }
@@ -481,6 +547,7 @@ describe('CacheWorkerCore', () => {
     const firstEnqueue = core.handleRequest(port, {
       id: 5,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000008',
       query: 'mutation First { first }',
       data: { first: true },
       createdAtMs: 1,
@@ -491,6 +558,7 @@ describe('CacheWorkerCore', () => {
     const secondEnqueue = core.handleRequest(port, {
       id: 6,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000009',
       query: 'mutation Second { second }',
       data: { second: true },
       createdAtMs: 2,
@@ -661,6 +729,7 @@ describe('CacheWorkerCore', () => {
         changed: [],
         affectedOps: [],
         reset: false,
+        upsertKind: { kind: 'inserted' as const },
         initialClaim: { kind: 'not-runnable' as const },
       };
     });
@@ -700,6 +769,7 @@ describe('CacheWorkerCore', () => {
     const enqueue = core.handleRequest(port, {
       id: 5,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000010',
       query: 'mutation Update { update }',
       data: { update: true },
       createdAtMs: 1,
@@ -769,6 +839,7 @@ describe('CacheWorkerCore', () => {
   it('pushes cache changes even without affected operations', async () => {
     const writeResult = {
       revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
       changed: ['GraphqlSoupDocument:doc-1'],
       affectedOps: [],
       reset: false,
@@ -813,6 +884,89 @@ describe('CacheWorkerCore', () => {
     expect(messages).toContainEqual({
       kind: 'cache-changed',
       revision: INITIAL_CACHE_REVISION,
+    });
+  });
+
+  it('does not push cache changes for no-op writes', async () => {
+    const writeResult = {
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: false,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        writeQuery: vi.fn().mockResolvedValue(writeResult),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'write',
+      query: 'subscription { soupUpdates { __typename } }',
+      data: { soupUpdates: [] },
+    });
+
+    expect(messages).not.toContainEqual({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
+  });
+
+  it('keeps revision-advancing background hydration silent', async () => {
+    const hydrateQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: ['GraphqlSoupDocument:doc-1'],
+      affectedOps: ['client:7'],
+      reset: false,
+      data: { cursor: 'next' },
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'hydrate',
+      query: 'query Backfill { cursor }',
+      data: { cursor: 'next' },
+    });
+
+    expect(messages).not.toContainEqual(
+      expect.objectContaining({ kind: 'ops-affected' })
+    );
+    expect(messages).not.toContainEqual(
+      expect.objectContaining({ kind: 'cache-changed' })
+    );
+    expect(messages.at(-1)).toEqual({
+      id: 2,
+      ok: true,
+      result: {
+        kind: 'data',
+        data: { cursor: 'next' },
+        revision: INITIAL_CACHE_REVISION,
+        reset: false,
+      },
     });
   });
 
@@ -1244,11 +1398,12 @@ describe('CacheWorkerCore', () => {
     expect(onStorageResetRequired).not.toHaveBeenCalled();
   });
 
-  it('records an identity-changing hydration as a logical reset', async () => {
+  it('records and broadcasts identity-changing hydration as a logical reset', async () => {
     const hydrateQuery = vi.fn().mockResolvedValue({
       revision: INITIAL_CACHE_REVISION,
-      changed: [],
-      affectedOps: [],
+      revisionAdvanced: true,
+      changed: ['GraphqlUser:user-1'],
+      affectedOps: ['client:7'],
       reset: true,
       data: { cursor: 'next' },
     });
@@ -1263,6 +1418,7 @@ describe('CacheWorkerCore', () => {
         flush: vi.fn(),
       },
     });
+    core.addPort(port);
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
 
     await core.handleRequest(port, {
@@ -1279,6 +1435,15 @@ describe('CacheWorkerCore', () => {
         resetReason: 'identity-change',
       })
     );
+    expect(port.postMessage).toHaveBeenCalledWith({
+      kind: 'ops-affected',
+      opIds: ['client:7'],
+      keys: ['GraphqlUser:user-1'],
+    });
+    expect(port.postMessage).toHaveBeenCalledWith({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
     expect(port.postMessage).toHaveBeenLastCalledWith({
       id: 2,
       ok: true,

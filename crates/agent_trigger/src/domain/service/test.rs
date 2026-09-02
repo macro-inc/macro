@@ -137,7 +137,7 @@ type TestService = AgentTriggerService<
     MockAgentBotLookup,
     MockTeamMembershipLookup,
     MockChannelParticipationLookup,
-    MockReplyDetector,
+    MockExplicitReplyDetector,
     MockImplicitTriggerJudge,
     MockThreadHistory,
 >;
@@ -165,7 +165,7 @@ impl From<MockAgentBotLookup> for FactMocks {
 fn service(
     sessions: MockAgentSessionRepo,
     facts: impl Into<FactMocks>,
-    replies: MockReplyDetector,
+    replies: MockExplicitReplyDetector,
     judge: MockImplicitTriggerJudge,
 ) -> TestService {
     service_reading(sessions, facts, replies, judge, thread_of(vec![]))
@@ -174,7 +174,7 @@ fn service(
 fn service_reading(
     sessions: MockAgentSessionRepo,
     facts: impl Into<FactMocks>,
-    replies: MockReplyDetector,
+    replies: MockExplicitReplyDetector,
     judge: MockImplicitTriggerJudge,
     history: MockThreadHistory,
 ) -> TestService {
@@ -202,8 +202,11 @@ fn thread_of(messages: Vec<ThreadMessage>) -> MockThreadHistory {
 
 /// Mocks for tests whose message never reaches the implicit path; any call is
 /// a test failure.
-fn no_implicit() -> (MockReplyDetector, MockImplicitTriggerJudge) {
-    (MockReplyDetector::new(), MockImplicitTriggerJudge::new())
+fn no_implicit() -> (MockExplicitReplyDetector, MockImplicitTriggerJudge) {
+    (
+        MockExplicitReplyDetector::new(),
+        MockImplicitTriggerJudge::new(),
+    )
 }
 
 fn existing_channel_metadata(
@@ -579,10 +582,10 @@ fn agent_bots() -> MockAgentBotLookup {
     bots
 }
 
-fn detector(result: Result<bool>) -> MockReplyDetector {
-    let mut replies = MockReplyDetector::new();
+fn detector(result: Result<bool>) -> MockExplicitReplyDetector {
+    let mut replies = MockExplicitReplyDetector::new();
     replies
-        .expect_is_quote_reply()
+        .expect_is_explicit_reply()
         .once()
         .return_once(move |_| Box::pin(async move { result }));
     replies
@@ -620,7 +623,7 @@ fn thread_message(id: u128, sender: ChannelSender<'static>, content: &str) -> Th
 }
 
 #[tokio::test]
-async fn a_quote_reply_in_a_session_thread_triggers_without_a_mention() {
+async fn an_explicit_reply_in_a_session_thread_triggers_without_a_mention() {
     let posted = message(vec![]);
     let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
     let service = service(
@@ -634,7 +637,7 @@ async fn a_quote_reply_in_a_session_thread_triggers_without_a_mention() {
     let metadata = existing_channel_metadata(&events);
     assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
     assert_eq!(metadata.bot_id, BotId::TEST_A);
-    assert_eq!(metadata.kind, ChannelKind::QuoteReply);
+    assert_eq!(metadata.kind, ChannelKind::ExplicitReply);
 }
 
 #[tokio::test]
@@ -835,7 +838,7 @@ async fn the_judge_reads_the_thread_around_the_agent() {
 }
 
 #[tokio::test]
-async fn a_quote_reply_never_reads_the_thread() {
+async fn an_explicit_reply_never_reads_the_thread() {
     let posted = message(vec![]);
     let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
     let mut history = MockThreadHistory::new();
@@ -851,7 +854,7 @@ async fn a_quote_reply_never_reads_the_thread() {
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(
         existing_channel_metadata(&events).kind,
-        ChannelKind::QuoteReply
+        ChannelKind::ExplicitReply
     );
 }
 

@@ -14,6 +14,7 @@ import type {
 } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   type EntityData,
@@ -66,6 +67,8 @@ function PreviewPanelContent(
 ) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const [interactedWith, setInteractedWith] = createSignal(false);
+  const [attachHotkeys, previewHotkeyScope] =
+    useHotkeyDOMScope('preview-panel');
 
   const blockInstance = createMemo(() => {
     const entity = props.selectedEntity;
@@ -172,7 +175,10 @@ function PreviewPanelContent(
 
   return (
     <div
-      ref={props.ref}
+      ref={(element) => {
+        attachHotkeys(element);
+        props.ref?.(element);
+      }}
       class="flex size-full min-h-0 flex-col"
       onFocusIn={(event) => {
         if (interactedWith()) return;
@@ -186,6 +192,8 @@ function PreviewPanelContent(
           !event.currentTarget.contains(relatedTarget)
         ) {
           relatedTarget.focus();
+        } else if (props.onFocusOut) {
+          props.onFocusOut();
         } else {
           (event.target as HTMLElement).blur?.();
         }
@@ -225,6 +233,8 @@ function PreviewPanelContent(
         <SplitPanelContext.Provider
           value={{
             ...props.splitPanelContext,
+            splitHotkeyScope: previewHotkeyScope,
+            isInlinePreview: true,
             layoutRefs: scopedLayoutRefs,
           }}
         >

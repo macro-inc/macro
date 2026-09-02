@@ -124,7 +124,9 @@ use system_properties::{
 use tokio_util::task::TaskTracker;
 use webhook::{
     domain::service::WebhookServiceImpl,
+    domain::stream::WebhookEventStreamServiceImpl,
     inbound::axum_router::WebhookRouterState as MacroWebhookRouterState,
+    inbound::stream_router::WebhookStreamRouterState,
     outbound::{
         http_validator::ReqwestWebhookValidationClient,
         pg_repository::PgRepository as PgWebhookRepo,
@@ -506,6 +508,14 @@ pub(crate) type DssWebhookRateLimiter =
 pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
+/// Type alias for the service backing the webhook-event SSE endpoint.
+pub(crate) type DssSseStreamService =
+    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
+
+/// Type alias for the webhook-event SSE router state.
+pub(crate) type DssSseStreamState =
+    WebhookStreamRouterState<DssSseStreamService, AuthorizationService>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -557,6 +567,7 @@ pub(crate) struct ApiContext {
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub webhook_state: DssWebhookState,
+    pub sse_stream_state: DssSseStreamState,
     pub call_internal_state: DssCallInternalState,
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,

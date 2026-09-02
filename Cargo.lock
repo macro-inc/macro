@@ -2935,6 +2935,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
@@ -2950,12 +2951,13 @@ dependencies = [
  "thiserror 2.0.18",
  "turso-opfs",
  "turso_core",
+ "uuid",
  "wasm-bindgen-test",
 ]
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -2968,6 +2970,7 @@ dependencies = [
  "soup-filter-cache-adapter",
  "soup-filter-projection",
  "turso-opfs",
+ "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -3552,15 +3555,15 @@ dependencies = [
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
- "axum",
  "bot_id",
- "bots",
  "channel_sender",
  "channels",
  "chrono",
  "clap",
  "crossterm 0.28.1",
  "dashmap",
+ "eventsource-stream",
+ "futures",
  "harness_id",
  "harnesses",
  "macro_event_broker",
@@ -3580,12 +3583,10 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "toml_edit 0.22.27",
- "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "uuid",
  "webhook",
- "webhook_signature",
  "workspace-hack",
 ]
 
@@ -4137,9 +4138,7 @@ checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 name = "cowlike"
 version = "0.1.0"
 dependencies = [
- "bot_id",
  "either",
- "macro_user_id",
 ]
 
 [[package]]
@@ -4922,6 +4921,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "determinator"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf14b901cdfba3f731d01c4c184100e85f586a272d38874824175b845dbaeaf9"
+dependencies = [
+ "camino",
+ "globset",
+ "guppy",
+ "guppy-workspace-hack",
+ "once_cell",
+ "petgraph 0.6.5",
+ "rayon",
+ "serde",
+ "toml 0.5.11",
 ]
 
 [[package]]
@@ -8650,6 +8666,7 @@ dependencies = [
  "filter_ast",
  "item_filters",
  "predicate-index",
+ "system_properties",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -11017,7 +11034,6 @@ dependencies = [
  "macro_uuid",
  "model-entity",
  "model-error-response",
- "model_notifications",
  "model_user",
  "models_pagination",
  "rate_limit",
@@ -17777,6 +17793,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sqs_client",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -18682,6 +18699,7 @@ dependencies = [
  "dotenvy",
  "indexmap 2.14.0",
  "indicatif",
+ "indoc",
  "libc",
  "macro_aws_config",
  "macro_env_var",
@@ -18702,8 +18720,11 @@ name = "xtask_nextest_filter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "determinator",
  "guppy",
+ "tempfile",
  "xtask_graph",
+ "xtask_paths",
 ]
 
 [[package]]

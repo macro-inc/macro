@@ -35,14 +35,14 @@ struct MentionsRequest<'a> {
 }
 
 #[derive(Debug, serde::Serialize)]
-struct QuoteReplyRequest<'a> {
+struct ExplicitReplyRequest<'a> {
     markdown: &'a str,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct QuoteReplyResponse {
-    is_quote_reply: bool,
+struct ExplicitReplyResponse {
+    is_explicit_reply: bool,
 }
 
 /// An entity mention extracted from markdown by the lexical service
@@ -78,10 +78,27 @@ pub struct AgentAnnouncementChip {
     pub status: String,
 }
 
+/// The channel message targeted by an agent-session announcement, in the
+/// shape the lexical service's `ReplyTargetNode` validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAnnouncementReplyTarget {
+    /// Channel containing the targeted message.
+    pub channel_id: String,
+    /// Targeted channel message.
+    pub target_message_id: String,
+    /// Thread containing the targeted message.
+    pub target_thread_id: String,
+    /// Static one-line preview rendered by the reply target.
+    pub display_text: String,
+    /// Sender of the targeted message.
+    pub sender_id: String,
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentAnnouncementRequest<'a> {
-    prompt_markdown: &'a str,
+    reply_target: &'a AgentAnnouncementReplyTarget,
     chip: &'a AgentAnnouncementChip,
 }
 
@@ -297,23 +314,20 @@ impl LexicalClient {
         Ok(data.mentions)
     }
 
-    /// Composes the channel message announcing an agent session — the prompt
-    /// quoted back as a blockquote above the session's Magic Chip — via the
-    /// lexical service, so the markdown is built from real Lexical nodes.
-    #[tracing::instrument(skip(self, prompt_markdown, chip), err)]
+    /// Composes the channel message announcing an agent session — a structured
+    /// reply target above the session's Magic Chip — via the lexical service,
+    /// so the markdown is built from real Lexical nodes.
+    #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
-        prompt_markdown: &str,
+        reply_target: &AgentAnnouncementReplyTarget,
         chip: &AgentAnnouncementChip,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&AgentAnnouncementRequest {
-                    prompt_markdown,
-                    chip,
-                })
+                .json(&AgentAnnouncementRequest { reply_target, chip })
                 .send()
                 .await?,
         )
@@ -348,22 +362,22 @@ impl LexicalClient {
         Ok(data.markdown)
     }
 
-    /// Parses `markdown` via the lexical service and reports whether it is
-    /// composed as a quote-reply: a leading blockquote followed by the reply
-    /// itself, the shape the editor produces when replying to a message.
+    /// Parses `markdown` via the lexical service and reports whether it starts
+    /// with a `ReplyTargetNode` followed by the author's non-empty reply.
+    /// Standard Markdown blockquotes carry no reply semantics.
     #[tracing::instrument(skip(self, markdown), err)]
-    pub async fn is_quote_reply(&self, markdown: &str) -> Result<bool> {
-        let url = format!("{}/quote-reply", self.url);
+    pub async fn is_explicit_reply(&self, markdown: &str) -> Result<bool> {
+        let url = format!("{}/explicit-reply", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&QuoteReplyRequest { markdown })
+                .json(&ExplicitReplyRequest { markdown })
                 .send()
                 .await?,
         )
         .await?;
-        let data: QuoteReplyResponse = response.json().await.context("unexpected response")?;
-        Ok(data.is_quote_reply)
+        let data: ExplicitReplyResponse = response.json().await.context("unexpected response")?;
+        Ok(data.is_explicit_reply)
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {

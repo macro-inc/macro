@@ -236,6 +236,13 @@ impl WebhookWorkspaceResolver for MockRepository {
         }
         Ok(state.resolved_workspace_ids.clone())
     }
+
+    async fn get_user_team_workspace_id(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(None)
+    }
 }
 
 impl WebhookRepo for MockRepository {

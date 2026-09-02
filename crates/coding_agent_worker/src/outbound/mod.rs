@@ -10,4 +10,4 @@ pub mod agent_session;
 pub mod credentials;
 pub mod link;
 pub mod pairing;
-pub mod registration;
+pub mod stream;

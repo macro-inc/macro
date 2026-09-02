@@ -66,9 +66,13 @@ import {
 export interface InboxCardLayoutProps {
   /** The already-derived item to render. */
   item: InboxCardDisplayItem;
+  /** Optional root-card styling for alternate list compositions. */
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  /** Set false when a parent list owns keyboard focus and activation. */
+  focusable?: boolean;
 }
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
@@ -507,9 +511,11 @@ const githubAction = (notification?: Notification): string => {
  */
 function BaseCard(props: {
   item: InboxCardDisplayItem;
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  focusable?: boolean;
   /** Contents of the avatar bubble (glyph or avatar); the circle is ours. */
   icon: JSX.Element;
   /**
@@ -524,6 +530,8 @@ function BaseCard(props: {
 }) {
   return (
     <InboxCard.Root
+      class={props.class}
+      focusable={props.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -690,10 +698,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={!isDM()}
@@ -751,10 +756,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
   // its three-line neighbors.
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
     >
@@ -870,6 +872,8 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   // the quoted-original block stacked beneath.
   return (
     <InboxCard.Root
+      class={props.class}
+      focusable={props.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -1005,10 +1009,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1072,10 +1073,7 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1120,10 +1118,7 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
   // two-line clamp of the response summary with its height reserved.
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1178,10 +1173,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<ActionBubble tag="new_email" />}
       titleLeading={
         <Show when={text().isDraft}>
@@ -1264,10 +1256,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={
@@ -1363,10 +1352,7 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}
@@ -1435,10 +1421,7 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />}
       title={props.item.entity.name || '(No title)'}
     >
@@ -1481,10 +1464,7 @@ export function ReminderCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       // Always the bell, never the referenced entity's icon: the row is a
       // reminder first, and the thing it points at is named right below.
       icon={<BellSimpleIcon class={AVATAR_GLYPH_CLASS} />}
@@ -1548,10 +1528,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}

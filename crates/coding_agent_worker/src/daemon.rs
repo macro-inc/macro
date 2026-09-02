@@ -5,7 +5,6 @@
 //! removed - which is what makes the TUI and the daemon one process.
 
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Duration;
 
 use rootcause::prelude::ResultExt as _;
@@ -15,32 +14,31 @@ use crate::config::Config;
 use crate::dispatch::Dispatcher;
 use crate::outbound::agent_session::HarnessApi;
 use crate::outbound::credentials::HarnessCredentials;
-use crate::outbound::registration::FeedReconciler;
+use crate::outbound::stream::EventStreamClient;
 use crate::runtime::Runtime;
-use crate::webhook::{WebhookState, webhook_router};
+use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 
-/// How often the bound-agent set is re-read and the feed reconciled to it, so
-/// a newly bound agent starts triggering without a restart. Short on purpose:
-/// a mention sent before the feed covers the new agent is dropped for good,
-/// so this interval is the worst-case window where a brand-new agent is deaf.
-const FEED_RECONCILE_INTERVAL: Duration = Duration::from_secs(10);
+/// How often the bound-agent set is re-read so a newly bound agent starts
+/// triggering without a restart. Short on purpose: a mention sent before the
+/// stream covers the new agent is dropped for good, so this interval is the
+/// worst-case window where a brand-new agent is deaf.
+const BOUND_AGENT_REFRESH: Duration = Duration::from_secs(10);
 
-/// A running serving core: webhook receiver, feed reconciler, harness bridge.
+/// A running serving core: SSE listener, harness bridge.
 pub struct Daemon {
     cancel: CancellationToken,
     task: tokio::task::JoinHandle<rootcause::Result<()>>,
 }
 
 impl Daemon {
-    /// Bind the webhook server and start serving in background tasks.
+    /// Start listening for agent triggers in a background task.
     ///
-    /// Returns once the listener is bound (so a failed bind is an immediate
-    /// error, not a background log line); the serving itself runs until
+    /// Returns once the client is built; the serving itself runs until
     /// [`Daemon::stop`] or the task fails.
     pub async fn start(
         config: Config,
         credentials: HarnessCredentials,
-        config_path: &Path,
+        _config_path: &Path,
     ) -> rootcause::Result<Self> {
         // The ACP launch config carries command, args, and env but no working
         // directory, and every session this daemon serves runs in the one
@@ -51,86 +49,43 @@ impl Daemon {
         ))?;
 
         let cancel = CancellationToken::new();
-
-        // The feed: make sure one exists, points here, covers the bound
-        // agents, and we hold its secret. An explicit config secret skips
-        // registration entirely (manual setups).
-        let reconciler = Arc::new(FeedReconciler::new(
-            &config.macro_api,
-            &config.server,
-            credentials.clone(),
-            config_path,
-        ));
-        let signing_secret = Arc::new(std::sync::RwLock::new(String::new()));
-        match &config.server.signing_secret {
-            Some(secret) => {
-                *signing_secret.write().expect("signing secret lock") = secret.clone();
-            }
-            None => {
-                // `None` is a daemon with nothing bound yet: it serves anyway,
-                // and the reconcile loop registers the feed the moment an
-                // agent is bound in the app.
-                let initial = reconciler
-                    .ensure_feed()
-                    .await
-                    .context("failed to register this harness's trigger feed")?;
-                if let Some(feed) = &initial {
-                    *signing_secret.write().expect("signing secret lock") =
-                        feed.signing_secret.clone();
-                }
-                // Validation probes the endpoint, so it can only pass once we
-                // serve; request it from the side once the listener is up,
-                // and keep the feed covering the bound-agent set from then on.
-                let reconciler = Arc::clone(&reconciler);
-                let signing_secret = Arc::clone(&signing_secret);
-                let cancel = cancel.clone();
-                tokio::spawn(async move {
-                    let mut current = None;
-                    if let Some(feed) = initial {
-                        if !feed.is_valid {
-                            reconciler.request_validation(&feed.webhook_id).await;
-                        }
-                        current = Some(feed.webhook_id);
-                    }
-                    tokio::select! {
-                        () = reconcile_forever(reconciler, signing_secret, current) => {}
-                        () = cancel.cancelled() => {}
-                    }
-                });
-            }
-        }
-
+        let client = EventStreamClient::new(&config.macro_api, &credentials);
         let api = HarnessApi::new(&config.macro_api, &credentials);
         let runtime = Runtime::new(&config.macro_api, &credentials, config.harness.clone());
-        let app = webhook_router(WebhookState {
-            executor: Dispatcher::new(api, runtime, config.workspace.clone()),
-            signing_secret: Arc::clone(&signing_secret),
-        });
+        let executor = Dispatcher::new(api, runtime, config.workspace.clone());
 
-        let port = config.server.port;
-        let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
-            .await
-            .context(format!(
-                "failed to bind the webhook server to port {port} - is another macrod \
-                 (a separate `macrod` serve, or another tui) already running?"
-            ))?;
         tracing::info!(
-            port,
-            pid = std::process::id(),
             api = %config.macro_api.api_url,
+            storage = %config.macro_api.storage_url,
             harness_id = %credentials.harness_id,
             harness = %config.harness.command,
             workspace = %config.workspace.path.display(),
-            "daemon listening for agent triggers"
+            "daemon listening for agent triggers over SSE"
         );
 
         let shutdown = cancel.clone();
         let task = tokio::spawn(async move {
-            axum::serve(listener, app)
-                .with_graceful_shutdown(async move { shutdown.cancelled().await })
-                .await
-                .context("the webhook server stopped")?;
-            Ok(())
+            let mut failures = 0u32;
+            loop {
+                if shutdown.is_cancelled() {
+                    return Ok(());
+                }
+                match serve_once(&client, &executor, &shutdown).await {
+                    ServeOutcome::Stopped => return Ok(()),
+                    ServeOutcome::Idle => {
+                        failures = 0;
+                    }
+                    ServeOutcome::Ended(error) => {
+                        tracing::warn!(error = ?error, "event stream ended; reconnecting");
+                        failures = failures.saturating_add(1);
+                        let delay = reconnect_delay(failures);
+                        tokio::select! {
+                            () = shutdown.cancelled() => return Ok(()),
+                            () = tokio::time::sleep(delay) => {}
+                        }
+                    }
+                }
+            }
         });
 
         Ok(Self { cancel, task })
@@ -141,7 +96,7 @@ impl Daemon {
         !self.task.is_finished()
     }
 
-    /// Stop serving: unbind the webhook port and end the reconcile loop.
+    /// Stop serving: drop the stream and end the reconnect loop.
     ///
     /// A live harness bridge (the WebSocket + spawned harness process) is not
     /// torn down here; it dies with the process, and a restarted daemon's
@@ -159,41 +114,70 @@ pub fn absolute_config_path(config_path: &Path) -> PathBuf {
     std::path::absolute(config_path).unwrap_or_else(|_| config_path.to_owned())
 }
 
-/// Keep the feed covering the bound-agent set: registered once anything is
-/// bound, replaced (along with the secret the receiver verifies with) when
-/// the set or endpoint changes, and dropped when nothing is bound any more.
-async fn reconcile_forever(
-    reconciler: Arc<FeedReconciler>,
-    signing_secret: Arc<std::sync::RwLock<String>>,
-    mut current_webhook_id: Option<String>,
-) {
+fn reconnect_delay(failures: u32) -> Duration {
+    let secs = 1u64.checked_shl(failures.min(5)).unwrap_or(30).min(30);
+    Duration::from_secs(secs)
+}
+
+enum ServeOutcome {
+    Stopped,
+    Idle,
+    Ended(rootcause::Report),
+}
+
+/// Open the stream (or wait for bound agents) until it ends or is cancelled.
+async fn serve_once<Executor: crate::trigger::WorkExecutor>(
+    client: &EventStreamClient,
+    executor: &Executor,
+    cancel: &CancellationToken,
+) -> ServeOutcome {
+    let bots = match client.bound_bot_ids().await {
+        Ok(bots) => bots,
+        Err(error) => return ServeOutcome::Ended(error),
+    };
+    if bots.is_empty() {
+        tracing::info!("no agents are bound; waiting before opening the event stream");
+        tokio::select! {
+            () = cancel.cancelled() => return ServeOutcome::Stopped,
+            () = tokio::time::sleep(BOUND_AGENT_REFRESH) => return ServeOutcome::Idle,
+        }
+    }
+
+    let filters = trigger_filters(bots.iter());
+    let mut stream = match client.connect::<TriggerEvent>(&filters).await {
+        Ok(stream) => stream,
+        Err(error) => return ServeOutcome::Ended(error),
+    };
+    tracing::info!(
+        bound_agents = bots.len(),
+        "connected to the agent-trigger event stream"
+    );
+
     loop {
-        tokio::time::sleep(FEED_RECONCILE_INTERVAL).await;
-        match reconciler.ensure_feed().await {
-            Ok(Some(feed)) => {
-                if current_webhook_id.as_deref() != Some(feed.webhook_id.as_str()) {
-                    tracing::info!(webhook_id = %feed.webhook_id, "trigger feed registered");
-                    *signing_secret.write().expect("signing secret lock") =
-                        feed.signing_secret.clone();
-                    if !feed.is_valid {
-                        reconciler.request_validation(&feed.webhook_id).await;
+        tokio::select! {
+            () = cancel.cancelled() => return ServeOutcome::Stopped,
+            () = tokio::time::sleep(BOUND_AGENT_REFRESH) => {
+                match client.bound_bot_ids().await {
+                    Ok(latest) if latest == bots => {}
+                    Ok(_) => {
+                        tracing::info!("bound-agent set changed; reconnecting the event stream");
+                        return ServeOutcome::Idle;
                     }
-                    current_webhook_id = Some(feed.webhook_id);
+                    Err(error) => return ServeOutcome::Ended(error),
                 }
             }
-            Ok(None) => {
-                if current_webhook_id.take().is_some() {
-                    // Drop the secret with the feed: retaining it would keep
-                    // verifying deliveries signed for a webhook the server has
-                    // already deleted. Empty fails closed (see
-                    // `webhook_signature::verify`), which is correct while
-                    // nothing is bound to serve.
-                    signing_secret.write().expect("signing secret lock").clear();
-                    tracing::info!("trigger feed removed; no agents are bound any more");
+            next = stream.next_event() => {
+                match next {
+                    Ok(Some(event)) => {
+                        let _ = handle_event(event, executor).await;
+                    }
+                    Ok(None) => {
+                        return ServeOutcome::Ended(rootcause::report!(
+                            "the server closed the stream"
+                        ));
+                    }
+                    Err(error) => return ServeOutcome::Ended(error),
                 }
-            }
-            Err(error) => {
-                tracing::warn!(error = ?error, "trigger feed reconciliation failed; will retry");
             }
         }
     }

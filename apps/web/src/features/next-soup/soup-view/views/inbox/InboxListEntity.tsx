@@ -1,3 +1,4 @@
+import '@entity/composed/ListEntity.css';
 import { useChannelsContext } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { MaybeEntityRow, MultiSelectCheckbox, UnreadIndicator } from '@entity';
@@ -18,7 +19,16 @@ import { scopeThreadNotifications } from './utils';
  * from the focused row (which is what the preview shows).
  *
  */
-export function InboxListEntity(props: BaseListEntityProps) {
+type InboxListEntityProps = BaseListEntityProps & {
+  /** Classes applied to the outer list-row wrapper. */
+  class?: string;
+  /** Classes applied to the rendered Inbox card. */
+  cardClass?: string;
+  focusable?: boolean;
+  occurrenceKey?: string;
+};
+
+export function InboxListEntity(props: InboxListEntityProps) {
   const channels = useChannelsContext();
 
   // A channel_thread soup entity comes back with a generic name ("Channel
@@ -41,16 +51,22 @@ export function InboxListEntity(props: BaseListEntityProps) {
       // NarrowInboxLayout.
       class={cn(
         'group/inbox-item soup-list-entity relative mx-(--soup-row-gutter)',
-        SOUP_ROW_CLASS.card
+        SOUP_ROW_CLASS.card,
+        props.class
       )}
       ref={props.ref}
       onMouseMove={props.onMouseMove}
     >
-      <MaybeEntityRow entityId={props.entity.id} config={props.entityRowConfig}>
+      <MaybeEntityRow
+        entityId={props.occurrenceKey ?? props.entity.id}
+        config={props.entityRowConfig}
+      >
         <InboxCardLayout
+          class={props.cardClass}
           item={item()}
           selected={props.checked}
           highlighted={props.highlighted}
+          focusable={props.focusable}
           onClick={props.onClick}
         />
       </MaybeEntityRow>

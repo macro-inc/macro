@@ -1,8 +1,4 @@
-import type { ListController, ListDataSource } from '@app/components/list';
-import type { ListView } from '@app/constants/list-views';
-import type { SoupRow } from '@app/features/soup';
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import type { EntityData } from '@entity';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -12,6 +8,7 @@ import {
   type Setter,
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
+import type { ReplaceOwnedSlot } from './utils/createOwnedSlots';
 import type { PriorityCollapser } from './utils/createPriorityCollapser';
 
 export const SplitLayoutContext = createContext<{
@@ -43,7 +40,7 @@ export type SplitFileMenuActionGroups = {
   sender: SplitFileMenuAction[];
   /** Share, Copy Link, Copy ID, and friends. */
   sharing: SplitFileMenuAction[];
-  /** Macro platform features: Favorite, Remind me, Add tag. */
+  /** Macro platform features: Favorite, Mute, Remind me, Add tag. */
   macro: SplitFileMenuAction[];
   /** Non-destructive operations on the file itself: Duplicate, Rename, Move, Download. */
   file: SplitFileMenuAction[];
@@ -65,37 +62,6 @@ export type SplitFileMenuActionSection = {
   actions: SplitFileMenuAction[];
 };
 
-export type SplitListRow = SoupRow<EntityData>;
-
-export type SplitListActivationMetadata = {
-  event?: MouseEvent;
-  newSplit?: boolean;
-};
-
-export type SplitListController = ListController<
-  SplitListRow,
-  SplitListActivationMetadata
->;
-
-export type SplitListRegistration<
-  TDataSource extends
-    ListDataSource<SplitListRow> = ListDataSource<SplitListRow>,
-> = {
-  viewId: ListView;
-  dataSource: TDataSource;
-  controller: SplitListController;
-};
-
-export type SetSplitList = <TDataSource extends ListDataSource<SplitListRow>>(
-  factory: () => SplitListRegistration<TDataSource>
-) => SplitListRegistration<TDataSource>;
-
-export type SplitListBinding = {
-  viewId: ListView | undefined;
-  dataSource: ListDataSource<SplitListRow>;
-  controller: SplitListController;
-};
-
 export function getSplitFileMenuActionSections(
   groups: SplitFileMenuActionGroups
 ): SplitFileMenuActionSection[] {
@@ -114,6 +80,8 @@ export function getSplitFileMenuActionSections(
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
+  /** Whether mounted block content is rendered in a passive inline preview. */
+  isInlinePreview?: boolean;
   isPanelActive: Accessor<boolean>;
   panelRef: Accessor<HTMLElement | null>;
   panelSize: NullableSize;
@@ -133,8 +101,7 @@ export type SplitPanelContextType = {
   setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
   setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
-  list: Accessor<SplitListBinding | undefined>;
-  setList: SetSplitList;
+  replaceOwnedSlot: ReplaceOwnedSlot;
   headerCollapser: PriorityCollapser;
   toolbarCollapser: PriorityCollapser;
 };

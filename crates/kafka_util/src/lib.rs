@@ -176,15 +176,6 @@ pub enum InitialOffset {
     Latest,
 }
 
-impl InitialOffset {
-    fn as_kafka_offset(self) -> Offset {
-        match self {
-            Self::Earliest => Offset::Beginning,
-            Self::Latest => Offset::End,
-        }
-    }
-}
-
 /// Shared Kafka consumer with environment-aware transport and type-safe group behavior.
 ///
 /// Consumers parameterized by a [`GroupName`] may subscribe and commit offsets.
@@ -277,10 +268,20 @@ fn create_producer_from_env(
     })
 }
 
+/// Polls the consumer once with a no-op waker so OAUTHBEARER installs its
+/// initial token before a synchronous broker request (metadata, list offsets)
+/// needs a connection.
+fn prime_oauth_token<C: ConsumerContext + 'static>(consumer: &StreamConsumer<C>) {
+    let mut recv = std::pin::pin!(consumer.recv());
+    let waker = std::task::Waker::noop();
+    let mut context = std::task::Context::from_waker(waker);
+    let _ = std::future::Future::poll(recv.as_mut(), &mut context);
+}
+
 fn build_assignment<C, T>(
     consumer: &T,
     topics: &[&str],
-    initial_offset: InitialOffset,
+    offset: Offset,
     metadata_timeout: Duration,
 ) -> KafkaResult<TopicPartitionList>
 where
@@ -319,11 +320,7 @@ where
             if let Some(error) = partition.error() {
                 return Err(KafkaError::MetadataFetch(error.into()));
             }
-            assignment.add_partition_offset(
-                topic,
-                partition.id(),
-                initial_offset.as_kafka_offset(),
-            )?;
+            assignment.add_partition_offset(topic, partition.id(), offset)?;
         }
     }
 
@@ -417,8 +414,8 @@ impl KafkaEventConsumer<Ungrouped> {
     /// Manually assigns every current partition of `topics` at `initial_offset`.
     ///
     /// Manual assignment does not join a consumer group, persist offsets, or
-    /// automatically discover partitions added after this call. Callers that
-    /// support partition-count changes must refresh the assignment themselves.
+    /// automatically discover partitions added after this call. Reconnect to
+    /// discover partition-count changes.
     pub fn assign_topics(
         &self,
         topics: &[&str],
@@ -426,19 +423,12 @@ impl KafkaEventConsumer<Ungrouped> {
         metadata_timeout: Duration,
     ) -> KafkaResult<()> {
         either::for_both!(&self.consumer.0, consumer => {
-            // OAUTHBEARER requires polling once to install the initial token
-            // before a synchronous metadata request can connect to a broker.
-            let mut recv = std::pin::pin!(consumer.recv());
-            let waker = std::task::Waker::noop();
-            let mut context = std::task::Context::from_waker(waker);
-            let _ = std::future::Future::poll(recv.as_mut(), &mut context);
-
-            let assignment = build_assignment(
-                consumer,
-                topics,
-                initial_offset,
-                metadata_timeout,
-            )?;
+            prime_oauth_token(consumer);
+            let offset = match initial_offset {
+                InitialOffset::Earliest => Offset::Beginning,
+                InitialOffset::Latest => Offset::End,
+            };
+            let assignment = build_assignment(consumer, topics, offset, metadata_timeout)?;
             consumer.assign(&assignment)
         })
     }

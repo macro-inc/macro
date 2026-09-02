@@ -43,7 +43,15 @@ impl HttpCommandForwarder {
 }
 
 impl CommandForwarder for HttpCommandForwarder {
-    #[tracing::instrument(err, skip(self, command), fields(%target, %session))]
+    #[tracing::instrument(
+        err,
+        skip(self, command),
+        fields(
+            %target,
+            %session,
+            http.response.status_code = tracing::field::Empty,
+        )
+    )]
     async fn forward(
         &self,
         target: &ReplicaAddress,
@@ -55,15 +63,23 @@ impl CommandForwarder for HttpCommandForwarder {
             target.as_str().trim_end_matches('/'),
             session
         );
+        // The peer's inbound layer already extracts `traceparent` and parents
+        // its request span to the remote span (see `macro_tower_layers`), so
+        // injecting here is what makes a forwarded command one trace spanning
+        // both replicas. Without it the hop is two unrelated traces.
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
         let response = self
             .client
             .post(url)
             .header(INTERNAL_API_KEY_HEADER, &self.internal_api_key)
+            .headers(headers)
             .json(&command)
             .send()
             .await
             .map_err(|error| HarnessError::Forward(rootcause::report!(error).into_dynamic()))?;
         let status = response.status();
+        tracing::Span::current().record("http.response.status_code", status.as_u16());
         if status.is_success() {
             return Ok(());
         }

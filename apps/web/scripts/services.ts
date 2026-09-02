@@ -42,8 +42,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "notification-service",
-		dev: "https://notifications-dev.macro.com/api-doc/openapi.json",
-		prod: "https://notifications.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/notification/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/notification/api-doc/openapi.json",
 		local: "http://localhost:8089/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-notification/",
 		orvalKey: "notificationService",
@@ -66,8 +66,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "contacts-service",
-		dev: "https://contacts-dev.macro.com/api-doc/openapi.json",
-		prod: "https://contacts.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/contacts/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/contacts/api-doc/openapi.json",
 		local: "http://localhost:8083/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-contacts/",
 		orvalKey: "contactService",
@@ -82,8 +82,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "unfurl-service",
-		dev: "https://unfurl-service-dev.macro.com/api-doc/openapi.json",
-		prod: "https://unfurl-service.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/unfurl/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/unfurl/api-doc/openapi.json",
 		local: "http://localhost:8095/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-unfurl/",
 		orvalKey: "unfurlService",

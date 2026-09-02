@@ -1,11 +1,11 @@
 //! The coding agent daemon: serve a registered harness's agent sessions from
 //! this machine.
 //!
-//! `macrod` is one process and one command: the serving core (webhook
-//! receiver, feed reconciler, harness bridge) running inside a terminal
-//! control panel that shows what it is serving - the registration, the agents
-//! bound to it, their sessions, and the daemon's own logs - and manages its
-//! own pairing, config, and retirement.
+//! `macrod` is one process and one command: the serving core (SSE listener,
+//! harness bridge) running inside a terminal control panel that shows what
+//! it is serving - the registration, the agents bound to it, their sessions,
+//! and the daemon's own logs - and manages its own pairing, config, and
+//! retirement.
 //!
 //! A first run starts unpaired: the panel offers pairing (press `p`), the
 //! user approves the printed code in the web app, and the minted harness
@@ -22,8 +22,8 @@ mod dispatch;
 mod harness;
 mod outbound;
 mod runtime;
+mod trigger;
 mod tui;
-mod webhook;
 
 use clap::Parser;
 use std::path::PathBuf;

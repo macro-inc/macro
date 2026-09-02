@@ -71,13 +71,12 @@ pub trait ChannelParticipationLookup: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool>> + Send;
 }
 
-/// Detects whether a message is composed as a quote-reply - a leading
-/// blockquote followed by the reply itself, the shape the editor produces
-/// when replying to a message.
+/// Detects whether a message is composed as an explicit reply: a leading
+/// reply target followed by the author's response.
 #[cfg_attr(test, mockall::automock)]
-pub trait ReplyDetector: Send + Sync + 'static {
-    /// Whether this markdown is a quote-reply.
-    fn is_quote_reply(&self, markdown: &str) -> impl Future<Output = Result<bool>> + Send;
+pub trait ExplicitReplyDetector: Send + Sync + 'static {
+    /// Whether this markdown is an explicit reply.
+    fn is_explicit_reply(&self, markdown: &str) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Reads whole threads, so an unmentioned message can be judged against the
@@ -124,7 +123,7 @@ where
     Bots: AgentBotLookup,
     Teams: TeamMembershipLookup,
     Channels: ChannelParticipationLookup,
-    Replies: ReplyDetector,
+    Replies: ExplicitReplyDetector,
     Judge: ImplicitTriggerJudge,
     History: ThreadHistory,
 {
@@ -307,7 +306,7 @@ where
     }
 
     /// Evaluates an unmentioned message against the sessions rooted at its
-    /// thread: a quote-reply is forwarded outright, anything else only when
+    /// thread: an explicit reply is forwarded outright, anything else only when
     /// the judge reads it as addressed to the agent.
     ///
     /// Only fires when exactly one agent is live in the thread; picking among
@@ -349,10 +348,10 @@ where
             }
         };
 
-        let kind = if self.is_quote_reply(posted).await {
-            // A quote-reply says who it answers on its face, so it needs no
+        let kind = if self.is_explicit_reply(posted).await {
+            // An explicit reply says who it answers on its face, so it needs no
             // thread read at all.
-            ChannelKind::QuoteReply
+            ChannelKind::ExplicitReply
         } else if self
             .is_addressed_to_agent(posted, &self.transcript(posted, thread_id, &session).await)
             .await
@@ -379,12 +378,12 @@ where
         )))
     }
 
-    async fn is_quote_reply(&self, posted: &ChannelMessagePostedMetadata) -> bool {
+    async fn is_explicit_reply(&self, posted: &ChannelMessagePostedMetadata) -> bool {
         self.replies
-            .is_quote_reply(&posted.content)
+            .is_explicit_reply(&posted.content)
             .await
             .inspect_err(|error| {
-                tracing::warn!(error = ?error, "quote-reply detection failed; treating as not a reply");
+                tracing::warn!(error = ?error, "explicit reply detection failed; treating as not a reply");
             })
             .unwrap_or(false)
     }
