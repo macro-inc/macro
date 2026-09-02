@@ -2,8 +2,10 @@ import { expect, type Page, test } from '@playwright/test';
 
 import { localE2ESeed } from './fixtures/local-e2e-seed';
 import {
+  createDocument,
   gotoApp,
   LOCAL_E2E,
+  openSidePanelSection,
   sendChannelMessage,
   uniqueE2EText,
 } from './helpers/local-app';
@@ -25,9 +27,11 @@ test.describe('local activity', () => {
     await openSeededChannel(page, channel.channel_id);
     await sendChannelMessage(page, channel.channel_id, messageText);
 
-    await gotoApp(page, '/activity');
+    await gotoApp(page, '/component/activity');
     await expect(
-      page.locator('[data-activity-row][data-activity-action="messaged"]')
+      page
+        .locator('[data-activity-row][data-activity-action="messaged"]')
+        .first()
     ).toBeVisible({ timeout: 30_000 });
   });
 
@@ -36,7 +40,7 @@ test.describe('local activity', () => {
       FEED_PAGE_LIMIT
     );
 
-    await gotoApp(page, '/activity');
+    await gotoApp(page, '/component/activity');
     const rows = page.locator('[data-activity-row]');
     await expect(rows).toHaveCount(FEED_PAGE_LIMIT, { timeout: 30_000 });
 
@@ -46,16 +50,18 @@ test.describe('local activity', () => {
       .toBeGreaterThanOrEqual(localE2ESeed.activity.seededEventCount);
   });
 
-  test('shows the document created event in the side panel', async ({
+  test('shows the created event for a new document in the side panel', async ({
     page,
   }) => {
-    const documentId = localE2ESeed.smoke.projectRoadmap.document_id;
+    await gotoApp(page, '/component/activity');
+    await createDocument(page);
+    await openSidePanelSection(page, 'Activity');
 
-    await gotoApp(page, `/md/${documentId}`);
-    await openDocumentSidePanel(page);
-    await expect(
-      page.locator('[data-activity-row][data-activity-action="created"]')
-    ).toBeVisible({ timeout: 30_000 });
+    const created = page.locator(
+      '[data-activity-row][data-activity-action="created"]'
+    );
+    await expect(created).toBeVisible({ timeout: 30_000 });
+    await expect(created).toContainText('You');
   });
 });
 
@@ -70,14 +76,4 @@ async function openSeededChannel(page: Page, channelId: string) {
   await expect(page.locator('[data-channel-message-list]')).toBeVisible({
     timeout: 30_000,
   });
-}
-
-async function openDocumentSidePanel(page: Page) {
-  const show = page.getByRole('button', { name: 'Show Side Panel' });
-  if (await show.isVisible()) {
-    await show.click();
-  }
-  await expect(
-    page.getByRole('button', { name: 'Hide Side Panel' })
-  ).toBeVisible({ timeout: 10_000 });
 }
