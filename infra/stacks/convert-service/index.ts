@@ -1,6 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { CONVERT_SERVICE_GATEWAY_URL, stack } from '../../packages/shared';
+import { BASE_DOMAIN, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { ConvertService } from './service';
 
@@ -83,7 +83,6 @@ const convertService = new ConvertService('convert-service', {
 });
 
 export const convertServiceRoleArn = pulumi.interpolate`${convertService.role.arn}`;
-// Consumers call the service through the shared gateway, not the legacy
-// per-service hostname. `convertService.domain` still names the dedicated
-// ALB and stays in place until that listener is retired.
-export const convertServiceUrl = CONVERT_SERVICE_GATEWAY_URL;
+export const convertServiceUrl = `https://${
+  stack === 'prod' ? '' : `${stack}-`
+}gateway.${BASE_DOMAIN}/convert`;
