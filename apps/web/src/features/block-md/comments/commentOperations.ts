@@ -207,9 +207,11 @@ export function useScrollToCommentThread() {
       });
       disposePendingWait = wait.dispose;
       const markElement = await wait.catch(() => undefined);
-      if (!markElement) return;
+      // A cancelled wait resolves undefined — report it so the caller
+      // skips activating the superseded/unmounted link's thread.
+      if (!markElement) return false;
       markElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
+      return true;
     }
 
     const measureContainerId = threadMeasureContainerId(documentId, threadId);

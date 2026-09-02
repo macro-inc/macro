@@ -464,9 +464,18 @@ export function MarkdownPopup(props: {
   };
 
   const handlePaste = async () => {
+    // Reading the pasteboard is async, and the toolbar tap or the native call
+    // can move or drop the editor selection before it resolves. Snapshot the
+    // range now and restore it before inserting so the text lands where the
+    // user had selected.
+    const savedSelection = editor.read(() => {
+      const current = $getSelection();
+      return $isRangeSelection(current) ? current.clone() : null;
+    });
     const text = await readNativePasteboardText();
     if (!text) return;
     editor.update(() => {
+      if (savedSelection) $setSelection(savedSelection);
       const lexicalSelection = $getSelection();
       if ($isRangeSelection(lexicalSelection)) {
         lexicalSelection.insertRawText(text);

@@ -19,11 +19,15 @@ private struct SetNativeMenuSuppressedArgs: Decodable {
 /// through `UIMenuSystem.main`) are unaffected.
 class EditMenuPlugin: Plugin {
     fileprivate static var suppressNativeEditMenu = false
+    fileprivate static weak var contentView: UIView?
     private static var isSwizzled = false
 
     override public func load(webview: WKWebView) {
-        guard !EditMenuPlugin.isSwizzled else { return }
-        if swizzleBuildMenu(in: webview) {
+        guard let contentView = findContentView(in: webview) else { return }
+        EditMenuPlugin.contentView = contentView
+        if !EditMenuPlugin.isSwizzled, let cls = object_getClass(contentView),
+            swizzleBuildMenu(on: cls)
+        {
             EditMenuPlugin.isSwizzled = true
         }
     }
@@ -31,24 +35,40 @@ class EditMenuPlugin: Plugin {
     @objc public func setNativeMenuSuppressed(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(SetNativeMenuSuppressedArgs.self)
         EditMenuPlugin.suppressNativeEditMenu = args.suppressed
+        if args.suppressed {
+            // The flag only gates the next `buildMenu` pass; a menu that
+            // presented before it crossed the JS→native bridge is already
+            // on screen and must be taken down explicitly.
+            DispatchQueue.main.async {
+                dismissPresentedEditMenu()
+            }
+        }
         invoke.resolve()
     }
 }
 
-@discardableResult
-private func swizzleBuildMenu(in rootView: UIView) -> Bool {
+private func findContentView(in rootView: UIView) -> UIView? {
     var queue = rootView.subviews
     while !queue.isEmpty {
         let view = queue.removeFirst()
         if NSStringFromClass(type(of: view)).hasPrefix("WKContent") {
-            if let cls = object_getClass(view) {
-                return swizzleBuildMenu(on: cls)
-            }
-            return false
+            return view
         }
         queue.append(contentsOf: view.subviews)
     }
-    return false
+    return nil
+}
+
+private func dismissPresentedEditMenu() {
+    if #available(iOS 16.0, *) {
+        // WKContentView presents the modern edit menu through a
+        // UIEditMenuInteraction it adds to itself.
+        for interaction in EditMenuPlugin.contentView?.interactions ?? [] {
+            (interaction as? UIEditMenuInteraction)?.dismissMenu()
+        }
+    } else {
+        UIMenuController.shared.hideMenu()
+    }
 }
 
 private typealias BuildMenuIMP = @convention(c) (AnyObject, Selector, UIMenuBuilder) -> Void
