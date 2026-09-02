@@ -533,8 +533,8 @@ service_url! {
         /// Notification service API URL.
         pub NotificationServiceUrl {
             local: "http://localhost:8089",
-            dev: "https://notifications-dev.macro.com",
-            prod: "https://notifications.macro.com",
+            dev: "https://dev-gateway.macro.com/notification",
+            prod: "https://gateway.macro.com/notification",
         },
         /// Static file service/CDN URL.
         pub StaticFileServiceUrl {

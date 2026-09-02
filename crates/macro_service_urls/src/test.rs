@@ -336,7 +336,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.notification_service_url.as_ref(),
-        "https://notifications-dev.macro.com",
+        "https://dev-gateway.macro.com/notification",
     );
     assert_eq!(
         service_urls.static_file_service_url.as_ref(),
@@ -395,7 +395,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.notification_service_url.as_ref(),
-        "https://notifications.macro.com",
+        "https://gateway.macro.com/notification",
     );
     assert_eq!(
         service_urls.static_file_service_url.as_ref(),
