@@ -456,21 +456,8 @@ export class ConvertService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const lbPortion: pulumi.Output<string> = this.lb.arn.apply((arn) => {
-      const parts = arn.split(':loadbalancer/');
-      return parts[1];
-    });
+    const resourceLabel = pulumi.interpolate`${gatewayAlbArnSuffix}/${gatewayTargetGroup.arnSuffix}`;
 
-    const tgPortion: pulumi.Output<string> = this.targetGroup.arn.apply(
-      (arn) => {
-        const parts = arn.split(':');
-        return parts[parts.length - 1];
-      }
-    );
-
-    const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
-
-    // Create an Auto Scaling policy for request count.
     new aws.appautoscaling.Policy(
       `${BASE_NAME}-scaling-policy-request-count-${stack}`,
       {
@@ -483,31 +470,6 @@ export class ConvertService extends pulumi.ComponentResource {
           predefinedMetricSpecification: {
             predefinedMetricType: 'ALBRequestCountPerTarget',
             resourceLabel,
-          },
-          scaleInCooldown: 60,
-          scaleOutCooldown: 120,
-        },
-      },
-      { parent: this }
-    );
-
-    // Gateway requests hit a different target group. A second policy is
-    // required because ALBRequestCountPerTarget is scoped to one
-    // load-balancer/target-group pair. Target tracking uses the higher
-    // desired count of the two.
-    const gatewayResourceLabel = pulumi.interpolate`${gatewayAlbArnSuffix}/${gatewayTargetGroup.arnSuffix}`;
-    new aws.appautoscaling.Policy(
-      `${BASE_NAME}-scaling-policy-gateway-request-count-${stack}`,
-      {
-        policyType: 'TargetTrackingScaling',
-        resourceId: serviceScalableTarget.resourceId,
-        scalableDimension: serviceScalableTarget.scalableDimension,
-        serviceNamespace: serviceScalableTarget.serviceNamespace,
-        targetTrackingScalingPolicyConfiguration: {
-          targetValue: 1000,
-          predefinedMetricSpecification: {
-            predefinedMetricType: 'ALBRequestCountPerTarget',
-            resourceLabel: gatewayResourceLabel,
           },
           scaleInCooldown: 60,
           scaleOutCooldown: 120,
