@@ -21,7 +21,7 @@ type ServiceTargetGroupArgs = {
   // Host headers to match instead of paths, for a target group that owns a
   // whole hostname on a shared listener.
   hostHeaders?: string[];
-  // Priority **MUST BE UNIQUE**
+  // Must be unique on the listener. Shared-gateway stacks use GATEWAY_PRIORITIES.
   priority: number;
   // Health check
   healthCheck?: Partial<aws.types.input.lb.TargetGroupHealthCheck>;
