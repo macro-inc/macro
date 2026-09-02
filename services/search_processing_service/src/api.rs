@@ -18,8 +18,6 @@ mod swagger;
 #[cfg(test)]
 mod test;
 
-/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
-/// alongside `/` so the dedicated ALB keeps working during cutover.
 const GATEWAY_PATH_PREFIX: &str = "/search-processing";
 
 pub async fn setup_and_serve(
@@ -41,7 +39,6 @@ async fn serve(state: ApiContext, shutdown_token: CancellationToken) -> anyhow::
         .with_state(state)
         .layer(cors.clone())
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
-    // Health stays outside TraceLayer so the probe does not generate request logs.
     let health = health::router().layer(cors);
     let app = mount_at_root_and_prefix(traced_api.merge(health))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
