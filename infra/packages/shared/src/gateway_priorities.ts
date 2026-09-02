@@ -6,6 +6,7 @@ export enum GatewayService {
   DOCUMENT_STORAGE_SERVICE = 'DOCUMENT_STORAGE_SERVICE',
   UNFURL_SERVICE = 'UNFURL_SERVICE',
   CONVERT_SERVICE = 'CONVERT_SERVICE',
+  NOTIFICATION_SERVICE = 'NOTIFICATION_SERVICE',
 }
 
 /**
@@ -20,6 +21,7 @@ type GatewayPriorityMap = { [K in GatewayService]: number };
 export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
   [GatewayService.DOCUMENT_STORAGE_SERVICE]: 10,
   [GatewayService.UNFURL_SERVICE]: 20,
+  [GatewayService.NOTIFICATION_SERVICE]: 30,
   [GatewayService.CONVERT_SERVICE]: 3000,
 };
 
