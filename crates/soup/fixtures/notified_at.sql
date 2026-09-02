@@ -3,10 +3,12 @@
 -- user-1 is the subject. Their notifications span every entity type the feed
 -- surfaces, plus every trap the query must dodge: deleted notification rows,
 -- other users' notifications, deleted and inaccessible entities, left
--- channels, other users' inboxes/events/foreign entities/reminders, and
--- notification types the feed does not roll up.
+-- channels, other users' inboxes/events/foreign entities/reminders,
+-- notification types the feed does not roll up, and a malformed entity id.
 --
 -- user-1's expected feed, latest notification first (T = minute past 10:00):
+--   T20 event-E3   (user-2's event on an inbox delegated to user-1)
+--   T19 pr-F3      (foreign entity stored for a team user-1 belongs to)
 --   T9 doc-A       (notified at T1 and T9 — group-max wins; T9 is not done)
 --   T8 chat-A      (marked done — done rows still set the sort key)
 --   T7 project-A
@@ -32,6 +34,12 @@ INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId", 
 VALUES ('macro|user-1@test.com', 'user@test.com', 'stripe_id_1', 1, 'a1111111-1111-1111-1111-111111111111'),
        ('macro|user-2@test.com', 'user2@test.com', 'stripe_id_2', 1, 'a2222222-2222-2222-2222-222222222222')
 ON CONFLICT DO NOTHING;
+
+INSERT INTO public.team ("id", "name", "owner_id")
+VALUES ('eeeeeeee-1111-1111-1111-111111111111', 'Team T', 'macro|user-2@test.com');
+
+INSERT INTO public.team_user ("user_id", "team_id", "team_role")
+VALUES ('macro|user-1@test.com', 'eeeeeeee-1111-1111-1111-111111111111', 'member');
 
 ---------------------------------------------------
 --  ENTITIES
@@ -79,7 +87,12 @@ VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'member', 'macro|user-1@test.com
 
 INSERT INTO public.email_links ("id", "macro_id", "fusionauth_user_id", "email_address", "provider")
 VALUES ('55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user-1@test.com', 'fa-user-1', 'user@test.com', 'GMAIL'),
-       ('55555555-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'macro|user-2@test.com', 'fa-user-2', 'user2@test.com', 'GMAIL');
+       ('55555555-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'macro|user-2@test.com', 'fa-user-2', 'user2@test.com', 'GMAIL'),
+       -- user-2's second inbox, delegated to user-1 below.
+       ('55555555-cccc-cccc-cccc-cccccccccccc', 'macro|user-2@test.com', 'fa-user-2-shared', 'shared@test.com', 'GMAIL');
+
+INSERT INTO public.macro_user_links ("primary_macro_id", "child_macro_id", "link_id")
+VALUES ('macro|user-1@test.com', 'macro|user-2@test.com', '55555555-cccc-cccc-cccc-cccccccccccc');
 
 INSERT INTO public.email_threads ("id", "link_id", "inbox_visible", "is_signal", "latest_inbound_message_ts", "created_at", "updated_at")
 -- thread-Z is a signal thread, so an importance=false pre-filter drops it.
@@ -90,12 +103,16 @@ VALUES ('44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '55555555-aaaa-aaaa-aaaa-aaaaaaa
 INSERT INTO public.calendar_events ("id", "owner_id", "source_link_id", "ical_uid", "title", "starts_at", "ends_at", "canonical_source_kind", "canonical_source_updated_at")
 VALUES ('66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user-1@test.com', '55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'e1@test', 'Event E1', '2024-06-02 10:00:00+00', '2024-06-02 11:00:00+00', 'google', '2024-06-01 09:00:00+00'),
        -- Notified at T15 but owned by user-2 with no delegation: must never surface.
-       ('66666666-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'macro|user-2@test.com', '55555555-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'e2@test', 'Event E2', '2024-06-02 10:00:00+00', '2024-06-02 11:00:00+00', 'google', '2024-06-01 09:00:00+00');
+       ('66666666-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'macro|user-2@test.com', '55555555-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'e2@test', 'Event E2', '2024-06-02 10:00:00+00', '2024-06-02 11:00:00+00', 'google', '2024-06-01 09:00:00+00'),
+       -- user-2's event on the inbox delegated to user-1: visible through the delegation.
+       ('66666666-cccc-cccc-cccc-cccccccccccc', 'macro|user-2@test.com', '55555555-cccc-cccc-cccc-cccccccccccc', 'e3@test', 'Event E3', '2024-06-02 12:00:00+00', '2024-06-02 13:00:00+00', 'google', '2024-06-01 09:00:00+00');
 
 INSERT INTO public.foreign_entity ("id", "foreign_entity_id", "foreign_entity_source", "metadata", "stored_for_id", "stored_for_auth_entity", "created_at", "updated_at")
 VALUES ('77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'org/repo#1', 'github_pull_request', '{}', 'macro|user-1@test.com', 'user', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
        -- Notified at T16 but stored for user-2: must never surface.
-       ('77777777-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'org/repo#2', 'github_pull_request', '{}', 'macro|user-2@test.com', 'user', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00');
+       ('77777777-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'org/repo#2', 'github_pull_request', '{}', 'macro|user-2@test.com', 'user', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
+       -- Stored for Team T, which user-1 belongs to: visible through the team source.
+       ('77777777-cccc-cccc-cccc-cccccccccccc', 'org/repo#3', 'github_pull_request', '{}', 'eeeeeeee-1111-1111-1111-111111111111', 'team', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00');
 
 INSERT INTO public.reminder ("id", "user_id", "description", "remind_at", "next_run_at")
 VALUES ('88888888-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'macro|user-1@test.com', 'Reminder R1', '2024-06-01 10:02:00+00', '2024-06-01 10:02:00+00'),
@@ -153,7 +170,15 @@ VALUES
 -- reminder-R2 at T17: user-2's reminder.
 ('0190a000-0000-7000-8000-000000000017', 'reminder_fired', '88888888-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'reminder', 'test', '2024-06-01 10:17:00', '{}', NULL, NULL, NULL),
 -- A call notification at T18: calls are not part of the feed.
-('0190a000-0000-7000-8000-000000000018', 'call_started', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'call', 'test', '2024-06-01 10:18:00', '{}', NULL, NULL, NULL);
+('0190a000-0000-7000-8000-000000000018', 'call_started', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'call', 'test', '2024-06-01 10:18:00', '{}', NULL, NULL, NULL),
+-- pr-F3 at T19: stored for user-1's team.
+('0190a000-0000-7000-8000-000000000019', 'github_pull_request_event', '77777777-cccc-cccc-cccc-cccccccccccc', 'foreign_entity', 'test', '2024-06-01 10:19:00', '{}', NULL, NULL, NULL),
+-- event-E3 at T20: user-2's event on the inbox delegated to user-1.
+('0190a000-0000-7000-8000-000000000020', 'calendar_event_reminder', '66666666-cccc-cccc-cccc-cccccccccccc', 'calendar_event', 'test', '2024-06-01 10:20:00', '{}', NULL, NULL, NULL),
+-- A channel notification at T21 whose event_item_id is not a uuid: the
+-- unconstrained TEXT column admits it, and the gate must drop the row rather
+-- than fail the page on the cast.
+('0190a000-0000-7000-8000-000000000021', 'channel_invite', 'not-a-uuid', 'channel', 'test', '2024-06-01 10:21:00', '{}', 'macro|user-2@test.com', NULL, NULL);
 
 INSERT INTO public.user_notification ("user_id", "notification_id", "created_at", "sent", "seen_at", "deleted_at", "done", "is_important_v0")
 VALUES
@@ -176,6 +201,9 @@ VALUES
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000015', '2024-06-01 10:15:00', TRUE, NULL, NULL, FALSE, FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000016', '2024-06-01 10:16:00', TRUE, NULL, NULL, FALSE, FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000017', '2024-06-01 10:17:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000018', '2024-06-01 10:18:00', TRUE, NULL, NULL, FALSE, FALSE);
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000018', '2024-06-01 10:18:00', TRUE, NULL, NULL, FALSE, FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000019', '2024-06-01 10:19:00', TRUE, NULL, NULL, FALSE, FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000020', '2024-06-01 10:20:00', TRUE, NULL, NULL, FALSE, FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000021', '2024-06-01 10:21:00', TRUE, NULL, NULL, FALSE, FALSE);
 
 SET session_replication_role = 'origin';

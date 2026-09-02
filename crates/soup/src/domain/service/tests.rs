@@ -10,7 +10,9 @@ use chrono::Days;
 use chrono::{DateTime, Utc};
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{
@@ -34,6 +36,10 @@ use models_pagination::{
 };
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
+use reminders::domain::models::{
+    CreateReminder, Reminder, ReminderError, ReminderFilter, ReminderForSoup, ReminderPage,
+    ReminderPatch,
+};
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -2899,6 +2905,65 @@ impl EmailPreviewServiceReadOnly for RecordingEmailPreviewService {
     }
 }
 
+/// Records the id sets and limits the reminders leg is asked for.
+#[derive(Default)]
+struct RecordingRemindersService {
+    queries: Arc<Mutex<Vec<(Vec<Uuid>, i64)>>>,
+}
+
+impl RemindersService for RecordingRemindersService {
+    async fn create_reminder(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: CreateReminder,
+        _entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("RecordingRemindersService.create_reminder")
+    }
+
+    async fn get_reminder(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("RecordingRemindersService.get_reminder")
+    }
+
+    async fn list_reminders(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _filter: ReminderFilter,
+    ) -> Result<ReminderPage, ReminderError> {
+        unimplemented!("RecordingRemindersService.list_reminders")
+    }
+
+    async fn list_reminders_for_soup(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        query: SoupReminderQuery<'_>,
+    ) -> Result<Vec<ReminderForSoup>, ReminderError> {
+        self.queries
+            .lock()
+            .unwrap()
+            .push((query.ids.to_vec(), query.limit));
+        Ok(Vec::new())
+    }
+
+    async fn update_reminder(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _patch: ReminderPatch,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("RecordingRemindersService.update_reminder")
+    }
+
+    async fn delete_reminder(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ReminderError> {
+        unimplemented!("RecordingRemindersService.delete_reminder")
+    }
+}
+
 /// Touched email hydration must use the unfiltered `All` view: the candidate
 /// query admits threads the caller's display view (e.g. Inbox) would hide,
 /// and a view-filtered hydration would silently drop them from the page.
@@ -3369,6 +3434,117 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
     let email_filters = email_filters.lock().unwrap();
     assert!(email_filters[0].contains(&thread.to_string()));
     assert!(email_filters[0].contains("Importance"));
+}
+
+fn reminder_id_filters(ids: &[Uuid]) -> EntityFilters {
+    EntityFilters {
+        reminder_filters: item_filters::ReminderFilters {
+            include: true,
+            ids: ids.iter().map(Uuid::to_string).collect(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+/// A request naming reminder ids hydrates only the page candidates among
+/// them: the leg is asked for the intersection.
+#[tokio::test]
+async fn notified_soup_narrows_the_reminder_leg_to_the_request_ids() {
+    let named = Uuid::from_u128(11);
+    let unnamed = Uuid::from_u128(12);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_notified_soup_page()
+        .times(1)
+        .returning(move |req| {
+            assert!(req.hydratable.reminders);
+            Box::pin(async move {
+                Ok(vec![
+                    notified(EntityType::Reminder, named, base + Days::new(2)),
+                    notified(EntityType::Reminder, unnamed, base + Days::new(1)),
+                ])
+            })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let reminders_service = RecordingRemindersService::default();
+    let queries = reminders_service.queries.clone();
+
+    let _page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        reminders_service,
+    )
+    .get_user_soup(
+        notified_request(20, vec![], reminder_id_filters(&[named])),
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(*queries.lock().unwrap(), vec![(vec![named], 1)]);
+}
+
+/// When no page candidate is among the named ids the leg is skipped: an
+/// empty id list means every reminder to the reminders service, which would
+/// hydrate — and surface — the candidates the request excluded.
+#[tokio::test]
+async fn notified_soup_skips_the_reminder_leg_when_no_candidate_is_named() {
+    let named = Uuid::from_u128(11);
+    let unnamed = Uuid::from_u128(12);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_notified_soup_page()
+        .times(1)
+        .returning(move |_req| {
+            Box::pin(async move {
+                Ok(vec![notified(
+                    EntityType::Reminder,
+                    unnamed,
+                    base + Days::new(1),
+                )])
+            })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let reminders_service = RecordingRemindersService::default();
+    let queries = reminders_service.queries.clone();
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        reminders_service,
+    )
+    .get_user_soup(
+        notified_request(20, vec![], reminder_id_filters(&[named])),
+        None,
+    )
+    .await
+    .unwrap()
+    .into_notified()
+    .unwrap();
+
+    assert!(queries.lock().unwrap().is_empty());
+    assert!(page.items.is_empty());
 }
 
 /// Calendar events hydrate by id through the main query, so only the

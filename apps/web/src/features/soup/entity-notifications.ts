@@ -1,6 +1,7 @@
 import type { EntityData } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
 import { toNotificationEntity } from '@entity/utils/notification';
+import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { NotificationSource } from '@notifications/notification-source';
 import {
   getAllNotificationsFromGroup,
@@ -26,17 +27,7 @@ function channelThreadNotificationIds(
           { tag: 'channel_message_send' },
           (metadata) => metadata.content.messageId === threadId
         )
-        .with(
-          { tag: 'channel_mention' },
-          (metadata) =>
-            (metadata.content.threadId ?? metadata.content.messageId) ===
-            threadId
-        )
-        .with(
-          { tag: 'channel_message_reply' },
-          (metadata) => metadata.content.threadId === threadId
-        )
-        .otherwise(() => false);
+        .otherwise(() => channelThreadRootId(notification) === threadId);
       if (belongsToThread) ids.add(notification.id);
     }
     return ids;

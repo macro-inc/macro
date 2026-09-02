@@ -941,29 +941,33 @@ where
             .map_or((Vec::new(), None), |(sources, query)| {
                 (sources, Some(query))
             });
-        let reminder_request = legs
-            .reminders
-            .as_ref()
-            .filter(|_| !reminder_ids.is_empty())
-            .map(|template| GetRemindersRequest {
+        let reminder_request = legs.reminders.as_ref().and_then(|template| {
+            // A request naming specific reminders keeps that constraint;
+            // otherwise the page's candidates are the id set. An empty
+            // intersection skips the leg: an empty id list means every
+            // reminder to the reminders service.
+            let ids: Vec<Uuid> = if template.reminder_ids.is_empty() {
+                reminder_ids.clone()
+            } else {
+                reminder_ids
+                    .iter()
+                    .copied()
+                    .filter(|id| template.reminder_ids.contains(id))
+                    .collect()
+            };
+            if ids.is_empty() {
+                return None;
+            }
+            Some(GetRemindersRequest {
                 user_id: template.user_id.clone(),
-                // A request naming specific reminders keeps that constraint;
-                // otherwise the page's candidates are the id set.
-                reminder_ids: if template.reminder_ids.is_empty() {
-                    reminder_ids.clone()
-                } else {
-                    reminder_ids
-                        .iter()
-                        .copied()
-                        .filter(|id| template.reminder_ids.contains(id))
-                        .collect()
-                },
+                limit: ids.len() as i64,
+                reminder_ids: ids,
                 entities: template.entities.clone(),
                 completed: template.completed,
                 fired: template.fired,
                 order: template.order,
-                limit: reminder_ids.len() as i64,
-            });
+            })
+        });
 
         // The repo error type is not Send, so it cannot ride through
         // tokio::join!; convert inside the future instead.

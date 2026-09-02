@@ -3,10 +3,10 @@
 //! user see it, and does it satisfy the request's soup-owned filters.
 //!
 //! Every gate renders against `id_sql`, the SQL expression yielding the
-//! candidate's entity id as TEXT (`ae.entity_id` for the activity log,
-//! `n.event_item_id` for notifications). Both candidate queries bind the user
-//! id as `$1` and the caller's inbox link ids as `$5`, which the gates
-//! reference directly.
+//! candidate's entity id as TEXT (`ae.entity_id` for the activity log, the
+//! `notified` CTE's derived key for notifications). Both candidate queries
+//! bind the user id as `$1` and the caller's inbox link ids as `$5`, which
+//! the gates reference directly.
 
 use filter_ast::Expr;
 use item_filters::ast::EntityFilterAst;
@@ -17,7 +17,8 @@ use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    access_semi_join, build_chat_filter, build_document_filter, build_notification_done_clause,
+    NotificationPredicate, access_semi_join, build_chat_filter, build_document_filter,
+    build_notification_done_clause, build_notification_exists_clause,
     build_notification_seen_clause, build_project_filter, build_properties_filter,
     chat_filter_is_impossible, document_filter_is_impossible,
     document_filter_needs_task_property_joins, project_filter_is_impossible,
@@ -150,22 +151,27 @@ pub(super) fn uuid_guarded(id_sql: &str, gate: String) -> String {
 /// The channel tree folds in the channels crate, which hydration applies in
 /// full; the notification-state conjuncts it implies are pre-applied here so
 /// a feed of done channels does not spend candidate slots on rows hydration
-/// is about to drop.
+/// is about to drop. Only channel-level notifications count: mentions and
+/// thread replies name a message as their secondary item and belong to that
+/// thread's row, so a live mention must not keep a channel whose own
+/// notifications are all done in the feed.
 pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
     let implied = implied_conjuncts_sql(
         filter.and_then(|f| f.channel_filter.as_deref()),
-        |literal| match literal {
-            ChannelLiteral::NotificationDone(done) => Some(build_notification_done_clause(
+        |literal| {
+            let predicate = match literal {
+                ChannelLiteral::NotificationDone(done) => NotificationPredicate::Done(*done),
+                ChannelLiteral::NotificationSeen(seen) => NotificationPredicate::Seen(*seen),
+                _ => return None,
+            };
+            Some(build_notification_exists_clause(
                 "cp.channel_id",
                 "channel",
-                *done,
-            )),
-            ChannelLiteral::NotificationSeen(seen) => Some(build_notification_seen_clause(
-                "cp.channel_id",
-                "channel",
-                *seen,
-            )),
-            _ => None,
+                &format!(
+                    "{} AND n.secondary_event_item_type IS DISTINCT FROM 'channel_message'",
+                    predicate.sql()
+                ),
+            ))
         },
     );
     uuid_guarded(

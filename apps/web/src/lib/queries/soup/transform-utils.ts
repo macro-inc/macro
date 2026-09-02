@@ -31,6 +31,7 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
+import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
   CallRecordSearchResult,
@@ -1021,10 +1022,10 @@ export const mapApiSoupItemToEntity = (
   const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
   const touched = touchedAt ? { ...entity, touchedAt } : entity;
   // Likewise only notified_at pages carry this one; the inbox sorts and
-  // date-buckets on it.
-  const notified = item.notified_at
-    ? { ...touched, notifiedAt: item.notified_at }
-    : touched;
+  // date-buckets on it. Resolved through the notified floor so a page that
+  // was in flight when a notification landed can't move the row back down.
+  const notifiedAt = resolveNotifiedAt(entity.id, item.notified_at ?? null);
+  const notified = notifiedAt ? { ...touched, notifiedAt } : touched;
 
   return withRawNotifications(notified, item);
 };

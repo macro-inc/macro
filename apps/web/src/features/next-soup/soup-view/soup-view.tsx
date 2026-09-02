@@ -404,15 +404,14 @@ export const SoupView = (props: SoupViewProps) => {
         : (persistedGroupBy ?? props.initialGroupBy);
 
       // The inbox exposes no sort control on either desktop (the toolbar
-      // hides SoupViewContextSort) or mobile, so its order is fixed: latest
-      // notification first on the tabs whose preset serves `notified_at`
-      // pages, and update recency everywhere else (rows without a
-      // notification stamp fall back to it). Ignore any sort persisted back
-      // when the control was reachable: honoring it would pin the list to an
-      // order the user can no longer change.
+      // hides SoupViewContextSort) or mobile, so its order is fixed: update
+      // recency, which the Signal and Noise presets override with the
+      // notified order they serve (see `clientSort`). Ignore any sort
+      // persisted back when the control was reachable: honoring it would pin
+      // the list to an order the user can no longer change.
       let initialSortIds =
         contentId === 'inbox'
-          ? ['notified_at']
+          ? ['updated_at']
           : (initialCrmView?.sort ?? sortPref());
       if (initialSortIds.length === 0) {
         initialSortIds = props.initialClientSort ?? ['updated_at'];
@@ -808,6 +807,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
+    clientSort,
     fetchNextGroupPage,
     isFetchingGroupPage,
   } = useSoupView();
@@ -1422,7 +1422,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                       >
                         {(row, i) => {
                           const timestamp = () => {
-                            const sort_ = soup.sort.active();
+                            const sort_ = clientSort();
                             // The notified order shows when you were told,
                             // ahead of the row's own recency stamp.
                             if (
