@@ -35,7 +35,6 @@ interface MessageListProps {
   underScrollsBottom?: boolean;
   showMiddleMessages: boolean;
   hiddenChipFocused: boolean;
-  keyboardSelecting: boolean;
   allowRowHover: boolean;
   onHiddenChipFocus: () => void;
   onOpenMiddle: () => void;
@@ -44,7 +43,9 @@ interface MessageListProps {
 export function MessageList(props: MessageListProps) {
   const getIsScrollingToMessage = isScrollingToMessage.get;
   const context = useEmailContext();
-  const isFocusedSelector = createSelector(
+  // One selected message at a time, whether it was reached by click, tab, or
+  // arrow keys — they all write the same focused id.
+  const isSelectedSelector = createSelector(
     context.messages.focusedID,
     (a, b) => !!a && !!b && a === b
   );
@@ -196,10 +197,9 @@ export function MessageList(props: MessageListProps) {
                     <MessageContainer
                       isFirstMessage={normalizedIndex() === 0}
                       isLastMessage={isLastMessage()}
-                      isFocused={
-                        props.keyboardSelecting &&
-                        isFocusedSelector(message().db_id ?? undefined)
-                      }
+                      isSelected={isSelectedSelector(
+                        message().db_id ?? undefined
+                      )}
                       allowHover={props.allowRowHover}
                       message={message()}
                       isExpanded={isExpanded()}
