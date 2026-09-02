@@ -83,9 +83,11 @@ fn open_command() -> OpenSession {
 /// A prompt arriving from a channel that is not the session's own, so it is
 /// the announcing case.
 fn forward_message(content: &str) -> DeliverAction {
+    // Staff: `disconnected_session` is a Daytona coder bot, and the
+    // execute() gate admits only macro.com actors onto those.
     DeliverAction::prompt(
         content,
-        Some(sender()),
+        Some(staff_sender()),
         Some(AnnounceOrigin {
             channel_id: macro_uuid::Uuid::from_u128(0xf0),
             thread_id: macro_uuid::Uuid::from_u128(0xf1),
@@ -1487,7 +1489,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
         id,
         ControlEvent {
             action: AgentAction::prompt("wake up"),
-            actor: Some(sender()),
+            actor: Some(staff_sender()),
         },
     );
     let drive_resume = async {
@@ -1795,7 +1797,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
         id,
         ControlEvent {
             action: AgentAction::prompt("wake up"),
-            actor: Some(sender()),
+            actor: Some(staff_sender()),
         },
     );
     let drive_resume = async {

@@ -1033,9 +1033,11 @@ where
 
     /// Deliver the oldest queued action, marking the session busy on success.
     ///
-    /// The chip is announced here, before delivery, so it exists to anchor
-    /// the turn the agent streams into - and it is announced *at most once*
-    /// per entry: the claimed entry remembers a successful announce, so a
+    /// Composition runs first so a lexical failure never posts a chip for a
+    /// prompt that will not reach the agent. The chip is then announced
+    /// (from the raw text) before delivery, so it exists to anchor the turn
+    /// the agent streams into - and it is announced *at most once* per
+    /// entry: the claimed entry remembers a successful announce, so a
     /// dispatch that fails after the chip posted retries without posting a
     /// second one.
     ///
@@ -1048,6 +1050,18 @@ where
         let Some(mut entry) = self.queues.claim_next(session_id) else {
             return Ok(());
         };
+
+        // Compose a copy: the queued entry stays raw so a retry still edits
+        // and re-composes the user's text, and the chip (below) still shows
+        // what they typed rather than the composed payload.
+        let mut composed = entry.action.clone();
+        if let Err(error) = self
+            .compose_action(&mut composed, entry.actor.as_ref(), entry.announce.as_ref())
+            .await
+        {
+            self.queues.requeue_front(session_id, entry);
+            return Err(error);
+        }
 
         if !entry.announced {
             let announcement = match self
@@ -1076,7 +1090,7 @@ where
 
         let command = DeliverAction {
             id: entry.action_id,
-            action: entry.action.clone(),
+            action: composed,
             actor: entry.actor.clone(),
             announce: entry.announce.clone(),
         };
@@ -1281,38 +1295,20 @@ where
         Ok(())
     }
 
-    /// Compose and deliver one action to the session's runtime.
+    /// Deliver one already-composed action to the session's runtime.
     ///
-    /// Announcing is not this function's business: the chip belongs to
-    /// dispatch (see [`Self::dispatch_next`]), which is the only path an
-    /// announceable action - a prompt from somewhere the session answers back
-    /// into - ever travels. `announce` here is only the prompt's channel
-    /// context source.
+    /// Announcing and composition are not this function's business: both
+    /// belong to dispatch (see [`Self::dispatch_next`]), which is the only
+    /// path a turn-occupying prompt travels. Non-turn-occupying actions
+    /// (set-model, stop) arrive here directly and need neither.
     #[tracing::instrument(err, skip(self, command), fields(agent.session.id = %session_id))]
     async fn deliver(&self, session_id: AgentSessionId, command: DeliverAction) -> Result<()> {
         let DeliverAction {
             id,
-            mut action,
+            action,
             actor,
-            announce,
+            announce: _,
         } = command;
-
-        if let AgentAction::Prompt(prompt) = &mut action {
-            let raw_prompt = prompt.prompt.clone();
-            let prior_messages = if let Some(origin) = announce.as_ref() {
-                Some(
-                    self.load_prompt_context(origin.channel_id, origin.message_id, actor.as_ref())
-                        .await,
-                )
-            } else {
-                None
-            };
-            prompt.prompt = self
-                .prompt_composer
-                .compose(&raw_prompt, prior_messages.as_deref())
-                .await?;
-            prompt.set_name_source(raw_prompt);
-        }
 
         match self
             .sessions
@@ -1359,6 +1355,37 @@ where
             }
             Err(error) => return Err(error.into()),
         }
+        Ok(())
+    }
+
+    /// Compose a prompt in place. Compact and other actions are left as-is.
+    ///
+    /// Channel context is loaded when the prompt named an origin; a lookup
+    /// failure still composes, with empty history, so a transient context
+    /// outage cannot eat the prompt.
+    async fn compose_action(
+        &self,
+        action: &mut AgentAction,
+        actor: Option<&MacroUserIdStr<'static>>,
+        announce: Option<&AnnounceOrigin>,
+    ) -> Result<()> {
+        let AgentAction::Prompt(prompt) = action else {
+            return Ok(());
+        };
+        let raw_prompt = prompt.prompt.clone();
+        let prior_messages = if let Some(origin) = announce {
+            Some(
+                self.load_prompt_context(origin.channel_id, origin.message_id, actor)
+                    .await,
+            )
+        } else {
+            None
+        };
+        prompt.prompt = self
+            .prompt_composer
+            .compose(&raw_prompt, prior_messages.as_deref())
+            .await?;
+        prompt.set_name_source(raw_prompt);
         Ok(())
     }
 
