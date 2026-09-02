@@ -115,19 +115,15 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
-      rawInput: null,
-      rawOutput: null,
       id: 'demo-read',
-      label: 'Read',
+      name: { kind: 'native', name: 'Read' },
       status: 'completed',
       detail: { kind: 'read', paths: ['crates/agent_fold/src/domain/fold.rs'] },
     },
     {
       kind: 'tool_use',
-      rawInput: null,
-      rawOutput: null,
       id: 'demo-search',
-      label: 'Search',
+      name: { kind: 'native', name: 'Search' },
       status: 'completed',
       detail: {
         kind: 'search',
@@ -137,19 +133,15 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
-      rawInput: null,
-      rawOutput: null,
       id: 'demo-edit',
-      label: 'Edit',
+      name: { kind: 'native', name: 'Edit' },
       status: 'completed',
       detail: { kind: 'edit', diffs: [FIXTURE_DIFF] },
     },
     {
       kind: 'tool_use',
-      rawInput: null,
-      rawOutput: null,
       id: 'demo-terminal',
-      label: 'Bash',
+      name: { kind: 'native', name: 'Bash' },
       status: 'running',
       detail: {
         kind: 'terminal',

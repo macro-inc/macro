@@ -5,6 +5,7 @@
  * row-level facts every card shares.
  */
 
+import type { ToolName } from '@service-agent-fold/generated/types';
 import type { JSX } from 'solid-js';
 import type { ToolStatus } from '../../ui';
 
@@ -16,6 +17,14 @@ export type ToolCallCommon = {
   muted: boolean;
   trailing: JSX.Element | undefined;
 };
+
+/**
+ * The short name to show for a tool: its own name, without the MCP server
+ * namespace the fold already separated out.
+ */
+export function toolLabel(name: ToolName): string {
+  return name.kind === 'mcp' ? name.tool : name.name;
+}
 
 /** Subtitle for a call that touched paths: the path, or how many. */
 export function pathsSubtitle(paths: string[]): string | undefined {

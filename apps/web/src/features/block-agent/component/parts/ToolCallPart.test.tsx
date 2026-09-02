@@ -29,6 +29,14 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
   ),
 }));
 
+// Markdown rendering pulls in the Lexical editor; the nested transcript's
+// prose is a marker here.
+vi.mock('./TextPart', () => ({
+  TextPart: (props: { text: string }) => (
+    <p data-testid="text-part">{props.text}</p>
+  ),
+}));
+
 // The ui primitives are mocked (the AssistantMessageParts.test.tsx idiom):
 // ToolCard pulls in kobalte + svg sprites and PierreDiff pulls in the diff
 // engine — the layer under test here is the per-kind card components and the
@@ -67,23 +75,25 @@ vi.mock('../../ui', () => ({
   FoldedPathList: (props: { paths: string[] }) => (
     <div data-testid="path-list">{props.paths.join(',')}</div>
   ),
+  Thought: (props: { text: string }) => (
+    <div data-testid="thought">{props.text}</div>
+  ),
 }));
 
 type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
 
 function toolUse(
   detail: ToolUsePart['detail'],
-  overrides?: Partial<ToolUsePart>
+  overrides?: Partial<Omit<ToolUsePart, 'name'>> & { name?: string }
 ): ToolUsePart {
+  const { name, ...rest } = overrides ?? {};
   return {
     kind: 'tool_use',
     id: 'call-1',
-    label: 'Tool',
+    name: { kind: 'native', name: name ?? 'Tool' },
     status: 'completed',
     detail,
-    rawInput: null,
-    rawOutput: null,
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -98,7 +108,7 @@ describe('ToolCallPart routing', () => {
             output: 'running 14 tests',
             exitCode: 0,
           },
-          { label: 'Bash' }
+          { name: 'Bash' }
         )}
       />
     ));
@@ -109,6 +119,23 @@ describe('ToolCallPart routing', () => {
     expect(rendered.getByTestId('body').textContent).toContain(
       'running 14 tests'
     );
+  });
+
+  it('shows an MCP tool by its own name, without the server namespace', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={{
+          ...toolUse({
+            kind: 'other',
+            acpKind: 'other',
+            output: null,
+            input: null,
+          }),
+          name: { kind: 'mcp', server: 'deepwiki', tool: 'ask' },
+        }}
+      />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe('ask');
   });
 
   it('renders an edit with computed +/− counts and the diff body', () => {
@@ -154,33 +181,37 @@ describe('ToolCallPart routing', () => {
   });
 });
 
-describe('ToolCallPart Macro tool routing', () => {
-  // A ReadContent call still in flight: name and arguments parse, no
-  // response required yet.
-  const macroPart = (overrides?: Partial<ToolUsePart>) =>
+describe('ToolCallPart Macro tools', () => {
+  // A ReadContent call the fold already named and unwrapped.
+  const readContent = (overrides?: Partial<Omit<ToolUsePart, 'name'>>) =>
     toolUse(
-      { kind: 'read', paths: [] },
       {
-        label: 'ReadContent',
-        status: 'running',
-        rawInput: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
-        ...overrides,
-      }
+        kind: 'macro',
+        input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
+        output: null,
+        error: null,
+      },
+      { name: 'ReadContent', status: 'running', ...overrides }
     );
 
-  it('routes an in-flight call with parseable input to the chat renderer', () => {
-    const rendered = render(() => <ToolCallPart part={macroPart()} />);
+  it('renders a known Macro tool with the chat component', () => {
+    const rendered = render(() => <ToolCallPart part={readContent()} />);
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
     expect(rendered.getByTestId('macro-tool').dataset.complete).toBe('false');
     expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 
-  it('routes a completed call whose raw output parses, as the response', () => {
+  it('passes the unwrapped output as the chat response once complete', () => {
     const rendered = render(() => (
       <ToolCallPart
-        part={macroPart({
+        part={readContent({
           status: 'completed',
-          rawOutput: { content: { text: 'hi' }, comments: [] },
+          detail: {
+            kind: 'macro',
+            input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
+            output: { content: { text: 'hi' }, comments: [] },
+            error: null,
+          },
         })}
       />
     ));
@@ -188,61 +219,213 @@ describe('ToolCallPart Macro tool routing', () => {
     expect(rendered.getByTestId('macro-tool').dataset.hasResponse).toBe('true');
   });
 
-  it('strips an mcp__<server>__ prefix when resolving the tool name', () => {
-    const rendered = render(() => (
-      <ToolCallPart part={macroPart({ label: 'mcp__macro__ReadContent' })} />
-    ));
-    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
-  });
-
-  it('keeps a completed call with no parseable response on the generic cards', () => {
-    // The chat renderer shows complete-without-response as failed, which
-    // would be wrong for a call that succeeded.
-    const rendered = render(() => (
-      <ToolCallPart part={macroPart({ status: 'completed' })} />
-    ));
-    expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('tool-card')).not.toBeNull();
-  });
-
-  it('routes a failed call — the chat renderer owns the failed treatment', () => {
-    const rendered = render(() => (
-      <ToolCallPart
-        part={macroPart({ status: 'failed', rawOutput: { error: 'nope' } })}
-      />
-    ));
-    expect(rendered.getByTestId('macro-tool').dataset.complete).toBe('true');
-  });
-
-  it('keeps an unknown tool name on the generic cards', () => {
+  it('keeps a Macro tool the chat has no component for on a labelled card', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse(
-          { kind: 'read', paths: ['a.rs'] },
-          { label: 'Read', rawInput: { filePath: 'a.rs' } }
+          {
+            kind: 'macro',
+            input: { anything: 1 },
+            output: { result: 'ok' },
+            error: null,
+          },
+          { name: 'BrandNewTool' }
         )}
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('tool-card')).not.toBeNull();
+    expect(rendered.getByTestId('title').textContent).toBe('BrandNewTool');
+    expect(rendered.getByTestId('body').textContent).toContain(
+      '"result": "ok"'
+    );
   });
 
-  it('keeps a known name whose input does not parse on the generic cards', () => {
+  it('keeps a known tool whose arguments do not fit its schema on the card', () => {
     const rendered = render(() => (
       <ToolCallPart
-        part={macroPart({ rawInput: { documentId: 'not-a-uuid' } })}
+        part={readContent({
+          detail: {
+            kind: 'macro',
+            input: { documentId: 'not-a-uuid' },
+            output: null,
+            error: null,
+          },
+        })}
       />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
     expect(rendered.getByTestId('tool-card')).not.toBeNull();
   });
 
-  it('keeps a known name with no raw input on the generic cards', () => {
+  it('shows a failed Macro tool with its error, faded', () => {
     const rendered = render(() => (
-      <ToolCallPart part={macroPart({ rawInput: null })} />
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'macro',
+            input: { limit: 5 },
+            output: null,
+            error: 'permission denied',
+          },
+          { name: 'ListEntities', status: 'failed' }
+        )}
+      />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
-    expect(rendered.getByTestId('tool-card')).not.toBeNull();
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('subtitle').textContent).toBe(
+      'permission denied'
+    );
+    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+  });
+});
+
+describe('ToolCallPart user tools', () => {
+  const email = (
+    outcome: Extract<ToolUsePart['detail'], { kind: 'user_tool' }>['outcome']
+  ) =>
+    toolUse(
+      {
+        kind: 'user_tool',
+        input: {
+          subject: 'Q3 plan',
+          body: 'Hi Alice',
+          to: [{ email: 'alice@example.com', name: 'Alice' }],
+        },
+        outcome,
+      },
+      { name: 'SendEmail' }
+    );
+
+  it('shows the draft with recipients, subject, and body while pending', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={email({ kind: 'pending' })} />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe('SendEmail');
+    expect(rendered.getByTestId('subtitle').textContent).toBe(
+      'To Alice · Q3 plan'
+    );
+    expect(rendered.getByTestId('body').textContent).toBe('Hi Alice');
+    expect(rendered.getByTestId('trailing').textContent).toBe('Awaiting you');
+  });
+
+  it('reads the outcome into the trailing label', () => {
+    for (const [outcome, label] of [
+      [{ kind: 'sent', messageId: 'm', threadId: 't' }, 'Sent'],
+      [{ kind: 'draft', draftId: 'd', threadId: null }, 'Saved as draft'],
+      [{ kind: 'rejected' }, 'Rejected'],
+      [{ kind: 'edited' }, 'Edited'],
+    ] as const) {
+      const rendered = render(() => <ToolCallPart part={email(outcome)} />);
+      expect(rendered.getByTestId('trailing').textContent).toBe(label);
+      rendered.unmount();
+    }
+  });
+
+  it('shows a failed user tool faded with the error as body', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={email({ kind: 'failed', message: 'no inbox' })} />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('body').textContent).toBe('no inbox');
+  });
+});
+
+describe('ToolCallPart subagents', () => {
+  const subagent = (
+    overrides?: Partial<Extract<ToolUsePart['detail'], { kind: 'subagent' }>>
+  ) =>
+    toolUse(
+      {
+        kind: 'subagent',
+        agentType: 'general-purpose',
+        description: 'Add 5+5 with Python',
+        prompt: 'Run python and report the output.',
+        background: false,
+        children: [
+          toolUse(
+            {
+              kind: 'terminal',
+              command: 'python3 -c "print(5+5)"',
+              output: '10',
+              exitCode: 0,
+            },
+            { id: 'child', name: 'Bash' }
+          ),
+        ],
+        result: {
+          text: 'Output: `10`',
+          error: null,
+          agentId: 'a1',
+          model: 'claude-opus-5[1m]',
+          durationMs: 3485,
+          tokens: 26077,
+          toolUses: 1,
+          stats: null,
+        },
+        ...overrides,
+      },
+      { name: 'Agent' }
+    );
+
+  it('titles the card with the description and nests the children', () => {
+    const rendered = render(() => <ToolCallPart part={subagent()} />);
+    const titles = rendered.getAllByTestId('title').map((el) => el.textContent);
+    expect(titles).toEqual(['Add 5+5 with Python', 'Bash']);
+    expect(rendered.getAllByTestId('subtitle')[0]?.textContent).toBe(
+      'general-purpose'
+    );
+    expect(rendered.getByTestId('terminal').textContent).toBe('10');
+    expect(rendered.getByTestId('text-part').textContent).toBe('Output: `10`');
+  });
+
+  it('summarizes the result in the trailing slot', () => {
+    const rendered = render(() => <ToolCallPart part={subagent()} />);
+    expect(rendered.getAllByTestId('trailing')[0]?.textContent).toBe(
+      '1 tool · 3.5s · 26k tokens'
+    );
+  });
+
+  it('falls back to the tool name and shows the brief when little is known', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={subagent({
+          description: null,
+          agentType: null,
+          children: [],
+          result: null,
+        })}
+      />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe('Agent');
+    expect(rendered.getByTestId('body').textContent).toContain(
+      'Run python and report the output.'
+    );
+  });
+
+  it('shows a failed subagent faded with its error', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={subagent({
+          children: [],
+          result: {
+            text: null,
+            error: 'Subagent failed: boom',
+            agentId: null,
+            model: null,
+            durationMs: null,
+            tokens: null,
+            toolUses: null,
+            stats: null,
+          },
+        })}
+      />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+    expect(rendered.getByTestId('output').textContent).toBe(
+      'Subagent failed: boom'
+    );
   });
 });
 
