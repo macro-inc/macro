@@ -193,17 +193,20 @@ export function listNeedsOlderPage(args: {
   return args.scrollHeight <= args.clientHeight;
 }
 
-export function fetchOlderMessages(
+export async function fetchOlderMessages(
   list: HTMLElement,
   fetchNextPage: () => unknown
-): void {
+): Promise<void> {
   const previousScrollHeight = list.scrollHeight;
   const previousScrollTop = list.scrollTop;
-  void Promise.resolve(fetchNextPage()).then(() => {
+  try {
+    await fetchNextPage();
     requestAnimationFrame(() => {
       adjustScrollAfterPrepend(list, previousScrollHeight, previousScrollTop);
     });
-  });
+  } catch {
+    return;
+  }
 }
 
 export function revealMessageAfterLayout(

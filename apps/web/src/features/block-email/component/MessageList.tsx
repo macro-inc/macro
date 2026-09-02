@@ -72,7 +72,7 @@ export function MessageList(props: MessageListProps) {
       ) {
         return;
       }
-      fetchOlderMessages(list, context.query.fetchNextPage);
+      void fetchOlderMessages(list, context.query.fetchNextPage);
     };
 
     applyHeight();
@@ -105,7 +105,7 @@ export function MessageList(props: MessageListProps) {
           !context.query.isFetching() &&
           context.query.hasMore()
         ) {
-          fetchOlderMessages(list, context.query.fetchNextPage);
+          void fetchOlderMessages(list, context.query.fetchNextPage);
         }
       }}
     >
