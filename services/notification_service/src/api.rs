@@ -43,6 +43,7 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationRea
         )
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+    let app = Router::new().merge(app.clone()).nest("/notification", app);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
