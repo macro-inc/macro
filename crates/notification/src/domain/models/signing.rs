@@ -1,13 +1,46 @@
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::borrow::Cow;
-use url::Url;
+use url::{ParseError, Url};
 
 #[cfg(test)]
 mod test;
 
 /// The query parameter name used to store the HMAC signature.
 const SIG_PARAM: &str = "sig";
+
+/// Append `path` onto `base` without discarding `base`'s existing path.
+///
+/// `Url::set_path` and `Url::join` with an absolute path both replace the
+/// entire path, so a service URL that already carries a gateway prefix
+/// (for example `/notification`) would sign a different URL than the one
+/// clients request.
+pub fn append_path(mut base: Url, path: &str) -> Url {
+    let prefix = base.path().trim_end_matches('/');
+    let suffix = path.trim_start_matches('/');
+    base.set_path(&format!("{prefix}/{suffix}"));
+    base
+}
+
+/// Rebuild the public URL the client requested.
+///
+/// HMAC covers the full URL string, including host. Use the request `Host`
+/// and original path-and-query so a link signed for the legacy hostname
+/// still verifies after the configured service URL moves to the gateway.
+/// `scheme` comes from the configured service URL because TLS terminates
+/// at the ALB and the hop into the task is HTTP.
+pub fn public_request_url(
+    scheme: &str,
+    host: &str,
+    path_and_query: &str,
+) -> Result<Url, ParseError> {
+    let path_and_query = if path_and_query.starts_with('/') {
+        Cow::Borrowed(path_and_query)
+    } else {
+        Cow::Owned(format!("/{path_and_query}"))
+    };
+    Url::parse(&format!("{scheme}://{host}{path_and_query}"))
+}
 
 /// A wrapper over url which is guaranteed to be a cryptographically signed url.
 /// The signature exists as a query param under "sig".
