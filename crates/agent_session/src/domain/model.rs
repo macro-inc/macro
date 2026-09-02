@@ -278,14 +278,11 @@ pub struct SessionBot {
     pub avatar_url: Option<String>,
 }
 
-/// One action waiting in a session's queue, as every transport serves it.
-///
-/// In the domain rather than any adapter because two of them speak it
-/// byte-identically - the queue GET endpoint and the realtime queue snapshot -
-/// and that identity is the client contract: a viewer baselining from REST
-/// and one following the socket read the same bytes.
+/// One action waiting in a session's queue.
 ///
 /// Clients deserialize this, so both derives are used.
+// Domain-owned because the queue GET endpoint and the realtime snapshot
+// serialize this type byte-identically; that identity is the client contract.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct QueuedActionDto {
