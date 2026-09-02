@@ -877,20 +877,20 @@ where
     ) -> Result<CommandOutcome> {
         match &command {
             HarnessCommand::Open(open)
-                if AgentKind::of(open.bot_id) == AgentKind::Cursor
+                if AgentKind::of(open.bot_id) == AgentKind::SandboxedCoder
                     && !is_macro_staff(&open.origin.sender) =>
             {
                 return Err(AgentSessionError::Forbidden.into());
             }
             // The queue mutations sit behind the same staff gate as delivery:
             // an edited entry is delivered later under its original identity,
-            // so rewriting (or dropping) what a Cursor session is about to
+            // so rewriting (or dropping) what a Daytona session is about to
             // run is the same privilege as prompting it.
             HarnessCommand::Deliver(DeliverAction { actor, .. })
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id) == AgentKind::Cursor
+                if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
                     && !actor.as_ref().is_some_and(is_macro_staff)
                 {
                     return Err(AgentSessionError::Forbidden.into());

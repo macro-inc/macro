@@ -54,6 +54,12 @@ fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
 }
 
+/// A sender whose email domain is `is_macro_staff` - the identity the
+/// Daytona staff gate admits.
+fn staff_sender() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("staff@macro.com").expect("a valid user id")
+}
+
 fn open_command() -> OpenSession {
     let thread_id = macro_uuid::generate_uuid_v7();
     OpenSession {
@@ -1054,16 +1060,16 @@ async fn live_session(
     container
 }
 
-async fn live_cursor_session(
+/// Open a Daytona-backed (sandboxed coder) session with a staff opener - the
+/// only identity the gate in `execute` lets past `Open`.
+async fn live_sandboxed_coder_session(
     service: &TestHarness,
     containers: &MockContainerManager,
     id: AgentSessionId,
 ) -> ContainerMock {
     let mut command = open_command();
-    command.bot_id = bot_id::CURSOR_BOT_ID;
-    command.runtime.kind = AgentKind::Cursor;
-    command.runtime.harness = "cursor".to_owned();
-    command.origin.sender = sender();
+    command.bot_id = bot_id::MACRO_CODER_BOT_ID;
+    command.origin.sender = staff_sender();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
@@ -1079,7 +1085,7 @@ async fn live_cursor_session(
         container
     };
     let (opened, container) = tokio::join!(open, drive);
-    opened.expect("cursor session should open");
+    opened.expect("sandboxed coder session should open");
     container
 }
 
@@ -1181,32 +1187,32 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 }
 
 #[tokio::test]
-async fn a_non_staff_control_event_cannot_drive_a_cursor_session() {
+async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
-    let container = live_cursor_session(&service, &containers, id).await;
+    let container = live_sandboxed_coder_session(&service, &containers, id).await;
 
     let error = service
         .control_event(
             id,
             ControlEvent {
-                action: AgentAction::prompt("spend cursor credits"),
+                action: AgentAction::prompt("spend daytona credits"),
                 actor: Some(sender()),
             },
         )
         .await
-        .expect_err("non-staff must not control cursor sessions");
+        .expect_err("non-staff must not control sandboxed coder sessions");
 
     assert!(matches!(error, AgentSessionError::Forbidden));
     assert_eq!(prompts(&container.agent()).len(), 1);
 }
 
 #[tokio::test]
-async fn a_staff_control_event_can_drive_a_cursor_session() {
+async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
     let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
         harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
     let id = AgentSessionId::new();
-    let container = live_cursor_session(&service, &containers, id).await;
+    let container = live_sandboxed_coder_session(&service, &containers, id).await;
     turns.settled(id).await;
 
     service
@@ -1214,11 +1220,11 @@ async fn a_staff_control_event_can_drive_a_cursor_session() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("continue"),
-                actor: Some(sender()),
+                actor: Some(staff_sender()),
             },
         )
         .await
-        .expect("the session owner may control cursor sessions");
+        .expect("macro staff may control sandboxed coder sessions");
 
     assert_eq!(prompts(&container.agent()).len(), 2);
 }
