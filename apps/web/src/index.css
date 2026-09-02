@@ -933,6 +933,11 @@ a {
 @utility macro-thread-message-list {
   scroll-padding-top: 1rem;
   scroll-padding-bottom: 1rem;
+  scroll-behavior: smooth;
+
+  @media (prefers-reduced-motion: reduce) {
+    scroll-behavior: auto;
+  }
 }
 
 @utility macro-thread-message-header-row {

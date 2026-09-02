@@ -48,6 +48,7 @@ import {
   isUnreadMessage,
   keyboardRevealDelta,
   leadingThrottle,
+  listScrollBehavior,
   messageElement,
   nearestDelta,
   pageThenAdvanceDelta,
@@ -75,8 +76,9 @@ import { EmailSidePanelSections } from './sidepanel/EmailSidePanelSections';
 import { TopBar } from './TopBar';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
-const SCROLL_ANIMATION_MS = 1000;
-const KEYBOARD_SCROLL_MS = 300;
+/** List navigation — keep within the 300ms UI motion budget (improve-animations). */
+const SCROLL_ANIMATION_MS = 250;
+const KEYBOARD_SCROLL_MS = 250;
 
 type EmailViewProps = {
   title: string;
@@ -345,7 +347,7 @@ function EmailContent(props: EmailViewProps) {
     if (top === 0) return false;
     setIsScrollingToMessage(true);
     setTimeout(() => setIsScrollingToMessage(false), animationMs);
-    list.scrollBy({ top, behavior: 'smooth' });
+    list.scrollBy({ top, behavior: listScrollBehavior() });
     return true;
   };
 
@@ -354,7 +356,7 @@ function EmailContent(props: EmailViewProps) {
     if (!tryKeyboardListScroll()) return true;
     setIsScrollingToMessage(true);
     setTimeout(() => setIsScrollingToMessage(false), KEYBOARD_SCROLL_MS);
-    list.scrollBy({ top, behavior: 'smooth' });
+    list.scrollBy({ top, behavior: listScrollBehavior() });
     return true;
   };
 

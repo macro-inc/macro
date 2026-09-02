@@ -9,6 +9,7 @@ import {
   keyboardRevealDelta,
   leadingThrottle,
   listNeedsOlderPage,
+  listScrollBehavior,
   nearestDelta,
   pageThenAdvanceDelta,
   revealDelta,
@@ -193,6 +194,22 @@ describe('nearestDelta', () => {
     box(container, 0, 800);
     box(element, 900, 1100);
     expect(nearestDelta(container, element)).toBe(300);
+  });
+});
+
+describe('listScrollBehavior', () => {
+  it('returns auto when reduced motion is preferred', () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: true,
+    } as MediaQueryList);
+    expect(listScrollBehavior()).toBe('auto');
+  });
+
+  it('returns smooth otherwise', () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: false,
+    } as MediaQueryList);
+    expect(listScrollBehavior()).toBe('smooth');
   });
 });
 

@@ -77,6 +77,14 @@ function scrollPaddingInset(
   );
 }
 
+/** Respect system motion settings for programmatic list scroll. */
+export function listScrollBehavior(): ScrollBehavior {
+  if (typeof window === 'undefined') return 'auto';
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 'auto'
+    : 'smooth';
+}
+
 export function alignmentDelta(
   container: HTMLElement,
   element: HTMLElement,
@@ -99,7 +107,11 @@ export function alignmentDelta(
 
 /** Native scroll-into-view so the list scroll-padding keeps focus rings in view. */
 export function scrollFocusedCardIntoView(element: HTMLElement): void {
-  element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  element.scrollIntoView({
+    block: 'nearest',
+    inline: 'nearest',
+    behavior: listScrollBehavior(),
+  });
 }
 
 export function messageElement(
@@ -119,7 +131,7 @@ export function alignElementInContainer(
   container: HTMLElement,
   element: HTMLElement,
   align: ScrollAlign,
-  behavior: ScrollBehavior = 'auto'
+  behavior: ScrollBehavior = listScrollBehavior()
 ): void {
   const nativeBehavior: ScrollBehavior =
     behavior === 'instant' ? 'auto' : behavior;

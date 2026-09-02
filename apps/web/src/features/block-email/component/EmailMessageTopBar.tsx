@@ -184,7 +184,7 @@ function HeaderTopRow(props: {
             >
               <CaretRight
                 class={cn(
-                  'size-3! text-ink-muted transition-transform',
+                  'size-3! text-ink-muted transition-transform duration-150 ease-out',
                   props.isExpanded && 'rotate-90'
                 )}
               />
