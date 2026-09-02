@@ -39,7 +39,7 @@ const serverHostRemote = {
   'notification-service': `${gatewayHost}/notification`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
   'unfurl-service': `${gatewayHost}/unfurl`,
-  contacts: `https://contacts${devServerSuffix}.macro.com`,
+  contacts: `${gatewayHost}/contacts`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
   'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,

@@ -66,8 +66,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "contacts-service",
-		dev: "https://contacts-dev.macro.com/api-doc/openapi.json",
-		prod: "https://contacts.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/contacts/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/contacts/api-doc/openapi.json",
 		local: "http://localhost:8083/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-contacts/",
 		orvalKey: "contactService",

@@ -558,8 +558,8 @@ service_url! {
         /// Contacts service API URL.
         pub ContactsServiceUrl {
             local: "http://localhost:8083",
-            dev: "https://contacts-dev.macro.com",
-            prod: "https://contacts.macro.com",
+            dev: "https://dev-gateway.macro.com/contacts",
+            prod: "https://gateway.macro.com/contacts",
         },
         /// Email service API URL.
         pub EmailServiceUrl {

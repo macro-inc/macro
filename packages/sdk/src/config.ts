@@ -36,7 +36,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     'scheduled-action': 'https://agent-schedule-dev.macro.com',
     'static-files': 'https://static-file-service-dev.macro.com',
     connection: 'https://connection-gateway-dev.macro.com',
-    contacts: 'https://contacts-dev.macro.com',
+    contacts: 'https://dev-gateway.macro.com/contacts',
     unfurl: 'https://dev-gateway.macro.com/unfurl',
   },
   prod: {
@@ -51,7 +51,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     'scheduled-action': 'https://agent-schedule.macro.com',
     'static-files': 'https://static-file-service.macro.com',
     connection: 'https://connection-gateway.macro.com',
-    contacts: 'https://contacts.macro.com',
+    contacts: 'https://gateway.macro.com/contacts',
     unfurl: 'https://gateway.macro.com/unfurl',
   },
   local: {
