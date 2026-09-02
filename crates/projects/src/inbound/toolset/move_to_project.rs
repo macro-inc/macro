@@ -3,6 +3,7 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
+use bot_id::BotId;
 use entity_access::domain::models::{
     AccessError, BotAccessScope, EditAccessLevel, EntityAccessReceipt, RequiredPermission,
 };
@@ -83,19 +84,19 @@ fn move_failed(code: EntityMutationErrorCode) -> ToolCallError {
 
 /// Whose receipts a move is minted with.
 ///
-/// Documents publish bot attribution from a Macro AI receipt. Chat `patch`,
-/// project lifecycle events, and email `thread_project_changed` still require
-/// an authenticated user, so those moves stay user-scoped.
+/// Documents publish bot attribution from the tool actor's receipt. Chat
+/// `patch`, project lifecycle events, and email `thread_project_changed` still
+/// require an authenticated user, so those moves stay user-scoped.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum MovePrincipal {
-    MacroAi,
+    Bot(BotId),
     User,
 }
 
 impl MovePrincipal {
-    fn for_entity(entity_type: EntityType) -> Self {
+    fn for_entity(actor: BotId, entity_type: EntityType) -> Self {
         match entity_type {
-            EntityType::Document => Self::MacroAi,
+            EntityType::Document => Self::Bot(actor),
             _ => Self::User,
         }
     }
@@ -112,10 +113,10 @@ impl MovePrincipal {
         ESvc: EntityAccessService,
     {
         match self {
-            Self::MacroAi => {
+            Self::Bot(actor) => {
                 entity_access_service
                     .generate_bot_entity_access_receipt::<T>(
-                        bot_id::MACRO_AI_BOT_ID,
+                        actor,
                         BotAccessScope::user(user_id.clone()),
                         entity_id,
                         entity_type,
@@ -136,6 +137,7 @@ impl MovePrincipal {
 async fn move_with<S, ESvc>(
     service: &S,
     entity_access_service: &ESvc,
+    actor: BotId,
     user_id: &MacroUserIdStr<'static>,
     entity: Entity<'static>,
     project_id: Option<String>,
@@ -144,7 +146,7 @@ where
     S: MoveEntity,
     ESvc: EntityAccessService,
 {
-    let principal = MovePrincipal::for_entity(entity.entity_type);
+    let principal = MovePrincipal::for_entity(actor, entity.entity_type);
     let receipt = principal
         .receipt::<S::Receipt, _>(
             entity_access_service,
@@ -246,11 +248,13 @@ where
         let project_id = self.project_id.map(|id| id.to_string());
 
         let entity_access_service = &*service_context.entity_access_service;
+        let actor = service_context.actor;
         match self.entity_type {
             MoveableEntityType::Document => {
                 move_with(
                     &*service_context.document_move_service,
                     entity_access_service,
+                    actor,
                     &user_id,
                     entity,
                     project_id,
@@ -261,6 +265,7 @@ where
                 move_with(
                     &*service_context.chat_move_service,
                     entity_access_service,
+                    actor,
                     &user_id,
                     entity,
                     project_id,
@@ -271,6 +276,7 @@ where
                 move_with(
                     &*service_context.email_move_service,
                     entity_access_service,
+                    actor,
                     &user_id,
                     entity,
                     project_id,
@@ -281,6 +287,7 @@ where
                 move_with(
                     &*service_context.service,
                     entity_access_service,
+                    actor,
                     &user_id,
                     entity,
                     project_id,

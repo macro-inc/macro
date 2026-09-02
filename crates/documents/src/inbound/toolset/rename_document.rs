@@ -88,7 +88,7 @@ where
         let entity_access_receipt = service_context
             .entity_access_service
             .generate_bot_entity_access_receipt::<EditAccessLevel>(
-                bot_id::MACRO_AI_BOT_ID,
+                service_context.actor,
                 BotAccessScope::user(request_context.user_id.clone()),
                 &document_id,
                 EntityType::Document,

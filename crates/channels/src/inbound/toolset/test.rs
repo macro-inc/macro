@@ -5,17 +5,20 @@ use super::{
     manage_channel_participants::{ManageChannelParticipants, ParticipantAction},
     parse_participants,
     rename_channel::RenameChannel,
+    send_channel_message::SendChannelMessage,
 };
 use crate::domain::{
     models::{
         AddParticipantsRequest, ChannelMetadata, ChannelType, CreateChannelRequest,
-        CreateChannelResponse, PatchChannelRequest, RemoveParticipantsRequest, Sender,
+        CreateChannelResponse, PatchChannelRequest, PostMessageRequest, PostMessageResponse,
+        RemoveParticipantsRequest, Sender,
     },
     ports::{ChannelMutationErr, ChannelService},
 };
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, schema::generate_validated_input_schema,
 };
+use bot_id::BotId;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, CallChannelInfo, EntityAccessReceipt,
@@ -40,6 +43,7 @@ type CreatedChannelCall = (Sender, Option<i64>, CreateChannelRequest);
 type PatchChannelCall = (Sender, Uuid, PatchChannelRequest);
 type AddParticipantsCall = (Sender, Uuid, AddParticipantsRequest);
 type RemoveParticipantsCall = (Sender, Uuid, RemoveParticipantsRequest);
+type PostMessageCall = (Sender, Uuid, PostMessageRequest);
 
 #[derive(Clone, Default)]
 struct ToolTestChannelService {
@@ -50,6 +54,7 @@ struct ToolTestChannelService {
     patch_error: Option<String>,
     adds: Arc<Mutex<Vec<AddParticipantsCall>>>,
     removes: Arc<Mutex<Vec<RemoveParticipantsCall>>>,
+    posts: Arc<Mutex<Vec<PostMessageCall>>>,
     metadata_name: Option<String>,
 }
 
@@ -170,6 +175,22 @@ impl ChannelService for ToolTestChannelService {
         Ok(())
     }
 
+    async fn post_message(
+        &self,
+        actor: Sender,
+        channel_id: Uuid,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        self.posts
+            .lock()
+            .expect("post lock")
+            .push((actor, channel_id, req));
+        Ok(PostMessageResponse {
+            id: Uuid::new_v4().to_string(),
+            nonce: None,
+        })
+    }
+
     async fn add_participants(
         &self,
         actor: Sender,
@@ -266,9 +287,13 @@ impl EntityAccessService for ToolTestAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-        _required_level: AccessLevel,
+        required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::internal("test access failure"))
+        match self.receipt_error {
+            Some(ReceiptFail::Unauthorized) => Err(AccessError::Unauthorized),
+            Some(ReceiptFail::NotFound) => Err(AccessError::NotFound("missing")),
+            None => Ok(required_level),
+        }
     }
 
     async fn check_public_access(
@@ -656,6 +681,52 @@ async fn rename_channel_surfaces_dm_rename_rejection() {
     assert_eq!(
         error.description,
         "cannot change channel_name for direct message channels"
+    );
+}
+
+#[tokio::test]
+async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
+    let channel_id = Uuid::new_v4();
+    let service = ToolTestChannelService::default();
+    let posts = service.posts.clone();
+
+    let tool = SendChannelMessage {
+        content: "hello".to_string(),
+        channel_id,
+        thread_id: None,
+    };
+
+    tool.call(
+        ServiceContext(ChannelToolContext::new(
+            service.clone(),
+            ToolTestAccessService::default(),
+        )),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("member can post");
+    tool.call(
+        ServiceContext(
+            ChannelToolContext::new(service, ToolTestAccessService::default())
+                .with_actor(BotId::TEST_A),
+        ),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("member can post");
+
+    let posts = posts.lock().expect("post lock");
+    let [(default_actor, _, default_req), (custom_actor, _, _)] = posts.as_slice() else {
+        panic!("expected two posts, got {}", posts.len());
+    };
+    assert_eq!(
+        default_actor.as_bot().map(|id| id.bot_id()),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
+    assert_eq!(default_req.triggered_by.as_deref(), Some(TEST_USER_ID));
+    assert_eq!(
+        custom_actor.as_bot().map(|id| id.bot_id()),
+        Some(BotId::TEST_A)
     );
 }
 

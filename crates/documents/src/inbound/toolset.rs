@@ -25,6 +25,7 @@ use crate::{
 };
 use activity::{Actor, Attribution};
 use ai_toolset::AsyncToolCollection;
+use bot_id::BotId;
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -64,6 +65,10 @@ pub struct DocumentToolContext<
     /// Records the token usage the editing worker reports. Defaults to a no-op;
     /// the chat path injects the real (Postgres-backed) recorder per request.
     pub recorder: Arc<dyn ai_usage::UsageRecorder>,
+
+    /// The bot these tools act as, on behalf of the requesting user. Defaults
+    /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
+    pub actor: BotId,
 }
 
 impl<
@@ -82,6 +87,7 @@ impl<
             editing: self.editing.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             recorder: self.recorder.clone(),
+            actor: self.actor,
         }
     }
 }
@@ -122,6 +128,7 @@ impl<
             editing: Arc::new(editing),
             document_permission_jwt_secret,
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
+            actor: bot_id::MACRO_AI_BOT_ID,
         }
     }
 
@@ -130,10 +137,17 @@ impl<
         self.recorder = recorder;
         self
     }
-}
 
-fn ai_tool_attribution(user: MacroUserIdStr<'static>) -> Attribution {
-    Attribution::delegated(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID), user)
+    /// Set the bot these tools act as.
+    pub fn with_actor(mut self, actor: BotId) -> Self {
+        self.actor = actor;
+        self
+    }
+
+    /// Attribution for a write these tools make for `user`.
+    pub fn attribution(&self, user: MacroUserIdStr<'static>) -> Attribution {
+        Attribution::delegated(Actor::new_from_bot(self.actor), user)
+    }
 }
 
 /// Create a document toolset

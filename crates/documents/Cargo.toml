@@ -161,6 +161,7 @@ non_empty = { path = "../non_empty" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+bot_id = { path = "../bot_id", features = ["test-utils"] }
 dotenvy = { workspace = true }
 embedding = { path = "../embedding" }
 http-body-util = { workspace = true }

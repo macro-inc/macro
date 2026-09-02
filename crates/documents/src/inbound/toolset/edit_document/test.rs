@@ -455,20 +455,39 @@ fn request_context() -> RequestContext {
 async fn call_edit_document(
     file_type: &str,
 ) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    call_edit_document_as(file_type, None).await
+}
+
+async fn call_edit_document_as(
+    file_type: &str,
+    actor: Option<BotId>,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
     let editing = FakeEditingWorker::default();
     let tool = EditDocument {
         document_id: TEST_DOCUMENT_ID.to_string(),
         instructions: "tidy up the imports".to_string(),
     };
 
-    let result = tool
-        .call(
-            tool_context(FakeDocumentService::new(file_type), editing.clone()),
-            request_context(),
-        )
-        .await;
+    let mut context = tool_context(FakeDocumentService::new(file_type), editing.clone());
+    if let Some(actor) = actor {
+        context.0 = context.0.with_actor(actor);
+    }
+    let result = tool.call(context, request_context()).await;
 
     (result, editing)
+}
+
+fn minted_token_actor(editing: &FakeEditingWorker) -> Option<String> {
+    let token = editing
+        .tokens
+        .lock()
+        .expect("edit tokens lock poisoned")
+        .first()
+        .expect("edit minted a document token")
+        .clone();
+    decode_permission_token(&token, "unused-jwt-secret")
+        .expect("edit token should decode")
+        .actor
 }
 
 #[tokio::test]
@@ -528,6 +547,38 @@ async fn allows_markdown_document() {
     assert_eq!(
         claims.actor.as_deref(),
         Some(bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref())
+    );
+}
+
+#[tokio::test]
+async fn edit_token_carries_the_context_actor() {
+    let (result, editing) = call_edit_document_as("md", Some(BotId::TEST_A)).await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(
+        minted_token_actor(&editing).as_deref(),
+        Some(BotId::TEST_A.into_storage_id().as_ref())
+    );
+}
+
+#[test]
+fn tool_writes_are_delegated_from_the_context_actor_to_the_requesting_user() {
+    let user = MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid user");
+    let default_context =
+        tool_context(FakeDocumentService::new("md"), FakeEditingWorker::default());
+    assert_eq!(default_context.actor, bot_id::MACRO_AI_BOT_ID);
+
+    let attribution = default_context
+        .0
+        .with_actor(BotId::TEST_A)
+        .attribution(user);
+    assert_eq!(
+        attribution.actor().as_ref(),
+        BotId::TEST_A.into_storage_id().as_ref()
+    );
+    assert_eq!(
+        attribution.on_behalf_of().as_ref().map(|id| id.as_ref()),
+        Some(TEST_USER_ID)
     );
 }
 
