@@ -7,16 +7,18 @@ use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::side_effects::bot_mention_ids;
 
 use crate::domain::broker_events::{
-    AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, NewAgentSessionEvent,
+    AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind,
+    NewAgentSessionEvent,
 };
 
 /// Why evaluating a message did not produce an agent-session event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum NoEventReason {
     /// No existing session and no mentioned bot identified the target agent.
     MissingBotContext,
-    /// The target bot is not configured with an agent.
-    BotHasNoAgent {
+    /// The target bot is not an available agent for this sender and channel.
+    BotUnavailable {
         /// Bot that was evaluated.
         bot_id: BotId,
     },
@@ -36,6 +38,18 @@ pub enum NoEventReason {
     DuplicateSession {
         /// Session already evaluated for this message.
         session_id: AgentSessionId,
+    },
+    /// The message sat in a session's thread without a mention, and neither
+    /// explicit reply detection nor the model judged it addressed to the agent.
+    NotAddressedToAgent {
+        /// Session whose thread carried the message.
+        session_id: AgentSessionId,
+    },
+    /// Several agents are live in the thread and nothing said which one the
+    /// message was for.
+    AmbiguousAgentSessions {
+        /// How many agent-backed sessions the thread carried.
+        candidates: usize,
     },
 }
 
@@ -89,19 +103,19 @@ pub enum PotentialTriggerEvent<'a> {
 
 /// What to publish for one incoming message.
 ///
-/// Existing sessions carry their own bot identity. `has_agent` gates all
-/// event production.
+/// Existing sessions carry their own bot identity. Current agent availability
+/// gates all event production.
 #[must_use]
 pub fn yield_event(
     message: &PotentialTriggerEvent<'_>,
-    has_agent: bool,
+    available: bool,
 ) -> AgentSessionEventDecision {
     match message {
         PotentialTriggerEvent::Channel {
             posted,
             existing,
             mentioned_bot,
-        } => yield_channel_event(posted, existing, *mentioned_bot, has_agent),
+        } => yield_channel_event(posted, existing, *mentioned_bot, available),
     }
 }
 
@@ -109,7 +123,7 @@ fn yield_channel_event(
     posted: &ChannelMessagePostedMetadata,
     existing: &ChannelSession,
     mentioned_bot: Option<BotId>,
-    has_agent: bool,
+    available: bool,
 ) -> AgentSessionEventDecision {
     let session_bot = match existing {
         ChannelSession::CreatedFromThread(session) => session.bot_id,
@@ -121,8 +135,8 @@ fn yield_channel_event(
         },
     };
 
-    if !has_agent {
-        return AgentSessionEventDecision::NoEvent(NoEventReason::BotHasNoAgent {
+    if !available {
+        return AgentSessionEventDecision::NoEvent(NoEventReason::BotUnavailable {
             bot_id: session_bot,
         });
     }
@@ -140,6 +154,7 @@ fn yield_channel_event(
             AgentSessionMacroEvent::channel_event(ChannelEventMetadata {
                 bot_id: session_bot,
                 session_id: session.id,
+                kind: ChannelKind::MentionThread,
                 message: posted.clone(),
             }),
         ),

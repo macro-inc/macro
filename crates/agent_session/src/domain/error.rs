@@ -8,6 +8,10 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 pub enum AgentSessionError {
     #[error("agent session {0} already has an active transport")]
     AlreadyConnected(AgentSessionId),
+    #[error("agent session {0} is managed by another live replica")]
+    ManagedElsewhere(AgentSessionId),
+    #[error("agent session {0} write was fenced out: another replica claimed the session")]
+    FencedOut(AgentSessionId),
     #[error("acp handshake failed: {0}")]
     Handshake(String),
     #[error("agent session {0} is no longer connected")]
@@ -16,10 +20,18 @@ pub enum AgentSessionError {
     ThreadSessionExists,
     #[error("the session owner is not a known user")]
     UnknownOwner,
+    #[error("invalid agent session name: {0}")]
+    InvalidName(&'static str),
+    #[error("the caller may not control this agent session")]
+    Forbidden,
     #[error(
         "agent session {0} cannot be restored because the agent supports neither session/resume nor session/load"
     )]
     ResumeUnsupported(AgentSessionId),
+    #[error("agent session {0} action delivery timed out")]
+    DeliveryTimedOut(AgentSessionId),
+    #[error("agent session {0} log persistence timed out")]
+    LogTimedOut(AgentSessionId),
     #[error(transparent)]
     Transport(#[from] TransportError),
     #[error(transparent)]

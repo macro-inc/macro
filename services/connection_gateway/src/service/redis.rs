@@ -1,8 +1,13 @@
 use anyhow::{Context, Result};
 use futures::StreamExt;
 use redis::{AsyncCommands, FromRedisValue, ParsingError, Value, aio::MultiplexedConnection};
+use tracing::Instrument as _;
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
-use crate::{context::ApiContext, model::message::Message};
+use crate::{
+    context::ApiContext,
+    model::message::{Message, record_span_error},
+};
 
 pub const REDIS_CHANNEL: &str = "connection_gateway.messages";
 
@@ -19,16 +24,31 @@ pub struct MessageWithConnection {
 /// will handle sending the message to the client correctly.
 pub async fn post_message(
     mut connection: MultiplexedConnection,
-    message: MessageWithConnection,
+    mut message: MessageWithConnection,
 ) -> Result<()> {
-    let message_json = serde_json::to_string(&message).context("Failed to serialize message")?;
+    let span = tracing::info_span!(
+        "connection_gateway.redis_publish",
+        otel.kind = "producer",
+        message_type = %message.message.message_type,
+        otel.status_code = tracing::field::Empty,
+        otel.status_description = tracing::field::Empty,
+    );
+    let result = async {
+        message.message = message.message.with_current_trace_context();
+        let message_json =
+            serde_json::to_string(&message).context("Failed to serialize message")?;
 
-    connection
-        .publish::<&str, &str, ()>(REDIS_CHANNEL, message_json.as_str())
-        .await
-        .context("Failed to publish message")?;
-
-    Ok(())
+        connection
+            .publish::<&str, &str, ()>(REDIS_CHANNEL, message_json.as_str())
+            .await
+            .context("Failed to publish message")
+    }
+    .instrument(span.clone())
+    .await;
+    if let Err(error) = &result {
+        record_span_error(&span, error);
+    }
+    result
 }
 
 impl FromRedisValue for MessageWithConnection {
@@ -55,7 +75,7 @@ pub async fn poll_messages(ctx: ApiContext) -> Result<()> {
         .context("Failed to subscribe to reddis channel")?;
 
     while let Some(maybe_message) = stream.next().await {
-        let message: MessageWithConnection =
+        let mut message: MessageWithConnection =
             match maybe_message.get_payload::<MessageWithConnection>() {
                 Ok(msg) => msg,
                 Err(err) => {
@@ -79,12 +99,26 @@ pub async fn poll_messages(ctx: ApiContext) -> Result<()> {
             connection_id = message.connection_id,
             "received message from redis, sending to connection"
         );
-
-        if let Err(err) = ctx
-            .connection_manager
-            .send_message(message.connection_id.as_str(), message.message)
-            .await
-        {
+        let span = tracing::info_span!(
+            "connection_gateway.redis_dispatch",
+            otel.kind = "consumer",
+            message_type = %message.message.message_type,
+            otel.status_code = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
+        if let Some(parent) = message.message.remote_trace_context() {
+            let _ = span.set_parent(parent);
+        }
+        let result = async {
+            message.message = message.message.with_current_trace_context();
+            ctx.connection_manager
+                .send_message(message.connection_id.as_str(), message.message)
+                .await
+        }
+        .instrument(span.clone())
+        .await;
+        if let Err(err) = result {
+            record_span_error(&span, &err);
             tracing::error!(error=?err, "failed to send message");
         }
     }

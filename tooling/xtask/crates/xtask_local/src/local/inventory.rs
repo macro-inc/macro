@@ -251,8 +251,24 @@ pub const RUST_SERVICES: &[RustService] = &[
         host_port: Some(Port::AgentHarness),
         path_prefix: Some("/agent-harness"),
         is_websocket: false,
-        // Runs without sandbox credentials so channel triggers and external
-        // sessions remain available; managed spawns fail loudly when unarmed.
+        // Local stacks default to DEV_DANGEROUS_LOCAL_CONTAINERS, so managed
+        // sandboxes run on the host Docker daemon. Daytona is opt-in via
+        // DEV_DANGEROUS_LOCAL_CONTAINERS=false DAYTONA_API_KEY=... just run_local.
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
+        compose_name: "mcp_service",
+        cargo_bin: "mcp_service",
+        package: "mcp_service",
+        // No host port and no proxy route: its one local client is the agent
+        // egress proxy, which dials it across the compose network as
+        // `mcp-service`. (Interactive MCP clients like claude.ai only exist
+        // against deployed environments.)
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
         modes: &[Mode::Local],
         opt_in: false,
         no_default_features: false,

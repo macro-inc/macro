@@ -65,7 +65,15 @@ echo "cursor-cloud install: bun cache ready"
 build_local_stack_binaries
 echo "cursor-cloud install: local stack binaries ready"
 
-just stack up --infra-only --no-doppler --build-aux-services --binaries-dir "${LOCAL_STACK_BINS}/bin" --json
+# Bake the init snapshot on stubs. Runtime stack.sh pulls Doppler when
+# DOPPLER_TOKEN is present; secrets must not land in the durable snapshot.
+# The bridge watcher mirrors stack.sh: compose creates the stack networks
+# mid-`up`, and a bridge born after the iptables pass has no FORWARD accept
+# rules — FusionAuth then cannot reach Postgres and wedges in maintenance
+# mode, failing the strict-200 kickstart wait.
+run_with_bridge_forwarding \
+  just stack up --infra-only --no-doppler --build-aux-services --binaries-dir "${LOCAL_STACK_BINS}/bin" --json
+ensure_docker_bridge_forwarding
 cleanup_stack
 trap - EXIT
 

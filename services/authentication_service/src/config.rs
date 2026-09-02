@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use anyhow::Context;
+use authentication_service::service::signup_policy::SignupPolicy;
 use database_env_vars::{DatabaseUrl, RedisUri};
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
@@ -40,6 +41,18 @@ maybe_env_vars! {
     pub struct MicrosoftClientSecret;
     pub struct MicrosoftTenantId;
     pub struct MicrosoftTokenKmsKeyId;
+    /// KMS key that encrypts users' Cursor API keys. Deliberately not the
+    /// Microsoft one: sharing it would grant whatever decrypts Cursor keys
+    /// access to the key protecting everyone's mailbox credentials.
+    ///
+    /// Optional *here* only because Pulumi injects it into the task
+    /// definition rather than Doppler, and the Doppler config validator
+    /// deserializes this struct from Doppler alone — a required field it
+    /// cannot see fails CI. The service still refuses to start without it;
+    /// see [`Config::cursor_api_key_kms_key_id`], which also reads the
+    /// process environment because `MacroConfig` does not fall back to it
+    /// when `APP_SECRETS_JSON` is present.
+    pub struct CursorApiKeyKmsKeyId;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
     pub struct MetaPixelId;
@@ -48,6 +61,8 @@ maybe_env_vars! {
     pub struct PosthogApiKey;
     pub struct PosthogHost;
     pub struct LoopsApiKey;
+    /// JSON array of exact email addresses allowed to sign up in Develop.
+    pub struct DevelopmentSignupAllowlistJson;
 }
 
 /// The configuration parameters for the application.
@@ -91,6 +106,10 @@ pub struct Config {
     pub microsoft_tenant_id: MicrosoftTenantId,
     /// KMS key used to encrypt Microsoft refresh-token data keys.
     pub microsoft_token_kms_key_id: MicrosoftTokenKmsKeyId,
+    /// KMS key used to encrypt users' Cursor API keys. Required in practice —
+    /// read through [`Config::cursor_api_key_kms_key_id`], which refuses an
+    /// absent or blank value at startup.
+    pub cursor_api_key_kms_key_id: CursorApiKeyKmsKeyId,
     /// Stripe secret key
     pub stripe_secret_key: StripeSecretKey,
     /// The port to listen for HTTP requests on.
@@ -124,6 +143,10 @@ pub struct Config {
     /// Loops API key (optional). When set, Macro sign-ups are added to our
     /// Loops audience.
     pub loops_api_key: LoopsApiKey,
+    /// JSON array of exact non-Macro email addresses allowed to sign up in Develop.
+    ///
+    /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
+    pub development_signup_allowlist_json: DevelopmentSignupAllowlistJson,
     /// The stripe price id
     pub stripe_price_id: StripePriceId,
     /// The internal api key
@@ -151,6 +174,26 @@ impl Config {
             .context("failed to load authentication service config")
     }
 
+    /// The KMS key that encrypts Cursor API keys.
+    ///
+    /// # Errors
+    /// If it is unset or blank. There is no "this deployment does not accept
+    /// Cursor keys" mode to fall back to: registering a key is a plain
+    /// feature of the settings surface, and a service that cannot encrypt one
+    /// should fail at startup rather than at the first user who tries.
+    pub(crate) fn cursor_api_key_kms_key_id(&self) -> anyhow::Result<String> {
+        // `MacroConfig` will not see a Pulumi-injected process env var once
+        // Doppler's `APP_SECRETS_JSON` is present. Re-read through the env-var
+        // type, which does fall back to process env.
+        let from_process_env = CursorApiKeyKmsKeyId::new();
+        resolve_cursor_api_key_kms_key_id(
+            &self.cursor_api_key_kms_key_id,
+            from_process_env
+                .as_ref()
+                .and_then(CursorApiKeyKmsKeyId::value),
+        )
+    }
+
     /// Resolves Microsoft credentials, enforcing that all values are configured together.
     pub(crate) fn microsoft_credentials(&self) -> anyhow::Result<Option<MicrosoftCredentials>> {
         resolve_microsoft_credentials(
@@ -159,6 +202,19 @@ impl Config {
             &self.microsoft_tenant_id,
             &self.microsoft_token_kms_key_id,
         )
+    }
+
+    /// Resolves the signup policy for the configured environment.
+    pub(crate) fn signup_policy(&self) -> anyhow::Result<SignupPolicy> {
+        self.signup_policy_for_environment(self.environment)
+    }
+
+    /// Resolves the signup policy for an explicit environment.
+    pub(crate) fn signup_policy_for_environment(
+        &self,
+        environment: Environment,
+    ) -> anyhow::Result<SignupPolicy> {
+        resolve_signup_policy(environment, &self.development_signup_allowlist_json)
     }
 }
 
@@ -192,8 +248,38 @@ fn resolve_microsoft_credentials(
     }
 }
 
+fn resolve_signup_policy(
+    environment: Environment,
+    development_signup_allowlist_json: &DevelopmentSignupAllowlistJson,
+) -> anyhow::Result<SignupPolicy> {
+    match environment {
+        Environment::Production | Environment::Local => Ok(SignupPolicy::allow_all()),
+        Environment::Develop => {
+            let raw_allowlist = nonblank_value(development_signup_allowlist_json.value())
+                .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is required in Develop")?;
+            SignupPolicy::from_allowlist_json(raw_allowlist)
+                .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is invalid")
+        }
+    }
+}
+
 fn nonblank_value(value: Option<&str>) -> Option<&str> {
     value.filter(|value| !value.trim().is_empty())
+}
+
+/// Pulumi injects `CURSOR_API_KEY_KMS_KEY_ID` as a container env var, not
+/// through Doppler. ECS always has `APP_SECRETS_JSON`, and `MacroConfig` will
+/// not look at process env once that blob is present, so the field on `Config`
+/// is unset in deployed environments. `CursorApiKeyKmsKeyId::new()` still
+/// falls back to process env, which is what `process_env` is.
+fn resolve_cursor_api_key_kms_key_id(
+    configured: &CursorApiKeyKmsKeyId,
+    process_env: Option<&str>,
+) -> anyhow::Result<String> {
+    nonblank_value(configured.value())
+        .or_else(|| nonblank_value(process_env))
+        .map(str::to_owned)
+        .context("CURSOR_API_KEY_KMS_KEY_ID is required")
 }
 
 #[cfg(test)]

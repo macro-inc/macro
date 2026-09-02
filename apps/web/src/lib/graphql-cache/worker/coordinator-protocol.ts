@@ -56,12 +56,20 @@ export type TabToCoordinatorEnvelope =
       kind: 'attach-engine-port';
       tabId: string;
       ownerEpoch: OwnerEpoch;
+      enginePort: MessagePort;
     }
   | {
       coordinatorVersion: 2;
       kind: 'graceful-departure';
       tabId: string;
       ownerEpoch: OwnerEpoch;
+    }
+  | {
+      coordinatorVersion: 2;
+      kind: 'navigation-departure';
+      tabId: string;
+      ownerEpoch: OwnerEpoch;
+      reason: string;
     }
   | {
       coordinatorVersion: 2;
@@ -285,6 +293,16 @@ const isOptionalRecord = (
 ): value is Record<string, unknown> | undefined =>
   value === undefined || isRecord(value);
 
+const isMessagePort = (value: unknown): value is MessagePort =>
+  typeof value === 'object' &&
+  value !== null &&
+  'postMessage' in value &&
+  typeof value.postMessage === 'function' &&
+  'close' in value &&
+  typeof value.close === 'function' &&
+  'start' in value &&
+  typeof value.start === 'function';
+
 const isPath = (value: unknown): boolean =>
   Array.isArray(value) &&
   value.every(
@@ -347,6 +365,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isNonEmptyString(value.scope) &&
         isOptionalPositiveInteger(value.hotCapacity)
       );
+    case 'current-revision':
+      return hasOnlyKeys(value, ['id', 'kind']);
     case 'read':
       return (
         hasOnlyKeys(value, [
@@ -410,6 +430,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'id',
           'kind',
           'originOpId',
+          'uuid',
           'query',
           'operationName',
           'variables',
@@ -422,6 +443,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'leaseExpiresAtMs',
         ]) &&
         isOptionalString(value.originOpId) &&
+        isString(value.uuid) &&
         isString(value.query) &&
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&
@@ -621,6 +643,20 @@ export function validateTabToCoordinatorEnvelope(
       }
       break;
     case 'attach-engine-port':
+      if (
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerEpoch',
+          'enginePort',
+        ]) &&
+        isPositiveInteger(value.ownerEpoch) &&
+        isMessagePort(value.enginePort)
+      ) {
+        return pass(value as TabToCoordinatorEnvelope);
+      }
+      break;
     case 'graceful-departure':
       if (
         hasOnlyKeys(value, [
@@ -630,6 +666,21 @@ export function validateTabToCoordinatorEnvelope(
           'ownerEpoch',
         ]) &&
         isPositiveInteger(value.ownerEpoch)
+      ) {
+        return pass(value as TabToCoordinatorEnvelope);
+      }
+      break;
+    case 'navigation-departure':
+      if (
+        hasOnlyKeys(value, [
+          'coordinatorVersion',
+          'kind',
+          'tabId',
+          'ownerEpoch',
+          'reason',
+        ]) &&
+        isPositiveInteger(value.ownerEpoch) &&
+        isNonEmptyString(value.reason)
       ) {
         return pass(value as TabToCoordinatorEnvelope);
       }

@@ -155,6 +155,23 @@ export type MessagePart =
       status: ToolStatus;
       /**  What the tool did, as far as the log reveals. */
       detail: ToolDetail;
+      /**
+       *  The call's input, verbatim from ACP's `rawInput`, when reported.
+       *
+       *  Carried on every call - not just [`ToolDetail::Other`] - so a
+       *  reader that knows a tool by name (the Macro toolset renders each
+       *  tool with its own component) can parse the real arguments instead
+       *  of settling for the coarse detail.
+       */
+      rawInput: unknown;
+      /**
+       *  The call's result, verbatim from ACP's `rawOutput`, when reported.
+       *
+       *  The structured counterpart to the text a detail may carry: Macro's
+       *  agent reports each tool response as JSON here, and named-tool
+       *  rendering needs that JSON whole.
+       */
+      rawOutput: unknown;
     }
   /**  The agent asking to proceed. */
   | {
@@ -316,9 +333,11 @@ export type SessionMetadata = {
 /**
  *  Why a turn stopped.
  *
- *  Parsed straight off ACP's `stopReason` wire string by [`FromStr`]: the
- *  `snake_case` variant names are the wire names, and anything unmodelled
- *  falls through to [`Self::Other`], so parsing never fails.
+ *  All but one variant is parsed straight off ACP's `stopReason` wire string
+ *  by [`FromStr`]: the `snake_case` variant names are the wire names, and
+ *  anything unmodelled falls through to [`Self::Other`], so parsing never
+ *  fails. [`Self::Failed`] is the exception - no wire string produces it,
+ *  because it is what a turn that got no `stopReason` at all stopped for.
  */
 export type StopReason =
   /**  The agent finished its turn. */
@@ -336,6 +355,22 @@ export type StopReason =
       kind: 'other';
       /**  The unrecognized wire value. */
       reason: string;
+    }
+  /**
+   *  The runtime answered the prompt with a JSON-RPC error, so the turn
+   *  produced no reply and never will.
+   *
+   *  Constructed by the fold, never parsed: an error response carries no
+   *  `stopReason` to read. Modelled as a stop reason rather than as
+   *  something alongside one because that is what it is - a turn that
+   *  ended - and because every reader already asks `stop` whether a turn
+   *  is still running. A turn left with no stop reason reads as forever in
+   *  flight, which is how a failed prompt used to wedge a session.
+   */
+  | {
+      kind: 'failed';
+      /**  The runtime's error message, verbatim. */
+      message: string;
     };
 
 /**

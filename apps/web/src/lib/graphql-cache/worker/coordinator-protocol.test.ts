@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   databaseOwnerLockName,
@@ -16,9 +17,16 @@ const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;
 
+const enginePort = {
+  postMessage() {},
+  close() {},
+  start() {},
+} as unknown as MessagePort;
+
 describe('coordinator runtime protocol', () => {
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
+    expect(isCacheRequest({ id: 1, kind: 'current-revision' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'read', query: '{ x }' })).toBe(true);
     expect(
       isCacheRequest({
@@ -49,6 +57,19 @@ describe('coordinator runtime protocol', () => {
         data: { user: { id: 'user-1' } },
       })
     ).toBe(false);
+    const enqueue = {
+      id: 2,
+      kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000001',
+      query: 'mutation Update { update }',
+      data: { update: true },
+      createdAtMs: 1,
+      owner: 'runner',
+      nowMs: 1,
+      leaseExpiresAtMs: 1_001,
+    };
+    expect(isCacheRequest(enqueue)).toBe(true);
+    expect(isCacheRequest({ ...enqueue, uuid: undefined })).toBe(false);
     expect(
       isCacheRequest({
         id: 2,
@@ -108,7 +129,12 @@ describe('coordinator runtime protocol', () => {
       })
     ).toBe(false);
     expect(isCacheResponse({ id: 3, ok: false, error: 4 })).toBe(false);
-    expect(isCachePush({ kind: 'cache-changed' })).toBe(true);
+    expect(
+      isCachePush({
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      })
+    ).toBe(true);
     expect(
       isCachePush({
         kind: 'mutation-settled',
@@ -172,12 +198,20 @@ describe('coordinator runtime protocol', () => {
       kind: 'attach-engine-port',
       tabId: 'tab',
       ownerEpoch: 1,
+      enginePort,
     },
     {
       ...version,
       kind: 'graceful-departure',
       tabId: 'tab',
       ownerEpoch: 1,
+    },
+    {
+      ...version,
+      kind: 'navigation-departure',
+      tabId: 'tab',
+      ownerEpoch: 1,
+      reason: 'pagehide',
     },
     {
       ...version,

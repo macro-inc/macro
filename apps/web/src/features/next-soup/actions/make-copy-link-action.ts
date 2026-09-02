@@ -1,9 +1,11 @@
+import { copyCalendarEventMentionTarget } from '@block-calendar/copy-event-mention';
 import { getChannelParams } from '@block-channel/utils/link';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { type EntityData, isGithubPrEntity } from '@entity';
-import type { SoupState } from '../create-soup-state';
+import { calendarEventLinkTarget } from '../utils';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Get the URL type/path segment for an entity
@@ -51,15 +53,26 @@ const getEntityUrl = (entity: EntityData): string => {
 };
 
 export const makeCopyLinkAction = () => {
-  const canExecute = (_entity: EntityData): boolean => {
-    // Can copy link for any entity type
-    return true;
-  };
+  // A reminder has no block of its own, so `/app/reminder/{id}` resolves to
+  // nothing the orchestrator can open — there is no link to copy.
+  const canExecute = (entity: EntityData): boolean =>
+    entity.type !== 'reminder';
 
   const execute = async (entities: EntityData[]) => {
     // Only copy link for the first entity (doesn't make sense for bulk)
     const entity = entities[0];
     if (!entity) return;
+
+    // The calendar is a singleton block, so there is no /app/calendar_event
+    // route to link an event by id. Events copy the deep link the calendar's
+    // own action writes, with the mention flavor behind it.
+    if (entity.type === 'calendar_event') {
+      await copyCalendarEventMentionTarget({
+        ...calendarEventLinkTarget(entity),
+        title: entity.name || '(No title)',
+      });
+      return;
+    }
 
     const url = getEntityUrl(entity);
 
@@ -76,7 +89,10 @@ export const makeCopyLinkAction = () => {
     toast.success('Link copied to clipboard');
   };
 
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
     // Don't clear selection or change focus for copy link
   };

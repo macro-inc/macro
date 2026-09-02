@@ -10,18 +10,24 @@
 
 import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
+  AffectedOperationsResult,
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
+  CacheRevision,
+  CacheRevisionResult,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
+  ReadRecordsByKeysResult,
   ReadResult,
+  RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
-  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 import { workerCacheTelemetry } from '../telemetry-relay';
@@ -62,6 +68,7 @@ export type CacheEngineHydrationResult = WriteResult & {
 };
 
 export interface CacheEngine {
+  currentRevision(): Promise<CacheRevision>;
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
   queueDiagnostics?(): Promise<CacheQueueDiagnostics>;
@@ -76,7 +83,7 @@ export interface CacheEngine {
     document: string,
     fragmentName: string,
     keys: string[]
-  ): Promise<SelectedRecordByKeyWire[]>;
+  ): Promise<ReadRecordsByKeysResult>;
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
@@ -106,6 +113,7 @@ export interface CacheEngine {
   ): Promise<CacheEngineHydrationResult>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,
+    uuid: string,
     query: string,
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
@@ -139,7 +147,7 @@ export interface CacheEngine {
     leaseGeneration: string,
     nextAttemptAtMs: number,
     error: string
-  ): Promise<void>;
+  ): Promise<DeferOptimisticWriteResult>;
   commitOptimisticWrite(
     transactionId: string,
     leaseOwner: string,
@@ -148,16 +156,16 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown
-  ): Promise<WriteResult>;
+  ): Promise<CommitOptimisticWriteResult>;
   rollbackOptimisticWrite(
     transactionId: string,
     leaseOwner: string,
     leaseGeneration: string
-  ): Promise<WriteResult>;
-  invalidateKeys(keys: string[]): Promise<string[]>;
-  deleteKeys(keys: string[]): Promise<string[]>;
+  ): Promise<RollbackOptimisticWriteResult>;
+  invalidateKeys(keys: string[]): Promise<AffectedOperationsResult>;
+  deleteKeys(keys: string[]): Promise<AffectedOperationsResult>;
   teardownOperation(opId: string): Promise<void>;
-  clear(): Promise<void>;
+  clear(): Promise<CacheRevisionResult>;
   /** Reset/recreate OPFS; concurrent calls wait for the fresh engine. */
   physicalReset(): Promise<void>;
   /** Gracefully close Turso/OPFS and release the owner lock. */

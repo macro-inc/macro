@@ -3,26 +3,24 @@ import {
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { useBlockId } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
+import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import LinkIcon from '@phosphor/link.svg';
-import TreeStructure from '@phosphor/tree-structure.svg';
+import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
-import {
-  ORIGIN_THREAD_DRAWER_ID,
-  sessionOriginThread,
-} from '../context/origin-thread';
+import { useAgentSession } from '../context/AgentSessionContext';
 
 /** 'claude-code' → 'Claude Code'; the fallback when the fold has no title. */
 export function harnessTitle(harness: string | undefined): string {
@@ -45,29 +43,58 @@ export function AgentSplitHeader(props: {
   /** The fold's session title, preferred over the harness fallback. */
   title?: string;
 }) {
-  const blockId = useBlockId();
-  const title = () => props.title ?? harnessTitle(props.session?.harness);
-  const originThreadDrawer = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
+  // The session, not `useBlockId()`: a block created from the launcher mounts
+  // against a placeholder and keeps reporting it (see `Block.tsx`), so the
+  // block id is the one thing here that is not a shareable session id.
+  const { sessionId } = useAgentSession();
+  const userId = useUserId();
+  const title = () => {
+    const persistedName = props.session?.name;
+    if (persistedName && persistedName !== 'Agent Session')
+      return persistedName;
+    return props.title ?? persistedName ?? harnessTitle(props.session?.harness);
+  };
+
+  const rename = async (name: string) => {
+    const id = sessionId();
+    if (!id) return;
+    const result = await agentHarnessServiceClient.rename(id, name);
+    if (result.isErr()) {
+      toast.failure('Failed to rename agent session');
+      return;
+    }
+    handleAgentSessionRenamed({ agentSessionId: id, name });
+  };
 
   const copyLink = async () => {
+    const id = sessionId();
+    if (!id) return;
     await navigator.clipboard.writeText(
-      buildSimpleEntityUrl({ type: 'agent', id: blockId })
+      buildSimpleEntityUrl({ type: 'agent', id })
     );
     toast.success('Link copied to clipboard');
   };
 
   const tools: BlockTool[] = [
     {
-      label: 'Discussion Thread',
-      icon: TreeStructure,
-      action: originThreadDrawer.toggle,
-      isActive: originThreadDrawer.isOpen,
-      condition: () => sessionOriginThread(props.session) !== undefined,
+      label: () => {
+        const provider = props.session?.external?.provider;
+        if (!provider) return 'Open externally';
+        return `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
+      },
+      icon: ArrowSquareOut,
+      action: () => {
+        const url = props.session?.external?.url;
+        if (url) openExternalUrl(url);
+      },
+      condition: () => Boolean(props.session?.external?.url),
     },
     {
       label: 'Copy link',
       icon: LinkIcon,
       action: copyLink,
+      // Nothing to link to until the session exists.
+      condition: () => sessionId() !== undefined,
     },
   ];
 
@@ -85,7 +112,12 @@ export function AgentSplitHeader(props: {
   return (
     <>
       <SplitHeaderLeft>
-        <StaticSplitLabel iconType="agent" label={title()} />
+        <StaticSplitLabel
+          iconType="agent"
+          label={title()}
+          onRename={props.session?.ownerId === userId() ? rename : undefined}
+          renameAriaLabel="Agent session name"
+        />
       </SplitHeaderLeft>
 
       {/* Tools live on the header row itself — `ResponsiveBlockToolbar`
@@ -110,7 +142,7 @@ export function AgentSplitHeader(props: {
         tools={[]}
         menuTools={tools}
         ops={ops}
-        id={blockId}
+        id={sessionId() ?? ''}
         itemType="foreign"
         name={title()}
       />

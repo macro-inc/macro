@@ -88,7 +88,9 @@ pub enum NotificationDelete<I> {
 /// A user-scoped notification update delivered to realtime subscribers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NotificationSubscriptionUpdate<T> {
-    /// A notification was created or updated.
+    /// A notification was newly delivered to the user.
+    New(Arc<UserNotificationRow<T>>),
+    /// An existing notification was updated.
     Updated(Arc<UserNotificationRow<T>>),
     /// A notification should be removed from the normalized cache.
     Deleted(Uuid),

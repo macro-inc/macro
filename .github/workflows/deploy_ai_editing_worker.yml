@@ -1,24 +1,37 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/deploy_ai_editing_worker.rs
 name: Deploy AI Editing Worker
-'on':
+on:
   push:
     branches:
     - main
     paths:
-    - '.github/workflows/deploy_ai_editing_worker.yml'
+    - .github/workflows/deploy_ai_editing_worker.yml
     - bun.lock
     - package.json
     - services/ai-editing-worker/**
     - packages/collaboration/**
     - packages/lexical-core/**
     - packages/loro-mirror/**
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: The environment to deploy to. e.g. (dev, prod)
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       environment:
-        description: Environment to deploy (dev or prod)
-        type: string
+        required: true
+        type: choice
         default: dev
+        options:
+        - dev
+        - prod
+        description: The environment to deploy to
 jobs:
   deploy:
     name: Deploy to Cloudflare
@@ -44,5 +57,5 @@ jobs:
         CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       working-directory: services/ai-editing-worker
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.environment || 'dev' }}
+  group: deploy-ai-editing-worker-${{ inputs.environment || 'dev' }}
   cancel-in-progress: false

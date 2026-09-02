@@ -1,28 +1,27 @@
-# Everything a coding agent daemon needs to serve one bot's sessions.
+# Everything a coding agent daemon needs to serve one harness's sessions.
+#
+# Deliberately credential-free: `macrod` starts unpaired and the control
+# panel offers pairing (press p). Pairing shows a code, you approve it in the
+# web app (choosing private or team), and the minted credential is kept in
+# `macro.credentials.json` next to this file.
 
 [macro]
 # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
 # gateway the daemon dials per session.
 api_url = "http://localhost:50009/agent-harness"
-# Base URL of the storage service (bots + webhook APIs); the daemon
-# registers its own trigger feed there at boot.
+# Base URL of the storage service (harness pairing + live event stream).
 storage_url = "http://localhost:50009/dss"
-# The user who owns the bot; registration acts for them.
-owner_user_id = "macro|you@macro.com"
-# The bot's API token.
-bot_token = "mbot_0123456789ab_0123456789abcdef"
-# Optional; `user` unless the bot is team-owned and acts in its team scope.
-bot_scope = "user"
+# Optional: base URL of the Macro web app, used only to print the pairing
+# link. Defaults to https://macro.com/app.
+web_url = "http://localhost:3000/app"
 
-[server]
-# Port `POST /macro-events` is served on.
-port = 8790
-# The URL deliveries reach this daemon at; what the feed registers.
-# Locally, the stack's relay tunnels this to the port above.
-public_url = "http://sdk-webhook-relay:8787/macro-events"
-# Optional override; normally the daemon registers its own feed at boot
-# and keeps the minted secret in a state file next to this config.
-# signing_secret = "whsec_..."
+[identity]
+# Optional: the harness name pairing requests; the approving user may rename
+# it. Defaults to this machine's hostname.
+name = "erics-macbook"
+# Optional: "private" (default) or "team". Team harnesses can run agents any
+# of your teammates create. The approval dialog arrives preselected to this.
+scope = "private"
 
 [harness]
 command = "opencode"

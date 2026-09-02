@@ -9,10 +9,134 @@ use macro_uuid::Uuid;
 // carries - is owned by `agent_fold`, the bottom of the agent session stack,
 // so that this crate can depend on the fold (see `agent_fold::domain::log`).
 // Re-exported here because this is where callers expect session types.
+pub use super::sandbox_size::SandboxSize;
 pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 pub use agent_fold::domain::model::{
     Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
 };
+
+/// Identity of one harness participant, minted fresh at construction.
+///
+/// A restarted process is a new replica: whatever the old identity claimed is
+/// released by its heartbeat going stale, never inherited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReplicaId(Uuid);
+
+impl ReplicaId {
+    /// Mint a fresh replica identity.
+    #[must_use]
+    pub fn mint() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    /// The raw uuid, for persistence.
+    #[must_use]
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+
+    /// Rebuild an identity from its persisted uuid.
+    #[must_use]
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl std::fmt::Display for ReplicaId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// A replica's own base URL, as peers should dial it for command forwarding.
+///
+/// Private-network address discovered by the replica itself at boot (the ECS
+/// task metadata endpoint in deployments), published with its heartbeat.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaAddress(String);
+
+impl ReplicaAddress {
+    /// Wrap a base URL, e.g. `http://10.0.1.7:8100`.
+    #[must_use]
+    pub fn new(address: impl Into<String>) -> Self {
+        Self(address.into())
+    }
+
+    /// The base URL as a string.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ReplicaAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// The live manager of a session, as read from the lease.
+#[derive(Debug, Clone)]
+pub struct SessionManager {
+    /// The replica holding the claim.
+    pub replica: ReplicaId,
+    /// Where to forward its commands, when the replica has published one.
+    /// `None` means the manager is live but unreachable - hold the error
+    /// rather than execute somewhere the actor is not.
+    pub address: Option<ReplicaAddress>,
+}
+
+/// Where a session's live actor runs, from one service instance's viewpoint.
+#[derive(Debug, Clone)]
+pub enum SessionManagement {
+    /// No live replica manages the session; this instance may claim it by
+    /// attaching, so commands execute locally.
+    Unmanaged,
+    /// This instance's replica manages it; commands execute locally.
+    Ours,
+    /// A live peer manages it; commands belong at its address.
+    Peer(SessionManager),
+}
+
+/// A session's takeover counter, bumped by every successful claim.
+///
+/// Carried by the claim holder into each live-actor write; the store rejects
+/// writes whose fence has been superseded, so a stale holder is neutralized
+/// by the same statement that would have written (a fencing token).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ManagerFence(pub i64);
+
+/// Proof that this replica claimed a session's live management.
+///
+/// Obtained only from [`SessionOwnership::claim`](super::ports::SessionOwnership::claim);
+/// holding one is what entitles an actor to attach and write the session's
+/// log under its fence.
+#[derive(Debug, Clone, Copy)]
+pub struct SessionClaim {
+    /// The claimed session.
+    pub session: AgentSessionId,
+    /// The replica holding the claim.
+    pub replica: ReplicaId,
+    /// The fence this claim writes under.
+    pub fence: ManagerFence,
+}
+
+/// What claiming a session yielded.
+#[derive(Debug, Clone, Copy)]
+pub enum ClaimOutcome {
+    /// This replica now manages the session.
+    Claimed(SessionClaim),
+    /// A replica with a fresh heartbeat already manages it. Until command
+    /// forwarding exists this surfaces as an error; with it, commands are
+    /// routed to the named replica instead.
+    ManagedElsewhere(ReplicaId),
+}
+
+/// Display name assigned to a newly created agent session.
+pub const DEFAULT_AGENT_SESSION_NAME: &str = "Agent Session";
+
+/// Maximum number of Unicode scalar values in a session name.
+pub const MAX_AGENT_SESSION_NAME_CHARS: usize = 100;
 
 #[derive(Debug, Clone, Default, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -47,6 +171,23 @@ pub struct CreateAgentSessionParams {
     pub repo_url: Option<String>,
     /// Absolute directory the harness runs in on its runtime.
     pub workspace: String,
+    /// Compute tier the managed sandbox was spawned with.
+    pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, when any were stated.
+    ///
+    /// Snapshotted here rather than resolved per turn because they are the
+    /// runtime's system prompt: how a harness is handed them differs by
+    /// provider, but every provider needs the same answer for the session's
+    /// whole life.
+    pub instructions: Option<String>,
+    /// SHA-256 hex of the opaque token the session's sandbox presents to the
+    /// egress proxy, or `None` for a session that never gets one.
+    ///
+    /// The hash and never the token: this row is the only durable record of
+    /// the credential, and a database dump must not yield a live one. A session
+    /// replayed from a recording, or created without a sandbox, has nothing to
+    /// store here.
+    pub egress_token_hash: Option<String>,
 }
 
 /// A running or historical agent coding session.
@@ -54,6 +195,8 @@ pub struct CreateAgentSessionParams {
 pub struct AgentSession {
     /// id of the agent session
     pub id: AgentSessionId,
+    /// User-facing session name.
+    pub name: String,
     /// The user who created and owns the session. Immutable for its life.
     pub owner_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
@@ -77,11 +220,49 @@ pub struct AgentSession {
     /// and load re-enter it - the directory the session actually ran in,
     /// not whatever the runtime is configured with today.
     pub workspace: String,
+    /// Compute tier of the managed sandbox, snapshotted at spawn.
+    pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, snapshotted at
+    /// creation. Immutable for the session's life; `None` when none were
+    /// stated.
+    pub instructions: Option<String>,
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
+    /// The provider-side identity, when an external provider serves this
+    /// session. `None` for sandboxed sessions and for external sessions
+    /// whose agent has not been minted yet.
+    pub external: Option<ExternalSession>,
     pub status: SessionStatus,
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
+}
+
+/// A persisted agent-session name changed and should be shown to live viewers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionRenamed {
+    /// Renamed session.
+    pub agent_session_id: AgentSessionId,
+    /// New user-facing name.
+    pub name: String,
+}
+
+/// The provider-side identity of a session served by an external provider.
+///
+/// For a Cursor-backed session this is the cloud agent: its `bc-…` id, the
+/// display name Cursor derived from the prompt, and its page on cursor.com.
+/// The stored row is the only durable record of the mapping — Cursor's API
+/// has no labels to recover it from — which is why this exists as data
+/// rather than being re-derived.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalSession {
+    /// Which provider serves the session, e.g. `cursor`.
+    pub provider: String,
+    /// The provider's id for the agent, e.g. `bc-…`.
+    pub external_id: String,
+    /// The provider's display name for the agent, when it reported one.
+    pub external_name: Option<String>,
+    /// The agent's page on the provider's site, for opening it there.
+    pub external_url: Option<String>,
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.

@@ -92,7 +92,7 @@ import {
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelThread } from '../Thread';
-import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
+import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { isUnifiedInputMode } from '../unified-input-mode';
 import { ActiveCallMessage } from './ActiveCallMessage';
 import { ChannelDropZone } from './ChannelDropZone';
@@ -252,10 +252,8 @@ export function Channel(props: ChannelProps) {
   const messageById = () => messageIndex.byId;
   const keepMountedTargetThreadIndexes = createMemo(() => {
     const threadId = targetMessageController.activeTargetMessageId();
-    const hasPendingElementScroll =
-      targetMessageController.pendingScrollTargetId() !== undefined ||
-      targetMessageController.pendingTargetReplyId() !== undefined;
-    if (!threadId || !hasPendingElementScroll) return [];
+    if (!threadId || !targetMessageController.hasPendingElementScroll())
+      return [];
 
     const index = messageIndex.keys.indexOf(threadId);
     return index === -1 ? [] : [index];
@@ -350,7 +348,12 @@ export function Channel(props: ChannelProps) {
       activityTracker.isNewMessage,
       // Once there are no older pages left to fetch, the oldest loaded message
       // (index 0) is the true first message in the channel.
-      !messagesQuery.hasNextPage
+      !messagesQuery.hasNextPage,
+      // A reply being composed opens the thread before any reply exists; the
+      // rail must already reach it. Signal reads keep this memo live.
+      (message) =>
+        threadManager.getOrCreateThreadState(message.id).isReplying() ||
+        unifiedInput.replyTarget()?.threadId === message.id
     )
   );
 
@@ -411,13 +414,20 @@ export function Channel(props: ChannelProps) {
     return state;
   };
 
-  const openQuoteReplyInput = (message: MessageData) => {
+  const openReplyTargetInput = (
+    message: MessageData,
+    selectedText?: string,
+    renderedText?: string
+  ) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
     const beforeSnapshot = state.replyInputState();
     const nextSnapshot: InputSnapshot = {
-      value: buildQuoteReplyValue({
-        quotedContent: message.content,
+      value: buildReplyTargetValue({
+        channelId: props.channelId,
+        message,
+        selectedText,
+        renderedText,
         existingValue: beforeSnapshot?.value,
       }),
       mentions: beforeSnapshot?.mentions ?? [],
@@ -452,7 +462,7 @@ export function Channel(props: ChannelProps) {
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
       if (ctx.message.thread_id) {
-        openQuoteReplyInput(ctx.message);
+        openReplyTargetInput(ctx.message, ctx.selectedText, ctx.renderedText);
         return;
       }
       openReplyInput(ctx.message);
@@ -702,7 +712,11 @@ export function Channel(props: ChannelProps) {
   );
 
   return (
-    <EntityLoadGate result={messagesLoadResult}>
+    <EntityLoadGate
+      result={messagesLoadResult}
+      loadErrorTitle="Unable to load this channel"
+      onRetry={() => void messagesQuery.refetch()}
+    >
       <DebugSuspense name="Channel.root">
         <deleteConfirmation.ConfirmationDialog />
         <StaticMarkdownContext>
@@ -739,10 +753,7 @@ export function Channel(props: ChannelProps) {
                           channelId={props.channelId}
                           keys={() => messageIndex.keys}
                           initialScrollTarget={threadListInitialScrollTarget()}
-                          initialScrollHandledByTargetElement={
-                            targetMessageController.pendingScrollTargetId() !==
-                            undefined
-                          }
+                          initialScrollHandledByTargetElement={targetMessageController.hasPendingElementScroll()}
                           keepMounted={keepMountedTargetThreadIndexes}
                           fullFrameScrollInsets={threadListScrollInsets}
                           shift={shift}
@@ -901,7 +912,7 @@ export function Channel(props: ChannelProps) {
                               getTargetMessage={() => {
                                 const target = unifiedInput.replyTarget();
                                 if (target?.message) return target.message;
-                                // A restored quote-reply has no resolvable
+                                // A restored referenced reply has no resolvable
                                 // message (messageById only indexes thread
                                 // roots) — don't misattribute it to the root.
                                 if (target?.replyId) return undefined;

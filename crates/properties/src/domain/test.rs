@@ -1242,7 +1242,65 @@ async fn entity_property_event_actor_is_only_an_authenticated_user() {
             published.envelope["metadata"]["actor_user_id"],
             serde_json::Value::Null
         );
+        assert!(published.envelope["metadata"]["actor"].is_null());
+        assert!(published.envelope["metadata"]["on_behalf_of"].is_null());
     }
+}
+
+#[tokio::test]
+async fn entity_property_event_delegates_user_scoped_bot_writes() {
+    let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000005759"));
+    let bot_access = EditReceipt::dangerously_assert_bot(
+        bot_id.into_storage_id(),
+        BotReceiptScope::User {
+            acting_user: caller_user_id(),
+        },
+        "doc1",
+        AccessEntityType::Document,
+    );
+    let property_definition_id = Uuid::from_u128(0xE706);
+    let assignment = entity_property_for_event(
+        Uuid::from_u128(0xE707),
+        "doc1",
+        EntityType::Document,
+        property_definition_id,
+        event_timestamp(),
+    );
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, false))) })
+    });
+    repo.expect_upsert_entity_property()
+        .return_once(move |_, _, _, _| {
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property: assignment,
+                    value: None,
+                    previous_value: None,
+                })
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    service
+        .set_entity_property(&bot_access, property_definition_id, None)
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(
+        published.envelope["metadata"]["actor_user_id"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        published.envelope["metadata"]["actor"],
+        "bot|00000000-0000-0000-0000-000000005759"
+    );
+    assert_eq!(
+        published.envelope["metadata"]["on_behalf_of"],
+        caller_user_id().as_ref()
+    );
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotKind, BotOwner,
-    CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotKind, BotOwner,
+    CreateAgentRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -11,8 +11,9 @@ use axum::{
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityPermission,
-        EntityType, ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -20,7 +21,8 @@ use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccess
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, MacroAuthorizationState, NoBotAuthorizer, ValidatedIdentity,
+    MacroAuthorizationServiceImpl, MacroAuthorizationState, NoBotAuthorizer,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
@@ -95,6 +97,27 @@ impl TestBotService {
 }
 
 impl BotService for TestBotService {
+    async fn create_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        unimplemented!()
+    }
+
     async fn create_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -150,8 +173,7 @@ impl BotService for TestBotService {
 
     async fn add_bot_to_channel(
         &self,
-        _caller: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _bot_id: BotId,
     ) -> Result<(), BotError> {
         self.add_calls.fetch_add(1, Ordering::SeqCst);
@@ -368,6 +390,7 @@ fn authorization_state() -> MacroAuthorizationState<TestAuthorizationService> {
             default_user_id: None,
         },
         NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -410,6 +433,7 @@ fn authorization_state_with_bot(
             default_user_id: None,
         },
         SelfBotAuthorizer { bot_id },
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -832,7 +856,20 @@ async fn bot_owner_can_list_and_remove_bot_channels_via_bot_routes(
         .await?;
 
     bot_service
-        .add_bot_to_channel(macro_user_id(BOT_OWNER_ID), channel_id, bot.id)
+        .add_bot_to_channel(
+            EntityAccessReceipt::try_new_authenticated_user(
+                macro_user_id(BOT_OWNER_ID),
+                Entity {
+                    entity_id: channel_id.to_string(),
+                    entity_type: EntityType::Channel,
+                },
+                EntityPermission::ChannelRole {
+                    role: EntityParticipantRole::Member,
+                },
+            )
+            .expect("member role satisfies channel membership"),
+            bot.id,
+        )
         .await?;
 
     let bot_principal_id = bot.id.into_storage_id().to_string();

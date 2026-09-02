@@ -62,9 +62,11 @@ import {
 } from 'wonka';
 import type { CacheHost } from '../host/types';
 import {
+  type CacheRevision,
   type ClaimedMutation,
   type EnqueueOptimisticMutationResult,
   isAdmittedEnqueueUncertainError,
+  isCacheRevision,
   isOwnerEpochLostError,
   type QueryRevalidationWire,
 } from '../protocol';
@@ -97,6 +99,42 @@ const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
 const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+
+const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
+
+/** Private authority metadata attached by the normalized-cache exchange. */
+export type NormalizedCacheResultMetadata =
+  | { source: 'live-network'; revision?: CacheRevision }
+  | { source: 'normalized-cache-hit' }
+  | { source: 'affected-cache-reread' };
+
+/** Reads normalized-cache authority metadata from an urql operation result. */
+export function normalizedCacheResultMetadata(
+  result: Pick<OperationResult, 'extensions'>
+): NormalizedCacheResultMetadata | undefined {
+  const metadata = result.extensions?.[NORMALIZED_CACHE_RESULT_METADATA_KEY];
+  if (metadata === null || typeof metadata !== 'object') return;
+  const source = (metadata as { source?: unknown }).source;
+  if (source === 'normalized-cache-hit' || source === 'affected-cache-reread') {
+    return { source };
+  }
+  if (source !== 'live-network') return;
+  const revision = (metadata as { revision?: unknown }).revision;
+  return isCacheRevision(revision) ? { source, revision } : { source };
+}
+
+function withResultMetadata(
+  result: OperationResult,
+  metadata: NormalizedCacheResultMetadata
+): OperationResult {
+  return {
+    ...result,
+    extensions: {
+      ...result.extensions,
+      [NORMALIZED_CACHE_RESULT_METADATA_KEY]: metadata,
+    },
+  };
+}
 
 type QueueAttemptContext = {
   transactionId: string;
@@ -227,16 +265,23 @@ function withQueueRequestTimeout(op: Operation): Operation {
 function cacheResult(
   op: Operation,
   data: unknown,
-  stale: boolean
+  stale: boolean,
+  source: Extract<
+    NormalizedCacheResultMetadata,
+    { source: 'normalized-cache-hit' | 'affected-cache-reread' }
+  >['source'] = 'normalized-cache-hit'
 ): OperationResult {
-  return {
-    operation: op,
-    data,
-    error: undefined,
-    extensions: undefined,
-    stale,
-    hasNext: false,
-  };
+  return withResultMetadata(
+    {
+      operation: op,
+      data,
+      error: undefined,
+      extensions: undefined,
+      stale,
+      hasNext: false,
+    },
+    { source }
+  );
 }
 
 type CacheEffect =
@@ -575,7 +620,9 @@ export function normalizedCacheExchange(
           // Preserve the authoritative request while immediately surfacing the
           // newer local view. Its eventual result still gets the deferred
           // cache reread below when it could not register fresh dependencies.
-          emitAffectedResult(cacheResult(active, read.data, true));
+          emitAffectedResult(
+            cacheResult(active, read.data, true, 'affected-cache-reread')
+          );
         })
         .catch((error) => options.onCacheError?.(error, operation));
     };
@@ -685,6 +732,27 @@ export function normalizedCacheExchange(
         claimed: ClaimedMutation
       ): Promise<void> {
         deferredUntil = undefined;
+        if (claimed.superseded) {
+          const discarded = await host.deferOptimisticWrite(
+            claimed.transactionId,
+            { owner: queueOwner, generation: claimed.leaseGeneration },
+            Date.now(),
+            'superseded before network replay'
+          );
+          if (discarded.kind !== 'discarded-superseded') {
+            throw new Error('superseded mutation was unexpectedly deferred');
+          }
+          const live = liveQueuedOps.get(claimed.transactionId);
+          if (live) {
+            liveQueuedOps.delete(claimed.transactionId);
+            live.resolveRoute(
+              queuedMutationResult(live.operation, claimed.transactionId)
+            );
+          }
+          resolveLiveOperationsAsQueued();
+          scheduleDrain();
+          return;
+        }
         attemptInFlight = true;
         const attempt: QueueAttemptContext = {
           transactionId: claimed.transactionId,
@@ -878,6 +946,7 @@ export function normalizedCacheExchange(
           return undefined;
         }
         const args = {
+          uuid: optimistic.uuid,
           query: queryText(op),
           operationName: operationName(op),
           variables: op.variables as Record<string, unknown> | undefined,
@@ -931,6 +1000,20 @@ export function normalizedCacheExchange(
             }
             enqueueForward(op);
             return undefined;
+          }
+        }
+        if (enqueue.upsertKind.kind === 'replaced-pending') {
+          const superseded = liveQueuedOps.get(
+            enqueue.upsertKind.removedTransactionId
+          );
+          if (superseded) {
+            liveQueuedOps.delete(enqueue.upsertKind.removedTransactionId);
+            superseded.resolveRoute(
+              queuedMutationResult(
+                superseded.operation,
+                enqueue.upsertKind.removedTransactionId
+              )
+            );
           }
         }
         const routed = new Promise<OperationResult | undefined>((resolve) => {
@@ -993,6 +1076,10 @@ export function normalizedCacheExchange(
         result: OperationResult
       ): Promise<OperationResult> {
         const op = result.operation;
+        let output =
+          op.kind === 'query'
+            ? withResultMetadata(result, { source: 'live-network' })
+            : result;
         if (op.kind === 'subscription' && result.data != null) {
           // Serialize effects across every emission for this operation, as
           // well as within buffered payloads, so a slower earlier write cannot
@@ -1022,10 +1109,13 @@ export function normalizedCacheExchange(
               identity: options.extractIdentity?.(result.data),
               entityResolvers,
             });
-            return {
-              ...result,
-              data: hydration.kind === 'data' ? hydration.data : undefined,
-            };
+            return withResultMetadata(
+              {
+                ...result,
+                data: hydration.kind === 'data' ? hydration.data : undefined,
+              },
+              { source: 'live-network', revision: hydration.revision }
+            );
           } catch (error) {
             options.onCacheError?.(error, op);
             return {
@@ -1079,7 +1169,11 @@ export function normalizedCacheExchange(
                 state.retainedReplacementFallback = retained;
               }
               try {
-                await host.writeQuery(writeArgs);
+                const write = await host.writeQuery(writeArgs);
+                output = withResultMetadata(result, {
+                  source: 'live-network',
+                  revision: write.revision,
+                });
                 state.networkRegistrationSatisfied =
                   writeArgs.registerDependencies;
                 if (state.retainedReplacementFallback === retained) {
@@ -1106,8 +1200,12 @@ export function normalizedCacheExchange(
               generation: attempt.leaseGeneration,
             };
             let retryAt: number | undefined;
-            let disposition: 'committed' | 'queued' | 'permanently-failed' =
-              'queued';
+            let replacementTransactionId: string | undefined;
+            let disposition:
+              | 'committed'
+              | 'queued'
+              | 'superseded'
+              | 'permanently-failed' = 'queued';
             try {
               if (result.error || result.data == null) {
                 let retry = false;
@@ -1120,20 +1218,33 @@ export function normalizedCacheExchange(
                 }
                 if (retry) {
                   retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
-                  await host.deferOptimisticWrite(
+                  const deferred = await host.deferOptimisticWrite(
                     attempt.transactionId,
                     claim,
                     retryAt,
                     result.error?.message ?? 'mutation returned no data'
                   );
-                  disposition = 'queued';
+                  if (deferred.kind === 'discarded-superseded') {
+                    retryAt = undefined;
+                    replacementTransactionId =
+                      deferred.replacementTransactionId;
+                    disposition = 'superseded';
+                  } else {
+                    disposition = 'queued';
+                  }
                 } else {
-                  await host.rollbackOptimisticWrite(
+                  const rolledBack = await host.rollbackOptimisticWrite(
                     attempt.transactionId,
                     claim,
                     result.error?.message ?? 'mutation returned no data'
                   );
-                  disposition = 'permanently-failed';
+                  if (rolledBack.kind === 'discarded-superseded') {
+                    replacementTransactionId =
+                      rolledBack.replacementTransactionId;
+                    disposition = 'superseded';
+                  } else {
+                    disposition = 'permanently-failed';
+                  }
                 }
               } else {
                 const committed = await host.commitOptimisticWrite(
@@ -1148,15 +1259,20 @@ export function normalizedCacheExchange(
                     data: result.data,
                   }
                 );
-                const effects = operationCacheEffects(result.data);
-                if (effects.some((effect) => effect.kind === 'delete')) {
-                  // Commit already normalized the complete result. Replay only
-                  // mixed explicit effects so their final write/delete order is
-                  // identical to a non-optimistic operation.
-                  await applyOperationCacheEffects(op, effects);
+                if (committed.kind === 'committed-superseded') {
+                  replacementTransactionId = committed.replacementTransactionId;
+                  disposition = 'superseded';
+                } else {
+                  const effects = operationCacheEffects(result.data);
+                  if (effects.some((effect) => effect.kind === 'delete')) {
+                    // Commit already normalized the complete result. Replay only
+                    // mixed explicit effects so their final write/delete order is
+                    // identical to a non-optimistic operation.
+                    await applyOperationCacheEffects(op, effects);
+                  }
+                  revalidateAfterCommit(committed.revalidations ?? [], op);
+                  disposition = 'committed';
                 }
-                revalidateAfterCommit(committed.revalidations ?? [], op);
-                disposition = 'committed';
               }
             } catch (error) {
               options.onCacheError?.(error, op);
@@ -1173,10 +1289,20 @@ export function normalizedCacheExchange(
                 retryAt === undefined ? 0 : Math.max(0, retryAt - Date.now())
               );
             }
-            return withOptimisticMutationDisposition(result, {
-              kind: disposition,
-              transactionId: attempt.transactionId,
-            });
+            return withOptimisticMutationDisposition(
+              result,
+              disposition === 'superseded'
+                ? {
+                    kind: 'superseded',
+                    transactionId: attempt.transactionId,
+                    replacementTransactionId:
+                      replacementTransactionId ?? attempt.transactionId,
+                  }
+                : {
+                    kind: disposition,
+                    transactionId: attempt.transactionId,
+                  }
+            );
           }
 
           const optimistic = optimisticContextOf(op);
@@ -1195,7 +1321,7 @@ export function normalizedCacheExchange(
             });
           }
         }
-        return result;
+        return output;
       }
 
       const cacheResults$ = pipe(

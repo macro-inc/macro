@@ -79,6 +79,7 @@ import {
   executeMarkEntitiesDone,
   getChannelEntityTarget,
   getRowClickFallbackLocation,
+  markChannelNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
   resolveMarkEntitiesDoneVariables,
@@ -122,6 +123,10 @@ const asRead = (notification: UnifiedNotification): UnifiedNotification =>
     ...notification,
     viewed_at: '2026-07-14T00:00:00.000Z',
   }) as unknown as UnifiedNotification;
+
+const notificationSourceWithBulkMarkAsRead = (
+  bulkMarkAsRead = vi.fn(async () => {})
+) => ({ bulkMarkAsRead }) as unknown as NotificationSource;
 
 const channelMessageRow = (opts?: {
   target?: ChannelEntityTarget;
@@ -285,6 +290,47 @@ describe('calendar block navigation', () => {
       expect.objectContaining({ eventId: 'event-1' })
     );
   });
+
+  it('retargets a calendar preview without activating its viewer', async () => {
+    const activate = vi.fn();
+    const openWithSplit = vi.fn();
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    const controller = {
+      isControllerSplit: () => true,
+      viewerId: () => 'viewer-1',
+    } as unknown as SplitHandle;
+
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(() => ({
+        id: 'viewer-1',
+        activate,
+      })),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'calendar_event',
+        id: 'event-2',
+      } as unknown as EntityData,
+      { splitHandle: controller, mergeHistory: true }
+    );
+
+    expect(activate).not.toHaveBeenCalled();
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'calendar',
+        id: 'view',
+      }),
+      expect.objectContaining({
+        handle: controller,
+        mergeHistory: true,
+      })
+    );
+  });
 });
 
 describe('preview history source', () => {
@@ -391,6 +437,126 @@ describe('getChannelEntityTarget', () => {
       messageId: 'notif-msg',
       threadId: undefined,
     });
+  });
+
+  it('marks every unread notification attached to a channel row', () => {
+    const agentNotification = sendNotification(
+      'agent-notification',
+      'agent-msg'
+    );
+    agentNotification.notification_metadata = {
+      tag: 'channel_message_send',
+      content: {
+        messageId: 'agent-msg',
+        sender: null,
+        senderDisplayName: 'Macro Agent',
+      },
+    } as UnifiedNotification['notification_metadata'];
+    const olderNotification = sendNotification('older-notification', 'older');
+    const readNotification = asRead(sendNotification('read', 'read-msg'));
+
+    const bulkMarkAsRead = vi.fn(async () => {});
+    markChannelNotificationsSeenOnOpen(
+      channelRow({
+        notifications: [agentNotification, olderNotification, readNotification],
+      }),
+      notificationSourceWithBulkMarkAsRead(bulkMarkAsRead)
+    );
+
+    expect(bulkMarkAsRead).toHaveBeenCalledOnce();
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([
+      agentNotification,
+      olderNotification,
+    ]);
+  });
+
+  it('marks attached channel notifications through the shared split-open path', async () => {
+    const notification = sendNotification('shared-open', 'message');
+    const openWithSplit = vi.fn();
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({
+        getBlockHandle: vi.fn(async () => undefined),
+      })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    const bulkMarkAsRead = vi.fn(async () => {});
+    await openEntityInSplitFromUnifiedList(
+      channelRow({ notifications: [notification] }),
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      }
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ channel_message_id: 'message' }),
+      }),
+      expect.any(Object)
+    );
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([notification]);
+  });
+
+  it('does not mark a thread-stack notification when opening its parent channel row', async () => {
+    const parentNotification = sendNotification('parent-send', 'message');
+    const threadNotification = replyNotification(
+      'thread-reply',
+      'reply',
+      'thread-root'
+    );
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({
+        getBlockHandle: vi.fn(async () => undefined),
+      })),
+      getSplitByContent: vi.fn(),
+      openWithSplit: vi.fn(),
+    } as unknown as SplitManager);
+
+    const bulkMarkAsRead = vi.fn(async () => {});
+    await openEntityInSplitFromUnifiedList(
+      channelRow({
+        notifications: [parentNotification, threadNotification],
+      }),
+      {
+        notificationSource:
+          notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      }
+    );
+
+    expect(bulkMarkAsRead).toHaveBeenCalledWith([parentNotification]);
+    expect(bulkMarkAsRead).not.toHaveBeenCalledWith(
+      expect.arrayContaining([threadNotification])
+    );
+  });
+
+  it('reports failures to mark an attached channel notification read', async () => {
+    const error = new Error('mark failed');
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const notification = sendNotification('notification', 'message');
+    const bulkMarkAsRead = vi.fn(async () => {
+      throw error;
+    });
+
+    try {
+      markChannelNotificationsSeenOnOpen(
+        channelRow({ notifications: [notification] }),
+        notificationSourceWithBulkMarkAsRead(bulkMarkAsRead)
+      );
+      await Promise.resolve();
+
+      expect(consoleError).toHaveBeenCalledWith(
+        'Failed to mark channel notifications as read',
+        error
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('opens a channel row at latest when it has no notifications', () => {

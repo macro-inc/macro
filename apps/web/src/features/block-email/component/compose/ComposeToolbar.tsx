@@ -133,7 +133,7 @@ export function EmailComposeToolbar(props: {
                   ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
                 }
                 onClick={() => void ctx.onSaveDraft?.()}
-                variant="base"
+                variant="outline"
                 size="sm"
               >
                 {ctx.isSavingDraft?.() ? 'Saving…' : 'Save Draft'}
@@ -195,7 +195,7 @@ function MobileToolbar(props: {
           </Show>
           <Show when={ctx.onSaveDraft}>
             <Button
-              variant="base"
+              variant="outline"
               size="sm"
               disabled={
                 ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()

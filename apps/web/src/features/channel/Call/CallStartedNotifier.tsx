@@ -14,6 +14,12 @@ import {
   publishCallResolution,
 } from './call-resolution';
 import { joinChannelCall } from './join-channel-call';
+import {
+  attachRingCoordination,
+  participateInRing,
+  type RingParticipation,
+  silenceIncomingCallRing,
+} from './ring-coordination';
 
 const RING_VOLUME = 0.11;
 const RING_NOTE_DURATION_S = 0.09;
@@ -61,18 +67,48 @@ function closeCallNotification(callId: string) {
   activeCallNotifications.delete(callId);
 }
 
-function startCallRinger(
-  callId: string,
-  shouldStop: () => boolean,
-  initialSound?: RingSound
-): Ringer {
+/**
+ * Starts this tab's participation in ringing `callId`. Only the tab that
+ * wins the cross-tab election actually makes noise; the others stay silent
+ * but take the ring over if the audible tab goes away mid-ring (see
+ * `ring-coordination.ts`).
+ */
+function startCallRinger(callId: string, shouldStop: () => boolean): Ringer {
   stopCallRinger(callId);
-  const ringer = startRingingLoop(shouldStop, initialSound, () => {
-    if (activeCallRingers.get(callId) === ringer) {
-      activeCallRingers.delete(callId);
-    }
-  });
+
+  let loop: Ringer | undefined;
+  let isReleasingLoop = false;
+  let participation: RingParticipation | undefined;
+  const ringer: Ringer = { stop: () => participation?.stop() };
   activeCallRingers.set(callId, ringer);
+
+  participation = participateInRing({
+    callId,
+    shouldStop,
+    maxDurationMs: MAX_RING_DURATION_MS,
+    onAcquire: () => {
+      loop = startRingingLoop(shouldStop, playRingSound(), () => {
+        // The loop stopping on its own (user joined, max duration) also ends
+        // the participation, so this tab stops heartbeating a claim it no
+        // longer rings for. Guarded so a release-triggered stop does not end
+        // the participation — a demoted tab must stay in the election as a
+        // takeover candidate.
+        if (!isReleasingLoop) participation?.stop();
+      });
+    },
+    onRelease: () => {
+      isReleasingLoop = true;
+      loop?.stop();
+      isReleasingLoop = false;
+      loop = undefined;
+    },
+    onEnd: () => {
+      if (activeCallRingers.get(callId) === ringer) {
+        activeCallRingers.delete(callId);
+      }
+    },
+  });
+
   return ringer;
 }
 
@@ -190,13 +226,18 @@ function startRingingLoop(
  *
  * Also resolves the ring remotely: `call_answered` (sent to just this user
  * when they join the call on any device, e.g. answering on iPhone) and
- * `call_ended` both stop the ring; `call_answered` additionally closes the
- * incoming-call notification since the user is already in the call.
+ * `call_ended` both stop the ring and close the incoming-call notification —
+ * the user is already in the call, or there is no longer a call to answer.
  *
  * This component is the sole bridge from those one-shot websocket events to
  * published call resolutions (`call-resolution.ts`) — resolution consumers
  * like `IncomingCallEvents` rely on it being mounted for instant dismissal,
  * falling back to their reconciliation poll otherwise.
+ *
+ * The ring itself is elected across tabs (`ring-coordination.ts`) so an
+ * incoming call sounds like one phone instead of one per open tab; the toast
+ * is already deduplicated separately by the platform-notification leader
+ * election.
  *
  * Mount once near the app root, inside `<CallProvider>` and
  * `<ChannelsContextProvider>`. The backend already excludes the caller from
@@ -210,15 +251,28 @@ export function CallStartedNotifier() {
   const notif = usePlatformNotificationState();
   const userId = useUserId();
 
+  // Attach up front so sibling tabs' ring claims are already recorded when
+  // this tab's own `call_started` event arrives (event delivery across tabs
+  // can be milliseconds to seconds apart).
+  attachRingCoordination();
+
   createCallResolutionsEffect((resolution) => {
     if (resolution.type === 'answered') {
       if (resolution.answeredBy !== userId()) return;
       stopCallRinger(resolution.callId);
       closeCallNotification(resolution.callId);
+      // The creator's other devices never receive call_started; a refetch
+      // picks the now-answered call up for their active-call badges.
+      void invalidateActiveCallQueries();
       return;
     }
 
     stopCallRinger(resolution.callId);
+    // Close the toast too, not just the ring. It is `requireInteraction`, so
+    // an ended call's notification otherwise sits on screen until clicked —
+    // and clicking it deep-links into a join, which for a call that is over
+    // means get-or-create starts a brand-new one in the channel.
+    closeCallNotification(resolution.callId);
     setActiveCallEndedCache({
       channelId: resolution.channelId,
       callId: resolution.callId,
@@ -280,15 +334,24 @@ async function emitCallStartedNotification(args: {
 }) {
   const { channelId, callId, createdBy, channelName, notif, isJoined } = args;
 
-  // Play the sound regardless of notification permission so a user with
-  // browser notifications denied still gets an audio cue. Keep re-ringing even
-  // when platform notifications are unavailable; in that case the loop stops
-  // when the user joins, the call ends, or after MAX_RING_DURATION_MS.
-  const ringer = startCallRinger(callId, isJoined, playRingSound());
+  // Ring regardless of notification permission so a user with browser
+  // notifications denied still gets an audio cue. Only the tab that wins the
+  // cross-tab election makes noise; this tab still participates so it can
+  // take the ring over if the audible tab closes mid-ring. The ring stops
+  // when the user joins, the call ends, the ring is silenced in any tab, or
+  // after MAX_RING_DURATION_MS.
+  const ringer = startCallRinger(callId, isJoined);
 
   if (notif === 'not-supported') return;
 
   const pending = { cancelled: false };
+  // Cancel any earlier attempt for this call before taking its slot. The map
+  // holds one entry per call id, so an attempt that was replaced would never
+  // see a later `closeCallNotification` and could still register its toast
+  // once it resolved — leaving a requireInteraction notification up for a call
+  // that has already ended.
+  const superseded = pendingCallNotifications.get(callId);
+  if (superseded) superseded.cancelled = true;
   pendingCallNotifications.set(callId, pending);
   try {
     const callerName =
@@ -332,7 +395,11 @@ async function emitCallStartedNotification(args: {
     });
     handle.onDismiss(() => {
       untrack();
-      ringer.stop();
+      // Closing the toast is an explicit "stop ringing": the audible tab may
+      // be a sibling, so silence the ring everywhere rather than just here.
+      // Also fires after our own `handle.close()` calls, where the ring is
+      // ending anyway and the extra silence is harmless.
+      silenceIncomingCallRing(callId);
     });
   } finally {
     if (pendingCallNotifications.get(callId) === pending) {

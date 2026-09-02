@@ -86,7 +86,7 @@ describe('realAwarenessSource (no live mirror)', () => {
       doc: { getContainerById: () => null } as any,
       send,
       name: 'Sam (AI)',
-      color: 'accent-30',
+      color: 'red',
     });
     src.apply({ type: 'cursor', node: 'missing', at: 0 });
     expect(send).not.toHaveBeenCalled();
@@ -102,7 +102,7 @@ describe('realAwarenessSource (no live mirror)', () => {
       doc,
       send,
       name: 'Sam (AI)',
-      color: 'accent-30',
+      color: 'red',
     });
 
     src.apply({ type: 'cursor', node: 't1', at: 3 });
@@ -130,7 +130,7 @@ describe('realAwarenessSource (no live mirror)', () => {
       doc,
       send,
       name: 'Sam (AI)',
-      color: 'accent-30',
+      color: 'red',
     });
 
     src.apply({ type: 'cursor', node: 't1', at: 3 });

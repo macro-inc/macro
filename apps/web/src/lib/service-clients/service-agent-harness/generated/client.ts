@@ -11,7 +11,126 @@ import type {
   ControlRequest,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  RenameAgentSessionRequest,
+  SandboxSizeBody,
 } from './schemas';
+
+/**
+ * @summary Read the caller's default sandbox size for new `@coder` sessions.
+ */
+export type getAgentSandboxSizeResponse200 = {
+  data: SandboxSizeBody;
+  status: 200;
+};
+
+export type getAgentSandboxSizeResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSandboxSizeResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSandboxSizeResponseSuccess =
+  getAgentSandboxSizeResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSandboxSizeResponseError = (
+  | getAgentSandboxSizeResponse401
+  | getAgentSandboxSizeResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSandboxSizeResponse =
+  | getAgentSandboxSizeResponseSuccess
+  | getAgentSandboxSizeResponseError;
+
+export const getGetAgentSandboxSizeUrl = () => {
+  return `/agent-sandbox-size`;
+};
+
+export const getAgentSandboxSize = async (
+  options?: RequestInit
+): Promise<getAgentSandboxSizeResponse> => {
+  const res = await fetch(getGetAgentSandboxSizeUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSandboxSizeResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSandboxSizeResponse;
+};
+
+/**
+ * @summary Set the caller's default sandbox size for the next `@coder` mention.
+ */
+export type putAgentSandboxSizeResponse200 = {
+  data: SandboxSizeBody;
+  status: 200;
+};
+
+export type putAgentSandboxSizeResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentSandboxSizeResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentSandboxSizeResponseSuccess =
+  putAgentSandboxSizeResponse200 & {
+    headers: Headers;
+  };
+export type putAgentSandboxSizeResponseError = (
+  | putAgentSandboxSizeResponse401
+  | putAgentSandboxSizeResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentSandboxSizeResponse =
+  | putAgentSandboxSizeResponseSuccess
+  | putAgentSandboxSizeResponseError;
+
+export const getPutAgentSandboxSizeUrl = () => {
+  return `/agent-sandbox-size`;
+};
+
+export const putAgentSandboxSize = async (
+  sandboxSizeBody: SandboxSizeBody,
+  options?: RequestInit
+): Promise<putAgentSandboxSizeResponse> => {
+  const res = await fetch(getPutAgentSandboxSizeUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sandboxSizeBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentSandboxSizeResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentSandboxSizeResponse;
+};
 
 /**
  * Nothing here tells the runtime where to dial: one connection per bot
@@ -350,4 +469,142 @@ export const getAgentSessionLog = async (
     status: res.status,
     headers: res.headers,
   } as getAgentSessionLogResponse;
+};
+
+/**
+ * @summary Rename an agent session.
+ */
+export type renameAgentSessionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type renameAgentSessionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type renameAgentSessionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type renameAgentSessionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type renameAgentSessionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type renameAgentSessionResponseSuccess =
+  renameAgentSessionResponse204 & {
+    headers: Headers;
+  };
+export type renameAgentSessionResponseError = (
+  | renameAgentSessionResponse400
+  | renameAgentSessionResponse401
+  | renameAgentSessionResponse403
+  | renameAgentSessionResponse500
+) & {
+  headers: Headers;
+};
+
+export type renameAgentSessionResponse =
+  | renameAgentSessionResponseSuccess
+  | renameAgentSessionResponseError;
+
+export const getRenameAgentSessionUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/name`;
+};
+
+export const renameAgentSession = async (
+  sessionId: string,
+  renameAgentSessionRequest: RenameAgentSessionRequest,
+  options?: RequestInit
+): Promise<renameAgentSessionResponse> => {
+  const res = await fetch(getRenameAgentSessionUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(renameAgentSessionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: renameAgentSessionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as renameAgentSessionResponse;
+};
+
+/**
+ * @summary Resize this session's sandbox and remember the size as the owner's default.
+ */
+export type putAgentSessionSandboxSizeResponse200 = {
+  data: SandboxSizeBody;
+  status: 200;
+};
+
+export type putAgentSessionSandboxSizeResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentSessionSandboxSizeResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type putAgentSessionSandboxSizeResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentSessionSandboxSizeResponseSuccess =
+  putAgentSessionSandboxSizeResponse200 & {
+    headers: Headers;
+  };
+export type putAgentSessionSandboxSizeResponseError = (
+  | putAgentSessionSandboxSizeResponse401
+  | putAgentSessionSandboxSizeResponse403
+  | putAgentSessionSandboxSizeResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentSessionSandboxSizeResponse =
+  | putAgentSessionSandboxSizeResponseSuccess
+  | putAgentSessionSandboxSizeResponseError;
+
+export const getPutAgentSessionSandboxSizeUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/sandbox-size`;
+};
+
+export const putAgentSessionSandboxSize = async (
+  sessionId: string,
+  sandboxSizeBody: SandboxSizeBody,
+  options?: RequestInit
+): Promise<putAgentSessionSandboxSizeResponse> => {
+  const res = await fetch(getPutAgentSessionSandboxSizeUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sandboxSizeBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentSessionSandboxSizeResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentSessionSandboxSizeResponse;
 };

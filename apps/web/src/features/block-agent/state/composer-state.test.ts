@@ -12,7 +12,31 @@ const facts = (overrides: Partial<ComposerFacts>): ComposerFacts => ({
   post: { type: 'idle' },
   head: undefined,
   agentWorking: false,
+  sessionExists: true,
   ...overrides,
+});
+
+describe('nextAction: before the session exists', () => {
+  it('holds the head until the create lands', () => {
+    const waiting = facts({ head: prompt('a'), sessionExists: false });
+    expect(nextAction(waiting).type).toBe('hold');
+    expect(nextAction(facts({ head: prompt('a') }))).toEqual({
+      type: 'post_head',
+      prompt: prompt('a'),
+    });
+  });
+
+  it('outranks every other hold — nothing can post to nowhere', () => {
+    const action = nextAction(
+      facts({
+        head: prompt('a'),
+        sessionExists: false,
+        post: { type: 'failed', promptId: 'a' },
+        agentWorking: true,
+      })
+    );
+    expect(action.type).toBe('hold');
+  });
 });
 
 describe('nextAction: when the head sends', () => {

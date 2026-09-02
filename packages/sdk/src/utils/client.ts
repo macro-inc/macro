@@ -1,3 +1,4 @@
+import { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
 import { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import { Sdk as ContactsSdk } from '../../generated/contacts/sdk.gen';
@@ -22,6 +23,7 @@ import { MacroEvents } from '../events/receiver';
 import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
 
 export class MacroClient {
+  readonly agentHarness: AgentHarnessSdk;
   readonly auth: AuthSdk;
   readonly cognition: CognitionSdk;
   readonly contacts: ContactsSdk;
@@ -32,7 +34,7 @@ export class MacroClient {
   readonly storage: StorageSdk;
   readonly webAppUrl: string;
   readonly wsVerify?: string;
-  readonly events?: MacroEvents;
+  readonly events: MacroEvents;
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
   /** Resolved service base urls: env defaults, then the local-stack portmap,
@@ -66,6 +68,9 @@ export class MacroClient {
     }
     this.wsVerify = opts.wsVerify;
 
+    this.agentHarness = new AgentHarnessSdk({
+      client: this.makeClient(hosts['agent-harness']),
+    });
     this.auth = new AuthSdk({ client: this.makeClient(hosts.auth) });
     this.cognition = new CognitionSdk({
       client: this.makeClient(hosts.cognition),
@@ -88,9 +93,7 @@ export class MacroClient {
         ? process.env.MACRO_WEBHOOK_SECRET
         : undefined;
     const webhookSecret = opts.webhookSecret ?? envWebhookSecret;
-    if (webhookSecret) {
-      this.events = new MacroEvents(this, webhookSecret);
-    }
+    this.events = new MacroEvents(this, webhookSecret);
   }
 
   /** Whether requests have a user identity accepted by acting-user endpoints. */

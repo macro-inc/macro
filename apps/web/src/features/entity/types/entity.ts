@@ -361,6 +361,21 @@ export type CalendarEventEntity = EntityBase & {
   status: string;
   /** Master event time. Absent when the wire shape could not be read. */
   time?: CalendarEventEntityTime;
+  /**
+   * The instance this row means, when one was resolved. Search rows carry it
+   * so a click lands on the relevant occurrence of a recurring series rather
+   * than the master's original start; soup rows leave it unset.
+   */
+  occurrenceKey?: string;
+  /** Whether the series carries a recurrence rule, so a row can flag it
+   * without parsing the rules. Only search rows populate it. */
+  isRecurring?: boolean;
+  /** The event's organizer (its creator, in Google's model), when named.
+   * Only search rows populate it. */
+  organizer?: { name?: string; email?: string };
+  /** Free-text description, when the event carries one. May contain HTML from
+   * the source. Only search rows populate it. */
+  description?: string;
   /** Direct join URL when known. */
   conferenceUrl?: string;
   /** Whether the canonical source prohibits mutation. */

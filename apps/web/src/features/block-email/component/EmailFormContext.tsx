@@ -7,11 +7,14 @@ import {
 type EmailFormContextValue = ReturnType<typeof createEmailFormState>;
 
 type FormAccessKey =
-  | { type: 'replying_to'; messageID: string }
-  | { type: 'draft'; messageID: string };
+  | { type: 'replying_to'; messageID: string; seed?: string }
+  | { type: 'draft'; messageID: string; seed?: string };
 
+// `seed` identifies the draft version the form seeds from (see EmailInput's
+// seed key), so a composer remounting on a newer draft version gets a
+// freshly derived form instead of the cached one.
 const stringifyKey = (key: FormAccessKey) => {
-  return `${key.type}_${key.messageID}`;
+  return `${key.type}_${key.messageID}_${key.seed ?? ''}`;
 };
 
 type RegistryApi = {

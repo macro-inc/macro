@@ -90,8 +90,9 @@ pub trait ConnectorDirectory: Send + Sync + 'static {
     ///
     /// `search` filters apps by name; `None` browses everything. `cursor` is
     /// the opaque pagination cursor from a previous page. Implementations
-    /// return only apps that can actually be connected (i.e. apps with an
-    /// auth flow).
+    /// return entries most-popular-first, and only apps that can actually be
+    /// connected and used (i.e. apps with an auth flow and at least one
+    /// action to expose as a tool).
     fn search(
         &self,
         search: Option<&str>,

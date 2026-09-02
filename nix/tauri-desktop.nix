@@ -149,8 +149,8 @@
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
           "git+https://github.com/macro-inc/plugins-workspace?rev=06474e4c446600627cf37a11f0c22c27bcf764ca#06474e4c446600627cf37a11f0c22c27bcf764ca" =
             "sha256-ngH5sltERe8DlP/zjsin9jmlGOZFeABk8SxJ5AnZG18=";
-          "git+https://github.com/seanaye/turso?rev=be9acfe9e5e6efb17911af84047e4855cace53a3#be9acfe9e5e6efb17911af84047e4855cace53a3" =
-            "sha256-BTS0ypmcVWne+m0BQp/VT2O6mOFB/cc9F1TgQMo48aM=";
+          "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
+            "sha256-7Noz7RMN+4nhlU5BBLzxZZ53nNFGewrr8BFMO1adkCo=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
             "sha256-5HamTWAZPtUSWOfP3TgtiqFJvunlPXy9/C0TLHQpXlU=";
           "git+https://github.com/voxelbee/tauri-plugin-virtual-keyboard?branch=main#70e8e8325b5ff7d681ef5f3b996ac083d4fc5a01" =

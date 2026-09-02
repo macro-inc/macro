@@ -3,9 +3,10 @@ use std::sync::{Arc, Mutex};
 
 use channels::domain::{
     broker_events::{
-        ChannelMessageAttachmentCreatedMetadata, ChannelMessageDeletedMetadata, ChannelTopicEvent,
+        ChannelEventAttachment, ChannelMessageAttachmentCreatedMetadata,
+        ChannelMessageDeletedMetadata, ChannelMessagePostedMetadata, ChannelTopicEvent,
     },
-    models::ChannelSender,
+    models::{ChannelSender, ChannelType, SimpleMention},
 };
 use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
 use chrono::Utc;
@@ -121,6 +122,8 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let created = DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
         owner: user(),
+        actor: None,
+        on_behalf_of: None,
         document_name: "Created".to_string(),
         file_type: None,
         project_id: None,
@@ -293,6 +296,8 @@ fn task_property_updates_map_to_document_updates() {
         entity_type: PropertyEntityType::Task,
         property_definition_id: Uuid::now_v7(),
         actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),
@@ -314,12 +319,16 @@ fn deleting_or_clearing_properties_updates_the_soup_entity() {
         entity_type: PropertyEntityType::Thread,
         property_definition_id: Uuid::now_v7(),
         actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
     });
     let company_id = Uuid::now_v7().to_string();
     let cleared = PropertyTopicEvent::EntityPropertiesCleared(EntityPropertiesClearedMetadata {
         entity_id: company_id.clone(),
         entity_type: PropertyEntityType::Company,
         actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
     });
 
     let deleted = patches_from_property_event(&deleted);
@@ -346,6 +355,8 @@ fn property_events_for_non_property_soup_items_are_ignored() {
             entity_id: DOCUMENT_ID.to_string(),
             entity_type,
             actor_user_id: Some(user()),
+            actor: None,
+            on_behalf_of: None,
         });
         assert!(patches_from_property_event(&event).is_empty());
     }
@@ -465,20 +476,56 @@ fn new_email_events_map_to_realtime_thread_patches() {
 }
 
 #[test]
-fn attachment_events_use_only_metadata_available_on_the_existing_event() {
+fn attachment_events_update_referenced_documents_for_channel_members() {
     let channel_id = Uuid::now_v7();
     let event =
         ChannelTopicEvent::MessageAttachmentCreated(ChannelMessageAttachmentCreatedMetadata {
             channel_id,
             message_id: Uuid::now_v7(),
             actor: ChannelSender::new_from_user(user()),
-            attachments: Vec::new(),
+            attachments: vec![ChannelEventAttachment {
+                attachment_id: Uuid::now_v7(),
+                entity_type: "document".to_string(),
+                entity_id: DOCUMENT_ID.to_string(),
+                created_at: Utc::now(),
+            }],
         });
 
     let patches = patches_from_channel_event(&event);
-    assert_eq!(patches.len(), 1);
+    assert_eq!(patches.len(), 2);
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Channel);
     assert_eq!(patch_entity(&patches[0]).entity_id, channel_id.to_string());
+    assert_eq!(patch_entity(&patches[1]).entity_type, EntityType::Document);
+    assert_eq!(patch_entity(&patches[1]).entity_id, DOCUMENT_ID);
+    assert_eq!(patches[1].access_source.entity_type, EntityType::Channel);
+    assert_eq!(patches[1].access_source.entity_id, channel_id.to_string());
+}
+
+#[test]
+fn posted_message_mentions_update_referenced_documents_for_channel_members() {
+    let channel_id = Uuid::now_v7();
+    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
+        channel_id,
+        message_id: Uuid::now_v7(),
+        thread_id: None,
+        sender: ChannelSender::new_from_user(user()),
+        triggered_by: None,
+        channel_type: ChannelType::Private,
+        content: "shared a document".to_string(),
+        mentions: vec![SimpleMention {
+            entity_type: "document".to_string(),
+            entity_id: DOCUMENT_ID.to_string(),
+        }],
+        attachments: Vec::new(),
+        created_at: Utc::now(),
+    });
+
+    let patches = patches_from_channel_event(&event);
+    assert_eq!(patches.len(), 3);
+    assert_eq!(patch_entity(&patches[2]).entity_type, EntityType::Document);
+    assert_eq!(patch_entity(&patches[2]).entity_id, DOCUMENT_ID);
+    assert_eq!(patches[2].access_source.entity_type, EntityType::Channel);
+    assert_eq!(patches[2].access_source.entity_id, channel_id.to_string());
 }
 
 #[test]

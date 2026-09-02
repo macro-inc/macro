@@ -14,6 +14,32 @@ import type { EntityResolverWire } from './exchange/entity-resolvers';
 
 export type ReadResult = { kind: 'hit'; data: unknown } | { kind: 'miss' };
 
+/** Opaque in-memory revision of one live cache engine generation. */
+export type CacheRevision = string & {
+  readonly __cacheRevision: unique symbol;
+};
+
+const MAX_CACHE_REVISION = 18_446_744_073_709_551_615n;
+
+/** Validates the canonical unsigned-decimal Rust `u64` wire representation. */
+export function isCacheRevision(value: unknown): value is CacheRevision {
+  return (
+    typeof value === 'string' &&
+    /^(0|[1-9][0-9]*)$/.test(value) &&
+    BigInt(value) <= MAX_CACHE_REVISION
+  );
+}
+
+/** Parses an untrusted cache revision at protocol ingress. */
+export function parseCacheRevision(value: unknown): CacheRevision {
+  if (!isCacheRevision(value)) {
+    throw new TypeError('invalid cache revision');
+  }
+  return value;
+}
+
+export const INITIAL_CACHE_REVISION = '0' as CacheRevision;
+
 /** Scheduling hint for latency-sensitive cache reads. */
 export type CacheReadPriority = 'user-visible';
 
@@ -60,9 +86,14 @@ export type EntityFilterCacheArgs = {
 };
 
 export type EntityFilterCacheResult =
-  | { kind: 'complete'; keys: string[]; optimistic: boolean }
+  | {
+      kind: 'complete';
+      revision: CacheRevision;
+      keys: string[];
+      optimistic: boolean;
+    }
   | { kind: 'unsupported' }
-  | { kind: 'incomplete' };
+  | { kind: 'incomplete'; revision: CacheRevision };
 
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
@@ -76,6 +107,20 @@ export type ReadRecordsByKeysArgs = {
 export type SelectedRecordByKeyWire = {
   recordKey: string;
   record: unknown;
+};
+
+export type ReadRecordsByKeysResult = {
+  revision: CacheRevision;
+  records: SelectedRecordByKeyWire[];
+};
+
+export type AffectedOperationsResult = {
+  revision: CacheRevision;
+  affectedOps: string[];
+};
+
+export type CacheRevisionResult = {
+  revision: CacheRevision;
 };
 
 export const MAX_RECORD_SELECTION_PAGE_SIZE = 500;
@@ -254,10 +299,14 @@ export type CachedQueryInstanceWire = CachedQueryVariantWire & {
 };
 
 export type HydrationResult =
-  | { kind: 'data'; data: unknown }
-  | { kind: 'void' };
+  | { kind: 'data'; data: unknown; revision: CacheRevision }
+  | { kind: 'void'; revision: CacheRevision };
 
 export type WriteResult = {
+  /** Effective-view revision installed by this logical mutation. */
+  revision: CacheRevision;
+  /** Whether this write advanced `revision`. */
+  revisionAdvanced: boolean;
   /** Entity keys whose records changed. */
   changed: string[];
   /** Registered operation ids affected by the change (origin excluded). */
@@ -282,9 +331,17 @@ export type OptimisticWriteResult = WriteResult & {
   transactionId: string;
 };
 
+/** How a caller UUID changed the durable queue. */
+export type MutationUpsertKind =
+  | { kind: 'inserted' }
+  | { kind: 'replaced-pending'; removedTransactionId: string }
+  | { kind: 'appended-after-active'; activeTransactionId: string };
+
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
   transactionId: string;
+  uuid: string;
+  superseded: boolean;
   leaseGeneration: string;
   query: string;
   operationName?: string;
@@ -302,6 +359,7 @@ export type InitialMutationClaim =
 
 /** Result returned after enqueue and the initial claim attempt complete. */
 export type EnqueueOptimisticMutationResult = OptimisticWriteResult & {
+  upsertKind: MutationUpsertKind;
   initialClaim: InitialMutationClaim;
 };
 
@@ -311,9 +369,38 @@ export type MutationClaim = {
   generation: string;
 };
 
+/** Result of deferring a retryable attempt. */
+export type DeferOptimisticWriteResult =
+  | { kind: 'deferred' }
+  | (WriteResult & {
+      kind: 'discarded-superseded';
+      replacementTransactionId: string;
+    });
+
+/** Result of committing a current or superseded attempt. */
+export type CommitOptimisticWriteResult =
+  | (WriteResult & { kind: 'committed' })
+  | (WriteResult & {
+      kind: 'committed-superseded';
+      replacementTransactionId: string;
+    });
+
+/** Result of rolling back a failed attempt. */
+export type RollbackOptimisticWriteResult =
+  | (WriteResult & { kind: 'rolled-back' })
+  | (WriteResult & {
+      kind: 'discarded-superseded';
+      replacementTransactionId: string;
+    });
+
 /** Final settlement of a previously queued optimistic mutation. */
 export type MutationSettlement =
   | { transactionId: string; status: 'committed' }
+  | {
+      transactionId: string;
+      status: 'superseded';
+      replacementTransactionId: string;
+    }
   | {
       transactionId: string;
       status: 'permanently-failed';
@@ -322,6 +409,7 @@ export type MutationSettlement =
 
 export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
+  | { kind: 'current-revision' }
   | {
       kind: 'read';
       opId?: string;
@@ -363,6 +451,7 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'enqueue-optimistic-mutation';
       originOpId?: string;
+      uuid: string;
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
@@ -479,7 +568,7 @@ export type CachePush =
       /** Changed entity keys, for diagnostics/advanced consumers. */
       keys: string[];
     }
-  | { kind: 'cache-changed' }
+  | { kind: 'cache-changed'; revision: CacheRevision }
   | { kind: 'mutation-settled'; settlement: MutationSettlement };
 
 export type WorkerMessage = CacheResponse | CachePush;
@@ -554,7 +643,10 @@ export function isCachePush(value: unknown): value is CachePush {
         isWireStringArray(value.keys)
       );
     case 'cache-changed':
-      return hasOnlyWireKeys(value, ['kind']);
+      return (
+        hasOnlyWireKeys(value, ['kind', 'revision']) &&
+        isCacheRevision(value.revision)
+      );
     case 'mutation-settled': {
       const settlement = value.settlement;
       if (
@@ -566,6 +658,15 @@ export function isCachePush(value: unknown): value is CachePush {
       }
       if (settlement.status === 'committed') {
         return hasOnlyWireKeys(settlement, ['transactionId', 'status']);
+      }
+      if (settlement.status === 'superseded') {
+        return (
+          hasOnlyWireKeys(settlement, [
+            'transactionId',
+            'status',
+            'replacementTransactionId',
+          ]) && typeof settlement.replacementTransactionId === 'string'
+        );
       }
       return (
         settlement.status === 'permanently-failed' &&

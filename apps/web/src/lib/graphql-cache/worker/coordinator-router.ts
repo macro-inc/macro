@@ -1,3 +1,5 @@
+import * as Effect from 'effect/Effect';
+import { match } from 'ts-pattern';
 import type { CacheResponse } from '../protocol';
 import {
   type CacheResetReason,
@@ -21,16 +23,24 @@ import {
   databaseOwnerLockName,
   type EngineFatalCode,
   type EngineOpenOutcome,
+  type EngineToCoordinatorEnvelope,
   type TabToCoordinatorEnvelope,
   tabLivenessLockName,
   validateEngineToCoordinatorEnvelope,
   validateTabToCoordinatorEnvelope,
 } from './coordinator-protocol';
+import {
+  createEffectWorkerTransport,
+  type EffectWorkerTransport,
+} from './effect-worker-transport';
 
-export type CoordinatorMessagePort = Pick<
-  MessagePort,
-  'postMessage' | 'close' | 'start' | 'onmessage' | 'onmessageerror'
->;
+export interface CoordinatorMessagePort {
+  onmessage: ((event: MessageEvent<unknown>) => void) | null;
+  onmessageerror: ((event: MessageEvent<unknown>) => void) | null;
+  postMessage(message: unknown, transfers?: Transferable[]): void;
+  close(): void;
+  start(): void;
+}
 
 export type CancelLivenessWatch = () => void;
 
@@ -59,12 +69,15 @@ type PendingRegistration = { cancelled: boolean };
 type EngineRoute = {
   tabId: string;
   ownerEpoch: number;
-  port: CoordinatorMessagePort;
+  transport: EffectWorkerTransport<CoordinatorToEngineEnvelope>;
 };
 
 const DEFAULT_ACTIVATION_TIMEOUT_MS = 20_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 const resetReasonForOpenOutcome = (
   outcome: EngineOpenOutcome
@@ -244,22 +257,12 @@ export class CoordinatorRouter {
       return;
     }
     const message = parsed.value;
-    const expectedPortCount = message.kind === 'attach-engine-port' ? 1 : 0;
-    if (transferredPorts.length !== expectedPortCount) {
+    if (transferredPorts.length !== 0) {
       for (const transferredPort of transferredPorts) transferredPort.close();
-      const tabId = this.portTabs.get(port);
-      if (message.kind === 'attach-engine-port' && tabId) {
-        this.failOwner(
-          tabId,
-          message.ownerEpoch,
-          'engine attachment transferred the wrong number of ports'
-        );
-      } else {
-        this.postProtocolError(
-          port,
-          'coordinator envelope transferred unexpected ports'
-        );
-      }
+      this.postProtocolError(
+        port,
+        'coordinator envelope transferred unexpected event ports'
+      );
       return;
     }
     if (message.kind === 'register-tab') {
@@ -285,25 +288,26 @@ export class CoordinatorRouter {
       return;
     }
 
-    switch (message.kind) {
-      case 'cache-request':
-        this.applyActions(core.request(tabId, message.request));
-        break;
-      case 'attach-engine-port':
-        this.attachEnginePort(tabId, message.ownerEpoch, transferredPorts[0]);
-        break;
-      case 'graceful-departure':
-        this.applyActions(
-          core.beginGracefulDeparture(tabId, message.ownerEpoch)
-        );
-        break;
-      case 'engine-lost':
-        this.failOwner(tabId, message.ownerEpoch, message.reason);
-        break;
-      case 'disconnect-tab':
-        this.loseTab(tabId, message.reason);
-        break;
-    }
+    match(message)
+      .with({ kind: 'cache-request' }, ({ request }) => {
+        this.applyActions(core.request(tabId, request));
+      })
+      .with({ kind: 'attach-engine-port' }, ({ ownerEpoch, enginePort }) => {
+        this.attachEnginePort(tabId, ownerEpoch, enginePort);
+      })
+      .with({ kind: 'graceful-departure' }, ({ ownerEpoch }) => {
+        this.applyActions(core.beginGracefulDeparture(tabId, ownerEpoch));
+      })
+      .with({ kind: 'navigation-departure' }, ({ ownerEpoch, reason }) => {
+        this.departForNavigation(tabId, ownerEpoch, reason);
+      })
+      .with({ kind: 'engine-lost' }, ({ ownerEpoch, reason }) => {
+        this.failOwner(tabId, ownerEpoch, reason);
+      })
+      .with({ kind: 'disconnect-tab' }, ({ reason }) => {
+        this.loseTab(tabId, reason);
+      })
+      .exhaustive();
   }
 
   private async register(
@@ -438,31 +442,42 @@ export class CoordinatorRouter {
       return;
     }
 
-    const route: EngineRoute = {
-      tabId,
-      ownerEpoch,
-      port: transferredPort,
-    };
+    let route: EngineRoute | undefined;
+    let transport: EffectWorkerTransport<CoordinatorToEngineEnvelope>;
+    try {
+      transport = createEffectWorkerTransport<
+        EngineToCoordinatorEnvelope,
+        CoordinatorToEngineEnvelope
+      >({
+        endpoint: transferredPort,
+        onMessage: (message) => {
+          if (route && this.engineRoute === route) {
+            this.handleEngineMessage(route, message);
+          }
+        },
+        onError: (error) => {
+          if (route && this.engineRoute === route) {
+            this.failOwner(
+              tabId,
+              ownerEpoch,
+              `engine Effect transport failed: ${error.message}`
+            );
+          }
+        },
+        closeEndpoint: () => transferredPort.close(),
+      });
+    } catch (error) {
+      transferredPort.close();
+      this.failOwner(
+        tabId,
+        ownerEpoch,
+        `engine Effect transport failed: ${errorMessage(error)}`
+      );
+      return;
+    }
+    route = { tabId, ownerEpoch, transport };
     this.engineRoute = route;
-    transferredPort.onmessage = (event: MessageEvent<unknown>) => {
-      if (this.engineRoute !== route) return;
-      if (event.ports.length > 0) {
-        for (const port of event.ports) port.close();
-        this.failOwner(
-          tabId,
-          ownerEpoch,
-          'engine envelope transferred an unexpected port'
-        );
-        return;
-      }
-      this.handleEngineMessage(route, event.data);
-    };
-    transferredPort.onmessageerror = () => {
-      if (this.engineRoute === route) {
-        this.failOwner(tabId, ownerEpoch, 'engine MessagePort messageerror');
-      }
-    };
-    transferredPort.start();
+    void transport.ready.catch(() => undefined);
   }
 
   private handleEngineMessage(route: EngineRoute, rawMessage: unknown): void {
@@ -686,7 +701,8 @@ export class CoordinatorRouter {
             );
             break;
           }
-          route.port.postMessage(
+          this.sendToEngine(
+            route,
             envelope<CoordinatorToEngineEnvelope>({
               kind: 'engine-request',
               ownerEpoch: action.ownerEpoch,
@@ -738,7 +754,8 @@ export class CoordinatorRouter {
             );
             break;
           }
-          route.port.postMessage(
+          this.sendToEngine(
+            route,
             envelope<CoordinatorToEngineEnvelope>({
               kind: 'drain-engine',
               ownerEpoch: action.ownerEpoch,
@@ -752,8 +769,11 @@ export class CoordinatorRouter {
             this.engineRoute?.tabId === action.tabId &&
             this.engineRoute.ownerEpoch === action.ownerEpoch
           ) {
-            this.engineRoute.port.close();
+            const route = this.engineRoute;
             this.engineRoute = undefined;
+            void Effect.runPromise(route.transport.close()).catch(
+              () => undefined
+            );
           }
           break;
         case 'drop-tab':
@@ -871,6 +891,55 @@ export class CoordinatorRouter {
       });
     }
     this.postTerminateEngine(tabId, ownerEpoch, reason);
+    this.clearEngineWatchdogs();
+    this.applyActions(actions);
+  }
+
+  private departForNavigation(
+    tabId: string,
+    ownerEpoch: number,
+    reason: string
+  ): void {
+    const core = this.coreValue;
+    if (!core) return;
+    const state = core.state;
+    const isCurrentOwner =
+      state.kind !== 'waiting-for-tab' &&
+      state.kind !== 'resetting-after-loss' &&
+      state.tabId === tabId &&
+      state.ownerEpoch === ownerEpoch;
+    const actions = core.departForNavigation(tabId, ownerEpoch, reason);
+    if (!isCurrentOwner) {
+      this.applyActions(actions);
+      return;
+    }
+
+    this.activationStarted.delete(ownerEpoch);
+    const interruptedResetReason =
+      state.kind === 'activating' && state.databaseAction === 'wipe-before-open'
+        ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
+        : undefined;
+    if (interruptedResetReason !== undefined) {
+      this.pendingRecoveryResetEpochs.delete(ownerEpoch);
+      this.nextRecoveryResetReason = interruptedResetReason;
+    }
+    this.telemetry.record({
+      name: 'graphql_cache.owner',
+      operationCategory: 'lifecycle',
+      outcome: 'graceful',
+      ownerEvent: 'navigation-departure',
+    });
+    for (const [routeId, timing] of this.routeStarted) {
+      if (timing.ownerEpoch !== ownerEpoch) continue;
+      this.routeStarted.delete(routeId);
+      this.telemetry.record({
+        name: 'graphql_cache.coordinator_request',
+        operationCategory: timing.category,
+        outcome: 'error',
+        errorCode: 'owner-lost',
+        durationMs: this.now() - timing.startedAt,
+      });
+    }
     this.clearEngineWatchdogs();
     this.applyActions(actions);
   }
@@ -1053,6 +1122,23 @@ export class CoordinatorRouter {
     connection.port.close();
   }
 
+  private sendToEngine(
+    route: EngineRoute,
+    message: CoordinatorToEngineEnvelope
+  ): boolean {
+    try {
+      Effect.runSync(route.transport.send(message));
+      return true;
+    } catch (error) {
+      this.failOwner(
+        route.tabId,
+        route.ownerEpoch,
+        `engine Effect transport send failed: ${errorMessage(error)}`
+      );
+      return false;
+    }
+  }
+
   private scheduleHeartbeat(ownerEpoch: number): void {
     this.clearHeartbeatTimers();
     this.heartbeatIntervalTimer = this.setTimeoutFn(() => {
@@ -1067,13 +1153,18 @@ export class CoordinatorRouter {
       }
       const heartbeatId = this.nextHeartbeatId++;
       this.pendingHeartbeat = { ownerEpoch, heartbeatId };
-      route.port.postMessage(
-        envelope<CoordinatorToEngineEnvelope>({
-          kind: 'heartbeat',
-          ownerEpoch,
-          heartbeatId,
-        })
-      );
+      if (
+        !this.sendToEngine(
+          route,
+          envelope<CoordinatorToEngineEnvelope>({
+            kind: 'heartbeat',
+            ownerEpoch,
+            heartbeatId,
+          })
+        )
+      ) {
+        return;
+      }
       this.heartbeatTimeoutTimer = this.setTimeoutFn(() => {
         if (
           this.pendingHeartbeat?.ownerEpoch === ownerEpoch &&

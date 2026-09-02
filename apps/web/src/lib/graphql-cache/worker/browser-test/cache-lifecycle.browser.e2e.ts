@@ -189,6 +189,54 @@ test('Cache exact host stays navigation-lazy, preserves offline handoff, resets 
   await page.evaluate(() => window.cacheLifecycleHarness.dispose());
 });
 
+test('Cache normal offline reload reopens the existing OPFS cache', async ({
+  context,
+  page,
+  request,
+}, testInfo) => {
+  const scope = `cache-lifecycle-offline-reload-${crypto.randomUUID()}`;
+  const path = harnessPath(testInfo.project.name);
+  await page.goto(`${path}?treatment=true&scope=${encodeURIComponent(scope)}`);
+  await expect(page.locator('#result')).toHaveAttribute('data-status', 'ready');
+  await page.evaluate(() => window.cacheLifecycleHarness.startSingle());
+  await page.evaluate(() =>
+    window.cacheLifecycleHarness.write(
+      'offline-reload-preserved',
+      'cache-lifecycle-offline-reload-user'
+    )
+  );
+  expect(
+    isHit(await page.evaluate(() => window.cacheLifecycleHarness.read()))
+  ).toBe(true);
+
+  // Keep only the already-known test app shell reachable while Chromium's
+  // browser context is offline. Any product API request remains unavailable.
+  const origin = new URL(page.url()).origin;
+  await context.route(`${origin}/**`, async (route) => {
+    const browserRequest = route.request();
+    if (browserRequest.method() !== 'GET') {
+      await route.abort('internetdisconnected');
+      return;
+    }
+    const response = await request.get(browserRequest.url(), {
+      headers: browserRequest.headers(),
+    });
+    await route.fulfill({ response });
+  });
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.locator('#result')).toHaveAttribute('data-status', 'ready');
+
+  await page.evaluate(() => window.cacheLifecycleHarness.startSingle());
+  const reloaded = await page.evaluate(() =>
+    window.cacheLifecycleHarness.read()
+  );
+  expect(isHit(reloaded)).toBe(true);
+
+  await context.setOffline(false);
+  await page.evaluate(() => window.cacheLifecycleHarness.dispose());
+});
+
 test('Cache real standby tab close preserves the same active engine', async ({
   context,
   page,

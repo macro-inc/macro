@@ -23,8 +23,10 @@ pub mod commands;
 mod engine;
 
 pub use engine::{
-    ClaimedMutationWire, EngineHandle, EnqueueOptimisticMutationResultWire,
-    InitialMutationClaimWire, ReadResultWire, WriteResultWire,
+    AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
+    DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
+    InitialMutationClaimWire, ReadResultWire, RecordSelectionResultWire,
+    RollbackOptimisticWriteResultWire, WriteResultWire,
 };
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose
@@ -53,7 +55,10 @@ pub struct OpsAffectedEvent {
 /// Payload of [`CACHE_CHANGED_EVENT`].
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CacheChangedEvent {}
+pub struct CacheChangedEvent {
+    /// Effective-view revision installed by the logical mutation.
+    pub revision: String,
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +67,8 @@ struct MutationSettledEvent {
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    replacement_transaction_id: Option<String>,
 }
 
 struct InitializedCache {
@@ -101,10 +108,15 @@ fn emit_ops_affected<R: Runtime>(app: &AppHandle<R>, op_ids: &[String], keys: &[
     .ok();
 }
 
-fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>) {
-    app.emit(CACHE_CHANGED_EVENT, CacheChangedEvent {})
-        .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
-        .ok();
+fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str) {
+    app.emit(
+        CACHE_CHANGED_EVENT,
+        CacheChangedEvent {
+            revision: revision.to_owned(),
+        },
+    )
+    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
+    .ok();
 }
 
 fn emit_mutation_settled<R: Runtime>(
@@ -112,6 +124,7 @@ fn emit_mutation_settled<R: Runtime>(
     transaction_id: String,
     status: &'static str,
     error: Option<String>,
+    replacement_transaction_id: Option<String>,
 ) {
     app.emit(
         MUTATION_SETTLED_EVENT,
@@ -119,6 +132,7 @@ fn emit_mutation_settled<R: Runtime>(
             transaction_id,
             status,
             error,
+            replacement_transaction_id,
         },
     )
     .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql mutation settlement"))

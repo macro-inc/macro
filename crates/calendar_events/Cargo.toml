@@ -45,6 +45,8 @@ model_notifications = { path = "../model_notifications", optional = true }
 models_pagination = { path = "../models_pagination", optional = true }
 notification = { path = "../notification", optional = true }
 reqwest = { workspace = true, optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

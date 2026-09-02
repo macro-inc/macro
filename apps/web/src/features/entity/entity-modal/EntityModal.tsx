@@ -29,7 +29,7 @@ export const EntityModalActionFooter = (props: {
   isDisabled?: boolean;
 }) => {
   return (
-    <div class="flex justify-end mt-2 tex-sm pt-2">
+    <div class="flex justify-end mt-2 text-sm pt-2">
       <button class="py-1 px-3 font-mono text-sm" onClick={props.onCancel}>
         Cancel
       </button>

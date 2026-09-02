@@ -1,12 +1,19 @@
+import type { CalendarBlockEventTime } from '@block-calendar/calendar-range';
 import CalendarBlank from '@phosphor-icons/core/regular/calendar-blank.svg';
 import CalendarDots from '@phosphor-icons/core/regular/calendar-dots.svg';
 import CalendarPlus from '@phosphor-icons/core/regular/calendar-plus.svg';
 import CalendarX from '@phosphor-icons/core/regular/calendar-x.svg';
+import VideoCamera from '@phosphor-icons/core/regular/video-camera.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { format, isSameDay, subDays } from 'date-fns';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { CalendarChatCompose } from './calendar/ChatCompose';
+import {
+  openToolCalendarEvent,
+  type ToolCalendarEvent,
+  toolInputOpenTime,
+} from './calendar/open-tool-event';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
 
@@ -15,7 +22,6 @@ type CalendarEventListItem = NamedTool<
   'response'
 >['data']['events'][number];
 
-type ToolCalendarEvent = NamedTool<'UpdateCalendarEvent', 'response'>['data'];
 type CreateCalendarEventResponse = NamedTool<
   'CreateCalendarEvent',
   'response'
@@ -45,46 +51,59 @@ const formatEventTime = (
   return `${format(startsAt, 'EEE MMM d, h:mm a')} – ${format(endsAt, 'EEE MMM d, h:mm a')}`;
 };
 
-const EventDetails = (props: { event: ToolCalendarEvent }) => (
+const EventDetails = (props: {
+  event: ToolCalendarEvent;
+  onOpen: () => void;
+}) => (
   <Tool.List>
-    <Tool.ListItem icon={<CalendarBlank class="size-4" />}>
-      <div class="flex min-w-0 flex-col gap-0.5">
-        <span class="truncate text-xs text-ink">{props.event.title}</span>
-        <span class="text-xs text-ink-extra-muted">
-          {formatEventTime(
-            props.event.start,
-            props.event.end,
-            props.event.isAllDay
-          )}
-        </span>
-        <Show when={props.event.location}>
-          <span class="truncate text-xs text-ink-extra-muted">
-            {props.event.location}
+    <button
+      type="button"
+      class="block w-full text-left hover:bg-hover"
+      onClick={props.onOpen}
+    >
+      <Tool.ListItem icon={<CalendarBlank class="size-4" />}>
+        <div class="flex min-w-0 flex-col gap-0.5">
+          <span class="truncate text-xs text-ink">{props.event.title}</span>
+          <span class="text-xs text-ink-extra-muted">
+            {formatEventTime(
+              props.event.start,
+              props.event.end,
+              props.event.isAllDay
+            )}
           </span>
-        </Show>
-        <Show when={props.event.attendeeCount > 0}>
-          <span class="truncate text-xs text-ink-extra-muted">
-            {props.event.attendeeCount === 1
-              ? '1 attendee'
-              : `${props.event.attendeeCount} attendees`}
-            {': '}
-            {props.event.attendees.map((attendee) => attendee.email).join(', ')}
-          </span>
-        </Show>
-        <Show when={props.event.conferenceUrl}>
-          {(url) => (
-            <a
-              class="truncate text-xs text-accent hover:underline"
-              href={url()}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {url()}
-            </a>
-          )}
-        </Show>
-      </div>
-    </Tool.ListItem>
+          <Show when={props.event.location}>
+            <span class="truncate text-xs text-ink-extra-muted">
+              {props.event.location}
+            </span>
+          </Show>
+          <Show when={props.event.attendeeCount > 0}>
+            <span class="truncate text-xs text-ink-extra-muted">
+              {props.event.attendeeCount === 1
+                ? '1 attendee'
+                : `${props.event.attendeeCount} attendees`}
+              {': '}
+              {props.event.attendees
+                .map((attendee) => attendee.email)
+                .join(', ')}
+            </span>
+          </Show>
+        </div>
+      </Tool.ListItem>
+    </button>
+    <Show when={props.event.conferenceUrl}>
+      {(url) => (
+        <Tool.ListItem icon={<VideoCamera class="size-4" />}>
+          <a
+            class="block truncate text-xs text-accent hover:underline"
+            href={url()}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {url()}
+          </a>
+        </Tool.ListItem>
+      )}
+    </Show>
   </Tool.List>
 );
 
@@ -102,12 +121,25 @@ function CalendarMutationCard(props: {
   event?: ToolCalendarEvent;
   icon: typeof CalendarPlus;
   label: string;
+  /** Instance the call targeted, for occurrence-scoped mutations. */
+  occurrenceKey?: string;
+  /** Locator timing to use instead of the returned event's own. */
+  openTime?: CalendarBlockEventTime;
   renderContext: Parameters<typeof BaseTool>[0]['renderContext'];
   status?: string;
   title?: string;
 }) {
   const [isExpanded, setIsExpanded] = createSignal(false);
   const title = () => props.event?.title ?? props.title;
+
+  const openEvent = () => {
+    const event = props.event;
+    if (!event) return;
+    openToolCalendarEvent(event, {
+      occurrenceKey: props.occurrenceKey,
+      time: props.openTime,
+    });
+  };
 
   return (
     <BaseTool
@@ -116,7 +148,7 @@ function CalendarMutationCard(props: {
       type="call"
       response={
         props.event && isExpanded() ? (
-          <EventDetails event={props.event} />
+          <EventDetails event={props.event} onOpen={openEvent} />
         ) : undefined
       }
     >
@@ -197,15 +229,26 @@ export const updateCalendarEventHandler = createToolRenderer({
   name: 'UpdateCalendarEvent',
   render: (ctx) => {
     const scope = () => ctx.tool.data.scope;
+    const isOccurrence = () => scope() === 'this_event';
+    // An occurrence-scoped update answers with the refreshed series, so the
+    // instance has to be located from the call's own occurrence and timing.
+    const movedTime = () => {
+      const time = ctx.tool.data.time;
+      return time ? toolInputOpenTime(time) : undefined;
+    };
     return (
       <CalendarMutationCard
         event={ctx.response?.data}
         icon={CalendarDots}
         label={
-          scope() === 'this_event'
+          isOccurrence()
             ? 'Update calendar event occurrence'
             : 'Update calendar event'
         }
+        occurrenceKey={
+          isOccurrence() ? (ctx.tool.data.recurrenceId ?? undefined) : undefined
+        }
+        openTime={isOccurrence() ? movedTime() : undefined}
         renderContext={ctx.renderContext}
         title={ctx.tool.data.title ?? undefined}
       />

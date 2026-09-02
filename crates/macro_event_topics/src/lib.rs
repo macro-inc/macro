@@ -75,4 +75,6 @@ topics! {
     MacroNotificationsTopic => "macro.notifications",
     /// AI chat lifecycle and message events.
     MacroChatsTopic => "macro.chats",
+    /// Calendar event changes, from provider sync and user mutations alike.
+    MacroCalendarTopic => "macro.calendar",
 }

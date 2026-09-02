@@ -10,7 +10,11 @@ import {
   type EmailThreadPageQuery,
   type EmailThreadPageQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
+import type { CombinedError } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { mapGraphqlEmailThreadPage } from './mapper';
 
@@ -44,6 +48,92 @@ function threadFromPage(page: EmailThreadPageQuery) {
   throw new ThrownResultError([
     { code: 'NOT_FOUND', message: 'Email thread not found' },
   ]);
+}
+
+/**
+ * Maps a GraphQL transport error onto the typed result codes the email query
+ * facade exposes.
+ */
+export function mapGraphqlThreadError(error: CombinedError): ThrownResultError {
+  // Selector failures are normalized into CombinedError.networkError; a
+  // ThrownResultError thrown there (e.g. NOT_FOUND from threadFromPage)
+  // carries typed codes — surface it rather than flattening to UNKNOWN.
+  if (error.networkError instanceof ThrownResultError) {
+    return error.networkError;
+  }
+
+  const resultErrors = error.graphQLErrors.map((graphqlError) => ({
+    ...graphqlError.extensions,
+    code:
+      typeof graphqlError.extensions?.code === 'string'
+        ? graphqlError.extensions.code
+        : 'UNKNOWN',
+    message: graphqlError.message,
+  }));
+  return new ThrownResultError(
+    resultErrors.length > 0
+      ? resultErrors
+      : [
+          {
+            code: 'UNKNOWN',
+            message: error.networkError?.message ?? error.message,
+          },
+        ]
+  );
+}
+
+/**
+ * Fetches the first page of an email thread through the persistent GraphQL
+ * cache. A normal read still waits for the network, but while the persistent
+ * cache is active a transport failure falls back to the previously persisted
+ * operation so a visited thread can be opened offline. Every failure is
+ * thrown as a ThrownResultError with typed result codes.
+ */
+export async function fetchGraphqlEmailThread(
+  threadId: string
+): Promise<ApiThread> {
+  const client = getGraphqlSoupClient();
+  const variables: EmailThreadPageQueryVariables = {
+    threadId,
+    offset: 0,
+    limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+  };
+  const result = await client
+    .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+      EmailThreadPageDocument,
+      variables,
+      { requestPolicy: 'cache-and-network' }
+    )
+    .toPromise();
+
+  if (result.error) {
+    // Without an active cache exchange a `cache-only` request is never
+    // answered, so only fall back when the persistent cache is live.
+    if (result.error.networkError && graphqlCacheEnabled()) {
+      const cached = await client
+        .query<EmailThreadPageQuery, EmailThreadPageQueryVariables>(
+          EmailThreadPageDocument,
+          variables,
+          { requestPolicy: 'cache-only' }
+        )
+        .toPromise();
+      if (cached.data) {
+        return mapGraphqlEmailThreadPage(threadFromPage(cached.data));
+      }
+    }
+    throw mapGraphqlThreadError(result.error);
+  }
+
+  if (!result.data) {
+    throw new ThrownResultError([
+      {
+        code: 'UNKNOWN',
+        message: 'GraphQL email thread query returned no data',
+      },
+    ]);
+  }
+
+  return mapGraphqlEmailThreadPage(threadFromPage(result.data));
 }
 
 /** Creates the native urql-solid query for one thread's message pages. */

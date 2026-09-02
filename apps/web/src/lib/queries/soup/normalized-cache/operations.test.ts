@@ -11,6 +11,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
 
+const getSoupItemsMock = vi.hoisted(() => vi.fn());
+const refreshActiveGraphqlSoupQueriesMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@service-storage/client', () => ({
+  storageServiceClient: { getSoupItems: getSoupItemsMock },
+}));
+
+vi.mock('../graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: refreshActiveGraphqlSoupQueriesMock,
+}));
+
 vi.mock('../../client', () => ({
   get queryClient() {
     return testQueryClient;
@@ -50,6 +61,7 @@ import {
   insertSoupEntity,
   optimisticUpdateSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
+  refetchSoupEntity,
   removeSearchEntities,
   removeSoupEntities,
   removeSoupEntitiesFromDoneFilteredQueries,
@@ -177,6 +189,11 @@ function getSearchQuery() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getSoupItemsMock.mockResolvedValue({
+    isErr: () => false,
+    value: { items: [] },
+  });
+  refreshActiveGraphqlSoupQueriesMock.mockResolvedValue(undefined);
   testQueryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -267,6 +284,22 @@ describe('buildSingleEntityFilter', () => {
       includeRoot: true,
     });
     expect((filter as any).project_filters.include_root).toBe(true);
+  });
+});
+
+describe('refetchSoupEntity', () => {
+  it('refreshes active GraphQL Soup queries when requested', async () => {
+    await refetchSoupEntity('task-1', 'document', { refreshGraphql: true });
+
+    expect(refreshActiveGraphqlSoupQueriesMock).toHaveBeenCalledOnce();
+    expect(getSoupItemsMock).toHaveBeenCalledOnce();
+  });
+
+  it('does not refresh GraphQL Soup queries for legacy-only refetches', async () => {
+    await refetchSoupEntity('task-1', 'document');
+
+    expect(refreshActiveGraphqlSoupQueriesMock).not.toHaveBeenCalled();
+    expect(getSoupItemsMock).toHaveBeenCalledOnce();
   });
 });
 

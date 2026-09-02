@@ -148,7 +148,7 @@ function EventSummary(props: {
           <XIcon class="size-4" />
         </Button>
         <Button
-          variant="base"
+          variant="outline"
           size="sm"
           depth={4}
           class="rounded-lg bg-surface px-2"
@@ -303,6 +303,7 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
         <ScrollIndicators
           scrollRef={scrollElement}
           appearance="gradient"
+          gradientColor="panel"
           noBorderStart
           noBorderEnd
         />

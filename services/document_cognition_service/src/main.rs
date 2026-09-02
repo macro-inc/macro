@@ -30,12 +30,12 @@ use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState,
+    MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+    ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
+    StaticFileServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -152,6 +152,7 @@ async fn main() -> anyhow::Result<()> {
                 default_user_id: None,
             },
             macro_authorization::NoBotAuthorizer,
+            PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
         )));
 
     let lexical_client = Arc::new(lexical_client::LexicalClient::new(
@@ -371,8 +372,10 @@ async fn main() -> anyhow::Result<()> {
 
     let search_service_client = Arc::new(search_service_client);
 
-    let properties_tool_context =
-        ai_tools::build_properties_tool_context(properties_service, entity_access_service.clone());
+    let properties_tool_context = ai_tools::build_properties_tool_context(
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
 
     tracing::info!("initialized properties tool context");
 
@@ -566,6 +569,11 @@ async fn main() -> anyhow::Result<()> {
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
+        activity_tool_context: ai_tools::build_activity_tool_context(
+            db.clone(),
+            properties_service,
+            entity_access_service.clone(),
+        ),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
@@ -585,6 +593,12 @@ async fn main() -> anyhow::Result<()> {
         ),
         chat_tool_context,
         channel_tool_context,
+        bot_tool_context: ai_tools::build_bot_tool_context(
+            db.clone(),
+            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            DocumentStorageServiceUrl::new()?.to_string(),
+        ),
         project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context: ai_tools::build_crm_tool_context(db.clone()),
@@ -605,7 +619,6 @@ async fn main() -> anyhow::Result<()> {
     // Build memory service
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        db.clone(),
         memory_repo,
         tool_service_context.clone(),
         all_tools,
@@ -678,7 +691,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized onboarding service");
 
-    let mcp_public_url = DocumentCognitionServiceUrl::new()?;
+    let mcp_public_url = &config.mcp_public_url;
     let mcp_client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(
         format!("{mcp_public_url}/mcp/servers/auth/client-metadata"),
         format!("{mcp_public_url}/mcp/servers/auth/callback"),

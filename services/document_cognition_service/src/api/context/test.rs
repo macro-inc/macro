@@ -358,6 +358,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
+        activity_tool_context: ai_tools::build_activity_tool_context(
+            pool.clone(),
+            properties_service.clone(),
+            entity_access_service.clone(),
+        ),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
@@ -377,6 +382,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
             std::sync::Arc::new(test_lexical_client),
+        ),
+        bot_tool_context: ai_tools::build_bot_tool_context(
+            pool.clone(),
+            ai_tools::ToolBotEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            "http://localhost:8086".to_string(),
         ),
         project_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
@@ -442,7 +453,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(pool.clone());
     let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        pool.clone(),
         memory_repo,
         tool_service_context.clone(),
         all_tools,
@@ -487,6 +497,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 default_user_id: None,
             },
             macro_authorization::NoBotAuthorizer,
+            macro_authorization::NoUserApiKeyAuthorizer,
         )));
 
     let user_permissions_service = Arc::new(

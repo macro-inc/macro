@@ -11,13 +11,17 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { Message } from '../component/AgentMessage';
+import { ReplyToSelection } from '../component/ReplyToSelection';
 import {
+  ActionLine,
   AgentInput,
   AnimatedNumber,
+  ComposerNotice,
   CountSummary,
   DiffChanges,
   PierreDiff,
   QuestionAnswers,
+  type QuoteInsert,
   TextShimmer,
   Thought,
   TodoList,
@@ -34,6 +38,37 @@ function Item(props: { label: string; children: JSX.Element }) {
       </h2>
       <div class="flex flex-col gap-2">{props.children}</div>
     </section>
+  );
+}
+
+/**
+ * Select text in the fixture message: a "Reply to this" chip should appear
+ * and insert a referenced paste into the composer below.
+ */
+function ReplyToSelectionDemo() {
+  const [container, setContainer] = createSignal<HTMLDivElement>();
+  let quoteInsert: QuoteInsert | undefined;
+
+  return (
+    <div class="flex flex-col gap-3">
+      <p class="text-xs text-ink-muted">
+        Select any of the message text, then click Reply to this.
+      </p>
+      <div ref={setContainer} class="relative">
+        <Message message={FIXTURE_MESSAGE} />
+        <ReplyToSelection
+          container={container()}
+          onReply={(text) => quoteInsert?.(text)}
+        />
+      </div>
+      <AgentInput
+        placeholder="Referenced text lands here"
+        onSend={(content) => console.info('[gallery] send', content)}
+        registerQuoteInsert={(insert) => {
+          quoteInsert = insert;
+        }}
+      />
+    </div>
   );
 }
 
@@ -80,6 +115,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
+      rawInput: null,
+      rawOutput: null,
       id: 'demo-read',
       label: 'Read',
       status: 'completed',
@@ -87,6 +124,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
+      rawInput: null,
+      rawOutput: null,
       id: 'demo-search',
       label: 'Search',
       status: 'completed',
@@ -98,6 +137,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
+      rawInput: null,
+      rawOutput: null,
       id: 'demo-edit',
       label: 'Edit',
       status: 'completed',
@@ -105,6 +146,8 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
+      rawInput: null,
+      rawOutput: null,
       id: 'demo-terminal',
       label: 'Bash',
       status: 'running',
@@ -136,6 +179,26 @@ export default function AgentUiGallery() {
     <StaticMarkdownContext>
       <div class="size-full overflow-auto">
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
+          <Item label="ComposerNotice">
+            <ComposerNotice text="Waking the agent's sandbox…" active />
+          </Item>
+
+          <Item label="ActionLine">
+            <ActionLine label="Setting model to claude-opus-5…" />
+            <ActionLine label="Model set to claude-opus-5" />
+            <ActionLine label="Context compacted" />
+            <ActionLine
+              label="Couldn't switch to openai/gpt-5"
+              failed
+              detail="no credentials configured for provider openai"
+            />
+            <ActionLine
+              label="The agent couldn't answer — Internal error: Bad Request: bad request: Authorization header is badly formatted"
+              detail="Internal error: Bad Request: bad request: Authorization header is badly formatted"
+              failed
+            />
+          </Item>
+
           <Item label="ToolCard">
             <ToolCard
               title="Bash"
@@ -241,6 +304,10 @@ export default function AgentUiGallery() {
               <DiffChanges additions={18} deletions={6} variant="bars" />
               <DiffChanges additions={0} deletions={412} variant="bars" />
             </div>
+          </Item>
+
+          <Item label="Reply to selection">
+            <ReplyToSelectionDemo />
           </Item>
 
           <Item label="AgentInput (idle / busy)">

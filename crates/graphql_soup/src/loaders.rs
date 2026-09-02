@@ -16,29 +16,31 @@ use email::domain::{
 };
 use filter_ast::Expr;
 use futures::{future::BoxFuture, future::try_join_all};
-use item_filters::ast::{
-    EmailFilterAst, EntityFilterAst,
-    calendar_event::CalendarEventLiteral,
-    call::CallLiteral,
-    channel::{ChannelLiteral, ChannelThreadLiteral},
-    chat::ChatLiteral,
-    crm_company::CrmCompanyLiteral,
-    document::DocumentLiteral,
-    email::EmailLiteral,
-    foreign_entity::ForeignEntityLiteral,
-    project::ProjectLiteral,
-    reminder::ReminderLiteral,
+use item_filters::{
+    SharedEmailFilter,
+    ast::{
+        EmailFilterAst, EntityFilterAst,
+        calendar_event::CalendarEventLiteral,
+        call::CallLiteral,
+        channel::{ChannelLiteral, ChannelThreadLiteral},
+        chat::ChatLiteral,
+        crm_company::CrmCompanyLiteral,
+        document::DocumentLiteral,
+        email::EmailLiteral,
+        foreign_entity::ForeignEntityLiteral,
+        project::ProjectLiteral,
+        reminder::ReminderLiteral,
+    },
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_pagination::SimpleSortMethod;
-use models_soup::item::SoupItem;
 use rootcause::{
     Report,
     markers::{Cloneable, Dynamic},
 };
 use soup::domain::{
-    models::{SoupQuery, SoupRequest, SoupSortDirection, SoupType},
+    models::{SoupProjectionHydration, SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,
 };
 use uuid::Uuid;
@@ -118,7 +120,7 @@ where
         &self,
         user_id: MacroUserIdStr<'static>,
         entities: Vec<Entity<'static>>,
-    ) -> Result<HashMap<SoupItemLoaderKey, SoupItem<()>>, SoupItemLoaderError> {
+    ) -> Result<HashMap<SoupItemLoaderKey, SoupProjectionHydration>, SoupItemLoaderError> {
         let requested = entities.iter().cloned().collect::<HashSet<_>>();
         let needs_inboxes = entities
             .iter()
@@ -145,14 +147,14 @@ where
 
         let items = self
             .soup_service
-            .get_user_soup(request, None)
+            .get_user_soup_with_projection(request, None)
             .await
             .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())?
             .into_items();
 
         let mut loaded = HashMap::with_capacity(items.len());
-        for item in items {
-            let entity = item.entity();
+        for hydration in items {
+            let entity = hydration.item.entity();
             if !requested.contains(&entity) {
                 return Err(rootcause::report!(
                     "filtered Soup request returned unrequested entity {} {}",
@@ -162,7 +164,7 @@ where
                 .into_cloneable());
             }
             if loaded
-                .insert((user_id.clone(), entity.clone()), item)
+                .insert((user_id.clone(), entity.clone()), hydration)
                 .is_some()
             {
                 return Err(rootcause::report!(
@@ -187,7 +189,7 @@ where
     async fn load_keys(
         &self,
         keys: Vec<SoupItemLoaderKey>,
-    ) -> Result<HashMap<SoupItemLoaderKey, SoupItem<()>>, SoupItemLoaderError> {
+    ) -> Result<HashMap<SoupItemLoaderKey, SoupProjectionHydration>, SoupItemLoaderError> {
         let mut entities_by_user = HashMap::<MacroUserIdStr<'static>, Vec<Entity<'static>>>::new();
         for (user_id, entity) in keys {
             entities_by_user.entry(user_id).or_default().push(entity);
@@ -206,7 +208,7 @@ where
     S: SoupService,
     I: SoupInboxReader,
 {
-    type Value = SoupItem<()>;
+    type Value = SoupProjectionHydration;
     type Error = SoupItemLoaderError;
 
     async fn load(
@@ -231,7 +233,7 @@ where
     S: SoupService,
     I: SoupInboxReader,
 {
-    type Value = SoupItem<()>;
+    type Value = SoupProjectionHydration;
     type Error = SoupItemLoaderError;
 
     async fn load(
@@ -253,7 +255,7 @@ where
 /// Type-erased function that loads one Soup item through a concrete DataLoader.
 type LoadOne = dyn Fn(
         OwnedSoupItemLoaderKey,
-    ) -> BoxFuture<'static, Result<Option<SoupItem<()>>, SoupItemLoaderError>>
+    ) -> BoxFuture<'static, Result<Option<SoupProjectionHydration>, SoupItemLoaderError>>
     + Send
     + Sync;
 
@@ -261,7 +263,7 @@ type LoadOne = dyn Fn(
 async fn load_one_owned<S, I>(
     loader: Arc<DataLoader<SoupItemLoader<S, I>>>,
     key: OwnedSoupItemLoaderKey,
-) -> Result<Option<SoupItem<()>>, SoupItemLoaderError>
+) -> Result<Option<SoupProjectionHydration>, SoupItemLoaderError>
 where
     S: SoupService,
     I: SoupInboxReader,
@@ -299,7 +301,7 @@ impl SoupItemDataLoader {
     pub async fn load_one(
         &self,
         key: SoupItemLoaderKey,
-    ) -> Result<Option<SoupItem<()>>, SoupItemLoaderError> {
+    ) -> Result<Option<SoupProjectionHydration>, SoupItemLoaderError> {
         let (user_id, entity) = key;
         (self.load_one)(OwnedSoupItemLoaderKey { user_id, entity }).await
     }
@@ -387,7 +389,12 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
         project_filter: Some(literal_tree(projects, ProjectLiteral::ProjectIdSelf(nil))),
         chat_filter: Some(literal_tree(chats, ChatLiteral::ChatId(nil))),
         email_filter: EmailFilterAst {
-            tree: Some(literal_tree(email_threads, EmailLiteral::ThreadId(nil))),
+            tree: Some(Arc::new(Expr::and(
+                literal_tree(email_threads, EmailLiteral::ThreadId(nil))
+                    .as_ref()
+                    .clone(),
+                Expr::val(EmailLiteral::Shared(SharedEmailFilter::Include)),
+            ))),
             crm_scope: None,
         },
         channel_filter: Some(literal_tree(channels, ChannelLiteral::ChannelId(nil))),

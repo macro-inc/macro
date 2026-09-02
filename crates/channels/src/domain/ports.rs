@@ -1,4 +1,3 @@
-use crate::domain::events::ChannelEvent;
 #[cfg(feature = "attachment")]
 use crate::domain::models::RecentChannelMessage;
 use crate::domain::models::{
@@ -23,6 +22,10 @@ use crate::domain::models::{
 use crate::domain::side_effects::{
     ChannelDocumentMention, ChannelNotificationEffect, ChannelRealtimeEffect,
     ThreadNotificationContext,
+};
+use crate::domain::{
+    dm::{EnsureDms, EnsureDmsSummary},
+    events::ChannelEvent,
 };
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
@@ -701,6 +704,18 @@ pub trait ChannelService: Send + Sync + 'static {
         async move {
             Err(ChannelMutationErr::NotFound(
                 "team channel mutations are not configured".to_string(),
+            ))
+        }
+    }
+
+    /// Ensure all direct-message pairs in a batch.
+    fn ensure_dms(
+        &self,
+        _command: EnsureDms,
+    ) -> impl Future<Output = Result<EnsureDmsSummary, ChannelMutationErr>> + Send {
+        async move {
+            Err(ChannelMutationErr::NotFound(
+                "channel mutations are not configured".to_string(),
             ))
         }
     }

@@ -10,10 +10,12 @@ import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
+import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import MapPinIcon from '@phosphor/map-pin.svg';
+import PhoneIcon from '@phosphor/phone.svg';
 import QuestionMarkIcon from '@phosphor/question-mark.svg';
 import TextAlignLeftIcon from '@phosphor/text-align-left.svg';
 import PersonIcon from '@phosphor/user.svg';
@@ -35,6 +37,14 @@ import {
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
+import {
+  type CalendarPerson,
+  eventAttribution,
+} from '../utils/event-attribution';
+import {
+  isPhoneOnlyLocation,
+  parseEventLocation,
+} from '../utils/event-location';
 import {
   formatReminderOffset,
   REMINDER_METHOD_POPUP,
@@ -316,23 +326,39 @@ function safeConferenceUrl(value: string | undefined) {
   }
 }
 
-interface CalendarOrganizer {
-  displayName?: string;
-  email?: string;
-  isSelf: boolean;
-}
+/**
+ * The location row. A phone number written into the location becomes a call
+ * link, so a dial-in number takes one click instead of being retyped into a
+ * phone by hand.
+ */
+function EventLocationItem(props: { location: string }) {
+  const segments = createMemo(() => parseEventLocation(props.location));
 
-function findOrganizer(event: CalendarEvent): CalendarOrganizer | undefined {
-  const organizerAttendee = event.attendees.find(
-    (attendee) => attendee.isOrganizer
+  return (
+    <div class="contents">
+      <Dynamic
+        aria-hidden="true"
+        class="mt-0.5 size-5 text-ink-extra-muted sm:size-4"
+        component={isPhoneOnlyLocation(segments()) ? PhoneIcon : MapPinIcon}
+      />
+      <span class="select-text">
+        <For each={segments()}>
+          {(segment) =>
+            segment.kind === 'phone' ? (
+              <a
+                class="text-link hover:text-link-hover hover:underline"
+                href={segment.telUrl}
+              >
+                {segment.text}
+              </a>
+            ) : (
+              segment.text
+            )
+          }
+        </For>
+      </span>
+    </div>
   );
-  const displayName =
-    event.organizerName ?? organizerAttendee?.displayName ?? undefined;
-  const email = event.organizerEmail ?? organizerAttendee?.email;
-
-  return displayName || email
-    ? { displayName, email, isSelf: organizerAttendee?.isSelf ?? false }
-    : undefined;
 }
 
 /**
@@ -347,7 +373,8 @@ function EventRemindersItem(props: {
   const reminders = createMemo(() =>
     resolveReminderOverrides(
       props.event.reminders,
-      props.defaultReminders
+      props.defaultReminders,
+      props.event.eventType
     ).toSorted((a, b) => a.minutes - b.minutes)
   );
 
@@ -370,22 +397,51 @@ function EventRemindersItem(props: {
   );
 }
 
-function CalendarOrganizerItem(props: { organizer: CalendarOrganizer }) {
+function calendarPersonDisplayName(person: CalendarPerson) {
+  const email = person.email ?? '';
+  const macroId = person.email ? emailToMacroId(person.email) : undefined;
+  const macroName = getDisplayName(macroId).trim();
+  if (isUsableDisplayName(macroName, email)) return macroName;
+
+  const providerName = person.displayName?.trim() ?? '';
+  if (providerName && (!email || isUsableDisplayName(providerName, email))) {
+    return providerName;
+  }
+
+  return email || providerName;
+}
+
+function CalendarSourceItem(props: {
+  calendarName: string;
+  creator?: CalendarPerson;
+}) {
+  const createdBy = () =>
+    props.creator ? calendarPersonDisplayName(props.creator) : undefined;
+
+  return (
+    <div class="contents">
+      <CalendarBlankIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
+      <div class="min-w-0">
+        <span class="block select-text truncate text-ink-muted">
+          {props.calendarName}
+        </span>
+        <Show when={createdBy()}>
+          {(name) => (
+            <div class="text-xs text-ink-extra-muted sm:text-xxs">
+              Created by: {name()}
+            </div>
+          )}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+function CalendarOrganizerItem(props: { organizer: CalendarPerson }) {
   const macroId = props.organizer.email
     ? emailToMacroId(props.organizer.email)
     : undefined;
-  const displayName = () => {
-    const email = props.organizer.email ?? '';
-    const macroName = getDisplayName(macroId).trim();
-    if (isUsableDisplayName(macroName, email)) return macroName;
-
-    const providerName = props.organizer.displayName?.trim() ?? '';
-    if (providerName && (!email || isUsableDisplayName(providerName, email))) {
-      return providerName;
-    }
-
-    return email || providerName;
-  };
+  const displayName = () => calendarPersonDisplayName(props.organizer);
 
   const iconProps: UserIconProps | undefined = props.organizer.email
     ? macroId
@@ -440,7 +496,7 @@ export function EventDetails(props: {
     props.event.conferenceProvider === 'google_meet'
       ? 'Join Google Meet'
       : 'Join meeting';
-  const organizer = createMemo(() => findOrganizer(props.event));
+  const attribution = createMemo(() => eventAttribution(props.event));
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
   );
@@ -509,13 +565,8 @@ export function EventDetails(props: {
         )}
       </Show>
 
-      <Show when={props.event.location}>
-        {(location) => (
-          <div class="contents">
-            <MapPinIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
-            <span class="select-text">{location()}</span>
-          </div>
-        )}
+      <Show when={props.event.location?.trim()}>
+        {(location) => <EventLocationItem location={location()} />}
       </Show>
 
       <Show when={props.event.description}>
@@ -534,7 +585,11 @@ export function EventDetails(props: {
         defaultReminders={props.defaultReminders}
       />
 
-      <Show when={organizer()}>
+      <CalendarSourceItem
+        calendarName={attribution().calendarName}
+        creator={attribution().creator}
+      />
+      <Show when={attribution().organizer}>
         {(eventOrganizer) => (
           <CalendarOrganizerItem organizer={eventOrganizer()} />
         )}

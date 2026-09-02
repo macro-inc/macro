@@ -8,23 +8,27 @@ use agent_session::domain::model::AgentSessionId;
 use futures::{StreamExt as _, stream};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument as _;
 
 use super::client::DaytonaClient;
 use super::errors::DaytonaError;
-use super::types::{DaytonaSettings, Env, GithubToken, Labels, PortPreview, Snapshot};
+use super::types::{AnthropicApiKey, DaytonaSettings, Env, Labels, PortPreview, Snapshot};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::ports::ContainerManager;
+use crate::domain::sandbox::{
+    SandboxResizeEffect, SandboxResources, resize_effect_from_resources, resources,
+};
 use crate::outbound::managed_containers::ManagedContainers;
-use crate::outbound::provision;
+use crate::outbound::provision::{self, SESSION_LABEL};
 use crate::outbound::sidecar::SidecarTransport;
 
 const LOG_FETCH_TIMEOUT: Duration = Duration::from_secs(15);
+const EXEC_TIMEOUT: Duration = Duration::from_secs(15);
 const IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const REAP_INTERVAL: Duration = Duration::from_secs(1);
 const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 const STOP_CONCURRENCY: usize = 10;
-const SESSION_LABEL: &str = "macro.agent_session_id";
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct DaytonaSandboxId(String);
@@ -81,7 +85,7 @@ impl DaytonaContainerManagerState {
 pub struct DaytonaContainerManager {
     client: DaytonaClient,
     snapshot: Snapshot,
-    github_token: GithubToken,
+    anthropic_api_key: AnthropicApiKey,
     managed: Arc<DaytonaContainerManagerState>,
 }
 
@@ -93,7 +97,7 @@ impl DaytonaContainerManager {
             api_url,
             api_key,
             snapshot,
-            github_token,
+            anthropic_api_key,
         } = settings;
         let client = DaytonaClient::new(api_url, api_key);
         let managed = Arc::new(DaytonaContainerManagerState::new());
@@ -103,11 +107,17 @@ impl DaytonaContainerManager {
         Self {
             client,
             snapshot,
-            github_token,
+            anthropic_api_key,
             managed,
         }
     }
 
+    #[tracing::instrument(
+        name = "agent.container.boot",
+        err,
+        skip(self, id),
+        fields(agent.container.provider = "daytona", agent.container.id = id.as_str())
+    )]
     async fn bring_up(&self, id: &DaytonaSandboxId) -> Result<DaytonaContainer> {
         self.client
             .wait_for_started(id.as_str(), provision::ENSURE_TIMEOUT)
@@ -120,6 +130,7 @@ impl DaytonaContainerManager {
                 &provision::ensure_ready_command(),
                 provision::ENSURE_TIMEOUT,
             )
+            .instrument(tracing::info_span!("agent.container.ensure_ready"))
             .await
             .map_err(unavailable)?;
         tracing::info!(sandbox_id = %id.as_str(), %output, "readiness recipe finished");
@@ -137,7 +148,10 @@ impl DaytonaContainerManager {
             )
             .await
             .map_err(unavailable)?;
-        let socket = dial_sidecar(&preview).await.map_err(unavailable)?;
+        let socket = dial_sidecar(&preview)
+            .instrument(tracing::info_span!("agent.container.websocket_connect"))
+            .await
+            .map_err(unavailable)?;
         if !self.managed.containers.activate(id, Instant::now()) {
             return Err(HarnessError::Container(
                 "sandbox is no longer managed".to_owned(),
@@ -232,24 +246,132 @@ impl DaytonaContainerManager {
             }
         }
     }
+
+    /// Snapshot creates inherit snapshot quotas. Align CPU/RAM to `size`, then
+    /// run the readiness recipe.
+    async fn align_size_then_bring_up(
+        &self,
+        id: &DaytonaSandboxId,
+        size: agent_session::domain::model::SandboxSize,
+    ) -> Result<DaytonaContainer> {
+        self.client
+            .wait_for_started(id.as_str(), provision::ENSURE_TIMEOUT)
+            .await
+            .map_err(unavailable)?;
+        self.align_size(id, size).await?;
+        self.bring_up(id).await
+    }
+
+    async fn align_size(
+        &self,
+        id: &DaytonaSandboxId,
+        size: agent_session::domain::model::SandboxSize,
+    ) -> Result<()> {
+        let (cpu, memory, disk) = self
+            .client
+            .resources(id.as_str())
+            .await
+            .map_err(unavailable)?;
+        let cpu = cpu.ok_or_else(|| {
+            HarnessError::Container("daytona did not report cpu for the new sandbox".to_owned())
+        })?;
+        let memory = memory.ok_or_else(|| {
+            HarnessError::Container("daytona did not report memory for the new sandbox".to_owned())
+        })?;
+        let current = SandboxResources {
+            cpu,
+            memory_gib: memory,
+            disk_gib: disk.unwrap_or(0),
+        };
+        let next = resources(size);
+        let kind = resize_effect_from_resources(current, next);
+        tracing::info!(
+            sandbox_id = %id.as_str(),
+            %size,
+            current_cpu = cpu,
+            current_memory_gib = memory,
+            next_cpu = next.cpu,
+            next_memory_gib = next.memory_gib,
+            ?kind,
+            "aligning sandbox size after snapshot create"
+        );
+        self.apply_resize(id, next, kind).await
+    }
+
+    async fn apply_resize(
+        &self,
+        id: &DaytonaSandboxId,
+        next: SandboxResources,
+        effect: SandboxResizeEffect,
+    ) -> Result<()> {
+        match effect {
+            SandboxResizeEffect::NoOp => Ok(()),
+            SandboxResizeEffect::Unsupported => Err(HarnessError::Container(
+                "daytona reported resize as unsupported".to_owned(),
+            )),
+            SandboxResizeEffect::InPlace => {
+                self.client
+                    .resize(id.as_str(), Some(next.cpu), Some(next.memory_gib), None)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .wait_for_resize(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                Ok(())
+            }
+            SandboxResizeEffect::Restart => {
+                self.client.stop(id.as_str()).await.map_err(unavailable)?;
+                self.client
+                    .wait_for_stopped(id.as_str(), STOP_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .resize(id.as_str(), Some(next.cpu), Some(next.memory_gib), None)
+                    .await
+                    .map_err(unavailable)?;
+                self.client
+                    .wait_for_resize(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                self.client.start(id.as_str()).await.map_err(unavailable)?;
+                self.client
+                    .wait_for_started(id.as_str(), provision::ENSURE_TIMEOUT)
+                    .await
+                    .map_err(unavailable)?;
+                Ok(())
+            }
+        }
+    }
 }
 
 impl ContainerManager for DaytonaContainerManager {
     type Transport = DaytonaContainer;
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(
+        name = "agent.container.spawn",
+        err,
+        skip(self),
+        fields(agent.container.provider = "daytona")
+    )]
     async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
         let SpawnContainer {
             session_id,
-            repo_url,
+            size,
+            egress,
+            ..
         } = command;
-        let env = Env::from(HashMap::from([
-            ("REPO_URL".to_owned(), repo_url),
-            (
-                "GITHUB_TOKEN".to_owned(),
-                self.github_token.expose().to_owned(),
-            ),
-        ]));
+        // `ANTHROPIC_API_KEY` is what activates opencode's `anthropic`
+        // provider — with `enabled_providers` pinned in
+        // `container/opencode.json`, it is the sandbox's only model source.
+        // Nothing else goes in: the repository and its credential now reach
+        // the sandbox through the egress proxy.
+        let mut env = HashMap::from([(
+            "ANTHROPIC_API_KEY".to_owned(),
+            self.anthropic_api_key.expose().to_owned(),
+        )]);
+        env.extend(egress.environment());
+        let env = Env::from(env);
         let labels = Labels::from(HashMap::from([(
             SESSION_LABEL.to_owned(),
             session_id.to_string(),
@@ -272,7 +394,7 @@ impl ContainerManager for DaytonaContainerManager {
             ));
         }
 
-        match self.bring_up(&id).await {
+        match self.align_size_then_bring_up(&id, size).await {
             Ok(container) => Ok(container),
             Err(error) => {
                 self.managed.containers.remove(&id);
@@ -284,6 +406,52 @@ impl ContainerManager for DaytonaContainerManager {
                 Err(error)
             }
         }
+    }
+
+    fn resize_effect(
+        &self,
+        from: agent_session::domain::model::SandboxSize,
+        to: agent_session::domain::model::SandboxSize,
+    ) -> SandboxResizeEffect {
+        crate::domain::sandbox::resize_effect(from, to)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn resize(
+        &self,
+        session: AgentSessionId,
+        size: agent_session::domain::model::SandboxSize,
+    ) -> Result<()> {
+        let Some(id) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+            .map(DaytonaSandboxId::new)
+        else {
+            return Err(HarnessError::Container(format!(
+                "session {session} has no sandbox to resize"
+            )));
+        };
+        let (cpu, memory, disk) = self
+            .client
+            .resources(id.as_str())
+            .await
+            .map_err(unavailable)?;
+        let cpu = cpu.ok_or_else(|| {
+            HarnessError::Container("daytona did not report cpu for the sandbox".to_owned())
+        })?;
+        let memory = memory.ok_or_else(|| {
+            HarnessError::Container("daytona did not report memory for the sandbox".to_owned())
+        })?;
+        let current = SandboxResources {
+            cpu,
+            memory_gib: memory,
+            disk_gib: disk.unwrap_or(0),
+        };
+        let next = resources(size);
+        self.apply_resize(&id, next, resize_effect_from_resources(current, next))
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -323,6 +491,29 @@ impl ContainerManager for DaytonaContainerManager {
                 Err(error)
             }
         }
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        let Some(id) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+            .map(DaytonaSandboxId::new)
+        else {
+            return Ok(None);
+        };
+        let output = self
+            .client
+            .exec(
+                id.as_str(),
+                &provision::session_token_command(),
+                EXEC_TIMEOUT,
+            )
+            .await
+            .map_err(unavailable)?;
+        Ok(provision::parse_session_token(&output))
     }
 
     #[tracing::instrument(err, skip(self))]

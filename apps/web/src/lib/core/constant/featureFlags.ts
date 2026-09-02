@@ -13,7 +13,11 @@ export const LOCAL_ONLY = !!import.meta.hot;
 
 type FeatureFlagValue = 'true' | 'false' | undefined;
 
-function getFeatureFlagOverride(flagName: string): boolean | undefined {
+/**
+ * Reads a `VITE_<flagName>` env override. Returns `undefined` when unset, so
+ * callers can fall through to PostHog rather than forcing the flag off.
+ */
+export function getFeatureFlagOverride(flagName: string): boolean | undefined {
   const envKey = `VITE_${flagName}` as const;
   const value = import.meta.env[envKey] as FeatureFlagValue;
 
@@ -41,6 +45,16 @@ export function resolveFeatureFlag(
  * @returns true in dev.macro.com and bun run dev, false otherwise
  */
 export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
+
+/**
+ * Switches Inbox and Tasks from the current SoupView implementations to the
+ * new composable view implementations. Override locally with
+ * VITE_ENABLE_NEW_APP_VIEWS.
+ */
+export const ENABLE_NEW_APP_VIEWS_FLAG = 'enable-new-app-views';
+export const ENABLE_NEW_APP_VIEWS_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_NEW_APP_VIEWS'
+);
 
 /**
  * This constant reflects whether the app is running in production mode with prod backend environment
@@ -428,7 +442,7 @@ export const USE_MACRO_PR_SUMMARY_BLOCK = resolveFeatureFlag(
 );
 
 // skips over posthog and sets the ENABLE_CALLS feature to true if we are in dev mode
-const ENABLE_CALLS_OVERRIDE = DEV_MODE_ENV ? true : true;
+const ENABLE_CALLS_OVERRIDE = true;
 
 export function ENABLE_CALLS(): boolean {
   if (ENABLE_CALLS_OVERRIDE !== undefined) {
@@ -494,7 +508,7 @@ const parseBooleanOverride = (value: unknown): boolean | undefined =>
 /** Controls the cache-warming GraphQL soup backfill. */
 export const ENABLE_GRAPHQL_BACKFILL = resolveFeatureFlag(
   'ENABLE_GRAPHQL_BACKFILL',
-  false
+  true
 );
 
 /** Independent emergency stop. Any true env/PostHog source wins. */
@@ -577,13 +591,13 @@ export const BOT_MANAGEMENT_OVERRIDE =
 
 // Onboarding v4: the full-screen stepper new users land in after signup
 // (unified with /login), driving the import machinery with auto-import.
-// PostHog-gated with a dev-mode default; override with
-// VITE_ENABLE_ONBOARDING_V4. Read it through `useOnboardingV4Flag()` so the
-// gate reacts when PostHog answers (and so callers can wait instead of
-// treating "flags not loaded yet" as "off").
+// PostHog-gated; override with VITE_ENABLE_ONBOARDING_V4. Read it through
+// `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
+// callers can wait instead of treating "flags not loaded yet" as "off").
 export const ENABLE_ONBOARDING_V4_FLAG = 'enable-onboarding-v4';
 // Honor an explicit VITE_ENABLE_ONBOARDING_V4=false (don't coerce it to
 // undefined), else default on in dev and defer to PostHog in prod.
+// `just run_local` sets the env to false unless `--enable-onboarding`.
 export const ENABLE_ONBOARDING_V4_OVERRIDE =
   getFeatureFlagOverride('ENABLE_ONBOARDING_V4') ??
   (DEV_MODE_ENV ? true : undefined);
@@ -606,6 +620,32 @@ export function ENABLE_CALENDAR_UI(): boolean {
     return ENABLE_CALENDAR_UI_OVERRIDE;
   }
   return analytics.posthog.isFeatureEnabled(ENABLE_CALENDAR_UI_FLAG) ?? false;
+}
+
+// Calendar event search UI: the Search view's Calendar type (and calendar
+// rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
+// — opening a hit needs the calendar block — so it only takes effect where
+// `enable-calendar-ui` is also on. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_CALENDAR_SEARCH_UI.
+export const ENABLE_CALENDAR_SEARCH_UI_FLAG = 'enable-calendar-search-ui';
+export const ENABLE_CALENDAR_SEARCH_UI_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CALENDAR_SEARCH_UI') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+/**
+ * Non-reactive check for imperative call sites (soup filter presets). Gated by
+ * the calendar UI too. For reactive UI, prefer `useCalendarSearchUiFlag()`.
+ */
+export function ENABLE_CALENDAR_SEARCH_UI(): boolean {
+  if (!ENABLE_CALENDAR_UI()) {
+    return false;
+  }
+  if (ENABLE_CALENDAR_SEARCH_UI_OVERRIDE !== undefined) {
+    return ENABLE_CALENDAR_SEARCH_UI_OVERRIDE;
+  }
+  return (
+    analytics.posthog.isFeatureEnabled(ENABLE_CALENDAR_SEARCH_UI_FLAG) ?? false
+  );
 }
 
 // The "Enable calendar" prompt on phones. Off by default everywhere,
@@ -678,6 +718,22 @@ export function ENABLE_CHAT_V3_AGENTS(): boolean {
   );
 }
 
+// The `@cursor` mention entry: agent sessions served by Cursor cloud agents
+// on Macro's Cursor account. PostHog-gated per user; the backend additionally
+// restricts these sessions to @macro.com senders. Override with
+// VITE_ENABLE_CURSOR_AGENTS.
+export const ENABLE_CURSOR_AGENTS_FLAG = 'enable-cursor-agents';
+export const ENABLE_CURSOR_AGENTS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_CURSOR_AGENTS') ??
+  (DEV_MODE_ENV ? true : undefined);
+export function ENABLE_CURSOR_AGENTS(): boolean {
+  if (ENABLE_CURSOR_AGENTS_OVERRIDE !== undefined) {
+    return ENABLE_CURSOR_AGENTS_OVERRIDE;
+  }
+
+  return analytics.posthog.isFeatureEnabled(ENABLE_CURSOR_AGENTS_FLAG) ?? false;
+}
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;
@@ -685,4 +741,13 @@ export function ENABLE_CHAT_V3_AGENTS(): boolean {
 export const ENABLE_RECENT_VIEW_FLAG = 'enable-recent-view';
 export const ENABLE_RECENT_VIEW_OVERRIDE =
   getFeatureFlagOverride('ENABLE_RECENT_VIEW') ??
+  (DEV_MODE_ENV ? true : undefined);
+
+// Settings › Notifications: the dedicated preferences tab (delivery, per-type
+// opt-outs, muted items). When off, the tab is hidden and Account keeps the
+// existing desktop/mobile toggle. PostHog-gated with a dev-mode default;
+// override with VITE_ENABLE_NOTIFICATION_SETTINGS.
+export const ENABLE_NOTIFICATION_SETTINGS_FLAG = 'enable-notification-settings';
+export const ENABLE_NOTIFICATION_SETTINGS_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_NOTIFICATION_SETTINGS') ??
   (DEV_MODE_ENV ? true : undefined);

@@ -34,6 +34,17 @@ struct MentionsRequest<'a> {
     markdown: &'a str,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct ExplicitReplyRequest<'a> {
+    markdown: &'a str,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExplicitReplyResponse {
+    is_explicit_reply: bool,
+}
+
 /// An entity mention extracted from markdown by the lexical service
 /// `/mentions` endpoint, in the shape channel messages track them.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -67,15 +78,54 @@ pub struct AgentAnnouncementChip {
     pub status: String,
 }
 
+/// The channel message targeted by an agent-session announcement, in the
+/// shape the lexical service's `ReplyTargetNode` validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAnnouncementReplyTarget {
+    /// Channel containing the targeted message.
+    pub channel_id: String,
+    /// Targeted channel message.
+    pub target_message_id: String,
+    /// Thread containing the targeted message.
+    pub target_thread_id: String,
+    /// Static one-line preview rendered by the reply target.
+    pub display_text: String,
+    /// Sender of the targeted message.
+    pub sender_id: String,
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentAnnouncementRequest<'a> {
-    prompt_markdown: &'a str,
+    reply_target: &'a AgentAnnouncementReplyTarget,
     chip: &'a AgentAnnouncementChip,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct AgentAnnouncementResponse {
+    markdown: String,
+}
+
+/// A channel message included as context for an agent prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextMessage<'a> {
+    /// Display name of the message sender.
+    pub sender: &'a str,
+    /// Markdown content of the message.
+    pub content: &'a str,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentContextRequest<'a> {
+    prompt_markdown: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    messages: Option<&'a [AgentContextMessage<'a>]>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct AgentContextResponse {
     markdown: String,
 }
 
@@ -264,23 +314,20 @@ impl LexicalClient {
         Ok(data.mentions)
     }
 
-    /// Composes the channel message announcing an agent session — the prompt
-    /// quoted back as a blockquote above the session's Magic Chip — via the
-    /// lexical service, so the markdown is built from real Lexical nodes.
-    #[tracing::instrument(skip(self, prompt_markdown, chip), err)]
+    /// Composes the channel message announcing an agent session — a structured
+    /// reply target above the session's Magic Chip — via the lexical service,
+    /// so the markdown is built from real Lexical nodes.
+    #[tracing::instrument(skip(self, reply_target, chip), err)]
     pub async fn compose_agent_announcement(
         &self,
-        prompt_markdown: &str,
+        reply_target: &AgentAnnouncementReplyTarget,
         chip: &AgentAnnouncementChip,
     ) -> Result<String> {
         let url = format!("{}/agent-announcement", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&AgentAnnouncementRequest {
-                    prompt_markdown,
-                    chip,
-                })
+                .json(&AgentAnnouncementRequest { reply_target, chip })
                 .send()
                 .await?,
         )
@@ -288,6 +335,49 @@ impl LexicalClient {
         let data: AgentAnnouncementResponse =
             response.json().await.context("unexpected response")?;
         Ok(data.markdown)
+    }
+
+    /// Sanitizes an agent prompt and optionally composes it with prior-message
+    /// context via the lexical service, so internal nodes and escaping are
+    /// handled by Lexical rather than assembled manually by the caller.
+    #[tracing::instrument(skip(self, prompt_markdown, messages), err)]
+    pub async fn compose_agent_context(
+        &self,
+        prompt_markdown: &str,
+        messages: Option<&[AgentContextMessage<'_>]>,
+    ) -> Result<String> {
+        let url = format!("{}/agent-context", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentContextRequest {
+                    prompt_markdown,
+                    messages,
+                })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentContextResponse = response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Parses `markdown` via the lexical service and reports whether it starts
+    /// with a `ReplyTargetNode` followed by the author's non-empty reply.
+    /// Standard Markdown blockquotes carry no reply semantics.
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn is_explicit_reply(&self, markdown: &str) -> Result<bool> {
+        let url = format!("{}/explicit-reply", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&ExplicitReplyRequest { markdown })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: ExplicitReplyResponse = response.json().await.context("unexpected response")?;
+        Ok(data.is_explicit_reply)
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {

@@ -58,6 +58,7 @@ fn filesystem_database_preserves_the_mutation_queue() {
         let mut storage = database.open("scope-1").unwrap();
         let mutation_id = storage
             .enqueue_mutation(NewQueuedMutation {
+                uuid: uuid::Uuid::new_v4(),
                 mutation: StoredMutation::new(
                     MutationRequest {
                         query: "mutation Persist { persist }".into(),

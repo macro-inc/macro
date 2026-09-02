@@ -232,6 +232,21 @@ describe('buildRecurrenceLines', () => {
     ]);
   });
 
+  it('serializes timed UNTIL in the recurrence timezone', () => {
+    expect(
+      buildRecurrenceLines(
+        {
+          frequency: 'DAILY',
+          interval: 1,
+          byDay: [],
+          ends: { kind: 'on', date: '2026-08-22' },
+        },
+        false,
+        'America/Los_Angeles'
+      )
+    ).toEqual(['RRULE:FREQ=DAILY;UNTIL=20260823T065959Z']);
+  });
+
   it('uses a date-valued UNTIL for all-day events', () => {
     expect(
       buildRecurrenceLines(
@@ -286,6 +301,15 @@ describe('parseRecurrenceConfig', () => {
       'yyyy-MM-dd'
     );
     expect(parsed?.ends).toEqual({ kind: 'on', date: localDate });
+  });
+
+  it('round-trips timed UNTIL in the recurrence timezone', () => {
+    const lines = ['RRULE:FREQ=DAILY;UNTIL=20260823T065959Z'];
+    const parsed = parseRecurrenceConfig(lines, 'America/Los_Angeles');
+    expect(parsed?.ends).toEqual({ kind: 'on', date: '2026-08-22' });
+    expect(
+      parsed && buildRecurrenceLines(parsed, false, 'America/Los_Angeles')
+    ).toEqual(lines);
   });
 
   it('declines rules it cannot round-trip', () => {

@@ -9,8 +9,7 @@ import { SettingsPage, SettingsSection } from './primitives';
 
 /**
  * Consolidated "Connections" page: one card per external account the user can
- * link (Gmail, GitHub), plus the agent's MCP integrations — so everything
- * Macro is connected to lives in one place.
+ * link (Gmail, GitHub), followed by the agent's MCP integrations.
  */
 export function ConnectedAccounts() {
   const pipedreamMcp = usePipedreamMcpFlag();

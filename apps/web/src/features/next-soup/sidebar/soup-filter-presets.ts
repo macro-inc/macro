@@ -7,6 +7,7 @@ import {
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
 import {
+  ENABLE_CALENDAR_SEARCH_UI,
   ENABLE_CALENDAR_UI,
   ENABLE_REMINDERS,
   ENABLE_SNIPPETS,
@@ -219,20 +220,18 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         clientFilters: { and: ['explicit-noise'] },
         groupBy: 'date',
       }),
-      // Pending reminders only: scheduled but not yet fired. A fired reminder
-      // has already hit the inbox — Signal surfaces it through its not-done
-      // notification — so this tab is the forward-looking complement: what is
-      // coming, not what is due. Soonest first, since "newest first" on future
-      // dates would put December above tomorrow.
+      // Every reminder still on the hook: the ones coming up and the ones that
+      // have fired and are waiting to be dealt with (fired ones also surface in
+      // Signal as their notification). Only marking one done drops it. Ascending
+      // by fire time, so overdue leads and upcoming follows soonest-first.
       reminders: () => ({
         filters: defineQueryFilters({
           include: {
             includeReminders: true,
             reminderCompleted: false,
-            reminderFired: false,
           },
         }),
-        clientFilters: { and: ['reminders-scheduled'] },
+        clientFilters: { and: ['reminders-not-done'] },
         sortDirection: 'asc',
       }),
     },
@@ -284,6 +283,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   mail: {
     default: 'important',
     tabs: {
+      // No 'no-drafts' on any thread-listing tab: a thread whose latest
+      // message is a saved draft must stay in Signal/Noise/Calendar/Sent (it
+      // also shows under Drafts). The server counts drafts toward is_signal
+      // and inbox visibility for the same reason.
       important: () => ({
         filters: defineQueryFilters({
           include: {
@@ -293,7 +296,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           emailView: 'inbox',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       noise: () => ({
@@ -305,7 +308,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           emailView: 'inbox',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       calendar: () => ({
@@ -317,7 +320,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         }),
 
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       drafts: () => ({
@@ -335,7 +338,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({
           emailView: 'sent',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       shared: () => ({
@@ -591,17 +594,22 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. Calendar, CRM, and non-displayable channel-thread rows are
-        // NIL-excluded the same way. `search-supported` mirrors these
-        // exclusions client-side so entities that enter the soup cache outside
-        // this query (e.g. websocket-driven inserts) don't surface in the
-        // search feed.
+        // them. CRM and non-displayable channel-thread rows are NIL-excluded
+        // the same way. Calendar events are not excluded — they carry a title
+        // index of their own. `search-supported` mirrors these exclusions
+        // client-side so entities that enter the soup cache outside this query
+        // (e.g. websocket-driven inserts) don't surface in the search feed.
         filters: {
           include: {
-            calendarEventId: [NIL_UUID],
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
             channelThreadId: [NIL_UUID],
+            // Events are title-indexed, so search returns them — but opening
+            // one needs the calendar block, which the flag gates. Without it
+            // a hit would render an inert row, so exclude the type instead.
+            ...(ENABLE_CALENDAR_SEARCH_UI()
+              ? {}
+              : { calendarEventId: [NIL_UUID] }),
           },
           exclude: getDisabledSnippetSubtypeExclude(),
         },

@@ -1,3 +1,4 @@
+use crate::constants::SLOW_WEBSOCKET_OPERATION_THRESHOLD;
 use crate::model::{
     connection::{Connection, StoredConnectionEntity},
     message::{Message, OutgoingMessage},
@@ -12,6 +13,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{sync::mpsc::Sender, task::AbortHandle};
+
+#[cfg(test)]
+mod test;
 
 #[async_trait]
 pub trait ConnectionRepo: Send + Sync {
@@ -199,13 +203,49 @@ impl ConnectionManager {
     /// Sends a message to a a connection
     /// If the connection is not found, or dropped, then we remove the connection id
     /// from the map, and should kill (TODO:) any remaining tasks associated with the connection
+    #[tracing::instrument(
+        name = "connection_gateway.queue_send",
+        err,
+        skip(self, id, message),
+        fields(
+            connection.id = id,
+            connection.queue.observed_depth = tracing::field::Empty,
+            connection.queue.max_capacity = tracing::field::Empty,
+            connection.queue.wait_ms = tracing::field::Empty,
+        )
+    )]
     pub async fn send_message(&self, id: &str, message: Message) -> Result<()> {
         let sender = match self.connections.get(id) {
             Some(connection) => connection.sender.clone(),
             None => anyhow::bail!("connection not found"),
         };
 
-        if let Err(err) = sender.send(OutgoingMessage::Message(message)).await {
+        let remaining_capacity = sender.capacity();
+        let max_capacity = sender.max_capacity();
+        let depth = max_capacity.saturating_sub(remaining_capacity);
+        let span = tracing::Span::current();
+        span.record("connection.queue.observed_depth", depth as u64);
+        span.record("connection.queue.max_capacity", max_capacity as u64);
+
+        let started = tokio::time::Instant::now();
+        let mut send = std::pin::pin!(sender.send(OutgoingMessage::Message(message)));
+        let result = tokio::select! {
+            result = &mut send => result,
+            () = tokio::time::sleep(SLOW_WEBSOCKET_OPERATION_THRESHOLD) => {
+                let depth = max_capacity.saturating_sub(sender.capacity());
+                tracing::warn!(
+                    connection.id = id,
+                    connection.queue.observed_depth = depth,
+                    connection.queue.max_capacity = max_capacity,
+                    "websocket outbound queue send is blocked"
+                );
+                send.await
+            }
+        };
+        let wait = started.elapsed();
+        span.record("connection.queue.wait_ms", wait.as_millis() as u64);
+
+        if let Err(err) = result {
             self.remove_connection(id).await?;
             anyhow::bail!("failed to send message: {}", err);
         }

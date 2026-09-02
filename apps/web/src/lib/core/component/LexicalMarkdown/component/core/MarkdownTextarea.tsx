@@ -33,6 +33,7 @@ import {
   type AutoLinkMatchMode,
   autoRegister,
   awaitPlugin,
+  blockDecoratorTrailingParagraphPlugin,
   codePlugin,
   createAccessoryStore,
   customSelectionDataPlugin,
@@ -213,6 +214,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .delete()
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
+    .use(blockDecoratorTrailingParagraphPlugin())
     .use(restoreFocusPlugin())
     .use(checkboxToTaskPlugin())
     .use(mediaPlugin())

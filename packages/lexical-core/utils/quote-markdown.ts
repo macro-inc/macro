@@ -5,6 +5,8 @@
  */
 export function quoteMarkdown(content: string): string | undefined {
   const flattened = content
+    .replace(/<m-agent-context>/g, '&lt;m-agent-context>')
+    .replace(/<\/m-agent-context>/g, '&lt;/m-agent-context>')
     .trim()
     .split('\n')
     .map((line) => line.replace(/^\s*>+\s?/, ''))

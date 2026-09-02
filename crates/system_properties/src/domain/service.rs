@@ -17,8 +17,9 @@ use crate::{
 pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
     /// Set email attachment properties for multiple entities.
     ///
-    /// Only properties that are `Some` will be updated.
-    /// All properties are upserted in a single query.
+    /// Only properties that are `Some` will be written.
+    /// Existing values are left unchanged so a later import does not clobber
+    /// Source, Sender, Recipients, or Subject.
     fn set_email_attachment_properties(
         &self,
         items: Vec<EmailAttachmentInput>,
@@ -84,7 +85,7 @@ where
             .flat_map(|item| collect_email_property_rows(&item.entity_id, item.properties))
             .collect();
 
-        self.repository.bulk_upsert_properties(rows).await
+        self.repository.bulk_insert_properties_if_absent(rows).await
     }
 
     #[tracing::instrument(skip(self, entity_ids))]

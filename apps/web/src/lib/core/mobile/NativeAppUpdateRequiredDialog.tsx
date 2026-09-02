@@ -28,7 +28,7 @@ export function NativeAppUpdateRequiredDialog(props: {
             </Dialog.Description>
           </div>
           <div class="flex justify-end">
-            <Dialog.CloseButton as={Button} variant="active" size="sm">
+            <Dialog.CloseButton as={Button} variant="accent" size="sm">
               OK
             </Dialog.CloseButton>
           </div>

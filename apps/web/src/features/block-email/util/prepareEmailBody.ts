@@ -460,6 +460,25 @@ export function prepareEmailBody(
     return $generateHtmlFromNodes(editor);
   });
 
+  return prepareEmailBodyFromHtml(generatedHtml, appendReply);
+}
+
+/**
+ * Same pipeline as {@link prepareEmailBody}, but starting from
+ * editor-generated HTML instead of a live editor — for callers holding a
+ * snapshot of editor content (e.g. undo-send restoring a draft).
+ */
+export function prepareEmailBodyFromHtml(
+  generatedHtml: string,
+  appendReply?: {
+    replyType: ReplyType | undefined;
+    replyingTo: ApiMessage;
+  }
+): {
+  bodyHtml: string;
+  bodyText: string;
+  mentions: DocumentMentionInfo[];
+} {
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
 
   flattenConsecutiveParagraphs(parsed.body);

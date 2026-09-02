@@ -39,10 +39,14 @@ import {
 import { Account } from './Account';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
+import { Agents } from './Agents';
+import { ApiKeys } from './ApiKeys';
 import { Appearance } from './Appearance';
 import { ConnectedAccounts } from './ConnectedAccounts';
 import { Crm } from './Crm';
+import { Harness } from './Harness';
 import { MobileApp } from './MobileApp';
+import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
 import { Team } from './Team';
@@ -389,6 +393,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
                     <Account />
                   </Suspense>
                 </Show>
+                <Show when={isCurrentTab('API Keys')}>
+                  <Suspense>
+                    <ApiKeys />
+                  </Suspense>
+                </Show>
+                <Show when={isCurrentTab('Notifications')}>
+                  <Notifications />
+                </Show>
                 <Show when={isCurrentTab('Billing')}>
                   <Suspense>
                     <Billing />
@@ -425,6 +437,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 </Show>
                 <Show when={isCurrentTab('Agent')}>
                   <Agent />
+                </Show>
+                <Show when={isCurrentTab('Agents')}>
+                  <Agents />
+                </Show>
+                <Show when={isCurrentTab('Harness')}>
+                  <Harness />
                 </Show>
                 <Show when={isCurrentTab('Bots')}>
                   <Suspense>

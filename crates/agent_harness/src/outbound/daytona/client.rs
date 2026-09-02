@@ -15,6 +15,8 @@ const POLL_INTERVAL: Duration = Duration::from_millis(250);
 #[serde(rename_all = "snake_case")]
 enum SandboxState {
     Started,
+    Stopped,
+    Resizing,
     Error,
     BuildFailed,
     #[serde(other)]
@@ -27,6 +29,9 @@ struct SandboxDto {
     id: String,
     state: SandboxState,
     error_reason: Option<String>,
+    cpu: Option<u32>,
+    memory: Option<u32>,
+    disk: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,11 +72,26 @@ struct ExecuteRequest<'a> {
     timeout: u64,
 }
 
-fn configuration_parameters(
-    snapshot: &Snapshot,
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ResizeSandboxRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpu: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    memory: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    disk: Option<u32>,
+}
+
+fn resize_not_enabled(status: reqwest::StatusCode, body: &str) -> bool {
+    status == reqwest::StatusCode::NOT_FOUND && body.contains("Cannot POST")
+}
+
+fn configuration_parameters<'a>(
+    snapshot: &'a Snapshot,
     env: Env,
     labels: Labels,
-) -> CreateSandboxRequest<'_> {
+) -> CreateSandboxRequest<'a> {
     CreateSandboxRequest {
         snapshot,
         env,
@@ -99,8 +119,12 @@ impl DaytonaClient {
         }
     }
 
-    /// Create a sandbox and return its Daytona id.
-    #[tracing::instrument(err, skip(self, env))]
+    /// Create a sandbox from a snapshot and return its Daytona id.
+    ///
+    /// Resource fields must be omitted: Daytona returns 400 ("Cannot specify
+    /// Sandbox resources when using a snapshot") if `cpu` / `memory` / `disk`
+    /// are sent with `snapshot`. Size is applied after start via [`Self::resize`].
+    #[tracing::instrument(name = "daytona.sandbox.create", err, skip(self, env))]
     pub async fn create(&self, snapshot: &Snapshot, env: Env, labels: Labels) -> Result<String> {
         let request = configuration_parameters(snapshot, env, labels);
         let sandbox: SandboxDto = self
@@ -115,8 +139,52 @@ impl DaytonaClient {
         Ok(sandbox.id)
     }
 
-    /// Find one sandbox carrying the supplied label.
+    /// Current CPU, RAM, and disk quotas for a sandbox, when Daytona reports them.
     #[tracing::instrument(err, skip(self))]
+    pub async fn resources(
+        &self,
+        sandbox_id: &str,
+    ) -> Result<(Option<u32>, Option<u32>, Option<u32>)> {
+        let sandbox: SandboxDto = self
+            .json(
+                self.http.get(format!("{}/sandbox/{sandbox_id}", self.base)),
+                "get sandbox",
+            )
+            .await?;
+        Ok((sandbox.cpu, sandbox.memory, sandbox.disk))
+    }
+
+    /// Resize CPU, RAM, and/or disk. Omit a field to leave it unchanged.
+    ///
+    /// In-place resize (running sandbox) accepts CPU/RAM increases only. Disk
+    /// changes and CPU/RAM decreases require a stopped sandbox.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn resize(
+        &self,
+        sandbox_id: &str,
+        cpu: Option<u32>,
+        memory: Option<u32>,
+        disk: Option<u32>,
+    ) -> Result<()> {
+        let result = self
+            .json::<serde::de::IgnoredAny>(
+                self.http
+                    .post(format!("{}/sandbox/{sandbox_id}/resize", self.base))
+                    .json(&ResizeSandboxRequest { cpu, memory, disk }),
+                "resize sandbox",
+            )
+            .await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(DaytonaError::Api { status, body, .. }) if resize_not_enabled(status, &body) => {
+                Err(DaytonaError::ResizeNotEnabled)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Find one sandbox carrying the supplied label.
+    #[tracing::instrument(name = "daytona.sandbox.find", err, skip(self))]
     pub async fn find_by_label(&self, label: &str, value: &str) -> Result<Option<String>> {
         let labels = Labels::from(HashMap::from([(label.to_owned(), value.to_owned())]));
         let filter = serde_json::to_string(&labels).map_err(DaytonaError::EncodeLabelFilter)?;
@@ -143,7 +211,7 @@ impl DaytonaClient {
     }
 
     /// Poll a sandbox until it has started or the deadline passes.
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(name = "daytona.sandbox.wait_started", err, skip(self))]
     pub async fn wait_for_started(&self, sandbox_id: &str, timeout: Duration) -> Result<()> {
         let deadline = Instant::now() + timeout;
         loop {
@@ -165,7 +233,81 @@ impl DaytonaClient {
                             .unwrap_or_else(|| "no reason given".to_owned()),
                     });
                 }
-                SandboxState::Other => {}
+                SandboxState::Stopped | SandboxState::Resizing | SandboxState::Other => {}
+            }
+
+            if Instant::now() >= deadline {
+                return Err(DaytonaError::SandboxStartTimeout {
+                    sandbox_id: sandbox_id.to_owned(),
+                    timeout,
+                });
+            }
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
+    }
+
+    /// Poll a sandbox until it has stopped or the deadline passes.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn wait_for_stopped(&self, sandbox_id: &str, timeout: Duration) -> Result<()> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let sandbox: SandboxDto = self
+                .json(
+                    self.http.get(format!("{}/sandbox/{sandbox_id}", self.base)),
+                    "get sandbox",
+                )
+                .await?;
+
+            match sandbox.state {
+                SandboxState::Stopped => return Ok(()),
+                SandboxState::Error | SandboxState::BuildFailed => {
+                    return Err(DaytonaError::SandboxStart {
+                        sandbox_id: sandbox_id.to_owned(),
+                        state: format!("{:?}", sandbox.state),
+                        reason: sandbox
+                            .error_reason
+                            .unwrap_or_else(|| "no reason given".to_owned()),
+                    });
+                }
+                SandboxState::Started | SandboxState::Resizing | SandboxState::Other => {}
+            }
+
+            if Instant::now() >= deadline {
+                return Err(DaytonaError::SandboxStartTimeout {
+                    sandbox_id: sandbox_id.to_owned(),
+                    timeout,
+                });
+            }
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
+    }
+
+    /// Poll until a resize is no longer in progress.
+    #[tracing::instrument(err, skip(self))]
+    pub async fn wait_for_resize(&self, sandbox_id: &str, timeout: Duration) -> Result<()> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let sandbox: SandboxDto = self
+                .json(
+                    self.http.get(format!("{}/sandbox/{sandbox_id}", self.base)),
+                    "get sandbox",
+                )
+                .await?;
+
+            match sandbox.state {
+                SandboxState::Resizing => {}
+                SandboxState::Error | SandboxState::BuildFailed => {
+                    return Err(DaytonaError::SandboxStart {
+                        sandbox_id: sandbox_id.to_owned(),
+                        state: format!("{:?}", sandbox.state),
+                        reason: sandbox
+                            .error_reason
+                            .unwrap_or_else(|| "no reason given".to_owned()),
+                    });
+                }
+                SandboxState::Started | SandboxState::Stopped | SandboxState::Other => {
+                    return Ok(());
+                }
             }
 
             if Instant::now() >= deadline {
@@ -205,6 +347,11 @@ impl DaytonaClient {
     }
 
     /// Stop a running sandbox without deleting it.
+    ///
+    /// A sandbox Daytona no longer knows (404) counts as stopped: it is
+    /// already in the state the caller asked for, and treating it as a
+    /// failure puts the idle reaper into an endless retry loop against a
+    /// sandbox that was deleted out from under it.
     #[tracing::instrument(err, skip(self))]
     pub async fn stop(&self, sandbox_id: &str) -> Result<()> {
         let operation = "stop sandbox";
@@ -216,7 +363,7 @@ impl DaytonaClient {
             .await
             .map_err(|source| DaytonaError::Request { operation, source })?;
         let status = response.status();
-        if status.is_success() {
+        if status.is_success() || status == reqwest::StatusCode::NOT_FOUND {
             return Ok(());
         }
         let body = response
@@ -231,7 +378,7 @@ impl DaytonaClient {
     }
 
     /// Execute one command in a sandbox.
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(name = "daytona.command.execute", err, skip(self, command))]
     pub async fn exec(&self, sandbox_id: &str, command: &str, timeout: Duration) -> Result<String> {
         let toolbox: ToolboxProxyUrlDto = self
             .json(
@@ -296,20 +443,38 @@ impl DaytonaClient {
     }
 
     /// Destroy a sandbox.
+    ///
+    /// A sandbox Daytona no longer knows (404) counts as deleted — already
+    /// the state the caller asked for — so a repeated delete (or one racing
+    /// Daytona's own cleanup) cannot park the sandbox in the failed-stop
+    /// retry queue forever.
     #[tracing::instrument(err, skip(self))]
     pub async fn delete(&self, sandbox_id: &str) -> Result<()> {
-        let _: serde::de::IgnoredAny = self
-            .json(
-                self.http
-                    .delete(format!("{}/sandbox/{sandbox_id}", self.base)),
-                "delete sandbox",
-            )
-            .await?;
-        Ok(())
+        let operation = "delete sandbox";
+        let response = self
+            .http
+            .delete(format!("{}/sandbox/{sandbox_id}", self.base))
+            .bearer_auth(self.api_key.expose())
+            .send()
+            .await
+            .map_err(|source| DaytonaError::Request { operation, source })?;
+        let status = response.status();
+        if status.is_success() || status == reqwest::StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        let body = response
+            .text()
+            .await
+            .map_err(|source| DaytonaError::ReadResponse { operation, source })?;
+        Err(DaytonaError::Api {
+            operation,
+            status,
+            body,
+        })
     }
 
     /// Poll the sidecar readiness endpoint until it succeeds.
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(name = "daytona.sidecar.wait_ready", err, skip(self))]
     pub async fn wait_for_ping(
         &self,
         ping_url: &str,
@@ -319,6 +484,9 @@ impl DaytonaClient {
         let deadline = Instant::now() + timeout;
         loop {
             let mut request = self.http.get(ping_url);
+            let mut trace_headers = reqwest::header::HeaderMap::new();
+            macro_tower_layers::inject_trace_headers(&mut trace_headers);
+            request = request.headers(trace_headers);
             if let Some(token) = preview_token {
                 request = request.header("x-daytona-preview-token", token);
             }
@@ -343,7 +511,10 @@ impl DaytonaClient {
         request: reqwest::RequestBuilder,
         operation: &'static str,
     ) -> Result<T> {
+        let mut trace_headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut trace_headers);
         let response = request
+            .headers(trace_headers)
             .bearer_auth(self.api_key.expose())
             .send()
             .await

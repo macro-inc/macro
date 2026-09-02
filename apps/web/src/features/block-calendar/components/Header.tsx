@@ -1,3 +1,4 @@
+import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import {
   type CalendarPageId,
   useCalendarPager,
@@ -24,6 +25,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { CalendarSearch } from './CalendarSearch';
 import { useOpenEventComposer } from './use-open-event-composer';
 
 const formatMonthTitle = new Intl.DateTimeFormat(undefined, {
@@ -103,9 +105,12 @@ export function Header() {
           <Show
             when={isMobile()}
             fallback={
-              <span class="min-w-0 truncate text-base font-semibold text-ink">
-                {dateTitle()}
-              </span>
+              <>
+                <span class="min-w-0 truncate text-base font-semibold text-ink">
+                  {dateTitle()}
+                </span>
+                <CopyAvailabilityButton class="ml-2" />
+              </>
             }
           >
             <MonthDrawer month={currentDate()} />
@@ -121,7 +126,7 @@ export function Header() {
               fallback={
                 <Show when={!isTodayVisible()}>
                   <Button
-                    variant="active"
+                    variant="accent"
                     size="sm"
                     class="rounded-lg px-3"
                     depth={2}
@@ -185,6 +190,7 @@ export function Header() {
                 </Button>
               </div>
             </Show>
+            <CalendarSearch />
             <CalendarSettingsDropdown isNarrow={sidePanel?.isNarrow()} />
           </div>
         </HeaderIsland>

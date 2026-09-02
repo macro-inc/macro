@@ -66,12 +66,8 @@ async fn fetch_user_memory(
         toolset: tools.toolset,
         prompt: tools.prompt,
     };
-    let memory_service = MemoryServiceImpl::new(
-        db.clone(),
-        PgMemoryRepo::new(db.clone()),
-        tool_context.clone(),
-        tools,
-    );
+    let memory_service =
+        MemoryServiceImpl::new(PgMemoryRepo::new(db.clone()), tool_context.clone(), tools);
     match memory_service.get_or_generate_memory(owner.clone()).await {
         Ok(memory) => memory,
         Err(e) => {

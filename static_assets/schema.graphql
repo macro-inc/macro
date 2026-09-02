@@ -14,6 +14,16 @@ input ActivityFeedInput {
 }
 
 """
+Request for the authenticated user's trailing-year activity overview.
+"""
+input ActivityOverviewInput {
+	"""
+	IANA time zone used for local dates. Omitted or empty means UTC.
+	"""
+	timeZone: String
+}
+
+"""
 Channel activity operation exposed by GraphQL.
 """
 enum ChannelActivityType {
@@ -53,6 +63,10 @@ type CompleteMutationRoot {
 	Set or attach one property on an entity.
 	"""
 	setEntityProperty(input: SetEntityPropertyInput!): GraphqlProperty!
+	"""
+	Add and remove options across one entity's multi-select properties.
+	"""
+	updateEntityPropertyOptions(input: UpdateEntityPropertyOptionsInput!): [GraphqlProperty!]!
 	"""
 	Rename heterogeneous entities in one request.
 	"""
@@ -156,6 +170,24 @@ type EntityMutationPayload {
 }
 
 """
+One property's option delta within an options update.
+"""
+input EntityPropertyOptionDeltaInput {
+	"""
+	Identifier of the multi-select property definition being changed.
+	"""
+	propertyDefinitionId: ID!
+	"""
+	Options to add to the currently stored value.
+	"""
+	addOptionIds: [ID!]!
+	"""
+	Options to strip from the currently stored value.
+	"""
+	removeOptionIds: [ID!]!
+}
+
+"""
 Canonical entity reference accepted by unified mutations.
 """
 input EntityRefInput {
@@ -227,6 +259,20 @@ type GraphqlActivityCreated {
 }
 
 """
+One local date with activity.
+"""
+type GraphqlActivityDay {
+	"""
+	Local date in `YYYY-MM-DD` form.
+	"""
+	date: String!
+	"""
+	Number of activities on that date.
+	"""
+	count: Int!
+}
+
+"""
 The entity was soft-deleted.
 """
 type GraphqlActivityDeleted {
@@ -244,6 +290,24 @@ type GraphqlActivityEdited {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+One entity ranked by its activity count.
+"""
+type GraphqlActivityEntityRank {
+	"""
+	Kind of entity.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Entity identifier.
+	"""
+	entityId: ID!
+	"""
+	Number of activities that touched the entity.
+	"""
+	count: Int!
 }
 
 """
@@ -303,6 +367,39 @@ type GraphqlActivityOpened {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+Activity aggregated over the authenticated user's trailing year.
+
+This value has no `id`, so the normalized client cache embeds it under
+the authenticated user instead of treating it as a global entity.
+"""
+type GraphqlActivityOverview {
+	"""
+	First local date, inclusive, in `YYYY-MM-DD` form.
+	"""
+	from: String!
+	"""
+	One past the final local date, exclusive, in `YYYY-MM-DD` form.
+	"""
+	to: String!
+	"""
+	IANA time zone used for the window and day buckets.
+	"""
+	timeZone: String!
+	"""
+	Total activity in the window.
+	"""
+	total: Int!
+	"""
+	Sparse positive day counts in ascending order.
+	"""
+	days: [GraphqlActivityDay!]!
+	"""
+	Most active entities in stable rank order.
+	"""
+	topEntities: [GraphqlActivityEntityRank!]!
 }
 
 """
@@ -2790,6 +2887,16 @@ type GraphqlNewEmailMetadata {
 }
 
 """
+A newly delivered notification patch.
+"""
+type GraphqlNewNotification {
+	"""
+	The newly delivered notification.
+	"""
+	notification: GraphqlNotification!
+}
+
+"""
 Typed GraphQL union containing every supported notification event payload.
 """
 union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
@@ -2889,9 +2996,9 @@ enum GraphqlNotificationDocumentSubType {
 }
 
 """
-Realtime notification patch represented as either an update or cache deletion.
+Realtime notification patch represented as a new, updated, or deleted notification.
 """
-union GraphqlNotificationPatch = GraphqlNotification | GraphqlCacheDeletion
+union GraphqlNotificationPatch = GraphqlNewNotification | GraphqlUpdatedNotification | GraphqlCacheDeletion
 
 """
 A numeric property value.
@@ -3490,6 +3597,10 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -3581,6 +3692,10 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible call name.
 	"""
@@ -3708,6 +3823,10 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -3815,6 +3934,10 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	Channel messages do not have a separate display name.
 	"""
@@ -3960,6 +4083,10 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Server-only projection facts are unavailable for chats.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -4039,6 +4166,10 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible company name.
 	"""
@@ -4123,6 +4254,10 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque authoritative server-only projection facts.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible display name.
 	"""
@@ -4576,6 +4711,10 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -4720,6 +4859,10 @@ interface GraphqlSoupEntity {
 	"""
 	id: ID!
 	"""
+	Opaque supplement containing authoritative server-only projection facts.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	The canonical entity type.
 	"""
 	entityType: GraphqlSoupEntityType!
@@ -4820,6 +4963,10 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	Foreign entities do not expose a common display name.
 	"""
 	displayName: String
@@ -4896,6 +5043,10 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Server-only projection facts are unavailable for projects.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -4971,6 +5122,10 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible display name — a reminder's description is its name.
 	"""
@@ -5159,6 +5314,16 @@ type GraphqlTeamRolePermission {
 }
 
 """
+An update to an existing notification.
+"""
+type GraphqlUpdatedNotification {
+	"""
+	The updated notification.
+	"""
+	notification: GraphqlNotification!
+}
+
+"""
 The authenticated user and their user-scoped data.
 """
 type GraphqlUser {
@@ -5171,6 +5336,11 @@ type GraphqlUser {
 	Delegated actions performed on the user's behalf are included.
 	"""
 	activity(input: ActivityFeedInput!): GraphqlActivityPage!
+	"""
+	The authenticated user's activity over the trailing year, bucketed
+	into local dates in the requested time zone.
+	"""
+	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
 	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""
@@ -5369,6 +5539,11 @@ input SetEntityPropertyInput {
 }
 
 """
+Opaque versioned supplement containing authoritative server-only facts.
+"""
+scalar SoupCacheProjection
+
+"""
 Input for continuing a Soup query.
 """
 input SoupContinuationInput {
@@ -5493,6 +5668,24 @@ input UpdateEmailThreadLabelInput {
 	Whether the label should be present after the mutation.
 	"""
 	value: Boolean!
+}
+
+"""
+Input for applying option deltas across one entity's properties.
+"""
+input UpdateEntityPropertyOptionsInput {
+	"""
+	Type of entity whose properties are changing.
+	"""
+	entityType: GraphqlPropertyTargetEntityType!
+	"""
+	Identifier of the entity whose properties are changing.
+	"""
+	entityId: String!
+	"""
+	Per-property option deltas applied in one transaction.
+	"""
+	properties: [EntityPropertyOptionDeltaInput!]!
 }
 
 """

@@ -27,6 +27,7 @@ import {
   createSignal,
   For,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -68,21 +69,30 @@ const MAX_LIST_HEIGHT = 192;
 const tagActionButtonClass =
   'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [&_:where(svg)]:size-3.5';
 
-type TagPickerProps = {
+export type TagPickerSourceProps =
+  | { docTags: DocTags; createDocTags?: never }
+  | { docTags?: never; createDocTags: () => DocTags };
+
+export type TagPickerProps = {
   replaceTag?: ResolvedTag;
   triggerClass?: string;
   triggerLabel: string;
   children: JSX.Element;
   onOpenChange?: (open: boolean) => void;
   /**
+   * Fires when a picker session starts or ends, where a session covers both the
+   * popover and the tag editor dialog it can hand off to. Consumers that
+   * unmount the trigger once the picker is done (a chip that disappears with
+   * its last tag, say) should wait for this instead of `onOpenChange`, which
+   * reports closed while the editor dialog is still up.
+   */
+  onActiveChange?: (active: boolean) => void;
+  /**
    * Prevent the click that dismisses the picker from activating the element
    * behind it. This matches inline property editors rendered in soup rows.
    */
   withClickBlock?: boolean;
-} & (
-  | { docTags: DocTags; createDocTags?: never }
-  | { docTags?: never; createDocTags: () => DocTags }
-);
+} & TagPickerSourceProps;
 
 export function TagPicker(props: TagPickerProps) {
   const [open, setOpen] = createSignal(false);
@@ -99,6 +109,13 @@ export function TagPicker(props: TagPickerProps) {
       triggerRef?.isConnected && triggerRef.focus();
     }, 0);
   };
+
+  const pickerActive = () => open() || editorMode() !== null;
+  createEffect(
+    on(pickerActive, (active) => props.onActiveChange?.(active), {
+      defer: true,
+    })
+  );
 
   const setOpenState = (
     value: boolean,

@@ -161,7 +161,7 @@ class Transcriber(Agent):
             instructions="Transcribe user speech.",
             stt=inference.STT(
                 "deepgram/nova-3",
-                language="en-US",
+                language="multi",
                 extra_kwargs={
                     # ms of silence before Deepgram finalizes an utterance.
                     # Library default is 25ms, which cuts hesitant speakers mid-thought.

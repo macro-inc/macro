@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod test;
 
+use activity::Actor;
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
@@ -25,6 +26,15 @@ pub struct DocumentCreatedMetadata {
     pub document_id: String,
     /// The owner (creator) of the document.
     pub owner: MacroUserIdStr<'static>,
+    /// Who mechanically created the document. Absent on events published
+    /// before attribution: ingest then treats [`Self::owner`] as the actor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this creation belongs on, when different from
+    /// [`Self::actor`]. Absent means the actor is also the subject.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
     /// The document name, with any file extension stripped.
     pub document_name: String,
     /// File type of the document, when known.

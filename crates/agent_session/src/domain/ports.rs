@@ -30,6 +30,8 @@ pub struct BotFacts {
     pub is_managed: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
+    /// The registered harness this bot's agent is bound to, when it is one.
+    pub harness_id: Option<harness_id::HarnessId>,
 }
 
 /// Read-only lookup of the bots sessions may be opened for.
@@ -73,16 +75,47 @@ pub struct OpenExternalAgentSession {
     pub owner: MacroUserIdStr<'static>,
     /// The thread whose mention triggered the session, when one did.
     pub thread: Option<SessionThread>,
+    /// Instructions the session's runtime works under, when any were stated.
+    pub instructions: Option<String>,
 }
 
-/// Opens externally-served sessions: rows whose runtime is hosted by the
-/// bot's operator and dials in on its own schedule. Implemented by the
-/// harness, which owns the session-opening semantics.
-pub trait ExternalSessionOpener: Send + Sync + 'static {
+/// Everything needed to open a session the server hosts itself.
+///
+/// Deliberately thin: a managed session runs in a sandbox this deployment
+/// provisions from its own configuration, so the bot, the repository and the
+/// workspace are not the caller's to choose. There is no originating mention
+/// and nothing to announce.
+#[derive(Debug, Clone)]
+pub struct OpenManagedSession {
+    /// The user who owns the session and is credited for its messages.
+    pub owner: MacroUserIdStr<'static>,
+    /// First prompt to deliver once the sandbox is attached. `None` opens an
+    /// idle session its owner prompts from the session's own surface.
+    pub prompt: Option<String>,
+    /// Instructions the session's runtime works under, for its whole life.
+    /// `None` runs the runtime's own default.
+    pub instructions: Option<String>,
+}
+
+/// Opens sessions, however they are served. Implemented by the harness, which
+/// owns the session-opening semantics.
+///
+/// Two openings, because the two runtimes differ in who owns the machine: an
+/// external session's runtime is hosted by the bot's operator and dials in on
+/// its own schedule, while a managed session's sandbox is provisioned here.
+/// That difference is why only one of them takes a workspace.
+pub trait SessionOpener: Send + Sync + 'static {
     /// Open a session and return the persisted row.
     fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
+    ) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Provision a sandbox, open a session on it and return the persisted
+    /// row, delivering `prompt` once it is attached.
+    fn open_managed_session(
+        &self,
+        request: OpenManagedSession,
     ) -> impl Future<Output = Result<AgentSession>> + Send;
 
     /// The session a thread's mentions already route to, if one exists.
@@ -116,6 +149,23 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// The session a sandbox's egress token stands for, if any still does.
+    ///
+    /// `egress_token_hash` is the SHA-256 hex of the token as presented, never
+    /// the token: implementations match on the stored hash, so the comparison
+    /// happens in an index rather than over secret-derived bytes in memory.
+    ///
+    /// `None` rather than an error when nothing matches - a token we never
+    /// minted and a token whose session has since been deleted are the same
+    /// fact, and the caller refuses both the same way. The whole session comes
+    /// back because everything the token entitles its holder to is on the row:
+    /// the owner whose credentials it spends, the repository its git traffic is
+    /// pinned to, and whether the session is still open.
+    fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// Find the session associated with an incoming channel context.
     ///
     /// Matches only when `thread_id` and `bot_id` are both given and a session
@@ -128,6 +178,16 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
     ) -> impl Future<Output = Result<ChannelSession>> + Send;
+
+    /// Every session rooted at this thread, newest first, regardless of bot.
+    ///
+    /// [`find_for_channel`](Self::find_for_channel) answers for one known bot;
+    /// this answers when no bot was named - a message in the thread may still
+    /// be meant for whichever agent lives there.
+    fn find_all_for_thread(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
     /// The agent behind a session, for rendering the messages it sent.
     ///
@@ -147,8 +207,127 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_model(&self, id: AgentSessionId, model: &str)
     -> impl Future<Output = Result<()>> + Send;
 
+    /// Persist the user-facing session name. Idempotent.
+    fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist an automatically generated name only while the default remains.
+    fn set_name_if_default(
+        &self,
+        id: AgentSessionId,
+        name: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Persist the sandbox size this session was spawned with, or resized to.
+    fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The user's default sandbox size for new `@coder` sessions.
+    ///
+    /// A missing row is [`SandboxSize::Default`], not an error.
+    fn user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<SandboxSize>> + Send;
+
+    /// Upsert the user's default sandbox size for the next `@coder` mention.
+    fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// The durable record of which provider-side agent an externally-served
+/// session runs on.
+///
+/// Written by the provider's container manager when the agent is minted, read
+/// back to resume after a restart, and joined into session reads so a client
+/// can link out to the provider. Providers have no queryable label space
+/// (Cursor's API cannot answer "which agent belongs to this session"), so
+/// this repo is the mapping's single source of truth.
+#[cfg_attr(feature = "test-utils", mockall::automock)]
+pub trait ExternalSessionRepo: Send + Sync + 'static {
+    /// Record (or refresh) a session's provider-side identity.
+    ///
+    /// Upsert on the session: a session has at most one external backing, and
+    /// re-learning the same agent's name or url must not fail the write.
+    fn upsert(
+        &self,
+        id: AgentSessionId,
+        external: ExternalSession,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session's provider-side identity, if it has one.
+    fn get(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<ExternalSession>>> + Send;
+
+    /// Forget a session's provider-side identity. A session that never had
+    /// one is already in the asked-for state, so this succeeds.
+    fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// How often a replica refreshes its heartbeat row.
+pub const REPLICA_HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How stale a replica's heartbeat may be before its claims are up for
+/// grabs. Three missed heartbeats: long enough that one slow write does not
+/// get a live replica's sessions stolen, short enough that a crashed
+/// replica's sessions resume on the next prompt rather than minutes later.
+pub const REPLICA_STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The session-management lease: which replica holds a session's live actor.
+///
+/// Implemented by the same store that persists the session log, never
+/// separately - the fence a claim carries is checked by that store's fenced
+/// appends, and minting fences in one place while checking them in another
+/// is the mis-wiring this coupling forbids.
+///
+/// Claiming is a single conditional update (compare-and-swap): it succeeds
+/// when the session is unmanaged, already ours, or held by a replica whose
+/// heartbeat has gone stale, and every success increments the session's
+/// fence. There are deliberately no explicit locks anywhere in the contract -
+/// see [`ManagerFence`](super::model::ManagerFence) for why a fence, not a
+/// lock, is what neutralizes a stale holder.
+pub trait SessionOwnership: Send + Sync + 'static {
+    /// Claim live management of a session for `replica`, registering the
+    /// replica's heartbeat as a side effect so a claim can never dangle on a
+    /// replica the store has not seen.
+    fn claim(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+    ) -> impl Future<Output = Result<ClaimOutcome>> + Send;
+
+    /// Release a claim this replica holds. Conditional on the claim's fence
+    /// still being current: releasing after having been superseded is a
+    /// no-op, never a theft of the successor's claim. A session already
+    /// released (or deleted) is in the asked-for state, so this succeeds.
+    fn release(&self, claim: &SessionClaim) -> impl Future<Output = Result<()>> + Send;
+
+    /// Refresh this replica's heartbeat, upserting its row and publishing
+    /// `address` - the base URL peers forward this replica's sessions'
+    /// commands to - when one is known.
+    fn heartbeat(
+        &self,
+        replica: ReplicaId,
+        address: Option<&ReplicaAddress>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The live manager of a session, if a replica with a fresh heartbeat
+    /// holds its lease. `None` covers both an unclaimed session and one whose
+    /// holder has gone stale - either way the session is claimable.
+    fn manager_of(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<SessionManager>>> + Send;
 }
 
 #[cfg_attr(feature = "test-utils", mockall::automock)]
@@ -157,6 +336,21 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     fn create(
         &self,
         log: AgentSessionLog,
+    ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
+
+    /// [`create`](Self::create), conditioned on `claim` still holding the
+    /// session's current fence.
+    ///
+    /// This is the write half of the fencing contract: the check and the
+    /// append are one atomic statement, so a replica that stalled past its
+    /// heartbeat and was superseded cannot interleave frames no matter when
+    /// it wakes - its append matches nothing and fails with
+    /// [`FencedOut`](super::error::AgentSessionError::FencedOut), which the
+    /// actor treats as its cue to tear down.
+    fn create_fenced(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
     ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
 
     /// List all log entries for a session, in chronological order.
@@ -191,6 +385,38 @@ pub trait AgentSessionRealtime {
         &self,
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Publish a user-facing name change to the session's viewers.
+    fn publish_renamed(
+        &self,
+        _event: AgentSessionRenamed,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+}
+
+/// Generates a concise display name from a session's first prompt.
+pub trait AgentSessionNameGenerator: Send + Sync + 'static {
+    /// Generate a name, or `None` when naming is disabled for this service.
+    fn generate_name(
+        &self,
+        session: &AgentSession,
+        initial_prompt: &str,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
+}
+
+/// Disables automatic agent-session naming.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpAgentSessionNameGenerator;
+
+impl AgentSessionNameGenerator for NoOpAgentSessionNameGenerator {
+    async fn generate_name(
+        &self,
+        _session: &AgentSession,
+        _initial_prompt: &str,
+    ) -> Result<Option<String>, rootcause::Report> {
+        Ok(None)
+    }
 }
 
 /// An [`AgentSessionRealtime`] that streams nowhere.
@@ -239,4 +465,23 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
         event: ControlEvent,
     ) -> impl Future<Output = Result<AgentActionId>> + Send;
+
+    /// Resize this session's sandbox and remember `size` as the owner's default.
+    fn set_sandbox_size(
+        &self,
+        id: AgentSessionId,
+        size: SandboxSize,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The harness currently bound to serve this session, resolved through its
+    /// bot's binding. `None` for a managed session or an unbound bot.
+    ///
+    /// The control routes use it to confine a harness caller to the sessions
+    /// its own daemon serves: ownership alone would let a harness that merely
+    /// acts for a user drive or delete sessions another harness serves for the
+    /// same user.
+    fn session_harness(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<harness_id::HarnessId>>> + Send;
 }

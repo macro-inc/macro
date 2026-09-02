@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+rootcause = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }

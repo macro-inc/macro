@@ -1,6 +1,10 @@
 /// <reference lib="webworker" />
 
-import type { CacheRequest, CacheResponse } from '../../protocol';
+import type {
+  CacheRequest,
+  CacheResponse,
+  INITIAL_CACHE_REVISION,
+} from '../../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
   type CoordinatorToEngineEnvelope,
@@ -77,8 +81,12 @@ let activationValue: PageToEngineEnvelope | undefined;
 let telemetry: BroadcastChannel | undefined;
 let ignoreHeartbeats = false;
 
+const sendEngine = (message: EngineToCoordinatorEnvelope): void => {
+  controlPort?.postMessage([1, message]);
+};
+
 const sendStaleResponse = (ownerEpoch: number, routeId: number): void => {
-  controlPort?.postMessage(
+  sendEngine(
     withVersion<EngineToCoordinatorEnvelope>({
       kind: 'engine-response',
       ownerEpoch,
@@ -88,9 +96,12 @@ const sendStaleResponse = (ownerEpoch: number, routeId: number): void => {
   );
 };
 
+type FakeEngineState = { revision: bigint };
+
 const execute = async (
   database: IDBDatabase,
-  request: CacheRequest
+  request: CacheRequest,
+  state: FakeEngineState
 ): Promise<CacheResponse> => {
   if (request.kind === 'read' && request.query.includes('Slow')) {
     await delay(10_000);
@@ -98,12 +109,20 @@ const execute = async (
   switch (request.kind) {
     case 'init':
       return { id: request.id, ok: true, result: null };
+    case 'current-revision':
+      return { id: request.id, ok: true, result: state.revision.toString() };
     case 'write':
       await put(database, request.data);
+      state.revision += 1n;
       return {
         id: request.id,
         ok: true,
-        result: { changed: ['ROOT_QUERY'], affectedOps: [], reset: false },
+        result: {
+          revision: state.revision.toString(),
+          changed: ['ROOT_QUERY'],
+          affectedOps: [],
+          reset: false,
+        },
       };
     case 'read': {
       const value = await get(database);
@@ -116,7 +135,12 @@ const execute = async (
     }
     case 'clear':
       await clear(database);
-      return { id: request.id, ok: true, result: null };
+      state.revision += 1n;
+      return {
+        id: request.id,
+        ok: true,
+        result: state.revision.toString(),
+      };
     default:
       return {
         id: request.id,
@@ -144,6 +168,7 @@ async function activate(
         ownerEpoch: activation.ownerEpoch,
       });
       let database: IDBDatabase | undefined;
+      const engineState: FakeEngineState = { revision: 0n };
       let queue = Promise.resolve();
       let draining = false;
       let requestShutdown: (() => void) | undefined;
@@ -165,14 +190,22 @@ async function activate(
         database = await openDatabase(activation.scope);
         const activeDatabase = database;
         port.onmessage = (event: MessageEvent<unknown>) => {
-          const parsed = validateCoordinatorToEngineEnvelope(event.data);
+          if (Array.isArray(event.data) && event.data[0] === 1) {
+            requestShutdown?.();
+            return;
+          }
+          const payload =
+            Array.isArray(event.data) && event.data[0] === 0
+              ? event.data[1]
+              : event.data;
+          const parsed = validateCoordinatorToEngineEnvelope(payload);
           if (!parsed.ok) return;
           const message: CoordinatorToEngineEnvelope = parsed.value;
           if (message.ownerEpoch !== activation.ownerEpoch) return;
           switch (message.kind) {
             case 'heartbeat':
               if (!ignoreHeartbeats) {
-                port.postMessage(
+                sendEngine(
                   withVersion<EngineToCoordinatorEnvelope>({
                     kind: 'heartbeat-ack',
                     ownerEpoch: activation.ownerEpoch,
@@ -202,7 +235,11 @@ async function activate(
               queue = queue.then(async () => {
                 let response: CacheResponse;
                 try {
-                  response = await execute(activeDatabase, message.request);
+                  response = await execute(
+                    activeDatabase,
+                    message.request,
+                    engineState
+                  );
                 } catch (error) {
                   response = {
                     id: message.request.id,
@@ -211,7 +248,7 @@ async function activate(
                       error instanceof Error ? error.message : String(error),
                   };
                 }
-                port.postMessage(
+                sendEngine(
                   withVersion<EngineToCoordinatorEnvelope>({
                     kind: 'engine-response',
                     ownerEpoch: activation.ownerEpoch,
@@ -224,11 +261,15 @@ async function activate(
                   (message.request.kind === 'write' ||
                     message.request.kind === 'clear')
                 ) {
-                  port.postMessage(
+                  sendEngine(
                     withVersion<EngineToCoordinatorEnvelope>({
                       kind: 'engine-push',
                       ownerEpoch: activation.ownerEpoch,
-                      push: { kind: 'cache-changed' },
+                      push: {
+                        kind: 'cache-changed',
+                        revision:
+                          engineState.revision.toString() as typeof INITIAL_CACHE_REVISION,
+                      },
                     })
                   );
                 }
@@ -237,7 +278,8 @@ async function activate(
           }
         };
         port.start();
-        port.postMessage(
+        port.postMessage([0]);
+        sendEngine(
           withVersion<EngineToCoordinatorEnvelope>({
             kind: 'engine-ready',
             tabId: activation.tabId,
@@ -264,7 +306,7 @@ async function activate(
         await queue;
         database.close();
         database = undefined;
-        port.postMessage(
+        sendEngine(
           withVersion<EngineToCoordinatorEnvelope>({
             kind: 'engine-drained',
             tabId: activation.tabId,

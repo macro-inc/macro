@@ -7,7 +7,7 @@ import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { cn, Layer } from '@ui';
+import { Badge, badgeTriggerClasses, Layer } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { TagDot } from './TagDot';
 import {
@@ -16,18 +16,13 @@ import {
   type TagEditorDialogMode,
 } from './TagEditorDialog';
 import { TagPicker } from './TagPicker';
+import { TagPill } from './TagPill';
 import {
   buildTaggedItemsSplitContent,
   buildTaggedItemsSplitOptions,
 } from './tagNavigation';
 import type { ResolvedTag } from './useDocTags';
 import { useDocTags } from './useDocTags';
-
-const chipClass = cn(
-  'inline-flex items-center gap-1.5 m-px min-w-0 max-w-[30ch]',
-  'px-2 py-1 leading-tight rounded-full border border-edge-muted bg-surface',
-  'text-ink-muted transition-colors hover:bg-hover hover:text-ink'
-);
 
 function TagChip(props: {
   tag: ResolvedTag;
@@ -56,21 +51,22 @@ function TagChip(props: {
           <Show
             when={props.canEdit}
             fallback={
-              <span class={cn(chipClass, 'cursor-default hover:bg-surface')}>
+              <Badge
+                variant="outline"
+                size="sm"
+                class="m-px min-w-0 max-w-[30ch] gap-1.5 cursor-default"
+              >
                 <TagDot color={props.tag.color} />
                 <span class="min-w-0 truncate">{props.tag.label}</span>
-              </span>
+              </Badge>
             }
           >
-            <TagPicker
+            <TagPill
+              tag={props.tag}
               docTags={props.docTags}
               replaceTag={props.tag}
-              triggerClass={chipClass}
-              triggerLabel={`Change or select tag ${props.tag.label}`}
-            >
-              <TagDot color={props.tag.color} />
-              <span class="min-w-0 truncate">{props.tag.label}</span>
-            </TagPicker>
+              class="m-px max-w-[30ch] gap-1.5"
+            />
           </Show>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
@@ -155,11 +151,11 @@ export function TagsRow(props: {
           <Match when={triggerVariant() === 'pill' && !hasTags()}>
             <TagPicker
               docTags={docTags}
-              triggerClass={cn(
-                'inline-flex items-center gap-1.5 m-px border border-edge-muted bg-surface',
-                'px-2 py-1 leading-tight rounded-full text-ink-muted',
-                'hover:bg-hover hover:text-ink transition-colors'
-              )}
+              triggerClass={badgeTriggerClasses({
+                variant: 'outline',
+                size: 'sm',
+                class: 'm-px gap-1.5',
+              })}
               triggerLabel="Add tags"
             >
               <PlusIcon class="size-3" />
@@ -169,11 +165,11 @@ export function TagsRow(props: {
           <Match when={true}>
             <TagPicker
               docTags={docTags}
-              triggerClass={cn(
-                'inline-flex items-center justify-center rounded-full px-1 py-1 leading-tight',
-                'm-px border border-edge-muted bg-surface text-ink-muted',
-                'transition-colors hover:bg-hover hover:text-ink'
-              )}
+              triggerClass={badgeTriggerClasses({
+                variant: 'outline',
+                size: 'sm',
+                class: 'm-px size-6 p-0',
+              })}
               triggerLabel="Add tags"
             >
               <PlusIcon class="size-3" />

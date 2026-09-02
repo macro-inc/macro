@@ -15,23 +15,7 @@ use crate::workflows::{runners, steps};
 
 /// Build the workflow.
 pub fn push_local_stack_binaries() -> Workflow {
-    let mut push = Push::default().add_branch("main");
-    for path in [
-        xtask_paths::repo_glob!("Cargo.toml"),
-        xtask_paths::repo_glob!("Cargo.lock"),
-        xtask_paths::repo_glob!("rust-toolchain.toml"),
-        xtask_paths::repo_glob!("crates/**"),
-        xtask_paths::repo_glob!("services/**"),
-        xtask_paths::repo_glob!("nix/**"),
-        xtask_paths::repo_glob!("nix-support/**"),
-        xtask_paths::repo_glob!("flake.nix"),
-        xtask_paths::repo_glob!("flake.lock"),
-        xtask_paths::repo_glob!(".github/actions/setup-nix/**"),
-        xtask_paths::repo_glob!(".github/actions/teardown-nix/**"),
-        xtask_paths::repo_glob!(".github/workflows/push_local_stack_binaries.yml"),
-    ] {
-        push = push.add_path(path);
-    }
+    let push = Push::default().add_branch("main");
 
     Workflow::new("Push local stack binaries")
         .permissions(Permissions {

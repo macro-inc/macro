@@ -6,6 +6,7 @@ const listenMock = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
 
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import { createTauriCacheHost } from './tauri-host';
 
 type EventCallback = (event: { payload: Record<string, unknown> }) => void;
@@ -91,7 +92,9 @@ describe('createTauriCacheHost', () => {
     ];
     invokeMock.mockImplementation((command: string) =>
       Promise.resolve(
-        command === 'graphql_cache_read_records_by_keys' ? records : null
+        command === 'graphql_cache_read_records_by_keys'
+          ? { revision: INITIAL_CACHE_REVISION, records }
+          : null
       )
     );
     const host = createTauriCacheHost({ scope: 'scope-1' });
@@ -102,7 +105,7 @@ describe('createTauriCacheHost', () => {
         fragmentName: 'Item',
         keys: ['GraphqlSoupDocument:item-1'],
       })
-    ).resolves.toEqual(records);
+    ).resolves.toEqual({ revision: INITIAL_CACHE_REVISION, records });
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_read_records_by_keys',
       {
@@ -214,17 +217,23 @@ describe('createTauriCacheHost', () => {
       changed: ['A:1'],
       affectedOps: [],
       reset: false,
+      upsertKind: { kind: 'inserted' as const },
       initialClaim: { kind: 'not-runnable' as const },
     };
     invokeMock.mockImplementation((command: string) => {
       if (command === 'graphql_cache_enqueue_optimistic_mutation') {
         return Promise.resolve(optimistic);
       }
-      if (
-        command === 'graphql_cache_commit_optimistic_write' ||
-        command === 'graphql_cache_rollback_optimistic_write'
-      ) {
+      if (command === 'graphql_cache_commit_optimistic_write') {
         return Promise.resolve({ changed: [], affectedOps: [], reset: false });
+      }
+      if (command === 'graphql_cache_rollback_optimistic_write') {
+        return Promise.resolve({
+          kind: 'rolled-back',
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        });
       }
       return Promise.resolve(null);
     });
@@ -242,6 +251,7 @@ describe('createTauriCacheHost', () => {
     };
     const begun = await host.enqueueOptimisticMutation(
       {
+        uuid: '00000000-0000-4000-8000-000000000004',
         query: 'mutation { m }',
         data: { m: 1 },
         linkPatches: [patch],
@@ -256,6 +266,7 @@ describe('createTauriCacheHost', () => {
     expect(invokeMock).toHaveBeenCalledWith(
       'graphql_cache_enqueue_optimistic_mutation',
       expect.objectContaining({
+        uuid: '00000000-0000-4000-8000-000000000004',
         linkPatches: [patch],
         createdAtMs: 123,
         owner: 'runner',
@@ -366,7 +377,9 @@ describe('createTauriCacheHost', () => {
     host.onCacheChanged(() => calls++);
     await Promise.resolve();
 
-    eventCallbacks.get('graphql-cache://cache-changed')?.({ payload: {} });
+    eventCallbacks.get('graphql-cache://cache-changed')?.({
+      payload: { revision: INITIAL_CACHE_REVISION },
+    });
     expect(calls).toBe(1);
   });
 
@@ -441,7 +454,11 @@ describe('createTauriCacheHost', () => {
       let settled = false;
       void host
         .enqueueOptimisticMutation(
-          { query: 'mutation Rename { rename { id } }', data: {} },
+          {
+            uuid: '00000000-0000-4000-8000-000000000101',
+            query: 'mutation Rename { rename { id } }',
+            data: {},
+          },
           { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 1_010 }
         )
         .then(

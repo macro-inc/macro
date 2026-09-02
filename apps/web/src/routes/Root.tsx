@@ -7,12 +7,12 @@ import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnb
 import { setCookie } from '@app/features/auth/Shared';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
-import { SearchProvider } from '@app/features/next-soup/search-context';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
 import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
+import { SearchProvider } from '@app/features/soup/search/context';
 import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   AnalyticsContextProvider,
@@ -32,9 +32,11 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
+import { publishLoginSuccess } from '@core/auth/login-events';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { ENABLE_ONBOARDING_V4_OVERRIDE } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -297,16 +299,12 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login/popup/success',
     component: () => {
-      const channel = new BroadcastChannel('auth');
-
       onMount(() => {
-        channel.postMessage({ type: 'login-success' });
-        channel.close();
+        publishLoginSuccess();
         window.close();
       });
 
       onCleanup(() => {
-        channel.close();
         window.close();
       });
 
@@ -314,10 +312,9 @@ const ROUTES: RouteDefinition[] = [
         <div class="h-full overflow-y-hidden">
           <div class="relative flex flex-row items-center pt-4 h-full">
             <Button
-              variant="base"
+              variant="outline"
               onClick={() => {
-                channel.postMessage({ type: 'login-success' });
-                channel.close();
+                publishLoginSuccess();
                 window.close();
               }}
             >
@@ -412,6 +409,11 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   );
 }
 
+function SoupBackfillSideEffect(props: { userId: string }) {
+  useSoupBackfills(props.userId);
+  return null;
+}
+
 /** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
 function UserInfoSideEffects() {
   const analytics = useAnalytics();
@@ -421,8 +423,6 @@ function UserInfoSideEffects() {
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();
-
-  useSoupBackfills(() => userInfo()?.id);
 
   // Keep the active theme following the OS color scheme when auto-detect is on.
   systemThemeEffect();
@@ -467,7 +467,11 @@ function UserInfoSideEffects() {
     })
   );
 
-  return null;
+  return (
+    <Show when={userInfo()?.id} keyed>
+      {(userId) => <SoupBackfillSideEffect userId={userId} />}
+    </Show>
+  );
 }
 
 const clearBodyInlineStyleColor = () => {
@@ -489,6 +493,10 @@ function InitialInteractiveOnboardingModal() {
 
   const modalOpen = () =>
     open() &&
+    // `just run_local` sets VITE_ENABLE_ONBOARDING_V4=false; without this the
+    // v4-off fallback would still open this legacy modal. Opt in with
+    // `just run_local --enable-onboarding`.
+    ENABLE_ONBOARDING_V4_OVERRIDE !== false &&
     // Onboarding-v4 replaces this modal on desktop; the Layout redirect
     // sends first-time users to /onboarding instead. Desktop waits for the
     // flag to resolve so this doesn't flash before that redirect fires.

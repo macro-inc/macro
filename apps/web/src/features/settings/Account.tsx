@@ -11,6 +11,8 @@ import {
 import {
   DISABLE_AUTO_UPDATE_UI_FLAG,
   ENABLE_AUTO_UPDATE_UI_OVERRIDE,
+  ENABLE_NOTIFICATION_SETTINGS_FLAG,
+  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
   ENABLE_PROFILE_PICTURES,
 } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
@@ -219,7 +221,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 role="button"
                 aria-label="Upload profile picture"
                 onClick={pickProfilePicture}
-                class="flex size-full cursor-pointer items-center justify-center rounded-full bg-edge text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="flex size-full items-center justify-center rounded-full bg-edge text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <IconUpload class="size-5" />
               </span>
@@ -232,7 +234,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 as="div"
                 tabindex="0"
                 aria-label="Edit profile picture"
-                class="group block size-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="group block size-full rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <div class="size-full overflow-hidden rounded-full">
                   <UserIcon
@@ -285,7 +287,7 @@ function ProfilePictureRow(props: { userId: string }) {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 disabled={isRemoving()}
                 onClick={() => setShowRemoveConfirmModal(false)}
@@ -317,6 +319,12 @@ export function Account() {
   const disableAutoUpdateUIFlag = useFeatureFlag(DISABLE_AUTO_UPDATE_UI_FLAG);
   const autoUpdateUIEnabled = createMemo(
     () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
+  );
+  const notificationSettingsFlag = useFeatureFlag(
+    ENABLE_NOTIFICATION_SETTINGS_FLAG,
+    {
+      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+    }
   );
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
@@ -454,7 +462,9 @@ export function Account() {
             <BundleUpdateRow />
           </Show>
 
-          <NotificationToggle />
+          <Show when={!notificationSettingsFlag().enabled}>
+            <NotificationToggle />
+          </Show>
         </SettingsCard>
       </SettingsSection>
 
@@ -464,7 +474,7 @@ export function Account() {
             <div class="px-6 py-3.5">
               <Button
                 fullWidth
-                variant="active"
+                variant="accent"
                 depth={4}
                 onClick={() => logout()}
               >
@@ -567,7 +577,7 @@ export function Account() {
             </div>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 onClick={() => {
                   setShowDeleteModal(false);
@@ -612,7 +622,7 @@ export function Account() {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 disabled={isDeleting()}
                 onClick={() => {
@@ -647,6 +657,48 @@ function Row(props: { label: string; children?: any }) {
       <div class="text-sm">{props.label}</div>
       <div class="text-right">{props.children}</div>
     </div>
+  );
+}
+
+function NotificationToggle() {
+  const settings = useNotificationSettings();
+
+  return (
+    <Show
+      when={settings.isSupported && settings}
+      fallback={<NotificationNotSupported />}
+    >
+      {(s) => <NotificationSettings settings={s()} />}
+    </Show>
+  );
+}
+
+function NotificationSettings(props: {
+  settings: SupportedNotificationSettings;
+}) {
+  const analytics = useAnalytics();
+
+  const handleToggle = (checked: boolean) => {
+    analytics.track('notifications_toggled');
+    props.settings.toggle(checked);
+  };
+
+  return (
+    <Row label="Notifications">
+      <ToggleSwitch
+        size="md"
+        checked={props.settings.isEnabled()}
+        onChange={handleToggle}
+      />
+    </Row>
+  );
+}
+
+function NotificationNotSupported() {
+  return (
+    <Row label="Notifications">
+      <span class="text-sm text-ink-muted">Not supported on this device</span>
+    </Row>
   );
 }
 
@@ -750,48 +802,6 @@ function NameInput(props: {
   );
 }
 
-function NotificationToggle() {
-  const settings = useNotificationSettings();
-
-  return (
-    <Show
-      when={settings.isSupported && settings}
-      fallback={<NotificationNotSupported />}
-    >
-      {(s) => <NotificationSettings settings={s()} />}
-    </Show>
-  );
-}
-
-function NotificationSettings(props: {
-  settings: SupportedNotificationSettings;
-}) {
-  const analytics = useAnalytics();
-
-  const handleToggle = (checked: boolean) => {
-    analytics.track('notifications_toggled');
-    props.settings.toggle(checked);
-  };
-
-  return (
-    <Row label="Notifications">
-      <ToggleSwitch
-        size="md"
-        checked={props.settings.isEnabled()}
-        onChange={handleToggle}
-      />
-    </Row>
-  );
-}
-
-function NotificationNotSupported() {
-  return (
-    <Row label="Notifications">
-      <span class="text-sm text-ink-muted">Not supported on this device</span>
-    </Row>
-  );
-}
-
 function bundleUpdateAction(
   status: BundleUpdateStatus
 ): { label: string; action: () => void } | null {
@@ -862,7 +872,7 @@ function BundleUpdateRow() {
         </span>
         <Show when={action()}>
           {(a) => (
-            <Button variant="active" size="sm" depth={3} onClick={a().action}>
+            <Button variant="accent" size="sm" depth={3} onClick={a().action}>
               {a().label}
             </Button>
           )}

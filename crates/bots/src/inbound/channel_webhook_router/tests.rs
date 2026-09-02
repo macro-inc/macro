@@ -1,7 +1,8 @@
 use super::*;
 use crate::domain::models::{
-    AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
-    CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse, PatchBotRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotKind, BotOwner, BotToken,
+    CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateBotTokenResponse,
+    PatchBotRequest, UpdateAgentRequest,
 };
 use axum::{
     Router,
@@ -12,8 +13,9 @@ use channels::domain::models::PostMessageResponse;
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityPermission,
-        EntityType, ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
+        EntityPermission, EntityType, MemberParticipantRole,
+        ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
 };
@@ -23,7 +25,7 @@ use macro_authorization::{
     BotActingUserClaims as AuthorizationBotActingUserClaims, BotAuthentication, BotAuthorizer,
     BotScope, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
     MacroAuthorizationServiceImpl, MacroAuthorizationState, MacroUserAuthentication,
-    ValidatedIdentity,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use rootcause::Report;
@@ -151,6 +153,27 @@ impl TestBotService {
 }
 
 impl BotService for TestBotService {
+    async fn create_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _req: CreateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn update_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        unimplemented!()
+    }
+
     async fn create_bot(
         &self,
         _caller: MacroUserIdStr<'static>,
@@ -210,8 +233,7 @@ impl BotService for TestBotService {
 
     async fn add_bot_to_channel(
         &self,
-        _caller: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _bot_id: BotId,
     ) -> Result<(), BotError> {
         unimplemented!()
@@ -592,6 +614,7 @@ fn authorization_state(
             default_user_id: None,
         },
         bot_authorizer,
+        NoUserApiKeyAuthorizer,
     );
     MacroAuthorizationState::new(Arc::new(service))
 }
@@ -695,7 +718,7 @@ fn scoped_bot_response(bot_id: BotId) -> CreateChannelScopedBotResponse {
         token: BotToken {
             id: Uuid::new_v4(),
             bot_id,
-            token: bot_token.clone(),
+            token_prefix: "mbot_test".to_string(),
             label: Some("webhook".to_string()),
             last_used_at: None,
             expires_at: None,

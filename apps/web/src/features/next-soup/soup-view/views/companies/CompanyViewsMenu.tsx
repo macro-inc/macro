@@ -299,7 +299,7 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
                   ]}
                 />
                 <Button
-                  variant="base"
+                  variant="outline"
                   size="sm"
                   disabled={!saveName().trim()}
                   onClick={saveCurrentView}

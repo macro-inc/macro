@@ -1,6 +1,8 @@
 import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
 import {
+  CALENDAR_EVENTS_ALIAS,
+  CALENDAR_EVENTS_INDEX,
   CALL_RECORDS_ALIAS,
   CALL_RECORDS_INDEX,
   CHANNELS_ALIAS,
@@ -617,6 +619,140 @@ const PROJECTS_BODY = {
   },
 };
 
+// `calendar_events_v1` is flat: one doc per **series master** (a
+// `calendar_events` row), `_id` = event id. Recurring instances are not
+// indexed — `calendar_event_occurrences` is materialized only inside a
+// rolling window (`calendars.materialized_range`), so a per-occurrence doc
+// would bound a recurring event's searchability to that slice and need
+// rewriting as the window rolls. Search resolves the relevant occurrence at
+// enrichment time instead.
+//
+// Access mirrors the soup predicate: `owner_id` is the event's own per-user
+// projection, and `source_link_id` grants delegates on that inbox.
+const CALENDAR_EVENTS_BODY = {
+  settings: {
+    ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
+    refresh_interval: '1s',
+  },
+  mappings: {
+    dynamic: 'false',
+    properties: {
+      entity_id: {
+        type: 'keyword',
+      },
+      // The series title. Named `name` rather than `title` because the
+      // unified search request highlights a fixed list of field names, and
+      // `name` is the one every other flat index uses — see the `Highlight`
+      // builder in `opensearch_client::search::unified`.
+      name: {
+        type: 'text',
+        fields: {
+          keyword: {
+            type: 'keyword',
+            ignore_above: 128,
+          },
+        },
+      },
+      // Titles Google carries on renamed single instances (exception events
+      // with their own `summary`). Mapped but not yet populated: this index is
+      // `dynamic: false`, so an unmapped field is silently dropped — reserving
+      // it here makes turning renamed instances on a populate + backfill
+      // rather than a mapping migration and reindex (macro-2731).
+      override_names: {
+        type: 'text',
+      },
+      owner_id: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      // The inbox link the canonical source belongs to. Delegated access is
+      // granted through this, OR'd with owner_id at query time.
+      source_link_id: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      // RFC 5545 UID, shared across every attendee's projection of a meeting.
+      ical_uid: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      status: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      is_recurring: {
+        type: 'boolean',
+        index: true,
+        doc_values: true,
+      },
+      organizer_email: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      attendee_emails: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      // Master span. A timed series carries the millis pair; an all-day
+      // series carries the date pair instead.
+      starts_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: true,
+        doc_values: true,
+      },
+      ends_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: true,
+        doc_values: true,
+      },
+      start_date: {
+        type: 'date',
+        format: 'strict_date',
+        index: true,
+        doc_values: true,
+      },
+      end_date: {
+        type: 'date',
+        format: 'strict_date',
+        index: true,
+        doc_values: true,
+      },
+      created_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
+      updated_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
+      // Entity properties (tags, custom). Same nested shape as the documents
+      // index so the shared property/tag query builders apply unchanged.
+      properties: {
+        type: 'nested',
+        properties: {
+          definition_id: { type: 'keyword' },
+          values: { type: 'keyword' },
+          number_value: { type: 'double' },
+          date_value: { type: 'date' },
+        },
+      },
+    },
+  },
+};
+
 // Splits addresses into positioned segment tokens for the `.parts`
 // sub-fields: `Jane.Doe@Mail.Foo.com` -> [jane, doe, mail, foo, com].
 // Same-width space replacements keep highlight offsets aligned, and the
@@ -934,6 +1070,11 @@ export const INDEX_SPECS: CreateIndexArgs[] = [
     body: CALL_RECORDS_V2_BODY,
   },
   { indexName: PROJECTS_INDEX, aliasName: PROJECTS_ALIAS, body: PROJECTS_BODY },
+  {
+    indexName: CALENDAR_EVENTS_INDEX,
+    aliasName: CALENDAR_EVENTS_ALIAS,
+    body: CALENDAR_EVENTS_BODY,
+  },
 ];
 
 /**

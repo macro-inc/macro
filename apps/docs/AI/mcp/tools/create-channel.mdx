@@ -1,0 +1,16 @@
+---
+title: CreateChannel
+description: "Create a private or team channel and add its first members. Use `private` for an invite-only channel and `team` for a channel owned by the current user's team. Do not use this for a direct message — those are created separately. Team id is resolved from the current user; do not invent one. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Creating a team channel when the user has no team fails; create a private channel instead. Creating a team channel with no participants adds the current user so the channel is valid. Use only when the user asks to create a channel."
+---
+
+# CreateChannel
+
+Create a private or team channel and add its first members. Use `private` for an invite-only channel and `team` for a channel owned by the current user's team. Do not use this for a direct message — those are created separately. Team id is resolved from the current user; do not invent one. Participants accept `macro|<email>` ids from ListTeamMembers or bare emails. Creating a team channel when the user has no team fails; create a private channel instead. Creating a team channel with no participants adds the current user so the channel is valid. Use only when the user asks to create a channel.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | Yes | Display name for the new channel. |
+| `channelType` | `"private"` \| `"team"` | Yes | Channel types an agent may create. |
+| `participants` | string[] | No | People to add, as `macro\|<email>` ids or bare emails. Defaults to none. A team channel with an empty list adds the current user. |

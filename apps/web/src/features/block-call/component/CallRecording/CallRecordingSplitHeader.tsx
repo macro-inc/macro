@@ -140,7 +140,7 @@ export function CallRecordingSplitHeader(props: {
             <HeaderIsland>
               <Button
                 depth={2}
-                variant="base"
+                variant="outline"
                 size="icon-xs"
                 class="bg-surface"
                 tooltip="Call Again"

@@ -101,6 +101,8 @@ fn projects_cold_links_and_skips_incomplete_explicit_keys() {
             )
             .await
             .unwrap();
+        assert_eq!(selected.revision, engine.current_revision());
+        assert_eq!(selected.revision.to_string(), "0");
         assert_eq!(selected.len(), 2);
         assert_eq!(selected[0].record["documentId"], json!("a"));
         assert_eq!(
@@ -285,6 +287,7 @@ fn merges_optimistic_updates_with_cold_linked_bases() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000003",
                     query: mutation,
                     operation_name: Some("SetProperty"),
                     variables: &variables,
@@ -344,6 +347,7 @@ fn includes_optimistic_only_records() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000004",
                     query: mutation,
                     operation_name: Some("SetProperty"),
                     variables: &variables,

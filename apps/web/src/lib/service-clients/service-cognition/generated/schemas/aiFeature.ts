@@ -23,4 +23,5 @@ export const AiFeature = {
   ai_projection: 'ai_projection',
   ai_editing: 'ai_editing',
   import: 'import',
+  agent_session: 'agent_session',
 } as const;

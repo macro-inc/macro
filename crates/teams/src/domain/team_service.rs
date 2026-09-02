@@ -303,11 +303,11 @@ where
             .ok();
     }
 
-    async fn enqueue_joining_user_contacts(
+    async fn teammate_ids_except(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) {
+    ) -> Vec<MacroUserIdStr<'static>> {
         let Some(team_with_members) = self
             .team_repository
             .get_team_by_id(team_id)
@@ -317,16 +317,16 @@ where
                     error = ?error,
                     team_id = %team_id,
                     user_id = %user_id,
-                    "failed to load team roster for contact connections"
+                    "failed to load team roster for joining-member side effects"
                 );
             })
             .ok()
         else {
-            return;
+            return Vec::new();
         };
 
         let joining_user = user_id.clone().into_owned();
-        let teammates: HashSet<_> = std::iter::once(team_with_members.team.owner_id)
+        let mut teammate_ids = std::iter::once(team_with_members.team.owner_id)
             .chain(
                 team_with_members
                     .members
@@ -334,15 +334,28 @@ where
                     .map(|member| member.user_id),
             )
             .filter(|teammate| teammate != &joining_user)
-            .collect();
-        let connections = teammates
+            .collect::<HashSet<_>>()
             .into_iter()
-            .map(|teammate| (joining_user.clone(), teammate))
             .collect::<Vec<_>>();
+        teammate_ids.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+        teammate_ids
+    }
 
-        if connections.is_empty() {
+    async fn enqueue_joining_user_contacts(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        teammate_ids: &[MacroUserIdStr<'static>],
+    ) {
+        if teammate_ids.is_empty() {
             return;
         }
+
+        let joining_user = user_id.clone().into_owned();
+        let connections = teammate_ids
+            .iter()
+            .cloned()
+            .map(|teammate| (joining_user.clone(), teammate))
+            .collect::<Vec<_>>();
 
         self.contacts_enqueuer
             .enqueue_contact_connections(connections)
@@ -350,7 +363,6 @@ where
             .inspect_err(|error| {
                 tracing::error!(
                     error = ?error,
-                    team_id = %team_id,
                     user_id = %user_id,
                     "failed to enqueue team contact connections"
                 );
@@ -1417,7 +1429,10 @@ where
             );
         }
 
-        self.enqueue_joining_user_contacts(&team_member.team_id, user_id)
+        let teammate_ids = self
+            .teammate_ids_except(&team_member.team_id, user_id)
+            .await;
+        self.enqueue_joining_user_contacts(user_id, &teammate_ids)
             .await;
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamJoined {
@@ -1430,6 +1445,7 @@ where
         self.publish_team_event(&TeamMacroEvent::member_joined(TeamMemberJoinedMetadata {
             team_id: team_member.team_id,
             member_id: team_member.user_id.clone().into_owned(),
+            teammate_ids,
             role: team_member.role,
             join_method: TeamJoinMethod::InviteAccepted {
                 invite_id: accepted_invite.invite.id,
@@ -1992,13 +2008,16 @@ where
             );
         }
 
-        self.enqueue_joining_user_contacts(&team_id, user_id).await;
+        let teammate_ids = self.teammate_ids_except(&team_id, user_id).await;
+        self.enqueue_joining_user_contacts(user_id, &teammate_ids)
+            .await;
 
         // NOTE: no TeamJoined analytics event here - that event is tied to
         // the team invite that was accepted, and a domain auto-join has none.
         self.publish_team_event(&TeamMacroEvent::member_joined(TeamMemberJoinedMetadata {
             team_id,
             member_id: team_member.user_id.clone().into_owned(),
+            teammate_ids,
             role: team_member.role,
             join_method: TeamJoinMethod::DomainAutoJoin,
         }));

@@ -3,14 +3,17 @@ import {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from '@core/user/combinedRecipient';
+import { TZDateMini } from '@date-fns/tz';
 import type { ConferenceChange } from '@service-email/generated/schemas/conferenceChange';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
+import type { EventType } from '@service-storage/generated/schemas/eventType';
 import {
   addDays,
   addHours,
   differenceInCalendarDays,
+  endOfDay,
   format,
   parseISO,
   startOfHour,
@@ -71,6 +74,8 @@ export interface EventEditorInitialValues {
   conference: EventEditorConferenceChoice;
   /** Per-user reminder configuration; absent means the calendar default. */
   reminders?: EventReminders;
+  /** Provider event type of the edited event; absent for new events. */
+  eventType?: EventType;
 }
 
 /** Calendar option displayed by the event editor. */
@@ -132,6 +137,7 @@ export function defaultEditorInitialValues(
     description: '',
     conference: 'none',
     reminders: undefined,
+    eventType: undefined,
   };
 }
 
@@ -167,14 +173,23 @@ function initialConferenceChoice(
     : 'existing';
 }
 
+/**
+ * Guest emails an existing event seeds into the editor: every attendee except
+ * the viewer when they are a mere guest. The organizer is kept even when it is
+ * the viewer, so a replacement attendee list submitted by the organizer never
+ * drops them.
+ */
+export function eventGuestEmails(event: CalendarEvent): string[] {
+  return event.attendees
+    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
+    .map((attendee) => attendee.email);
+}
+
 /** Converts an existing event into values for the shared editor. */
 export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
-  const guests = event.attendees
-    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
-    .map((attendee) => attendee.email)
-    .join(', ');
+  const guests = eventGuestEmails(event).join(', ');
 
   if (event.allDay) {
     const start = isDateOnly(event.start)
@@ -195,6 +210,7 @@ export function calendarEventToEditorInitialValues(
       description: event.description ?? '',
       conference: initialConferenceChoice(event),
       reminders: event.reminders,
+      eventType: event.eventType,
     };
   }
 
@@ -210,6 +226,7 @@ export function calendarEventToEditorInitialValues(
     description: event.description ?? '',
     conference: initialConferenceChoice(event),
     reminders: event.reminders,
+    eventType: event.eventType,
   };
 }
 
@@ -242,6 +259,29 @@ export function buildEventTime(
     endsAt: end.toISOString(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
+}
+
+/** Copy shown when guests would be invited to an event that already ended. */
+export const PAST_EVENT_GUESTS_WARNING =
+  'This event has already ended — guests will still be invited.';
+
+/** When the edited range ends, or `undefined` while the range does not parse. */
+export function eventEndsAt(state: EventEditorInitialValues): Date | undefined {
+  if (state.allDay) {
+    const end = parseLocalDate(state.end);
+    return end ? endOfDay(end) : undefined;
+  }
+  const end = new Date(state.end);
+  return Number.isNaN(end.getTime()) ? undefined : end;
+}
+
+/** Whether the edited range finished before `now`. In-progress events do not. */
+export function eventHasEnded(
+  state: EventEditorInitialValues,
+  now = new Date()
+) {
+  const endsAt = eventEndsAt(state);
+  return endsAt !== undefined && endsAt.getTime() < now.getTime();
 }
 
 function parseGuestEmails(value: string) {
@@ -320,17 +360,24 @@ export function moveAllDayRange(
 export interface CreateEventEditorStateOptions {
   initialValues: EventEditorInitialValues;
   state: Accessor<EventEditorInitialValues>;
+  recurrenceTimeZone?: string;
 }
 
-function recurrenceConfigFor(values: EventEditorInitialValues) {
+function recurrenceConfigFor(
+  values: EventEditorInitialValues,
+  timeZone?: string
+) {
   return values.recurrenceLines.length > 0
-    ? parseRecurrenceConfig(values.recurrenceLines)
+    ? parseRecurrenceConfig(values.recurrenceLines, timeZone)
     : undefined;
 }
 
-function recurrenceChoiceFor(values: EventEditorInitialValues) {
+function recurrenceChoiceFor(
+  values: EventEditorInitialValues,
+  timeZone?: string
+) {
   if (values.recurrenceLines.length === 0) return 'none';
-  const config = recurrenceConfigFor(values);
+  const config = recurrenceConfigFor(values, timeZone);
   if (!config) return 'existing';
   const start = values.allDay ? parseISO(values.start) : new Date(values.start);
   const preset = recurrencePresetsFor(start).find((candidate) =>
@@ -342,18 +389,23 @@ function recurrenceChoiceFor(values: EventEditorInitialValues) {
 /** Shared recurrence and validation state used by event editor layouts. */
 export function createEventEditorState(options: CreateEventEditorStateOptions) {
   const [initialValues, setInitialValues] = createSignal(options.initialValues);
-  const initialConfig = createMemo(() => recurrenceConfigFor(initialValues()));
+  const initialConfig = createMemo(() =>
+    recurrenceConfigFor(initialValues(), options.recurrenceTimeZone)
+  );
   const hasUnrepresentableRule = () =>
     initialValues().recurrenceLines.length > 0 && !initialConfig();
 
   const startForRecurrence = createMemo(() => {
-    const start = options.state().start;
-    const parsed = options.state().allDay ? parseISO(start) : new Date(start);
-    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    const state = options.state();
+    const parsed = state.allDay ? parseISO(state.start) : new Date(state.start);
+    if (Number.isNaN(parsed.getTime())) return new Date();
+    return !state.allDay && options.recurrenceTimeZone
+      ? TZDateMini.tz(options.recurrenceTimeZone, parsed)
+      : parsed;
   });
   const presets = createMemo(() => recurrencePresetsFor(startForRecurrence()));
   const [recurrenceChoice, setRecurrenceChoice] = createSignal(
-    recurrenceChoiceFor(options.initialValues)
+    recurrenceChoiceFor(options.initialValues, options.recurrenceTimeZone)
   );
   const recurrenceOptions = createMemo<EventEditorRecurrenceOption[]>(() => {
     const values = [
@@ -409,11 +461,19 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     if (choice === 'existing') return undefined;
     if (choice === 'none') return [];
     if (choice === 'custom') {
-      return buildRecurrenceLines(customConfig(), options.state().allDay);
+      return buildRecurrenceLines(
+        customConfig(),
+        options.state().allDay,
+        options.recurrenceTimeZone
+      );
     }
     const preset = presets().find((candidate) => candidate.id === choice);
     return preset
-      ? buildRecurrenceLines(preset.config, options.state().allDay)
+      ? buildRecurrenceLines(
+          preset.config,
+          options.state().allDay,
+          options.recurrenceTimeZone
+        )
       : undefined;
   };
   const dateRangeError = createMemo(() => {
@@ -439,9 +499,12 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
   const replaceInitialValues = (next: EventEditorInitialValues) => {
     batch(() => {
       setInitialValues(() => next);
-      setRecurrenceChoice(recurrenceChoiceFor(next));
+      setRecurrenceChoice(
+        recurrenceChoiceFor(next, options.recurrenceTimeZone)
+      );
       setCustomConfig(
-        recurrenceConfigFor(next) ?? defaultCustomConfig(startForRecurrence())
+        recurrenceConfigFor(next, options.recurrenceTimeZone) ??
+          defaultCustomConfig(startForRecurrence())
       );
     });
   };

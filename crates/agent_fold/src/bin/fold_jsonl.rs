@@ -380,6 +380,7 @@ fn render_stop(stop: &StopReason) -> String {
         StopReason::Refusal => "refused".to_owned(),
         StopReason::Cancelled => "cancelled".to_owned(),
         StopReason::Other { reason } => format!("stopped: {reason}"),
+        StopReason::Failed { message } => format!("failed: {message}"),
     }
 }
 

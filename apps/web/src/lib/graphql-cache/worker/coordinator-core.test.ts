@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import { type CoordinatorAction, CoordinatorCore } from './coordinator-core';
 import type { DatabaseActionProof } from './coordinator-protocol';
 
@@ -168,8 +169,16 @@ describe('CoordinatorCore', () => {
     core.beginGracefulDeparture('tab-a', 1);
     expect(core.request('tab-b', clear(5))).toEqual([]);
     expect(core.snapshot().queuedRequestCount).toBe(1);
-    expect(core.enginePush(1, { kind: 'cache-changed' })).toEqual([
-      { kind: 'broadcast-push', push: { kind: 'cache-changed' } },
+    expect(
+      core.enginePush(1, {
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      })
+    ).toEqual([
+      {
+        kind: 'broadcast-push',
+        push: { kind: 'cache-changed', revision: INITIAL_CACHE_REVISION },
+      },
     ]);
     expect(
       core.engineResponse(1, routed.routeId, {
@@ -254,12 +263,88 @@ describe('CoordinatorCore', () => {
         reason: 'unknown-route',
       })
     );
-    expect(core.enginePush(0, { kind: 'cache-changed' })).toContainEqual(
+    expect(
+      core.enginePush(0, {
+        kind: 'cache-changed',
+        revision: INITIAL_CACHE_REVISION,
+      })
+    ).toContainEqual(
       expect.objectContaining({
         kind: 'drop-stale-engine-message',
         reason: 'stale-epoch',
       })
     );
+  });
+
+  it('preserves storage across an intentional navigation departure', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.request('tab-b', clear(9));
+
+    const departure = core.departForNavigation('tab-a', 1, 'page navigation');
+    expect(departure).toContainEqual({
+      kind: 'reject-request',
+      tabId: 'tab-b',
+      requestId: 9,
+      error: 'owner epoch 1 departed for navigation: page navigation',
+      errorCode: 'owner-epoch-lost',
+    });
+    expect(action(departure, 'elect-owner')).toEqual({
+      kind: 'elect-owner',
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+      databaseAction: 'open-existing',
+    });
+  });
+
+  it('does not downgrade an interrupted recovery activation to open-existing', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.ownerLost('tab-a', 1, 'engine failed');
+    expect(action(core.resumeAfterLoss(), 'elect-owner')).toMatchObject({
+      tabId: 'tab-b',
+      ownerEpoch: 2,
+      databaseAction: 'wipe-before-open',
+    });
+
+    expect(
+      action(
+        core.departForNavigation('tab-b', 2, 'recovery owner navigated'),
+        'elect-owner'
+      )
+    ).toEqual({
+      kind: 'elect-owner',
+      tabId: 'tab-a',
+      ownerEpoch: 3,
+      databaseAction: 'wipe-before-open',
+    });
+  });
+
+  it('retains open-existing when a navigating owner has no standby', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    ready(core, 'tab-a', 1, 'opened-existing');
+
+    expect(core.departForNavigation('tab-a', 1, 'refresh')).toEqual([
+      { kind: 'close-engine-route', tabId: 'tab-a', ownerEpoch: 1 },
+      { kind: 'drop-tab', tabId: 'tab-a' },
+    ]);
+    expect(core.state).toEqual({
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: 'open-existing',
+    });
+    expect(core.registerTab('tab-b')).toEqual([
+      {
+        kind: 'elect-owner',
+        tabId: 'tab-b',
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      },
+    ]);
   });
 
   it('uses standby liveness loss without failover and owner liveness loss with wipe', () => {

@@ -10,6 +10,7 @@ import {
   type EntityIconSelector,
   isArchiveType,
 } from '@core/component/EntityIcon';
+import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
@@ -28,6 +29,7 @@ import {
   type Component,
   createEffect,
   createMemo,
+  createSignal,
   For,
   type JSX,
   type ParentProps,
@@ -48,11 +50,21 @@ export function StaticSplitLabel(props: {
   badges?: JSX.Element;
   class?: string;
   colorIcon?: boolean;
+  /** Enables double-click renaming while retaining the split title/menu
+   * chrome. */
+  onRename?: (name: string) => void;
+  renameAriaLabel?: string;
 }) {
   const panel = useSplitPanelOrThrow();
+  const [renaming, setRenaming] = createSignal(false);
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
+  const startRename = (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setRenaming(true);
+  };
   const openTitleFileMenu = (e: MouseEvent) => {
     if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
@@ -63,10 +75,7 @@ export function StaticSplitLabel(props: {
   };
   return (
     <SplitLabelContextMenu>
-      <HeaderIsland
-        class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
-        onClick={openTitleFileMenu}
-      >
+      <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div
           class={cn(
             'z-split-header-content relative flex items-center gap-2 max-w-full h-full shrink',
@@ -86,9 +95,46 @@ export function StaticSplitLabel(props: {
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <span class="inline-flex min-w-0 items-center gap-1">
-            <span class="inline-block truncate text-sm font-semibold">
-              {props.label}
-            </span>
+            <Show
+              when={props.onRename}
+              fallback={
+                <span class="inline-block truncate text-sm font-semibold">
+                  {props.label}
+                </span>
+              }
+            >
+              {(onRename) => (
+                <Show
+                  when={renaming()}
+                  fallback={
+                    <span
+                      class="inline-block truncate text-sm font-semibold"
+                      onDblClick={startRename}
+                      onClick={(event) => {
+                        if (isTouchDevice()) startRename(event);
+                      }}
+                    >
+                      {props.label}
+                    </span>
+                  }
+                >
+                  <span
+                    onClick={(event) => event.stopPropagation()}
+                    onDblClick={(event) => event.stopPropagation()}
+                  >
+                    <InlineTitleEditor
+                      value={props.label}
+                      placeholder="Untitled"
+                      ariaLabel={props.renameAriaLabel ?? 'Rename'}
+                      onRename={onRename()}
+                      class="text-sm"
+                      autofocus
+                      onExit={() => setRenaming(false)}
+                    />
+                  </span>
+                </Show>
+              )}
+            </Show>
             <Show when={panel.titleFileMenuTrigger()}>
               <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted touch:block" />
             </Show>
@@ -222,10 +268,7 @@ export function BlockItemSplitLabel(props: {
 
   return (
     <SplitLabelContextMenu>
-      <HeaderIsland
-        class={cn('shrink', panel.titleFileMenuTrigger() && 'cursor-pointer')}
-        onClick={openTitleFileMenu}
-      >
+      <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
           <Show when={props.badges}>{props.badges}</Show>

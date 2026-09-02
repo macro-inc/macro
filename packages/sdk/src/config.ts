@@ -3,6 +3,7 @@ export type Env = 'dev' | 'prod' | 'local';
 /** The backend services the SDK talks to. Note `search` and `properties` are
  * served on the storage host, so they point there. */
 export type ServiceName =
+  | 'agent-harness'
   | 'storage'
   | 'auth'
   | 'email'
@@ -24,34 +25,37 @@ export const WEB_APP_URLS: Record<Env, string> = {
 
 export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   dev: {
-    storage: 'https://cloud-storage-dev.macro.com',
+    'agent-harness': 'https://agent-harness-dev.macro.com',
+    storage: 'https://dev-gateway.macro.com/dss',
     auth: 'https://auth-service-dev.macro.com',
     email: 'https://email-service-dev.macro.com',
     cognition: 'https://document-cognition-dev.macro.com',
-    notification: 'https://notifications-dev.macro.com',
-    properties: 'https://cloud-storage-dev.macro.com',
-    search: 'https://cloud-storage-dev.macro.com',
+    notification: 'https://dev-gateway.macro.com/notification',
+    properties: 'https://dev-gateway.macro.com/dss',
+    search: 'https://dev-gateway.macro.com/dss',
     'scheduled-action': 'https://agent-schedule-dev.macro.com',
     'static-files': 'https://static-file-service-dev.macro.com',
     connection: 'https://connection-gateway-dev.macro.com',
-    contacts: 'https://contacts-dev.macro.com',
-    unfurl: 'https://unfurl-service-dev.macro.com',
+    contacts: 'https://dev-gateway.macro.com/contacts',
+    unfurl: 'https://dev-gateway.macro.com/unfurl',
   },
   prod: {
-    storage: 'https://cloud-storage.macro.com',
+    'agent-harness': 'https://agent-harness.macro.com',
+    storage: 'https://gateway.macro.com/dss',
     auth: 'https://auth-service.macro.com',
     email: 'https://email-service.macro.com',
     cognition: 'https://document-cognition.macro.com',
-    notification: 'https://notifications.macro.com',
-    properties: 'https://cloud-storage.macro.com',
-    search: 'https://cloud-storage.macro.com',
+    notification: 'https://gateway.macro.com/notification',
+    properties: 'https://gateway.macro.com/dss',
+    search: 'https://gateway.macro.com/dss',
     'scheduled-action': 'https://agent-schedule.macro.com',
     'static-files': 'https://static-file-service.macro.com',
     connection: 'https://connection-gateway.macro.com',
-    contacts: 'https://contacts.macro.com',
-    unfurl: 'https://unfurl-service.macro.com',
+    contacts: 'https://gateway.macro.com/contacts',
+    unfurl: 'https://gateway.macro.com/unfurl',
   },
   local: {
+    'agent-harness': 'http://localhost:8101',
     storage: 'http://localhost:8086',
     auth: 'http://localhost:8080',
     email: 'http://localhost:8087',
@@ -102,7 +106,12 @@ export interface MacroOpts {
   hosts?: Partial<Record<ServiceName, string>>;
   /** Override the web app base URL (e.g. for local frontend dev). Also reads MACRO_WEB_URL. */
   webAppUrl?: string;
-  /** Signing secret for verifying incoming webhooks. Falls back to MACRO_WEBHOOK_SECRET. */
+  /**
+   * Signing secret for verifying incoming persisted-webhook deliveries.
+   * Required only for `macro.events.webhook()` / `macro.events.handle()`.
+   * SSE via `macro.events.listen()` uses the API token and does not need
+   * this. Falls back to MACRO_WEBHOOK_SECRET.
+   */
   webhookSecret?: string;
   wsVerify?: string;
   /** User id the bot acts for, sent as `x-macro-bot-for-macro-user-id` on

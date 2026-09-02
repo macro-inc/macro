@@ -116,6 +116,7 @@ function CalendarScrollIndicators(props: {
           <ScrollIndicators
             scrollRef={() => scrollTarget.scrollElement}
             appearance="gradient"
+            gradientColor="panel"
             class="h-6"
           />
         </Portal>
@@ -161,7 +162,7 @@ function CalendarPageDataStatus(props: { data: CalendarOccurrenceData }) {
                   We couldn’t load your calendar events. Try again.
                 </p>
                 <Button
-                  variant="active"
+                  variant="accent"
                   size="sm"
                   label="Retry loading calendar"
                   onClick={() => void props.data.occurrencesQuery.refetch()}

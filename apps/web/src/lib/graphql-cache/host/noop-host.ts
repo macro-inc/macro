@@ -1,11 +1,15 @@
 import type {
+  CommitOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   ReadResult,
   WriteResult,
 } from '../protocol';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 import type { CacheHost } from './types';
 
 const emptyWriteResult = (): WriteResult => ({
+  revision: INITIAL_CACHE_REVISION,
+  revisionAdvanced: false,
   changed: [],
   affectedOps: [],
   reset: false,
@@ -22,11 +26,14 @@ export function createNoopCacheHost(reason: string): CacheHost {
   return {
     clientId: 'noop',
     disabled: true,
+    async currentRevision() {
+      return INITIAL_CACHE_REVISION;
+    },
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
     },
     async readRecordsByKeys() {
-      return [];
+      return { revision: INITIAL_CACHE_REVISION, records: [] };
     },
     async search() {
       return { documents: [], nextCursor: null };
@@ -52,25 +59,32 @@ export function createNoopCacheHost(reason: string): CacheHost {
     async claimNextMutation() {
       return undefined;
     },
-    async deferOptimisticWrite(): Promise<void> {},
-    async commitOptimisticWrite(): Promise<WriteResult> {
-      return emptyWriteResult();
+    async deferOptimisticWrite() {
+      return { kind: 'deferred' } as const;
     },
-    async rollbackOptimisticWrite(): Promise<WriteResult> {
-      return emptyWriteResult();
+    async commitOptimisticWrite(): Promise<CommitOptimisticWriteResult> {
+      return { kind: 'committed', ...emptyWriteResult() };
     },
-    async invalidate(): Promise<string[]> {
-      return [];
+    async rollbackOptimisticWrite() {
+      return { kind: 'rolled-back' as const, ...emptyWriteResult() };
     },
-    async deleteRecords(): Promise<string[]> {
-      return [];
+    async invalidate() {
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
+    },
+    async deleteRecords() {
+      return { revision: INITIAL_CACHE_REVISION, affectedOps: [] };
     },
     async teardown(): Promise<void> {},
-    async clear(): Promise<void> {},
+    async clear() {
+      return INITIAL_CACHE_REVISION;
+    },
     onOpsAffected() {
       return () => undefined;
     },
     onCacheChanged() {
+      return () => undefined;
+    },
+    onCacheGenerationChanged() {
       return () => undefined;
     },
     onMutationSettled() {

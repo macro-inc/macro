@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id AS call_id,\n                c.channel_id,\n                c.created_by,\n                c.created_at,\n                p.participant_count AS \"participant_count!\"\n            FROM calls c\n            JOIN LATERAL (\n                SELECT COUNT(*) AS participant_count\n                FROM call_participants cp\n                WHERE cp.call_id = c.id AND cp.left_at IS NULL\n            ) p ON p.participant_count > 0\n            WHERE EXISTS (\n                SELECT 1 FROM comms_channel_participants ccp\n                WHERE ccp.channel_id = c.channel_id\n                  AND ccp.user_id = $1\n                  AND ccp.left_at IS NULL\n            )\n            ORDER BY c.created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "call_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "participant_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "4383d1ee28161d9116e25e91ac21f6192d63679fcc2a10132c2de7358c638fa2"
+}

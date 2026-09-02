@@ -828,6 +828,9 @@
           nsc
           parallel
           docker-compose
+          # `just run_local` opens a quick tunnel to the agent egress proxy so
+          # Cursor cloud agents can dial a local stack's MCP servers.
+          cloudflared
           curl
           openssh
           wget
@@ -887,7 +890,9 @@
           doppler
           biome
           jq
-          stripe-cli
+          # TEMP: nixpkgs stripe-cli 1.43.2 checkPhase fails in the sandbox
+          # (TestResolvePluginForInstallSucceedsForGAPluginWhenNotLoggedIn).
+          # stripe-cli
           sccache
           rustToolchain
           python3
@@ -1071,6 +1076,25 @@
               BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
             }
           );
+
+        # Keep release builds independent of optional developer tools in the
+        # default shell. In particular, adding Hermes there must not make
+        # macrod releases fetch or realize Hermes and its Python/npm closure.
+        agent-daemon = pkgs.mkShell {
+          packages = [
+            rustToolchain
+            pkgs.cargo-zigbuild
+            pkgs.zig
+            pkgs.cmake
+            pkgs.perl
+            pkgs.pkg-config
+            pkgs.sccache
+            nsc
+          ];
+          RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+          CARGO_INCREMENTAL = "0";
+          AWS_LC_SYS_CMAKE_BUILDER = "1";
+        };
       };
     };
 }

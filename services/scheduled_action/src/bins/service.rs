@@ -8,7 +8,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState,
+    MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::ConnectionGatewayUrl;
@@ -121,6 +121,7 @@ async fn main() -> Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     );
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
 

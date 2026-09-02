@@ -46,7 +46,7 @@ export function ThemeEditor(props: {
           <ThemeTokenEditor />
         </div>
         <div class="flex justify-end">
-          <Button variant="base" size="sm" onClick={props.onSave}>
+          <Button variant="outline" size="sm" onClick={props.onSave}>
             Save theme
           </Button>
         </div>

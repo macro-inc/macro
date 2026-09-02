@@ -16,13 +16,22 @@ type ToolParserMap = {
     call: types.BulkSetEntityPropertyOptions;
     response: types.BulkSetEntityPropertyOptionsResponse;
   };
+  ConfigureBot: {
+    call: types.ConfigureBot;
+    response: types.ConfigureBotResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  CreateBot: { call: types.CreateBot; response: types.CreateBotResponse };
   CreateCalendarEvent: {
     call: types.CreateCalendarEvent;
     response: types.UserToolResponseForToolCalendarEvent;
+  };
+  CreateChannel: {
+    call: types.CreateChannel;
+    response: types.CreateChannelResponse;
   };
   CreateDocument: {
     call: types.CreateDocument;
@@ -38,6 +47,7 @@ type ToolParserMap = {
   };
   CreateReminder: { call: types.CreateReminder; response: types.ToolReminder };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteBot: { call: types.DeleteBot; response: types.DeleteBotResponse };
   DeleteCalendarEvent: {
     call: types.DeleteCalendarEvent;
     response: types.DeleteCalendarEventResponse;
@@ -60,6 +70,10 @@ type ToolParserMap = {
     response: types.EditDocumentResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
+  GetBotWebhooks: {
+    call: types.GetBotWebhooks;
+    response: types.GetBotWebhooksResponse;
+  };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
@@ -70,6 +84,11 @@ type ToolParserMap = {
     call: types.ImportNotionPage;
     response: types.ImportNotionPageResponse;
   };
+  IssueBotCredential: {
+    call: types.IssueBotCredential;
+    response: types.IssueBotCredentialResponse;
+  };
+  ListBots: { call: types.ListBots; response: types.ListBotsResponse };
   ListCalendarEvents: {
     call: types.ListCalendarEvents;
     response: types.ListCalendarEventsResponse;
@@ -107,6 +126,14 @@ type ToolParserMap = {
     response: types.ListTeamMembersResponse;
   };
   LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
+  ManageBotChannelAccess: {
+    call: types.ManageBotChannelAccess;
+    response: types.ManageBotChannelAccessResponse;
+  };
+  ManageChannelParticipants: {
+    call: types.ManageChannelParticipants;
+    response: types.ManageChannelParticipantsResponse;
+  };
   MarkNotificationsDone: {
     call: types.MarkNotificationsDone;
     response: types.MarkNotificationsResponse;
@@ -120,6 +147,10 @@ type ToolParserMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  ReadActivity: {
+    call: types.ReadActivity;
+    response: types.ReadActivityResponse;
+  };
   ReadCallRecord: {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
@@ -144,6 +175,10 @@ type ToolParserMap = {
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameChannel: {
+    call: types.RenameChannel;
+    response: types.RenameChannelResponse;
+  };
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
@@ -168,6 +203,10 @@ type ToolParserMap = {
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
+  };
+  SetSenderPolicy: {
+    call: types.SetSenderPolicy;
+    response: types.SetSenderPolicyResponse;
   };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {
@@ -196,13 +235,22 @@ const toolParserMap = {
     call: schemas.BulkSetEntityPropertyOptions,
     response: schemas.BulkSetEntityPropertyOptionsResponse,
   },
+  ConfigureBot: {
+    call: schemas.ConfigureBot,
+    response: schemas.ConfigureBotResponse,
+  },
   ContentSearch: {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
   },
+  CreateBot: { call: schemas.CreateBot, response: schemas.CreateBotResponse },
   CreateCalendarEvent: {
     call: schemas.CreateCalendarEvent,
     response: schemas.UserToolResponseForToolCalendarEvent,
+  },
+  CreateChannel: {
+    call: schemas.CreateChannel,
+    response: schemas.CreateChannelResponse,
   },
   CreateDocument: {
     call: schemas.CreateDocument,
@@ -221,6 +269,7 @@ const toolParserMap = {
     response: schemas.ToolReminder,
   },
   CreateTag: { call: schemas.CreateTag, response: schemas.CreateTagResponse },
+  DeleteBot: { call: schemas.DeleteBot, response: schemas.DeleteBotResponse },
   DeleteCalendarEvent: {
     call: schemas.DeleteCalendarEvent,
     response: schemas.DeleteCalendarEventResponse,
@@ -243,6 +292,10 @@ const toolParserMap = {
     response: schemas.EditDocumentResponse,
   },
   EditTag: { call: schemas.EditTag, response: schemas.EditTagResponse },
+  GetBotWebhooks: {
+    call: schemas.GetBotWebhooks,
+    response: schemas.GetBotWebhooksResponse,
+  },
   GetCompany: {
     call: schemas.GetCompany,
     response: schemas.GetCompanyResponse,
@@ -256,6 +309,11 @@ const toolParserMap = {
     call: schemas.ImportNotionPage,
     response: schemas.ImportNotionPageResponse,
   },
+  IssueBotCredential: {
+    call: schemas.IssueBotCredential,
+    response: schemas.IssueBotCredentialResponse,
+  },
+  ListBots: { call: schemas.ListBots, response: schemas.ListBotsResponse },
   ListCalendarEvents: {
     call: schemas.ListCalendarEvents,
     response: schemas.ListCalendarEventsResponse,
@@ -302,6 +360,14 @@ const toolParserMap = {
     response: schemas.ListTeamMembersResponse,
   },
   LoadTools: { call: schemas.LoadTools, response: schemas.LoadToolsResponse },
+  ManageBotChannelAccess: {
+    call: schemas.ManageBotChannelAccess,
+    response: schemas.ManageBotChannelAccessResponse,
+  },
+  ManageChannelParticipants: {
+    call: schemas.ManageChannelParticipants,
+    response: schemas.ManageChannelParticipantsResponse,
+  },
   MarkNotificationsDone: {
     call: schemas.MarkNotificationsDone,
     response: schemas.MarkNotificationsResponse,
@@ -317,6 +383,10 @@ const toolParserMap = {
   NameSearch: {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
+  },
+  ReadActivity: {
+    call: schemas.ReadActivity,
+    response: schemas.ReadActivityResponse,
   },
   ReadCallRecord: {
     call: schemas.ReadCallRecord,
@@ -348,6 +418,10 @@ const toolParserMap = {
     response: schemas.ReadProjectResponse,
   },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
+  RenameChannel: {
+    call: schemas.RenameChannel,
+    response: schemas.RenameChannelResponse,
+  },
   RenameDocument: {
     call: schemas.RenameDocument,
     response: schemas.RenameDocumentResponse,
@@ -375,6 +449,10 @@ const toolParserMap = {
   SetEntityProperty: {
     call: schemas.SetEntityProperty,
     response: schemas.SetEntityPropertyResponse,
+  },
+  SetSenderPolicy: {
+    call: schemas.SetSenderPolicy,
+    response: schemas.SetSenderPolicyResponse,
   },
   Subagent: { call: schemas.Subagent, response: schemas.SubagentResponse },
   TextEditorCodeExecution: {
@@ -414,13 +492,22 @@ type ToolDataMap = {
     call: types.BulkSetEntityPropertyOptions;
     response: types.BulkSetEntityPropertyOptionsResponse;
   };
+  ConfigureBot: {
+    call: types.ConfigureBot;
+    response: types.ConfigureBotResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  CreateBot: { call: types.CreateBot; response: types.CreateBotResponse };
   CreateCalendarEvent: {
     call: types.CreateCalendarEvent;
     response: types.UserToolResponseForToolCalendarEvent;
+  };
+  CreateChannel: {
+    call: types.CreateChannel;
+    response: types.CreateChannelResponse;
   };
   CreateDocument: {
     call: types.CreateDocument;
@@ -436,6 +523,7 @@ type ToolDataMap = {
   };
   CreateReminder: { call: types.CreateReminder; response: types.ToolReminder };
   CreateTag: { call: types.CreateTag; response: types.CreateTagResponse };
+  DeleteBot: { call: types.DeleteBot; response: types.DeleteBotResponse };
   DeleteCalendarEvent: {
     call: types.DeleteCalendarEvent;
     response: types.DeleteCalendarEventResponse;
@@ -458,6 +546,10 @@ type ToolDataMap = {
     response: types.EditDocumentResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
+  GetBotWebhooks: {
+    call: types.GetBotWebhooks;
+    response: types.GetBotWebhooksResponse;
+  };
   GetCompany: { call: types.GetCompany; response: types.GetCompanyResponse };
   GetEntityProperties: {
     call: types.GetEntityProperties;
@@ -468,6 +560,11 @@ type ToolDataMap = {
     call: types.ImportNotionPage;
     response: types.ImportNotionPageResponse;
   };
+  IssueBotCredential: {
+    call: types.IssueBotCredential;
+    response: types.IssueBotCredentialResponse;
+  };
+  ListBots: { call: types.ListBots; response: types.ListBotsResponse };
   ListCalendarEvents: {
     call: types.ListCalendarEvents;
     response: types.ListCalendarEventsResponse;
@@ -505,6 +602,14 @@ type ToolDataMap = {
     response: types.ListTeamMembersResponse;
   };
   LoadTools: { call: types.LoadTools; response: types.LoadToolsResponse };
+  ManageBotChannelAccess: {
+    call: types.ManageBotChannelAccess;
+    response: types.ManageBotChannelAccessResponse;
+  };
+  ManageChannelParticipants: {
+    call: types.ManageChannelParticipants;
+    response: types.ManageChannelParticipantsResponse;
+  };
   MarkNotificationsDone: {
     call: types.MarkNotificationsDone;
     response: types.MarkNotificationsResponse;
@@ -518,6 +623,10 @@ type ToolDataMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  ReadActivity: {
+    call: types.ReadActivity;
+    response: types.ReadActivityResponse;
+  };
   ReadCallRecord: {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
@@ -542,6 +651,10 @@ type ToolDataMap = {
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
+  RenameChannel: {
+    call: types.RenameChannel;
+    response: types.RenameChannelResponse;
+  };
   RenameDocument: {
     call: types.RenameDocument;
     response: types.RenameDocumentResponse;
@@ -566,6 +679,10 @@ type ToolDataMap = {
   SetEntityProperty: {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
+  };
+  SetSenderPolicy: {
+    call: types.SetSenderPolicy;
+    response: types.SetSenderPolicyResponse;
   };
   Subagent: { call: types.Subagent; response: types.SubagentResponse };
   TextEditorCodeExecution: {

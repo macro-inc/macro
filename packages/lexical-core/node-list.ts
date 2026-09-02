@@ -13,6 +13,7 @@ import {
   TabNode,
   TextNode,
 } from 'lexical';
+import { AgentContextNode } from './nodes/AgentContextNode';
 import { AwaitNode } from './nodes/AwaitNode';
 import { ClassedBlockNode } from './nodes/ClassedBlockNode';
 import { CommentNode } from './nodes/CommentNode';
@@ -35,6 +36,7 @@ import { InlineSearchNode } from './nodes/InlineSearchNode';
 import { MagicChipNode } from './nodes/MagicChipNode';
 import { PasteNode } from './nodes/PasteNode';
 import { PullRequestMentionNode } from './nodes/PullRequestMentionNode';
+import { ReplyTargetNode } from './nodes/ReplyTargetNode';
 import { SearchMatchNode } from './nodes/SearchMatchNode';
 import { SnapshotNode } from './nodes/SnapshotNode';
 import { TagMentionNode } from './nodes/TagMentionNode';
@@ -80,6 +82,7 @@ export const SupportedNodeTypes = [
   ContactMentionNode,
   DateMentionNode,
   PullRequestMentionNode,
+  ReplyTargetNode,
   GroupMentionNode,
   InlineSearchNode,
   UnlinkedTextNode,
@@ -109,6 +112,7 @@ export const SupportedNodeTypes = [
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,
+  AgentContextNode,
 ] as const;
 
 export const NodeReplacements: LexicalNodeReplacement[] = [

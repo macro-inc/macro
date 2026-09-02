@@ -7,11 +7,15 @@
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+  type AffectedOperationsResult,
   type CachedQueryInstanceWire,
   type CachedQueryVariantWire,
   type CacheRequest,
   type CacheResponseErrorCode,
+  type CacheRevision,
   type ClaimedMutation,
+  type CommitOptimisticWriteResult,
+  type DeferOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
   type EntityFilterCacheArgs,
   type EntityFilterCacheResult,
@@ -22,10 +26,11 @@ import {
   type MutationSettlement,
   OWNER_EPOCH_LOST_ERROR_CODE,
   type ReadRecordsByKeysArgs,
+  type ReadRecordsByKeysResult,
   type ReadResult,
+  type RollbackOptimisticWriteResult,
   type SearchCacheArgs,
   type SearchCachePage,
-  type SelectedRecordByKeyWire,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
   type WorkerMessage,
@@ -189,7 +194,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   const lostRegisteredOpKeys = new Set<number>();
   const replacementReadOpKeys = new Set<number>();
   const affectedSubscribers = new Set<(opKeys: number[]) => void>();
-  const cacheChangeSubscribers = new Set<() => void>();
+  const cacheChangeSubscribers = new Set<(revision: CacheRevision) => void>();
+  const generationChangeSubscribers = new Set<() => void>();
   const settlementSubscribers = new Set<
     (settlement: MutationSettlement) => void
   >();
@@ -210,7 +216,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   let adapterDisposePromise: Promise<void> | undefined;
   let adapterDisposeWasGraceful = false;
   let adapterDisposalStarted = false;
-  let disposalMode: 'graceful' | 'abrupt' | undefined;
+  let disposalMode: 'graceful' | 'navigation' | 'abrupt' | undefined;
   let pagehideRegistered = false;
   let legacyIdbDeletionStarted = false;
   let telemetryRelayStarted = false;
@@ -247,7 +253,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const msg = event.data;
     if (isCachePush(msg)) {
       if (msg.kind === 'cache-changed') {
-        for (const cb of cacheChangeSubscribers) cb();
+        for (const cb of cacheChangeSubscribers) cb(msg.revision);
         return;
       }
       if (msg.kind === 'mutation-settled') {
@@ -331,6 +337,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     latestReplacementEpoch = ownerEpoch;
     // Initial readiness completes the already-running first handshake.
     if (state === 'initializing' && !recoveryInProgress) return;
+    for (const cb of generationChangeSubscribers) cb();
     if (state === 'ready') {
       beginRecoveryGeneration();
       // No old response put this host into recovery. Requests still pending at
@@ -418,14 +425,21 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
   }
 
-  function disposeAdapter(graceful: boolean): Promise<void> {
+  function disposeAdapter(
+    graceful: boolean,
+    preserveDatabase = false
+  ): Promise<void> {
     if (adapterDisposePromise) {
       if (!graceful && adapterDisposeWasGraceful && adapter) {
         adapterDisposeWasGraceful = false;
         try {
           // A pagehide during graceful retirement must reach the adapter so it
-          // can terminate and close instead of memoizing the old mode.
-          void adapter.dispose({ graceful: false });
+          // can terminate immediately without classifying navigation as loss.
+          void adapter.dispose(
+            preserveDatabase
+              ? { graceful: false, preserveDatabase: true }
+              : { graceful: false }
+          );
         } catch {
           // The original disposal promise still owns final settlement.
         }
@@ -436,7 +450,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     adapterDisposeWasGraceful = graceful;
     try {
       adapterDisposePromise = adapter
-        .dispose({ graceful })
+        .dispose(
+          preserveDatabase ? { graceful, preserveDatabase: true } : { graceful }
+        )
         .catch(() => undefined);
     } catch {
       // The host is already closed and cannot safely retry disposal.
@@ -448,6 +464,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   function clearSubscribers(): void {
     affectedSubscribers.clear();
     cacheChangeSubscribers.clear();
+    generationChangeSubscribers.clear();
     settlementSubscribers.clear();
   }
 
@@ -523,13 +540,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     pageTelemetry?.relay.dispose();
   }
 
-  function startAdapterDisposal(graceful: boolean): void {
+  function startAdapterDisposal(
+    graceful: boolean,
+    preserveDatabase = false
+  ): void {
     if (adapterDisposalStarted) {
-      if (!graceful) void disposeAdapter(false);
+      if (!graceful) void disposeAdapter(false, preserveDatabase);
       return;
     }
     adapterDisposalStarted = true;
-    void disposeAdapter(graceful).then(() => {
+    void disposeAdapter(graceful, preserveDatabase).then(() => {
       if (state !== 'disposing') return;
       state = 'disposed';
       unregisterPagehide();
@@ -548,11 +568,27 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     startAdapterDisposal(true);
   }
 
-  function disposeHost(graceful: boolean): void {
+  function disposeHost(graceful: boolean, preserveDatabase = false): void {
     stopStorageHealthSampling();
     if (state === 'disposed') return;
     if (state === 'disposing') {
-      if (graceful || disposalMode === 'abrupt') return;
+      if (
+        graceful ||
+        disposalMode === 'abrupt' ||
+        (preserveDatabase && disposalMode === 'navigation')
+      ) {
+        return;
+      }
+      if (preserveDatabase) {
+        disposalMode = 'navigation';
+        clearSubscribers();
+        rejectPending(
+          new Error('cache worker host was disposed for page navigation'),
+          true
+        );
+        startAdapterDisposal(false, true);
+        return;
+      }
       disposalMode = 'abrupt';
       const quarantine = hasAdmittedEnqueue();
       clearSubscribers();
@@ -568,23 +604,33 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       state = 'disposing';
       disposalMode = 'graceful';
       clearSubscribers();
-      // Keep pagehide armed through coordinator retirement so an abrupt close
-      // can still terminate the adapter's in-progress graceful drain.
+      // Keep pagehide armed through coordinator retirement so navigation can
+      // terminate the worker without converting the handoff into a wipe.
       finishGracefulDisposeIfDrained();
       return;
     }
 
-    const quarantine = hasAdmittedEnqueue();
     state = 'disposing';
-    disposalMode = 'abrupt';
     clearSubscribers();
+    if (preserveDatabase) {
+      disposalMode = 'navigation';
+      rejectPending(
+        new Error('cache worker host was disposed for page navigation'),
+        true
+      );
+      startAdapterDisposal(false, true);
+      return;
+    }
+
+    const quarantine = hasAdmittedEnqueue();
+    disposalMode = 'abrupt';
     if (quarantine) void quarantineCacheScope(options.scope);
     rejectPending(new Error('cache worker host was abruptly disposed'), true);
     startAdapterDisposal(false);
   }
 
   function onPagehide(): void {
-    disposeHost(false);
+    disposeHost(false, true);
   }
 
   function request(
@@ -613,7 +659,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       const timeoutMs =
         msg.kind === 'init'
           ? initializationTimeoutMs
-          : msg.kind === 'read' ||
+          : msg.kind === 'current-revision' ||
+              msg.kind === 'read' ||
               msg.kind === 'read-records-by-keys' ||
               msg.kind === 'search' ||
               msg.kind === 'entity-filter' ||
@@ -766,6 +813,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   return {
     clientId,
 
+    async currentRevision(): Promise<CacheRevision> {
+      await ensureInitialized();
+      return (await request({ kind: 'current-revision' })) as CacheRevision;
+    },
+
     async readQuery(args: CacheReadArgs): Promise<ReadResult> {
       if (args.opKey !== undefined) {
         activeOpKeys.add(args.opKey);
@@ -788,7 +840,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
 
     async readRecordsByKeys(
       args: ReadRecordsByKeysArgs
-    ): Promise<SelectedRecordByKeyWire[]> {
+    ): Promise<ReadRecordsByKeysResult> {
       const keys = validateRecordSelectionKeys(args.keys);
       await ensureInitialized();
       return (await request({
@@ -796,7 +848,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         document: args.document,
         fragmentName: args.fragmentName,
         keys,
-      })) as SelectedRecordByKeyWire[];
+      })) as ReadRecordsByKeysResult;
     },
 
     async search(args: SearchCacheArgs): Promise<SearchCachePage> {
@@ -867,6 +919,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return (await request({
         kind: 'enqueue-optimistic-mutation',
         originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+        uuid: args.uuid,
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,
@@ -924,23 +977,23 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       claim: MutationClaim,
       nextAttemptAtMs: number,
       error: string
-    ): Promise<void> {
+    ) {
       await ensureInitialized();
-      await request({
+      return (await request({
         kind: 'defer-optimistic-write',
         transactionId,
         leaseOwner: claim.owner,
         leaseGeneration: claim.generation,
         nextAttemptAtMs,
         error,
-      });
+      })) as DeferOptimisticWriteResult;
     },
 
     async commitOptimisticWrite(
       transactionId: string,
       claim: MutationClaim,
       args: CacheWriteArgs
-    ): Promise<WriteResult> {
+    ): Promise<CommitOptimisticWriteResult> {
       await ensureInitialized();
       return (await request({
         kind: 'commit-optimistic-write',
@@ -951,14 +1004,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         operationName: args.operationName,
         variables: args.variables,
         data: args.data,
-      })) as WriteResult;
+      })) as CommitOptimisticWriteResult;
     },
 
     async rollbackOptimisticWrite(
       transactionId: string,
       claim: MutationClaim,
       error: string
-    ): Promise<WriteResult> {
+    ): Promise<RollbackOptimisticWriteResult> {
       await ensureInitialized();
       return (await request({
         kind: 'rollback-optimistic-write',
@@ -966,17 +1019,23 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         leaseOwner: claim.owner,
         leaseGeneration: claim.generation,
         error,
-      })) as WriteResult;
+      })) as RollbackOptimisticWriteResult;
     },
 
-    async invalidate(keys: string[]): Promise<string[]> {
+    async invalidate(keys: string[]): Promise<AffectedOperationsResult> {
       await ensureInitialized();
-      return (await request({ kind: 'invalidate', keys })) as string[];
+      return (await request({
+        kind: 'invalidate',
+        keys,
+      })) as AffectedOperationsResult;
     },
 
-    async deleteRecords(keys: string[]): Promise<string[]> {
+    async deleteRecords(keys: string[]): Promise<AffectedOperationsResult> {
       await ensureInitialized();
-      return (await request({ kind: 'delete-records', keys })) as string[];
+      return (await request({
+        kind: 'delete-records',
+        keys,
+      })) as AffectedOperationsResult;
     },
 
     async teardown(opKey: number): Promise<void> {
@@ -984,13 +1043,25 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       registeredOpKeys.delete(opKey);
       lostRegisteredOpKeys.delete(opKey);
       replacementReadOpKeys.delete(opKey);
-      await ensureInitialized();
+      // urql emits teardown while initialization-failure fallback is
+      // unsubscribing operations. Local registration cleanup is sufficient
+      // when no usable engine generation remains.
+      if (state !== 'ready' && state !== 'initializing') return;
+      if (state === 'initializing') {
+        try {
+          await ensureInitialized();
+        } catch {
+          return;
+        }
+      }
+      // Disposal or owner loss can win while an initialization await yields.
+      if (state !== 'ready') return;
       await request({ kind: 'teardown', opId: opId(opKey) });
     },
 
-    async clear(): Promise<void> {
+    async clear(): Promise<CacheRevision> {
       await ensureInitialized();
-      await request({ kind: 'clear' });
+      const revision = (await request({ kind: 'clear' })) as CacheRevision;
       telemetry?.record({
         name: 'graphql_cache.logical_reset',
         operationCategory: 'lifecycle',
@@ -998,6 +1069,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         errorCode: 'none',
         resetReason: 'explicit-clear',
       });
+      return revision;
     },
 
     onOpsAffected(cb: (opKeys: number[]) => void): () => void {
@@ -1005,9 +1077,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return () => affectedSubscribers.delete(cb);
     },
 
-    onCacheChanged(cb: () => void): () => void {
+    onCacheChanged(cb: (revision: CacheRevision) => void): () => void {
       cacheChangeSubscribers.add(cb);
       return () => cacheChangeSubscribers.delete(cb);
+    },
+
+    onCacheGenerationChanged(cb: () => void): () => void {
+      generationChangeSubscribers.add(cb);
+      return () => generationChangeSubscribers.delete(cb);
     },
 
     onMutationSettled(

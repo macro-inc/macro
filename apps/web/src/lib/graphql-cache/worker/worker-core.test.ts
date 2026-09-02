@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { INITIAL_CACHE_REVISION } from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
@@ -22,7 +23,11 @@ describe('CacheWorkerCore', () => {
         record: { id: 'item-1' },
       },
     ];
-    const readRecordsByKeys = vi.fn().mockResolvedValue(records);
+    const selectionResult = {
+      revision: INITIAL_CACHE_REVISION,
+      records,
+    };
+    const readRecordsByKeys = vi.fn().mockResolvedValue(selectionResult);
     loadCacheWasmMock.mockResolvedValue({
       openCache: vi.fn().mockResolvedValue({ readRecordsByKeys }),
     });
@@ -48,7 +53,11 @@ describe('CacheWorkerCore', () => {
       'Item',
       ['GraphqlSoupDocument:item-1']
     );
-    expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: records });
+    expect(messages.at(-1)).toEqual({
+      id: 2,
+      ok: true,
+      result: selectionResult,
+    });
   });
 
   it('dispatches bounded search to the wasm compact projection', async () => {
@@ -91,22 +100,76 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
+  it('reports a successful stale commit as superseded', async () => {
+    const commitOptimisticWrite = vi.fn().mockResolvedValue({
+      kind: 'committed-superseded',
+      replacementTransactionId: '2',
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+      revalidations: [],
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    messages.length = 0;
+
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'commit-optimistic-write',
+      transactionId: '1',
+      leaseOwner: 'runner',
+      leaseGeneration: '1',
+      query: 'mutation Update { update }',
+      data: { update: true },
+    });
+
+    expect(messages).toContainEqual({
+      kind: 'mutation-settled',
+      settlement: {
+        transactionId: '1',
+        status: 'superseded',
+        replacementTransactionId: '2',
+      },
+    });
+  });
+
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
     let resolveEnqueue!: (result: {
       transactionId: string;
+      revision: typeof INITIAL_CACHE_REVISION;
       changed: string[];
       affectedOps: string[];
       reset: false;
+      upsertKind: {
+        kind: 'replaced-pending';
+        removedTransactionId: string;
+      };
       initialClaim: { kind: 'not-runnable' };
     }) => void;
     const enqueueOptimisticMutation = vi.fn(() => {
       order.push('enqueue:start');
       return new Promise<{
         transactionId: string;
+        revision: typeof INITIAL_CACHE_REVISION;
         changed: string[];
         affectedOps: string[];
         reset: false;
+        upsertKind: {
+          kind: 'replaced-pending';
+          removedTransactionId: string;
+        };
         initialClaim: { kind: 'not-runnable' };
       }>((resolve) => {
         resolveEnqueue = (result) => {
@@ -139,6 +202,7 @@ describe('CacheWorkerCore', () => {
     const enqueue = core.handleRequest(port, {
       id: 2,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000007',
       query: 'mutation Update { update }',
       data: { update: true },
       createdAtMs: 10,
@@ -165,9 +229,14 @@ describe('CacheWorkerCore', () => {
     );
     resolveEnqueue({
       transactionId: '1',
+      revision: INITIAL_CACHE_REVISION,
       changed: ['Thing:1'],
       affectedOps: ['client:query'],
       reset: false,
+      upsertKind: {
+        kind: 'replaced-pending',
+        removedTransactionId: '0',
+      },
       initialClaim: { kind: 'not-runnable' },
     });
     await Promise.all([enqueue, read]);
@@ -177,6 +246,14 @@ describe('CacheWorkerCore', () => {
       kind: 'ops-affected',
       opIds: ['client:query'],
       keys: ['Thing:1'],
+    });
+    expect(messages).toContainEqual({
+      kind: 'mutation-settled',
+      settlement: {
+        transactionId: '0',
+        status: 'superseded',
+        replacementTransactionId: '1',
+      },
     });
   });
 
@@ -247,6 +324,159 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('runs foreground cache reads ahead of queued background hydration', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const readQuery = vi.fn(async (opId: string | undefined) => {
+      order.push(`read:${opId}`);
+      if (opId === 'client:blocker') {
+        markBlockerStarted();
+        await blocker;
+      }
+      return { kind: 'miss' as const };
+    });
+    const entityFilter = vi.fn(async () => {
+      order.push('entity-filter');
+      return { kind: 'incomplete' as const };
+    });
+    const hydrateQuery = vi.fn(async () => {
+      order.push('hydrate');
+      return { kind: 'none' as const };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery,
+        entityFilter,
+        hydrateQuery,
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'client:blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { backfill }',
+      data: { backfill: true },
+    });
+    const filter = core.handleRequest(port, {
+      id: 4,
+      kind: 'entity-filter',
+      request: {
+        filters: {},
+        sortMethod: 'UPDATED_AT',
+        sortDirection: 'DESC',
+        limit: 20,
+      },
+    });
+    const visibleRead = core.handleRequest(port, {
+      id: 5,
+      kind: 'read',
+      opId: 'client:visible',
+      query: 'query Visible { visible }',
+      priority: 'user-visible',
+    });
+
+    releaseBlocker();
+    await Promise.all([running, hydration, filter, visibleRead]);
+
+    expect(order).toEqual([
+      'read:client:blocker',
+      'read:client:visible',
+      'entity-filter',
+      'hydrate',
+    ]);
+  });
+
+  it('does not let stale hydration overwrite a newer queued write', async () => {
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const record = { id: 'doc-1', title: 'initial' };
+    const mergeDocument = (data: unknown) => {
+      Object.assign(
+        record,
+        (data as { document: { id: string; title: string } }).document
+      );
+    };
+    const readQuery = vi.fn(async () => {
+      markBlockerStarted();
+      await blocker;
+      return { kind: 'miss' as const };
+    });
+    const hydrateQuery = vi.fn(async (...args: unknown[]) => {
+      mergeDocument(args[3]);
+      return { changed: [], affectedOps: [], reset: false, data: null };
+    });
+    const writeQuery = vi.fn(async (...args: unknown[]) => {
+      mergeDocument(args[4]);
+      return { changed: [], affectedOps: [], reset: false };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery,
+        hydrateQuery,
+        writeQuery,
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query Backfill { document { id title } }',
+      data: { document: { id: 'doc-1', title: 'stale' } },
+    });
+    const write = core.handleRequest(port, {
+      id: 4,
+      kind: 'write',
+      query: 'query Current { document { id title } }',
+      data: { document: { id: 'doc-1', title: 'newer' } },
+    });
+
+    releaseBlocker();
+    await Promise.all([running, hydration, write]);
+
+    expect(record).toEqual({ id: 'doc-1', title: 'newer' });
+    expect(hydrateQuery).toHaveBeenCalledBefore(writeQuery);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
@@ -266,13 +496,15 @@ describe('CacheWorkerCore', () => {
       return { kind: 'hit' as const, data: { opId } };
     });
     const enqueueOptimisticMutation = vi.fn(
-      async (_originOpId: string | undefined, query: string) => {
+      async (_originOpId: string | undefined, _uuid: string, query: string) => {
         order.push(`enqueue:${query}`);
         return {
           transactionId: query,
+          revision: INITIAL_CACHE_REVISION,
           changed: [],
           affectedOps: [],
           reset: false,
+          upsertKind: { kind: 'inserted' as const },
           initialClaim: { kind: 'not-runnable' as const },
         };
       }
@@ -315,6 +547,7 @@ describe('CacheWorkerCore', () => {
     const firstEnqueue = core.handleRequest(port, {
       id: 5,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000008',
       query: 'mutation First { first }',
       data: { first: true },
       createdAtMs: 1,
@@ -325,6 +558,7 @@ describe('CacheWorkerCore', () => {
     const secondEnqueue = core.handleRequest(port, {
       id: 6,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000009',
       query: 'mutation Second { second }',
       data: { second: true },
       createdAtMs: 2,
@@ -491,9 +725,11 @@ describe('CacheWorkerCore', () => {
       order.push('enqueue');
       return {
         transactionId: '1',
+        revision: INITIAL_CACHE_REVISION,
         changed: [],
         affectedOps: [],
         reset: false,
+        upsertKind: { kind: 'inserted' as const },
         initialClaim: { kind: 'not-runnable' as const },
       };
     });
@@ -533,6 +769,7 @@ describe('CacheWorkerCore', () => {
     const enqueue = core.handleRequest(port, {
       id: 5,
       kind: 'enqueue-optimistic-mutation',
+      uuid: '00000000-0000-4000-8000-000000000010',
       query: 'mutation Update { update }',
       data: { update: true },
       createdAtMs: 1,
@@ -601,6 +838,8 @@ describe('CacheWorkerCore', () => {
 
   it('pushes cache changes even without affected operations', async () => {
     const writeResult = {
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
       changed: ['GraphqlSoupDocument:doc-1'],
       affectedOps: [],
       reset: false,
@@ -642,7 +881,46 @@ describe('CacheWorkerCore', () => {
       { user: { id: 'user-1' } },
       undefined
     );
-    expect(messages).toContainEqual({ kind: 'cache-changed' });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
+  });
+
+  it('does not push cache changes for no-op writes', async () => {
+    const writeResult = {
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: false,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        writeQuery: vi.fn().mockResolvedValue(writeResult),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+
+    await core.handleRequest(port, {
+      id: 1,
+      kind: 'init',
+      scope: 'scope-1',
+    });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'write',
+      query: 'subscription { soupUpdates { __typename } }',
+      data: { soupUpdates: [] },
+    });
+
+    expect(messages).not.toContainEqual({
+      kind: 'cache-changed',
+      revision: INITIAL_CACHE_REVISION,
+    });
   });
 
   it('drains earlier request responses before consuming close and rejects later admission', async () => {
@@ -800,6 +1078,7 @@ describe('CacheWorkerCore', () => {
     });
     const close = vi.fn().mockResolvedValue(undefined);
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -933,6 +1212,7 @@ describe('CacheWorkerCore', () => {
       .mockImplementation(() => new Promise(() => {}));
     const readQuery = vi.fn().mockResolvedValue({ kind: 'miss' });
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -1002,6 +1282,7 @@ describe('CacheWorkerCore', () => {
       .mockRejectedValueOnce(resetError)
       .mockImplementation(() => new Promise(() => {}));
     const writeQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: false,
@@ -1072,6 +1353,7 @@ describe('CacheWorkerCore', () => {
 
   it('records an identity-changing hydration as a logical reset', async () => {
     const hydrateQuery = vi.fn().mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
       changed: [],
       affectedOps: [],
       reset: true,
@@ -1107,7 +1389,12 @@ describe('CacheWorkerCore', () => {
     expect(port.postMessage).toHaveBeenLastCalledWith({
       id: 2,
       ok: true,
-      result: { kind: 'data', data: { cursor: 'next' }, reset: true },
+      result: {
+        kind: 'data',
+        data: { cursor: 'next' },
+        revision: INITIAL_CACHE_REVISION,
+        reset: true,
+      },
     });
   });
 

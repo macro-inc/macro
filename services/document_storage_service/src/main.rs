@@ -51,6 +51,11 @@ use channels::{
         pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
+use collab_surface::{
+    domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
+    outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
+    outbound::surface_init::LexicalSyncSurfaceInitializer,
+};
 use config::{Config, Environment};
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -80,11 +85,13 @@ use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::F
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
-    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
+    MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer, PgHarnessAuthorizationRepo,
+    PgHarnessAuthorizer, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::maybe_env_vars;
@@ -145,6 +152,10 @@ use task_dedup::{
     },
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use user_api_key::{
+    domain::service::UserApiKeyServiceImpl, inbound::axum_router::UserApiKeyRouterState,
+    outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+};
 
 mod api;
 mod config;
@@ -167,7 +178,13 @@ maybe_env_vars! {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    MacroEntrypoint::default().init();
+    let entrypoint = MacroEntrypoint::default().init();
+    let result = run().await;
+    entrypoint.shutdown();
+    result
+}
+
+async fn run() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -312,8 +329,14 @@ async fn main() -> anyhow::Result<()> {
             default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
         },
         PgBotAuthorizer::new(PgBotAuthorizationRepo::new(db.clone())),
-    );
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
+    )
+    .with_harness_authorizer(PgHarnessAuthorizer::new(PgHarnessAuthorizationRepo::new(
+        db.clone(),
+    )));
     let authorization_state = MacroAuthorizationState::new(Arc::new(authorization_service));
+    let harnesses_service =
+        harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(db.clone()));
 
     // Initialize OpenSearch client
     let opensearch_client = OpensearchClient::new(
@@ -730,6 +753,50 @@ async fn main() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let (webhook_stream_sender, _) =
+        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
+    let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
+        webhook_stream_sender.clone(),
+        entity_access_service.clone(),
+        webhook_repository.clone(),
+    );
+    let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
+        sse_stream_service,
+        authorization_state.clone(),
+    );
+    consumer_tracker.spawn({
+        let brokers = config.kafka_brokers.as_ref().to_string();
+        let sender = webhook_stream_sender;
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
+                        &brokers,
+                        &sender,
+                    ) => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+                if let Err(error) = result {
+                    tracing::error!(
+                        error = ?error,
+                        "webhook SSE Kafka consumer stopped"
+                    );
+                    tokio::select! {
+                        biased;
+                        _ = cancellation_token.cancelled() => break,
+                        _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                    }
+                }
+            }
+        }
+    });
+
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
             entity_access_service.clone(),
@@ -903,9 +970,53 @@ async fn main() -> anyhow::Result<()> {
         )),
     );
 
-    // Wire Macro AI to react to mentions. The router posts replies through the
-    // channel service we just built and runs the agent loop in-process with the
-    // same pre-configured toolset used by other AI hosts.
+    let teammate_dms_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let channels = (*channels_service).clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting teammate DM consumer");
+                let result = channels::inbound::teammate_dms_consumer::run_teammate_dms_consumer(
+                    &teammate_dms_brokers,
+                    channels.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("teammate DM consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            "teammate DM consumer exited unexpectedly"
+                        );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
+    // Wire Macro AI to react to mentions with the classic in-channel chat
+    // reply. The router posts replies through the channel service we just
+    // built and runs the agent loop in-process with the same pre-configured
+    // toolset used by other AI hosts. Agent sessions belong to a different
+    // bot entirely (`bot_id::MACRO_NEW_BOT_ID`, served by the harness), so
+    // the two paths can never answer the same mention.
     let mut macro_agent_tool_context =
         ai_tools::build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
             .await
@@ -949,6 +1060,15 @@ async fn main() -> anyhow::Result<()> {
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
+
+    let collab_surface_service = CollabSurfaceServiceImpl::new(
+        Arc::new(PgCollabSurfaceRepo::new(db.clone())),
+        Arc::new(LexicalSyncSurfaceInitializer::new(
+            lexical_client.as_ref().clone(),
+            sync_service_client.as_ref().clone(),
+        )),
+        config.document_permission_jwt.as_ref().to_string(),
+    );
 
     let soup_service = Arc::new(SoupImpl::new(
         PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
@@ -1100,6 +1220,9 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
+    let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
+        db.clone(),
+    )));
     let calendar_state = CalendarRouterState::new(
         Arc::new(calendar_events::domain::service::CalendarService::new(
             calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
@@ -1204,8 +1327,17 @@ async fn main() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         favorites_service,
+        user_api_key_state: UserApiKeyRouterState::new(
+            user_api_key_service,
+            authorization_state.clone(),
+        ),
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        collab_surface_state: CollabSurfaceRouterState::new(
+            Arc::new(collab_surface_service),
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
@@ -1276,10 +1408,15 @@ async fn main() -> anyhow::Result<()> {
             (*entity_access_service).clone(),
             authorization_state.clone(),
         ),
+        harnesses_state: harnesses::inbound::axum_router::HarnessesRouterState::new(
+            harnesses_service,
+            authorization_state.clone(),
+        ),
         channel_bot_webhook_state,
         call_state,
         call_webhook_state,
         webhook_state,
+        sse_stream_state,
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,

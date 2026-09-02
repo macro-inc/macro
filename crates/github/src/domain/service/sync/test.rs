@@ -15,7 +15,9 @@ use document_sub_type::DocumentSubType;
 use documents::domain::models::EditDocumentServiceArgs;
 use documents::domain::{
     content::{DocumentContent, DocumentContentLocation},
-    models::{CreateDocumentRepoArgs, DocumentError, LocationQueryParams},
+    models::{
+        CreateDocumentRepoArgs, DocumentError, ImportEmailAttachmentRepoArgs, LocationQueryParams,
+    },
     ports::DocumentService,
     response::{
         CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
@@ -42,6 +44,7 @@ use notification::domain::{
 };
 
 use super::*;
+use crate::domain::models::AppJwt;
 
 /// UUID that corresponds to the short ID `2BuyvtY3aeEvHx4uG8iD51`.
 const KNOWN_TASK_UUID: &str = "0d0dc589-f301-43f1-8b11-4ab448ca4bb4";
@@ -211,6 +214,14 @@ impl DocumentService for StubDocumentService {
         _user_id: MacroUserIdStr<'static>,
         _args: CreateDocumentRepoArgs,
         _job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        unimplemented!()
+    }
+
+    async fn import_email_attachment(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         unimplemented!()
     }
@@ -833,13 +844,32 @@ impl GithubSyncClient for StubSyncClient {
 
     async fn generate_installation_access_token(
         &self,
-        _jwt: &str,
+        _jwt: &AppJwt,
         _installation_id: u64,
     ) -> Result<GithubInstallationAccessToken, GithubError> {
         Ok(GithubInstallationAccessToken {
             token: "test-token".to_string(),
             expires_at: "2099-01-01T00:00:00Z".to_string(),
         })
+    }
+
+    async fn get_repository_installation(
+        &self,
+        _jwt: &AppJwt,
+        _owner: &str,
+        _repository: &str,
+    ) -> Result<Option<u64>, GithubError> {
+        unimplemented!("the sync service does not look installations up by repository")
+    }
+
+    async fn generate_scoped_installation_access_token(
+        &self,
+        _jwt: &AppJwt,
+        _installation_id: u64,
+        _repository: &str,
+        _permissions: &[(&str, &str)],
+    ) -> Result<GithubInstallationAccessToken, GithubError> {
+        unimplemented!("the sync service mints unscoped installation tokens")
     }
 
     async fn create_pr_comment(

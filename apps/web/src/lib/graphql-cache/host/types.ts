@@ -8,10 +8,14 @@
 
 import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
+  AffectedOperationsResult,
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   CacheReadPriority,
+  CacheRevision,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
@@ -22,10 +26,11 @@ import type {
   QueryRevalidationWire,
   QueryVariableFilter,
   ReadRecordsByKeysArgs,
+  ReadRecordsByKeysResult,
   ReadResult,
+  RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
-  SelectedRecordByKeyWire,
   WriteResult,
 } from '../protocol';
 
@@ -65,6 +70,8 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
 }
 
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
+  /** Caller-supplied RFC UUID used for explicit safe coalescing. */
+  uuid: string;
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
@@ -83,11 +90,13 @@ export interface CacheHost {
   /** True for the storage-free fallback when browser cache APIs are unsupported. */
   readonly disabled?: boolean;
 
+  /** Returns the current revision of the active cache-engine generation. */
+  currentRevision(): Promise<CacheRevision>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   /** Projects a bounded explicit set of normalized entity keys. */
   readRecordsByKeys(
     args: ReadRecordsByKeysArgs
-  ): Promise<SelectedRecordByKeyWire[]>;
+  ): Promise<ReadRecordsByKeysResult>;
   /** Searches the compact write-through materialized projection. */
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
@@ -118,27 +127,27 @@ export interface CacheHost {
     claim: MutationClaim,
     nextAttemptAtMs: number,
     error: string
-  ): Promise<void>;
+  ): Promise<DeferOptimisticWriteResult>;
   /** Atomically commits a claimed mutation's real network response. */
   commitOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
     args: CacheWriteArgs
-  ): Promise<WriteResult>;
+  ): Promise<CommitOptimisticWriteResult>;
   /** Permanently fails a claimed mutation and drops its optimistic layer. */
   rollbackOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
     error: string
-  ): Promise<WriteResult>;
+  ): Promise<RollbackOptimisticWriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
-  invalidate(keys: string[]): Promise<string[]>;
+  invalidate(keys: string[]): Promise<AffectedOperationsResult>;
   /** Apply explicit server-provided cache-deletion effects. */
-  deleteRecords(keys: string[]): Promise<string[]>;
+  deleteRecords(keys: string[]): Promise<AffectedOperationsResult>;
   /** urql teardown for an operation key. */
   teardown(opKey: number): Promise<void>;
   /** Wipe all cached state (logout). */
-  clear(): Promise<void>;
+  clear(): Promise<CacheRevision>;
 
   /**
    * Subscribes to "these urql operation keys must re-execute" pushes
@@ -148,9 +157,12 @@ export interface CacheHost {
   onOpsAffected(cb: (opKeys: number[]) => void): () => void;
 
   /** Subscribes whenever the effective normalized-cache view changes. */
-  onCacheChanged(cb: () => void): () => void;
+  onCacheChanged(cb: (revision: CacheRevision) => void): () => void;
 
-  /** Subscribes to final commit/rollback events for queued mutations. */
+  /** Invalidates revision watermarks before a replacement engine is used. */
+  onCacheGenerationChanged(cb: () => void): () => void;
+
+  /** Subscribes to final commit, rollback, or supersession events. */
   onMutationSettled(cb: (settlement: MutationSettlement) => void): () => void;
 
   dispose(): void;

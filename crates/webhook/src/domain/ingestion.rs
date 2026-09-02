@@ -5,6 +5,8 @@
 //! separate from `WebhookService`, which is the CRUD surface for webhook
 //! creation and edits.
 
+#[cfg(feature = "stream")]
+pub(crate) mod stream;
 #[cfg(test)]
 mod test;
 
@@ -62,14 +64,15 @@ pub enum WebhookEventIngestionError {
 impl WebhookEventIngestionError {
     /// Whether retrying the same event could plausibly succeed.
     ///
-    /// Access resolution currently maps some PostgreSQL failures to
-    /// [`AccessError::Internal`], so that variant remains retryable alongside
-    /// explicit database, repository, workspace-resolution, and queue errors.
-    /// Invalid broker contracts are permanent and can be safely skipped.
+    /// Access resolution classifies failures at the database boundary:
+    /// [`AccessError::Unavailable`] is a connection-level or retryable
+    /// Postgres failure, while [`AccessError::Internal`] is a bug or bad
+    /// data that retrying cannot fix. Invalid broker contracts are
+    /// permanent and can be safely skipped.
     pub fn is_transient(&self) -> bool {
         matches!(
             self,
-            Self::EntityAccess(AccessError::DatabaseError(_) | AccessError::Internal)
+            Self::EntityAccess(AccessError::Unavailable(_))
                 | Self::WorkspaceResolution(_)
                 | Self::Repository(_)
                 | Self::Enqueue(_)
@@ -234,7 +237,7 @@ where
     }
 }
 
-fn normalized_document_event(
+pub(crate) fn normalized_document_event(
     event: &Event<DocumentTopicEvent>,
 ) -> Result<Option<NormalizedWebhookEvent>, WebhookEventIngestionError> {
     let (event_name, entity_id) = match &event.event {
@@ -268,7 +271,7 @@ fn normalized_document_event(
     )))
 }
 
-fn normalized_channel_event(
+pub(crate) fn normalized_channel_event(
     event: &Event<ChannelTopicEvent>,
 ) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
     let (event_name, channel_id) = match &event.event {
@@ -311,7 +314,7 @@ fn normalized_channel_event(
     ))
 }
 
-fn normalized_webhook_event(
+pub(crate) fn normalized_webhook_event(
     event: &Event<WebhookTopicEvent>,
 ) -> Result<(NormalizedWebhookEvent, String), WebhookEventIngestionError> {
     let (event_name, webhook_id, workspace_id) = match &event.event {
@@ -380,9 +383,9 @@ fn normalized_event(
 ///
 /// Not the bot the event names: that is what a subscriber filters on, and a
 /// bot is not an entity anyone holds access to.
-struct TriggerAudience {
-    entity_id: String,
-    entity_type: EntityType,
+pub(crate) struct TriggerAudience {
+    pub(crate) entity_id: String,
+    pub(crate) entity_type: EntityType,
 }
 
 /// Normalize one agent-trigger event.
@@ -396,7 +399,7 @@ struct TriggerAudience {
 /// own grants - its owner, and the channel it came from - so the session is
 /// the authoritative audience, and whatever channel a later message happened
 /// to land in is incidental to it.
-fn normalized_agent_trigger_event(
+pub(crate) fn normalized_agent_trigger_event(
     event: &Event<AgentTriggerTopicEvent>,
 ) -> Result<(NormalizedWebhookEvent, TriggerAudience), WebhookEventIngestionError> {
     use agent_trigger::domain::broker_events::{

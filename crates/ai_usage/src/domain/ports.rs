@@ -60,6 +60,8 @@ pub enum AiFeature {
     AiEditing,
     /// Import pipeline agent sessions (connector gathers + Notion imports).
     Import,
+    /// In-process ACP agent sessions (the in-memory harness).
+    AgentSession,
 }
 
 /// Resolved price for one completion.
@@ -224,8 +226,8 @@ impl UsageContext {
 #[derive(Debug, Error)]
 pub enum UsageError {
     /// A database error.
-    #[error(transparent)]
-    Db(#[from] sqlx::Error),
+    #[error("database error: {0}")]
+    Db(rootcause::Report),
     /// Any other error.
     #[error(transparent)]
     Other(#[from] anyhow::Error),

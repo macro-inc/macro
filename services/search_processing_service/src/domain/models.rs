@@ -210,6 +210,30 @@ pub struct ProjectBackfillCursor {
     pub project_id: String,
 }
 
+/// Calendar event backfill filter. All `None` means "every event".
+///
+/// Only series masters are enumerated — recurring instances are not indexed.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct CalendarEventBackfillRequest {
+    pub updated_after: Option<DateTime<Utc>>,
+    pub updated_before: Option<DateTime<Utc>>,
+    /// Override the OpenSearch target index for upserts (e.g. blue/green swap).
+    pub index_override: Option<String>,
+}
+
+/// Keyset (seek-method) pagination cursor for calendar event backfills.
+///
+/// `get_calendar_events_for_search_backfill` walks `calendar_events` in
+/// `(updated_at ASC, id ASC)` order; the cursor carries the last row's pair
+/// so the next page resumes with `WHERE (updated_at, id) > cursor`.
+/// `None` starts at the beginning.
+#[derive(Debug, Clone)]
+pub struct CalendarEventBackfillCursor {
+    pub updated_at: DateTime<Utc>,
+    pub event_id: uuid::Uuid,
+}
+
 /// Email-thread backfill filter.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]

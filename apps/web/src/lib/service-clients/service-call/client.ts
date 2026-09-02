@@ -1,6 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 
+import type { ActiveCallsResponse } from '@service-storage/generated/schemas/activeCallsResponse';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { CallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
@@ -37,6 +38,14 @@ export const callServiceClient = {
       // safeFetch returns {} for 204 (no Content-Type header)
       (data) => ('callId' in data ? (data as CallActiveResponse) : null)
     );
+  },
+
+  async getActiveCalls() {
+    return (
+      await fetchWithToken<ActiveCallsResponse>(`${host}/call/active`, {
+        method: 'GET',
+      })
+    ).map((response) => response.calls ?? []);
   },
 
   async getCallRecord(callId: string) {

@@ -34,7 +34,8 @@
 //! the fold derives.
 
 use crate::domain::model::{
-    AgentSessionId, AgentSessionLog, LogAppended, Message, StoredAgentSessionLog,
+    AgentSessionId, AgentSessionLog, AgentSessionRenamed, LogAppended, Message,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::AgentSessionRealtime;
 use connection_gateway_client::ConnectionGatewayClient;
@@ -50,6 +51,9 @@ use std::sync::Arc;
 /// streaming silently, since an unrecognized type is ignored rather than
 /// rejected.
 pub const AGENT_SESSION_LOG: &str = "agent_session_log";
+
+/// The realtime message type carrying a persisted session-name change.
+pub const AGENT_SESSION_RENAMED: &str = "agent_session_renamed";
 
 /// The body of an [`AGENT_SESSION_LOG`] message - the module docs are the
 /// contract.
@@ -69,6 +73,25 @@ pub struct AgentSessionLogEvent {
     /// serialized by [`Message`] itself so they match the log verbatim.
     #[serde(flatten)]
     pub message: Message,
+}
+
+/// User-facing metadata changed for an agent session.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRenamedEvent {
+    /// Renamed session.
+    pub agent_session_id: Uuid,
+    /// New user-facing name.
+    pub name: String,
+}
+
+impl From<AgentSessionRenamed> for AgentSessionRenamedEvent {
+    fn from(event: AgentSessionRenamed) -> Self {
+        Self {
+            agent_session_id: event.agent_session_id.as_uuid(),
+            name: event.name,
+        }
+    }
 }
 
 impl AgentSessionLogEvent {
@@ -155,6 +178,29 @@ where
 
         Ok(())
     }
+
+    async fn publish_renamed(&self, event: AgentSessionRenamed) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(event.agent_session_id).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+
+        let payload = serde_json::to_value(AgentSessionRenamedEvent::from(event))
+            .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_RENAMED.to_string(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -203,6 +249,22 @@ mod test {
         assert_eq!(object["direction"], "to_runtime");
         assert_eq!(object["content"]["method"], "session/prompt");
         assert_eq!(object["createdAt"], "2026-08-13T12:34:56.789Z");
+    }
+
+    #[test]
+    fn renamed_event_uses_the_frontend_wire_shape() {
+        let event = AgentSessionRenamedEvent::from(AgentSessionRenamed {
+            agent_session_id: test_session(),
+            name: "Fix Flaky Tests".to_owned(),
+        });
+
+        assert_eq!(
+            serde_json::to_value(event).expect("event serializes"),
+            serde_json::json!({
+                "agentSessionId": test_session().as_uuid(),
+                "name": "Fix Flaky Tests",
+            })
+        );
     }
 
     /// An unattributed frame omits the key rather than sending null, matching

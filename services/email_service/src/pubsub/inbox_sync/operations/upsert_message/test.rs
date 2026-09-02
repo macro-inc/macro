@@ -193,3 +193,54 @@ fn suppresses_existing_immutable_non_drafts() {
     assert_eq!(select_message_sync_event(Some(false), false, false), None);
     assert_eq!(select_message_sync_event(Some(false), false, true), None);
 }
+
+#[test]
+fn staff_recipients_are_split_onto_the_apns_path() {
+    let (staff, customers) = partition_email_push_recipients(HashSet::from([
+        id("macro|teo@macro.com"),
+        id("macro|teo+notify@macro.com"),
+        id("macro|user@example.com"),
+    ]));
+
+    assert_eq!(
+        staff,
+        HashSet::from([id("macro|teo@macro.com"), id("macro|teo+notify@macro.com"),])
+    );
+    assert_eq!(customers, HashSet::from([id("macro|user@example.com")]));
+}
+
+#[test]
+fn customer_only_recipients_do_not_take_the_apns_path() {
+    let (staff, customers) =
+        partition_email_push_recipients(HashSet::from([id("macro|user@example.com")]));
+
+    assert!(staff.is_empty());
+    assert_eq!(customers, HashSet::from([id("macro|user@example.com")]));
+}
+
+#[test]
+fn signal_filter_requires_importance_and_unshared() {
+    let thread_id = Uuid::nil();
+    match signal_filter(thread_id) {
+        Expr::And(thread, rest) => {
+            assert!(matches!(
+                *thread,
+                Expr::Literal(EmailLiteral::ThreadId(id)) if id == thread_id
+            ));
+            match *rest {
+                Expr::And(importance, shared) => {
+                    assert!(matches!(
+                        *importance,
+                        Expr::Literal(EmailLiteral::Importance(true))
+                    ));
+                    assert!(matches!(
+                        *shared,
+                        Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude))
+                    ));
+                }
+                other => panic!("expected importance AND shared, got {other:?}"),
+            }
+        }
+        other => panic!("expected thread AND signal predicates, got {other:?}"),
+    }
+}

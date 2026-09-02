@@ -1,4 +1,8 @@
 import type { Klass, LexicalNode } from 'lexical';
+import type {
+  AgentContextDecoratorProps,
+  AgentContextNode,
+} from './nodes/AgentContextNode';
 import type { AwaitDecoratorProps, AwaitNode } from './nodes/AwaitNode';
 import type {
   ContactMentionDecoratorProps,
@@ -47,6 +51,10 @@ import type {
   PullRequestMentionNode,
 } from './nodes/PullRequestMentionNode';
 import type {
+  ReplyTargetDecoratorProps,
+  ReplyTargetNode,
+} from './nodes/ReplyTargetNode';
+import type {
   SnapshotDecoratorProps,
   SnapshotNode,
 } from './nodes/SnapshotNode';
@@ -79,6 +87,10 @@ export type DecoratorComponent<P extends {}> = (props: P) => any;
 // Maps node type names to their class and props types
 // This provides compile-time type safety for decorator registration
 export interface NodeDecoratorMap {
+  AgentContextNode: {
+    klass: typeof AgentContextNode;
+    props: AgentContextDecoratorProps;
+  };
   DiffInsertNode: {
     klass: typeof DiffInsertNode;
     props: DiffInsertDecoratorProps;
@@ -118,6 +130,10 @@ export interface NodeDecoratorMap {
   PullRequestMentionNode: {
     klass: typeof PullRequestMentionNode;
     props: PullRequestMentionDecoratorProps;
+  };
+  ReplyTargetNode: {
+    klass: typeof ReplyTargetNode;
+    props: ReplyTargetDecoratorProps;
   };
   EquationNode: {
     klass: typeof EquationNode;

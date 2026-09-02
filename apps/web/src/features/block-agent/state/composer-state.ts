@@ -55,6 +55,14 @@ export type ComposerFacts = {
   head: QueuedPrompt | undefined;
   /** The block's one working signal (fold ∧ not disconnected). */
   agentWorking: boolean;
+  /**
+   * There is a session to post to. False on a just-created block whose
+   * `POST /agent-sessions` has not answered yet: the user can type and queue
+   * from the first frame, and the queue drains itself the moment the session
+   * exists. Absence of a session is a hold like any other, not a special
+   * case the composer has to be told about.
+   */
+  sessionExists: boolean;
 };
 
 export type ComposerAction =
@@ -69,6 +77,9 @@ const hold = (reason: string): ComposerAction => ({ type: 'hold', reason });
  */
 export function nextAction(facts: ComposerFacts): ComposerAction {
   return match(facts)
+    .with({ sessionExists: false }, () =>
+      hold('the session has not been created yet')
+    )
     .with({ post: { type: 'posting' } }, () => hold('a post is on the wire'))
     .with({ post: { type: 'awaiting_turn' } }, () =>
       hold('posted; the fold has not shown the turn yet')

@@ -159,7 +159,10 @@ export function Notebook(props: {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
     return Object.keys(comments).length > 0;
   });
-  const showComments = () => hasComment() && !history.isOpen();
+  // On phones the margin is hidden entirely (no minimized rail); the touch
+  // comment drawer is the only comment surface. CommentMargin stays mounted
+  // inside the hidden wrapper — it hosts the drawer.
+  const showComments = () => hasComment() && !history.isOpen() && !isMobile();
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -191,8 +194,13 @@ export function Notebook(props: {
     observe(notebookRef);
   });
 
+  // Component scope on purpose: the hook registers an onCleanup that ends
+  // its pending wait-for-mark. Called inside the createEffect below, that
+  // cleanup would belong to the effect's computation and run on every
+  // re-run — tying the deep-link scroll's lifetime to re-run ordering.
+  const goToTempRedirect = useGoToTempRedirect();
+
   createEffect(() => {
-    const goToTempRedirect = useGoToTempRedirect();
     const recentState = tempRedirectLocation();
     if (!recentState) return;
 

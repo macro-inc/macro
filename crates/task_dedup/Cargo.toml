@@ -36,6 +36,7 @@ backfill = [
 default = ["backfill"]
 
 [dependencies]
+rootcause = { workspace = true }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 anyhow = { workspace = true }

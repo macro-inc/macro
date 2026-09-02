@@ -1,7 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  BASE_DOMAIN,
+  config,
+  getMacroApiToken,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { ContactsService } from './service';
 
@@ -61,7 +66,7 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const contactsService = new ContactsService('contacts-service', {
+new ContactsService('contacts-service', {
   contactsQueueArn,
   vpc: coparse_api_vpc,
   tags,
@@ -75,4 +80,6 @@ const contactsService = new ContactsService('contacts-service', {
   secretKeyArns,
 });
 
-export const contactsServiceUrl = pulumi.interpolate`${contactsService.domain}`;
+export const contactsServiceUrl = `https://${
+  stack === 'prod' ? '' : `${stack}-`
+}gateway.${BASE_DOMAIN}/contacts`;

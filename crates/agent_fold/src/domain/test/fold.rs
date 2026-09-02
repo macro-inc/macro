@@ -60,6 +60,7 @@ fn folds_a_complete_turn() {
         label: run_label,
         status: run_status,
         detail: run_detail,
+        ..
     } = &parts[1]
     else {
         panic!("second part is the terminal call: {:?}", parts[1]);
@@ -214,6 +215,69 @@ fn folds_session_controls_as_typed_parts() {
     assert_eq!(messages[0].id, TurnId(0));
     assert_eq!(messages[1].id, TurnId(1));
     assert_eq!(messages[2].id, TurnId(2));
+}
+
+/// A stop pressed before the agent's first chunk - a window over ten seconds
+/// wide, since a session's first prompt spends that creating the Cursor agent.
+///
+/// The turn has no agent message to stamp, so the close has to mint one. Left
+/// unstamped, the newest turn message is the user's prompt, which every reader
+/// takes to mean the agent is still working: the composer keeps its stop
+/// affordance, and each further click stacks another Stopped line onto a
+/// session that can never settle.
+#[test]
+fn a_stop_before_the_agent_speaks_still_settles_the_turn() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"do a big job"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"cancelled"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3, "prompt, stop control, minted reply");
+    let reply = &messages[2];
+    assert!(matches!(reply.author, Author::Agent));
+    assert_eq!(
+        reply.id,
+        TurnId(0),
+        "the reply belongs to the prompt's turn"
+    );
+    assert_eq!(reply.stop, Some(StopReason::Cancelled));
+    assert_eq!(
+        reply.parts.as_slice(),
+        &[MessagePart::Text {
+            text: String::new()
+        }],
+        "nothing was said, so there is nothing to render but the stop"
+    );
+}
+
+/// The same stop once the agent has managed a single thought: the message
+/// already exists, so nothing is minted and the thought is kept.
+#[test]
+fn a_stop_after_the_agent_speaks_stamps_the_message_it_has() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"do a big job"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"hmm"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"cancelled"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3, "prompt, reply, stop control");
+    let reply = &messages[1];
+    assert_eq!(reply.stop, Some(StopReason::Cancelled));
+    assert_eq!(
+        reply.parts.as_slice(),
+        &[MessagePart::Thought {
+            text: "hmm".to_owned()
+        }]
+    );
 }
 
 #[test]
@@ -477,4 +541,64 @@ fn replays_local_recordings() {
             );
         }
     }
+}
+
+/// The exchange the local database recorded after a switch to a provider
+/// whose credentials were broken: the prompt is answered with a JSON-RPC
+/// error and nothing else ever arrives.
+const FAILED_PROMPT: &str = concat!(
+    r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"hi"}]}}}"#,
+    "\n",
+    r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"message":"Internal error: Bad Request: bad request: Authorization header is badly formatted"}}}"#,
+);
+
+/// A turn whose prompt errors is over, and says why.
+///
+/// The bug this pins: the turn used to be left with no stop reason at all,
+/// which every reader takes to mean "still running" — so one failed prompt
+/// wedged the composer against a turn that had already died, and the error
+/// itself was dropped on the floor.
+#[test]
+fn a_prompt_answered_with_an_error_ends_its_turn() {
+    let messages = fold(parse_log(FAILED_PROMPT));
+
+    assert_eq!(messages.len(), 2, "the prompt, and the turn that failed");
+    let agent = messages.last().expect("an agent message");
+    assert_eq!(agent.author, Author::Agent);
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "Internal error: Bad Request: bad request: Authorization header is badly \
+                      formatted"
+                .to_owned()
+        }),
+        "the runtime's own words, carried verbatim"
+    );
+}
+
+/// The failure lands on whatever the agent had already said, rather than
+/// opening a second message beside it.
+#[test]
+fn a_turn_that_had_started_talking_fails_in_place() {
+    let chunk = concat!(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","#,
+        r#""params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"working"}}}}}"#,
+    );
+    let (prompt, error) = FAILED_PROMPT
+        .split_once('\n')
+        .expect("the fixture has two frames");
+    let log = format!("{prompt}\n{chunk}\n{error}");
+
+    let messages = fold(parse_log(&log));
+
+    assert_eq!(messages.len(), 2, "no extra message for the failure");
+    let agent = messages.last().expect("an agent message");
+    assert!(matches!(agent.stop, Some(StopReason::Failed { .. })));
+    assert_eq!(
+        agent.parts.first(),
+        Some(&MessagePart::Text {
+            text: "working".to_owned()
+        }),
+        "what the agent managed to say is kept"
+    );
 }

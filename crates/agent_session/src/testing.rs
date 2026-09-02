@@ -6,17 +6,30 @@
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
-    LogAppended, SessionBot, SessionStatus, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
+    CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    SessionStatus, StoredAgentSessionLog,
 };
-use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo};
+use crate::domain::ports::{
+    AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, REPLICA_STALE_AFTER,
+    SessionOwnership,
+};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 use bots::domain::models::BotId;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+
+/// One session's lease state: the holding replica (if any) and the fence,
+/// which outlives the holder as in the real schema.
+type Lease = (Option<ReplicaId>, i64);
+
+/// One replica's row: its last heartbeat and published forwarding address.
+type ReplicaRow = (std::time::Instant, Option<ReplicaAddress>);
 
 /// An in-memory [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
 ///
@@ -27,9 +40,18 @@ use std::sync::{Arc, Mutex};
 #[derive(Debug, Clone, Default)]
 pub struct InMemoryAgentSessionRepo {
     sessions: Arc<Mutex<HashMap<AgentSessionId, AgentSession>>>,
+    /// Egress token hash -> the session it was stored against, mirroring the
+    /// unique partial index the real table carries.
+    egress_token_hashes: Arc<Mutex<HashMap<String, AgentSessionId>>>,
     logs: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredAgentSessionLog>>>>,
+    user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
+    /// Replica heartbeats and published addresses, mirroring `harness_replica`.
+    replicas: Arc<Mutex<HashMap<ReplicaId, ReplicaRow>>>,
+    /// Session -> lease, mirroring the lease columns: release clears the
+    /// holder and leaves the counter.
+    leases: Arc<Mutex<HashMap<AgentSessionId, Lease>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -100,6 +122,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let now = chrono::Utc::now();
         let session = AgentSession {
             id: params.id,
+            name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: params.owner_id,
             thread_id: params.thread_id,
             // The in-memory repo has no comms rows to derive a channel from.
@@ -110,13 +133,41 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             harness: params.harness,
             repo_url: params.repo_url,
             workspace: params.workspace,
+            sandbox_size: params.sandbox_size,
+            instructions: params.instructions,
             acp_session_id: None,
+            external: None,
             status: SessionStatus::default(),
             created_at: now,
             modified_at: now,
         };
+        if let Some(hash) = params.egress_token_hash {
+            self.egress_token_hashes
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .insert(hash, session.id);
+        }
         self.insert_session(session.clone());
         Ok(session)
+    }
+
+    async fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> Result<Option<AgentSession>> {
+        let id = self
+            .egress_token_hashes
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(egress_token_hash)
+            .copied();
+        Ok(id.and_then(|id| {
+            self.sessions
+                .lock()
+                .expect("in-memory session store is not poisoned")
+                .get(&id)
+                .cloned()
+        }))
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
@@ -129,6 +180,19 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .ok_or_else(|| {
                 AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
             })
+    }
+
+    async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
+        let mut found: Vec<AgentSession> = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .values()
+            .filter(|session| session.thread_id == Some(thread_id))
+            .cloned()
+            .collect();
+        found.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(found)
     }
 
     async fn find_for_channel(
@@ -190,6 +254,73 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        if session.name == name {
+            return Ok(());
+        }
+        session.name = name.to_owned();
+        session.modified_at = chrono::Utc::now();
+        Ok(())
+    }
+
+    async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        if session.name != DEFAULT_AGENT_SESSION_NAME {
+            return Ok(false);
+        }
+        session.name = name.to_owned();
+        session.modified_at = chrono::Utc::now();
+        Ok(true)
+    }
+
+    async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        session.sandbox_size = size;
+        session.modified_at = chrono::Utc::now();
+        Ok(())
+    }
+
+    async fn user_sandbox_size(&self, user_id: &MacroUserIdStr<'static>) -> Result<SandboxSize> {
+        Ok(self
+            .user_sizes
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(user_id.as_ref())
+            .copied()
+            .unwrap_or_default())
+    }
+
+    async fn set_user_sandbox_size(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        size: SandboxSize,
+    ) -> Result<()> {
+        self.user_sizes
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(user_id.as_ref().to_owned(), size);
+        Ok(())
+    }
+
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.sessions
             .lock()
@@ -200,6 +331,99 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .expect("in-memory log store is not poisoned")
             .remove(&id);
         Ok(())
+    }
+}
+
+impl SessionOwnership for InMemoryAgentSessionRepo {
+    async fn claim(&self, session: AgentSessionId, replica: ReplicaId) -> Result<ClaimOutcome> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&session)
+        {
+            return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                "agent session {session} does not exist to claim"
+            )));
+        }
+        let now = std::time::Instant::now();
+        let mut replicas = self
+            .replicas
+            .lock()
+            .expect("in-memory replica store is not poisoned");
+        replicas.entry(replica).or_insert((now, None)).0 = now;
+        let mut leases = self
+            .leases
+            .lock()
+            .expect("in-memory lease store is not poisoned");
+        let (holder, fence) = leases.entry(session).or_insert((None, 0));
+        let holder_is_live = holder.filter(|holder| *holder != replica).filter(|holder| {
+            replicas
+                .get(holder)
+                .is_some_and(|(beat, _)| now.duration_since(*beat) < REPLICA_STALE_AFTER)
+        });
+        if let Some(holder) = holder_is_live {
+            return Ok(ClaimOutcome::ManagedElsewhere(holder));
+        }
+        *holder = Some(replica);
+        *fence += 1;
+        Ok(ClaimOutcome::Claimed(SessionClaim {
+            session,
+            replica,
+            fence: ManagerFence(*fence),
+        }))
+    }
+
+    async fn release(&self, claim: &SessionClaim) -> Result<()> {
+        let mut leases = self
+            .leases
+            .lock()
+            .expect("in-memory lease store is not poisoned");
+        if let Some((holder, fence)) = leases.get_mut(&claim.session)
+            && *holder == Some(claim.replica)
+            && *fence == claim.fence.0
+        {
+            *holder = None;
+        }
+        Ok(())
+    }
+
+    async fn heartbeat(&self, replica: ReplicaId, address: Option<&ReplicaAddress>) -> Result<()> {
+        let mut replicas = self
+            .replicas
+            .lock()
+            .expect("in-memory replica store is not poisoned");
+        let entry = replicas
+            .entry(replica)
+            .or_insert((std::time::Instant::now(), None));
+        entry.0 = std::time::Instant::now();
+        // As in the real adapter: a beat carrying no address keeps the one
+        // already published.
+        if let Some(address) = address {
+            entry.1 = Some(address.clone());
+        }
+        Ok(())
+    }
+
+    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+        let leases = self
+            .leases
+            .lock()
+            .expect("in-memory lease store is not poisoned");
+        let Some((Some(holder), _)) = leases.get(&session) else {
+            return Ok(None);
+        };
+        let replicas = self
+            .replicas
+            .lock()
+            .expect("in-memory replica store is not poisoned");
+        Ok(replicas
+            .get(holder)
+            .filter(|(beat, _)| beat.elapsed() < REPLICA_STALE_AFTER)
+            .map(|(_, address)| SessionManager {
+                replica: *holder,
+                address: address.clone(),
+            }))
     }
 }
 
@@ -252,6 +476,28 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         Ok(stored)
     }
 
+    async fn create_fenced(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+    ) -> Result<StoredAgentSessionLog> {
+        let fenced_out = {
+            let leases = self
+                .leases
+                .lock()
+                .expect("in-memory lease store is not poisoned");
+            !matches!(
+                leases.get(&log.agent_session_id),
+                Some((holder, fence))
+                    if *holder == Some(claim.replica) && *fence == claim.fence.0
+            )
+        };
+        if fenced_out {
+            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+        }
+        AgentSessionLogRepo::create(self, log).await
+    }
+
     async fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
@@ -290,6 +536,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
         id,
+        name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
             .expect("valid macro user id"),
         thread_id: None,
@@ -300,7 +547,10 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         harness: "claude-code".to_string(),
         repo_url: Some("https://github.com/example/example".to_string()),
         workspace: "/workspace".to_string(),
+        sandbox_size: SandboxSize::Default,
+        instructions: None,
         acp_session_id: None,
+        external: None,
         status: SessionStatus::NoMessages,
         created_at: now,
         modified_at: now,

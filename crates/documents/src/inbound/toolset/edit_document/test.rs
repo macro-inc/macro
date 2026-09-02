@@ -7,7 +7,7 @@ use crate::domain::events::InteractionReason;
 use crate::domain::models::{
     CommentThread, CreateDocumentRepoArgs, CreateTaskRequest, DocumentError,
     DocumentTeamShareResponse, EditDocumentServiceArgs, GithubPullRequestsResponse,
-    LocationQueryParams, TaskBranchName,
+    ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
 };
 use crate::domain::ports::editing::{EditResult, EditingWorkerService};
 use crate::domain::response::{
@@ -127,6 +127,14 @@ impl DocumentService for FakeDocumentService {
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         panic!("unexpected create_document call")
+    }
+
+    async fn import_email_attachment(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _args: ImportEmailAttachmentRepoArgs,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        panic!("unexpected import_email_attachment call")
     }
 
     async fn get_short_id(
