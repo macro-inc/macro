@@ -25,19 +25,16 @@ pub const MODEL_CONFIG_ID: &str = "model";
 /// it derives.
 ///
 /// Minted only by the server at accept time, as a v7 uuid so ids sort by mint
-/// time. On the wire and in JSON it is the bare uuid; frames logged before
-/// the prefix was dropped carry `agent_session:{uuid}`, which
-/// [`Self::from_request_id`] still reads. The machine's own handshake request
-/// ids (`agent_session:{session}:{n}`) parse as neither and stay `None`.
+/// time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
+/// request id is the whole ownership test: the server is the only writer of
+/// runtime-bound frames. The machine's own handshake request ids
+/// (`agent_session:{session}:{n}`) are not uuids and stay `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct AgentActionId(Uuid);
 
 impl AgentActionId {
-    /// What ids minted before the prefix was dropped start with.
-    const LEGACY_PREFIX: &'static str = "agent_session:";
-
     /// Mint a fresh id for an action being accepted.
     #[must_use]
     pub fn mint() -> Self {
@@ -57,8 +54,7 @@ impl AgentActionId {
         let RequestId::Str(id) = id else {
             return None;
         };
-        let raw = id.strip_prefix(Self::LEGACY_PREFIX).unwrap_or(id);
-        raw.parse().ok().map(Self)
+        id.parse().ok().map(Self)
     }
 
     /// The raw uuid, for callers that key on it.

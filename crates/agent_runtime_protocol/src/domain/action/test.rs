@@ -119,15 +119,6 @@ fn compact_becomes_opencodes_compact_prompt() {
 }
 
 #[test]
-fn legacy_prefixed_request_ids_still_parse() {
-    // Frames logged before the prefix was dropped carry it; the fold has to
-    // keep reading them.
-    let id = AgentActionId::mint();
-    let legacy = RequestId::Str(format!("agent_session:{id}"));
-    assert_eq!(AgentActionId::from_request_id(&legacy), Some(id));
-}
-
-#[test]
 fn non_uuid_request_ids_are_not_action_ids() {
     // The harness's own handshake counters and numeric ids were not minted by
     // the control plane. (A foreign client's bare uuid is indistinguishable
