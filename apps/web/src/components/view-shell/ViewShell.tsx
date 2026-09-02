@@ -278,6 +278,7 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
       index={0}
       minSize={ws.aside.layout().min}
       maxSize={ws.aside.layout().max}
+      redistributionPreferredSize={ws.aside.layout().width}
       target={{ kind: 'px', px: ws.aside.layout().width }}
       collapsed={() => ws.aside.isCollapsed()}
     >

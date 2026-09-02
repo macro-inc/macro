@@ -1,6 +1,7 @@
 import { makePersistedState } from '@app/lib/persistence';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import { createStore, type Store } from 'solid-js/store';
 import { createChannelsViewPersistence } from './persistence';
@@ -27,6 +28,7 @@ export const [ChannelsViewProvider, useChannelsView] =
     'ChannelsView',
     (props) => {
       const panel = useSplitPanelOrThrow();
+      const userId = useUserId();
       const initial = props.initialState ?? {};
       const [state, setState] = makePersistedState(
         createStore<ChannelsViewState>({
@@ -40,7 +42,9 @@ export const [ChannelsViewProvider, useChannelsView] =
         }),
         createChannelsViewPersistence({
           handle: panel.handle,
+          userId,
           restoreEntryState: props.initialState === undefined,
+          restoreLocalState: props.initialState === undefined,
         })
       );
 

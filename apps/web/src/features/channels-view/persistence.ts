@@ -6,10 +6,15 @@ import {
   createEntryPersistenceStorage,
   type EntryPersistenceHandle,
 } from '@components/app/split-layout/entry-persistence';
+import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import type { ChannelsViewState } from './types';
 
 const CHANNELS_ENTRY_STATE_KEY = 'channels.view';
+const channelsLocalStateStorage = createUserScopedStorage(
+  'macro:channels:view-state:v1'
+);
 
 const channelsEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -42,6 +47,20 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
   };
 }
 
+function restoreChannelsEntryState(
+  current: ChannelsViewState,
+  stored: unknown
+): ChannelsViewState {
+  const restored = channelsEntryStateSchema.parse(stored);
+
+  return {
+    ...current,
+    tab: restored.tab,
+    selectedChannelId: restored.selectedChannelId,
+    expandedGroups: restored.expandedGroups,
+  };
+}
+
 function createChannelsEntryStorage(options: {
   handle: EntryPersistenceHandle;
   restore: boolean;
@@ -52,25 +71,64 @@ function createChannelsEntryStorage(options: {
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
-      const restored = channelsEntryStateSchema.parse(stored);
-
-      return {
-        ...current,
-        tab: restored.tab,
-        selectedChannelId: restored.selectedChannelId,
-        expandedGroups: restored.expandedGroups,
-      };
+      return restoreChannelsEntryState(current, stored);
     },
     select: selectEntryState,
   });
 }
 
+function createChannelsLocalStateStorage(options: {
+  userId: Accessor<string | undefined>;
+  restore: boolean;
+}): PersistenceStorage<ChannelsViewState> {
+  let previous: string | undefined;
+  const serialize = (state: ChannelsViewState) =>
+    JSON.stringify(selectEntryState(state));
+
+  return {
+    restore: (current) => {
+      if (!options.restore) return undefined;
+
+      const userId = options.userId();
+      if (!userId) return undefined;
+
+      const raw = channelsLocalStateStorage.read(userId);
+      if (raw === null) return undefined;
+
+      try {
+        return restoreChannelsEntryState(current, JSON.parse(raw));
+      } catch {
+        return undefined;
+      }
+    },
+    initialize: (current) => {
+      previous = serialize(current);
+    },
+    write: (current) => {
+      const userId = options.userId();
+      if (!userId) return;
+
+      const serialized = serialize(current);
+      if (serialized === previous) return;
+
+      previous = serialized;
+      channelsLocalStateStorage.write(userId, serialized);
+    },
+  };
+}
+
 export function createChannelsViewPersistence(options: {
   handle: EntryPersistenceHandle;
+  userId: Accessor<string | undefined>;
   restoreEntryState?: boolean;
+  restoreLocalState?: boolean;
 }): MakePersistedStateOptions<ChannelsViewState> {
   return {
     storages: [
+      createChannelsLocalStateStorage({
+        userId: options.userId,
+        restore: options.restoreLocalState ?? true,
+      }),
       createChannelsEntryStorage({
         handle: options.handle,
         restore: options.restoreEntryState ?? true,
