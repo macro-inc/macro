@@ -8,14 +8,19 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
+  ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getGatewayAlb,
+  GatewayService,
   stack,
 } from '../../packages/shared';
+
+const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
@@ -164,6 +169,22 @@ export class ConvertService extends pulumi.ComponentResource {
     this.serviceAlbSg = sg.serviceAlbSg;
     this.serviceSg = sg.serviceSg;
 
+    const gatewayTargetGroup = new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        service: GatewayService.CONVERT_SERVICE,
+        healthCheckPath,
+        pathPatterns: ['/convert', '/convert/*'],
+        serviceSecurityGroupId: this.serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
+
     // Load balancer
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
       serviceName: BASE_NAME, // service name
@@ -199,6 +220,23 @@ export class ConvertService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
+        // Register tasks in both the legacy ALB's target group and the gateway
+        // target group while we migrate to the gateway. An explicit
+        // `loadBalancers` replaces the list awsx derives from
+        // `portMappings.targetGroup`, so the legacy entry must be listed here
+        // too.
+        loadBalancers: [
+          {
+            targetGroupArn: targetGroup.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: gatewayTargetGroup.target_group.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+        ],
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -259,6 +297,10 @@ export class ConvertService extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        // ECS refuses a service whose target group is not yet associated with
+        // a load balancer; it is the listener rule that creates that
+        // association
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
     this.service = service;

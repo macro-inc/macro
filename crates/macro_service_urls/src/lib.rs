@@ -512,6 +512,12 @@ service_url! {
             dev: "https://dev-gateway.macro.com/dss",
             prod: "https://gateway.macro.com/dss",
         },
+        /// Convert service API URL.
+        pub ConvertServiceUrl {
+            local: "http://localhost:8080",
+            dev: "https://dev-gateway.macro.com/convert",
+            prod: "https://gateway.macro.com/convert",
+        },
         /// Connection gateway HTTP API URL.
         pub ConnectionGatewayUrl {
             local: "http://localhost:8082",
