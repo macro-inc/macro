@@ -440,6 +440,7 @@ export type CacheRequest = { id: number } & (
       identity?: string;
     }
   | {
+      /** Background cache warming; ordinary writes do not publish pushes. */
       kind: 'hydrate';
       query: string;
       operationName?: string;

@@ -1,28 +1,36 @@
-import { isExplicitReplyMarkdown } from "@macro-inc/lexical-core/utils/explicit-reply";
+import { extractExplicitReply } from "@macro-inc/lexical-core/utils/explicit-reply";
 import { OpenAPIRoute } from "chanfana";
 import type { Context } from "hono";
 import { z } from "zod";
 import { handleEndpointError } from "../lib/error-handler";
 import { standardErrorResponses } from "../lib/schemas";
 
-const explicitReplyRequest = z.object({
+const extractReplyRequest = z.object({
 	markdown: z.string(),
 });
 
-const explicitReplyResponse = z.object({
-	isExplicitReply: z.boolean(),
+const replyTarget = z.object({
+	channelId: z.string(),
+	targetMessageId: z.string(),
+	targetThreadId: z.string(),
+	displayText: z.string(),
+	senderId: z.string(),
 });
 
-export class ExplicitReplyEndpoint extends OpenAPIRoute {
+const extractReplyResponse = z.object({
+	reply: replyTarget.nullable(),
+});
+
+export class ExtractReplyEndpoint extends OpenAPIRoute {
 	schema = {
-		summary: "Detect whether Markdown is an explicit reply",
+		summary: "Extract an explicit reply target from Markdown",
 		description:
-			"Reports whether Macro Markdown begins with a ReplyTarget node followed by authored content. Standard blockquotes do not count as replies.",
+			"Parses Macro Markdown and returns the leading ReplyTarget node when it is followed by authored content. Standard blockquotes do not count as replies.",
 		request: {
 			body: {
 				content: {
 					"application/json": {
-						schema: explicitReplyRequest,
+						schema: extractReplyRequest,
 					},
 				},
 			},
@@ -32,7 +40,7 @@ export class ExplicitReplyEndpoint extends OpenAPIRoute {
 				description: "Successfully evaluated the markdown",
 				content: {
 					"application/json": {
-						schema: explicitReplyResponse,
+						schema: extractReplyResponse,
 					},
 				},
 			},
@@ -44,7 +52,7 @@ export class ExplicitReplyEndpoint extends OpenAPIRoute {
 		try {
 			const { body } = await this.getValidatedData<typeof this.schema>();
 			return c.json({
-				isExplicitReply: isExplicitReplyMarkdown(body.markdown),
+				reply: extractExplicitReply(body.markdown),
 			});
 		} catch (error) {
 			return handleEndpointError(error, c);

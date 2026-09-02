@@ -1,38 +1,47 @@
 import { describe, expect, it } from 'vitest';
 import { buildReplyTargetMarkdown } from '../nodes/ReplyTargetNode';
-import { isExplicitReplyMarkdown } from '../utils/explicit-reply';
+import { extractExplicitReply } from '../utils/explicit-reply';
 
-describe('isExplicitReplyMarkdown', () => {
-  it('detects a reply-target node followed by a response', () => {
-    const reply = buildReplyTargetMarkdown({
-      channelId: 'channel-1',
-      targetMessageId: 'reply-1',
-      targetThreadId: 'thread-1',
-      displayText: 'please fix this',
-      senderId: 'macro|sender@example.com',
+const target = {
+  channelId: 'channel-1',
+  targetMessageId: 'reply-1',
+  targetThreadId: 'thread-1',
+  displayText: 'please fix this',
+  senderId: 'macro|sender@example.com',
+};
+
+describe('extractExplicitReply', () => {
+  it('extracts the leading reply-target when followed by a response', () => {
+    const reply = buildReplyTargetMarkdown(target);
+
+    expect(extractExplicitReply(`${reply}\n\nyes, on it`)).toEqual(target);
+    expect(extractExplicitReply(reply)).toBeNull();
+  });
+
+  it('rejects a second reply-target as authored content', () => {
+    const first = buildReplyTargetMarkdown(target);
+    const second = buildReplyTargetMarkdown({
+      ...target,
+      targetMessageId: 'reply-2',
+      displayText: 'another preview',
     });
 
-    expect(isExplicitReplyMarkdown(`${reply}\n\nyes, on it`)).toBe(true);
-    expect(isExplicitReplyMarkdown(reply)).toBe(false);
+    expect(extractExplicitReply(`${first}\n\n${second}`)).toBeNull();
   });
 
   it('rejects plain text', () => {
-    expect(isExplicitReplyMarkdown('just a normal message')).toBe(false);
+    expect(extractExplicitReply('just a normal message')).toBeNull();
   });
 
   it('does not treat a blockquote followed by content as an explicit reply', () => {
-    expect(isExplicitReplyMarkdown('> quoted text\n\nordinary response')).toBe(
-      false
-    );
+    expect(extractExplicitReply('> quoted text\n\nordinary response')).toBeNull();
   });
 
   it('rejects a quote appearing after the reply', () => {
-    expect(isExplicitReplyMarkdown('as I said\n\n> earlier message')).toBe(
-      false
-    );
+    expect(extractExplicitReply('as I said\n\n> earlier message')).toBeNull();
   });
 
   it('rejects empty markdown', () => {
-    expect(isExplicitReplyMarkdown('')).toBe(false);
+    expect(extractExplicitReply('')).toBeNull();
   });
 });

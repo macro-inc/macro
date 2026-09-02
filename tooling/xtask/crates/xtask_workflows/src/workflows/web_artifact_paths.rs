@@ -2,9 +2,10 @@
 
 use xtask_paths::RepoGlob;
 
-/// Shared by web checks, preview builds, and development deployments so a
-/// cache-WASM or shared-package change cannot be tested without being deployed
-/// (or deployed without being tested).
+/// Shared by web checks and preview builds so a cache-WASM or shared-package
+/// change cannot be tested without being built (or built without being
+/// tested). The push-to-main dev deploy is not path-gated at all — see
+/// [`crate::workflows::deploy_on_push`] for why.
 pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("package.json"),
     RepoGlob::new("bun.lock"),
@@ -26,13 +27,4 @@ pub fn yaml_list(indent: &str) -> String {
         .iter()
         .map(|path| format!("{indent}- '{}'\n", path.as_str()))
         .collect()
-}
-
-/// Render the shared paths for `diff-checker-action`'s space-delimited input.
-pub fn diff_checker_list() -> String {
-    WEB_ARTIFACT_PATHS
-        .iter()
-        .map(|path| format!("./{}", path.as_str()))
-        .collect::<Vec<_>>()
-        .join(" ")
 }

@@ -184,7 +184,9 @@ TypeScript · `[ui]` UI / UX conventions
   (#3898)
 - **FE-10** `[solid]` `createEffect` is for external/imperative systems only (DOM APIs,
   third-party libs, navigation events) — never for deriving state; use `on()` to make
-  dependencies explicit when an effect is warranted. (#3750, #3898 · also: AGENTS.md)
+  dependencies explicit when an effect is warranted. Prefer wrapping the setter over
+  `createEffect(() => { if (signal()) sideEffect() })` when setting a value should also
+  clear related UI, blur a control, or scroll. (#3750, #3898, #6038 · also: AGENTS.md)
 - **FE-11** `[solid]` Check `solid-primitives` before writing a custom reactive utility.
   (also: AGENTS.md)
 - **FE-12** `[async]` `async`/`await` with `try`/`catch`, not `.then()`/`.catch()`
@@ -246,3 +248,6 @@ TypeScript · `[ui]` UI / UX conventions
   from `@service-storage/client`, the one owner of entity-type spellings (email
   threads alone are stored as `email`, `thread`, and `email_thread`). (#6043 ·
   enforced: ast-grep `ts-no-item-type-cast` + `tsx-no-item-type-cast`, CI error)
+- **FE-32** `[ui]` Prefer styling in the component (Tailwind on the markup). Reserve
+  `@utility` in `apps/web/src/index.css` for styles widely shared across many
+  components — not one-off or two-callsite layouts. (#6038 · also: apps/web/AGENTS.md)

@@ -193,8 +193,9 @@ pub enum HydrationResultWire {
     },
 }
 
-/// Normalizes and stores a network response, broadcasts affected operations,
-/// and returns only fields not marked `@cacheOnly`.
+/// Normalizes and stores a background hydration response and returns only
+/// fields not marked `@cacheOnly`. Ordinary hydration remains silent to
+/// foreground subscribers; identity-changing resets are still broadcast.
 #[tauri::command]
 pub async fn graphql_cache_hydrate<R: Runtime>(
     app: AppHandle<R>,
@@ -214,13 +215,15 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             identity,
         )
         .await?;
-    emit_ops_affected(
-        &app,
-        &result.write_result.affected_ops,
-        &result.write_result.changed,
-    );
-    if result.write_result.revision_advanced {
-        emit_cache_changed(&app, &result.write_result.revision);
+    if result.write_result.reset {
+        emit_ops_affected(
+            &app,
+            &result.write_result.affected_ops,
+            &result.write_result.changed,
+        );
+        if result.write_result.revision_advanced {
+            emit_cache_changed(&app, &result.write_result.revision);
+        }
     }
     Ok(match result.data {
         Some(data) => HydrationResultWire::Data {

@@ -3,9 +3,9 @@
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`services/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
-//! the full static toolset, the tool-use system prompt plus the agent-session
-//! preamble and the owner's memory, and usage recorded per turn against the
-//! session owner.
+//! the full static toolset, the agent-session preamble, the static Macro
+//! prompt (immediately before any session instructions), and the owner's
+//! memory, with usage recorded per turn against the session owner.
 //!
 //! This is also where a session's own instructions become a system prompt.
 //! Nothing has to be transported for it - the loop runs in this process - which
@@ -126,20 +126,21 @@ async fn drive_turn(
     result
 }
 
-/// The turn's system prompt: the toolset's, the agent-session preamble, then
-/// the session's own instructions and the owner's memory when there are any.
+/// The turn's system prompt: the agent-session preamble, the static Macro
+/// prompt (how to use the product: mentions, tools, terminology), then the
+/// session's own instructions and the owner's memory when there are any.
 ///
-/// Instructions land after the preamble and before the memory block for the
-/// same reason DCS puts `additional_instructions` there - they are the
-/// caller's word on how this session works, so they qualify the standing
-/// prompt rather than being qualified by it, and memory stays last so a
-/// remembered fact is never read as an instruction.
+/// The static Macro prompt sits immediately before `<session_instructions>`
+/// so it is the preamble the model reads as it takes in the caller's word —
+/// the same reason DCS puts `additional_instructions` after the standing
+/// prompt. Memory stays last so a remembered fact is never read as an
+/// instruction.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> String {
-    let mut prompt = format!("{}\n{}", tools_prompt, prompt::agent_session::PROMPT);
+    let mut prompt = format!("{}\n{}", prompt::agent_session::PROMPT, tools_prompt);
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
