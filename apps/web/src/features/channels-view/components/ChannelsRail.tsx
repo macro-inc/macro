@@ -1,0 +1,587 @@
+import { CommandState } from '@app/features/command';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { SplitPanel } from '@components/app/split-panel';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { TabsInset } from '@core/component/TabsInset';
+import { useUserId } from '@core/context/user';
+import { tryMacroId, useDisplayName } from '@core/user';
+import type { MacroId } from '@core/user/macroId';
+import { compareDateDesc, type DateValue } from '@core/util/date';
+import { Entity, type ChannelEntity } from '@entity';
+import { notificationIsRead } from '@entity/utils/notification';
+import ChannelIcon from '@icon/wide-channel.svg';
+import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
+import AtIcon from '@phosphor/at.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import ChatsIcon from '@phosphor/chats-circle.svg';
+import ChatTextIcon from '@phosphor/chat-text.svg';
+import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import { Key } from '@solid-primitives/keyed';
+import { cn, Tooltip } from '@ui';
+import { createMemo, type JSX, Show } from 'solid-js';
+import { useChannelsView } from '../channels-view-context';
+import type { ChannelsGroup } from '../types';
+
+function createTabLabel(label: string, icon: JSX.Element) {
+  return (
+    <>
+      <span class="@max-[720px]/channels-view:hidden">{label}</span>
+      <span class="hidden @max-[720px]/channels-view:block [&_svg]:size-4">
+        {icon}
+      </span>
+    </>
+  );
+}
+
+const CHANNEL_TABS = [
+  {
+    value: 'browse',
+    label: createTabLabel('Browse', <ChatsIcon />),
+  },
+  {
+    value: 'recents',
+    label: createTabLabel('Recents', <ChatTextIcon />),
+  },
+];
+
+function channelInitials(name: string) {
+  const words = name.replace(/^#+/, '').trim().split(/\s+/).filter(Boolean);
+
+  if (words.length === 0) return '?';
+
+  return words
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join('')
+    .toLocaleUpperCase();
+}
+
+function ChannelAvatar(props: { channel: ChannelEntity; size?: 'sm' | 'md' }) {
+  const sizeClass = () =>
+    props.size === 'md'
+      ? cn(
+          'size-9 [&_svg]:size-4.5',
+          '@max-[720px]/channels-view:size-6 @max-[720px]/channels-view:[&_svg]:size-3.5'
+        )
+      : 'size-6 [&_svg]:size-3.5';
+
+  return (
+    <Show
+      when={props.channel.channelType === 'direct_message'}
+      fallback={
+        <span
+          class={cn(
+            'flex shrink-0 items-center justify-center text-ink-muted [&_svg]:shrink-0',
+            sizeClass()
+          )}
+        >
+          <span class="flex size-full items-center justify-center @max-[720px]/channels-view:hidden">
+            <Entity.Icon
+              entity={props.channel}
+              suppressClick
+              showTooltip={false}
+            />
+          </span>
+          <span class="hidden size-full items-center justify-center rounded-full border border-edge bg-lift text-xxs font-semibold tracking-wide text-ink @max-[720px]/channels-view:flex">
+            {channelInitials(props.channel.name)}
+          </span>
+        </span>
+      }
+    >
+      <span
+        class={cn(
+          'relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-lift [&_img]:size-full [&_svg]:shrink-0',
+          sizeClass()
+        )}
+      >
+        <Entity.Icon entity={props.channel} suppressClick showTooltip={false} />
+      </span>
+    </Show>
+  );
+}
+
+type ChannelOptionProps = {
+  channel: ChannelEntity;
+  unread: boolean;
+  selected: boolean;
+  onSelect: () => void;
+};
+
+function ChannelOption(props: ChannelOptionProps) {
+  return (
+    <Tooltip label={props.channel.name} placement="right" class="w-full">
+      <button
+        type="button"
+        class={cn(
+          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent',
+          '@max-[720px]/channels-view:size-10 @max-[720px]/channels-view:min-h-10 @max-[720px]/channels-view:self-center @max-[720px]/channels-view:justify-center @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:px-0 @max-[720px]/channels-view:py-0',
+          props.channel.channelType === 'direct_message'
+            ? 'min-h-10 py-2'
+            : 'h-8',
+          props.selected
+            ? 'bg-active text-ink'
+            : 'text-ink-muted hover:bg-hover hover:text-ink'
+        )}
+        aria-current={props.selected ? 'page' : undefined}
+        onClick={props.onSelect}
+      >
+        <ChannelAvatar channel={props.channel} />
+        <span class="min-w-0 flex-1 truncate text-sm font-medium @max-[720px]/channels-view:hidden">
+          {props.channel.name}
+        </span>
+        <Show when={props.unread}>
+          <span
+            aria-label="Unread"
+            class={cn(
+              'size-2 shrink-0 rounded-full bg-accent',
+              '@max-[720px]/channels-view:absolute @max-[720px]/channels-view:right-1.5 @max-[720px]/channels-view:top-1'
+            )}
+          />
+        </Show>
+      </button>
+    </Tooltip>
+  );
+}
+
+type ConversationCardProps = {
+  channel: ChannelEntity;
+  senderId?: string;
+  mentionedCurrentUser: boolean;
+  unread: boolean;
+  selected: boolean;
+  onSelect: () => void;
+};
+
+function formatDetailedTimestamp(timestamp: DateValue) {
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return String(timestamp);
+
+  return date.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
+function UserDisplayName(props: { id: MacroId }) {
+  const [displayName] = useDisplayName(props.id, {
+    emailFallback: 'local-part',
+  });
+
+  return <>{displayName()}</>;
+}
+
+function MessageSenderName(props: { id?: string }) {
+  const currentUserId = useUserId();
+  const macroId = () => (props.id ? tryMacroId(props.id) : undefined);
+  const isCurrentUser = () =>
+    props.id?.toLocaleLowerCase() === currentUserId()?.toLocaleLowerCase();
+
+  return (
+    <Show when={props.id} fallback={<>Unknown sender</>}>
+      {(senderId) => (
+        <Show when={!isCurrentUser()} fallback={<>You</>}>
+          <Show
+            when={macroId()}
+            fallback={senderId().startsWith('bot|') ? 'Bot' : 'Someone'}
+          >
+            {(id) => <UserDisplayName id={id()} />}
+          </Show>
+        </Show>
+      )}
+    </Show>
+  );
+}
+
+function ConversationCard(props: ConversationCardProps) {
+  const latestRootMessage = () => props.channel.latestRootMessage;
+
+  return (
+    <button
+      type="button"
+      class={cn(
+        'w-full min-w-0 px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        '@max-[720px]/channels-view:flex @max-[720px]/channels-view:size-10 @max-[720px]/channels-view:self-center @max-[720px]/channels-view:items-center @max-[720px]/channels-view:justify-center @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:px-0 @max-[720px]/channels-view:py-0',
+        props.selected ? 'bg-active' : 'bg-transparent hover:bg-hover'
+      )}
+      aria-current={props.selected ? 'page' : undefined}
+      onClick={props.onSelect}
+    >
+      <div class="flex min-w-0 items-start gap-3 @max-[720px]/channels-view:justify-center">
+        <div class="relative shrink-0">
+          <ChannelAvatar channel={props.channel} size="md" />
+          <Show when={props.unread}>
+            <span
+              aria-label="Unread"
+              class="absolute -right-0.5 -top-0.5 hidden size-2 rounded-full bg-accent ring-2 ring-surface @max-[720px]/channels-view:block"
+            />
+          </Show>
+        </div>
+        <div class="min-w-0 flex-1 @max-[720px]/channels-view:hidden">
+          <span class="flex min-w-0 items-center gap-2">
+            <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+              {props.channel.name}
+            </span>
+            <Show when={props.unread}>
+              <span
+                aria-label="Unread"
+                class="size-2 shrink-0 rounded-full bg-accent"
+              />
+            </Show>
+            <Show when={latestRootMessage()?.createdAt}>
+              {(createdAt) => (
+                <Tooltip
+                  label={formatDetailedTimestamp(createdAt())}
+                  placement="top"
+                >
+                  <span class="shrink-0 text-xxs text-ink-extra-muted">
+                    <Entity.Timestamp
+                      entity={props.channel}
+                      overrideTimeStamp={createdAt()}
+                    />
+                  </span>
+                </Tooltip>
+              )}
+            </Show>
+          </span>
+          <Show
+            when={latestRootMessage()?.threadId || props.mentionedCurrentUser}
+          >
+            <span class="flex min-w-0 items-center gap-2 text-xxs leading-4 text-ink-extra-muted">
+              <Show when={latestRootMessage()?.threadId}>
+                <span
+                  class="flex shrink-0 items-center gap-1"
+                  title="Reply in thread"
+                >
+                  <ReplyIcon class="size-3" />
+                  <span>Reply</span>
+                </span>
+              </Show>
+              <Show when={props.mentionedCurrentUser}>
+                <span class="flex shrink-0 items-center gap-1 text-accent">
+                  <AtIcon class="size-3" />
+                  <span>Mentioned you</span>
+                </span>
+              </Show>
+            </span>
+          </Show>
+          <div class="flex min-w-0 items-start gap-1 text-xs leading-4">
+            <span class="shrink-0 font-medium text-ink-muted">
+              <MessageSenderName id={props.senderId} />:
+            </span>
+            <Show
+              when={latestRootMessage()?.content.trim()}
+              fallback={
+                <span class="min-w-0 flex-1 text-ink-extra-muted">
+                  No messages yet
+                </span>
+              }
+            >
+              {(content) => (
+                <div class="min-w-0 flex-1 text-ink-muted [&_*]:my-0">
+                  <StaticMarkdown markdown={content()} singleLine />
+                </div>
+              )}
+            </Show>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+type CollapsibleSectionProps = {
+  group: ChannelsGroup;
+  title: string;
+  narrowIcon: JSX.Element;
+  unreadCount: number;
+  action: () => JSX.Element;
+  children: JSX.Element;
+};
+
+function CollapsibleSection(props: CollapsibleSectionProps) {
+  const { state, setGroupOpen } = useChannelsView();
+  const open = () => state.expandedGroups[props.group];
+  const toggle = () => setGroupOpen(props.group, !open());
+
+  return (
+    <section class="flex flex-col gap-1">
+      <div
+        class={cn(
+          'flex h-9 w-full items-center rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent',
+          '@max-[720px]/channels-view:h-10 @max-[720px]/channels-view:justify-center'
+        )}
+      >
+        <button
+          type="button"
+          class={cn(
+            'relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            '@max-[720px]/channels-view:size-10 @max-[720px]/channels-view:min-w-10 @max-[720px]/channels-view:flex-none @max-[720px]/channels-view:justify-center @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:px-0'
+          )}
+          aria-expanded={open()}
+          onClick={toggle}
+        >
+          <CaretDownIcon
+            class={cn(
+              'size-3 shrink-0 transition-transform @max-[720px]/channels-view:hidden',
+              !open() && '-rotate-90'
+            )}
+          />
+          <span class="min-w-0 flex-1 truncate @max-[720px]/channels-view:hidden">
+            {props.title}
+          </span>
+          <span class="hidden items-center justify-center @max-[720px]/channels-view:flex [&_svg]:size-4">
+            {props.narrowIcon}
+          </span>
+          <Show when={props.unreadCount > 0}>
+            <span
+              class={cn(
+                'text-xxs tabular-nums',
+                '@max-[720px]/channels-view:absolute @max-[720px]/channels-view:right-0.5 @max-[720px]/channels-view:top-0'
+              )}
+            >
+              {props.unreadCount}
+            </span>
+          </Show>
+        </button>
+        <div
+          data-section-action=""
+          class="pr-1 @max-[720px]/channels-view:hidden"
+        >
+          {props.action()}
+        </div>
+      </div>
+      <div class="hidden px-2 @max-[720px]/channels-view:block">
+        <div class="border-t border-edge-muted" />
+      </div>
+      <Show when={open()}>
+        <div class="flex flex-col gap-0.5">
+          <div
+            class={cn(
+              'hidden justify-center',
+              '@max-[720px]/channels-view:flex [&_button]:size-8! [&_button]:rounded-full! [&_button]:border [&_button]:border-edge-muted [&_button]:bg-transparent!'
+            )}
+          >
+            {props.action()}
+          </div>
+          {props.children}
+        </div>
+      </Show>
+    </section>
+  );
+}
+
+/** V2 Chat navigation rail with Browse and Recents destinations. */
+export function ChannelsRail(props: { channels: ChannelEntity[] }) {
+  const { state, setSelectedChannelId, setTab } = useChannelsView();
+  const currentUserId = useUserId();
+  const notificationSource = useGlobalNotificationSource();
+
+  const unreadChannelIds = createMemo(() => {
+    const ids = new Set<string>();
+
+    for (const notification of notificationSource.notifications()) {
+      if (
+        notification.entity_type === 'channel' &&
+        !notificationIsRead(notification)
+      ) {
+        ids.add(notification.entity_id);
+      }
+    }
+
+    return ids;
+  });
+
+  const teamChannels = createMemo(() =>
+    props.channels.filter((channel) => channel.channelType !== 'direct_message')
+  );
+  const directMessages = createMemo(() =>
+    props.channels.filter((channel) => channel.channelType === 'direct_message')
+  );
+  const unreadTeamChannelCount = createMemo(
+    () =>
+      teamChannels().filter((channel) => unreadChannelIds().has(channel.id))
+        .length
+  );
+  const unreadDirectMessageCount = createMemo(
+    () =>
+      directMessages().filter((channel) => unreadChannelIds().has(channel.id))
+        .length
+  );
+  const recentConversations = createMemo(() =>
+    props.channels
+      .filter((channel) => channel.latestRootMessage)
+      .sort((a, b) =>
+        compareDateDesc(
+          a.latestRootMessage?.createdAt,
+          b.latestRootMessage?.createdAt
+        )
+      )
+  );
+  const mentionsCurrentUser = (channel: ChannelEntity) => {
+    const userId = currentUserId()?.toLocaleLowerCase();
+
+    return Boolean(
+      userId &&
+        channel.latestRootMessage?.mentions.some(
+          (mention) => mention.toLocaleLowerCase() === userId
+        )
+    );
+  };
+
+  const createChannelAction = () => (
+    <button
+      type="button"
+      class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+      aria-label="Create channel"
+      onClick={() => openNewChannelModal()}
+    >
+      <PlusIcon class="size-3.5" />
+    </button>
+  );
+  const createDirectMessageAction = () => (
+    <button
+      type="button"
+      class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+      aria-label="Start direct message"
+      onClick={() => {
+        CommandState.clearQuery();
+        CommandState.setCategoryFilter('dms');
+        CommandState.open();
+      }}
+    >
+      <PlusIcon class="size-3.5" />
+    </button>
+  );
+
+  return (
+    <aside
+      aria-label="Chat navigation"
+      class="flex size-full min-h-0 flex-col bg-inset pb-5 pt-2"
+    >
+      <div class="flex min-h-8 shrink-0 items-center px-4 @max-[720px]/channels-view:hidden">
+        <SplitPanel.ControlGroup>
+          <SplitPanel.CloseButton />
+          <SplitPanel.BackButton />
+          <SplitPanel.ForwardButton />
+        </SplitPanel.ControlGroup>
+      </div>
+      <div class="flex shrink-0 items-center px-4 pt-3 @max-[720px]/channels-view:hidden">
+        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+          Chat
+        </h1>
+      </div>
+
+      <div
+        class={cn(
+          'shrink-0 px-4 pt-3',
+          '@max-[720px]/channels-view:px-3 @max-[720px]/channels-view:pt-0'
+        )}
+      >
+        <TabsInset
+          aria-label="Chat sidebar views"
+          class="h-9 @max-[720px]/channels-view:h-[76px]"
+          trackClass="h-full @max-[720px]/channels-view:flex-col"
+          fullWidth
+          list={CHANNEL_TABS}
+          value={state.tab}
+          onChange={(value) => {
+            if (value !== 'browse' && value !== 'recents') return;
+
+            setTab(value);
+          }}
+        />
+      </div>
+
+      <div class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto pt-3">
+        <Show
+          when={state.tab === 'browse'}
+          fallback={
+            <Show
+              when={recentConversations().length > 0}
+              fallback={
+                <div class="px-3 py-8 text-center text-sm text-ink-extra-muted @max-[720px]/channels-view:hidden">
+                  No recent messages
+                </div>
+              }
+            >
+              <div class="flex w-full flex-col divide-y divide-edge-muted @max-[720px]/channels-view:gap-0.5 @max-[720px]/channels-view:divide-y-0">
+                <Key each={recentConversations()} by={(channel) => channel.id}>
+                  {(channel) => (
+                    <ConversationCard
+                      channel={channel()}
+                      senderId={channel().latestRootMessage?.senderId}
+                      mentionedCurrentUser={mentionsCurrentUser(channel())}
+                      unread={unreadChannelIds().has(channel().id)}
+                      selected={state.selectedChannelId === channel().id}
+                      onSelect={() => setSelectedChannelId(channel().id)}
+                    />
+                  )}
+                </Key>
+              </div>
+            </Show>
+          }
+        >
+          <div class="flex flex-col gap-3 px-4 @max-[720px]/channels-view:px-2">
+            <CollapsibleSection
+              group="channels"
+              title="Channels"
+              narrowIcon={<ChannelIcon />}
+              unreadCount={unreadTeamChannelCount()}
+              action={createChannelAction}
+            >
+              <Show
+                when={teamChannels().length > 0}
+                fallback={
+                  <div class="px-2 py-2 text-xs text-ink-extra-muted @max-[720px]/channels-view:hidden">
+                    No channels
+                  </div>
+                }
+              >
+                <Key each={teamChannels()} by={(channel) => channel.id}>
+                  {(channel) => (
+                    <ChannelOption
+                      channel={channel()}
+                      unread={unreadChannelIds().has(channel().id)}
+                      selected={state.selectedChannelId === channel().id}
+                      onSelect={() => setSelectedChannelId(channel().id)}
+                    />
+                  )}
+                </Key>
+              </Show>
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              group="direct-messages"
+              title="DMs"
+              narrowIcon={<ChatTeardropIcon />}
+              unreadCount={unreadDirectMessageCount()}
+              action={createDirectMessageAction}
+            >
+              <Show
+                when={directMessages().length > 0}
+                fallback={
+                  <div class="px-2 py-2 text-xs text-ink-extra-muted @max-[720px]/channels-view:hidden">
+                    No direct messages
+                  </div>
+                }
+              >
+                <Key each={directMessages()} by={(channel) => channel.id}>
+                  {(channel) => (
+                    <ChannelOption
+                      channel={channel()}
+                      unread={unreadChannelIds().has(channel().id)}
+                      selected={state.selectedChannelId === channel().id}
+                      onSelect={() => setSelectedChannelId(channel().id)}
+                    />
+                  )}
+                </Key>
+              </Show>
+            </CollapsibleSection>
+          </div>
+        </Show>
+      </div>
+    </aside>
+  );
+}
