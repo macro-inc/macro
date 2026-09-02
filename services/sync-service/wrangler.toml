@@ -31,7 +31,7 @@ bucket_name = "document-snapshot-bucket-dev"
 
 [vars]
 INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
-SPS_URL = "https://dev-gateway.macro.com/search-processing"
+SPS_URL = "http://localhost:8092"
 DSS_URL = "http://localhost:8086"
 DSS_INTERNAL_AUTH_KEY = "local"
 # Tags exported spans with deployment.environment=local, matching the
