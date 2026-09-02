@@ -153,6 +153,25 @@ export function ENABLE_EMAIL_SIGNATURES(): boolean {
   );
 }
 
+// SidebarNext: the rebuilt app sidebar (`components/app/sidebar-next`) rendered
+// in place of `AppSidebar`. On by default in dev while it is iterated on;
+// PostHog-gated everywhere else. Set VITE_ENABLE_SIDEBAR_NEXT=false to get the
+// old sidebar back locally.
+export const ENABLE_SIDEBAR_NEXT_FLAG = 'enable-sidebar-next';
+// Read statically rather than through `getFeatureFlagOverride` for the same
+// reason as VITE_ENABLE_REMINDERS below: Vite substitutes `import.meta.env.VITE_X`
+// by text at build time, so that helper's dynamic lookup can come back
+// undefined in a production bundle.
+const SIDEBAR_NEXT_ENV_OVERRIDE = import.meta.env.VITE_ENABLE_SIDEBAR_NEXT;
+export const ENABLE_SIDEBAR_NEXT_OVERRIDE: boolean | undefined =
+  SIDEBAR_NEXT_ENV_OVERRIDE === 'true'
+    ? true
+    : SIDEBAR_NEXT_ENV_OVERRIDE === 'false'
+      ? false
+      : DEV_MODE_ENV
+        ? true
+        : undefined;
+
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
 // global search. PostHog-gated (currently targeted at the Macro team in prod)

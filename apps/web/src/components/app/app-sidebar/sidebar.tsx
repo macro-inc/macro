@@ -124,7 +124,8 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { CalendarSidebarPreview } from './calendar-sidebar-preview';
 
-interface SidebarItem {
+// TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarNext ships.
+export interface SidebarItem {
   id: ListView | (string & {});
   label: string;
   href: string;
@@ -292,7 +293,9 @@ type SidebarHotkeyDeps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
+export type OpenWithSplitFn = ReturnType<
+  typeof useSplitLayout
+>['openWithSplit'];
 
 const isMarkdownDocumentsParams = (
   params: SidebarItem['params'] | undefined
@@ -304,7 +307,7 @@ const isMarkdownDocumentsParams = (
   return initialClientFilters?.or?.includes('doc-markdown') ?? false;
 };
 
-function sidebarContent(
+export function sidebarContent(
   viewId: SidebarItem['id'],
   params?: SidebarItem['params']
 ): SplitContent {
@@ -318,7 +321,7 @@ function sidebarContent(
  * Holding shift opens it in a new split. Use in-app back/forward to return to
  * prior entries.
  */
-function navigateToSidebarView(args: {
+export function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
   params?: SidebarItem['params'];
   shiftKey: boolean;
@@ -353,7 +356,7 @@ function navigateToSidebarView(args: {
   });
 }
 
-const registerSidebarHotkeys = ({
+export const registerSidebarHotkeys = ({
   isSlim,
   onOpenChange,
 }: SidebarHotkeyDeps) => {
@@ -382,7 +385,8 @@ const registerSidebarHotkeys = ({
  * icons even though the registration below is owned by `GoToHotkeys`, which
  * stays mounted regardless of whether the sidebar itself is visible.
  */
-const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
+// TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarNext ships.
+export const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
 
 const resetGoToHotkeysState = () => {
   setGoToHotkeyVisible(false);
@@ -1727,6 +1731,12 @@ interface SidebarOpenInSplitMenuProps {
    */
   onOpened?: (split: SplitHandle, action: SidebarOpenAction) => void;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Overrides the trigger's default `h-7`, which otherwise clips rows of a
+   * different height (SidebarNext's are taller). Merged with `cn`, so a height
+   * utility here wins.
+   */
+  triggerClass?: string;
   children: JSX.Element;
 }
 
@@ -1735,7 +1745,7 @@ interface SidebarOpenInSplitMenuProps {
  * split, in a new split, or fullscreen. Wraps any sidebar row — the top-level
  * links and the nested Email account rows both use it.
  */
-const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
+export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
 
@@ -1777,7 +1787,7 @@ const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
 
   return (
     <ContextMenu onOpenChange={props.onOpenChange}>
-      <ContextMenu.Trigger class="w-full h-7">
+      <ContextMenu.Trigger class={cn('w-full h-7', props.triggerClass)}>
         {props.children}
       </ContextMenu.Trigger>
 
