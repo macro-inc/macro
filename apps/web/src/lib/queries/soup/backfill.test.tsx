@@ -42,8 +42,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_GRAPHQL_BACKFILL: true,
-  ENABLE_GRAPHQL_SOUP_FLAG: 'enable-graphql-soup',
-  ENABLE_GRAPHQL_SOUP_OVERRIDE: undefined,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 
 vi.mock('@core/cross-tab/tab-leader', () => ({
