@@ -31,28 +31,13 @@ fn auth_service_url_parses() {
 }
 
 #[test]
-fn pdf_service_url_parses() {
-    assert_parses_for_all_environments(PdfServiceUrl::default_for_environment);
-}
-
-#[test]
 fn document_storage_service_url_parses() {
     assert_parses_for_all_environments(DocumentStorageServiceUrl::default_for_environment);
 }
 
 #[test]
-fn websocket_service_url_parses() {
-    assert_parses_for_all_environments(WebsocketServiceUrl::default_for_environment);
-}
-
-#[test]
 fn connection_gateway_url_parses() {
     assert_parses_for_all_environments(ConnectionGatewayUrl::default_for_environment);
-}
-
-#[test]
-fn connection_gateway_websocket_url_parses() {
-    assert_parses_for_all_environments(ConnectionGatewayWebsocketUrl::default_for_environment);
 }
 
 #[test]
@@ -255,24 +240,12 @@ fn exported_service_urls_match_local_values() {
         "http://localhost:8080"
     );
     assert_eq!(
-        service_urls.pdf_service_url.as_ref(),
-        "http://localhost:4567"
-    );
-    assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
         "http://localhost:8086",
     );
     assert_eq!(
-        service_urls.websocket_service_url.as_ref(),
-        "ws://localhost:6969"
-    );
-    assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
         "http://localhost:8082",
-    );
-    assert_eq!(
-        service_urls.connection_gateway_websocket_url.as_ref(),
-        "ws://localhost:8082",
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
@@ -325,24 +298,12 @@ fn exported_service_urls_match_dev_values() {
         "https://auth-service-dev.macro.com",
     );
     assert_eq!(
-        service_urls.pdf_service_url.as_ref(),
-        "https://pdf-service-dev.macro.com",
-    );
-    assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
         "https://dev-gateway.macro.com/dss",
     );
     assert_eq!(
-        service_urls.websocket_service_url.as_ref(),
-        "wss://services-dev.macro.com",
-    );
-    assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
         "https://connection-gateway-dev.macro.com",
-    );
-    assert_eq!(
-        service_urls.connection_gateway_websocket_url.as_ref(),
-        "wss://connection-gateway-dev.macro.com",
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
@@ -392,24 +353,12 @@ fn exported_service_urls_match_prod_values() {
         "https://auth-service.macro.com",
     );
     assert_eq!(
-        service_urls.pdf_service_url.as_ref(),
-        "https://pdf-service.macro.com",
-    );
-    assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
         "https://gateway.macro.com/dss",
     );
     assert_eq!(
-        service_urls.websocket_service_url.as_ref(),
-        "wss://services.macro.com",
-    );
-    assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
         "https://connection-gateway.macro.com",
-    );
-    assert_eq!(
-        service_urls.connection_gateway_websocket_url.as_ref(),
-        "wss://connection-gateway.macro.com",
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
@@ -460,24 +409,12 @@ fn exported_service_url_override_names_are_derived_from_env_var_names() {
         "OVERRIDE_AUTH_SERVICE_URL",
     );
     assert_eq!(
-        PdfServiceUrl::local().override_env_var_name(),
-        "OVERRIDE_PDF_SERVICE_URL",
-    );
-    assert_eq!(
         DocumentStorageServiceUrl::local().override_env_var_name(),
         "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",
     );
     assert_eq!(
-        WebsocketServiceUrl::local().override_env_var_name(),
-        "OVERRIDE_WEBSOCKET_SERVICE_URL",
-    );
-    assert_eq!(
         ConnectionGatewayUrl::local().override_env_var_name(),
         "OVERRIDE_CONNECTION_GATEWAY_URL",
-    );
-    assert_eq!(
-        ConnectionGatewayWebsocketUrl::local().override_env_var_name(),
-        "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
     );
     assert_eq!(
         DocumentCognitionServiceUrl::local().override_env_var_name(),

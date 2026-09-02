@@ -506,43 +506,17 @@ service_url! {
             dev: "https://auth-service-dev.macro.com",
             prod: "https://auth-service.macro.com",
         },
-        /// PDF rendering service API URL.
-        pub PdfServiceUrl {
-            local: "http://localhost:4567",
-            dev: "https://pdf-service-dev.macro.com",
-            prod: "https://pdf-service.macro.com",
-        },
         /// Document storage service API URL.
         pub DocumentStorageServiceUrl {
             local: "http://localhost:8086",
             dev: "https://dev-gateway.macro.com/dss",
             prod: "https://gateway.macro.com/dss",
         },
-        /// WebSocket service URL.
-        pub WebsocketServiceUrl {
-            local: "ws://localhost:6969",
-            dev: "wss://services-dev.macro.com",
-            prod: "wss://services.macro.com",
-        },
         /// Connection gateway HTTP API URL.
         pub ConnectionGatewayUrl {
             local: "http://localhost:8082",
             dev: "https://connection-gateway-dev.macro.com",
             prod: "https://connection-gateway.macro.com",
-        },
-        /// Connection gateway WebSocket URL.
-        pub ConnectionGatewayWebsocketUrl {
-            local: "ws://localhost:8082",
-            dev: "wss://connection-gateway-dev.macro.com",
-            prod: "wss://connection-gateway.macro.com",
-        },
-        /// Agent proxy WebSocket URL (the shared runtime endpoint external
-        /// agent runtimes dial). Unused: its service is gone, and the URL
-        /// stays only until the deployed stack behind it is torn down.
-        pub AgentProxyWebsocketUrl {
-            local: "ws://localhost:8091",
-            dev: "wss://agent-proxy-dev.macro.com",
-            prod: "wss://agent-proxy.macro.com",
         },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
