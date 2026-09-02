@@ -20,3 +20,14 @@ pub const LONG_MULTI_RESUME: &str = include_str!("../../fixtures/real/long_multi
 
 /// A sanitized real turn containing repeated plan updates.
 pub const PLAN_TODO: &str = include_str!("../../fixtures/real/plan_todo.jsonl");
+
+/// A sanitized real Claude Code turn delegating to a subagent: the `Agent`
+/// call, the subagent's own `Bash` call attributed to it, and the rich
+/// `toolResponse` with the subagent's answer and statistics.
+pub const SUBAGENT_CLAUDE_CODE: &str =
+    include_str!("../../fixtures/real/subagent_claude_code.jsonl");
+
+/// A sanitized real OpenCode turn delegating to a subagent: the `task` call
+/// whose completion names the child session and wraps the answer in
+/// `<task_result>`, with nothing of the child streamed.
+pub const SUBAGENT_OPENCODE: &str = include_str!("../../fixtures/real/subagent_opencode.jsonl");

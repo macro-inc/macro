@@ -60,12 +60,29 @@ pub enum MessagePart {
 }
 
 impl MessagePart {
-    /// The parts nested inside this one, for a part kind that holds any.
-    /// `None` for every kind today; a part that delegates work (a subagent)
-    /// will hold its delegate's parts here.
+    /// The parts nested inside this one: a subagent's own parts. `None` for
+    /// every other kind.
     #[must_use]
     pub fn children_mut(&mut self) -> Option<&mut Vec<MessagePart>> {
-        None
+        match self {
+            Self::ToolUse {
+                detail: ToolDetail::Subagent { children, .. },
+                ..
+            } => Some(children),
+            _ => None,
+        }
+    }
+
+    /// The parts nested inside this one, read-only. See [`Self::children_mut`].
+    #[must_use]
+    pub fn children(&self) -> &[MessagePart] {
+        match self {
+            Self::ToolUse {
+                detail: ToolDetail::Subagent { children, .. },
+                ..
+            } => children,
+            _ => &[],
+        }
     }
 }
 

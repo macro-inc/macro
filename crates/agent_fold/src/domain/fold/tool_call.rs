@@ -15,6 +15,7 @@ use agent_client_protocol::schema::v1::{
 
 use super::convert::{content_block_text, tool_kind_name, tool_status};
 use super::state::{Changed, FoldState, ToolPath};
+use super::subagent::{patch_subagent_detail, subagent_detail};
 
 impl FoldState {
     /// Handle a `tool_call`: add a new tool part.
@@ -23,24 +24,40 @@ impl FoldState {
         let reader = self.reader();
         let name = harness::tool_name(reader, call.meta.as_ref(), &call.title);
 
-        // Macro's tools are chosen by name and never recategorized: the kind
-        // ACP gives them is `other`, and what a reader wants is the tool's own
-        // JSON, which only the name tells us how to read.
-        let detail = match reader.macro_tool(&name) {
-            Some(tool) => macro_detail(
+        // Macro's tools and subagents are chosen by name and never
+        // recategorized: the kind ACP gives them is `other` (or `think`), and
+        // what a reader wants is the tool's own shape, which only the name -
+        // and the harness's conventions - tell us how to read.
+        let detail = if let Some(tool) = reader.macro_tool(&name) {
+            macro_detail(
                 reader,
                 tool,
                 call.raw_input.as_ref(),
                 call.raw_output.as_ref(),
-            ),
-            None => tool_detail(
+            )
+        } else if reader.is_subagent(&name, call.kind, call.meta.as_ref()) {
+            // Content text is only an answer once the call has finished;
+            // while it streams, Claude Code echoes the brief there.
+            let finished = tool_status(call.status).is_finished();
+            subagent_detail(
+                reader,
+                call.meta.as_ref(),
+                &call.title,
+                call.raw_input.as_ref(),
+                call.raw_output.as_ref(),
+                generic_output(&call.content)
+                    .as_deref()
+                    .filter(|_| finished),
+            )
+        } else {
+            tool_detail(
                 reader,
                 call.kind,
                 call.raw_input.as_ref(),
                 &call.content,
                 &call.locations,
                 call.meta.as_ref(),
-            ),
+            )
         };
         let tool = MessagePart::ToolUse {
             id: id.clone(),
@@ -59,14 +76,21 @@ impl FoldState {
             return Some(Changed::updated(message));
         }
 
-        let (changed, position) = self.push_agent_part(tool)?;
-        self.tool_positions.insert(
-            id,
-            ToolPath {
-                message: changed.message,
-                path: vec![position],
-            },
-        );
+        // A call the harness attributes to a subagent nests under it.
+        let (changed, at) = match self.parent_path(reader, call.meta.as_ref(), &id) {
+            Some(parent) => self.push_child_part(&parent, tool)?,
+            None => {
+                let (changed, position) = self.push_agent_part(tool)?;
+                (
+                    changed,
+                    ToolPath {
+                        message: changed.message,
+                        path: vec![position],
+                    },
+                )
+            }
+        };
+        self.tool_positions.insert(id, at);
         Some(changed)
     }
 
@@ -104,7 +128,7 @@ impl FoldState {
         // only fills a name nothing better has set.
         if let Some(found) = reader.meta_tool_name(update.meta.as_ref()) {
             *name = found;
-        } else if let Some(title) = fields.title
+        } else if let Some(title) = fields.title.as_deref()
             && name.is_empty()
         {
             *name = title.parse().unwrap_or_else(|never| match never {});
@@ -118,6 +142,23 @@ impl FoldState {
                 fields.raw_input.as_ref(),
                 fields.raw_output.as_ref(),
             ),
+            ToolDetail::Subagent { .. } => {
+                let finished = status.is_finished();
+                patch_subagent_detail(
+                    reader,
+                    detail,
+                    update.meta.as_ref(),
+                    fields.title.as_deref(),
+                    fields.raw_input.as_ref(),
+                    fields.raw_output.as_ref(),
+                    fields
+                        .content
+                        .as_deref()
+                        .and_then(generic_output)
+                        .as_deref()
+                        .filter(|_| finished),
+                );
+            }
             _ => patch_detail(
                 reader,
                 detail,
@@ -326,8 +367,9 @@ pub(super) fn patch_detail(
                 *output = Some(found);
             }
         }
-        // Patched by `patch_macro_detail`, which has the name to hand.
-        ToolDetail::Macro { .. } | ToolDetail::UserTool { .. } => {}
+        // Patched by `patch_macro_detail` / `patch_subagent_detail`, which
+        // have the name and the harness's result shapes to hand.
+        ToolDetail::Macro { .. } | ToolDetail::UserTool { .. } | ToolDetail::Subagent { .. } => {}
     }
 }
 

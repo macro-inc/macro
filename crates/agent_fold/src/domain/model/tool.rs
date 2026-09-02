@@ -8,6 +8,8 @@ use lazy_regex::regex_captures;
 use serde::Serialize;
 use specta::Type;
 
+use super::part::MessagePart;
+use super::subagent::SubagentResult;
 use super::user_tool::UserToolOutcome;
 
 /// What a harness called a tool.
@@ -135,6 +137,14 @@ pub enum ToolStatus {
     Failed,
 }
 
+impl ToolStatus {
+    /// Whether the call is over, either way.
+    #[must_use]
+    pub const fn is_finished(self) -> bool {
+        matches!(self, Self::Completed | Self::Failed)
+    }
+}
+
 /// What a tool call actually did.
 ///
 /// Discriminated by what a reader needs in order to render it, not by ACP's
@@ -244,6 +254,36 @@ pub enum ToolDetail {
         input: serde_json::Value,
         /// Where the user got to with it.
         outcome: UserToolOutcome,
+    },
+    /// Work the agent delegated to another agent.
+    ///
+    /// ACP has no notion of this; every harness spells it as a tool call by
+    /// its own conventions (Claude Code's `Agent`, OpenCode's and Cursor's
+    /// `task`, Codex's `spawnAgent`, Hermes's `delegate_task`), and the
+    /// harness reader recognizes it. What the subagent itself did nests in
+    /// `children` when the harness attributes its calls to the parent -
+    /// only Claude Code does today - and is otherwise summarized in
+    /// `result`.
+    Subagent {
+        /// Which kind of agent was delegated to (`general-purpose`,
+        /// `explore`), when the harness names one.
+        #[serde(rename = "agentType")]
+        agent_type: Option<String>,
+        /// A short description of the task, when given.
+        description: Option<String>,
+        /// The brief the subagent was given.
+        prompt: Option<String>,
+        /// Whether the subagent was started in the background: its call
+        /// completes at once and its answer, if any, arrives some other way.
+        background: bool,
+        /// The subagent's own parts, in arrival order, for a harness that
+        /// attributes them to the parent call.
+        children: Vec<MessagePart>,
+        /// What the subagent reported back, once it has.
+        ///
+        /// Boxed: this is by far the widest thing a part can hold, and every
+        /// part pays for the widest variant.
+        result: Option<Box<SubagentResult>>,
     },
 }
 

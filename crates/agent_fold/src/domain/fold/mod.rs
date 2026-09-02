@@ -69,6 +69,8 @@ mod permission;
 mod plan;
 /// The fold's state and the per-frame dispatch.
 mod state;
+/// Delegated agents and the calls nested under them.
+mod subagent;
 /// Tool calls and their patches.
 mod tool_call;
 /// Opening, closing, and failing turns.

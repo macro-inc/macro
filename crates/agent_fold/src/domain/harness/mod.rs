@@ -32,9 +32,11 @@ pub mod generic;
 pub mod macro_inmem;
 /// MCP's result and user-tool response shapes.
 pub mod mcp;
+/// OpenCode's built-in ACP server.
+pub mod opencode;
 
-use crate::domain::model::{Harness, ToolName};
-use agent_client_protocol::schema::v1::Meta;
+use crate::domain::model::{Harness, SubagentResult, ToolName, ToolUseId};
+use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use lazy_regex::regex_is_match;
 
 /// What a harness's conventions let the fold read off a tool frame.
@@ -84,6 +86,61 @@ pub trait HarnessReader: Sync {
     fn unwrap_tool_output(&self, raw: &serde_json::Value) -> (serde_json::Value, Option<String>) {
         mcp::unwrap_call_result(raw)
     }
+
+    /// Whether a call, as its opening frame describes it, delegates work to
+    /// another agent.
+    ///
+    /// Decided at open and never revisited, so a subagent never changes
+    /// shape mid-flight. The neutral rule is the Claude Code "Task tool"
+    /// convention that OpenCode and Cursor copied: a tool called `task` or
+    /// `agent` whose kind is `think` or `other`.
+    fn is_subagent(&self, name: &ToolName, kind: ToolKind, meta: Option<&Meta>) -> bool {
+        let _ = meta;
+        generic::is_subagent(name, kind)
+    }
+
+    /// The subagent call this frame's call belongs to, when the harness
+    /// attributes calls to a parent. Only Claude Code does today.
+    fn parent_tool_call(&self, meta: Option<&Meta>) -> Option<ToolUseId> {
+        let _ = meta;
+        None
+    }
+
+    /// What a subagent was asked, read off a call's raw input (and, for a
+    /// harness that puts it nowhere else, its title).
+    fn subagent_input(&self, raw_input: Option<&serde_json::Value>, title: &str) -> SubagentInput {
+        let _ = title;
+        generic::subagent_input(raw_input)
+    }
+
+    /// What a subagent reported, read off a frame's `_meta`, raw input, raw
+    /// output and content text - whichever of those the harness uses.
+    /// `None` when the frame carries no result at all.
+    fn subagent_result(
+        &self,
+        meta: Option<&Meta>,
+        raw_input: Option<&serde_json::Value>,
+        raw_output: Option<&serde_json::Value>,
+        content_text: Option<&str>,
+    ) -> Option<SubagentResult> {
+        let _ = (meta, raw_input);
+        generic::subagent_result(raw_output, content_text)
+    }
+}
+
+/// What a subagent was asked, as one frame reports it. Every field is
+/// optional because the input arrives in pieces - Claude Code streams the
+/// arguments over several patches - and a patch only says what it carries.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SubagentInput {
+    /// Which kind of agent was delegated to.
+    pub agent_type: Option<String>,
+    /// A short description of the task.
+    pub description: Option<String>,
+    /// The brief.
+    pub prompt: Option<String>,
+    /// Whether the subagent runs in the background.
+    pub background: Option<bool>,
 }
 
 impl Harness {
@@ -130,7 +187,7 @@ impl Harness {
     }
 
     /// Every harness with a reader of its own, in the order they are tried.
-    const KNOWN: &'static [Self] = &[Self::ClaudeCode, Self::Macro];
+    const KNOWN: &'static [Self] = &[Self::ClaudeCode, Self::Macro, Self::OpenCode];
 
     /// How to read this harness's frames.
     #[must_use]
@@ -138,12 +195,10 @@ impl Harness {
         match self {
             Self::ClaudeCode => &claude_code::ClaudeCode,
             Self::Macro => &macro_inmem::MacroInmem,
-            Self::OpenCode
-            | Self::Codex
-            | Self::Cursor
-            | Self::Hermes
-            | Self::OpenClaw
-            | Self::Unknown => &generic::Generic,
+            Self::OpenCode => &opencode::OpenCode,
+            Self::Codex | Self::Cursor | Self::Hermes | Self::OpenClaw | Self::Unknown => {
+                &generic::Generic
+            }
         }
     }
 }
