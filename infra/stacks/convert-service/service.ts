@@ -306,7 +306,10 @@ export class ConvertService extends pulumi.ComponentResource {
     this.service = service;
 
     // auto-scaling and alarm notifications
-    this.setupAutoScaling();
+    this.setupAutoScaling({
+      gatewayAlbArnSuffix: gatewayLoadBalancer.albArnSuffix,
+      gatewayTargetGroup: gatewayTargetGroup.target_group,
+    });
     this.setupServiceAlarms();
 
     // DNS
@@ -431,7 +434,13 @@ export class ConvertService extends pulumi.ComponentResource {
     return { serviceAlbSg, serviceSg };
   }
 
-  setupAutoScaling() {
+  setupAutoScaling({
+    gatewayAlbArnSuffix,
+    gatewayTargetGroup,
+  }: {
+    gatewayAlbArnSuffix: pulumi.Output<string>;
+    gatewayTargetGroup: aws.lb.TargetGroup;
+  }) {
     if (!this.service) return;
 
     const serviceScalableTarget = new aws.appautoscaling.Target(
@@ -474,6 +483,31 @@ export class ConvertService extends pulumi.ComponentResource {
           predefinedMetricSpecification: {
             predefinedMetricType: 'ALBRequestCountPerTarget',
             resourceLabel,
+          },
+          scaleInCooldown: 60,
+          scaleOutCooldown: 120,
+        },
+      },
+      { parent: this }
+    );
+
+    // Gateway requests hit a different target group. A second policy is
+    // required because ALBRequestCountPerTarget is scoped to one
+    // load-balancer/target-group pair. Target tracking uses the higher
+    // desired count of the two.
+    const gatewayResourceLabel = pulumi.interpolate`${gatewayAlbArnSuffix}/${gatewayTargetGroup.arnSuffix}`;
+    new aws.appautoscaling.Policy(
+      `${BASE_NAME}-scaling-policy-gateway-request-count-${stack}`,
+      {
+        policyType: 'TargetTrackingScaling',
+        resourceId: serviceScalableTarget.resourceId,
+        scalableDimension: serviceScalableTarget.scalableDimension,
+        serviceNamespace: serviceScalableTarget.serviceNamespace,
+        targetTrackingScalingPolicyConfiguration: {
+          targetValue: 1000,
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'ALBRequestCountPerTarget',
+            resourceLabel: gatewayResourceLabel,
           },
           scaleInCooldown: 60,
           scaleOutCooldown: 120,
