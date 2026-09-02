@@ -1,4 +1,5 @@
 use crate::constants::header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY;
+use crate::durable_object::EditAttribution;
 use serde_json::json;
 use tracing::{debug, error};
 use worker::{Fetch, Method, Request, RequestInit};
@@ -6,8 +7,7 @@ use worker::{Fetch, Method, Request, RequestInit};
 pub async fn update(
     document_id: &str,
     env: &worker::Env,
-    actor: Option<String>,
-    on_behalf_of: Option<String>,
+    attribution: Option<EditAttribution>,
 ) -> worker::Result<()> {
     let internal_auth_key = env
         .secret("SPS_API_SECRET_KEY")
@@ -19,18 +19,13 @@ pub async fn update(
         .to_string();
 
     let url = format!("{url}/internal/extract_sync");
-    let mut document = json!({
-        "document_id": document_id,
-        "file_type": "md",
-    });
-    if let Some(actor) = actor {
-        document["actor"] = json!(actor);
-    }
-    if let Some(on_behalf_of) = on_behalf_of {
-        document["on_behalf_of"] = json!(on_behalf_of);
-    }
     let json_body = json!({
-        "documents": [document]
+        "documents": [{
+            "document_id": document_id,
+            "file_type": "md",
+            "actor": attribution.as_ref().map(|a| &a.actor),
+            "on_behalf_of": attribution.as_ref().and_then(|a| a.on_behalf_of.as_ref()),
+        }]
     });
 
     let mut request = Request::new_with_init(
