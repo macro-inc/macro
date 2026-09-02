@@ -1,7 +1,20 @@
 import type { EntityData, WithNotification } from '@entity';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildInboxQuery } from './inbox-query';
 import { groupInboxEntitiesByDate, inboxGroupTimestamp } from './inbox-results';
+
+// The soup barrel these pull in transitively imports the websocket client
+// modules, which open real sockets at module scope and reject under jsdom.
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
 
 const now = new Date('2026-09-02T18:00:00Z');
 

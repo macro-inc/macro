@@ -74,6 +74,7 @@ vi.mock('@queries/soup/graphql/active-queries', () => ({
 }));
 
 vi.mock('@queries/soup/normalized-cache', () => ({
+  bumpSoupEntityNotifiedAt: vi.fn(),
   optimisticUpdateSoupItemUpdatedAt: vi.fn(),
   hasSoupEntity: vi.fn(() => false),
   refetchSoupEntity: vi.fn(),
@@ -84,6 +85,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 import {
+  bumpSoupEntityNotifiedAt,
   hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
@@ -705,6 +707,11 @@ describe('optimisticInsertNotification', () => {
     expect(mockOptimisticUpdateSoupItemUpdatedAt).toHaveBeenCalledWith(
       newNotification.entity_id,
       'document',
+      newNotification.created_at
+    );
+    // The inbox's notified_at order moves the row up on arrival.
+    expect(vi.mocked(bumpSoupEntityNotifiedAt)).toHaveBeenCalledWith(
+      newNotification.entity_id,
       newNotification.created_at
     );
     expect(mockRefetchSoupEntity).not.toHaveBeenCalled();

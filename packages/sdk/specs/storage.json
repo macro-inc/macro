@@ -9546,7 +9546,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at.",
+            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -21972,7 +21972,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at."
+                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at."
               }
             ]
           }
@@ -24033,6 +24033,11 @@
                 "type": "boolean",
                 "description": "Whether the requesting user has favorited this entity."
               },
+              "notified_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value."
+              },
               "touched_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
@@ -24052,7 +24057,8 @@
           "updated_at",
           "viewed_updated",
           "frecency",
-          "touched_by_me"
+          "touched_by_me",
+          "notified_at"
         ]
       },
       "SoupApiSortDirection": {
