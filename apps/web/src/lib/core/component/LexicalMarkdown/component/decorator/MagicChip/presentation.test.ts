@@ -122,22 +122,25 @@ describe('deriveMagicChipPresentation', () => {
     }
   );
 
-  it('shows the answer as it is written, before the turn ends', () => {
+  it('keeps prose to the activity line until the turn ends', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'acp_ready',
       response: response({ parts: [{ kind: 'text', text: 'Looking at t' }] }),
     });
 
     expect(presentation).toEqual({
-      kind: 'answering',
-      markdown: 'Looking at t',
-      activity: { label: 'Writing response', busy: false },
+      kind: 'working',
+      activity: {
+        label: 'Writing response',
+        detail: 'Looking at t',
+        busy: true,
+      },
     });
   });
 
-  it('keeps the answer visible while a tool runs mid-turn', () => {
-    // Prose, then a tool call: the text stays and the activity says what the
-    // agent moved on to, rather than the answer vanishing until it resumes.
+  it('drops narration the agent moved on from when a tool follows it', () => {
+    // Prose, then a tool call: the prose was a chunk, not the turn's answer,
+    // so the chip goes back to the activity line rather than holding it.
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'acp_ready',
       response: response({
@@ -162,9 +165,35 @@ describe('deriveMagicChipPresentation', () => {
     });
 
     expect(presentation).toEqual({
-      kind: 'answering',
-      markdown: 'Let me check the tests.',
+      kind: 'working',
       activity: { label: 'Running command', detail: 'cargo test', busy: true },
+    });
+  });
+
+  it('answers with the last chunk, not every chunk of the turn', () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [
+          { kind: 'text', text: "I'll research frogs from a few angles." },
+          {
+            kind: 'tool_use',
+            rawInput: null,
+            rawOutput: null,
+            id: 'search',
+            label: 'Search',
+            status: 'completed',
+            detail: { kind: 'search', paths: ['frogs'], output: null },
+          },
+          { kind: 'text', text: 'Frogs are amphibians.' },
+        ],
+        stop: { kind: 'end_turn' },
+      }),
+    });
+
+    expect(presentation).toEqual({
+      kind: 'settled',
+      markdown: 'Frogs are amphibians.',
     });
   });
 
@@ -178,7 +207,7 @@ describe('deriveMagicChipPresentation', () => {
     });
 
     expect(presentation).toEqual({
-      kind: 'answering',
+      kind: 'settled',
       markdown: 'Half an ans',
       activity: { label: 'Stopped', busy: false },
     });
