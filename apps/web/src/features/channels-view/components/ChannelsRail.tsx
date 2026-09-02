@@ -517,11 +517,11 @@ export function ChannelsRail(props: {
       );
     }
 
-    rows.push(sectionRow('direct-messages'));
-    if (state.expandedGroups['direct-messages']) {
+    rows.push(sectionRow('direct_messages'));
+    if (state.expandedGroups.direct_messages) {
       rows.push(
         ...directMessages().map((channel) =>
-          conversationRow(channel, 'direct-messages')
+          conversationRow(channel, 'direct_messages')
         )
       );
     }
@@ -770,14 +770,14 @@ export function ChannelsRail(props: {
             </CollapsibleSection>
 
             <CollapsibleSection
-              id={domIdForRow(rowKeyForSection('direct-messages'))}
-              group="direct-messages"
+              id={domIdForRow(rowKeyForSection('direct_messages'))}
+              group="direct_messages"
               title="DMs"
               narrowIcon={<ChatTeardropIcon />}
               unreadCount={unreadDirectMessageCount()}
-              focused={list.focus.key() === rowKeyForSection('direct-messages')}
+              focused={list.focus.key() === rowKeyForSection('direct_messages')}
               onActivate={() =>
-                activateRow(rowKeyForSection('direct-messages'))
+                activateRow(rowKeyForSection('direct_messages'))
               }
               action={createDirectMessageAction}
             >

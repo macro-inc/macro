@@ -16,16 +16,32 @@ const channelsLocalStateStorage = createUserScopedStorage(
   'macro:channels:view-state:v1'
 );
 
+const channelsExpandedGroupsSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return value;
+    }
+
+    const groups = value as Record<string, unknown>;
+    return {
+      ...groups,
+      direct_messages: groups.direct_messages ?? groups['direct-messages'],
+    };
+  },
+  z.object({
+    channels: z.boolean().default(true),
+    direct_messages: z.boolean().default(true),
+  })
+);
+
 const channelsEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   tab: z.enum(['browse', 'recents']).default('browse'),
   selectedChannelId: z.string().optional(),
-  expandedGroups: z
-    .object({
-      channels: z.boolean().default(true),
-      'direct-messages': z.boolean().default(true),
-    })
-    .default({ channels: true, 'direct-messages': true }),
+  expandedGroups: channelsExpandedGroupsSchema.default({
+    channels: true,
+    direct_messages: true,
+  }),
 });
 
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;

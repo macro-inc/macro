@@ -1,6 +1,6 @@
 export type ChannelsTab = 'browse' | 'recents';
 
-export type ChannelsGroup = 'channels' | 'direct-messages';
+export type ChannelsGroup = 'channels' | 'direct_messages';
 
 export type ChannelsViewState = {
   tab: ChannelsTab;

@@ -36,8 +36,7 @@ export const [ChannelsViewProvider, useChannelsView] =
           selectedChannelId: initial.selectedChannelId,
           expandedGroups: {
             channels: initial.expandedGroups?.channels ?? true,
-            'direct-messages':
-              initial.expandedGroups?.['direct-messages'] ?? true,
+            direct_messages: initial.expandedGroups?.direct_messages ?? true,
           },
         }),
         createChannelsViewPersistence({
