@@ -27,7 +27,15 @@ export function useSystemSkillsQuery() {
     refetchOnWindowFocus: false,
   }));
 
-  const skills = createMemo<SystemSkillSummary[]>(() => query.data ?? []);
+  // Reading `query.data` reads the query's underlying resource, which suspends
+  // the caller's nearest <Suspense> until the fetch lands, and this memo runs
+  // the moment the hook is called. Reading it unguarded therefore blanks and
+  // remounts whatever surface a mention renders into — the calendar grid
+  // behind the event composer, for one. No id can be classified before the
+  // list arrives anyway.
+  const skills = createMemo<SystemSkillSummary[]>(() =>
+    query.isSuccess ? (query.data ?? []) : []
+  );
   const byId = createMemo(
     () => new Map(skills().map((skill) => [skill.id, skill]))
   );

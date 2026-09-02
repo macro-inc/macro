@@ -442,16 +442,14 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   const systemSkills = useSystemSkillsQuery();
   return (
     <Switch>
-      {/* Until the (once-per-session) system skill list arrives, ids can't be
-          classified — render from the stored name so a system skill never
-          flashes the preview service's "Deleted" state. This check must come
-          before getSystemSkill: its cold query-data read would otherwise
-          suspend the nearest outer boundary and remount the hosting surface. */}
-      <Match when={systemSkills.query.isPending}>
-        <DocumentMentionStatic {...props} />
-      </Match>
       <Match when={systemSkills.getSystemSkill(props.documentId)}>
         {(skill) => <SystemSkillMention name={skill().name} {...props} />}
+      </Match>
+      {/* Until the (once-per-session) system skill list arrives, ids can't be
+          classified — render from the stored name so a system skill never
+          flashes the preview service's "Deleted" state. */}
+      <Match when={systemSkills.query.isPending}>
+        <DocumentMentionStatic {...props} />
       </Match>
       <Match when={true}>
         <Suspense>
