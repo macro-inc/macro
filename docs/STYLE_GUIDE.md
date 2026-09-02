@@ -242,11 +242,22 @@ TypeScript · `[ui]` UI / UX conventions
   string can't carry structure, props, or behavior. Extract a component, or inline the
   literal at its single use; styling variants are component props, not exported
   strings. (enforced: ast-grep `tsx-no-class-string-consts`, warning)
-- **FE-31** `[data]` `features/activity` keeps a one-way import graph: `domain/`
-  stays free of Solid, urql, `@queries/*`, generated GraphQL, and `adapters/`;
-  `ui/` stays free of `adapters/` (except `property-value`), `@queries/*`,
-  `openDocument`, and `useSplitNavigationHandler`; `views/` compose adapters,
-  domain, ui, and navigation. `grep -r generated/graphql features/activity`
-  must hit only `adapters/`. (enforced: ast-grep
-  `ts-no-activity-domain-framework-imports` + `tsx-no-activity-domain-framework-imports`
-  + `ts-no-activity-ui-adapter-imports` + `tsx-no-activity-ui-adapter-imports`, warning)
+- **FE-31** `[arch]` Layered feature layout. A feature that adopts it (today:
+  `features/activity`) is split into `core/` (pure TS: types and functions, no
+  Solid, urql, generated GraphQL, or app modules), `queries/` (decode wire types
+  and build query factories that take the feature's deps), `state/` (reactive view
+  models: Solid primitives, no JSX; each returns a view-state union such as
+  `loading | error | empty | ready` plus actions), `components/` (props in, JSX
+  out; no queries, state, or navigation), and `views/` (compose deps, state, and
+  components). Every outside capability the feature needs (GraphQL client, viewer
+  id, display names, entity display, open-entity, property definitions, time zone)
+  is a field on one `Deps` type in `deps.ts`, provided through a context
+  provider; `app-deps.ts` is the only production wiring and is mounted once at
+  the app root. Tests provide fakes through the same provider, so `state/` runs
+  under `createRoot` against a fake client and `views/` render without `vi.mock`.
+  The import graph is one-way: `core` → `queries` → `state` → `views` and
+  `core` → `components` → `views`; `components` may import types from `deps.ts`.
+  Feature flags gate mounting at the root and stay outside deps. To adopt, add
+  the feature's layer paths to `files` in each `*-feature-*` rule. (enforced:
+  ast-grep `ts-/tsx-feature-core-pure`, `ts-/tsx-feature-components-presentational`,
+  `ts-/tsx-feature-data-no-ui`, `ts-/tsx-feature-layers-use-deps`, warning)

@@ -24,6 +24,7 @@
 - Keep reusable components small, atomic, and decoupled from queries/complex state. Push data-fetching and mutations up to use-case-specific composed components.
 - Context should be scoped to a component subtree — Message.Content consuming a MessageContext is fine because the ownership boundary is clear.
 - Composed primitives must not depend on use-case-specific context — a RecipientsSelector should never require an EmailComposeContext.
+- New features use the layered layout in docs/STYLE_GUIDE.md FE-31 (`core / queries / state / components / views` plus an injected `deps.ts`). `src/features/activity` is the reference.
 
 ## Styling
 - Use semantic color tokens, not raw Tailwind color classes.
