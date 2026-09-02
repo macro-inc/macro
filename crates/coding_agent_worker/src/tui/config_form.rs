@@ -11,7 +11,16 @@ use crate::config::Config;
 #[cfg(test)]
 mod test;
 
+mod environment {
+    macro_env_var::maybe_env_var! {
+        pub struct DevMode;
+    }
+}
+
 const DEFAULT_CONFIG: &str = include_str!("../../default.macrod.toml");
+const DEV_API_URL: &str = "https://agent-harness-dev.macro.com";
+const DEV_STORAGE_URL: &str = "https://dev-gateway.macro.com/dss";
+const DEV_WEB_URL: &str = "https://dev.macro.com/app";
 
 /// User-facing settings shown by the Config tab and Quickstart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,8 +75,22 @@ impl ConfigForm {
         })
     }
 
-    /// Create a production config from the template embedded in the binary.
+    /// Create a config from embedded defaults, selecting dev when `DEV_MODE` is present.
     pub fn create(path: &Path, agent: &DetectedAgent, workspace: &Path) -> rootcause::Result<()> {
+        Self::create_for_mode(
+            path,
+            agent,
+            workspace,
+            environment::DevMode::new().is_some(),
+        )
+    }
+
+    fn create_for_mode(
+        path: &Path,
+        agent: &DetectedAgent,
+        workspace: &Path,
+        dev_mode: bool,
+    ) -> rootcause::Result<()> {
         if !workspace.is_absolute() || !workspace.is_dir() {
             rootcause::bail!("the Quickstart workspace must be an existing absolute directory");
         }
@@ -80,6 +103,11 @@ impl ConfigForm {
         };
         form.apply_agent(agent);
         form.set_string("workspace", "path", &workspace.to_string_lossy());
+        if dev_mode {
+            form.set_string("macro", "api_url", DEV_API_URL);
+            form.set_string("macro", "storage_url", DEV_STORAGE_URL);
+            form.set_string("macro", "web_url", DEV_WEB_URL);
+        }
         form.save()
     }
 
