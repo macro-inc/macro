@@ -182,7 +182,7 @@ function PreviewPanelContent(
       class="flex size-full min-h-0 flex-col"
       onFocusIn={(event) => {
         if (interactedWith()) return;
-        if (event.target.closest('[data-allow-focus-in-preview]')) {
+        if (event.target.hasAttribute('data-allow-focus-in-preview')) {
           setInteractedWith(true);
           return;
         }
