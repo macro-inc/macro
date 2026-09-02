@@ -27,6 +27,14 @@ const telemetryMocks = vi.hoisted(() => ({
   anonymousSpan: vi.fn(),
 }));
 
+const cacheGenerationCallbacks = new Set<() => void>();
+const mockCacheHost = {
+  onCacheGenerationChanged: vi.fn((callback: () => void) => {
+    cacheGenerationCallbacks.add(callback);
+    return () => cacheGenerationCallbacks.delete(callback);
+  }),
+};
+
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: featureFlagMocks.useFeatureFlag,
 }));
@@ -78,7 +86,11 @@ describe('runSoupBackfills', () => {
     featureFlagMocks.useFeatureFlag
       .mockReset()
       .mockReturnValue(() => ({ enabled: true, payload: undefined }));
-    graphqlMocks.getGraphqlSoupCacheHost.mockReset().mockReturnValue({});
+    cacheGenerationCallbacks.clear();
+    mockCacheHost.onCacheGenerationChanged.mockClear();
+    graphqlMocks.getGraphqlSoupCacheHost
+      .mockReset()
+      .mockReturnValue(mockCacheHost);
     graphqlMocks.hydrateGraphqlSoup.mockReset();
     leaderMocks.createTabLeaderSignal.mockReset().mockReturnValue(() => true);
     telemetryMocks.anonymousSpan.mockReset().mockImplementation(() => ({
@@ -129,6 +141,53 @@ describe('runSoupBackfills', () => {
     expect(loadSoupBackfillCheckpoint('user-1', 'second-lane').completed).toBe(
       true
     );
+  });
+
+  it('immediately catches up email changes that moved ahead of the initial cursor', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-09-02T12:00:00.000Z');
+    const fetchPage = vi.fn(
+      async (
+        _input: Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0]
+      ) => {
+        if (fetchPage.mock.calls.length === 1) {
+          vi.setSystemTime('2026-09-02T12:01:00.000Z');
+        }
+        return { nextCursor: null };
+      }
+    );
+
+    await Effect.runPromise(
+      runSoupBackfill('user-1', {
+        ...lane('email-thread-pages', fetchPage),
+        catchUpAfterInitialPass: true,
+      })
+    );
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
+      initial: { sortMethod: 'VIEWED_UPDATED' },
+    });
+    expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: {
+            tree: {
+              literal: {
+                updatedAt: { gte: '2026-09-02T12:00:00.000Z' },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(
+      loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+    ).toMatchObject({
+      completed: true,
+      scanStartedAt: null,
+      updatedSince: '2026-09-02T12:01:00.000Z',
+    });
   });
 
   it('does not checkpoint a page whose required v2 capsule ingestion fails', async () => {
@@ -215,7 +274,7 @@ describe('runSoupBackfills', () => {
 
   it('starts when only the cache host becomes available', async () => {
     vi.useFakeTimers();
-    let cacheHost: object | undefined;
+    let cacheHost: typeof mockCacheHost | undefined;
     graphqlMocks.getGraphqlSoupCacheHost.mockImplementation(() => cacheHost);
     graphqlMocks.hydrateGraphqlSoup.mockResolvedValue({ nextCursor: null });
 
@@ -223,11 +282,67 @@ describe('runSoupBackfills', () => {
     expect(graphqlMocks.getGraphqlSoupCacheHost).toHaveBeenCalledOnce();
     expect(graphqlMocks.hydrateGraphqlSoup).not.toHaveBeenCalled();
 
-    cacheHost = {};
+    cacheHost = mockCacheHost;
     await vi.advanceTimersByTimeAsync(100);
 
     expect(graphqlMocks.getGraphqlSoupCacheHost).toHaveBeenCalledTimes(2);
     expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalled();
+    rendered.unmount();
+  });
+
+  it('restarts from the beginning when the cache generation is replaced', async () => {
+    localStorage.setItem(
+      'graphql-soup-backfill:v7:user-1:core-entities',
+      JSON.stringify({
+        userId: 'user-1',
+        nextCursor: 'stale-cursor',
+        pagesFetched: 12,
+        completed: false,
+        scanStartedAt: '2026-09-01T00:00:00.000Z',
+        updatedSince: null,
+        completedAt: null,
+      })
+    );
+    const fetchInputs: unknown[] = [];
+    const fetchSignals: AbortSignal[] = [];
+    graphqlMocks.hydrateGraphqlSoup.mockImplementation(
+      (
+        _document,
+        variables: { input: unknown },
+        options: { signal: AbortSignal }
+      ) =>
+        new Promise((_resolve, reject) => {
+          fetchInputs.push(variables.input);
+          fetchSignals.push(options.signal);
+          options.signal.addEventListener(
+            'abort',
+            () => reject(options.signal.reason),
+            { once: true }
+          );
+        })
+    );
+
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    await vi.waitFor(() =>
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
+    );
+    expect(fetchInputs[0]).toMatchObject({
+      continuation: { cursor: 'stale-cursor' },
+    });
+
+    for (const callback of cacheGenerationCallbacks) callback();
+
+    await vi.waitFor(() =>
+      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(2)
+    );
+    expect(fetchSignals[0]?.aborted).toBe(true);
+    expect(fetchInputs[1]).toMatchObject({ initial: { limit: 100 } });
+    expect(loadSoupBackfillCheckpoint('user-1', 'core-entities')).toMatchObject(
+      {
+        nextCursor: null,
+        pagesFetched: 0,
+      }
+    );
     rendered.unmount();
   });
 
