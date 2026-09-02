@@ -144,4 +144,170 @@ fn only_prompt_shaped_actions_occupy_a_turn() {
     assert!(AgentAction::Compact.occupies_turn());
     assert!(!AgentAction::set_model("opus").occupies_turn());
     assert!(!AgentAction::Stop.occupies_turn());
+    assert!(
+        !AgentAction::respond_elicitation(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Cancel
+        )
+        .occupies_turn(),
+        "an answer rides alongside the turn that is waiting on it"
+    );
+}
+
+#[test]
+fn an_elicitation_answer_is_a_response_on_the_agents_own_id() {
+    use agent_client_protocol::schema::v1::{
+        CreateElicitationResponse, ElicitationAction, ElicitationContentValue, Response,
+    };
+
+    let session_id = SessionId::new("acp-abc");
+    let content = BTreeMap::from([
+        ("strategy".to_owned(), serde_json::json!("balanced")),
+        ("port".to_owned(), serde_json::json!(3000)),
+        ("ratio".to_owned(), serde_json::json!(0.5)),
+        ("logging".to_owned(), serde_json::json!(true)),
+        ("colours".to_owned(), serde_json::json!(["red", "blue"])),
+    ]);
+    let translated = AgentAction::respond_elicitation(
+        ElicitationRequestId::Number(0),
+        ElicitationAnswer::Accept {
+            content: Some(content),
+        },
+    )
+    .to_runtime(
+        &session_id,
+        RequestId::Str("agent_session:ignored".to_owned()),
+    )
+    .unwrap();
+
+    // Claude Code numbers its elicitations from 0; the answer must echo that
+    // id exactly, not the minted action id.
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
+        id,
+        result,
+    }))) = translated
+    else {
+        panic!("an elicitation answer translates to a JSON-RPC result");
+    };
+    assert_eq!(id, RequestId::Number(0));
+
+    let response: CreateElicitationResponse = serde_json::from_value(result).unwrap();
+    let ElicitationAction::Accept(accept) = response.action else {
+        panic!("accept round-trips as accept, got {:?}", response.action);
+    };
+    let content = accept.content.unwrap();
+    assert_eq!(
+        content["strategy"],
+        ElicitationContentValue::String("balanced".to_owned())
+    );
+    assert_eq!(content["port"], ElicitationContentValue::Integer(3000));
+    assert_eq!(content["ratio"], ElicitationContentValue::Number(0.5));
+    assert_eq!(content["logging"], ElicitationContentValue::Boolean(true));
+    assert_eq!(
+        content["colours"],
+        ElicitationContentValue::StringArray(vec!["red".to_owned(), "blue".to_owned()])
+    );
+}
+
+#[test]
+fn decline_and_cancel_carry_no_content_and_string_ids_survive() {
+    use agent_client_protocol::schema::v1::Response;
+
+    for (answer, action) in [
+        (ElicitationAnswer::Decline, "decline"),
+        (ElicitationAnswer::Cancel, "cancel"),
+    ] {
+        let translated =
+            AgentAction::respond_elicitation(ElicitationRequestId::Str("el-7".to_owned()), answer)
+                .to_runtime(
+                    &SessionId::new("acp-abc"),
+                    RequestId::Str("unused".to_owned()),
+                )
+                .unwrap();
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
+            id,
+            result,
+        }))) = translated
+        else {
+            panic!("an elicitation answer translates to a JSON-RPC result");
+        };
+        assert_eq!(id, RequestId::Str("el-7".to_owned()));
+        assert_eq!(result, serde_json::json!({ "action": action }));
+    }
+}
+
+#[test]
+fn nested_content_is_refused_before_it_reaches_the_wire() {
+    let translated = AgentAction::respond_elicitation(
+        ElicitationRequestId::Number(1),
+        ElicitationAnswer::Accept {
+            content: Some(BTreeMap::from([(
+                "nested".to_owned(),
+                serde_json::json!({ "a": 1 }),
+            )])),
+        },
+    )
+    .to_runtime(
+        &SessionId::new("acp-abc"),
+        RequestId::Str("unused".to_owned()),
+    );
+    assert!(matches!(translated, Err(ActionError::Acp(_))));
+}
+
+#[test]
+fn the_control_body_for_an_answer_reads_as_documented() {
+    let action: AgentAction = serde_json::from_value(serde_json::json!({
+        "type": "respondElicitation",
+        "requestId": 43,
+        "action": "accept",
+        "content": { "strategy": "balanced" }
+    }))
+    .unwrap();
+    assert_eq!(
+        action,
+        AgentAction::respond_elicitation(
+            ElicitationRequestId::Number(43),
+            ElicitationAnswer::Accept {
+                content: Some(BTreeMap::from([(
+                    "strategy".to_owned(),
+                    serde_json::json!("balanced")
+                )])),
+            },
+        )
+    );
+
+    let action: AgentAction = serde_json::from_value(serde_json::json!({
+        "type": "respondElicitation",
+        "requestId": "el-7",
+        "action": "decline"
+    }))
+    .unwrap();
+    assert_eq!(
+        action,
+        AgentAction::respond_elicitation(
+            ElicitationRequestId::Str("el-7".to_owned()),
+            ElicitationAnswer::Decline,
+        )
+    );
+    assert_eq!(
+        serde_json::to_value(&action).unwrap(),
+        serde_json::json!({ "type": "respondElicitation", "requestId": "el-7", "action": "decline" })
+    );
+}
+
+#[test]
+fn elicitation_ids_round_trip_and_null_is_unanswerable() {
+    assert_eq!(
+        ElicitationRequestId::from_request_id(&RequestId::Number(0)),
+        Some(ElicitationRequestId::Number(0))
+    );
+    assert_eq!(
+        ElicitationRequestId::from_request_id(&RequestId::Str("x".to_owned()))
+            .map(|id| id.to_request_id()),
+        Some(RequestId::Str("x".to_owned()))
+    );
+    assert_eq!(
+        ElicitationRequestId::from_request_id(&RequestId::Null),
+        None
+    );
 }
