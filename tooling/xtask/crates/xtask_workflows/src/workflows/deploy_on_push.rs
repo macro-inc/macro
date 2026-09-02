@@ -1,8 +1,13 @@
 //! `Deploy on Push` — the single push-to-main dev deploy pipeline. Mirrors the
 //! production release flow (cloud storage first, then the sync service and web
-//! app), except every stage is gated behind the `check-to-deploy` path diff so
-//! only the stages whose inputs actually changed deploy — the release always
-//! deploys everything. Replaces the separate `deploy_cloud_storage_on_push`
+//! app), except the backend stages are gated behind the `check-to-deploy` path
+//! diff so only the stages whose inputs actually changed deploy — the release
+//! always deploys everything. The web app is deliberately *not* gated: its
+//! artifact picks up more than a path list can capture (generated clients,
+//! schema-derived types, env/config baked in at build time), so a skipped
+//! frontend deploy silently leaves dev serving a stale bundle. Deploying it on
+//! every push is cheap next to that.
+//! Replaces the separate `deploy_cloud_storage_on_push`
 //! and `deploy_web_app_dev_push` workflows. Generated into `deploy_on_push.yml`
 //! (keep [`crate::workflows::cancel_stuck_cloud_storage_deploys`]'s
 //! `WORKFLOW_FILE` in sync with this filename).
@@ -18,7 +23,7 @@ use anyhow::Result;
 use gh_workflow::{Concurrency, Event, Expression, Job, Push, Step, Use, Workflow};
 use xtask_paths::RepoGlob;
 
-use crate::workflows::{runners, web_artifact_paths};
+use crate::workflows::runners;
 
 /// Repository inputs that can change the deployed cloud-storage services —
 /// the trigger paths of the replaced `deploy_cloud_storage_on_push` workflow,
@@ -152,7 +157,6 @@ fn check_to_deploy() -> Job {
             "${{ steps.changes.outputs.cloud-storage }}",
         )
         .add_output("sync-service", "${{ steps.changes.outputs.sync-service }}")
-        .add_output("web-app", "${{ steps.changes.outputs.web-app }}")
         .add_step(checkout())
         .add_step(diff_checker())
 }
@@ -184,17 +188,14 @@ fn deploy_sync_service() -> Job {
         .uses("./.github/workflows/deploy_sync_service.yml")
 }
 
-/// Same skipped-backend tolerance as [`deploy_sync_service`].
+/// Always deploys (see the module docs) — the condition only keeps it behind a
+/// *successful* or skipped cloud-storage stage, with the same skipped-backend
+/// tolerance as [`deploy_sync_service`].
 fn deploy_web_app() -> Job {
     Job::default()
         .name("Deploy Web App")
-        .needs(vec![
-            "check-to-deploy".to_string(),
-            "deploy-cloud-storage".to_string(),
-        ])
-        .cond(Expression::new(
-            "${{ !failure() && !cancelled() && needs.check-to-deploy.outputs.web-app == 'true' }}",
-        ))
+        .needs(vec!["deploy-cloud-storage".to_string()])
+        .cond(Expression::new("${{ !failure() && !cancelled() }}"))
         .uses("./.github/workflows/deploy_web_app.yml")
 }
 
@@ -210,10 +211,6 @@ fn diff_checker() -> Step<Use> {
     let diff = [
         diff_entry("cloud-storage", CLOUD_STORAGE_PATHS),
         diff_entry("sync-service", SYNC_SERVICE_PATHS),
-        format!(
-            "web-app: ./infra/stacks/web-app/** ./.github/workflows/deploy_on_push.yml ./.github/workflows/deploy_web_app.yml {}",
-            web_artifact_paths::diff_checker_list()
-        ),
     ]
     .join("\n");
 
