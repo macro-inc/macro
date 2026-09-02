@@ -129,8 +129,8 @@ export function TouchSelectionToolbar(props: {
       content: () => <>Copy</>,
       // execCommand is also lexical's own programmatic copy path: it routes
       // through the editor's COPY_COMMAND handler, so the clipboard gets the
-      // rich (html + lexical) payload. The button's pointerdown is prevented,
-      // which keeps the editor selection alive for it.
+      // rich (html + lexical) payload. keepEditorFocus keeps the editor
+      // selection alive for it.
       onSelect: () => {
         if (!document.execCommand('copy')) toast.failure('Could not copy');
         props.setPopupVisible(false);
@@ -369,8 +369,21 @@ export function TouchSelectionToolbar(props: {
 
   const currentPageWidth = () => pages()[clampedIndex()]?.width ?? null;
 
+  // Nothing in the toolbar may take focus from the editor: Copy/Cut act on
+  // the live selection, and the chevrons must leave the popup open (the
+  // editor's focusout closes it). Cancelling pointerdown ought to suffice —
+  // the spec then drops the compatibility mouse events, and Chrome and the
+  // iOS simulator do — but a real iPhone still synthesises mousedown for the
+  // tap, whose default moves focus to the button's nearest focusable
+  // ancestor, the block container. Cancelling mousedown too covers that.
+  const keepEditorFocus = (event: Event) => event.preventDefault();
+
   return (
-    <div class="relative flex touch-pan-y flex-row items-center">
+    <div
+      class="relative flex touch-pan-y flex-row items-center"
+      onPointerDown={keepEditorFocus}
+      onMouseDown={keepEditorFocus}
+    >
       {/* Hidden measuring row: sizes every option and a chevron. Collapsed
           to a zero-size clipped box — at natural width it would extend the
           scroll parent's overflow area and make the document pannable
@@ -412,7 +425,6 @@ export function TouchSelectionToolbar(props: {
           depth={3}
           variant="ghost"
           aria-label="Previous options"
-          onPointerDown={(e: PointerEvent) => e.preventDefault()}
           onClick={() => page(-1)}
         >
           <CaretLeftIcon class="size-4" />
@@ -473,7 +485,6 @@ export function TouchSelectionToolbar(props: {
                         depth={3}
                         variant="ghost"
                         disabled={option.disabled?.()}
-                        onPointerDown={(e: PointerEvent) => e.preventDefault()}
                         onClick={() => option.onSelect()}
                       >
                         {option.content()}
@@ -494,7 +505,6 @@ export function TouchSelectionToolbar(props: {
           depth={3}
           variant="ghost"
           aria-label="More options"
-          onPointerDown={(e: PointerEvent) => e.preventDefault()}
           onClick={() => page(1)}
         >
           <CaretRightIcon class="size-4" />
