@@ -1,6 +1,8 @@
+import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Layer } from '@ui';
 import { createEffect, createUniqueId, Show } from 'solid-js';
+import { prepareCalendarDescription } from '../../utils/calendar-description';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventDateTimeRangeFields } from './EventDateTimeRangeFields';
 import {
@@ -135,23 +137,23 @@ export function EventForm(props: EventFormProps) {
             />
 
             <div class="h-12">
-              <textarea
-                value={state().description}
-                onInput={(event) =>
+              <MarkdownTextarea
+                initialHtml={state().description}
+                editable={() => !fieldIsDisabled('description')}
+                onChange={(markdown, editor) => {
+                  if (!editor) return;
                   controller.setField(
                     'description',
-                    event.currentTarget.value.replaceAll(/[\r\n]+/g, ' ')
-                  )
-                }
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.preventDefault();
+                    prepareCalendarDescription(markdown)
+                  );
                 }}
                 placeholder="Add description..."
-                aria-label="Description"
-                rows={1}
-                wrap="off"
-                disabled={fieldIsDisabled('description')}
-                class="h-full w-full resize-none overflow-x-auto bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder"
+                mentionSources={['documents']}
+                portalScope="local"
+                domRef={(element) =>
+                  element.setAttribute('aria-label', 'Description')
+                }
+                class="h-full w-full bg-transparent px-2 text-sm text-ink outline-none"
               />
             </div>
           </div>
