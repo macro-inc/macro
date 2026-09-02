@@ -25,7 +25,6 @@ use crate::{
 };
 use activity::{Actor, Attribution};
 use ai_toolset::AsyncToolCollection;
-use entity_access::domain::models::BotAccessScope;
 use entity_access::domain::ports::EntityAccessService;
 use lexical_client::LexicalClient;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -135,13 +134,6 @@ impl<
 
 fn ai_tool_attribution(user: MacroUserIdStr<'static>) -> Attribution {
     Attribution::delegated(Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID), user)
-}
-
-fn ai_tool_user_scope(user: MacroUserIdStr<'static>) -> BotAccessScope {
-    BotAccessScope::User {
-        user_id: user,
-        user_org_id: None,
-    }
 }
 
 /// Create a document toolset

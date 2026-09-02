@@ -15,6 +15,9 @@ use uuid::Uuid;
 use super::events::DocumentTopicEvent;
 use macro_user_id::user_id::MacroUserIdStr;
 
+/// Attribution for `updated` / `deleted` events. Bot receipts publish `actor`;
+/// user receipts (and events from before attribution) only `actor_user_id`.
+/// `None` when neither is set, e.g. internal callers.
 fn mutation_attribution(
     actor: &Option<Actor<'static>>,
     actor_user_id: &Option<MacroUserIdStr<'static>>,
@@ -23,10 +26,7 @@ fn mutation_attribution(
     let actor = actor
         .clone()
         .or_else(|| actor_user_id.clone().map(Actor::new_from_user))?;
-    Some(match on_behalf_of.clone() {
-        Some(subject) => Attribution::delegated(actor, subject),
-        None => Attribution::direct(actor),
-    })
+    Some(Attribution::new(actor, on_behalf_of.clone()))
 }
 
 impl ActivitySource for DocumentTopicEvent {

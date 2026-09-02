@@ -7,7 +7,10 @@ use crate::domain::{
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use entity_access::domain::{models::EntityType, ports::EntityAccessService};
+use entity_access::domain::{
+    models::{BotAccessScope, EntityType},
+    ports::EntityAccessService,
+};
 use models_permissions::share_permission::access_level::EditAccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -86,7 +89,7 @@ where
             .entity_access_service
             .generate_bot_entity_access_receipt::<EditAccessLevel>(
                 bot_id::MACRO_AI_BOT_ID,
-                super::ai_tool_user_scope(request_context.user_id.clone()),
+                BotAccessScope::user(request_context.user_id.clone()),
                 &document_id,
                 EntityType::Document,
             )

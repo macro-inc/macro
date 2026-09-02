@@ -147,6 +147,12 @@ fn should_revoke_non_owner_user_access(
     }
 }
 
+/// Attribution fields published on document `updated` / `deleted` events.
+///
+/// User receipts keep filling the legacy `actor_user_id`; bot receipts acting
+/// for a user fill `actor` + `on_behalf_of`. Team-scoped bots, internal and
+/// unauthenticated callers publish nothing attributable.
+#[derive(Default)]
 struct PublishedDocumentActors {
     actor: Option<Actor<'static>>,
     on_behalf_of: Option<MacroUserIdStr<'static>>,
@@ -156,9 +162,8 @@ struct PublishedDocumentActors {
 fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors {
     match auth {
         EntityAccessAuth::Authenticated(user_id) => PublishedDocumentActors {
-            actor: None,
-            on_behalf_of: None,
             actor_user_id: Some(user_id.clone()),
+            ..Default::default()
         },
         EntityAccessAuth::Bot(bot) => match bot.scope() {
             BotReceiptScope::User { acting_user } => PublishedDocumentActors {
@@ -166,17 +171,11 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
                 on_behalf_of: Some(acting_user.clone()),
                 actor_user_id: None,
             },
-            BotReceiptScope::Team { .. } => PublishedDocumentActors {
-                actor: None,
-                on_behalf_of: None,
-                actor_user_id: None,
-            },
+            BotReceiptScope::Team { .. } => PublishedDocumentActors::default(),
         },
-        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => PublishedDocumentActors {
-            actor: None,
-            on_behalf_of: None,
-            actor_user_id: None,
-        },
+        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
+            PublishedDocumentActors::default()
+        }
     }
 }
 

@@ -5,7 +5,7 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
@@ -227,7 +227,7 @@ where
             .entity_access_service
             .generate_bot_entity_access_receipt::<EditAccessLevel>(
                 bot_id::MACRO_AI_BOT_ID,
-                super::ai_tool_user_scope(request_context.user_id.clone()),
+                BotAccessScope::user(request_context.user_id.clone()),
                 &self.entity_id,
                 entity_type,
             )
