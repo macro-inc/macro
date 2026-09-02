@@ -3,7 +3,7 @@
  */
 
 import { ActivityDepsProvider } from '@app/features/activity/deps';
-import { createFakeActivityDeps } from '@app/features/activity/testing/fake-deps';
+import { createMockActivityDeps } from '@app/features/activity/testing/mock-deps';
 import type { PropertyDefinitionDomain } from '@property/types';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { cleanup, render, screen } from '@solidjs/testing-library';
@@ -37,7 +37,7 @@ vi.mock(
   })
 );
 
-const deps = createFakeActivityDeps({
+const deps = createMockActivityDeps({
   propertyDefinition: (id) => () =>
     definitions.find((definition) => definition.id === id()),
   entityDisplay: () => ({

@@ -27,7 +27,7 @@ export type OpenEntityTarget = {
 
 /**
  * Everything the activity feature reaches outside itself for. The app wires
- * the real implementations in `app-deps.tsx`; tests hand in fakes. No file
+ * the real implementations in `app-deps.tsx`; tests hand in mocks. No file
  * under `queries/`, `state/`, `components/`, or `views/` imports these
  * capabilities directly.
  */

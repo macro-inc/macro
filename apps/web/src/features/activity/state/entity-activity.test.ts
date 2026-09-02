@@ -1,7 +1,7 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createdEvent } from '../queries/fixtures';
-import { createFakeActivityDeps } from '../testing/fake-deps';
+import { createMockActivityDeps } from '../testing/mock-deps';
 import { soupPage } from '../testing/wire';
 import {
   createEntityActivityState,
@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 function setup(entityType: 'DOCUMENT' | 'USER' = 'DOCUMENT') {
-  const deps = createFakeActivityDeps();
+  const deps = createMockActivityDeps();
   let state!: EntityActivityState;
   const dispose = createRoot((rootDispose) => {
     state = createEntityActivityState(deps, {
@@ -24,7 +24,7 @@ function setup(entityType: 'DOCUMENT' | 'USER' = 'DOCUMENT') {
     return rootDispose;
   });
   disposals.push(dispose);
-  return { state, graphql: deps.graphqlFake };
+  return { state, graphql: deps.graphqlMock };
 }
 
 describe('createEntityActivityState', () => {

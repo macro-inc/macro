@@ -37,7 +37,7 @@ export function createAppActivityDeps(): ActivityDeps {
 /**
  * Mounts the app wiring once, at the app root, so every activity surface
  * (feed view, side-panel sections, AI tool rows) shares it. Tests never
- * render this; they provide fakes through `ActivityDepsProvider`.
+ * render this; they provide mocks through `ActivityDepsProvider`.
  */
 export function AppActivityDeps(props: ParentProps) {
   return (

@@ -18,7 +18,7 @@ export type PendingOperation = {
   readonly unsubscribed: boolean;
 };
 
-export type FakeGraphql = {
+export type MockGraphql = {
   client: Client;
   pending: PendingOperation[];
   /** The most recent operation with this name, or throws. */
@@ -37,7 +37,7 @@ function operationName(query: unknown): string {
  * A urql client whose operations stay pending until the test answers them,
  * so loading, error, and pagination transitions are observable in order.
  */
-export function createFakeGraphql(): FakeGraphql {
+export function createMockGraphql(): MockGraphql {
   const pending: PendingOperation[] = [];
   const executeQuery = <D, V extends AnyVariables>(
     request: GraphQLRequest<D, V>,

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { createFakeActivityDeps, FAKE_VIEWER_ID } from '../testing/fake-deps';
+import { createMockActivityDeps, MOCK_VIEWER_ID } from '../testing/mock-deps';
 import { createActorName } from './actor-name';
 
 describe('createActorName', () => {
-  const deps = createFakeActivityDeps();
+  const deps = createMockActivityDeps();
 
   it('names the viewer "You"', () => {
-    expect(createActorName(deps, () => FAKE_VIEWER_ID)()).toBe('You');
+    expect(createActorName(deps, () => MOCK_VIEWER_ID)()).toBe('You');
   });
 
   it('resolves other users through displayName', () => {

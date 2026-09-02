@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFakeActivityDeps } from '../testing/fake-deps';
+import { createMockActivityDeps } from '../testing/mock-deps';
 import { createEntityOpener } from './entity-opener';
 
 function click(shiftKey: boolean) {
@@ -11,7 +11,7 @@ function click(shiftKey: boolean) {
 
 describe('createEntityOpener', () => {
   it('opens the resolved block, in a new split on shift-click', () => {
-    const deps = createFakeActivityDeps();
+    const deps = createMockActivityDeps();
     const opener = createEntityOpener(
       deps,
       () => 'doc-1',
@@ -29,7 +29,7 @@ describe('createEntityOpener', () => {
   });
 
   it('does nothing for entities without a block mapping', () => {
-    const deps = createFakeActivityDeps({
+    const deps = createMockActivityDeps({
       entityDisplay: () => ({
         name: () => 'Team',
         icon: () => null,

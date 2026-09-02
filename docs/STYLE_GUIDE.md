@@ -253,8 +253,8 @@ TypeScript · `[ui]` UI / UX conventions
   id, display names, entity display, open-entity, property definitions, time zone)
   is a field on one `Deps` type in `deps.ts`, provided through a context
   provider; `app-deps.ts` is the only production wiring and is mounted once at
-  the app root. Tests provide fakes through the same provider, so `state/` runs
-  under `createRoot` against a fake client and `views/` render without `vi.mock`.
+  the app root. Tests provide mocks through the same provider, so `state/` runs
+  under `createRoot` against a mock client and `views/` render without `vi.mock`.
   The import graph is one-way: `core` → `queries` → `state` → `views` and
   `core` → `components` → `views`; `components` may import types from `deps.ts`.
   Feature flags gate mounting at the root and stay outside deps. To adopt, add

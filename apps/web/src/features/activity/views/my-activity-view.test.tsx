@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityDepsProvider } from '../deps';
 import { createdEvent, messagedEvent } from '../queries/fixtures';
-import { createFakeActivityDeps } from '../testing/fake-deps';
+import { createMockActivityDeps } from '../testing/mock-deps';
 import { feedPage, overviewPage } from '../testing/wire';
 import { MyActivityView } from './my-activity-view';
 
@@ -21,13 +21,13 @@ vi.mock(
 afterEach(cleanup);
 
 function renderView() {
-  const deps = createFakeActivityDeps();
+  const deps = createMockActivityDeps();
   const result = render(() => (
     <ActivityDepsProvider deps={deps}>
       <MyActivityView />
     </ActivityDepsProvider>
   ));
-  return { ...result, deps, graphql: deps.graphqlFake };
+  return { ...result, deps, graphql: deps.graphqlMock };
 }
 
 const rows = () => document.querySelectorAll('[data-activity-row]');

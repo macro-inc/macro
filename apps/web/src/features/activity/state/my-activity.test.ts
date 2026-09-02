@@ -1,7 +1,7 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createdEvent, editedEvent } from '../queries/fixtures';
-import { createFakeActivityDeps } from '../testing/fake-deps';
+import { createMockActivityDeps } from '../testing/mock-deps';
 import { feedPage, overviewPage } from '../testing/wire';
 import { createMyActivityState, type MyActivityState } from './my-activity';
 
@@ -11,14 +11,14 @@ afterEach(() => {
 });
 
 function setup() {
-  const deps = createFakeActivityDeps();
+  const deps = createMockActivityDeps();
   let state!: MyActivityState;
   const dispose = createRoot((rootDispose) => {
     state = createMyActivityState(deps);
     return rootDispose;
   });
   disposals.push(dispose);
-  return { deps, state, graphql: deps.graphqlFake };
+  return { deps, state, graphql: deps.graphqlMock };
 }
 
 describe('createMyActivityState', () => {

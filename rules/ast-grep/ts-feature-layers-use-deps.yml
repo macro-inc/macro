@@ -9,7 +9,7 @@ note: |-
   `state/`, `components/`, and `views/` never import the app's singletons
   or context hooks (GraphQL soup client, user context, display names,
   entity display, openDocument, PostHog). Those arrive through the
-  feature's `Deps` record so every layer runs against fakes in tests. Only
+  feature's `Deps` record so every layer runs against mocks in tests. Only
   `deps.ts` (the contract) and `app-deps.ts` (production wiring) at the
   feature root touch them. Adopting features add their layer paths to
   `files` in each ts-/tsx-feature-* rule.
