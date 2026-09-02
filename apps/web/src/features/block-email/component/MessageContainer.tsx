@@ -4,11 +4,9 @@ import { useEmailContext } from '@block-email/component/EmailContext';
 import { EmailInput } from '@block-email/component/EmailInput';
 import { EmailMessageBody } from '@block-email/component/EmailMessageBody';
 import { EmailMessageTopBar } from '@block-email/component/EmailMessageTopBar';
+import { MessageCard } from '@block-email/component/MessageCard';
 import { getSenderMacroId } from '@block-email/util/emailUser';
-import {
-  revealMessageAfterLayout,
-  scrollFocusedCardIntoView,
-} from '@block-email/util/scrollToMessage';
+import { revealMessageAfterLayout } from '@block-email/util/scrollToMessage';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
@@ -23,7 +21,6 @@ import { emailClient } from '@service-email/client';
 import type { ApiMessage, Attachment } from '@service-email/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
-import { cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BottomReplyButtons } from './BottomReplyButtons';
 
@@ -31,7 +28,7 @@ interface MessageContainerProps {
   message: ApiMessage;
   isFirstMessage: boolean;
   isLastMessage: boolean;
-  isFocused: boolean;
+  isSelected: boolean;
   allowHover: boolean;
   isExpanded: boolean;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
@@ -203,25 +200,11 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   };
 
-  const hoverThisRow = () => {
-    const id = props.message.db_id;
-    if (!id) return;
-    context.messages.setHovered({ kind: 'message', id });
-  };
-
-  const unhoverThisRow = () => {
-    const id = props.message.db_id;
-    const hovered = context.messages.hovered();
-    if (hovered?.kind === 'message' && hovered.id === id) {
-      context.messages.setHovered(undefined);
-    }
-  };
-
+  // The card selects itself; expanding is the collapsed row's extra behaviour.
   const handleExpand = () => {
     const messageId = props.message.db_id;
     if (!messageId) return;
     context.messages.setExpandedBodyId(messageId, true);
-    context.messages.setFocused(messageId);
     revealMessageAfterLayout(
       messageId,
       context.messages.list(),
@@ -230,195 +213,156 @@ export function MessageContainer(props: MessageContainerProps) {
   };
 
   return (
-    <Show
-      when={isBodyExpanded()}
-      fallback={
-        <CollapsedMessage
-          message={props.message}
-          isFocused={props.isFocused}
-          allowHover={props.allowHover}
-          onClick={handleExpand}
-          onPointerEnter={hoverThisRow}
-          onPointerLeave={unhoverThisRow}
-          onFocus={() => {
-            if (props.message.db_id) {
-              context.messages.setFocused(props.message.db_id);
-            }
-          }}
-        />
-      }
+    <MessageCard
+      messageId={props.message.db_id}
+      isSelected={props.isSelected}
+      allowHover={props.allowHover}
+      onActivate={isBodyExpanded() ? undefined : handleExpand}
     >
-      {/* Expanded message view */}
-      <div class="shrink-0 flex justify-center w-full">
-        <div class="macro-message-width macro-message-padding w-full">
-          <div
-            class={cn(
-              'relative p-4 rounded-lg bg-message',
-              props.isFocused
-                ? 'z-1 border border-transparent outline-none ring-2 ring-accent/40'
-                : cn(
-                    'border border-edge-muted outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-transparent',
-                    props.allowHover &&
-                      'hover:z-1 light-mode:hover:shadow-md light-mode:hover:shadow-drop-shadow'
-                  )
-            )}
-            style={{ '--user-icon-width': '1rem' }}
-            data-message-body-id={props.message.db_id}
-            tabIndex={0}
-            onPointerEnter={hoverThisRow}
-            onPointerLeave={unhoverThisRow}
-            onFocus={(e) => {
-              scrollFocusedCardIntoView(e.currentTarget);
-              if (props.message.db_id) {
-                context.messages.setFocused(props.message.db_id);
-              }
-            }}
-          >
-            <div class="flex flex-col min-w-0 gap-2 overflow-hidden">
-              <EmailMessageTopBar
-                message={props.message}
-                focused={props.isFocused}
-                setExpandedBodyId={context.messages.setExpandedBodyId}
-                isBodyExpanded={isBodyExpanded}
-                expandedHeader={expandedHeader}
-                setExpandedHeader={setExpandedHeader}
-                setFocusedMessageId={context.messages.setFocused}
-                setShowReply={setShowReply}
-                isLastMessage={props.isLastMessage}
-                hiddenActions={
-                  !context.permissions().isOwner
-                    ? ['reply', 'reply-all', 'forward']
-                    : undefined
-                }
-                avatar={
-                  <div class="shrink-0 flex justify-center items-center size-6">
-                    <UserIcon
-                      {...senderIconProps()}
-                      isDeleted={false}
-                      size="fill"
-                      suppressClick={true}
-                    />
-                  </div>
-                }
-              />
-              <div class="ph-no-capture text-sm text-ink pr-4">
-                <EmailMessageBody
-                  message={props.message}
-                  personalSenders={context.messages.personalSenders}
-                  isBodyExpanded={isBodyExpanded}
-                  setExpandedMessageBody={(id) =>
-                    context.messages.setExpandedBodyId(id, true)
-                  }
-                  setFocusedMessageId={context.messages.setFocused}
-                  isFirstMessageInThread={props.isFirstMessage}
-                  isFocused={props.isFocused}
+      <Show
+        when={isBodyExpanded()}
+        fallback={<CollapsedMessage message={props.message} />}
+      >
+        <div class="flex flex-col min-w-0 gap-2 overflow-hidden">
+          <EmailMessageTopBar
+            message={props.message}
+            focused={props.isSelected}
+            setExpandedBodyId={context.messages.setExpandedBodyId}
+            isBodyExpanded={isBodyExpanded}
+            expandedHeader={expandedHeader}
+            setExpandedHeader={setExpandedHeader}
+            setFocusedMessageId={context.messages.setFocused}
+            setShowReply={setShowReply}
+            isLastMessage={props.isLastMessage}
+            hiddenActions={
+              !context.permissions().isOwner
+                ? ['reply', 'reply-all', 'forward']
+                : undefined
+            }
+            avatar={
+              <div class="shrink-0 flex justify-center items-center size-6">
+                <UserIcon
+                  {...senderIconProps()}
+                  isDeleted={false}
+                  size="fill"
+                  suppressClick={true}
                 />
               </div>
-              {/* Image attachments */}
-              <Show when={imageAttachmentsWithSfs().length > 0}>
-                <div class="flex flex-wrap gap-2 mt-2">
-                  <ImageGalleryPreview
-                    images={imageAttachmentsWithSfs().map((a) => ({
-                      id: a.sfs_id!,
-                    }))}
-                    variant="small"
-                    attachmentIds={imageAttachmentsWithSfs().map(
-                      (a) => a.db_id!
-                    )}
-                  />
-                </div>
-              </Show>
-
-              {/* Video attachments */}
-              <Show when={videoAttachmentsWithSfs().length > 0}>
-                <For each={videoAttachmentsWithSfs()}>
-                  {(attachment) => (
-                    <VideoPreview id={attachment.sfs_id!} variant="dynamic" />
-                  )}
-                </For>
-              </Show>
-
-              {/* Other attachments (non-media or without sfs_id) */}
-              <Show when={otherAttachments().length > 0}>
-                <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
-                  <For each={otherAttachments()}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment.filename ?? '',
-                          mimeType: attachment.mime_type ?? undefined,
-                        }}
-                        onClick={(fileType) =>
-                          onClickAttachment(attachment, fileType)
-                        }
-                      />
-                    )}
-                  </For>
-                </div>
-              </Show>
-
-              {/* Draft attachments */}
-              <Show
-                when={
-                  draftAttachments().length > 0 ||
-                  forwardedAttachments().length > 0
-                }
-              >
-                <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
-                  <For each={draftAttachments()}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment.file_name,
-                          mimeType: attachment.content_type,
-                        }}
-                      />
-                    )}
-                  </For>
-                  <For each={forwardedAttachments()}>
-                    {(attachment) => (
-                      <EmailAttachmentPill
-                        attachment={{
-                          fileName: attachment.filename ?? '',
-                          mimeType: attachment.mime_type ?? undefined,
-                        }}
-                      />
-                    )}
-                  </For>
-                </div>
-              </Show>
-            </div>
-            <Show when={showInlineReplyArea()}>
-              <div class="relative -mx-4 mb-0 border-t border-ink/20 mt-4">
-                <Show when={props.isLastMessage && !isTouchDevice()}>
-                  <FloatingInputLoader
-                    isLoading={context.query.isFetching}
-                    loadingText="Loading messages"
-                  />
-                </Show>
-                <div class="px-4">
-                  <Switch>
-                    <Match when={showInlineReplyInput()}>
-                      <EmailInput
-                        replyingTo={() => props.message}
-                        setShowReply={setShowReply}
-                        draft={draftChild()}
-                        markdownDomRef={
-                          props.isLastMessage ? props.markdownDomRef : undefined
-                        }
-                        unframed
-                      />
-                    </Match>
-                    <Match when={props.isLastMessage && !isTouchDevice()}>
-                      <BottomReplyButtons lastMessage={props.message} />
-                    </Match>
-                  </Switch>
-                </div>
-              </div>
-            </Show>
+            }
+          />
+          <div class="ph-no-capture text-sm text-ink pr-4">
+            <EmailMessageBody
+              message={props.message}
+              personalSenders={context.messages.personalSenders}
+              isBodyExpanded={isBodyExpanded}
+              setExpandedMessageBody={(id) =>
+                context.messages.setExpandedBodyId(id, true)
+              }
+              setFocusedMessageId={context.messages.setFocused}
+              isFirstMessageInThread={props.isFirstMessage}
+              isFocused={props.isSelected}
+            />
           </div>
+          {/* Image attachments */}
+          <Show when={imageAttachmentsWithSfs().length > 0}>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <ImageGalleryPreview
+                images={imageAttachmentsWithSfs().map((a) => ({
+                  id: a.sfs_id!,
+                }))}
+                variant="small"
+                attachmentIds={imageAttachmentsWithSfs().map((a) => a.db_id!)}
+              />
+            </div>
+          </Show>
+
+          {/* Video attachments */}
+          <Show when={videoAttachmentsWithSfs().length > 0}>
+            <For each={videoAttachmentsWithSfs()}>
+              {(attachment) => (
+                <VideoPreview id={attachment.sfs_id!} variant="dynamic" />
+              )}
+            </For>
+          </Show>
+
+          {/* Other attachments (non-media or without sfs_id) */}
+          <Show when={otherAttachments().length > 0}>
+            <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
+              <For each={otherAttachments()}>
+                {(attachment) => (
+                  <EmailAttachmentPill
+                    attachment={{
+                      fileName: attachment.filename ?? '',
+                      mimeType: attachment.mime_type ?? undefined,
+                    }}
+                    onClick={(fileType) =>
+                      onClickAttachment(attachment, fileType)
+                    }
+                  />
+                )}
+              </For>
+            </div>
+          </Show>
+
+          {/* Draft attachments */}
+          <Show
+            when={
+              draftAttachments().length > 0 || forwardedAttachments().length > 0
+            }
+          >
+            <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
+              <For each={draftAttachments()}>
+                {(attachment) => (
+                  <EmailAttachmentPill
+                    attachment={{
+                      fileName: attachment.file_name,
+                      mimeType: attachment.content_type,
+                    }}
+                  />
+                )}
+              </For>
+              <For each={forwardedAttachments()}>
+                {(attachment) => (
+                  <EmailAttachmentPill
+                    attachment={{
+                      fileName: attachment.filename ?? '',
+                      mimeType: attachment.mime_type ?? undefined,
+                    }}
+                  />
+                )}
+              </For>
+            </div>
+          </Show>
         </div>
-      </div>
-    </Show>
+        <Show when={showInlineReplyArea()}>
+          <div class="relative -mx-4 mb-0 border-t border-ink/20 mt-4">
+            <Show when={props.isLastMessage && !isTouchDevice()}>
+              <FloatingInputLoader
+                isLoading={context.query.isFetching}
+                loadingText="Loading messages"
+              />
+            </Show>
+            <div class="px-4">
+              <Switch>
+                <Match when={showInlineReplyInput()}>
+                  <EmailInput
+                    replyingTo={() => props.message}
+                    setShowReply={setShowReply}
+                    draft={draftChild()}
+                    markdownDomRef={
+                      props.isLastMessage ? props.markdownDomRef : undefined
+                    }
+                    unframed
+                  />
+                </Match>
+                <Match when={props.isLastMessage && !isTouchDevice()}>
+                  <BottomReplyButtons lastMessage={props.message} />
+                </Match>
+              </Switch>
+            </div>
+          </div>
+        </Show>
+      </Show>
+    </MessageCard>
   );
 }

@@ -234,6 +234,9 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
       return;
     }
     if (id) props.setExpandedBodyId(id, false);
+    // The header consumed the click. Without this the card sees an
+    // already-collapsed row on the way up and expands it straight back.
+    e.stopPropagation();
   };
 
   return (

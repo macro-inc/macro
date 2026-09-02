@@ -187,12 +187,20 @@ function EmailContent(props: EmailViewProps) {
   let lastPointer = { x: Number.NaN, y: Number.NaN };
   let armedPointer: { x: number; y: number } | undefined;
 
+  // Hand list navigation back to the pointer: arrow keys resume from whatever
+  // the mouse is over. The selection itself survives, so a message reached with
+  // the keyboard stays selected once the mouse moves.
   const releaseKeyboardPointer = () => {
     armedPointer = undefined;
     setKeyboardSelecting(false);
     setListAnchor(undefined);
-    context.messages.setFocused(undefined);
     leaveHiddenChip();
+  };
+
+  /** Escape drops the selection too, not just the keyboard's claim on it. */
+  const clearSelection = () => {
+    releaseKeyboardPointer();
+    context.messages.setFocused(undefined);
   };
 
   const armKeyboardPointer = () => {
@@ -465,13 +473,20 @@ function EmailContent(props: EmailViewProps) {
       }
     }
 
-    const hover = threadStopFromHover(
-      context.messages.hovered(),
-      messages.map((message) => message.db_id)
-    );
+    const messageIds = messages.map((message) => message.db_id);
+    const hover = threadStopFromHover(context.messages.hovered(), messageIds);
+    // The pointer leads while it is over the list. With the pointer elsewhere,
+    // arrows step off the selected card rather than re-entering at the end.
+    const selectedId = context.messages.focusedID();
+    const selectedIndex = selectedId ? messageIds.indexOf(selectedId) : -1;
+    const cursor =
+      hover ??
+      (selectedIndex >= 0
+        ? ({ kind: 'message', index: selectedIndex } as const)
+        : undefined);
 
     return applyStop(
-      nextThreadStop({ stops, keyboard, hover, dir }),
+      nextThreadStop({ stops, keyboard, hover: cursor, dir }),
       messages,
       list
     );
@@ -645,19 +660,19 @@ function EmailContent(props: EmailViewProps) {
       }
 
       if (hiddenChipFocused()) {
-        releaseKeyboardPointer();
+        clearSelection();
         return true;
       }
 
       if (keyboardSelecting() && listAnchor()) {
-        releaseKeyboardPointer();
+        clearSelection();
         return true;
       }
 
       const focusedId = context.messages.focusedID();
       if (!focusedId) {
         if (keyboardSelecting()) {
-          releaseKeyboardPointer();
+          clearSelection();
           return true;
         }
         return false;
@@ -675,7 +690,7 @@ function EmailContent(props: EmailViewProps) {
         return true;
       }
 
-      releaseKeyboardPointer();
+      clearSelection();
       if (
         activeEl instanceof HTMLElement &&
         activeEl.closest(`[data-message-body-id="${CSS.escape(focusedId)}"]`)
@@ -862,7 +877,6 @@ function EmailContent(props: EmailViewProps) {
                     underScrollsBottom={!replyInputInFlow()}
                     showMiddleMessages={showMiddleMessages()}
                     hiddenChipFocused={hiddenChipFocused()}
-                    keyboardSelecting={keyboardSelecting()}
                     allowRowHover={!keyboardSelecting()}
                     onHiddenChipFocus={() => {
                       armKeyboardPointer();
