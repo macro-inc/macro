@@ -208,7 +208,12 @@ export async function executeGraphqlSaveEmailDraft(
     variables,
     optimisticData,
     {
-      uuid: crypto.randomUUID(),
+      // The draft handle is the coalescing key: a newer save of the same
+      // draft safely replaces an older queued one (saves are full-state
+      // snapshots), so an offline typing session holds one queue row per
+      // draft instead of one per debounce tick. The delete reuses the key —
+      // a discard supersedes any still-queued save.
+      uuid: String(args.draftId),
       // Splice the optimistic entity into the thread page's message list so
       // draftMap sees it. Idempotent; reapplied at commit; a non-resolving
       // path is skipped and recovered by the revalidation below.
@@ -318,7 +323,10 @@ export async function executeGraphqlDeleteEmailDraft(
     variables,
     optimisticData,
     {
-      uuid: crypto.randomUUID(),
+      // Same coalescing key as the draft's saves: a discard supersedes any
+      // still-queued save of this draft — the replaced entry never replays,
+      // and the delete itself is an idempotent no-op if nothing was created.
+      uuid: args.draftId,
       // Drop the draft from the thread page's message list so draftMap
       // stops seeing it. Idempotent; reapplied at commit; a non-resolving
       // path is skipped and recovered by the revalidation below.
