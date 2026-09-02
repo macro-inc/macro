@@ -24,7 +24,7 @@ export type SidebarRailProps = {
 const RAIL_WIDTH = 'w-15';
 
 /**
- * The rebuilt app sidebar, behind `enable-sidebar-next`: a single always-narrow
+ * The rebuilt app sidebar, behind `enable-new-app-views`: a single always-narrow
  * column of 36px icon buttons, labels in tooltips.
  *
  * Always narrow by design — there is no slim mode and no hover-peek overlay, so

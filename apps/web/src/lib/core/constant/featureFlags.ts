@@ -158,7 +158,10 @@ export function ENABLE_EMAIL_SIGNATURES(): boolean {
 // PostHog-gated everywhere, dev included: no dev-mode default, so `AppSidebar`
 // stays the sidebar you get by default until the flag is on for you. Set
 // VITE_ENABLE_SIDEBAR_NEXT=true to force the rail on locally without PostHog.
-export const ENABLE_SIDEBAR_NEXT_FLAG = 'enable-sidebar-next';
+//
+// The PostHog key is deliberately broader than the local names: `enable-new-app-views`
+// is the rollout switch for the rebuilt app surfaces, of which this sidebar is one.
+export const ENABLE_SIDEBAR_NEXT_FLAG = 'enable-new-app-views';
 // Read statically rather than through `getFeatureFlagOverride` for the same
 // reason as VITE_ENABLE_REMINDERS below: Vite substitutes `import.meta.env.VITE_X`
 // by text at build time, so that helper's dynamic lookup can come back

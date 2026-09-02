@@ -7,7 +7,7 @@ import type { Accessor } from 'solid-js';
 
 /**
  * Whether `SidebarRail` renders in place of `AppSidebar`. Needs the
- * `enable-sidebar-next` PostHog flag, in dev as much as anywhere else. Set
+ * `enable-new-app-views` PostHog flag, in dev as much as anywhere else. Set
  * VITE_ENABLE_SIDEBAR_NEXT=true to force it on locally without PostHog.
  */
 export function useSidebarNextFlag(): Accessor<boolean> {
