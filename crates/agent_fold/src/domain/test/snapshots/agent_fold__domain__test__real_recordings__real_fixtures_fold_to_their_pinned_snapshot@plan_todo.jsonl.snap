@@ -56,7 +56,9 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                     id: ToolUseId(
                         "toolu_01VWRTvryJTnQLFGHiTsBXYT",
                     ),
-                    label: "ToolSearch",
+                    name: Native {
+                        name: "ToolSearch",
+                    },
                     status: Completed,
                     detail: Other {
                         kind: "other",
@@ -105,7 +107,9 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                     id: ToolUseId(
                         "toolu_01DCbqRyKnRaqmDNHoFB7MNi",
                     ),
-                    label: "ToolSearch",
+                    name: Native {
+                        name: "ToolSearch",
+                    },
                     status: Completed,
                     detail: Other {
                         kind: "other",

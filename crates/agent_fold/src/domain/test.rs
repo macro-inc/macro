@@ -7,4 +7,5 @@ mod machine;
 mod metadata;
 mod real_recordings;
 mod service;
+mod tool_name;
 mod util;

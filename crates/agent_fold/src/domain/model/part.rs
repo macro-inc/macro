@@ -8,7 +8,7 @@ use specta::Type;
 use super::ToolUseId;
 use super::permission::{PermissionOption, PermissionOutcome};
 use super::plan::PlanEntry;
-use super::tool::{ToolDetail, ToolStatus};
+use super::tool::{ToolDetail, ToolName, ToolStatus};
 
 /// A unit of renderable content.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
@@ -28,8 +28,8 @@ pub enum MessagePart {
     ToolUse {
         /// The ACP `toolCallId`.
         id: ToolUseId,
-        /// What to show as the tool's name.
-        label: String,
+        /// What the harness called the tool.
+        name: ToolName,
         /// Where the call got to.
         status: ToolStatus,
         /// What the tool did, as far as the log reveals.

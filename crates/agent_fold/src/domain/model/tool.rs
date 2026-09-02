@@ -1,9 +1,106 @@
-//! Tool calls: how far one got and what it did.
+//! Tool calls: what one was called, how far it got, and what it did.
 
+use std::convert::Infallible;
 use std::path::PathBuf;
+use std::str::FromStr;
 
+use lazy_regex::regex_captures;
 use serde::Serialize;
 use specta::Type;
+
+/// What a harness called a tool.
+///
+/// ACP has no tool-name field - a call carries a human-readable `title` and a
+/// coarse `kind`, nothing more. The name a reader wants (`Bash`, `ReadContent`)
+/// is a harness convention: Claude Code writes it to `_meta`, others put it
+/// in the title, and tools reached over MCP arrive namespaced as
+/// `mcp__<server>__<tool>`. This type is the one place that namespacing is
+/// understood, so no reader downstream ever splits a string.
+///
+/// Parsing is infallible: a string that is not an MCP name is a native one,
+/// however odd it looks. Nothing is dropped for being unrecognized.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ToolName {
+    /// A tool the harness owns: `Bash`, `Read`, `Write`, or a Macro tool
+    /// called in-process by Macro's own agent.
+    Native {
+        /// The name as the harness reported it.
+        name: String,
+    },
+    /// A tool reached over MCP, from the server the harness registered it
+    /// under.
+    Mcp {
+        /// The MCP server's name, as the harness registered it.
+        server: String,
+        /// The tool's name on that server.
+        tool: String,
+    },
+}
+
+impl ToolName {
+    /// The name every session's server list gives Macro's own MCP server.
+    /// Mirrors `agent_harness::MACRO_MCP_NAME`; restated here rather than
+    /// imported so the wasm fold does not pull in the harness crate.
+    pub const MACRO_MCP_SERVER: &'static str = "macro";
+
+    /// A native name, as reported.
+    #[must_use]
+    pub fn native(name: impl Into<String>) -> Self {
+        Self::Native { name: name.into() }
+    }
+
+    /// The short name to show: the tool's own name, without any server
+    /// namespacing.
+    #[must_use]
+    pub fn display(&self) -> &str {
+        match self {
+            Self::Native { name } => name,
+            Self::Mcp { tool, .. } => tool,
+        }
+    }
+
+    /// The Macro tool this names, if it is one reached over Macro's own MCP
+    /// server. A native name is never a Macro tool by this method - Macro's
+    /// own in-process agent is recognized by the harness it runs under, not
+    /// by its tool names.
+    #[must_use]
+    pub fn macro_mcp_tool(&self) -> Option<&str> {
+        match self {
+            Self::Mcp { server, tool } if server == Self::MACRO_MCP_SERVER => Some(tool),
+            _ => None,
+        }
+    }
+
+    /// Whether this name is empty - a call whose harness reported nothing
+    /// useful yet, which a later patch may fill in.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.display().is_empty()
+    }
+}
+
+impl FromStr for ToolName {
+    type Err = Infallible;
+
+    /// `mcp__<server>__<tool>` splits at the first `__` after the prefix
+    /// whose left side does not start or end in an underscore, so a server
+    /// or tool name containing single underscores survives intact. Anything
+    /// else is a native name.
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        Ok(
+            match regex_captures!(r"^mcp__([^_](?:.*?[^_])?)__(.+)$", name) {
+                Some((_, server, tool)) => Self::Mcp {
+                    server: server.to_owned(),
+                    tool: tool.to_owned(),
+                },
+                None => Self::Native {
+                    name: name.to_owned(),
+                },
+            },
+        )
+    }
+}
 
 /// How far a tool call progressed.
 ///

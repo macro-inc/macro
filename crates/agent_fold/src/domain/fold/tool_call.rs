@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use crate::domain::error::FoldError;
-use crate::domain::harness::{claude_code, command_from_raw_input, file_edit_from_raw_input};
+use crate::domain::harness::{self, claude_code, command_from_raw_input, file_edit_from_raw_input};
 use crate::domain::model::{AnsiText, FileDiff, MessagePart, ToolDetail, ToolUseId};
 use agent_client_protocol::schema::v1::{
     Content, Meta, ToolCall, ToolCallContent, ToolCallLocation, ToolCallUpdate, ToolKind,
@@ -16,12 +16,11 @@ impl FoldState {
     /// Handle a `tool_call`: add a new tool part.
     pub(super) fn open_tool_call(&mut self, call: ToolCall) -> Option<Changed> {
         let id = ToolUseId(call.tool_call_id.0.to_string());
-        let label =
-            claude_code::tool_name(call.meta.as_ref()).unwrap_or_else(|| call.title.clone());
+        let name = harness::tool_name(call.meta.as_ref(), &call.title);
 
         let tool = MessagePart::ToolUse {
             id: id.clone(),
-            label,
+            name,
             status: tool_status(call.status),
             detail: tool_detail(
                 call.kind,
@@ -70,7 +69,7 @@ impl FoldState {
         };
         let (message, parts) = self.agent_parts_mut()?;
         let Some(MessagePart::ToolUse {
-            label,
+            name,
             status,
             detail,
             raw_input,
@@ -86,15 +85,15 @@ impl FoldState {
         if let Some(new_status) = fields.status {
             *status = tool_status(new_status);
         }
-        if let Some(title) = fields.title {
-            // A harness-supplied name outranks any ACP title, so only take
-            // the title when nothing better is already set.
-            if claude_code::tool_name(update.meta.as_ref()).is_none() && label.is_empty() {
-                *label = title;
+        if let Some(found) =
+            harness::patched_tool_name(update.meta.as_ref(), fields.title.as_deref())
+        {
+            // A harness-supplied name outranks any ACP title, so a title
+            // alone only fills a name nothing better has set.
+            let from_meta = claude_code::tool_name(update.meta.as_ref()).is_some();
+            if from_meta || name.is_empty() {
+                *name = found;
             }
-        }
-        if let Some(name) = claude_code::tool_name(update.meta.as_ref()) {
-            *label = name;
         }
 
         patch_detail(

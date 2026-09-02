@@ -21,6 +21,31 @@
 /// The `_meta` keys written by the Claude Code harness.
 pub mod claude_code;
 
+use crate::domain::model::ToolName;
+use agent_client_protocol::schema::v1::Meta;
+
+/// The name of the tool behind a `tool_call`'s opening frame: the harness's
+/// own name when it wrote one to `_meta`, else the ACP title.
+#[must_use]
+pub fn tool_name(meta: Option<&Meta>, title: &str) -> ToolName {
+    let name = claude_code::tool_name(meta);
+    name.as_deref()
+        .unwrap_or(title)
+        .parse()
+        .unwrap_or_else(|never| match never {})
+}
+
+/// The name a `tool_call_update` carries, if it carries one at all: the
+/// harness's `_meta` name outranks a title, and an update with neither
+/// names nothing.
+#[must_use]
+pub fn patched_tool_name(meta: Option<&Meta>, title: Option<&str>) -> Option<ToolName> {
+    claude_code::tool_name(meta)
+        .as_deref()
+        .or(title)
+        .map(|name| name.parse().unwrap_or_else(|never| match never {}))
+}
+
 /// The command line behind an `execute` tool call.
 ///
 /// This one reads ACP's own `rawInput` rather than `_meta`, but lives here

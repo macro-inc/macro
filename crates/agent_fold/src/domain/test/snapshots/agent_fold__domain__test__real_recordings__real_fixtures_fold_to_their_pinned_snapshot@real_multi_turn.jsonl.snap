@@ -39,7 +39,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01F5V288iQ8iArGM4B3ayCFm",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -96,7 +98,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01T6GAjr5YEZpBifkp3vj1N9",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -164,7 +168,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_0166v7nKJaZsGG5TUqPcomaa",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -193,7 +199,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01BSkUBhuv3VSJMmEXidfKDZ",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -225,7 +233,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_015cPCzRzsgaeC5T4RKwfcqt",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -245,7 +255,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01ULC7SdcZW6QpLwibk2SdF9",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -265,7 +277,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_018WB6FehVLcrszUvj598DeC",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -294,7 +308,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01FMZq9Myj3VrRZScNV2vx4o",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -323,7 +339,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01352etHpBLWV1h8TL9UTmdc",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -352,7 +370,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01V4uph7ZkZKaPpgF6UE4Nop",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -381,7 +401,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_019iCEBqeqsXYMJQdJhvGZzE",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -410,7 +432,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_019NXxCRZdm2cgJ4haDXmfRn",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -439,7 +463,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_018ArD4ZmaWuxEXW1KVfWxWi",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -468,7 +494,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01Ex1sHJeme9xM23T9tuUtvW",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -488,7 +516,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01NuY6RvJBEwhYApLPbV3QfA",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -517,7 +547,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01ATR61Vo1sUBC4sDTb9hgkQ",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -546,7 +578,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_014E1teRuKvFVz3kXjjkS9Ah",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -575,7 +609,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01HocEetuSapsmVgT3isZYfw",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Failed,
                     detail: Edit {
                         diffs: [
@@ -600,7 +636,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_017CKQR5Ypi2BbXyyEWi9epq",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -621,7 +659,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01B21mvnKULwrxijSpbU4hgU",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -686,7 +726,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01Y6KvTMTESF9qJwnVDWLMMh",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -716,7 +758,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01XiuBq9trG9cXnZA3wDu7Gp",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -745,7 +789,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01MohDMjaUKCtkLJXFwjMqVY",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -775,7 +821,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01MRKTuvyiKzhsv37MTRfvmQ",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -805,7 +853,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01LPjM3sh7fjLME6aNNvbYtu",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -830,7 +880,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_018xbq9fhqGHb88EBgsfVisi",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -862,7 +914,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_013ZZhkrMVi1WUobYm5iLFBp",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -891,7 +945,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_011jsLuU3pdvMBZ5UQuv87Mz",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -980,7 +1036,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01VdTdh7sXMuLbz5B7D35poo",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Pending,
                     detail: Terminal {
                         command: Some(
@@ -1001,7 +1059,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     id: ToolUseId(
                         "toolu_01JnxGKMHWwnZCHCc7RWuBxk",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Pending,
                     detail: Terminal {
                         command: None,

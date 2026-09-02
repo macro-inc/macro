@@ -36,7 +36,7 @@ pub use metadata::{AvailableCommand, ModelOption, SessionMetadata};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
-pub use tool::{AnsiText, FileDiff, ToolDetail, ToolStatus};
+pub use tool::{AnsiText, FileDiff, ToolDetail, ToolName, ToolStatus};
 
 /// One prompt-to-stop cycle within a session.
 ///

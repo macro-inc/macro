@@ -20,7 +20,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_016KvA9QfpBcmLNajBmQNpSV",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -49,7 +51,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_015HGRRG8ibnJVuZ3s4TupsE",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -78,7 +82,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01GLwvbuuYzjinKZv1Kwpbu4",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -107,7 +113,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01DB7JxnjAW9FCjSdAYhapYw",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -139,7 +147,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01FkFADbJ7W3WdgvzpGWnTji",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -168,7 +178,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01SeJKBY6azjALY8kj4uq27Y",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -200,7 +212,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01PXukMqRZDXuKbPTVafaGGx",
                     ),
-                    label: "Agent",
+                    name: Native {
+                        name: "Agent",
+                    },
                     status: Completed,
                     detail: Think {
                         output: Some(
@@ -231,7 +245,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01KsJWsNt9AEMNxGvH9kdzFW",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Failed,
                     detail: Terminal {
                         command: Some(
@@ -260,7 +276,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01A6mS8XN4ZXEnxhJyWiEGMH",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -289,7 +307,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01NmGaWpJhjrn48N9FJENixC",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -318,7 +338,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01VQBg93GPRV7YetjxNSqNpV",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -347,7 +369,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01LSir1M6JhmFeiHNYs1T6Ly",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -376,7 +400,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_014pZDiX2zcymaRYNFibN4tw",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -405,7 +431,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01H7txCGcKsCxMmCNw3tpmdK",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -434,7 +462,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01MkAkz5N8nTLSrwXLQCJQA6",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -466,7 +496,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01GFxjB6ojJiQfBfho1by61y",
                     ),
-                    label: "AskUserQuestion",
+                    name: Native {
+                        name: "AskUserQuestion",
+                    },
                     status: Failed,
                     detail: Other {
                         kind: "other",
@@ -619,7 +651,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_015NiiSX3ES4fmbWphw92e4w",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -648,7 +682,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_013NK6fa5hBQpYgvTui7X7ji",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -677,7 +713,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01QuLErooobxKmiBx7PBuUhp",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -706,7 +744,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_016onb2tTHYUN1xFGMHxqn4c",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -735,7 +775,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01YHq57i7vBC5MCSso8v9K3o",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -767,7 +809,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01AYc17jWRchH926P73NPt6L",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -799,7 +843,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_019Z1Rgt7583ZiypZa7sgjJX",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Failed,
                     detail: Terminal {
                         command: Some(
@@ -828,7 +874,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01VbU2LJR4jYLDREztQ6RHJ5",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -857,7 +905,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01RYj6NV18X5Lt1eEaaGqmdQ",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -889,7 +939,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Ln6wSwGcnpNJh4rX2uhoPb",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -921,7 +973,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_016jwFFdrSR1LJ8cGfsDaEBY",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -950,7 +1004,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_019ks1zbBSkDLjzdWz71FFrn",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -982,7 +1038,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01B8qQLpqdnLgGTvjEsvWHet",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1014,7 +1072,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01V7xp9geWVr3oeA1UAeCX8m",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1043,7 +1103,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01LBs9wCxaeXcKkyKQDYw53q",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1072,7 +1134,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01JKXbVLmzWzxmsRexjuJmjc",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1104,7 +1168,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01TDnpwNc7wRVoM1dNNpwL5E",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1133,7 +1199,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01R8T1Wn8GZuAUejP5HBmX66",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1162,7 +1230,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01SRXCzzj8Qwsvq9ivymuC1E",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1191,7 +1261,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01LLrSGm3o4HeXjtL22kg1KC",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1220,7 +1292,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01WTbBesTaXiVdkiquSzSgm1",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1252,7 +1326,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01N6BLgjAoGAhxgh5vSVFX1p",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1281,7 +1357,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01T5EFmheabRG2iikUtqkK36",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1310,7 +1388,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01NevBStmCFksbhVaXa7PFyh",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1342,7 +1422,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01RWuiUWaScgdt5rf1KLBv6V",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1374,7 +1456,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01T2H17efiw2RWxccX8yZmqN",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Failed,
                     detail: Edit {
                         diffs: [
@@ -1399,7 +1483,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_015VCTRFM2kjYc3uX2U8qYPL",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -1419,7 +1505,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01QXMwDjKGFcFRsh4J4HNiWg",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1447,7 +1535,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01PkqPtUVwaQs3NDjektXfJT",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1472,7 +1562,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01QuD8zhMyp3jCNHMLMEdccb",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1501,7 +1593,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01CaR4g64cMXfdpwDosqALzP",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1530,7 +1624,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_018MmsGdVRKGcXBLTexY6icm",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1559,7 +1655,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_016bMWEGPYrPdQR5dK18C6t6",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1588,7 +1686,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_012q1xtZk5Ur7JNvVqQLbBQZ",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1617,7 +1717,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_014kDAJJqKsQvum7wiW9BFRx",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1649,7 +1751,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01WcPGzVB8WquF1rUAv8w4Gu",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1677,7 +1781,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Qc86PFeEm9GLk2rah6m9nz",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1705,7 +1811,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01RiE5apYRropfoqsYGHabpw",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1734,7 +1842,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01TjvXdjMBemxw37v82KJVt3",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1763,7 +1873,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01SAzhLQbhr3L7S1KFUxohSa",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1792,7 +1904,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Gk2jb4SFVnZqJhybpX3pb3",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1821,7 +1935,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_014cLczzExDZjr3nu7kw2PFH",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1850,7 +1966,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01YWP9Mr3s51smkm2PZKJvFz",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1879,7 +1997,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Sth7ajAnwikWsFGZUizoFU",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1911,7 +2031,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_016TzwRDT93LPFd2WmByWsgx",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -1943,7 +2065,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01MQwo3p8Jbo1MvEZeLAreAh",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -1972,7 +2096,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01KitVhUe1VzMioHL1HS4cdz",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2001,7 +2127,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01UX6CxpBaaAJDqqQXKTQYda",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2030,7 +2158,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_015i8GDcUt9U8v4guH7kK4de",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2059,7 +2189,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01LgYVEM887shZWUC221pENP",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2088,7 +2220,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01YWuFhjpoU6xBVApLNMGNrR",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2120,7 +2254,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_012kkzYC8t6uTYrmkUZTNQMA",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2149,7 +2285,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01TRWwTP4i26fJYCohQUFEeP",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2178,7 +2316,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Pv8aPePeM8Fcm4o2K63pJ6",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2207,7 +2347,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01UuQP3vFtHykhVVEW1UNdnz",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Failed,
                     detail: Terminal {
                         command: Some(
@@ -2236,7 +2378,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Weisa7bDsWPF7ZnTtdXcdP",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2268,7 +2412,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01VHjufyUubZ1jBhzQCnemLD",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Failed,
                     detail: Edit {
                         diffs: [
@@ -2293,7 +2439,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_018wDJSEfs9FyqEeHi1HNdHD",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -2313,7 +2461,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_014w6RmXtn2vVEJPA6ZMiwA1",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2341,7 +2491,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_0171Un3aQHfB4AdqNNLq53zR",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2373,7 +2525,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01GNJ1dqehPY33GVVnwhNGr4",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2398,7 +2552,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01KKDkPymKKwqZRd1qmfEHEk",
                     ),
-                    label: "Skill",
+                    name: Native {
+                        name: "Skill",
+                    },
                     status: Completed,
                     detail: Other {
                         kind: "other",
@@ -2424,7 +2580,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01RsHdoDUdYXHPLfCa3DpmmP",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2453,7 +2611,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Qz45eqP4VcGMTWfeATHyda",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2482,7 +2642,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_0118qP7HovvgD4BkeFY1BMn8",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2511,7 +2673,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01R4QYGgJfpQiQS1VxqWjDZ9",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2540,7 +2704,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_017VydSZzYozARKNeGLFrLL4",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2569,7 +2735,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_013P87uybRY1M6bmfZLgdixN",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2598,7 +2766,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01FE69AgtngAnUCmqgxnr5bP",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2627,7 +2797,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01XWbArSuRgoMnLaePyVtkWb",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -2659,7 +2831,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01NYowSTpdShAk3oAqyK6dTv",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2688,7 +2862,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01LbUahv1rowfscwRgxRcjtE",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -2709,7 +2885,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Dvw8FiPMEqdtL4XDjktdfQ",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2738,7 +2916,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_018eJ4a56yi6dA4ACkP83bJb",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2767,7 +2947,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01V9HqUkM7YX6mBu1Hne6SoT",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2796,7 +2978,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Q6d8KScTNVZGChbDWwuioD",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2828,7 +3012,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01DQJhgDzAGsapYG5sCQvnBG",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2857,7 +3043,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01CosbbVKFBxAW6aFoVjyMFY",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2886,7 +3074,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01EgKh8Ae871CWUaaJZ6FREe",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2918,7 +3108,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01KLVU5FN37NVukDAVgYXf4G",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2943,7 +3135,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01VvtRhZuKi3qGQzEz9vs5ri",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2968,7 +3162,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01JmETWUewVzK4J65BumEd6J",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -2996,7 +3192,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_018fCCvxm72CU4kX2nhRnH8n",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3021,7 +3219,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01FHp7bM44DiyczQWeRbzAud",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3046,7 +3246,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_017wesMmZoBU6Qg5DzScBKFd",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3074,7 +3276,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01U1n75uqikwJQNhkocKhm9x",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3106,7 +3310,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01T2PhF57e3XSotKV48kgBeh",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3138,7 +3344,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_011ryaCQw7sFhbjFuH38gYcQ",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3163,7 +3371,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_018nUaDSs117XXUdHBH8i5L5",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3195,7 +3405,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01HeSAMG6QFhTYYRWtA3qn79",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3224,7 +3436,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_017g4c2PmRqCXehTvjCUqgHQ",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3249,7 +3463,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01QN37aZBTmATxnPgkiGCfck",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3281,7 +3497,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_013kEDYGtNadUSqxn8a4e7jZ",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3306,7 +3524,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_015iMmr6odhKRipdzks5KqM2",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3336,7 +3556,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_012DvLbqFv7vpUoakxBMZiMe",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3365,7 +3587,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01MPA4MBU4n2CjXBuUgJZSNE",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3395,7 +3619,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Le2eyQK2JbXXbfrzM1WCjg",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3425,7 +3651,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_013qFo2rqGHZJHK7BjeN7ctf",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3454,7 +3682,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01BynA9q2Rig8kASZ25XBG2N",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3486,7 +3716,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01ViMoKt3zuuKcFvNgP3DzYR",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3515,7 +3747,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01V6p2sN3PN7mzJqbM5F4JSn",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3547,7 +3781,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01MjmaSEP7KT1kHQ6hGUp3Ht",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3579,7 +3815,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01WUijwLfisYxcDCwUNk5bJe",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -3599,7 +3837,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01G2v4zZ3pQjxgV9qhs1Xkwx",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3624,7 +3864,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_017LSgehp1mrEeQpPyqunths",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3649,7 +3891,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01BpevjmhnXXC1vjLTfjVYhi",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -3669,7 +3913,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_0162xMTspmR7TWbjaVwiPtnA",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3694,7 +3940,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01KN8bsa7eqWdQg8VgPK9bLM",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -3714,7 +3962,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01EhNCTkY3nVcQebEeDHV67s",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3743,7 +3993,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01P67JqV5GnJHzy3JCWGXkkM",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3776,7 +4028,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01H5oHnUt1DJMkWRhNX3XWTk",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3801,7 +4055,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Wy46G7qjy4czVSD94ficqs",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3829,7 +4085,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01AuAyJPSM8diHAMvejhMks6",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3854,7 +4112,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01XXo9AEBcVSza4qjTAfqzN3",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3883,7 +4143,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Bh7uu1nLRfo8xoMyGFcKSx",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3908,7 +4170,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01PMRbR5KWC4FYDKXNoz4GRT",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3933,7 +4197,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_018LWRjGQsDrxskD5U9BHKzP",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -3965,7 +4231,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01UEdswQzxRbnKYNpVkXJw1j",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -3994,7 +4262,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01R9Jjdxeuv6xS8p6A9wgovX",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4023,7 +4293,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_013eZ4p21vhq6MtS54fXnYp9",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -4044,7 +4316,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01As3awcCaWRFSbEeQoe4jUo",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4073,7 +4347,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01HBHsfxYJydGiK8kYqbtaVG",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -4094,7 +4370,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01Eq6eiBaSNCybxRoa1zuRap",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4126,7 +4404,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01XVVyZTJkSLkuSAmRNobNc8",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4151,7 +4431,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01YGi2fkdeEMfQt8waKgkq5p",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4184,7 +4466,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_018C5QEs32b3cM9PhtW6MUrV",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4213,7 +4497,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_019jfNCyVfzrLGp18DqS8ynr",
                     ),
-                    label: "Write",
+                    name: Native {
+                        name: "Write",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4238,7 +4524,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_015mJuH5F4nVfyag7i2tzNB2",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4268,7 +4556,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01VyFEbbVaCEma32FdDNsJgh",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4301,7 +4591,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_013avoaixmfTiMhq2cT69ZQ5",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4330,7 +4622,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_015sGhsKemJsQy9hxwd62JPD",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4360,7 +4654,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_011utVtULLtsCwD2q5uT7nWV",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4392,7 +4688,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_017Ho44av5PzXQvbpUWXPJes",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4421,7 +4719,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01FmmuiHZb3fQA2mTp8abdES",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4450,7 +4750,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01LL75Hr3YA9RMM9v7BbqPUi",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4480,7 +4782,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01QhDMea41zuGuzDmZRpUHdk",
                     ),
-                    label: "Read",
+                    name: Native {
+                        name: "Read",
+                    },
                     status: Completed,
                     detail: Read {
                         paths: [
@@ -4502,7 +4806,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01AEErEMbFRSAmhDqFVhEafU",
                     ),
-                    label: "Edit",
+                    name: Native {
+                        name: "Edit",
+                    },
                     status: Completed,
                     detail: Edit {
                         diffs: [
@@ -4531,7 +4837,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01H1h38nZaVDtDLhUiCGBG6X",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4561,7 +4869,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01QgiihrkQ3YA9UsC42QMXKc",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4594,7 +4904,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_018xWfu38d71cFTKh75qAP1R",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4627,7 +4939,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01NoHPiPMMJm2KsZdZy3gMHn",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(
@@ -4656,7 +4970,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     id: ToolUseId(
                         "toolu_01NAdCwZqSfWjRUHgxz5R1wC",
                     ),
-                    label: "Bash",
+                    name: Native {
+                        name: "Bash",
+                    },
                     status: Completed,
                     detail: Terminal {
                         command: Some(

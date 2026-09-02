@@ -1,6 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/fold.rs
-assertion_line: 314
+assertion_line: 381
 expression: agent.parts
 ---
 NonEmpty {
@@ -9,7 +9,9 @@ NonEmpty {
             id: ToolUseId(
                 "del",
             ),
-            label: "del",
+            name: Native {
+                name: "del",
+            },
             status: Completed,
             detail: Delete {
                 paths: [
@@ -23,7 +25,9 @@ NonEmpty {
             id: ToolUseId(
                 "mv",
             ),
-            label: "mv",
+            name: Native {
+                name: "mv",
+            },
             status: Completed,
             detail: Move {
                 paths: [
@@ -38,7 +42,9 @@ NonEmpty {
             id: ToolUseId(
                 "search",
             ),
-            label: "search",
+            name: Native {
+                name: "search",
+            },
             status: Completed,
             detail: Search {
                 paths: [
@@ -55,7 +61,9 @@ NonEmpty {
             id: ToolUseId(
                 "fetch",
             ),
-            label: "fetch",
+            name: Native {
+                name: "fetch",
+            },
             status: Completed,
             detail: Fetch {
                 output: Some(
@@ -69,7 +77,9 @@ NonEmpty {
             id: ToolUseId(
                 "think",
             ),
-            label: "think",
+            name: Native {
+                name: "think",
+            },
             status: Completed,
             detail: Think {
                 output: Some(
@@ -83,7 +93,9 @@ NonEmpty {
             id: ToolUseId(
                 "mystery",
             ),
-            label: "mystery",
+            name: Native {
+                name: "mystery",
+            },
             status: Completed,
             detail: Other {
                 kind: "other",

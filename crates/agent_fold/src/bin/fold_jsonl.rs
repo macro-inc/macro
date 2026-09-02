@@ -227,11 +227,11 @@ fn render_message(message: &FoldedMessage) -> String {
                 let _ = writeln!(out, "[thought]\n{}", indent(text.trim_end()));
             }
             MessagePart::ToolUse {
-                label,
+                name,
                 status,
                 detail,
                 ..
-            } => out.push_str(&render_tool(label, *status, detail)),
+            } => out.push_str(&render_tool(name.display(), *status, detail)),
             MessagePart::Permission {
                 tool_call,
                 options,
