@@ -3,14 +3,20 @@
 //!
 //! Every candidate is gated on existence, deletion and access, and on the
 //! request's filters where soup owns the fold (documents, chats, projects,
-//! calendar events, properties). Channel, email, foreign-entity and reminder
-//! candidates are gated on access (plus, for channels and emails, the
-//! notification-state and importance conjuncts their trees imply): their
-//! filter trees fold in their own domains' query builders, so the service
-//! applies them in full when it hydrates the page through those legs and
-//! drops the candidates that fail, refilling from the next candidate page. A
-//! short page from this query therefore still means the feed is exhausted,
-//! but a short hydrated page does not.
+//! calendar events, properties). Channel, channel-thread, email,
+//! foreign-entity and reminder candidates are gated on access (plus, for
+//! channels and emails, the notification-state and importance conjuncts
+//! their trees imply): their filter trees fold in their own domains' query
+//! builders, so the service applies them in full when it hydrates the page
+//! through those legs and drops the candidates that fail, refilling from the
+//! next candidate page. A short page from this query therefore still means
+//! the feed is exhausted, but a short hydrated page does not.
+//!
+//! A channel notification that names a message as its secondary event item
+//! (mentions and thread replies) is keyed as a `channel_message` candidate on
+//! that message — the thread root — because that is the row the client
+//! attributes the notification to; the channel row keeps only channel-level
+//! notifications.
 
 use filter_ast::Expr;
 use item_filters::ast::EntityFilterAst;
@@ -24,8 +30,9 @@ use std::str::FromStr;
 
 use crate::domain::models::{NotifiedEntity, NotifiedSoupRequest};
 use crate::outbound::pg_soup_repo::candidate_gates::{
-    channel_gate, chat_gate, document_gate, email_gate, includes_channels, includes_chats,
-    includes_documents, includes_email_threads, includes_projects, project_gate, uuid_guarded,
+    channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, includes_channels,
+    includes_chats, includes_documents, includes_email_threads, includes_projects, project_gate,
+    uuid_guarded,
 };
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     build_notification_done_clause, build_notification_seen_clause, build_properties_filter,
@@ -33,8 +40,9 @@ use crate::outbound::pg_soup_repo::expanded::dynamic::{
 };
 use crate::outbound::pg_soup_repo::type_err;
 
-/// The candidate row's entity id, as the gates see it.
-const ID_SQL: &str = "n.event_item_id";
+/// The candidate row's entity id, as the gates see it: the `notified` CTE's
+/// derived key (thread root for thread-scoped channel notifications).
+const ID_SQL: &str = "nc.entity_id";
 
 /// Folds a calendar filter into SQL over the `event` alias. Only the literals
 /// [`calendar_filter_supported_by_notified`] admits have a fold; anything
@@ -160,6 +168,9 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     if req.hydratable.channels && includes_channels(req.filter) {
         types.push(EntityType::Channel.into());
     }
+    if req.hydratable.channel_threads && propertyless_ok {
+        types.push(EntityType::ChannelMessage.into());
+    }
     if req.hydratable.email_threads && includes_email_threads(req.filter, req.link_ids) {
         types.push(EntityType::EmailThread.into());
     }
@@ -189,10 +200,10 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
 /// Fetches one page of notified-at candidates.
 ///
 /// Shape: keyset scan of the user's live notifications in `created_at DESC`
-/// order, keeping only each entity's newest notification (the `NOT EXISTS`
-/// group-max), gated per entity type on existence/deletion/access and the
-/// soup-owned filters so `LIMIT` lands after gating. Only the primary event
-/// item counts: a thread-reply notification rolls into its channel.
+/// order over the `notified` CTE's derived entity key, keeping only each
+/// entity's newest notification (the `NOT EXISTS` group-max), gated per
+/// entity type on existence/deletion/access and the soup-owned filters so
+/// `LIMIT` lands after gating.
 ///
 /// `user_notification.created_at` is a naive `TIMESTAMP` written in UTC, so
 /// the keyset binds and the returned value stay naive and are re-tagged as
@@ -217,42 +228,54 @@ pub(super) async fn notified_soup_page(
                 WHERE t.user_id = $1
             UNION ALL
             SELECT $1
+        ),
+        notified AS NOT MATERIALIZED (
+            SELECT
+                un.created_at,
+                n.id AS notification_id,
+                CASE WHEN n.event_item_type = 'channel'
+                        AND n.secondary_event_item_type = 'channel_message'
+                    THEN 'channel_message' ELSE n.event_item_type
+                END AS entity_type,
+                CASE WHEN n.event_item_type = 'channel'
+                        AND n.secondary_event_item_type = 'channel_message'
+                    THEN n.secondary_event_item_id ELSE n.event_item_id
+                END AS entity_id
+            FROM user_notification un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE un.user_id = $1
+            AND un.deleted_at IS NULL
         )
-        SELECT n.event_item_type, n.event_item_id, un.created_at AS notified_at
-        FROM user_notification un
-        JOIN notification n ON n.id = un.notification_id
-        WHERE un.user_id = $1
-        AND un.deleted_at IS NULL
-        AND n.event_item_type = ANY($2)
-        AND ($3::timestamp IS NULL OR (un.created_at, n.event_item_id) < ($3, $4))
+        SELECT nc.entity_type, nc.entity_id, nc.created_at AS notified_at
+        FROM notified nc
+        WHERE nc.entity_type = ANY($2)
+        AND ($3::timestamp IS NULL OR (nc.created_at, nc.entity_id) < ($3, $4))
         AND NOT EXISTS (
-            SELECT 1 FROM notification newer
-            JOIN user_notification newer_un
-                ON newer_un.notification_id = newer.id
-                AND newer_un.user_id = $1
-                AND newer_un.deleted_at IS NULL
-            WHERE newer.event_item_type = n.event_item_type
-            AND newer.event_item_id = n.event_item_id
-            AND (newer_un.created_at, newer.id) > (un.created_at, n.id)
+            SELECT 1 FROM notified newer
+            WHERE newer.entity_type = nc.entity_type
+            AND newer.entity_id = nc.entity_id
+            AND (newer.created_at, newer.notification_id) > (nc.created_at, nc.notification_id)
         )
-        AND CASE n.event_item_type
+        AND CASE nc.entity_type
             WHEN 'document' THEN {document_gate}
             WHEN 'chat' THEN {chat_gate}
             WHEN 'project' THEN {project_gate}
             WHEN 'channel' THEN {channel_gate}
+            WHEN 'channel_message' THEN {channel_thread_gate}
             WHEN 'email_thread' THEN {email_gate}
             WHEN 'calendar_event' THEN {calendar_event_gate}
             WHEN 'foreign_entity' THEN {foreign_entity_gate}
             WHEN 'reminder' THEN {reminder_gate}
             ELSE FALSE
         END
-        ORDER BY un.created_at DESC, n.event_item_id DESC
+        ORDER BY nc.created_at DESC, nc.entity_id DESC
         LIMIT $6
         "#,
         document_gate = document_gate(ID_SQL, req.filter),
         chat_gate = chat_gate(ID_SQL, req.filter),
         project_gate = project_gate(ID_SQL, req.filter),
         channel_gate = channel_gate(ID_SQL, req.filter),
+        channel_thread_gate = channel_thread_gate(ID_SQL),
         email_gate = email_gate(ID_SQL, req.filter),
         calendar_event_gate = calendar_event_gate(req.filter),
         foreign_entity_gate = foreign_entity_gate(),
@@ -287,8 +310,8 @@ pub(super) async fn notified_soup_page(
         // statement is rarely reused but would flip to a generic plan.
         .persistent(false)
         .try_map(|row: sqlx::postgres::PgRow| {
-            let entity_type: String = row.try_get("event_item_type")?;
-            let entity_id: String = row.try_get("event_item_id")?;
+            let entity_type: String = row.try_get("entity_type")?;
+            let entity_id: String = row.try_get("entity_id")?;
             let notified_at: chrono::NaiveDateTime = row.try_get("notified_at")?;
             let entity_type = EntityType::from_str(&entity_type).map_err(type_err)?;
             Ok(NotifiedEntity {

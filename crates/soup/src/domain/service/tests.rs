@@ -3271,12 +3271,14 @@ async fn notified_soup_caps_refill_rounds_and_keeps_a_cursor() {
     );
 }
 
-/// Channel and email candidates hydrate through their own legs with the
-/// request's tree ANDed onto the page's ids, under the request's own view,
-/// so every channel/email filter keeps applying to the notified feed.
+/// Channel, channel-thread and email candidates hydrate through their own
+/// legs with the request's tree ANDed onto the page's ids, under the
+/// request's own view, so every such filter keeps applying to the notified
+/// feed.
 #[tokio::test]
 async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
     let channel = Uuid::from_u128(5);
+    let channel_thread = Uuid::from_u128(6);
     let thread = Uuid::from_u128(7);
     let link = Uuid::from_u128(8);
     let base: DateTime<Utc> = DateTime::default();
@@ -3287,11 +3289,17 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
         .times(1)
         .returning(move |req| {
             assert!(req.hydratable.channels);
+            assert!(req.hydratable.channel_threads);
             assert!(req.hydratable.email_threads);
             assert!(!req.hydratable.reminders);
             Box::pin(async move {
                 Ok(vec![
-                    notified(EntityType::Channel, channel, base + Days::new(2)),
+                    notified(EntityType::Channel, channel, base + Days::new(3)),
+                    notified(
+                        EntityType::ChannelMessage,
+                        channel_thread,
+                        base + Days::new(2),
+                    ),
                     notified(EntityType::EmailThread, thread, base + Days::new(1)),
                 ])
             })
@@ -3311,6 +3319,10 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
                 done: Some(false),
                 ..Default::default()
             },
+            ..Default::default()
+        },
+        channel_thread_filters: ChannelThreadFilters {
+            participant_ids: vec!["macro|test@example.com".to_string()],
             ..Default::default()
         },
         email_filters: item_filters::EmailFilters {
@@ -3338,6 +3350,12 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
     assert!(channel_filters[0].contains("ChannelId"));
     assert!(channel_filters[0].contains(&channel.to_string()));
     assert!(channel_filters[0].contains("NotificationDone"));
+
+    let thread_filters = comms_service.thread_filters();
+    assert_eq!(thread_filters.len(), 1);
+    assert!(thread_filters[0].contains("ThreadId"));
+    assert!(thread_filters[0].contains(&channel_thread.to_string()));
+    assert!(thread_filters[0].contains("Participant"));
 
     let recorded = email_requests.lock().unwrap();
     let (view, link_ids, limit) = recorded.first().expect("email hydration ran");

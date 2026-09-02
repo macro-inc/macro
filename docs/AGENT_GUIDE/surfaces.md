@@ -7,8 +7,7 @@ results). Filter radios: `Signal` (default, AI-filtered "needs attention") / `No
 / `Reminders`; plus `Filter` menu and `Preview` toggle (split list + preview pane; the empty
 preview shows "No content selected"). `Signal` and `Noise` order rows (and their date
 headers) by when you were last notified about the item, so a fresh comment on an old task
-sits under "Today"; a channel thread reply shows as its channel row. `All` and `Reminders`
-order by recency. Keyboard: `j`/`k` move, `space` preview, `enter` open, `e` mark done.
+sits under "Today". `All` and `Reminders` order by recency. Keyboard: `j`/`k` move, `space` preview, `enter` open, `e` mark done.
 Rows are buttons named `<channel> <sender>:<snippet> <time>`.
 
 ## Email — `/app/component/mail`

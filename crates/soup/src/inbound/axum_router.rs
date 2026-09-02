@@ -139,8 +139,9 @@ pub enum SoupApiSort {
     TouchedByMe,
     /// Only entities the caller holds a notification for, most recently
     /// notified first. Both a filter and an ordering: entities the caller
-    /// was never notified about are absent. Channel-thread rows roll into
-    /// their channel, and calls and CRM companies never appear.
+    /// was never notified about are absent. Thread-scoped channel
+    /// notifications surface as channel-thread rows; calls and CRM
+    /// companies never appear.
     NotifiedAt,
 }
 

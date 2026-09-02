@@ -36,7 +36,9 @@ use frecency::domain::{
     ports::FrecencyQueryService,
 };
 use item_filters::ast::{
-    EntityFilterAst, channel::ChannelLiteral, email::EmailLiteral,
+    EntityFilterAst,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+    email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -114,6 +116,7 @@ struct NotifiedHydrationLegs {
     link_ids: Vec<Uuid>,
     email: Option<GetEmailsRequest>,
     comms: Option<GetChannelsRequest>,
+    comms_threads: Option<GetThreadReplyRowsRequest>,
     foreign_entities: Option<(Vec<SourceId>, ForeignEntityListQuery)>,
     reminders: Option<GetRemindersRequest<'static>>,
 }
@@ -696,10 +699,10 @@ where
     /// candidates from the user's notifications, hydrates each entity type by
     /// id, and reassembles the page in notification order.
     ///
-    /// Channel, email, foreign-entity and reminder candidates hydrate through
-    /// their own domains' legs with the request's filter tree for that type
-    /// ANDed in, so those filters apply at hydration rather than in the
-    /// candidate query. A candidate the leg does not return is dropped and
+    /// Channel, channel-thread, email, foreign-entity and reminder candidates
+    /// hydrate through their own domains' legs with the request's filter tree
+    /// for that type ANDed in, so those filters apply at hydration rather
+    /// than in the candidate query. A candidate the leg does not return is dropped and
     /// the page refills from the next candidate page, bounded by
     /// [`MAX_NOTIFIED_FILL_ROUNDS`] so a run of filtered-out candidates still
     /// answers promptly — with a cursor to continue from, since the feed is
@@ -738,6 +741,7 @@ where
             .unwrap_or_default();
         let hydratable = NotifiedHydratableTypes {
             channels: legs.comms.is_some(),
+            channel_threads: legs.comms_threads.is_some(),
             email_threads: legs.email.is_some(),
             foreign_entities: legs.foreign_entities.is_some(),
             reminders: legs.reminders.is_some(),
@@ -824,6 +828,7 @@ where
         let mut main_entities = Vec::new();
         let mut project_entities = Vec::new();
         let mut channel_ids = Vec::new();
+        let mut thread_ids = Vec::new();
         let mut email_ids = Vec::new();
         let mut foreign_entity_ids = Vec::new();
         let mut reminder_ids = Vec::new();
@@ -841,6 +846,11 @@ where
                 },
                 EntityType::Channel => {
                     push_candidate_uuid(&mut channel_ids, &candidate.entity, "channel")
+                }
+                // Thread-scoped channel notifications are keyed on their
+                // thread root, which is the thread row's id.
+                EntityType::ChannelMessage => {
+                    push_candidate_uuid(&mut thread_ids, &candidate.entity, "channel thread")
                 }
                 EntityType::EmailThread => {
                     push_candidate_uuid(&mut email_ids, &candidate.entity, "email")
@@ -867,6 +877,22 @@ where
                 macro_id: user.clone(),
                 limit: Some(channel_ids.len() as u32),
                 include_frecency: false,
+                query: Query::Sort(
+                    SimpleSortMethod::UpdatedAt,
+                    Some(with_id_tree(ids, template.query.filter().as_ref())),
+                ),
+            })
+        });
+        let comms_thread_request = legs.comms_threads.as_ref().and_then(|template| {
+            let ids = balanced_or_tree(
+                thread_ids
+                    .iter()
+                    .map(|id| Expr::val(ChannelThreadLiteral::ThreadId(*id)))
+                    .collect(),
+            )?;
+            Some(GetThreadReplyRowsRequest {
+                macro_id: user.clone(),
+                limit: Some(thread_ids.len() as u32),
                 query: Query::Sort(
                     SimpleSortMethod::UpdatedAt,
                     Some(with_id_tree(ids, template.query.filter().as_ref())),
@@ -971,6 +997,7 @@ where
             main_items,
             project_items,
             channel_candidates,
+            thread_candidates,
             email_candidates,
             foreign_entity_candidates,
             reminder_candidates,
@@ -978,6 +1005,7 @@ where
             main_items_fut,
             project_items_fut,
             self.handle_comms_request(comms_request),
+            self.handle_comms_thread_request(comms_thread_request),
             self.handle_email_request(email_request),
             self.handle_foreign_entity_request(
                 Some(user.to_string()),
@@ -993,6 +1021,7 @@ where
             .into_iter()
             .chain(project_items?.into_iter().map(SoupCandidate::plain))
             .chain(channel_candidates?)
+            .chain(thread_candidates?)
             .chain(email_candidates?)
             .chain(foreign_entity_candidates?)
             .chain(reminder_candidates?)
@@ -1616,6 +1645,7 @@ where
                     link_ids: req.link_ids,
                     email: email_request,
                     comms: comms_request,
+                    comms_threads: comms_thread_request,
                     foreign_entities: foreign_entity_query
                         .map(|query| (foreign_entity_source_ids, query)),
                     reminders: reminder_request,

@@ -10,11 +10,13 @@
 --   T9 doc-A       (notified at T1 and T9 — group-max wins; T9 is not done)
 --   T8 chat-A      (marked done — done rows still set the sort key)
 --   T7 project-A
---   T6 channel-X   (a thread reply: primary channel, secondary channel_message)
+--   T6 thread-M    (a mention in channel-X's thread M: primary channel,
+--                   secondary channel_message — keyed on the thread root)
 --   T5 event-E1    (owned calendar event)
 --   T4 thread-Z    (user-1's own inbox link)
 --   T3 pr-F1       (foreign entity stored for user-1)
 --   T2 reminder-R1
+--   T0 channel-X   (a channel-level notification with no secondary item)
 
 SET session_replication_role = 'replica';
 
@@ -65,6 +67,10 @@ VALUES ('22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Chat A', 'macro|user-1@test.com
 INSERT INTO public.comms_channels ("id", "channel_type", "owner_id", "created_at", "updated_at")
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'private', 'macro|user-1@test.com', '2023-01-07 10:00:00', '2023-01-07 10:00:00'),
        ('33333333-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'private', 'macro|user-2@test.com', '2023-01-07 11:00:00', '2023-01-07 11:00:00');
+
+INSERT INTO public.comms_messages ("id", "channel_id", "thread_id", "sender_id", "content", "created_at", "updated_at")
+-- thread-M is a root message in channel-X that user-1 was mentioned in.
+VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'macro|user-2@test.com', 'hey @user-1', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
 
 INSERT INTO public.comms_channel_participants ("channel_id", "role", "user_id", "joined_at", "left_at")
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'member', 'macro|user-1@test.com', '2023-01-07 10:00:00', NULL),
@@ -118,8 +124,10 @@ VALUES
 ('0190a000-0000-7000-8000-000000000008', 'chat_complete', '22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'test', '2024-06-01 10:08:00', '{}', NULL, NULL, NULL),
 -- project-A at T7.
 ('0190a000-0000-7000-8000-000000000007', 'project_shared', 'aaaaaaaa-ffff-ffff-ffff-ffffffffffff', 'project', 'test', '2024-06-01 10:07:00', '{}', 'macro|user-2@test.com', NULL, NULL),
--- channel-X at T6: a thread reply, primary channel + secondary message.
-('0190a000-0000-7000-8000-000000000006', 'channel_thread_reply', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', 'test', '2024-06-01 10:06:00', '{"messageId": "99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}', 'macro|user-2@test.com', '99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel_message'),
+-- thread-M at T6: a mention, primary channel-X + secondary thread root.
+('0190a000-0000-7000-8000-000000000006', 'channel_mention', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', 'test', '2024-06-01 10:06:00', '{"messageId": "99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}', 'macro|user-2@test.com', '99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel_message'),
+-- channel-X at T0: a channel-level notification with no secondary item.
+('0190a000-0000-7000-8000-000000000000', 'channel_invite', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', 'test', '2024-06-01 10:00:00', '{}', 'macro|user-2@test.com', NULL, NULL),
 -- event-E1 at T5 (a fired alarm).
 ('0190a000-0000-7000-8000-000000000005', 'calendar_event_reminder', '66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'calendar_event', 'test', '2024-06-01 10:05:00', '{}', NULL, NULL, NULL),
 -- thread-Z at T4.
@@ -155,6 +163,7 @@ VALUES
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000008', '2024-06-01 10:08:00', TRUE, '2024-06-01 10:08:30', NULL, TRUE, FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000007', '2024-06-01 10:07:00', TRUE, NULL, NULL, FALSE, FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000006', '2024-06-01 10:06:00', TRUE, NULL, NULL, FALSE, FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000000', '2024-06-01 10:00:00', TRUE, NULL, NULL, FALSE, FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000005', '2024-06-01 10:05:00', TRUE, NULL, NULL, FALSE, FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000004', '2024-06-01 10:04:00', TRUE, NULL, NULL, FALSE, FALSE),
 ('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000003', '2024-06-01 10:03:00', TRUE, NULL, NULL, FALSE, FALSE),

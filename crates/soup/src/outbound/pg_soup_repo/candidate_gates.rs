@@ -182,6 +182,27 @@ pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
     )
 }
 
+/// Channel-thread rows are root messages; one is visible iff it is undeleted
+/// and the caller is an active participant of its channel. The thread tree
+/// folds in the channels crate, which hydration applies in full.
+pub(super) fn channel_thread_gate(id_sql: &str) -> String {
+    uuid_guarded(
+        id_sql,
+        format!(
+            r#"EXISTS (
+                SELECT 1 FROM comms_messages m
+                JOIN comms_channel_participants cp
+                    ON cp.channel_id = m.channel_id
+                    AND cp.user_id = $1
+                    AND cp.left_at IS NULL
+                WHERE m.id = {id_sql}::uuid
+                AND m.thread_id IS NULL
+                AND m.deleted_at IS NULL
+            )"#
+        ),
+    )
+}
+
 /// Email threads are inbox-scoped: visible iff the thread belongs to one of
 /// the caller's readable links (own + delegated).
 ///

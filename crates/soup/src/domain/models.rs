@@ -762,10 +762,16 @@ impl SoupRequest<Option<EntityFilterAst>> {
             // channel-thread rows carry no activity (messages attribute to
             // the channel), so the touched feed never includes them
             SoupQuery::Touched(_) => None,
-            // thread-reply notifications target the channel (the message is
-            // only the secondary item), so the notified feed shows the
-            // channel row rather than a thread row
-            SoupQuery::Notified(_) => None,
+            // notified-at hydrates thread-scoped channel notifications through
+            // this leg with the request's own tree; the handler ANDs the
+            // thread ids in
+            SoupQuery::Notified(NotifiedQueryInner(query)) => Some(Query::Sort(
+                SimpleSortMethod::UpdatedAt,
+                query
+                    .filter()
+                    .as_ref()
+                    .and_then(|f| f.channel_thread_filter.clone()),
+            )),
         }?;
 
         Some(GetThreadReplyRowsRequest {
@@ -915,6 +921,10 @@ pub struct NotifiedSoupRequest<'a> {
 pub struct NotifiedHydratableTypes {
     /// The channel leg is active.
     pub channels: bool,
+    /// The channel-thread leg is active. Thread-scoped channel notifications
+    /// (mentions and replies, which name their thread root as the secondary
+    /// event item) surface as thread rows, the way the client attributes them.
+    pub channel_threads: bool,
     /// The email leg is active.
     pub email_threads: bool,
     /// The foreign-entity leg is active.

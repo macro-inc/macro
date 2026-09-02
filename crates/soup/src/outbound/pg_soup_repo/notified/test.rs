@@ -15,6 +15,7 @@ const DOC_A: &str = "11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const CHAT_A: &str = "22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const PROJECT_A: &str = "aaaaaaaa-ffff-ffff-ffff-ffffffffffff";
 const CHANNEL_X: &str = "33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const THREAD_M: &str = "99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_Z: &str = "44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const EVENT_E1: &str = "66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const PR_F1: &str = "77777777-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -23,6 +24,7 @@ const LINK_1: &str = "55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
 const EVERYTHING: NotifiedHydratableTypes = NotifiedHydratableTypes {
     channels: true,
+    channel_threads: true,
     email_threads: true,
     foreign_entities: true,
     reminders: true,
@@ -73,21 +75,24 @@ async fn feed_orders_by_latest_notification(pool: Pool<Postgres>) -> anyhow::Res
     // the deleted-row, deleted-doc, no-access, left-channel, foreign-inbox,
     // other-owner and call rows are all absent — latest notification first.
     // doc-A's older mention must not move it, user-2's newer notification
-    // about doc-A must not move it, and chat-A's done row still counts.
+    // about doc-A must not move it, and chat-A's done row still counts. The
+    // thread mention is keyed on its thread root, separately from the
+    // channel-level notification on the same channel.
     assert_eq!(
         keys(&page),
         vec![
             (EntityType::Document, DOC_A.to_string()),
             (EntityType::Chat, CHAT_A.to_string()),
             (EntityType::Project, PROJECT_A.to_string()),
-            (EntityType::Channel, CHANNEL_X.to_string()),
+            (EntityType::ChannelMessage, THREAD_M.to_string()),
             (EntityType::CalendarEvent, EVENT_E1.to_string()),
             (EntityType::EmailThread, THREAD_Z.to_string()),
             (EntityType::ForeignEntity, PR_F1.to_string()),
             (EntityType::Reminder, REMINDER_R1.to_string()),
+            (EntityType::Channel, CHANNEL_X.to_string()),
         ]
     );
-    assert_eq!(minutes(&page), vec![9, 8, 7, 6, 5, 4, 3, 2]);
+    assert_eq!(minutes(&page), vec![9, 8, 7, 6, 5, 4, 3, 2, 0]);
 
     Ok(())
 }
@@ -122,7 +127,7 @@ async fn keyset_paginates_without_overlap_or_gaps(pool: Pool<Postgres>) -> anyho
     // Walking in pages of 3 yields the same feed as one big page.
     let one_page = notified_soup_page(&pool, req(None, &link_ids, &sources, EVERYTHING)).await?;
     assert_eq!(keys(&all), keys(&one_page));
-    assert_eq!(all.len(), 8);
+    assert_eq!(all.len(), 9);
 
     Ok(())
 }
@@ -186,7 +191,7 @@ async fn done_filters_exclude_without_moving_the_sort_key(
     assert_eq!(keys[0], (EntityType::Document, DOC_A.to_string()));
     assert_eq!(minutes(&page)[0], 9);
     assert!(!keys.contains(&(EntityType::Chat, CHAT_A.to_string())));
-    assert_eq!(page.len(), 7);
+    assert_eq!(page.len(), 8);
 
     Ok(())
 }
@@ -209,7 +214,7 @@ async fn calendar_filter_folds_notification_state(pool: Pool<Postgres>) -> anyho
     let page =
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&(EntityType::CalendarEvent, EVENT_E1.to_string())));
-    assert_eq!(page.len(), 7);
+    assert_eq!(page.len(), 8);
 
     // Naming the event keeps it.
     let filter = EntityFilterAst {
@@ -221,7 +226,7 @@ async fn calendar_filter_folds_notification_state(pool: Pool<Postgres>) -> anyho
     let page =
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(keys(&page).contains(&(EntityType::CalendarEvent, EVENT_E1.to_string())));
-    assert_eq!(page.len(), 8);
+    assert_eq!(page.len(), 9);
 
     Ok(())
 }
@@ -275,9 +280,11 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     let page =
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&thread));
-    assert_eq!(page.len(), 7);
+    assert_eq!(page.len(), 8);
 
-    // Done-only channels: channel-X's notification is live, so it drops.
+    // Done-only channels: channel-X's channel-level notification is live, so
+    // the channel row drops; the thread row is gated by the thread tree, so
+    // it stays.
     let filter = EntityFilterAst {
         channel_filter: Some(Arc::new(filter_ast::Expr::val(
             ChannelLiteral::NotificationDone(true),
@@ -287,7 +294,8 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     let page =
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&channel));
-    assert_eq!(page.len(), 7);
+    assert!(keys(&page).contains(&(EntityType::ChannelMessage, THREAD_M.to_string())));
+    assert_eq!(page.len(), 8);
 
     // An `Or` implies neither branch, so nothing is pre-filtered.
     let filter = EntityFilterAst {
@@ -300,7 +308,7 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     let page =
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(keys(&page).contains(&thread));
-    assert_eq!(page.len(), 8);
+    assert_eq!(page.len(), 9);
 
     Ok(())
 }
@@ -317,6 +325,7 @@ fn every_type_with_every_leg_active() {
             "chat",
             "project",
             "channel",
+            "channel_message",
             "email_thread",
             "calendar_event",
             "foreign_entity",
