@@ -5,6 +5,7 @@ import { cn, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
 import { formatFullDate, formatShortDate } from '../util/formatEmailDate';
+import { scrollFocusedCardIntoView } from '../util/scrollToMessage';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
 interface CollapsedMessageProps {
@@ -82,7 +83,10 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           data-message-body-id={props.message.db_id}
           tabIndex={0}
           onClick={handleRowClick}
-          onFocus={props.onFocus}
+          onFocus={(e) => {
+            scrollFocusedCardIntoView(e.currentTarget);
+            props.onFocus?.();
+          }}
           onPointerEnter={props.onPointerEnter}
           onPointerLeave={props.onPointerLeave}
           onKeyDown={handleKeyDown}

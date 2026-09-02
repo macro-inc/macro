@@ -49,18 +49,55 @@ export function threadMessageIsExpanded(args: {
   );
 }
 
+function scrollportRect(container: HTMLElement) {
+  const rect = container.getBoundingClientRect();
+  const height = container.clientHeight || rect.height;
+  const width = container.clientWidth || rect.width;
+  const top = rect.top + container.clientTop;
+  const left = rect.left + container.clientLeft;
+  return {
+    top,
+    bottom: top + height,
+    left,
+    right: left + width,
+    height,
+    width,
+  };
+}
+
+function scrollPaddingInset(
+  container: HTMLElement,
+  edge: 'top' | 'bottom'
+): number {
+  const style = getComputedStyle(container);
+  return parseFloat(
+    edge === 'top' ? style.scrollPaddingTop : style.scrollPaddingBottom
+  ) || 0;
+}
+
 export function alignmentDelta(
   container: HTMLElement,
   element: HTMLElement,
   align: ScrollAlign
 ): number {
-  const containerBox = container.getBoundingClientRect();
+  const port = scrollportRect(container);
   const elementBox = element.getBoundingClientRect();
   return match(align)
-    .with('end', () => elementBox.bottom - containerBox.bottom)
-    .with('start', () => elementBox.top - containerBox.top)
+    .with('end', () => {
+      const inset = scrollPaddingInset(container, 'bottom');
+      return elementBox.bottom - port.bottom + inset;
+    })
+    .with('start', () => {
+      const inset = scrollPaddingInset(container, 'top');
+      return elementBox.top - port.top - inset;
+    })
     .with('nearest', () => nearestDelta(container, element))
     .exhaustive();
+}
+
+/** Native scroll-into-view so the list scroll-padding keeps focus rings in view. */
+export function scrollFocusedCardIntoView(element: HTMLElement): void {
+  element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 export function messageElement(
@@ -95,12 +132,17 @@ export function nearestDelta(
   container: HTMLElement,
   element: HTMLElement
 ): number {
-  const containerBox = container.getBoundingClientRect();
+  const port = scrollportRect(container);
   const elementBox = element.getBoundingClientRect();
-  if (elementBox.bottom <= containerBox.top + 1) {
+  const topInset = scrollPaddingInset(container, 'top');
+  const bottomInset = scrollPaddingInset(container, 'bottom');
+  if (elementBox.top < port.top + topInset - 1) {
     return alignmentDelta(container, element, 'start');
   }
-  if (elementBox.top >= containerBox.bottom - 1) {
+  if (elementBox.bottom <= port.top + topInset + 1) {
+    return alignmentDelta(container, element, 'start');
+  }
+  if (elementBox.top >= port.bottom - bottomInset - 1) {
     return alignmentDelta(container, element, 'end');
   }
   return 0;
@@ -111,16 +153,50 @@ export function revealDelta(
   container: HTMLElement,
   element: HTMLElement
 ): number {
-  const containerBox = container.getBoundingClientRect();
+  const port = scrollportRect(container);
   const elementBox = element.getBoundingClientRect();
-  if (elementBox.height >= containerBox.height) {
+  if (elementBox.height >= port.height) {
     return alignmentDelta(container, element, 'start');
   }
-  if (elementBox.top < containerBox.top) {
+  if (elementBox.top < port.top) {
     return alignmentDelta(container, element, 'start');
   }
-  if (elementBox.bottom > containerBox.bottom) {
+  if (elementBox.bottom > port.bottom) {
     return alignmentDelta(container, element, 'end');
+  }
+  return 0;
+}
+
+/** Scroll a partially visible short card into view before paging or advancing. */
+export function keyboardRevealDelta(
+  container: HTMLElement,
+  element: HTMLElement,
+  dir: NavDirection
+): number {
+  const port = scrollportRect(container);
+  const elementBox = element.getBoundingClientRect();
+  const topInset = scrollPaddingInset(container, 'top');
+  const bottomInset = scrollPaddingInset(container, 'bottom');
+  const fitsInPort = elementBox.height <= port.height;
+
+  // Tall cards page in place; snapping them would fight keyboard paging.
+  if (!fitsInPort) return 0;
+
+  if (dir === 'next') {
+    if (elementBox.top < port.top + topInset - 1) {
+      return alignmentDelta(container, element, 'start');
+    }
+    if (elementBox.bottom > port.bottom - bottomInset + 1) {
+      return alignmentDelta(container, element, 'end');
+    }
+    return 0;
+  }
+
+  if (elementBox.bottom > port.bottom - bottomInset + 1) {
+    return alignmentDelta(container, element, 'end');
+  }
+  if (elementBox.top < port.top + topInset - 1) {
+    return alignmentDelta(container, element, 'start');
   }
   return 0;
 }
@@ -131,17 +207,18 @@ export function pageThenAdvanceDelta(
   element: HTMLElement,
   dir: NavDirection
 ): number {
-  const containerBox = container.getBoundingClientRect();
+  const port = scrollportRect(container);
   const elementBox = element.getBoundingClientRect();
-  const page = containerBox.height;
+  const page = port.height;
   return match(dir)
     .with('next', () => {
-      const overflow = elementBox.bottom - containerBox.bottom;
+      const overflow = elementBox.bottom - port.bottom;
       if (overflow <= 1) return 0;
       return Math.min(overflow, page);
     })
     .with('prev', () => {
-      const overflow = containerBox.top - elementBox.top;
+      const topInset = scrollPaddingInset(container, 'top');
+      const overflow = port.top + topInset - elementBox.top;
       if (overflow <= 1) return 0;
       return -Math.min(overflow, page);
     })
@@ -151,6 +228,24 @@ export function pageThenAdvanceDelta(
 /** Remaining scroll to the thread title. 0 means the list is already at the top. */
 export function scrollToListStartDelta(container: HTMLElement): number {
   return container.scrollTop > 1 ? -container.scrollTop : 0;
+}
+
+/** Remaining scroll to the list bottom. 0 means the list is already at the end. */
+export function scrollToListEndDelta(container: HTMLElement): number {
+  const maxScroll = container.scrollHeight - container.clientHeight;
+  const remaining = maxScroll - container.scrollTop;
+  return remaining > 1 ? remaining : 0;
+}
+
+/** Leading-edge throttle for repeated keyboard scroll steps. */
+export function leadingThrottle(intervalMs: number): () => boolean {
+  let lastAt = -Infinity;
+  return () => {
+    const now = Date.now();
+    if (now - lastAt < intervalMs) return false;
+    lastAt = now;
+    return true;
+  };
 }
 
 export function revealMessageInView(

@@ -46,12 +46,15 @@ import {
   hiddenMessagesControl,
   isTruncatedMiddleMessage,
   isUnreadMessage,
+  keyboardRevealDelta,
+  leadingThrottle,
   messageElement,
   nearestDelta,
   pageThenAdvanceDelta,
   revealMessageAfterLayout,
   type ScrollAlign,
   scrollToListStartDelta,
+  scrollToListEndDelta,
   scrollToMessage,
   threadMessageIsExpanded,
 } from '../util/scrollToMessage';
@@ -73,6 +76,7 @@ import { TopBar } from './TopBar';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 const SCROLL_ANIMATION_MS = 1000;
+const KEYBOARD_SCROLL_MS = 300;
 
 type EmailViewProps = {
   title: string;
@@ -331,12 +335,26 @@ function EmailContent(props: EmailViewProps) {
   });
 
   let markdownDomRef!: HTMLDivElement;
+  const tryKeyboardListScroll = leadingThrottle(KEYBOARD_SCROLL_MS);
 
-  const animateListScroll = (list: HTMLElement, top: number) => {
+  const scrollListBy = (
+    list: HTMLElement,
+    top: number,
+    animationMs = SCROLL_ANIMATION_MS
+  ) => {
     if (top === 0) return false;
     setIsScrollingToMessage(true);
+    setTimeout(() => setIsScrollingToMessage(false), animationMs);
     list.scrollBy({ top, behavior: 'smooth' });
-    setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
+    return true;
+  };
+
+  const keyboardScrollListBy = (list: HTMLElement, top: number) => {
+    if (top === 0) return false;
+    if (!tryKeyboardListScroll()) return true;
+    setIsScrollingToMessage(true);
+    setTimeout(() => setIsScrollingToMessage(false), KEYBOARD_SCROLL_MS);
+    list.scrollBy({ top, behavior: 'smooth' });
     return true;
   };
 
@@ -347,7 +365,7 @@ function EmailContent(props: EmailViewProps) {
     if (!button) return false;
     context.messages.setFocused(undefined);
     setHiddenChipFocused(true);
-    animateListScroll(list, nearestDelta(list, button));
+    scrollListBy(list, nearestDelta(list, button));
     return true;
   };
 
@@ -363,7 +381,7 @@ function EmailContent(props: EmailViewProps) {
         setListAnchor('title');
         context.messages.setFocused(undefined);
         const startDelta = scrollToListStartDelta(list);
-        if (startDelta !== 0) return animateListScroll(list, startDelta);
+        if (startDelta !== 0) return scrollListBy(list, startDelta);
         return true;
       })
       .with({ kind: 'hidden-chip' }, () => {
@@ -424,8 +442,24 @@ function EmailContent(props: EmailViewProps) {
         ? messageElement(list, messages, focusedId)
         : undefined;
       if (focusedEl) {
+        const revealDelta = keyboardRevealDelta(list, focusedEl, dir);
+        if (revealDelta !== 0) return keyboardScrollListBy(list, revealDelta);
+
         const pageDelta = pageThenAdvanceDelta(list, focusedEl, dir);
-        if (pageDelta !== 0) return animateListScroll(list, pageDelta);
+        if (pageDelta !== 0) return keyboardScrollListBy(list, pageDelta);
+      }
+
+      if (
+        dir === 'next' &&
+        keyboard.index === messages.length - 1 &&
+        keyboardSelecting()
+      ) {
+        const nextStop = adjacentStop(stops, keyboard, 'next');
+        if (!nextStop || nextStop.kind === 'composer') {
+          const endDelta = scrollToListEndDelta(list);
+          if (endDelta !== 0) return keyboardScrollListBy(list, endDelta);
+          return true;
+        }
       }
     }
 

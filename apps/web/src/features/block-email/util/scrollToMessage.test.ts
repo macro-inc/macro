@@ -6,11 +6,14 @@ import {
   fetchOlderMessages,
   hiddenMessagesControl,
   isTruncatedMiddleMessage,
+  keyboardRevealDelta,
+  leadingThrottle,
   listNeedsOlderPage,
   nearestDelta,
   pageThenAdvanceDelta,
   revealDelta,
   scrollToListStartDelta,
+  scrollToListEndDelta,
   threadMessageIsExpanded,
   truncatedMiddleCount,
 } from './scrollToMessage';
@@ -114,6 +117,15 @@ describe('alignmentDelta', () => {
     expect(alignmentDelta(container, element, 'start')).toBe(25);
   });
 
+  it('respects scroll-padding on the list container', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    container.style.scrollPaddingTop = '8px';
+    box(container, 0, 800);
+    box(element, 0, 200);
+    expect(alignmentDelta(container, element, 'start')).toBe(-8);
+  });
+
   it('end-aligns the card to the list bottom', () => {
     const container = document.createElement('div');
     const element = document.createElement('div');
@@ -150,14 +162,29 @@ describe('revealDelta', () => {
 });
 
 describe('nearestDelta', () => {
-  it('does nothing when any part of the card is on screen', () => {
+  it('does nothing when the card sits inside the scrollport', () => {
     const container = document.createElement('div');
     const element = document.createElement('div');
     box(container, 0, 800);
     box(element, 200, 400);
     expect(nearestDelta(container, element)).toBe(0);
-    box(element, -200, 200);
-    expect(nearestDelta(container, element)).toBe(0);
+  });
+
+  it('start-aligns when the card top sits above the scroll-padding inset', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    container.style.scrollPaddingTop = '8px';
+    box(container, 0, 800);
+    box(element, 4, 200);
+    expect(nearestDelta(container, element)).toBe(-4);
+  });
+
+  it('start-aligns when the card sits entirely above the list', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, -200, -50);
+    expect(nearestDelta(container, element)).toBe(-200);
   });
 
   it('end-aligns a card that sits entirely below the list', () => {
@@ -166,6 +193,56 @@ describe('nearestDelta', () => {
     box(container, 0, 800);
     box(element, 900, 1100);
     expect(nearestDelta(container, element)).toBe(300);
+  });
+});
+
+describe('leadingThrottle', () => {
+  it('allows the first call and blocks calls inside the interval', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const throttle = leadingThrottle(300);
+    expect(throttle()).toBe(true);
+    vi.setSystemTime(100);
+    expect(throttle()).toBe(false);
+    vi.setSystemTime(300);
+    expect(throttle()).toBe(true);
+    vi.useRealTimers();
+  });
+});
+
+describe('keyboardRevealDelta', () => {
+  it('end-aligns a short card whose bottom is clipped when moving down', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 720, 820);
+    expect(keyboardRevealDelta(container, element, 'next')).toBe(20);
+  });
+
+  it('start-aligns a short card whose top is clipped when moving up', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, -20, 80);
+    expect(keyboardRevealDelta(container, element, 'prev')).toBe(-20);
+  });
+
+  it('does nothing when the card already fits in the scrollport', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, 200, 400);
+    expect(keyboardRevealDelta(container, element, 'next')).toBe(0);
+    expect(keyboardRevealDelta(container, element, 'prev')).toBe(0);
+  });
+
+  it('does nothing for a tall card at the bottom so the next message can load', () => {
+    const container = document.createElement('div');
+    const element = document.createElement('div');
+    box(container, 0, 800);
+    box(element, -800, 800);
+    expect(keyboardRevealDelta(container, element, 'next')).toBe(0);
+    expect(pageThenAdvanceDelta(container, element, 'next')).toBe(0);
   });
 });
 
@@ -215,6 +292,24 @@ describe('scrollToListStartDelta', () => {
     const container = document.createElement('div');
     container.scrollTop = 0;
     expect(scrollToListStartDelta(container)).toBe(0);
+  });
+});
+
+describe('scrollToListEndDelta', () => {
+  it('scrolls the leftover distance to the bottom', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'scrollHeight', { value: 1200, writable: true });
+    Object.defineProperty(container, 'clientHeight', { value: 800, writable: true });
+    container.scrollTop = 200;
+    expect(scrollToListEndDelta(container)).toBe(200);
+  });
+
+  it('is zero when the list is already at the bottom', () => {
+    const container = document.createElement('div');
+    Object.defineProperty(container, 'scrollHeight', { value: 1200, writable: true });
+    Object.defineProperty(container, 'clientHeight', { value: 800, writable: true });
+    container.scrollTop = 400;
+    expect(scrollToListEndDelta(container)).toBe(0);
   });
 });
 
