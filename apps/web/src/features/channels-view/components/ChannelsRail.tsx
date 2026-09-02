@@ -33,7 +33,7 @@ import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn, Tooltip } from '@ui';
+import { cn, Scroll, Tooltip } from '@ui';
 import { createMemo, createUniqueId, type JSX, Show } from 'solid-js';
 import { useChannelsView } from '../channels-view-context';
 import type { ChannelsGroup, ChannelsTab } from '../types';
@@ -372,6 +372,7 @@ type CollapsibleSectionProps = {
   unreadCount: number;
   focused: boolean;
   onActivate: () => void;
+  contentRef: (element: HTMLDivElement) => void;
   action: () => JSX.Element;
   children: JSX.Element;
 };
@@ -379,9 +380,18 @@ type CollapsibleSectionProps = {
 function CollapsibleSection(props: CollapsibleSectionProps) {
   const { state } = useChannelsView();
   const open = () => state.expandedGroups[props.group];
+  const bothSectionsOpen = () =>
+    state.expandedGroups.channels && state.expandedGroups.direct_messages;
 
   return (
-    <section class="flex flex-col gap-1 channels-slim:items-center">
+    <section
+      class={cn(
+        'flex min-h-0 flex-col gap-1 channels-slim:items-center',
+        open() ? 'shrink' : 'shrink-0',
+        open() &&
+          (bothSectionsOpen() ? 'max-h-[calc(50%_-_0.375rem)]' : 'max-h-full')
+      )}
+    >
       <div
         class={cn(
           'flex h-9 w-full items-center rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent',
@@ -432,12 +442,20 @@ function CollapsibleSection(props: CollapsibleSectionProps) {
         <div class="border-t border-edge-muted" />
       </div>
       <Show when={open()}>
-        <div class="flex flex-col gap-0.5 channels-slim:w-full channels-slim:items-center">
-          <div class="hidden justify-center channels-slim:flex">
-            {props.action()}
+        <Scroll
+          scrollRef={props.contentRef}
+          class="min-h-0 flex-1 channels-slim:w-full"
+        >
+          <div
+            role="group"
+            class="flex min-h-0 flex-col gap-0.5 channels-slim:w-full channels-slim:items-center"
+          >
+            <div class="hidden justify-center channels-slim:flex">
+              {props.action()}
+            </div>
+            {props.children}
           </div>
-          {props.children}
-        </div>
+        </Scroll>
       </Show>
     </section>
   );
@@ -455,6 +473,7 @@ export function ChannelsRail(props: {
   const currentUserId = useUserId();
   const notificationSource = useGlobalNotificationSource();
   const listDomId = createUniqueId();
+  const sectionScrollRoots: Partial<Record<ChannelsGroup, HTMLDivElement>> = {};
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -559,14 +578,31 @@ export function ChannelsRail(props: {
 
   const domIdForRow = (rowId: string) => `${listDomId}-${rowId}`;
   let listRoot: HTMLDivElement | undefined;
+  const setSectionScrollRoot =
+    (group: ChannelsGroup) => (element: HTMLDivElement) => {
+      sectionScrollRoots[group] = element;
+    };
   const scrollHandle: ListScrollHandle = {
     scrollToIndex: (index) => {
       const row = list.items.at(index);
       if (!row) return;
 
-      document
-        .getElementById(domIdForRow(row.id))
-        ?.scrollIntoView({ block: 'nearest' });
+      const element = document.getElementById(domIdForRow(row.id));
+      const scrollRoot =
+        row.kind === 'conversation' && row.group
+          ? sectionScrollRoots[row.group]
+          : state.tab === 'recents'
+            ? listRoot
+            : undefined;
+      if (!element || !scrollRoot) return;
+
+      const elementBounds = element.getBoundingClientRect();
+      const scrollBounds = scrollRoot.getBoundingClientRect();
+      if (elementBounds.top < scrollBounds.top) {
+        scrollRoot.scrollTop -= scrollBounds.top - elementBounds.top;
+      } else if (elementBounds.bottom > scrollBounds.bottom) {
+        scrollRoot.scrollTop += elementBounds.bottom - scrollBounds.bottom;
+      }
     },
   };
 
@@ -694,7 +730,10 @@ export function ChannelsRail(props: {
         role="tree"
         tabIndex={-1}
         aria-activedescendant={activeDescendant()}
-        class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto pt-3 outline-none"
+        class={cn(
+          'scrollbar-hidden min-h-0 flex-1 pt-3 outline-none',
+          state.tab === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
+        )}
       >
         <Show
           when={state.tab === 'browse'}
@@ -731,7 +770,7 @@ export function ChannelsRail(props: {
             </Show>
           }
         >
-          <div class="flex flex-col gap-3 px-4 channels-slim:px-2">
+          <div class="flex h-full min-h-0 flex-col gap-3 px-4 channels-slim:px-2">
             <CollapsibleSection
               id={domIdForRow(rowKeyForSection('channels'))}
               group="channels"
@@ -740,6 +779,7 @@ export function ChannelsRail(props: {
               unreadCount={unreadTeamChannelCount()}
               focused={list.focus.key() === rowKeyForSection('channels')}
               onActivate={() => activateRow(rowKeyForSection('channels'))}
+              contentRef={setSectionScrollRoot('channels')}
               action={createChannelAction}
             >
               <Show
@@ -779,6 +819,7 @@ export function ChannelsRail(props: {
               onActivate={() =>
                 activateRow(rowKeyForSection('direct_messages'))
               }
+              contentRef={setSectionScrollRoot('direct_messages')}
               action={createDirectMessageAction}
             >
               <Show
