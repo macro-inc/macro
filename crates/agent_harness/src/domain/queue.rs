@@ -140,11 +140,16 @@ impl SessionQueues {
     }
 
     /// Replace a queued prompt's text. The entry keeps its place and its id.
+    ///
+    /// `actor` becomes the entry's actor: the user who rewrote the text is
+    /// who later dispatch announces and logs as, so an edit cannot keep
+    /// someone else's name on words they did not type.
     pub fn edit_prompt(
         &self,
         session: AgentSessionId,
         action_id: AgentActionId,
         prompt: String,
+        actor: Option<MacroUserIdStr<'static>>,
     ) -> Result<(), QueueError> {
         let mut queue = self.queues.get_mut(&session).ok_or(QueueError::NotFound)?;
         let entry = queue
@@ -154,6 +159,7 @@ impl SessionQueues {
         match &mut entry.action {
             AgentAction::Prompt(action) => {
                 action.prompt = prompt;
+                entry.actor = actor;
                 Ok(())
             }
             AgentAction::SetModel(_) | AgentAction::Compact | AgentAction::Stop => {

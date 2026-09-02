@@ -72,11 +72,34 @@ fn editing_replaces_the_text_and_keeps_the_place() {
     queues.enqueue(session, second.clone()).unwrap();
 
     queues
-        .edit_prompt(session, first.action_id, "rewritten".to_owned())
+        .edit_prompt(session, first.action_id, "rewritten".to_owned(), None)
         .unwrap();
 
     let claimed = queues.claim_next(session).unwrap();
     assert_eq!(claimed.action_id, first.action_id);
+    assert_eq!(prompt_text(&claimed.action), "rewritten");
+}
+
+#[test]
+fn editing_reattributes_the_entry_to_the_editor() {
+    let queues = SessionQueues::new();
+    let session = AgentSessionId::TEST_A;
+    let mut first = prompt_entry("first");
+    first.actor = Some(MacroUserIdStr::try_from_email("asker@example.com").unwrap());
+    queues.enqueue(session, first.clone()).unwrap();
+
+    let editor = MacroUserIdStr::try_from_email("editor@example.com").unwrap();
+    queues
+        .edit_prompt(
+            session,
+            first.action_id,
+            "rewritten".to_owned(),
+            Some(editor.clone()),
+        )
+        .unwrap();
+
+    let claimed = queues.claim_next(session).unwrap();
+    assert_eq!(claimed.actor.as_ref(), Some(&editor));
     assert_eq!(prompt_text(&claimed.action), "rewritten");
 }
 
@@ -89,7 +112,7 @@ fn a_claimed_entry_is_gone_for_editing_and_removal() {
     queues.claim_next(session).unwrap();
 
     assert_eq!(
-        queues.edit_prompt(session, entry.action_id, "late".to_owned()),
+        queues.edit_prompt(session, entry.action_id, "late".to_owned(), None),
         Err(QueueError::NotFound)
     );
     assert_eq!(
@@ -113,7 +136,7 @@ fn only_prompts_are_editable() {
     queues.enqueue(session, compact.clone()).unwrap();
 
     assert_eq!(
-        queues.edit_prompt(session, compact.action_id, "text".to_owned()),
+        queues.edit_prompt(session, compact.action_id, "text".to_owned(), None),
         Err(QueueError::NotEditable)
     );
     // Still removable.

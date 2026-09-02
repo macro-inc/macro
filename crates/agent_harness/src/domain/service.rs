@@ -920,10 +920,13 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::EditQueued {
-                action_id, prompt, ..
+                action_id,
+                prompt,
+                actor,
             } => {
                 queue_result(
-                    self.queues.edit_prompt(session_id, action_id, prompt),
+                    self.queues
+                        .edit_prompt(session_id, action_id, prompt, actor),
                     session_id,
                 )?;
                 self.publish_queue(session_id).await;

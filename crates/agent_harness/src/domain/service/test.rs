@@ -1386,10 +1386,20 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
             id,
             second.action_id,
             "second, rewritten".to_owned(),
-            Some(sender()),
+            Some(staff_sender()),
         )
         .await
         .expect("a waiting prompt is editable");
+    let queued = service.queued_controls(id).await.expect("queue lists");
+    let rewritten = queued
+        .iter()
+        .find(|entry| entry.action_id == second.action_id)
+        .expect("the edited entry is still queued");
+    assert_eq!(
+        rewritten.actor.as_ref(),
+        Some(&staff_sender()),
+        "an edit is attributed to the editor, not the original queuer"
+    );
     service
         .remove_queued_control(id, third.action_id, Some(sender()))
         .await
