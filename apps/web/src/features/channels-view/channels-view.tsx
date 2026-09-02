@@ -39,8 +39,9 @@ function ChannelsViewRoot() {
     () => workspaceSize.width ?? undefined,
     { narrow: 720 }
   );
+  const railMode = () => (breakpoints.narrow() ? 'slim' : 'full');
   const railLayout = () =>
-    breakpoints.narrow()
+    railMode() === 'slim'
       ? {
           width: NARROW_RAIL_WIDTH,
           min: NARROW_RAIL_WIDTH,
@@ -85,22 +86,16 @@ function ChannelsViewRoot() {
       <StaticMarkdownContext>
         <SplitPanel.Root>
           <SplitPanel.Body>
-            <div
-              ref={setWorkspace}
-              class="@container/channels-view size-full min-h-0 bg-panel"
-            >
+            <div ref={setWorkspace} class="size-full min-h-0 bg-panel">
               <ViewShell.Root
                 aside={railLayout()}
                 breakpoints={{ collapsed: 0 }}
                 layoutBreakpoint="collapsed"
                 main={{ min: 224 }}
-                resizable={!breakpoints.narrow()}
+                resizable={railMode() === 'full'}
               >
                 <ViewShell.Aside>
-                  <ChannelsRail
-                    channels={channels()}
-                    narrow={breakpoints.narrow()}
-                  />
+                  <ChannelsRail channels={channels()} mode={railMode()} />
                 </ViewShell.Aside>
                 <ViewShell.Main class="overflow-hidden">
                   <Show

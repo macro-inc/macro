@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./features/channels-view/channels-rail.css";
 
 @source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
 @source inline("z-{popup-viewer,viewer-definition-lookup}");

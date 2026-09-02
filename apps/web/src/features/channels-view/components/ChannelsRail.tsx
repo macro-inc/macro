@@ -27,10 +27,8 @@ import type { ChannelsGroup } from '../types';
 function createTabLabel(label: string, icon: JSX.Element) {
   return (
     <>
-      <span class="@max-[720px]/channels-view:hidden">{label}</span>
-      <span class="hidden @max-[720px]/channels-view:block [&_svg]:size-4">
-        {icon}
-      </span>
+      <span class="channels-slim:hidden">{label}</span>
+      <span class="hidden channels-slim:block [&_svg]:size-4">{icon}</span>
     </>
   );
 }
@@ -63,7 +61,7 @@ function ChannelAvatar(props: { channel: ChannelEntity; size?: 'sm' | 'md' }) {
     props.size === 'md'
       ? cn(
           'size-9 [&_svg]:size-4.5',
-          '@max-[720px]/channels-view:size-6 @max-[720px]/channels-view:[&_svg]:size-3.5'
+          'channels-slim:size-6 channels-slim:[&_svg]:size-3.5'
         )
       : 'size-6 [&_svg]:size-3.5';
 
@@ -77,14 +75,14 @@ function ChannelAvatar(props: { channel: ChannelEntity; size?: 'sm' | 'md' }) {
             sizeClass()
           )}
         >
-          <span class="flex size-full items-center justify-center @max-[720px]/channels-view:hidden">
+          <span class="flex size-full items-center justify-center channels-slim:hidden">
             <Entity.Icon
               entity={props.channel}
               suppressClick
               showTooltip={false}
             />
           </span>
-          <span class="hidden size-full items-center justify-center rounded-full border border-edge bg-lift text-xxs font-semibold tracking-wide text-ink @max-[720px]/channels-view:flex">
+          <span class="hidden size-full items-center justify-center rounded-full border border-edge bg-lift text-xxs font-semibold tracking-wide text-ink channels-slim:flex">
             {channelInitials(props.channel.name)}
           </span>
         </span>
@@ -114,13 +112,13 @@ function ChannelOption(props: ChannelOptionProps) {
     <Tooltip
       label={props.channel.name}
       placement="right"
-      class="w-full @max-[720px]/channels-view:size-10"
+      class="w-full channels-slim:size-10"
     >
       <button
         type="button"
         class={cn(
           'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent',
-          '@max-[720px]/channels-view:size-10 @max-[720px]/channels-view:min-h-10 @max-[720px]/channels-view:self-center @max-[720px]/channels-view:justify-center @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:px-0 @max-[720px]/channels-view:py-0',
+          'channels-slim:size-10 channels-slim:min-h-10 channels-slim:self-center channels-slim:justify-center channels-slim:rounded-full channels-slim:px-0 channels-slim:py-0',
           props.channel.channelType === 'direct_message'
             ? 'min-h-10 py-2'
             : 'h-8',
@@ -132,7 +130,7 @@ function ChannelOption(props: ChannelOptionProps) {
         onClick={props.onSelect}
       >
         <ChannelAvatar channel={props.channel} />
-        <span class="min-w-0 flex-1 truncate text-sm font-medium @max-[720px]/channels-view:hidden">
+        <span class="min-w-0 flex-1 truncate text-sm font-medium channels-slim:hidden">
           {props.channel.name}
         </span>
         <Show when={props.unread}>
@@ -140,7 +138,7 @@ function ChannelOption(props: ChannelOptionProps) {
             aria-label="Unread"
             class={cn(
               'size-2 shrink-0 rounded-full bg-accent',
-              '@max-[720px]/channels-view:absolute @max-[720px]/channels-view:right-1.5 @max-[720px]/channels-view:top-1'
+              'channels-slim:absolute channels-slim:right-1.5 channels-slim:top-1'
             )}
           />
         </Show>
@@ -207,29 +205,29 @@ function ConversationCard(props: ConversationCardProps) {
       label={props.channel.name}
       placement="right"
       disabled={!props.showTooltip}
-      class="w-full @max-[720px]/channels-view:size-10 @max-[720px]/channels-view:self-center"
+      class="w-full channels-slim:size-10 channels-slim:self-center"
     >
       <button
         type="button"
         class={cn(
           'w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-          '@max-[720px]/channels-view:flex @max-[720px]/channels-view:size-10 @max-[720px]/channels-view:items-center @max-[720px]/channels-view:justify-center @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:px-0 @max-[720px]/channels-view:py-0',
+          'channels-slim:flex channels-slim:size-10 channels-slim:items-center channels-slim:justify-center channels-slim:rounded-full channels-slim:px-0 channels-slim:py-0',
           props.selected ? 'bg-active' : 'bg-transparent hover:bg-hover'
         )}
         aria-current={props.selected ? 'page' : undefined}
         onClick={props.onSelect}
       >
-        <div class="flex min-w-0 items-start gap-3 overflow-hidden @max-[720px]/channels-view:justify-center">
+        <div class="flex min-w-0 items-start gap-3 overflow-hidden channels-slim:justify-center">
           <div class="relative shrink-0">
             <ChannelAvatar channel={props.channel} size="md" />
             <Show when={props.unread}>
               <span
                 aria-label="Unread"
-                class="absolute -right-0.5 -top-0.5 hidden size-2 rounded-full bg-accent ring-2 ring-surface @max-[720px]/channels-view:block"
+                class="absolute -right-0.5 -top-0.5 hidden size-2 rounded-full bg-accent ring-2 ring-surface channels-slim:block"
               />
             </Show>
           </div>
-          <div class="min-w-0 flex-1 overflow-hidden @max-[720px]/channels-view:hidden">
+          <div class="min-w-0 flex-1 overflow-hidden channels-slim:hidden">
             <span class="flex min-w-0 items-center gap-2">
               <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
                 {props.channel.name}
@@ -318,58 +316,55 @@ function CollapsibleSection(props: CollapsibleSectionProps) {
   const toggle = () => setGroupOpen(props.group, !open());
 
   return (
-    <section class="flex flex-col gap-1 @max-[720px]/channels-view:items-center">
+    <section class="flex flex-col gap-1 channels-slim:items-center">
       <div
         class={cn(
           'flex h-9 w-full items-center rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent',
-          '@max-[720px]/channels-view:h-10 @max-[720px]/channels-view:justify-center'
+          'channels-slim:h-10 channels-slim:justify-center'
         )}
       >
         <button
           type="button"
           class={cn(
             'relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent',
-            '@max-[720px]/channels-view:size-10 @max-[720px]/channels-view:min-w-10 @max-[720px]/channels-view:flex-none @max-[720px]/channels-view:justify-center @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:px-0'
+            'channels-slim:size-10 channels-slim:min-w-10 channels-slim:flex-none channels-slim:justify-center channels-slim:rounded-full channels-slim:px-0'
           )}
           aria-expanded={open()}
           onClick={toggle}
         >
           <CaretDownIcon
             class={cn(
-              'size-3 shrink-0 transition-transform @max-[720px]/channels-view:hidden',
+              'size-3 shrink-0 transition-transform channels-slim:hidden',
               !open() && '-rotate-90'
             )}
           />
-          <span class="min-w-0 flex-1 truncate @max-[720px]/channels-view:hidden">
+          <span class="min-w-0 flex-1 truncate channels-slim:hidden">
             {props.title}
           </span>
-          <span class="hidden items-center justify-center @max-[720px]/channels-view:flex [&_svg]:size-4">
+          <span class="hidden items-center justify-center channels-slim:flex [&_svg]:size-4">
             {props.narrowIcon}
           </span>
           <Show when={props.unreadCount > 0}>
             <span
               class={cn(
                 'text-xxs tabular-nums',
-                '@max-[720px]/channels-view:absolute @max-[720px]/channels-view:right-0.5 @max-[720px]/channels-view:top-0'
+                'channels-slim:absolute channels-slim:right-0.5 channels-slim:top-0'
               )}
             >
               {props.unreadCount}
             </span>
           </Show>
         </button>
-        <div
-          data-section-action=""
-          class="pr-1 @max-[720px]/channels-view:hidden"
-        >
+        <div data-section-action="" class="pr-1 channels-slim:hidden">
           {props.action()}
         </div>
       </div>
-      <div class="hidden w-full px-2 @max-[720px]/channels-view:block">
+      <div class="hidden w-full px-2 channels-slim:block">
         <div class="border-t border-edge-muted" />
       </div>
       <Show when={open()}>
-        <div class="flex flex-col gap-0.5 @max-[720px]/channels-view:w-full @max-[720px]/channels-view:items-center">
-          <div class="hidden justify-center @max-[720px]/channels-view:flex">
+        <div class="flex flex-col gap-0.5 channels-slim:w-full channels-slim:items-center">
+          <div class="hidden justify-center channels-slim:flex">
             {props.action()}
           </div>
           {props.children}
@@ -382,7 +377,7 @@ function CollapsibleSection(props: CollapsibleSectionProps) {
 /** V2 Chat navigation rail with Browse and Recents destinations. */
 export function ChannelsRail(props: {
   channels: ChannelEntity[];
-  narrow: boolean;
+  mode: 'full' | 'slim';
 }) {
   const { state, setSelectedChannelId, setTab } = useChannelsView();
   const currentUserId = useUserId();
@@ -445,7 +440,7 @@ export function ChannelsRail(props: {
       type="button"
       class={cn(
         'flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent',
-        '@max-[720px]/channels-view:size-10 @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:border @max-[720px]/channels-view:border-edge-muted @max-[720px]/channels-view:bg-transparent'
+        'channels-slim:size-10 channels-slim:rounded-full channels-slim:border channels-slim:border-edge-muted channels-slim:bg-transparent'
       )}
       aria-label="Create channel"
       onClick={() => openNewChannelModal()}
@@ -458,7 +453,7 @@ export function ChannelsRail(props: {
       type="button"
       class={cn(
         'flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent',
-        '@max-[720px]/channels-view:size-10 @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:border @max-[720px]/channels-view:border-edge-muted @max-[720px]/channels-view:bg-transparent'
+        'channels-slim:size-10 channels-slim:rounded-full channels-slim:border channels-slim:border-edge-muted channels-slim:bg-transparent'
       )}
       aria-label="Start direct message"
       onClick={() => {
@@ -474,16 +469,17 @@ export function ChannelsRail(props: {
   return (
     <aside
       aria-label="Chat navigation"
+      data-channels-rail={props.mode}
       class="flex size-full min-h-0 flex-col bg-inset pb-5 pt-2"
     >
-      <div class="flex min-h-8 shrink-0 items-center px-4 @max-[720px]/channels-view:hidden">
+      <div class="flex min-h-8 shrink-0 items-center px-4 channels-slim:hidden">
         <SplitPanel.ControlGroup>
           <SplitPanel.CloseButton />
           <SplitPanel.BackButton />
           <SplitPanel.ForwardButton />
         </SplitPanel.ControlGroup>
       </div>
-      <div class="flex shrink-0 items-center px-4 pt-3 @max-[720px]/channels-view:hidden">
+      <div class="flex shrink-0 items-center px-4 pt-3 channels-slim:hidden">
         <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
           Chat
         </h1>
@@ -492,15 +488,15 @@ export function ChannelsRail(props: {
       <div
         class={cn(
           'shrink-0 px-4 pt-3',
-          '@max-[720px]/channels-view:px-3 @max-[720px]/channels-view:pt-0'
+          'channels-slim:px-3 channels-slim:pt-0'
         )}
       >
         <TabsInset
           aria-label="Chat sidebar views"
-          class="h-9 @max-[720px]/channels-view:h-[76px]"
-          trackClass="h-full @max-[720px]/channels-view:flex-col"
-          itemClass="h-full @max-[720px]/channels-view:h-auto @max-[720px]/channels-view:min-h-0 @max-[720px]/channels-view:w-full"
-          labelClass="h-full py-0 @max-[720px]/channels-view:size-full @max-[720px]/channels-view:p-0"
+          class="h-9 channels-slim:h-[76px]"
+          trackClass="h-full channels-slim:flex-col"
+          itemClass="h-full channels-slim:h-auto channels-slim:min-h-0 channels-slim:w-full"
+          labelClass="h-full py-0 channels-slim:size-full channels-slim:p-0"
           fullWidth
           list={CHANNEL_TABS}
           value={state.tab}
@@ -519,12 +515,12 @@ export function ChannelsRail(props: {
             <Show
               when={recentConversations().length > 0}
               fallback={
-                <div class="px-3 py-8 text-center text-sm text-ink-extra-muted @max-[720px]/channels-view:hidden">
+                <div class="px-3 py-8 text-center text-sm text-ink-extra-muted channels-slim:hidden">
                   No recent messages
                 </div>
               }
             >
-              <div class="flex w-full flex-col divide-y divide-edge-muted @max-[720px]/channels-view:gap-0.5 @max-[720px]/channels-view:divide-y-0">
+              <div class="flex w-full flex-col divide-y divide-edge-muted channels-slim:gap-0.5 channels-slim:divide-y-0">
                 <Key each={recentConversations()} by={(channel) => channel.id}>
                   {(channel) => (
                     <ConversationCard
@@ -533,7 +529,7 @@ export function ChannelsRail(props: {
                       mentionedCurrentUser={mentionsCurrentUser(channel())}
                       unread={unreadChannelIds().has(channel().id)}
                       selected={state.selectedChannelId === channel().id}
-                      showTooltip={props.narrow}
+                      showTooltip={props.mode === 'slim'}
                       onSelect={() => setSelectedChannelId(channel().id)}
                     />
                   )}
@@ -542,7 +538,7 @@ export function ChannelsRail(props: {
             </Show>
           }
         >
-          <div class="flex flex-col gap-3 px-4 @max-[720px]/channels-view:px-2">
+          <div class="flex flex-col gap-3 px-4 channels-slim:px-2">
             <CollapsibleSection
               group="channels"
               title="Channels"
@@ -553,7 +549,7 @@ export function ChannelsRail(props: {
               <Show
                 when={teamChannels().length > 0}
                 fallback={
-                  <div class="px-2 py-2 text-xs text-ink-extra-muted @max-[720px]/channels-view:hidden">
+                  <div class="px-2 py-2 text-xs text-ink-extra-muted channels-slim:hidden">
                     No channels
                   </div>
                 }
@@ -581,7 +577,7 @@ export function ChannelsRail(props: {
               <Show
                 when={directMessages().length > 0}
                 fallback={
-                  <div class="px-2 py-2 text-xs text-ink-extra-muted @max-[720px]/channels-view:hidden">
+                  <div class="px-2 py-2 text-xs text-ink-extra-muted channels-slim:hidden">
                     No direct messages
                   </div>
                 }
