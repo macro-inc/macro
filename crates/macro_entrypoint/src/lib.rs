@@ -13,7 +13,9 @@ pub use shutdown::shutdown_signal;
 use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use rootcause::hooks::Hooks;
 use rootcause_tracing::{RootcauseLayer, SpanCollector};
@@ -95,16 +97,22 @@ impl Default for MacroEntrypoint {
 #[derive(Debug)]
 pub struct InitializedEntrypoint {
     tracer_provider: Option<SdkTracerProvider>,
+    logger_provider: Option<SdkLoggerProvider>,
 }
 
 impl InitializedEntrypoint {
-    /// Gracefully shut down the OpenTelemetry tracer provider.
-    /// This should be called before the application exits to ensure all traces are flushed.
+    /// Gracefully shut down the OpenTelemetry providers.
+    /// This should be called before the application exits to ensure all traces and logs are flushed.
     pub fn shutdown(&self) {
         if let Some(ref provider) = self.tracer_provider
             && let Err(e) = provider.shutdown()
         {
             tracing::error!(error=?e, "failed to shutdown tracer provider");
+        }
+        if let Some(ref provider) = self.logger_provider
+            && let Err(e) = provider.shutdown()
+        {
+            tracing::error!(error=?e, "failed to shutdown logger provider");
         }
     }
 }
@@ -128,15 +136,22 @@ impl MacroEntrypoint {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {
                 let rust_log_filter = rust_log_env_filter();
                 // Local OTLP export is opt-in. xtask injects this only for
-                // trace-enabled local runs.
-                let tracer_provider = OtelExporterOtlpEndpoint::new()
-                    .map(|_| init_opentelemetry("local".to_string()));
+                // trace-enabled local runs. Alongside spans, tracing events
+                // ship as OTLP log records (Loki, when the collector is the
+                // LGTM stack), so local logs are queryable next to the traces
+                // they belong to.
+                let export_otel = OtelExporterOtlpEndpoint::new().is_some();
+                let tracer_provider = export_otel.then(|| init_opentelemetry("local".to_string()));
+                let logger_provider = export_otel.then(|| init_otel_logs("local".to_string()));
 
                 if let Some(provider) = tracer_provider.as_ref() {
                     let otel_filter = otel_env_filter();
                     let rootcause_filter = rust_log_filter.clone().or(otel_filter.clone());
                     let otel_layer = otel_layer_with_error_mapping(provider.tracer(service_name()))
                         .with_filter(otel_filter);
+                    let log_bridge = logger_provider.as_ref().map(|p| {
+                        OpenTelemetryTracingBridge::new(p).with_filter(otel_logs_filter())
+                    });
 
                     Registry::default()
                         .with(RootcauseLayer.with_filter(rootcause_filter))
@@ -149,6 +164,7 @@ impl MacroEntrypoint {
                                 .with_filter(rust_log_filter),
                         )
                         .with(otel_layer)
+                        .with(log_bridge)
                         .init();
                 } else {
                     Registry::default()
@@ -164,7 +180,10 @@ impl MacroEntrypoint {
                         .init();
                 }
 
-                InitializedEntrypoint { tracer_provider }
+                InitializedEntrypoint {
+                    tracer_provider,
+                    logger_provider,
+                }
             }
             (
                 Environment::Local,
@@ -179,6 +198,7 @@ impl MacroEntrypoint {
                 tracing::subscriber::set_global_default(subscriber).unwrap();
                 InitializedEntrypoint {
                     tracer_provider: None,
+                    logger_provider: None,
                 }
             }
             (Environment::Production | Environment::Develop, _) => {
@@ -217,8 +237,11 @@ impl MacroEntrypoint {
                     .with(otel_layer)
                     .init();
 
+                // Prod/develop logs reach Datadog as JSON on stdout (the fmt
+                // layer above); no OTLP log export there.
                 InitializedEntrypoint {
                     tracer_provider: Some(tracer_provider),
+                    logger_provider: None,
                 }
             }
         }
@@ -273,6 +296,22 @@ fn service_name() -> String {
         .unwrap_or_else(|| "unknown-service".to_string())
 }
 
+fn otel_endpoint() -> String {
+    OtelExporterOtlpEndpoint::new()
+        .map(|e| e.to_string())
+        .unwrap_or_else(|| DEFAULT_OTLP_ENDPOINT.to_string())
+}
+
+fn otel_resource(deployment_environment: String) -> opentelemetry_sdk::Resource {
+    opentelemetry_sdk::Resource::builder()
+        .with_service_name(service_name())
+        .with_attribute(opentelemetry::KeyValue::new(
+            "deployment.environment",
+            deployment_environment,
+        ))
+        .build()
+}
+
 fn init_opentelemetry(deployment_environment: String) -> SdkTracerProvider {
     // W3C trace-context propagation: lets macro_tower_layers parent request
     // spans under an incoming `traceparent` (e.g. from the web app), and
@@ -281,28 +320,51 @@ fn init_opentelemetry(deployment_environment: String) -> SdkTracerProvider {
         opentelemetry_sdk::propagation::TraceContextPropagator::new(),
     );
 
-    let endpoint = OtelExporterOtlpEndpoint::new()
-        .map(|e| e.to_string())
-        .unwrap_or_else(|| DEFAULT_OTLP_ENDPOINT.to_string());
-
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
-        .with_endpoint(endpoint)
+        .with_endpoint(otel_endpoint())
         .build()
         .expect("failed to create OTLP span exporter");
 
-    let resource = opentelemetry_sdk::Resource::builder()
-        .with_service_name(service_name())
-        .with_attribute(opentelemetry::KeyValue::new(
-            "deployment.environment",
-            deployment_environment,
-        ))
-        .build();
-
     SdkTracerProvider::builder()
         .with_batch_exporter(exporter)
-        .with_resource(resource)
+        .with_resource(otel_resource(deployment_environment))
         .build()
+}
+
+/// OTLP log export for the [`OpenTelemetryTracingBridge`]: tracing events
+/// become log records (with trace/span correlation) at the same endpoint the
+/// spans go to. Local-only today — see the prod arm of [`MacroEntrypoint::init`].
+fn init_otel_logs(deployment_environment: String) -> SdkLoggerProvider {
+    let exporter = opentelemetry_otlp::LogExporter::builder()
+        .with_tonic()
+        .with_endpoint(otel_endpoint())
+        .build()
+        .expect("failed to create OTLP log exporter");
+
+    SdkLoggerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(otel_resource(deployment_environment))
+        .build()
+}
+
+/// Filter for the log bridge: mirror `RUST_LOG` verbosity, but never feed the
+/// exporter's own internals back into it — the OTel/tonic stack logs through
+/// `tracing`, so exporting those events would emit more of them (a
+/// telemetry-induced-telemetry loop).
+fn otel_logs_filter() -> EnvFilter {
+    let mut filter = rust_log_env_filter();
+    for directive in [
+        "opentelemetry=off",
+        "opentelemetry_sdk=off",
+        "opentelemetry_otlp=off",
+        "tonic=off",
+        "h2=off",
+        "hyper=off",
+    ] {
+        filter = filter.add_directive(directive.parse().expect("static directive parses"));
+    }
+    filter
 }
 
 /// builder struct for modifying the local environment options

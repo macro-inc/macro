@@ -1,3 +1,4 @@
+import { formatDateAndTime } from '@app/features/entity/utils/timestamp';
 import {
   buildCron,
   type CronParts,
@@ -7,14 +8,9 @@ import {
   parseCron,
   type ScheduleFrequency,
 } from '@core/util/cron';
-import {
-  type DateOption,
-  formatDateWithContext,
-} from '@core/util/dateSearch/useDateSearch';
 import type { EntityData } from '@entity';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import type { UpdateReminderRequest } from '@service-storage/generated/schemas/updateReminderRequest';
-import { addDays, addHours, addWeeks } from 'date-fns';
 
 /**
  * The time of day a bare date resolves to.
@@ -27,20 +23,6 @@ export const REMINDER_DEFAULT_TIME = { hours: 9, minutes: 0 } as const;
 
 /** Longest description the API accepts, mirroring the service's own limit. */
 export const REMINDER_DESCRIPTION_MAX_LENGTH = 2000;
-
-/**
- * Drop options that have already passed.
- *
- * The API rejects a `remindAt` in the past, and the date search happily returns
- * past dates for a typed query ("yesterday", or a month already gone by). The
- * no-query preset list filters itself; this covers everything else.
- */
-export function futureDateOptions(
-  options: readonly DateOption[],
-  now: Date
-): DateOption[] {
-  return options.filter((option) => option.date.getTime() > now.getTime());
-}
 
 /** A one-shot schedule firing at `date`. */
 export function onceSchedule(date: Date): ReminderSchedule {
@@ -97,14 +79,6 @@ export function repeatPartsFromDate(
 }
 
 /**
- * What the repeat picker starts from for a brand-new recurrence: weekly on
- * today, at the same morning time a bare date would resolve to.
- */
-export function defaultRepeatParts(now: Date = new Date()): CronParts {
-  return repeatPartsFromDate(atDefaultTime(now));
-}
-
-/**
  * The schedule a soup row is on, rebuilt as the tagged union the API speaks.
  *
  * A row carries the schedule flattened into `scheduleType` plus the fields that
@@ -132,6 +106,26 @@ export function scheduleFromRow(row: {
     };
   }
   return { type: 'once', remindAt: new Date(row.nextRunAt).toISOString() };
+}
+
+/**
+ * When a reminder next comes due, as one line for a row to show.
+ *
+ * A recurring reminder reads as its cadence ("Every weekday at 9:00 AM"), which
+ * is what says it fires again at all; a one-shot reads as the single instant it
+ * fires, date and time together. Both answer "when?" without repeating what the
+ * recurrence badge beside them already says.
+ */
+export function describeReminderWhen(row: {
+  scheduleType: 'once' | 'recurring';
+  cron?: string;
+  timezone?: string;
+  nextRunAt: string | Date;
+}): string {
+  return (
+    describeReminderSchedule(scheduleFromRow(row)) ??
+    formatDateAndTime(row.nextRunAt)
+  );
 }
 
 /** Whether a schedule repeats, narrowed for the caller. */
@@ -194,104 +188,6 @@ export function sameSchedule(
     return new Date(a.remindAt).getTime() === new Date(b.remindAt).getTime();
   }
   return false;
-}
-
-/** The same instant, at `REMINDER_DEFAULT_TIME`. */
-function atDefaultTime(date: Date): Date {
-  const result = new Date(date);
-  result.setHours(
-    REMINDER_DEFAULT_TIME.hours,
-    REMINDER_DEFAULT_TIME.minutes,
-    0,
-    0
-  );
-  return result;
-}
-
-/** The same instant, with seconds dropped. */
-function toWholeMinute(date: Date): Date {
-  const result = new Date(date);
-  result.setSeconds(0, 0);
-  return result;
-}
-
-/**
- * What the reminder picker offers before anything is typed.
- *
- * Deliberately not the shared `searchPresets` list, which is built for due dates
- * — it leads with "Today"/"Yesterday" and every entry lands on `endOfDay`.
- * Typing still goes through `useDateSearch`, so the shared presets remain
- * reachable by name; this only replaces the resting list.
- *
- * The hour offsets keep their computed clock time (an "in 1 hour" reminder at
- * 9am would be useless); the day-scale ones get the morning default.
- */
-export function reminderDefaultOptions(now: Date): DateOption[] {
-  const entries: Array<{ id: string; label: string; date: Date }> = [
-    {
-      id: 'in-1-hour',
-      label: 'In 1 hour',
-      date: toWholeMinute(addHours(now, 1)),
-    },
-    {
-      id: 'in-2-hours',
-      label: 'In 2 hours',
-      date: toWholeMinute(addHours(now, 2)),
-    },
-    { id: 'tomorrow', label: 'Tomorrow', date: atDefaultTime(addDays(now, 1)) },
-    {
-      id: 'in-1-week',
-      label: 'In 1 week',
-      date: atDefaultTime(addWeeks(now, 1)),
-    },
-  ];
-
-  // No two of the presets above can currently land on the same instant, but
-  // they are a list people add to, and two entries offering one time under two
-  // labels is the kind of thing nobody notices until it ships.
-  const seen = new Set<number>();
-  const unique = entries.filter(({ date }) => {
-    const time = date.getTime();
-    if (seen.has(time)) return false;
-    seen.add(time);
-    return true;
-  });
-
-  return futureDateOptions(
-    unique.map(({ id, label, date }) => ({
-      id,
-      displayText: label,
-      secondaryText: formatDateWithContext(date, now, true),
-      date,
-      type: 'preset' as const,
-    })),
-    now
-  );
-}
-
-/**
- * What the picker offers when editing a reminder that already has a time.
- *
- * "Keep current time" leads, so a rename costs one Enter rather than forcing a
- * date to be re-picked. It is the only option exempt from the future filter: an
- * overdue reminder still has to be renamable, and keeping its time sends no
- * schedule at all — see {@link reminderEditPatch}.
- *
- * Presets landing on the current time are dropped, or the same instant would be
- * offered twice under two labels.
- */
-export function reminderEditOptions(current: Date, now: Date): DateOption[] {
-  const keep: DateOption = {
-    id: 'keep',
-    displayText: 'Keep current time',
-    secondaryText: formatDateWithContext(current, now, true),
-    date: current,
-    type: 'preset',
-  };
-  const rest = reminderDefaultOptions(now).filter(
-    (option) => option.date.getTime() !== current.getTime()
-  );
-  return [keep, ...rest];
 }
 
 /**

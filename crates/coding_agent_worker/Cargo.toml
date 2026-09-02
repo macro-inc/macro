@@ -16,17 +16,20 @@ agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
-axum = { workspace = true }
 bot_id = { path = "../bot_id" }
-# Only the domain models: the daemon reads `GET /bots/me` and the webhook
-# API's bodies, and wants none of either crate's server-side machinery.
-bots = { path = "../bots", default-features = false }
+chrono = { workspace = true }
 clap = { workspace = true }
+crossterm = { workspace = true }
+harness_id = { path = "../harness_id" }
+harnesses = { path = "../harnesses", default-features = false }
 dashmap = { workspace = true }
+eventsource-stream = { workspace = true }
+futures = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
-reqwest = { workspace = true }
+ratatui = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }
 # The gateway dial is `wss` on every deployment but a local stack, and
 # tokio-tungstenite's rustls feature selects no crypto provider.
@@ -37,12 +40,14 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "process", "rt-multi-thread", "signal", "time"] }
 tokio-retry = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 tokio-tungstenite = { workspace = true }
 toml = { workspace = true }
+toml_edit = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 tracing-subscriber = { workspace = true }
 webhook = { path = "../webhook", default-features = false }
-webhook_signature = { path = "../webhook_signature" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
@@ -50,4 +55,5 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
 channels = { path = "../channels", default-features = false }
 chrono = { workspace = true }
-tower = { workspace = true, features = ["util"] }
+harness_id = { path = "../harness_id", features = ["test-utils"] }
+tokio = { workspace = true, features = ["io-util", "net"] }

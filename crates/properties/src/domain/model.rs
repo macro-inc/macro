@@ -1,5 +1,8 @@
 //! Domain models for properties.
 
+#[cfg(test)]
+mod test;
+
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
     RequiredPermission, ViewAccessLevel,
@@ -24,6 +27,33 @@ pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
         EntityType::Channel => AccessEntityType::Channel,
         EntityType::Company => AccessEntityType::CrmCompany,
         EntityType::User => AccessEntityType::User,
+    }
+}
+
+/// Map a canonical entity type to its properties storage type.
+///
+/// Inverse of [`canonical_entity_type`]. `Document` covers task documents
+/// too; callers that need the task refinement resolve the document subtype
+/// themselves. `None` means the canonical type has no properties storage.
+pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> {
+    match entity_type {
+        AccessEntityType::CalendarEvent => Some(EntityType::CalendarEvent),
+        AccessEntityType::Document => Some(EntityType::Document),
+        AccessEntityType::Call => Some(EntityType::CallRecord),
+        AccessEntityType::Chat => Some(EntityType::Chat),
+        AccessEntityType::Project => Some(EntityType::Project),
+        AccessEntityType::EmailThread => Some(EntityType::Thread),
+        AccessEntityType::Channel => Some(EntityType::Channel),
+        AccessEntityType::CrmCompany => Some(EntityType::Company),
+        AccessEntityType::User => Some(EntityType::User),
+        AccessEntityType::ChannelMessage
+        | AccessEntityType::Team
+        | AccessEntityType::ForeignEntity
+        | AccessEntityType::StaticFile
+        | AccessEntityType::CrmContact
+        | AccessEntityType::Reminder
+        | AccessEntityType::Skill
+        | AccessEntityType::AgentSession => None,
     }
 }
 

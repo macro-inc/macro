@@ -26,6 +26,7 @@ export function Content(props: ContentProps) {
   return (
     <Show when={message().content}>
       <div
+        data-message-content
         class={cn(
           'whitespace-pre-wrap wrap-break-word max-w-full',
           bigEmoji() ? 'text-4xl' : 'text-sm',

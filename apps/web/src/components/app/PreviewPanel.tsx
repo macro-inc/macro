@@ -1,13 +1,20 @@
 import {
+  calendarBlockParamsForEntity,
   getChannelEntityTarget,
+  navigateCalendarEntityToTarget,
   navigateChannelEntityToTarget,
   reminderSplitTarget,
 } from '@app/features/next-soup/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { getChannelParams } from '@block-channel/utils/link';
-import type { BlockAliasContext, BlockName } from '@core/block';
+import type {
+  BlockAliasContext,
+  BlockComponentProps,
+  BlockName,
+} from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   type EntityData,
@@ -52,14 +59,16 @@ type PreviewBlockTarget = {
   blockType: BlockName;
   blockId: string;
   aliasContext: BlockAliasContext | undefined;
+  params?: BlockComponentProps[BlockName];
 };
 
 function PreviewPanelContent(
   props: PreviewPanelProps & { selectedEntity: EntityData }
 ) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
-  const selectedEntityId = createMemo(() => props.selectedEntity.id);
   const [interactedWith, setInteractedWith] = createSignal(false);
+  const [attachHotkeys, previewHotkeyScope] =
+    useHotkeyDOMScope('preview-panel');
 
   const blockInstance = createMemo(() => {
     const entity = props.selectedEntity;
@@ -89,11 +98,21 @@ function PreviewPanelContent(
       }))
       .with(
         { type: P.union('channel_message', 'channel_thread') },
-        (message) => ({
-          blockType: 'channel',
-          blockId: message.channelId,
-          aliasContext: undefined,
-        })
+        (message) => {
+          const channelTarget = untrack(() => getChannelEntityTarget(message));
+          return {
+            blockType: 'channel',
+            blockId: message.channelId,
+            aliasContext: undefined,
+            params:
+              channelTarget?.kind === 'message'
+                ? getChannelParams(
+                    channelTarget.messageId,
+                    channelTarget.threadId
+                  )
+                : undefined,
+          };
+        }
       )
       .with({ type: 'foreign' }, (foreignEntity) => ({
         blockType:
@@ -113,10 +132,11 @@ function PreviewPanelContent(
         blockId: contact.id,
         aliasContext: undefined,
       }))
-      .with({ type: 'calendar_event' }, () => ({
+      .with({ type: 'calendar_event' }, (calendarEvent) => ({
         blockType: 'calendar',
         blockId: CALENDAR_BLOCK_ID,
         aliasContext: undefined,
+        params: untrack(() => calendarBlockParamsForEntity(calendarEvent)),
       }))
       .with({ type: 'reminder' }, (reminder) => {
         const reminderTarget = reminderSplitTarget(reminder);
@@ -132,37 +152,33 @@ function PreviewPanelContent(
         aliasContext: undefined,
       }));
 
-    const channelTarget =
-      target.blockType === 'channel'
-        ? untrack(() => getChannelEntityTarget(entity))
-        : undefined;
-
     return props.orchestrator.createBlockInstance(
       target.blockType,
       target.blockId,
       {
         aliasContext: target.aliasContext,
-        params:
-          channelTarget?.kind === 'message'
-            ? getChannelParams(channelTarget.messageId, channelTarget.threadId)
-            : undefined,
+        params: target.params,
       }
     );
   });
 
   createRenderEffect(
-    on(selectedEntityId, () => {
-      setInteractedWith(false);
-      void navigateChannelEntityToTarget(
-        props.selectedEntity,
-        props.orchestrator
-      );
-    })
+    on(
+      () => props.selectedEntity,
+      (entity) => {
+        setInteractedWith(false);
+        void navigateChannelEntityToTarget(entity, props.orchestrator);
+        void navigateCalendarEntityToTarget(entity, props.orchestrator);
+      }
+    )
   );
 
   return (
     <div
-      ref={props.ref}
+      ref={(element) => {
+        attachHotkeys(element);
+        props.ref?.(element);
+      }}
       class="flex size-full min-h-0 flex-col"
       onFocusIn={(event) => {
         if (interactedWith()) return;
@@ -176,6 +192,8 @@ function PreviewPanelContent(
           !event.currentTarget.contains(relatedTarget)
         ) {
           relatedTarget.focus();
+        } else if (props.onFocusOut) {
+          props.onFocusOut();
         } else {
           (event.target as HTMLElement).blur?.();
         }
@@ -215,6 +233,8 @@ function PreviewPanelContent(
         <SplitPanelContext.Provider
           value={{
             ...props.splitPanelContext,
+            splitHotkeyScope: previewHotkeyScope,
+            isInlinePreview: true,
             layoutRefs: scopedLayoutRefs,
           }}
         >

@@ -40,9 +40,11 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationRea
                 ))
                 .layer(macro_cors::cors_layer())
                 .layer(CompressionLayer::new().gzip(true)),
-        )
-        // The health router is attached here so we don't attach the logging middleware to it
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+        );
+    let app = Router::new()
+        .merge(app.clone())
+        .nest("/notification", app)
+        .merge(swagger_ui());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -55,6 +57,15 @@ pub async fn setup_and_serve<S: ::notification::domain::service::NotificationRea
     axum::serve(listener, app.into_make_service())
         .await
         .context("error starting service")
+}
+
+fn swagger_ui() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/notification/docs").url(
+            "/notification/api-doc/openapi.json",
+            swagger::ApiDoc::openapi(),
+        ))
 }
 
 fn api_router<S: ::notification::domain::service::NotificationReader>(
@@ -79,4 +90,42 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
     Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn openapi_is_served_at_root_and_gateway_prefix() {
+        let api = swagger_ui();
+
+        for uri in [
+            "/api-doc/openapi.json",
+            "/notification/api-doc/openapi.json",
+        ] {
+            let response = api
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(uri)
+                        .method("GET")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "openapi at {uri} should be 200"
+            );
+        }
+    }
 }

@@ -128,6 +128,14 @@ describe('createTargetMessageController', () => {
     expect(scrollToId).not.toHaveBeenCalled();
     expect(controller!.pendingScrollTargetId()).toBeUndefined();
     expect(controller!.pendingTargetReplyId()).toBe('reply-4');
+    // The outer row is acknowledged early so the reply can scroll itself, but
+    // an element still owes the viewport a scroll. Anything gated on that —
+    // the kept-mounted row, the ThreadList fallback — must stay armed, or a
+    // reply that never lands leaves the channel parked where it mounted.
+    expect(controller!.hasPendingElementScroll()).toBe(true);
+
+    controller!.completePendingReplyScroll('message-1', 'reply-4');
+    expect(controller!.hasPendingElementScroll()).toBe(false);
     dispose();
   });
 

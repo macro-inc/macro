@@ -404,6 +404,95 @@ async fn tagged_calendar_event_participates_in_grouped_property_soup(
     Ok(())
 }
 
+/// A fired reminder counts as the event's latest activity: the grouped
+/// recency sort must place the event at its delivery time, not at the older
+/// Google last-modified time that made reminder rows surface in the past.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn grouped_recency_sort_uses_reminder_delivery_time(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const OWNER_ID: &str = "macro|calendar-fired-grouped@example.com";
+    let link_id = uuid::Uuid::now_v7();
+    let reminded_id = uuid::Uuid::now_v7();
+    let edited_id = uuid::Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO email_links (
+            id, macro_id, fusionauth_user_id, email_address, provider
+        )
+        VALUES ($1, $2, $2, 'calendar-fired-grouped@example.com', 'GMAIL')
+        "#,
+        link_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_events (
+            id, owner_id, source_link_id, ical_uid, title,
+            starts_at, ends_at, canonical_source_kind,
+            canonical_source_updated_at, updated_at, last_reminder_fired_at
+        )
+        VALUES (
+            $1, $2, $3, 'reminded-grouped@example.com', 'Reminded event',
+            now(), now() + interval '1 hour', 'google', now(),
+            now() - interval '10 days', now()
+        )
+        "#,
+        reminded_id,
+        OWNER_ID,
+        link_id,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO calendar_events (
+            id, owner_id, source_link_id, ical_uid, title,
+            starts_at, ends_at, canonical_source_kind,
+            canonical_source_updated_at, updated_at
+        )
+        VALUES (
+            $1, $2, $3, 'edited-grouped@example.com', 'Edited event',
+            now(), now() + interval '1 hour', 'google', now(),
+            now() - interval '1 day'
+        )
+        "#,
+        edited_id,
+        OWNER_ID,
+        link_id,
+    )
+    .execute(&pool)
+    .await?;
+
+    let user_id = MacroUserIdStr::parse_from_str(OWNER_ID).unwrap();
+    let ids: Vec<uuid::Uuid> = expanded_dynamic_cursor_soup_grouped(
+        &pool,
+        GroupedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 50,
+            cursor: Query::Sort(
+                SimpleSortMethod::ViewedUpdated,
+                EntityFilterAst::mock_empty(),
+            ),
+            exclude_frecency: false,
+            grouping: GroupingConfig {
+                field: GroupByField::EntityType,
+                group_key: None,
+                per_group_limit: None,
+            },
+        },
+    )
+    .await?
+    .filter(|item| matches!(item.item, models_soup::item::SoupItem::CalendarEvent(_)))
+    .map(|item| item.item.id())
+    .collect();
+
+    assert_eq!(ids, vec![reminded_id, edited_id]);
+    Ok(())
+}
+
 /// Regression: when a filter makes an arm of the Combined UNION impossible,
 /// the remaining arms must still type-align. Postgres resolves UNION column
 /// types pairwise left-to-right, and untyped `NULL`s across two arms resolve

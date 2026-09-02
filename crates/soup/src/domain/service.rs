@@ -2,9 +2,9 @@ use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
         GetRemindersRequest, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection,
-        SoupType, TouchedPagePosition, TouchedQueryInner, TouchedSoupRequest,
-        grouping::ItemGroupingInfo,
+        SimpleSortRequest, SoupDocumentServerFacts, SoupErr, SoupProjectionHydration,
+        SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
+        TouchedPagePosition, TouchedQueryInner, TouchedSoupRequest, grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -66,6 +66,7 @@ mod tests;
 #[derive(Debug)]
 struct SoupCandidate {
     item: SoupItem<()>,
+    document_server_facts: Option<SoupDocumentServerFacts>,
     frecency_score: Option<AggregateFrecency>,
     touched_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -75,6 +76,17 @@ impl SoupCandidate {
     fn plain(item: SoupItem<()>) -> Self {
         SoupCandidate {
             item,
+            document_server_facts: None,
+            frecency_score: None,
+            touched_at: None,
+        }
+    }
+
+    /// A candidate whose optional server facts came from the same repository row.
+    fn from_projection_hydration(hydration: SoupProjectionHydration) -> Self {
+        SoupCandidate {
+            item: hydration.item,
+            document_server_facts: hydration.document_server_facts,
             frecency_score: None,
             touched_at: None,
         }
@@ -200,20 +212,35 @@ where
         &self,
         soup_type: SoupType,
         req: SimpleSortRequest<'_>,
+        include_projection: bool,
     ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
-        let res = match soup_type {
-            SoupType::Expanded => self
+        let candidates: Vec<_> = match (soup_type, include_projection) {
+            (SoupType::Expanded, true) => self
+                .soup_storage
+                .expanded_generic_cursor_soup_with_projection(req)
+                .await
+                .map_err(anyhow::Error::from)?
+                .into_iter()
+                .map(SoupCandidate::from_projection_hydration)
+                .collect(),
+            (SoupType::Expanded, false) => self
                 .soup_storage
                 .expanded_generic_cursor_soup(req)
                 .await
-                .map_err(anyhow::Error::from)?,
-            SoupType::UnExpanded => self
+                .map_err(anyhow::Error::from)?
+                .into_iter()
+                .map(SoupCandidate::plain)
+                .collect(),
+            (SoupType::UnExpanded, _) => self
                 .soup_storage
                 .unexpanded_generic_cursor_soup(req)
                 .await
-                .map_err(anyhow::Error::from)?,
+                .map_err(anyhow::Error::from)?
+                .into_iter()
+                .map(SoupCandidate::plain)
+                .collect(),
         };
-        Ok(res.into_iter().map(SoupCandidate::plain))
+        Ok(candidates.into_iter())
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -233,10 +260,30 @@ where
         &self,
         soup_type: SoupType,
         req: AdvancedSortParams<'_>,
-    ) -> Result<Vec<SoupItem<()>>, T::Err> {
-        match soup_type {
-            SoupType::Expanded => self.soup_storage.expanded_soup_by_ids(req).await,
-            SoupType::UnExpanded => self.soup_storage.unexpanded_soup_by_ids(req).await,
+        include_projection: bool,
+    ) -> Result<Vec<SoupCandidate>, T::Err> {
+        match (soup_type, include_projection) {
+            (SoupType::Expanded, true) => Ok(self
+                .soup_storage
+                .expanded_soup_by_ids_with_projection(req)
+                .await?
+                .into_iter()
+                .map(SoupCandidate::from_projection_hydration)
+                .collect()),
+            (SoupType::Expanded, false) => Ok(self
+                .soup_storage
+                .expanded_soup_by_ids(req)
+                .await?
+                .into_iter()
+                .map(SoupCandidate::plain)
+                .collect()),
+            (SoupType::UnExpanded, _) => Ok(self
+                .soup_storage
+                .unexpanded_soup_by_ids(req)
+                .await?
+                .into_iter()
+                .map(SoupCandidate::plain)
+                .collect()),
         }
     }
 
@@ -248,6 +295,7 @@ where
         user: MacroUserIdStr<'_>,
         frecency_items: impl ExactSizeIterator<Item = SoupCandidate>,
         limit: u16,
+        include_projection: bool,
     ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let len = frecency_items.len();
         let remainder_to_fetch = (limit as usize).saturating_sub(len);
@@ -263,6 +311,7 @@ where
                     )),
                     user_id: user,
                 },
+                include_projection,
             )
             .await?;
         Ok(frecency_items.chain(updated_at_soup))
@@ -275,6 +324,7 @@ where
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
+        include_projection: bool,
     ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let from_score = match cursor {
             Query::Sort(_, _) => None,
@@ -329,6 +379,7 @@ where
                             },
                             user_id: user,
                         },
+                        include_projection,
                     )
                     .await?,
                 ));
@@ -336,7 +387,7 @@ where
         };
 
         Ok(Either::Right(
-            self.handle_frecency_cursor(from_score, soup_type, user, limit)
+            self.handle_frecency_cursor(from_score, soup_type, user, limit, include_projection)
                 .await?,
         ))
     }
@@ -348,6 +399,7 @@ where
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
+        include_projection: bool,
     ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
         let (from_score, filters) = match from_value {
             None => (None, None),
@@ -373,26 +425,27 @@ where
                     entities: &entities,
                     user_id: user.copied(),
                 },
+                include_projection,
             )
             .await
             .map_err(anyhow::Error::from)?
             .into_iter()
-            .join_frecency(res, |id| AggregateId {
-                entity: id.entity(),
+            .join_frecency(res, |candidate| AggregateId {
+                entity: candidate.item.entity(),
                 user_id: user.copied().into_owned(),
             })
             .into_iter()
-            .map(|(soup_item, frecency)| SoupCandidate {
-                item: soup_item,
-                frecency_score: Some(frecency),
-                touched_at: None,
+            .map(|(mut candidate, frecency)| {
+                candidate.frecency_score = Some(frecency);
+                candidate
             });
 
         Ok(match res.len().cmp(&(limit as usize)) {
             // use either to avoid boxing for dynamic dispatch
-            Ordering::Less => {
-                Either::Left(self.fallback_soup_data(soup_type, user, res, limit).await?)
-            }
+            Ordering::Less => Either::Left(
+                self.fallback_soup_data(soup_type, user, res, limit, include_projection)
+                    .await?,
+            ),
             Ordering::Greater | Ordering::Equal => Either::Right(res),
         })
     }
@@ -409,6 +462,7 @@ where
         user: MacroUserIdStr<'static>,
         limit: u16,
         link_ids: Vec<Uuid>,
+        include_projection: bool,
     ) -> Result<(Vec<SoupCandidate>, Option<TouchedPagePosition>), SoupErr> {
         // Channel and email filter trees fold in their own domains' query
         // builders, which the touched candidate query cannot reach.
@@ -532,6 +586,7 @@ where
                     entities: &main_entities,
                     user_id: user.copied(),
                 },
+                include_projection,
             )
             .await
             .map_err(anyhow::Error::from)
@@ -557,38 +612,35 @@ where
             self.handle_email_request(email_request),
         );
 
-        let mut items_by_entity: HashMap<(EntityType, String), SoupItem<()>> = HashMap::new();
-        for item in main_items?
+        let mut candidates_by_entity: HashMap<(EntityType, String), SoupCandidate> = HashMap::new();
+        for candidate in main_items?
             .into_iter()
-            .chain(project_items?)
-            .chain(channel_candidates?.map(|c| c.item))
-            .chain(email_candidates?.map(|c| c.item))
+            .chain(project_items?.into_iter().map(SoupCandidate::plain))
+            .chain(channel_candidates?)
+            .chain(email_candidates?)
         {
             let key = {
-                let entity = item.entity();
+                let entity = candidate.item.entity();
                 (entity.entity_type, entity.entity_id.to_string())
             };
-            items_by_entity.insert(key, item);
+            candidates_by_entity.insert(key, candidate);
         }
 
         let candidates = touched
             .into_iter()
-            .filter_map(|candidate| {
+            .filter_map(|touched_candidate| {
                 let key = (
-                    candidate.entity.entity_type,
-                    candidate.entity.entity_id.to_string(),
+                    touched_candidate.entity.entity_type,
+                    touched_candidate.entity.entity_id.to_string(),
                 );
-                let item = items_by_entity.remove(&key).or_else(|| {
+                let mut candidate = candidates_by_entity.remove(&key).or_else(|| {
                     // The candidate query gates on existence and access, so
                     // a miss is a race (revoked/deleted mid-request).
                     tracing::warn!(entity_type = ?key.0, "touched entity did not hydrate; skipping");
                     None
                 })?;
-                Some(SoupCandidate {
-                    item,
-                    frecency_score: None,
-                    touched_at: Some(candidate.touched_at),
-                })
+                candidate.touched_at = Some(touched_candidate.touched_at);
+                Some(candidate)
             })
             .collect();
 
@@ -638,6 +690,7 @@ where
         Ok(Either::Right(items.into_iter().zip(frecency_scores).map(
             |(item, frecency_score)| SoupCandidate {
                 item,
+                document_server_facts: None,
                 frecency_score,
                 touched_at: None,
             },
@@ -664,6 +717,7 @@ where
                         let soup_channel = SoupChannel::new_from_channels(c);
                         SoupCandidate {
                             item: SoupItem::Channel(soup_channel),
+                            document_server_facts: None,
                             frecency_score,
                             touched_at: None,
                         }
@@ -959,6 +1013,30 @@ where
         })
     }
 
+    fn into_projection_output<R>(
+        output: SoupOutput<R, SoupCandidate>,
+    ) -> SoupOutput<R, SoupProjectionHydration> {
+        output.map(|candidate| SoupProjectionHydration {
+            item: candidate.item,
+            document_server_facts: candidate.document_server_facts,
+        })
+    }
+
+    fn into_enriched_projection_output<R>(
+        output: SoupOutput<R, SoupCandidate>,
+    ) -> SoupOutput<R, SoupProjectionHydration<EnrichedSoupItem>> {
+        output.map(|candidate| SoupProjectionHydration {
+            item: EnrichedSoupItem {
+                item: candidate
+                    .item
+                    .map_extra(|()| SoupPropertiesField::default()),
+                frecency_score: candidate.frecency_score,
+                touched_at: candidate.touched_at,
+            },
+            document_server_facts: candidate.document_server_facts,
+        })
+    }
+
     fn clear_frecency<R>(
         output: SoupOutput<R, EnrichedSoupItem>,
     ) -> SoupOutput<R, EnrichedSoupItem> {
@@ -1016,6 +1094,7 @@ where
         &self,
         req: SoupRequest<R>,
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+        include_projection: bool,
     ) -> Result<SoupOutput<R, SoupCandidate>, SoupErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
@@ -1060,6 +1139,7 @@ where
                         cursor: SimpleSortQuery::from_entity_cursor(cursor),
                         user_id: req.user.copied(),
                     },
+                    include_projection,
                 );
                 let email_soup_fut = self.handle_email_request(email_request);
                 let comms_soup_fut = self.handle_comms_request(comms_request);
@@ -1114,15 +1194,28 @@ where
                 Ok(SoupOutput::Simple(page))
             }
             SoupQuery::Frecency(FrecencyQueryInner(cursor)) => Ok(SoupOutput::Frecency(
-                self.handle_advanced_sort(cursor, req.soup_type, req.user, limit)
-                    .await?
-                    .paginate_on(limit.into(), Frecency)
-                    .filter_on(entity_filter)
-                    .into_page(),
+                self.handle_advanced_sort(
+                    cursor,
+                    req.soup_type,
+                    req.user,
+                    limit,
+                    include_projection,
+                )
+                .await?
+                .paginate_on(limit.into(), Frecency)
+                .filter_on(entity_filter)
+                .into_page(),
             )),
             SoupQuery::Touched(TouchedQueryInner(cursor)) => {
                 let (candidates, next) = self
-                    .handle_touched_request(cursor, req.soup_type, req.user, limit, req.link_ids)
+                    .handle_touched_request(
+                        cursor,
+                        req.soup_type,
+                        req.user,
+                        limit,
+                        req.link_ids,
+                        include_projection,
+                    )
                     .await?;
                 let next_cursor = next.map(|position| {
                     Base64Str::encode_json(Cursor {
@@ -1166,8 +1259,24 @@ where
         SoupRequest<R>: IntoSoupReqAst,
         R: Clone + Serialize + Send,
     {
-        let output = self.get_user_soup_internal(req, team_receipt).await?;
+        let output = self
+            .get_user_soup_internal(req, team_receipt, false)
+            .await?;
         Ok(Self::into_raw_output(output))
+    }
+
+    #[tracing::instrument(err, skip(self, req, team_receipt))]
+    async fn get_user_soup_with_projection<R>(
+        &self,
+        req: SoupRequest<R>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<R, SoupProjectionHydration>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
+        let output = self.get_user_soup_internal(req, team_receipt, true).await?;
+        Ok(Self::into_projection_output(output))
     }
 
     #[tracing::instrument(err, skip(self, req, team_receipt))]
@@ -1181,9 +1290,27 @@ where
         R: Clone + Serialize + Send,
     {
         let user_id = req.user.clone();
-        let output = self.get_user_soup_internal(req, team_receipt).await?;
+        let output = self
+            .get_user_soup_internal(req, team_receipt, false)
+            .await?;
         let output = self.populate_frecency_output(user_id, output).await?;
         Ok(Self::into_enriched_output(output))
+    }
+
+    #[tracing::instrument(err, skip(self, req, team_receipt))]
+    async fn get_user_soup_with_frecency_and_projection<R>(
+        &self,
+        req: SoupRequest<R>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<SoupOutput<R, SoupProjectionHydration<EnrichedSoupItem>>, SoupErr>
+    where
+        SoupRequest<R>: IntoSoupReqAst,
+        R: Clone + Serialize + Send,
+    {
+        let user_id = req.user.clone();
+        let output = self.get_user_soup_internal(req, team_receipt, true).await?;
+        let output = self.populate_frecency_output(user_id, output).await?;
+        Ok(Self::into_enriched_projection_output(output))
     }
 
     #[tracing::instrument(err, skip(self, req, team_receipt))]
@@ -1197,7 +1324,9 @@ where
         R: Clone + Serialize + Send,
     {
         let user_id = req.user.clone();
-        let output = self.get_user_soup_internal(req, team_receipt).await?;
+        let output = self
+            .get_user_soup_internal(req, team_receipt, false)
+            .await?;
         let output = self.populate_properties_output(user_id, output).await?;
         Ok(Self::clear_frecency(output))
     }
@@ -1213,7 +1342,9 @@ where
         R: Clone + Serialize + Send,
     {
         let user_id = req.user.clone();
-        let output = self.get_user_soup_internal(req, team_receipt).await?;
+        let output = self
+            .get_user_soup_internal(req, team_receipt, false)
+            .await?;
         let output = self
             .populate_frecency_output(user_id.clone(), output)
             .await?;

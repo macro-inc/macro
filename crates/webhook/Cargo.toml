@@ -13,7 +13,7 @@ consumer = [
   "ingestion",
   "macro_event_broker/outbound",
 ]
-default = ["consumer", "inbound", "outbound", "ports"]
+default = ["consumer", "inbound", "outbound", "ports", "stream"]
 inbound = [
   "dep:axum",
   "dep:axum-extra",
@@ -50,6 +50,15 @@ outbound = [
   "ports",
 ]
 ports = ["dep:serde_json", "dep:url"]
+stream = [
+  "dep:futures",
+  "dep:kafka_util",
+  "dep:tokio",
+  "dep:uuid",
+  "ingestion",
+  "inbound",
+  "macro_event_broker/outbound",
+]
 worker = ["dep:tokio", "ports"]
 
 [dependencies]
@@ -83,8 +92,9 @@ serde_json = { workspace = true, optional = true }
 webhook_signature = { path = "../webhook_signature", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, optional = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "time"], optional = true }
+tokio = { workspace = true, features = ["macros", "sync", "time"], optional = true }
 tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true }
 url = { workspace = true, optional = true }

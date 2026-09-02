@@ -5,6 +5,7 @@ use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_session::domain::ports::NoOpRealtime;
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::testing::{InMemoryAgentSessionRepo, test_agent_session};
+use bot_id::BotId;
 
 /// A sandbox provider the tests never reach: every case here is decided by
 /// `route` before the provider is asked for anything.
@@ -18,22 +19,46 @@ fn unreachable_sandbox() -> HarnessContainers {
 }
 
 fn sessions_with(bot: BotId) -> (AgentSessionId, impl AgentSessionService + use<>) {
+    sessions_with_harness(bot, "opencode")
+}
+
+fn sessions_with_harness(
+    bot: BotId,
+    harness: &str,
+) -> (AgentSessionId, impl AgentSessionService + use<>) {
     let repo = InMemoryAgentSessionRepo::new();
     let id = AgentSessionId::new();
     let mut session = test_agent_session(id);
     session.bot_id = bot;
+    session.harness = harness.to_owned();
     repo.insert_session(session);
     let service =
         AgentSessionServiceImpl::new(repo.clone(), FoldedMessageService::new(repo), NoOpRealtime);
     (id, service)
 }
 
-/// The whole point of the refusal: `@macro`'s sessions have no repository to
+#[tokio::test]
+async fn recognizes_a_database_backed_in_memory_agent() {
+    let agent = BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0x0000_5678));
+    let (id, sessions) = sessions_with_harness(agent, "in-memory");
+    let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions);
+
+    let error = containers
+        .route(id)
+        .await
+        .expect_err("an in-memory agent requires the shared in-process runtime");
+
+    assert!(
+        matches!(error, HarnessError::Container(message) if message.contains("in-process bot"))
+    );
+}
+
+/// The whole point of the refusal: `@macro-new`'s sessions have no repository to
 /// clone, so a deployment that cannot run them in-process must not quietly
 /// bill a sandbox for one.
 #[tokio::test]
 async fn refuses_the_in_process_bot_when_no_in_memory_runtime_is_configured() {
-    let (id, sessions) = sessions_with(bot_id::MACRO_AI_BOT_ID);
+    let (id, sessions) = sessions_with(bot_id::MACRO_NEW_BOT_ID);
     let containers = RoutedContainers::new(unreachable_sandbox(), None, sessions);
 
     let error = containers

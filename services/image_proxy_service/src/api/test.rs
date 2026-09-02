@@ -30,6 +30,7 @@ fn test_context() -> ApiContext {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        macro_authorization::NoUserApiKeyAuthorizer,
     );
 
     ApiContext {

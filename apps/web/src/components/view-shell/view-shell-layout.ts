@@ -30,6 +30,8 @@ export type DetailNarrowBehavior = 'overlay' | 'replace' | 'hide';
 
 export type DetailLayout = {
   width: number;
+  /** Initial inline panel width. Use `auto` to fill the space left by siblings. */
+  initialWidth?: number | 'auto';
   min: number;
   max: number;
   whenNarrow: DetailNarrowBehavior;

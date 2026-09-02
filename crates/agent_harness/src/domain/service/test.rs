@@ -32,10 +32,12 @@ use macro_uuid::Uuid;
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults, MentionOrigin,
-    OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults,
+    MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
 };
-use crate::domain::ports::{AgentPromptComposer, ChannelPromptContext, ContainerManager as _};
+use crate::domain::ports::{
+    AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
+};
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
@@ -50,14 +52,16 @@ fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
 }
 
-fn staff_sender() -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid staff user id")
-}
-
 fn open_command() -> OpenSession {
     let thread_id = macro_uuid::generate_uuid_v7();
     OpenSession {
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+        runtime: AgentRuntimeConfig {
+            kind: AgentKind::SandboxedCoder,
+            model: "agent-model".to_owned(),
+            harness: "opencode".to_owned(),
+            instructions: String::new(),
+        },
         origin: MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),
             thread_id,
@@ -178,11 +182,29 @@ type TestHarness = AgentHarnessService<
     >,
     MockContainerManager,
     AnnouncerMock,
-    Arc<RuntimeRegistry<ContainerSender>>,
+    TestConnections,
     PromptContextMock,
     PromptComposerMock,
     EgressProvisionerMock,
 >;
+
+/// Bot-to-harness bindings for tests: every bot maps to the harness sharing
+/// its uuid, so tests attach runtimes by [`harness_for_bot`].
+#[derive(Clone, Default)]
+struct MirrorBindings;
+
+impl crate::domain::ports::HarnessBindings for MirrorBindings {
+    async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
+        Ok(Some(harness_for_bot(bot)))
+    }
+}
+
+fn harness_for_bot(bot: BotId) -> harness_id::HarnessId {
+    harness_id::HarnessId::new_from_uuid(bot.as_uuid())
+}
+
+type TestConnections =
+    crate::outbound::runtime_registry::HarnessKeyedConnections<MirrorBindings, ContainerSender>;
 
 fn harness_with_edges(
     prompt_context: PromptContextMock,
@@ -206,10 +228,11 @@ fn harness_with_edges(
         ),
         containers.clone(),
         announcer.clone(),
-        Arc::clone(&runtimes),
+        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
         EgressProvisionerMock::new(),
+        NoPeers,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -367,6 +390,8 @@ async fn open_creates_announces_and_delivers_the_mention() {
     assert_eq!(session.acp_session_id, Some(SessionId::new("acp-test")));
     assert_eq!(session.originating_message_id, Some(origin.message_id));
     assert_eq!(session.thread_id, Some(origin.thread_id));
+    assert_eq!(session.model, "agent-model");
+    assert_eq!(session.harness, "opencode");
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
     assert_eq!(announced[0].origin_channel_id, origin.channel_id);
@@ -444,7 +469,7 @@ async fn composer_failure_stops_open_before_announcement_or_delivery() {
 }
 
 #[tokio::test]
-async fn open_sends_prior_messages_only_to_the_agent_prompt() {
+async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
     let context = vec![PriorChannelMessage {
         sender: "previous@example.com".to_owned(),
         content: "previous channel message".to_owned(),
@@ -454,7 +479,8 @@ async fn open_sends_prior_messages_only_to_the_agent_prompt() {
         PromptContextMock::with_messages(context.clone()),
         composer.clone(),
     );
-    let command = open_command();
+    let mut command = open_command();
+    command.runtime.instructions = "Diagnose first.".to_owned();
     let raw = command.origin.content.clone();
     let id = AgentSessionId::new();
 
@@ -942,7 +968,9 @@ async fn live_cursor_session(
 ) -> ContainerMock {
     let mut command = open_command();
     command.bot_id = bot_id::CURSOR_BOT_ID;
-    command.origin.sender = staff_sender();
+    command.runtime.kind = AgentKind::Cursor;
+    command.runtime.harness = "cursor".to_owned();
+    command.origin.sender = sender();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
@@ -960,24 +988,6 @@ async fn live_cursor_session(
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("cursor session should open");
     container
-}
-
-#[tokio::test]
-async fn a_non_staff_sender_cannot_open_a_cursor_session() {
-    let (service, _repo, containers, _announcer, _runtimes) = harness();
-    let mut command = open_command();
-    command.bot_id = bot_id::CURSOR_BOT_ID;
-
-    let error = service
-        .execute(AgentSessionId::new(), HarnessCommand::Open(command))
-        .await
-        .expect_err("non-staff must not open cursor sessions");
-
-    assert!(matches!(
-        error,
-        HarnessError::Session(AgentSessionError::Forbidden)
-    ));
-    assert_eq!(containers.spawned(), 0);
 }
 
 #[tokio::test]
@@ -1078,28 +1088,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 }
 
 #[tokio::test]
-async fn a_non_staff_control_event_cannot_drive_a_cursor_session() {
-    let (service, _repo, containers, _announcer, _runtimes) = harness();
-    let id = AgentSessionId::new();
-    let container = live_cursor_session(&service, &containers, id).await;
-
-    let error = service
-        .control_event(
-            id,
-            ControlEvent {
-                action: AgentAction::prompt("spend cursor credits"),
-                actor: Some(sender()),
-            },
-        )
-        .await
-        .expect_err("non-staff must not control cursor sessions");
-
-    assert!(matches!(error, AgentSessionError::Forbidden));
-    assert_eq!(prompts(&container.agent()).len(), 1);
-}
-
-#[tokio::test]
-async fn a_staff_control_event_can_drive_a_cursor_session() {
+async fn a_user_control_event_can_drive_their_cursor_session() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
     let container = live_cursor_session(&service, &containers, id).await;
@@ -1109,11 +1098,11 @@ async fn a_staff_control_event_can_drive_a_cursor_session() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("continue"),
-                actor: Some(staff_sender()),
+                actor: Some(sender()),
             },
         )
         .await
-        .expect("staff may control cursor sessions");
+        .expect("the session owner may control cursor sessions");
 
     assert_eq!(prompts(&container.agent()).len(), 2);
 }
@@ -1296,7 +1285,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // session: no handshake, no ACP session, nothing sent - a session nobody
     // is prompting costs the runtime nothing.
     let runtime = ContainerMock::default();
-    runtimes.attach(session.bot_id, runtime.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
     assert!(runtime.agent().received_requests().is_empty());
     assert!(
         repo.get(session.id)
@@ -1336,7 +1325,7 @@ async fn a_bound_session_stays_on_its_connection_until_it_drops() {
         .expect("open");
 
     let first = ContainerMock::default();
-    runtimes.attach(session.bot_id, first.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), first.clone());
     let (result, ()) = tokio::join!(
         prompt(&service, session.id, "fix the failing test"),
         complete_bound_handshake(&first)
@@ -1366,7 +1355,7 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
         .expect("open");
 
     let first = ContainerMock::default();
-    runtimes.attach(session.bot_id, first.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), first.clone());
     let (result, ()) = tokio::join!(
         prompt(&service, session.id, "fix the failing test"),
         complete_bound_handshake(&first)
@@ -1379,7 +1368,7 @@ async fn a_prompt_after_a_redial_restores_the_session_on_the_new_connection() {
     first.disconnects();
     await_disconnect(&repo, session.id).await;
     let second = ContainerMock::default();
-    runtimes.attach(session.bot_id, second.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), second.clone());
     assert!(second.agent().received_requests().is_empty());
 
     let (result, ()) = tokio::join!(
@@ -1412,10 +1401,11 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         ),
         containers.clone(),
         AnnouncerMock::new(),
-        RuntimeRegistry::<ContainerSender>::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
+        NoPeers,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -1458,7 +1448,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
     // this deployment's to run, so the dial must not be what the session is
     // restored onto.
     let dialed_in = ContainerMock::default();
-    runtimes.attach(session.bot_id, dialed_in.clone());
+    runtimes.attach(harness_for_bot(session.bot_id), dialed_in.clone());
 
     let prompted = service.control_event(
         id,
@@ -1800,4 +1790,158 @@ async fn set_sandbox_size_unsupported_does_not_persist() {
         SandboxSize::Default
     );
     assert_eq!(containers.resumed(), 0);
+}
+
+/// A [`CommandForwarder`] that records its calls and reports success.
+#[derive(Clone, Default)]
+struct RecordingForwarder {
+    calls: Arc<Mutex<Vec<(String, AgentSessionId)>>>,
+}
+
+impl crate::domain::ports::CommandForwarder for RecordingForwarder {
+    async fn forward(
+        &self,
+        target: &agent_session::domain::model::ReplicaAddress,
+        session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> crate::domain::error::Result<()> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((target.as_str().to_owned(), session));
+        Ok(())
+    }
+}
+
+/// A forwarder standing in for a peer that died mid-forward: the call fails,
+/// and by the time the caller re-reads the lease the peer's claim is gone.
+#[derive(Clone)]
+struct DyingPeerForwarder {
+    repo: InMemoryAgentSessionRepo,
+    claim: agent_session::domain::model::SessionClaim,
+}
+
+impl crate::domain::ports::CommandForwarder for DyingPeerForwarder {
+    async fn forward(
+        &self,
+        _target: &agent_session::domain::model::ReplicaAddress,
+        _session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> crate::domain::error::Result<()> {
+        use agent_session::domain::ports::SessionOwnership as _;
+        self.repo.release(&self.claim).await.expect("peer releases");
+        Err(HarnessError::Forward(rootcause::report!(
+            "the peer went away"
+        )))
+    }
+}
+
+/// Claim a session for a fabricated peer replica that publishes an address.
+async fn claim_as_peer(
+    repo: &InMemoryAgentSessionRepo,
+    session: AgentSessionId,
+    address: &str,
+) -> agent_session::domain::model::SessionClaim {
+    use agent_session::domain::model::{ClaimOutcome, ReplicaAddress, ReplicaId};
+    use agent_session::domain::ports::SessionOwnership as _;
+    let peer = ReplicaId::mint();
+    repo.heartbeat(peer, Some(&ReplicaAddress::new(address)))
+        .await
+        .expect("peer heartbeats");
+    match repo.claim(session, peer).await.expect("peer claims") {
+        ClaimOutcome::Claimed(claim) => claim,
+        ClaimOutcome::ManagedElsewhere(_) => panic!("nobody else should hold the test session"),
+    }
+}
+
+/// A command for a session a live peer manages goes to the peer's address
+/// and never executes here: the session outlives a Delete this replica would
+/// otherwise have applied.
+#[tokio::test]
+async fn commands_for_a_peer_managed_session_forward_to_its_address() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = agent_session::testing::test_agent_session(AgentSessionId::new());
+    let id = session.id;
+    repo.insert_session(session);
+    let _claim = claim_as_peer(&repo, id, "http://10.0.0.7:8100").await;
+    let forwarder = RecordingForwarder::default();
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        forwarder.clone(),
+        SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    );
+
+    service
+        .execute(id, HarnessCommand::Delete)
+        .await
+        .expect("the forwarded command succeeds");
+
+    assert_eq!(
+        forwarder.calls.lock().unwrap().clone(),
+        vec![("http://10.0.0.7:8100".to_owned(), id)]
+    );
+    assert!(
+        repo.get(id).await.is_ok(),
+        "the delete ran on the peer, not here"
+    );
+}
+
+/// A forward that fails against a peer whose lease is gone by the re-read
+/// falls back to executing locally, so a peer crash costs one retry rather
+/// than the command.
+#[tokio::test]
+async fn a_dead_peers_command_falls_back_to_local_execution() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = agent_session::testing::test_agent_session(AgentSessionId::new());
+    let id = session.id;
+    repo.insert_session(session);
+    let claim = claim_as_peer(&repo, id, "http://10.0.0.7:8100").await;
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        DyingPeerForwarder {
+            repo: repo.clone(),
+            claim,
+        },
+        SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    );
+
+    service
+        .execute(id, HarnessCommand::Delete)
+        .await
+        .expect("the fallback executes locally");
+
+    assert!(
+        repo.get(id).await.is_err(),
+        "the delete ran here once the peer was gone"
+    );
 }

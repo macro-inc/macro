@@ -18,6 +18,11 @@ const serverHostLocal: Servers = {
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
 
+const gatewayHost =
+  import.meta.env.MODE === 'development'
+    ? 'https://dev-gateway.macro.com'
+    : 'https://gateway.macro.com';
+
 const authLogoutUrl =
   import.meta.env.MODE === 'development'
     ? 'https://fusionauth-dev.macro.com/oauth2/logout?client_id=eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c&tenantId=5e13f524-8d32-0454-81f8-061936256aa4'
@@ -27,14 +32,14 @@ const serverHostRemote = {
   'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
   'auth-logout': authLogoutUrl,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
-  'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
+  'document-storage-service': `${gatewayHost}/dss`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
   'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,
-  'notification-service': `https://notifications${devServerSuffix}.macro.com`,
+  'notification-service': `${gatewayHost}/notification`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
-  'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
-  contacts: `https://contacts${devServerSuffix}.macro.com`,
+  'unfurl-service': `${gatewayHost}/unfurl`,
+  contacts: `${gatewayHost}/contacts`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
   'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,

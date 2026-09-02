@@ -62,6 +62,10 @@ use favorites::{
     outbound::pg_favorites_repo::PgFavoritesRepo,
 };
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use user_api_key::{
+    domain::service::UserApiKeyServiceImpl, inbound::axum_router::UserApiKeyRouterState,
+    outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
+};
 
 use collab_surface::{
     domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
@@ -120,7 +124,9 @@ use system_properties::{
 use tokio_util::task::TaskTracker;
 use webhook::{
     domain::service::WebhookServiceImpl,
+    domain::stream::WebhookEventStreamServiceImpl,
     inbound::axum_router::WebhookRouterState as MacroWebhookRouterState,
+    inbound::stream_router::WebhookStreamRouterState,
     outbound::{
         http_validator::ReqwestWebhookValidationClient,
         pg_repository::PgRepository as PgWebhookRepo,
@@ -365,6 +371,15 @@ pub(crate) type DssBotService = BotServiceImpl<PgBotsRepo, DssEventBroker>;
 pub(crate) type DssBotsState =
     BotsRouterState<DssBotService, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the harnesses service wired into DSS.
+pub(crate) type DssHarnessService = harnesses::domain::service::HarnessServiceImpl<
+    harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+>;
+
+/// Type alias for the harnesses router state.
+pub(crate) type DssHarnessesState =
+    harnesses::inbound::axum_router::HarnessesRouterState<DssHarnessService, AuthorizationService>;
+
 /// Type alias for the channel bot webhook router state.
 pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
     DssBotService,
@@ -437,6 +452,13 @@ pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the user API key service.
+pub(crate) type UserApiKeyServiceType = UserApiKeyServiceImpl<PgUserApiKeysRepo>;
+
+/// Type alias for the user API key router state.
+pub(crate) type DssUserApiKeyState =
+    UserApiKeyRouterState<UserApiKeyServiceType, AuthorizationService>;
+
 /// Type alias for the reminders service.
 pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 
@@ -486,6 +508,14 @@ pub(crate) type DssWebhookRateLimiter =
 pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
+/// Type alias for the service backing the webhook-event SSE endpoint.
+pub(crate) type DssSseStreamService =
+    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
+
+/// Type alias for the webhook-event SSE router state.
+pub(crate) type DssSseStreamState =
+    WebhookStreamRouterState<DssSseStreamService, AuthorizationService>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -502,6 +532,7 @@ pub(crate) struct ApiContext {
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
+    pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
@@ -531,10 +562,12 @@ pub(crate) struct ApiContext {
     /// the channels router (starter-doc seeding records mention backlinks).
     pub channel_service: Arc<DssChannelService>,
     pub bots_state: DssBotsState,
+    pub harnesses_state: DssHarnessesState,
     pub channel_bot_webhook_state: DssChannelBotWebhookState,
     pub call_state: DssCallState,
     pub call_webhook_state: DssCallWebhookState,
     pub webhook_state: DssWebhookState,
+    pub sse_stream_state: DssSseStreamState,
     pub call_internal_state: DssCallInternalState,
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,

@@ -112,10 +112,20 @@ async fn try_begin_with_projection(
     engine: &mut Engine<InMemoryStorage>,
     projection_mutations: Vec<OptimisticProjectionMutation>,
 ) -> Result<MutationId, EngineError<std::convert::Infallible>> {
+    let uuid = uuid::Uuid::new_v4().to_string();
+    try_begin_with_projection_uuid(engine, &uuid, projection_mutations).await
+}
+
+async fn try_begin_with_projection_uuid(
+    engine: &mut Engine<InMemoryStorage>,
+    uuid: &str,
+    projection_mutations: Vec<OptimisticProjectionMutation>,
+) -> Result<MutationId, EngineError<std::convert::Infallible>> {
     engine
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                uuid,
                 query: OPTIMISTIC_MUTATION,
                 operation_name: Some("SetEntityProperty"),
                 variables: &optimistic_variables(),
@@ -137,6 +147,94 @@ async fn begin_with_projection(
     try_begin_with_projection(engine, projection_mutations)
         .await
         .unwrap()
+}
+
+#[test]
+fn authoritative_projection_no_op_does_not_advance_revision() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        let first = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        assert!(first.revision_advanced);
+        assert_eq!(first.revision.to_string(), "1");
+
+        let unchanged = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-1"))],
+            )
+            .await
+            .unwrap();
+        assert!(unchanged.changed.is_empty());
+        assert!(!unchanged.revision_advanced);
+        assert_eq!(unchanged.revision, first.revision);
+
+        let projection_only = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key, Record::default())],
+                vec![ProjectionMutation::Replace(projection("owner-2"))],
+            )
+            .await
+            .unwrap();
+        assert!(projection_only.changed.is_empty());
+        assert!(projection_only.revision_advanced);
+        assert_eq!(projection_only.revision.to_string(), "2");
+    });
+}
+
+#[test]
+fn authoritative_projection_no_op_uses_the_canonical_persisted_value() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let entity_key = EntityKey::entity("GraphqlSoupDocument", &["doc-1"]);
+        let mut replacement = projection("owner-1");
+        replacement.exact_facts.push(ExactFact {
+            attribute: token("category"),
+            value: ExactValue::utf8("report").unwrap(),
+        });
+        let mut canonical = replacement.clone();
+        canonical.canonicalize();
+        assert_ne!(replacement, canonical, "fixture must be non-canonical");
+
+        let first = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key.clone(), Record::default())],
+                vec![ProjectionMutation::Replace(replacement.clone())],
+            )
+            .await
+            .unwrap();
+        assert!(first.revision_advanced);
+        assert_eq!(
+            engine
+                .storage()
+                .load_projection_states(&[record_key()])
+                .await
+                .unwrap(),
+            vec![Some(ProjectionState::Complete(canonical))]
+        );
+
+        let unchanged = engine
+            .put_records_with_projections(
+                None,
+                vec![(entity_key, Record::default())],
+                vec![ProjectionMutation::Replace(replacement)],
+            )
+            .await
+            .unwrap();
+        assert!(unchanged.changed.is_empty());
+        assert!(!unchanged.revision_advanced);
+        assert_eq!(unchanged.revision, first.revision);
+    });
 }
 
 #[test]
@@ -360,6 +458,99 @@ fn direct_projection_writes_merge_partial_records_and_report_real_changes() {
             stored.fields.get("__typename"),
             Some(&CacheValue::String("GraphqlSoupDocument".into()))
         );
+    });
+}
+
+#[test]
+fn authoritative_patch_preserves_unmentioned_server_facts_or_marks_missing() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut base = projection("owner-1");
+        base.exact_facts.push(ExactFact {
+            attribute: token("server-relation"),
+            value: ExactValue::new([1]).unwrap(),
+        });
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(base)],
+            )
+            .await
+            .unwrap();
+
+        engine
+            .put_records_with_projections(
+                None,
+                vec![],
+                vec![ProjectionMutation::Patch {
+                    record_key: record_key(),
+                    profile: profile(),
+                    partition: token("document"),
+                    exact: vec![ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![ExactValue::utf8("owner-2").unwrap()],
+                    }],
+                    integers: vec![],
+                    sorts: vec![],
+                }],
+            )
+            .await
+            .unwrap();
+        let states = engine
+            .storage()
+            .load_projection_states(&[record_key()])
+            .await
+            .unwrap();
+        let [Some(ProjectionState::Complete(patched))] = states.as_slice() else {
+            panic!("same-profile patch must preserve completeness");
+        };
+        assert!(patched.exact_facts.iter().any(|fact| {
+            fact.attribute == token("server-relation")
+                && fact.value == ExactValue::new([1]).unwrap()
+        }));
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-2"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Complete(vec![record_key()])
+        );
+
+        let missing_key = RecordKey::new("GraphqlSoupDocument:doc-2").unwrap();
+        engine
+            .put_records_with_projections(
+                None,
+                vec![],
+                vec![ProjectionMutation::Patch {
+                    record_key: missing_key.clone(),
+                    profile: profile(),
+                    partition: token("document"),
+                    exact: vec![ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![ExactValue::utf8("owner-2").unwrap()],
+                    }],
+                    integers: vec![],
+                    sorts: vec![],
+                }],
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            engine
+                .storage()
+                .load_projection_states(&[missing_key])
+                .await
+                .unwrap()
+                .as_slice(),
+            [Some(ProjectionState::Incomplete {
+                kind: ProjectionIncompleteKind::Missing,
+                ..
+            })]
+        ));
     });
 }
 
@@ -755,6 +946,147 @@ fn commit_recomposes_later_patch_against_anticipated_authority() {
             fact.attribute == token("owner") && fact.value == ExactValue::utf8("owner-3").unwrap()
         }));
         assert_eq!(document.sort_facts[0].value, 99);
+    });
+}
+
+#[test]
+fn optimistic_settlement_applies_authoritative_patch_before_shadow_reconciliation() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut base = projection("owner-1");
+        base.exact_facts.push(ExactFact {
+            attribute: token("server-relation"),
+            value: ExactValue::new([1]).unwrap(),
+        });
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(base)],
+            )
+            .await
+            .unwrap();
+        let transaction = begin_with_projection(
+            &mut engine,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
+        )
+        .await;
+        let claimed = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".to_owned(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        engine
+            .commit_optimistic_write_with_projections(
+                transaction,
+                MutationClaimToken {
+                    owner: "runner".to_owned(),
+                    generation: claimed.lease_generation,
+                },
+                OPTIMISTIC_MUTATION,
+                Some("SetEntityProperty"),
+                &optimistic_variables(),
+                &optimistic_data(),
+                vec![ProjectionMutation::Patch {
+                    record_key: record_key(),
+                    profile: profile(),
+                    partition: token("document"),
+                    exact: vec![ExactAttributePatch {
+                        attribute: token("owner"),
+                        values: vec![ExactValue::utf8("owner-3").unwrap()],
+                    }],
+                    integers: vec![],
+                    sorts: vec![],
+                }],
+            )
+            .await
+            .unwrap();
+
+        let states = engine
+            .storage()
+            .load_projection_states(&[record_key()])
+            .await
+            .unwrap();
+        let [Some(ProjectionState::Complete(projection))] = states.as_slice() else {
+            panic!("patched settlement must retain complete authority");
+        };
+        assert!(projection.exact_facts.iter().any(|fact| {
+            fact.attribute == token("owner") && fact.value == ExactValue::utf8("owner-3").unwrap()
+        }));
+        assert!(projection.exact_facts.iter().any(|fact| {
+            fact.attribute == token("server-relation")
+                && fact.value == ExactValue::new([1]).unwrap()
+        }));
+    });
+}
+
+#[test]
+fn pending_uuid_replacement_reassigns_projection_shadow_to_the_new_tail() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(
+                    EntityKey::entity("GraphqlSoupDocument", &["doc-1"]),
+                    Record::default(),
+                )],
+                vec![ProjectionMutation::Replace(projection("authority"))],
+            )
+            .await
+            .unwrap();
+        let uuid = "e3ac0a53-8789-4925-8664-744630448ebe";
+        let first = try_begin_with_projection_uuid(
+            &mut engine,
+            uuid,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-1"))],
+        )
+        .await
+        .unwrap();
+        let replacement = try_begin_with_projection_uuid(
+            &mut engine,
+            uuid,
+            vec![OptimisticProjectionMutation::Replace(projection("owner-2"))],
+        )
+        .await
+        .unwrap();
+
+        assert!(replacement > first);
+        let queue = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(
+            queue.iter().map(|row| row.id).collect::<Vec<_>>(),
+            [replacement]
+        );
+        let shadow = engine
+            .storage()
+            .load_optimistic_projections(&[record_key()])
+            .await
+            .unwrap()
+            .pop()
+            .flatten()
+            .unwrap();
+        assert_eq!(shadow.owner, replacement);
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-2"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Optimistic(vec![record_key()])
+        );
+        assert_eq!(
+            engine
+                .query_predicate_index(&query("owner-1"))
+                .await
+                .unwrap(),
+            PredicateQueryResult::Optimistic(Vec::new())
+        );
     });
 }
 

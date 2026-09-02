@@ -244,6 +244,10 @@ TypeScript · `[ui]` UI / UX conventions
   string can't carry structure, props, or behavior. Extract a component, or inline the
   literal at its single use; styling variants are component props, not exported
   strings. (enforced: ast-grep `tsx-no-class-string-consts`, warning)
-- **FE-31** `[ui]` Prefer styling in the component (Tailwind on the markup). Reserve
+- **FE-31** `[ts]` Never cast a string to `ItemType` — parse it with `stringToItemType`
+  from `@service-storage/client`, the one owner of entity-type spellings (email
+  threads alone are stored as `email`, `thread`, and `email_thread`). (#6043 ·
+  enforced: ast-grep `ts-no-item-type-cast` + `tsx-no-item-type-cast`, CI error)
+- **FE-32** `[ui]` Prefer styling in the component (Tailwind on the markup). Reserve
   `@utility` in `apps/web/src/index.css` for styles widely shared across many
   components — not one-off or two-callsite layouts. (#6038 · also: apps/web/AGENTS.md)

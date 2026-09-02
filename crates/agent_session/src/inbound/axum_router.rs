@@ -33,7 +33,7 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
     ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrBot, UserOrBotAuthorization,
+    UserBotOrHarness, UserBotOrHarnessAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -500,6 +500,28 @@ pub async fn rename_agent_session_handler<
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Confine a harness caller to the sessions its own daemon serves.
+///
+/// The access extractor already proved the caller owns the session, but owning
+/// it is not enough for a harness: a harness that merely acts for a user could
+/// otherwise drive, resize or delete a session a *different* harness serves
+/// for that same user (and reach managed sessions no daemon serves at all).
+/// User and bot callers are unrestricted here - their reach is the access
+/// extractor's call. A harness may act only when the session's bot binds to it.
+async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
+    caller: &UserBotOrHarnessAuthorization,
+    recipient: &R,
+    session_id: AgentSessionId,
+) -> Result<(), AgentSessionApiError> {
+    let UserBotOrHarnessAuthorization::Harness(harness) = caller else {
+        return Ok(());
+    };
+    if recipient.session_harness(session_id).await? != Some(harness.harness_id) {
+        return Err(AgentSessionError::Forbidden.into());
+    }
+    Ok(())
+}
+
 #[utoipa::path(
     post,
     path = "/agent-sessions/{session_id}/control",
@@ -535,10 +557,17 @@ pub async fn control_agent_session_handler<
 >(
     _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
     Json(req): Json<ControlRequest>,
 ) -> Result<Json<AgentActionId>, AgentSessionApiError> {
+    ensure_harness_serves_session(
+        &caller.authorization,
+        state.recipient.as_ref(),
+        AgentSessionId::new_from_uuid(session_id),
+    )
+    .await?;
+
     let actor = caller
         .authorization
         .acting_user()
@@ -580,12 +609,14 @@ pub async fn delete_agent_session_handler<
 >(
     _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AgentSessionApiError> {
-    state
-        .recipient
-        .session_deleted(AgentSessionId::new_from_uuid(session_id))
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
         .await?;
+
+    state.recipient.session_deleted(session_id).await?;
 
     Ok(StatusCode::OK)
 }
@@ -621,12 +652,17 @@ pub async fn put_agent_session_sandbox_size_handler<
 >(
     _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
     Json(req): Json<SandboxSizeBody>,
 ) -> Result<Json<SandboxSizeBody>, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
     state
         .recipient
-        .set_sandbox_size(AgentSessionId::new_from_uuid(session_id), req.size)
+        .set_sandbox_size(session_id, req.size)
         .await?;
     Ok(Json(req))
 }
@@ -928,8 +964,9 @@ pub struct CreateAgentSessionRequest {
     /// optional: having it cloned there is the runtime operator's job.
     pub repo_url: Option<String>,
     /// The user who owns the session. Ignored for user callers, who always
-    /// own their own sessions; required for bot callers without verified
-    /// acting-user claims.
+    /// own their own sessions, and for harness callers, whose verified acting
+    /// user (owner or confirmed team member) owns the session instead;
+    /// required for bot callers without verified acting-user claims.
     ///
     /// For bot callers this is a claim, not a verified fact: it is scoped to
     /// the bot's own sessions, but the named user owns the session on the
@@ -1121,27 +1158,38 @@ fn validate_workspace(workspace: &str) -> Result<(), CreateSessionApiError> {
 
 /// Resolve which bot the session runs for, from the principal and the body.
 fn resolve_bot(
-    caller: &UserOrBotAuthorization,
+    caller: &UserBotOrHarnessAuthorization,
     body_bot: Option<Uuid>,
 ) -> Result<BotId, CreateSessionApiError> {
     match caller {
-        UserOrBotAuthorization::Bot(bot) => match body_bot {
+        UserBotOrHarnessAuthorization::Bot(bot) => match body_bot {
             Some(named) if named != bot.bot_id.as_uuid() => Err(CreateSessionApiError::NotYourBot),
             _ => Ok(bot.bot_id),
         },
-        UserOrBotAuthorization::User(_) => body_bot
-            .map(BotId::new_from_uuid)
-            .ok_or(CreateSessionApiError::BotRequired),
+        // A harness serves many bots, so nothing is implied by the token: the
+        // body must say which bound agent this session runs for.
+        UserBotOrHarnessAuthorization::User(_) | UserBotOrHarnessAuthorization::Harness(_) => {
+            body_bot
+                .map(BotId::new_from_uuid)
+                .ok_or(CreateSessionApiError::BotRequired)
+        }
     }
 }
 
 /// Resolve the user who owns the session.
 ///
-/// A user caller always owns their own sessions. A bot caller's verified
-/// acting user wins when present; otherwise the body's claimed owner is
-/// accepted (see [`CreateAgentSessionRequest::owner`] for the trust model).
+/// A user caller always owns their own sessions. A harness caller always has a
+/// verified acting user - the owner for a private harness, a confirmed team
+/// member for a team one (the harness authorizer checks the forwarded
+/// `x-macro-harness-for-macro-user-id` claim against ownership) - and that
+/// verified user owns the session; the body's `owner` claim is never trusted
+/// for it. This matches the control endpoint, which already acts only for that
+/// verified user: a session that could not later be prompted for its owner is
+/// one that should never have been created for that owner. A bot caller's
+/// verified acting user wins when present; otherwise the body's claimed owner
+/// is accepted (see [`CreateAgentSessionRequest::owner`] for the trust model).
 fn resolve_owner(
-    caller: &UserOrBotAuthorization,
+    caller: &UserBotOrHarnessAuthorization,
     claimed: Option<String>,
 ) -> Result<MacroUserIdStr<'static>, CreateSessionApiError> {
     if let Some(user) = caller.acting_user() {
@@ -1180,7 +1228,7 @@ pub async fn create_agent_session_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<CreateSessionState<Opener, Bots, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Json(request): Json<CreateAgentSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
     // Blank instructions are "none" stated clumsily; normalized once here so
@@ -1229,6 +1277,7 @@ pub async fn create_agent_session_handler<
         has_agent,
         is_managed,
         owner_user_id,
+        harness_id,
     } = state
         .bots
         .bot_facts(bot_id)
@@ -1243,8 +1292,14 @@ pub async fn create_agent_session_handler<
     // A team-owned bot has no owner_user_id, so no user token passes this
     // check: its sessions are opened with the bot's own token until team
     // membership is modeled here.
-    if let UserOrBotAuthorization::User(user) = &caller.authorization
+    if let UserBotOrHarnessAuthorization::User(user) = &caller.authorization
         && owner_user_id.as_ref() != Some(&user.macro_user_id)
+    {
+        return Err(CreateSessionApiError::NotYourBot);
+    }
+    // A harness may open sessions only for agents currently bound to it.
+    if let UserBotOrHarnessAuthorization::Harness(harness) = &caller.authorization
+        && harness_id != Some(harness.harness_id)
     {
         return Err(CreateSessionApiError::NotYourBot);
     }

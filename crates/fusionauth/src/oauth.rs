@@ -46,6 +46,17 @@ struct AuthorizationCodeGrantCompleteResponse<'a> {
     // TODO: add other fields if we start to need them
 }
 
+/// Tokens returned by a successful OAuth2 grant.
+#[derive(Debug)]
+pub struct OAuth2Grant {
+    /// The access token.
+    pub access_token: String,
+    /// The refresh token.
+    pub refresh_token: String,
+    /// Seconds until the access token expires, as reported by FusionAuth.
+    pub expires_in: u64,
+}
+
 /// Completes the authorization code grant
 /// https://fusionauth.io/docs/lifecycle/authenticate-users/oauth/endpoints#complete-the-authorization-code-grant-request
 /// Valid respones: 200, 400, 401, 500, 503
@@ -53,7 +64,7 @@ async fn complete(
     client: &UnauthedClient,
     base_url: &str,
     request: impl Serialize,
-) -> Result<(String, String)> {
+) -> Result<OAuth2Grant> {
     let body = serde_urlencoded::to_string(&request).map_err(|e| {
         FusionAuthClientError::Generic(GenericErrorResponse {
             message: e.to_string(),
@@ -91,7 +102,11 @@ async fn complete(
                     })
                 })?;
 
-            Ok((body.access_token.into(), body.refresh_token.into()))
+            Ok(OAuth2Grant {
+                access_token: body.access_token.into(),
+                refresh_token: body.refresh_token.into(),
+                expires_in: body.expires_in,
+            })
         }
         _ => {
             let body = res.text().await.map_err(|e| {
@@ -112,7 +127,7 @@ async fn complete(
 impl FusionAuthClient {
     /// Completes the OAuth2 authorization code grant flow.
     #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
-    pub async fn complete_authorization_code_grant(&self, code: &str) -> Result<(String, String)> {
+    pub async fn complete_authorization_code_grant(&self, code: &str) -> Result<OAuth2Grant> {
         complete(
             &self.unauth_client,
             &self.fusion_auth_base_url,
@@ -129,10 +144,7 @@ impl FusionAuthClient {
 
     /// complete the OAuth2 Refresh token grant flow.
     #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
-    pub async fn complete_refresh_token_grant(
-        &self,
-        refresh_token: &str,
-    ) -> Result<(String, String)> {
+    pub async fn complete_refresh_token_grant(&self, refresh_token: &str) -> Result<OAuth2Grant> {
         complete(
             &self.unauth_client,
             &self.fusion_auth_base_url,

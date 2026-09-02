@@ -267,6 +267,12 @@ export function EmailCompose(props: EmailComposeProps) {
     };
   }
 
+  // Content uploads still in flight, including ones started by earlier saves.
+  // attachmentID only proves the draft record exists, and the send path treats
+  // a resolved save as "attachments ready", so a save must not resolve while
+  // any of these are pending.
+  const inFlightAttachmentUploads = new Set<Promise<void>>();
+
   async function executeSaveDraft() {
     if (sendMutation.isPending) {
       return;
@@ -310,20 +316,28 @@ export function EmailCompose(props: EmailComposeProps) {
         { type: 'local' }
       >[];
 
+      let uploadRun: Promise<void> | undefined;
       if (attachments.length) {
-        const uploaded = await uploadAttachmentMutation.mutateAsync({
+        uploadRun = uploadAttachmentMutation.mutateAsync({
           draftID: draftId,
           attachments: attachments.map((a) => a.file),
           linkId: headerLinkId(),
+          onAttachmentAdded: form.attachments.assignAttachmentID,
+          onAttachmentUploadFailed: form.attachments.clearAttachmentID,
         });
-
-        for (const attachment of uploaded.attachments) {
-          form.attachments.assignAttachmentID(
-            attachment.file,
-            attachment.attachmentID
-          );
-        }
+        const tracked = uploadRun.then(
+          () => undefined,
+          () => undefined
+        );
+        inFlightAttachmentUploads.add(tracked);
+        tracked.then(() => inFlightAttachmentUploads.delete(tracked));
       }
+
+      while (inFlightAttachmentUploads.size) {
+        await Promise.all([...inFlightAttachmentUploads]);
+      }
+      // Settled by the drain above, this only rethrows this save's own failure
+      if (uploadRun) await uploadRun;
 
       setCurrentDraftID(draftId);
       return draftId;
