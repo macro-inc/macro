@@ -114,6 +114,20 @@ impl LinkOperation {
             | Self::UpsertEmbeddedLink { entity_key, .. } => entity_key.borrowed(),
         }
     }
+
+    /// The entity key this operation INSERTS a reference to, when it does.
+    /// Inserted references must resolve to a normalized record: applying one
+    /// against a record-less key would plant a dangling reference that turns
+    /// every read of the containing query into a miss. Removals need no
+    /// record — removing an absent reference is a natural no-op.
+    pub fn inserted_entity_key(&self) -> Option<&EntityKey<'static>> {
+        match self {
+            Self::PrependUnique { entity_key } | Self::UpsertEmbeddedLink { entity_key, .. } => {
+                Some(entity_key)
+            }
+            Self::Remove { .. } | Self::RemoveEmbeddedLink { .. } => None,
+        }
+    }
 }
 
 /// A query that should be fetched after a successful mutation settlement.
@@ -172,6 +186,11 @@ pub enum LinkPatchError {
     /// The selected normalized record is absent.
     #[error("link update record `{0}` is missing")]
     MissingParent(EntityKey<'static>),
+    /// An inserted reference targets an entity with no normalized record.
+    /// Applying it would plant a dangling reference, so at settlement (skip
+    /// mode) such a patch is dropped and recovered by its revalidation.
+    #[error("link update inserts a reference to record-less entity `{0}`")]
+    MissingLinkedRecord(EntityKey<'static>),
     /// The selected record field is absent.
     #[error("link update field `{field}` is missing on `{parent}`")]
     MissingField { parent: String, field: String },
@@ -396,6 +415,11 @@ fn apply_one(
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
     let resolved = resolve_target(effective, patch)?;
+    if let Some(inserted) = patch.operation.inserted_entity_key() {
+        if !effective.contains_key(inserted) {
+            return Err(LinkPatchError::MissingLinkedRecord(inserted.clone()));
+        }
+    }
     let record = effective
         .get_mut(&resolved.parent_entity_key)
         .ok_or_else(|| LinkPatchError::MissingParent(resolved.parent_entity_key.clone()))?;
@@ -1076,6 +1100,18 @@ mod tests {
         (parent, record)
     }
 
+    /// Record for the entity the fixtures link to. Inserted references
+    /// validate against a loaded record, and the engine loads inserted
+    /// keys' bases before applying, so fixtures must carry it too.
+    fn linked_item() -> (EntityKey<'static>, Record) {
+        (
+            EntityKey("GraphqlSoupItem:task-1".into()),
+            Record {
+                fields: BTreeMap::from([("id".into(), CacheValue::String("task-1".into()))]),
+            },
+        )
+    }
+
     fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
         OptimisticLinkPatch {
             query: QUERY.into(),
@@ -1241,6 +1277,7 @@ mod tests {
     #[test]
     fn remove_and_prepend_compose_without_touching_unrelated_values() {
         let (parent, initial) = record();
+        let (item_key, item_record) = linked_item();
         let mut effective = HashMap::from([
             (
                 EntityKey::root(),
@@ -1249,6 +1286,7 @@ mod tests {
                 },
             ),
             (parent.clone(), initial.clone()),
+            (item_key, item_record),
         ]);
         let mut updates = RecordUpdates::new();
         apply_link_patches(
@@ -1297,8 +1335,71 @@ mod tests {
     }
 
     #[test]
+    fn inserted_reference_requires_a_record() {
+        let (parent, initial) = record();
+        let base = HashMap::from([
+            (
+                EntityKey::root(),
+                Record {
+                    fields: BTreeMap::from([("user".into(), CacheValue::Ref(parent.clone()))]),
+                },
+            ),
+            (parent.clone(), initial.clone()),
+        ]);
+        let ghost = patch(
+            "completed",
+            LinkOperation::PrependUnique {
+                entity_key: EntityKey("GraphqlSoupItem:ghost".into()),
+            },
+        );
+
+        // Strict mode rejects the whole set: applying would plant a
+        // dangling reference and turn later reads into misses.
+        let mut effective = base.clone();
+        let mut updates = RecordUpdates::new();
+        assert_eq!(
+            apply_link_patches(
+                &mut effective,
+                &mut updates,
+                std::slice::from_ref(&ghost),
+                false
+            )
+            .unwrap_err(),
+            LinkPatchError::MissingLinkedRecord(EntityKey("GraphqlSoupItem:ghost".into()))
+        );
+        assert_eq!(effective.get(&parent), Some(&initial));
+        assert!(updates.is_empty());
+
+        // Skip mode (settlement, hydration) drops the not-applicable patch
+        // and leaves the base untouched for the revalidation to repair.
+        let mut effective = base;
+        let mut updates = RecordUpdates::new();
+        apply_link_patches(&mut effective, &mut updates, &[ghost], true).unwrap();
+        assert_eq!(effective.get(&parent), Some(&initial));
+        assert!(updates.is_empty());
+
+        // Removing a record-less reference stays a natural no-op: a delete
+        // must never require its target to still exist.
+        let mut effective = effective;
+        let mut updates = RecordUpdates::new();
+        apply_link_patches(
+            &mut effective,
+            &mut updates,
+            &[patch(
+                "in-progress",
+                LinkOperation::Remove {
+                    entity_key: EntityKey("GraphqlSoupItem:ghost".into()),
+                },
+            )],
+            false,
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn embedded_link_changes_create_bins_and_adjust_counts_once() {
         let (parent, initial) = record();
+        let (item_key, item_record) = linked_item();
         let mut effective = HashMap::from([
             (
                 EntityKey::root(),
@@ -1307,6 +1408,7 @@ mod tests {
                 },
             ),
             (parent.clone(), initial),
+            (item_key, item_record),
         ]);
         let mut updates = RecordUpdates::new();
         let urgent = upsert_bin_patch("urgent");

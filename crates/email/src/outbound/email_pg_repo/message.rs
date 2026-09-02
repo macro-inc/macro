@@ -303,18 +303,6 @@ pub(crate) async fn get_simple_message(
     Ok(row.map(SimpleMessageInfo::from))
 }
 
-/// Whether any message row exists with this ID, in any inbox.
-pub(crate) async fn message_exists(pool: &PgPool, message_id: Uuid) -> Result<bool, sqlx::Error> {
-    let row = sqlx::query_scalar!(
-        r#"SELECT EXISTS(SELECT 1 FROM email_messages WHERE id = $1) AS "exists!""#,
-        message_id,
-    )
-    .fetch_one(pool)
-    .await?;
-
-    Ok(row)
-}
-
 /// Find an existing draft that replies to the given message, identified by
 /// the "Macro-In-Reply-To" header value.
 #[tracing::instrument(skip(pool), err)]

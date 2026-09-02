@@ -23,9 +23,11 @@ import {
 } from './graphql/generated/graphql';
 
 /**
- * Input for a durable GraphQL draft save. `draftId` is client-generated and
- * is the upsert key for the draft's lifetime, so saves queued offline replay
- * as idempotent upserts. `threadDbId` is required: this path covers reply
+ * Input for a durable GraphQL draft save. `draftId` is the draft's handle —
+ * a client-minted id (or a server id from a fetched draft) that the server
+ * resolves through a caller-scoped mapping to a server-minted row, so saves
+ * queued offline replay as idempotent upserts without the handle ever
+ * becoming a primary key. `threadDbId` is required: this path covers reply
  * drafts, whose thread is always known.
  *
  * The `sender*` and `optimistic*` fields are client-only — they feed the
@@ -116,6 +118,12 @@ function optimisticContact(
  * an unloadable thread instead of one with the draft. The mutation document
  * selects the same `EmailThreadMessageFields` fragment the thread page
  * reads, so fragment drift surfaces as a compile error in this function.
+ *
+ * The entity is keyed by the handle; a first save's committed response
+ * arrives under the server-minted id instead. The engine skips the now
+ * record-less link patch at settlement (never planting a dangling ref), so
+ * the draft is briefly absent from the page until the revalidation lands —
+ * subsequent saves use the adopted server id and match exactly.
  */
 function optimisticDraftEntity(
   args: GraphqlSaveEmailDraftArgs

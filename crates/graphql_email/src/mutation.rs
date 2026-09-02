@@ -173,13 +173,18 @@ impl From<SaveEmailDraftContactInput> for ContactInfo {
 
 /// Input for creating or updating an email draft.
 ///
-/// The draft ID is client-generated so a save queued offline stays an
-/// idempotent upsert when it replays later — possibly after an app restart,
-/// possibly more than once. Thread identifiers are hints: the server derives
-/// authoritative thread linkage from the reply target or the existing draft.
+/// The draft ID is a client-generated handle so a save queued offline stays
+/// an idempotent upsert when it replays later — possibly after an app
+/// restart, possibly more than once. Handles are untrusted input and never
+/// become primary keys: the server resolves them through a caller-scoped
+/// mapping to server-minted rows. Thread identifiers are hints: the server
+/// derives authoritative thread linkage from the reply target or the
+/// existing draft.
 #[derive(InputObject)]
 pub struct SaveEmailDraftInput {
-    /// Client-generated draft ID; the upsert key for this draft's lifetime.
+    /// Draft handle: a client-generated ID, or a server ID from a fetched
+    /// draft. Resolved scoped to the caller's inboxes, and bound to the
+    /// server row the save settles on, so replays converge on one draft.
     pub draft_id: ID,
     /// Sending inbox. Absent means the caller's primary inbox. Carried as a
     /// variable (not a header) so queued offline saves replay with it.
@@ -190,11 +195,10 @@ pub struct SaveEmailDraftInput {
     pub provider_id: Option<String>,
     /// Provider-assigned thread ID hint.
     pub provider_thread_id: Option<String>,
-    /// Thread ID. For replies this is a hint the server may override. For
-    /// compose drafts (no reply target) it is client-generated: an unclaimed
-    /// ID creates the thread with it, so saves queued offline replay as
-    /// idempotent upserts against one thread; an ID owned by another inbox
-    /// is rejected.
+    /// Thread handle. For replies this is a hint the server may override.
+    /// For compose drafts (no reply target) it is client-generated: an
+    /// unresolvable handle gets a fresh server-minted thread and is bound
+    /// to it, so saves queued offline replay against one thread.
     pub thread_db_id: Option<ID>,
     /// Draft subject line.
     pub subject: String,
@@ -218,8 +222,9 @@ pub struct SaveEmailDraftInput {
 /// Input for deleting an email draft.
 #[derive(InputObject)]
 pub struct DeleteEmailDraftInput {
-    /// Draft to delete. An ID that is already gone (or was never created —
-    /// a discard can replay before its draft's first save ever committed)
+    /// Draft handle to delete: a client-generated ID or a server ID, resolved
+    /// like a save's. A handle that is already gone (or was never bound — a
+    /// discard can replay before its draft's first save ever committed)
     /// deletes nothing and still succeeds, so a delete queued offline lands
     /// cleanly however late it replays.
     pub draft_id: ID,
@@ -251,9 +256,9 @@ impl<O> SaveEmailDraftPayload<O>
 where
     O: EmailThreadMutationOutput,
 {
-    /// Server-confirmed draft ID. Matches the input's client-generated ID
-    /// unless the save converged onto an existing draft for the same reply
-    /// target.
+    /// Server-confirmed draft ID: the server-minted row the input's handle
+    /// resolved (and is now bound) to. Use it for server-addressed calls;
+    /// the handle keeps working for queued saves and deletes.
     async fn draft_id(&self) -> ID {
         ID(self.draft_id.to_string())
     }
@@ -429,9 +434,9 @@ where
     }
 
     /// Create or update an email draft and return its thread's authoritative
-    /// cache record. The upsert is keyed by the client-generated draft ID, so
-    /// a save replayed from the offline mutation queue converges instead of
-    /// duplicating.
+    /// cache record. The client-generated handle resolves through a
+    /// caller-scoped mapping to a server-minted row, so a save replayed from
+    /// the offline mutation queue converges instead of duplicating.
     #[tracing::instrument(skip_all, err(Debug))]
     async fn save_email_draft(
         &self,
@@ -545,6 +550,10 @@ fn draft_input_from_graphql(input: SaveEmailDraftInput) -> async_graphql::Result
         send_time,
         include_signature: None,
         actor: None,
+        // Handle resolution (and any binding) is owned by the user-scoped
+        // save, never by transport input.
+        draft_client_binding: None,
+        thread_client_binding: None,
     })
 }
 

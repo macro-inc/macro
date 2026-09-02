@@ -4,9 +4,16 @@
 //! must show the draft while the mutation is still queued — this is what
 //! makes an offline-composed reply visible after leaving and reopening the
 //! thread.
+//!
+//! Also covers settlement: committing under the same id keeps the page
+//! readable with the draft in place, while committing under a different
+//! (server-alias) id skips the now record-less patch — the page stays
+//! readable without the draft until the revalidation lands. The skip is
+//! what makes the client-id-as-lookup-column design safe.
 
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
 use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch};
+use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::InMemoryStorage;
 use cache_core::value::EntityKey;
 use pollster::block_on;
@@ -513,5 +520,236 @@ fn queued_draft_delete_removes_the_draft_from_the_thread_page_read() {
             vec!["msg-1"],
             "discarded draft must not appear in the thread page read"
         );
+    });
+}
+
+fn save_response_with(draft_id: &str, body: &str) -> Json {
+    json!({
+        "saveEmailDraft": {
+            "draftId": draft_id,
+            "draft": message(draft_id, true, body),
+            "thread": {
+                "__typename": "GraphqlSoupEmailThread",
+                "id": "thread-1",
+                "updatedAt": "2026-08-27T01:00:00Z"
+            }
+        }
+    })
+}
+
+async fn claim_head(engine: &mut Engine<InMemoryStorage>) -> MutationClaimToken {
+    let claimed = engine
+        .claim_next_mutation(MutationClaimRequest {
+            owner: "runner".into(),
+            now_ms: 10,
+            lease_expires_at_ms: 1_010,
+        })
+        .await
+        .unwrap()
+        .expect("queue head");
+    MutationClaimToken {
+        owner: "runner".into(),
+        generation: claimed.lease_generation,
+    }
+}
+
+fn message_ids(data: &Json) -> Vec<&str> {
+    data["user"]["emailThread"]["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["id"].as_str().unwrap())
+        .collect()
+}
+
+// Settlement path of the shipped client-real-id design: the server response
+// carries the SAME id the enqueued link patch references, so the reapplied
+// patch points at an entity the response just wrote. The page must stay a
+// hit with the draft present, now carrying server truth.
+#[test]
+fn committed_draft_save_with_the_same_id_keeps_the_draft_visible() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(
+                None,
+                PAGE_QUERY,
+                Some("EmailThreadPage"),
+                &page_variables(),
+                &thread_page(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        let patches = [messages_patch()];
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SaveEmailDraft"),
+                    variables: &mutation_variables(),
+                    data: &mutation_response(),
+                    link_patches: &patches,
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
+            )
+            .await
+            .unwrap();
+
+        let claim = claim_head(&mut engine).await;
+        engine
+            .commit_optimistic_write(
+                transaction,
+                claim,
+                MUTATION,
+                Some("SaveEmailDraft"),
+                &mutation_variables(),
+                &save_response_with("draft-1", "<p>server copy</p>"),
+            )
+            .await
+            .unwrap();
+
+        let data = match engine
+            .read_query(None, PAGE_QUERY, Some("EmailThreadPage"), &page_variables())
+            .await
+            .unwrap()
+        {
+            ReadResult::Hit { data } => data,
+            ReadResult::Miss => panic!("thread page must stay a hit after commit"),
+        };
+        assert_eq!(message_ids(&data), vec!["draft-1", "msg-1"]);
+        assert_eq!(
+            data["user"]["emailThread"]["messages"][0]["bodyHtmlSanitized"],
+            json!("<p>server copy</p>"),
+            "the committed read must serve the server's copy, not the optimistic one"
+        );
+    });
+}
+
+// The alias-id flow (client handle as a lookup key, server-minted PK): the
+// enqueued link patch references the CLIENT handle, but the settlement
+// response carries the entity under the SERVER id, so at commit the patch
+// points at an entity with no record. The engine must treat that inserted
+// reference as not-applicable — dropped in skip mode rather than reapplied
+// as a dangling ref that would turn every read of the page into a miss —
+// leaving the page readable (briefly without the draft) until the
+// mutation's revalidation delivers the server's list. This settlement skip
+// is what makes client-handle identity safe; a regression here reads as
+// the Miss branch below.
+#[test]
+fn committed_alias_id_response_skips_the_patch_and_stays_readable() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(
+                None,
+                PAGE_QUERY,
+                Some("EmailThreadPage"),
+                &page_variables(),
+                &thread_page(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        // The optimistic layer fabricates the draft under the client id, as
+        // the alias design would: the client cannot know the server id yet.
+        let patches = [messages_patch_with(LinkOperation::PrependUnique {
+            entity_key: EntityKey("GraphqlSoupEmailMessage:client-1".into()),
+        })];
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    query: MUTATION,
+                    operation_name: Some("SaveEmailDraft"),
+                    variables: &mutation_variables(),
+                    data: &save_response_with("client-1", "<p>offline</p>"),
+                    link_patches: &patches,
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
+            )
+            .await
+            .unwrap();
+
+        // Queued, the page read hits: the alias entity exists optimistically.
+        match engine
+            .read_query(None, PAGE_QUERY, Some("EmailThreadPage"), &page_variables())
+            .await
+            .unwrap()
+        {
+            ReadResult::Hit { data } => {
+                assert_eq!(message_ids(&data), vec!["client-1", "msg-1"]);
+            }
+            ReadResult::Miss => panic!("queued alias draft must be readable"),
+        }
+
+        // Settle with the server's response: the draft entity arrives under
+        // the server-minted id; nothing ever writes a `client-1` record.
+        let claim = claim_head(&mut engine).await;
+        engine
+            .commit_optimistic_write(
+                transaction,
+                claim,
+                MUTATION,
+                Some("SaveEmailDraft"),
+                &mutation_variables(),
+                &save_response_with("srv-1", "<p>server copy</p>"),
+            )
+            .await
+            .unwrap();
+
+        // Settlement must skip the alias patch (its entity has no record):
+        // the page stays a hit, listing only the server's known messages.
+        match engine
+            .read_query(None, PAGE_QUERY, Some("EmailThreadPage"), &page_variables())
+            .await
+            .unwrap()
+        {
+            ReadResult::Hit { data } => {
+                assert_eq!(
+                    message_ids(&data),
+                    vec!["msg-1"],
+                    "the skipped alias patch must leave the durable list untouched"
+                );
+            }
+            ReadResult::Miss => panic!(
+                "a record-less inserted reference must be skipped at settlement, \
+                 never planted as a dangling ref that misses the whole page"
+            ),
+        }
+
+        // The draft's brief absence ends when the mutation's persisted
+        // revalidation delivers the server's fresh list.
+        let mut revalidated = thread_page();
+        revalidated["user"]["emailThread"]["messages"] = json!([
+            message("srv-1", true, "<p>server copy</p>"),
+            message("msg-1", false, "<p>original</p>"),
+        ]);
+        engine
+            .write_query(
+                None,
+                PAGE_QUERY,
+                Some("EmailThreadPage"),
+                &page_variables(),
+                &revalidated,
+                None,
+            )
+            .await
+            .unwrap();
+        match engine
+            .read_query(None, PAGE_QUERY, Some("EmailThreadPage"), &page_variables())
+            .await
+            .unwrap()
+        {
+            ReadResult::Hit { data } => {
+                assert_eq!(message_ids(&data), vec!["srv-1", "msg-1"]);
+            }
+            ReadResult::Miss => panic!("the revalidation write must repair the page"),
+        }
     });
 }

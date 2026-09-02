@@ -19,6 +19,8 @@ fn input_with_body_html(html: &str) -> CreateDraftInput {
         send_time: None,
         include_signature: None,
         actor: None,
+        draft_client_binding: None,
+        thread_client_binding: None,
     }
 }
 
@@ -169,28 +171,26 @@ fn thread_row(link_id: Uuid, provider_id: Option<&str>) -> ThreadRow {
 fn thread_hint_attaches_to_an_owned_thread_and_adopts_its_provider_id() {
     let link_id = Uuid::from_u128(1);
     let thread = thread_row(link_id, Some("provider-7"));
-    let outcome = resolve_thread_hint(Some(&thread), link_id, thread.db_id).unwrap();
-    match outcome {
+    match resolve_thread_hint(Some(&thread), link_id) {
         ThreadHintOutcome::Attach { provider_thread_id } => {
             assert_eq!(provider_thread_id.as_deref(), Some("provider-7"));
         }
-        ThreadHintOutcome::CreateWithId(_) => panic!("expected attach"),
+        ThreadHintOutcome::CreateNew => panic!("expected attach"),
     }
 }
 
+// A hint naming another inbox's thread and one naming no thread at all must
+// behave identically — the hint is untrusted input and must not act as a
+// thread-existence oracle. Neither becomes the new thread's primary key.
 #[test]
-fn thread_hint_owned_by_another_inbox_is_rejected_opaquely() {
-    let thread = thread_row(Uuid::from_u128(2), None);
-    let result = resolve_thread_hint(Some(&thread), Uuid::from_u128(1), thread.db_id);
-    assert!(matches!(result, Err(EmailErr::ThreadNotFound)));
-}
-
-#[test]
-fn unclaimed_thread_hint_creates_with_the_client_id() {
-    let hint = Uuid::from_u128(0xc0ffee);
-    let outcome = resolve_thread_hint(None, Uuid::from_u128(1), hint).unwrap();
-    match outcome {
-        ThreadHintOutcome::CreateWithId(id) => assert_eq!(id, hint),
-        ThreadHintOutcome::Attach { .. } => panic!("expected create"),
-    }
+fn foreign_and_unknown_thread_hints_both_create_a_fresh_thread() {
+    let foreign = thread_row(Uuid::from_u128(2), None);
+    assert!(matches!(
+        resolve_thread_hint(Some(&foreign), Uuid::from_u128(1)),
+        ThreadHintOutcome::CreateNew
+    ));
+    assert!(matches!(
+        resolve_thread_hint(None, Uuid::from_u128(1)),
+        ThreadHintOutcome::CreateNew
+    ));
 }

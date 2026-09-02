@@ -39,7 +39,7 @@ where
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         link_id: Option<Uuid>,
-        input: CreateDraftInput,
+        mut input: CreateDraftInput,
     ) -> Result<SavedUserDraft, EmailErr> {
         let accessible_inboxes = self
             .email_repo
@@ -47,10 +47,74 @@ where
             .await
             .map_err(anyhow::Error::from)?;
         let link = resolve_target_link(&accessible_inboxes, link_id, &macro_id)?.clone();
+        let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
+        self.resolve_client_handles(&mut input, &accessible_link_ids)
+            .await?;
         let draft = self
             .create_draft_impl(&link, &accessible_inboxes, input)
             .await?;
         Ok(SavedUserDraft { draft, link })
+    }
+
+    /// Resolve the user-scoped save's client handles into server IDs.
+    ///
+    /// GraphQL saves carry client-generated identity so offline replays stay
+    /// idempotent — but a client-supplied ID must never become a primary key
+    /// in the shared email tables. Each handle resolves through its mapping
+    /// table (scoped to the caller's inboxes, so identical handles from
+    /// different users never interact); an unmapped handle that happens to
+    /// name an accessible row is treated as a server ID from a fetched draft
+    /// and bound to itself; anything else stays unresolved and gets a
+    /// server-minted row, with the binding recorded in the same transaction
+    /// as the insert. Resolution reads are advisory — the mapping upsert and
+    /// the insert's owner guard are the race-proof enforcement.
+    async fn resolve_client_handles(
+        &self,
+        input: &mut CreateDraftInput,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<(), EmailErr> {
+        if let Some(handle) = input.db_id {
+            // Bind on every save, hit or miss: a sender switch deletes and
+            // recreates the row, cascading the old binding away — the
+            // insert's binding upsert re-points the handle at whatever row
+            // the save converges on.
+            input.draft_client_binding = Some(handle);
+            match self
+                .email_repo
+                .message_id_for_client_draft_id(handle, accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?
+            {
+                Some(message_id) => input.db_id = Some(message_id),
+                None => {
+                    let is_server_id = self
+                        .email_repo
+                        .get_simple_message(handle, accessible_link_ids)
+                        .await
+                        .map_err(anyhow::Error::from)?
+                        .is_some();
+                    if !is_server_id {
+                        input.db_id = None;
+                    }
+                }
+            }
+        }
+        if let Some(handle) = input.thread_db_id {
+            input.thread_client_binding = Some(handle);
+            if let Some(thread_id) = self
+                .email_repo
+                .thread_id_for_client_thread_id(handle, accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?
+            {
+                input.thread_db_id = Some(thread_id);
+            }
+            // Unmapped: the hint may still be an accessible server thread
+            // ID — validate_thread_hint attaches it — or a fresh client
+            // handle, which gets a server-minted thread. Either way the
+            // binding makes replays converge.
+        }
+        Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -68,13 +132,22 @@ where
             .map(|link| link.id)
             .collect();
 
+        // The handle resolves like a save's: through the caller-scoped
+        // mapping first, else as a server ID from a fetched draft.
+        let resolved_id = self
+            .email_repo
+            .message_id_for_client_draft_id(draft_id, &accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .unwrap_or(draft_id);
+
         // Advisory read: classifies the ID for error reporting. Enforcement
         // is the guarded DELETE below, whose WHERE clause re-checks ownership
-        // and draft state, so a raced read can at worst turn the delete into
+        // and draft state, so a raced read can at most turn the delete into
         // a no-op — never remove a row the caller doesn't own.
         let Some(msg) = self
             .email_repo
-            .get_simple_message(draft_id, &accessible_link_ids)
+            .get_simple_message(resolved_id, &accessible_link_ids)
             .await
             .map_err(anyhow::Error::from)?
         else {
@@ -136,7 +209,7 @@ where
         self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
             .await?;
 
-        let new_thread_id = self.validate_thread_hint(link_id, &mut input).await?;
+        self.validate_thread_hint(link_id, &mut input).await?;
 
         decode_and_sanitize_html_body(&mut input)?;
 
@@ -165,8 +238,7 @@ where
             .map_err(anyhow::Error::from)?;
 
         // Build new thread if one doesn't already exist
-        let (thread_db_id, new_thread) =
-            self.build_new_thread_if_needed(link_id, &input, new_thread_id);
+        let (thread_db_id, new_thread) = self.build_new_thread_if_needed(link_id, &input);
 
         // Resolve all IDs and build the insert-ready struct
         let message_db_id = input.db_id.unwrap_or_else(macro_uuid::generate_uuid_v7);
@@ -187,6 +259,8 @@ where
             headers_json: input.headers_json,
             send_time: input.send_time,
             actor_id: input.actor.as_ref().map(|actor| actor.as_ref().to_owned()),
+            draft_client_id: input.draft_client_binding,
+            thread_client_id: input.thread_client_binding,
         };
 
         let applied = self
@@ -301,30 +375,12 @@ where
             .await
             .map_err(anyhow::Error::from)?
         else {
-            // The scoped lookup missed: either the ID is free — a
-            // client-generated draft ID, created below with that ID so offline
-            // saves replayed out of session stay idempotent — or it belongs to
-            // a message outside the caller's inboxes, reported as the same
-            // opaque not-found the scoped read always produced. The probe can
-            // be raced by a concurrent create; the upsert's owner guard is the
-            // enforcement either way.
-            if self
-                .email_repo
-                .message_exists(db_id)
-                .await
-                .map_err(anyhow::Error::from)?
-            {
-                return Err(EmailErr::MessageNotFound(db_id));
-            }
-            // For replies, client-supplied thread hints may be stale (or
-            // fabricated); creation derives linkage from the reply target
-            // instead. For compose drafts (no reply target) the thread ID is
-            // client-minted on purpose — validate_thread_hint owns it.
-            if input.replying_to_id.is_some() {
-                input.thread_db_id = None;
-                input.provider_thread_id = None;
-            }
-            return Ok(());
+            // A message ID must name an accessible row: REST clients only
+            // send IDs learned from responses, and user-scoped (GraphQL)
+            // saves arrive here with the client handle already resolved —
+            // an unresolvable handle was cleared so the row is server-minted.
+            // A miss is therefore a stale/foreign ID, reported opaquely.
+            return Err(EmailErr::MessageNotFound(db_id));
         };
 
         if msg.is_sent || !msg.is_draft {
@@ -335,12 +391,13 @@ where
             // The sender was switched to a different inbox. A draft belongs to a
             // single inbox, so discard it (and its now-empty thread) and create a
             // fresh draft in the sending inbox; validate_replying_to re-derives
-            // the thread from the reply target. The draft keeps its ID across
-            // the move: clients (and queued offline saves) keep referencing it,
-            // so an ID churn here would orphan their handle and let a follow-up
-            // save recreate the old ID as a duplicate. A raced delete (`None`)
-            // is fine — the row is gone either way, and a raced send is caught
-            // by the insert's owner guard.
+            // the thread from the reply target. The draft keeps its server ID
+            // across the move, and the delete's cascade drops any client-handle
+            // binding — the save's binding upsert re-points the handle at the
+            // recreated row in the same transaction, so queued offline saves
+            // keep converging. A raced delete (`None`) is fine — the row is
+            // gone either way, and a raced send is caught by the insert's
+            // owner guard.
             self.email_repo
                 .delete_draft_message(msg.db_id, msg.thread_db_id, accessible_link_ids)
                 .await
@@ -435,47 +492,47 @@ where
 
     /// Validate a client-supplied thread hint on the no-reply-target path.
     /// Reply drafts never reach the decision: their linkage was already
-    /// re-derived from the reply target. Returns the thread ID to create
-    /// when the hint names a thread that does not exist yet — compose drafts
-    /// mint their thread ID client-side so saves queued offline replay as
-    /// idempotent upserts against one thread.
+    /// re-derived from the reply target. A hint naming an accessible thread
+    /// in the sending inbox attaches to it; any other hint — unknown, or a
+    /// thread owned elsewhere, both reported by behaving identically — gets
+    /// a fresh server-minted thread. Compose saves replayed offline still
+    /// converge on one thread through the client-handle binding, never by
+    /// letting the hint become the thread's primary key.
     async fn validate_thread_hint(
         &self,
         link_id: Uuid,
         input: &mut CreateDraftInput,
-    ) -> Result<Option<Uuid>, EmailErr> {
+    ) -> Result<(), EmailErr> {
         if input.replying_to_id.is_some() {
-            return Ok(None);
+            return Ok(());
         }
         let Some(thread_db_id) = input.thread_db_id else {
-            return Ok(None);
+            return Ok(());
         };
         let existing = self
             .email_repo
             .thread_by_id(thread_db_id)
             .await
             .map_err(anyhow::Error::from)?;
-        match resolve_thread_hint(existing.as_ref(), link_id, thread_db_id)? {
+        match resolve_thread_hint(existing.as_ref(), link_id) {
             ThreadHintOutcome::Attach { provider_thread_id } => {
                 input.provider_thread_id = provider_thread_id;
-                Ok(None)
             }
-            ThreadHintOutcome::CreateWithId(id) => {
+            ThreadHintOutcome::CreateNew => {
                 input.thread_db_id = None;
                 input.provider_thread_id = None;
-                Ok(Some(id))
             }
         }
+        Ok(())
     }
 
     /// If the input already has a (validated) thread_db_id, return it with no
-    /// new thread. Otherwise, build a ThreadRow for creation inside the
-    /// transaction — with the client-requested ID when the save carried one.
+    /// new thread. Otherwise, build a server-minted ThreadRow for creation
+    /// inside the transaction.
     fn build_new_thread_if_needed(
         &self,
         link_id: Uuid,
         input: &CreateDraftInput,
-        requested_thread_id: Option<Uuid>,
     ) -> (Uuid, Option<ThreadRow>) {
         if let Some(id) = input.thread_db_id {
             return (id, None);
@@ -483,7 +540,7 @@ where
 
         let now = chrono::Utc::now();
         let thread = ThreadRow {
-            db_id: requested_thread_id.unwrap_or_else(macro_uuid::generate_uuid_v7),
+            db_id: macro_uuid::generate_uuid_v7(),
             provider_id: None,
             link_id,
             inbox_visible: false,
@@ -506,27 +563,21 @@ enum ThreadHintOutcome {
     /// The thread exists in the sending inbox — attach, adopting its
     /// provider thread ID.
     Attach { provider_thread_id: Option<String> },
-    /// The ID is unclaimed — create the thread with it, so replayed offline
-    /// saves converge on one client-minted thread.
-    CreateWithId(Uuid),
+    /// The hint names no thread in the sending inbox — unknown, or owned
+    /// elsewhere. Create a fresh server-minted thread; behaving identically
+    /// for both keeps the hint from acting as a thread-existence oracle.
+    CreateNew,
 }
 
 /// Pure decision for a client-supplied thread hint: attach when the thread
-/// exists in the sending inbox, reject a thread owned elsewhere with the
-/// same opaque error an invalid thread has always produced, and create with
-/// the client ID when it is unclaimed. A create raced by another claimant is
-/// enforced by the thread insert's uniqueness, not this read.
-fn resolve_thread_hint(
-    existing: Option<&ThreadRow>,
-    link_id: Uuid,
-    hint: Uuid,
-) -> Result<ThreadHintOutcome, EmailErr> {
+/// exists in the sending inbox, create a fresh server-minted thread
+/// otherwise. Hints are untrusted input and never become primary keys.
+fn resolve_thread_hint(existing: Option<&ThreadRow>, link_id: Uuid) -> ThreadHintOutcome {
     match existing {
-        Some(thread) if thread.link_id == link_id => Ok(ThreadHintOutcome::Attach {
+        Some(thread) if thread.link_id == link_id => ThreadHintOutcome::Attach {
             provider_thread_id: thread.provider_id.clone(),
-        }),
-        Some(_) => Err(EmailErr::ThreadNotFound),
-        None => Ok(ThreadHintOutcome::CreateWithId(hint)),
+        },
+        Some(_) | None => ThreadHintOutcome::CreateNew,
     }
 }
 

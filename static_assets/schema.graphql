@@ -121,9 +121,9 @@ type CompleteMutationRoot {
 	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
 	"""
 	Create or update an email draft and return its thread's authoritative
-	cache record. The upsert is keyed by the client-generated draft ID, so
-	a save replayed from the offline mutation queue converges instead of
-	duplicating.
+	cache record. The client-generated handle resolves through a
+	caller-scoped mapping to a server-minted row, so a save replayed from
+	the offline mutation queue converges instead of duplicating.
 	"""
 	saveEmailDraft(input: SaveEmailDraftInput!): SaveEmailDraftPayload!
 	"""
@@ -155,8 +155,9 @@ Input for deleting an email draft.
 """
 input DeleteEmailDraftInput {
 	"""
-	Draft to delete. An ID that is already gone (or was never created —
-	a discard can replay before its draft's first save ever committed)
+	Draft handle to delete: a client-generated ID or a server ID, resolved
+	like a save's. A handle that is already gone (or was never bound — a
+	discard can replay before its draft's first save ever committed)
 	deletes nothing and still succeeds, so a delete queued offline lands
 	cleanly however late it replays.
 	"""
@@ -5585,14 +5586,19 @@ input SaveEmailDraftContactInput {
 """
 Input for creating or updating an email draft.
 
-The draft ID is client-generated so a save queued offline stays an
-idempotent upsert when it replays later — possibly after an app restart,
-possibly more than once. Thread identifiers are hints: the server derives
-authoritative thread linkage from the reply target or the existing draft.
+The draft ID is a client-generated handle so a save queued offline stays
+an idempotent upsert when it replays later — possibly after an app
+restart, possibly more than once. Handles are untrusted input and never
+become primary keys: the server resolves them through a caller-scoped
+mapping to server-minted rows. Thread identifiers are hints: the server
+derives authoritative thread linkage from the reply target or the
+existing draft.
 """
 input SaveEmailDraftInput {
 	"""
-	Client-generated draft ID; the upsert key for this draft's lifetime.
+	Draft handle: a client-generated ID, or a server ID from a fetched
+	draft. Resolved scoped to the caller's inboxes, and bound to the
+	server row the save settles on, so replays converge on one draft.
 	"""
 	draftId: ID!
 	"""
@@ -5613,11 +5619,10 @@ input SaveEmailDraftInput {
 	"""
 	providerThreadId: String
 	"""
-	Thread ID. For replies this is a hint the server may override. For
-	compose drafts (no reply target) it is client-generated: an unclaimed
-	ID creates the thread with it, so saves queued offline replay as
-	idempotent upserts against one thread; an ID owned by another inbox
-	is rejected.
+	Thread handle. For replies this is a hint the server may override.
+	For compose drafts (no reply target) it is client-generated: an
+	unresolvable handle gets a fresh server-minted thread and is bound
+	to it, so saves queued offline replay against one thread.
 	"""
 	threadDbId: ID
 	"""
@@ -5660,9 +5665,9 @@ Result of creating or updating an email draft.
 """
 type SaveEmailDraftPayload {
 	"""
-	Server-confirmed draft ID. Matches the input's client-generated ID
-	unless the save converged onto an existing draft for the same reply
-	target.
+	Server-confirmed draft ID: the server-minted row the input's handle
+	resolved (and is now bound) to. Use it for server-addressed calls;
+	the handle keeps working for queued saves and deletes.
 	"""
 	draftId: ID!
 	"""

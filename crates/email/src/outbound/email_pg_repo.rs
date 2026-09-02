@@ -14,6 +14,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod client_id_mapping;
 mod contact;
 mod db_types;
 mod draft;
@@ -241,8 +242,20 @@ impl EmailRepo for EmailPgRepo {
         message::get_simple_message(&self.pool, message_id, link_ids).await
     }
 
-    async fn message_exists(&self, message_id: Uuid) -> Result<bool, Self::Err> {
-        message::message_exists(&self.pool, message_id).await
+    async fn message_id_for_client_draft_id(
+        &self,
+        client_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, Self::Err> {
+        client_id_mapping::message_id_for_client_draft_id(&self.pool, client_id, link_ids).await
+    }
+
+    async fn thread_id_for_client_thread_id(
+        &self,
+        client_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, Self::Err> {
+        client_id_mapping::thread_id_for_client_thread_id(&self.pool, client_id, link_ids).await
     }
 
     async fn get_draft_replying_to(

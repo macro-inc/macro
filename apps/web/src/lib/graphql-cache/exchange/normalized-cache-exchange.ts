@@ -955,6 +955,18 @@ export function normalizedCacheExchange(
             enqueueForward(op);
             return undefined;
           }
+          // Deliberately loud: this fallback is durable but invisible until
+          // reconnect — the mutation's optimistic list membership silently
+          // becomes eventual. A systematic rejection (schema drift, a patch
+          // path the cache cannot resolve) looks identical to a transient
+          // race without this trace.
+          console.warn(
+            '[graphql-cache] optimistic link patches rejected at enqueue; ' +
+              `degrading to post-commit revalidations for ${
+                args.operationName ?? 'mutation'
+              }`,
+            error
+          );
           try {
             enqueue = await host.enqueueOptimisticMutation(
               {

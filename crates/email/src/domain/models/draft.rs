@@ -47,6 +47,15 @@ pub struct CreateDraftInput {
     /// delegated inboxes; attribution (events, activity) follows the actor.
     /// Ignored for drafts.
     pub actor: Option<MacroUserIdStr<'static>>,
+    /// Client draft handle to bind to the final message row. Set only by
+    /// user-scoped (GraphQL) saves whose handle did not resolve through the
+    /// mapping table — never from a request body. The binding is upserted
+    /// inside the insert transaction so replayed offline saves converge on
+    /// one server-minted row.
+    pub draft_client_binding: Option<Uuid>,
+    /// Client thread handle to bind to the final thread row; same contract
+    /// as `draft_client_binding`.
+    pub thread_client_binding: Option<Uuid>,
 }
 
 /// A draft input with all IDs resolved, ready for database insertion.
@@ -84,6 +93,11 @@ pub struct ResolvedDraftInput {
     /// The sending user's principal string, persisted with the scheduled
     /// send so the eventual `message_sent` event can attribute the actor.
     pub actor_id: Option<String>,
+    /// Client draft handle to bind to `db_id` in the insert transaction.
+    pub draft_client_id: Option<Uuid>,
+    /// Client thread handle to bind to `thread_db_id` in the insert
+    /// transaction.
+    pub thread_client_id: Option<Uuid>,
 }
 
 /// Simplified message info used for validation queries.

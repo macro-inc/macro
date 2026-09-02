@@ -226,13 +226,22 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_ids: &[Uuid],
     ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
 
-    /// Whether any message row exists with this ID, in any inbox. Lets draft
-    /// upserts with a client-generated ID distinguish "free to create" from
-    /// "exists outside the caller's inboxes" without widening the scoped read.
-    fn message_exists(
+    /// Resolve a client draft handle to its server-minted message ID through
+    /// the mapping table, scoped to the caller's inboxes — identical handles
+    /// from different users never interact.
+    fn message_id_for_client_draft_id(
         &self,
-        message_id: Uuid,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+        client_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Resolve a client thread handle to its server-minted thread ID through
+    /// the mapping table, scoped to the caller's inboxes.
+    fn thread_id_for_client_thread_id(
+        &self,
+        client_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
     /// Find an existing draft that replies to the given message ID.
     fn get_draft_replying_to(
@@ -267,14 +276,15 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<UpsertedContacts, Self::Err>> + Send;
 
     /// Insert a message within a transaction, including thread insert (if new),
-    /// recipients, scheduled message handling, thread metadata update, and user history.
-    /// If `new_thread` is Some, the thread is created inside the same transaction.
+    /// recipients, scheduled message handling, thread metadata update, user
+    /// history, and any client-handle bindings the input carries (upserted so
+    /// replayed offline saves converge on the final row).
     ///
     /// Returns `false` (rolling the transaction back) when the upsert's owner
     /// guard rejected the write: the message ID already exists but belongs to
-    /// another inbox or is no longer an unsent draft. This is the race-proof
-    /// enforcement behind client-generated draft IDs — validation reads can be
-    /// raced, the guarded conflict clause cannot.
+    /// another inbox or is no longer an unsent draft. Defense-in-depth behind
+    /// the handle resolution — validation reads can be raced, the guarded
+    /// conflict clause cannot.
     fn insert_message(
         &self,
         input: &ResolvedDraftInput,
@@ -567,7 +577,9 @@ pub trait EmailService: Send + Sync + 'static {
     /// sending inbox from `link_id` (or the caller's primary inbox when
     /// `None`). Lets transports without the `X-Email-Link-Id` header (the
     /// GraphQL mutation, whose offline replay persists only variables) target
-    /// an inbox by value.
+    /// an inbox by value. The input's `db_id`/`thread_db_id` are client
+    /// handles here — resolved through the caller-scoped mapping tables and
+    /// bound to server-minted rows, never used as primary keys.
     fn save_draft_for_user(
         &self,
         macro_id: MacroUserIdStr<'_>,
@@ -576,7 +588,9 @@ pub trait EmailService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<SavedUserDraft, EmailErr>> + Send;
 
     /// Delete a draft for the authenticated user, searching every inbox they
-    /// can reach. Idempotent: an ID that is absent (or not theirs — reported
+    /// can reach. `draft_id` is a handle resolved like a save's: through the
+    /// caller-scoped mapping, else as a server ID. Idempotent: a handle that
+    /// resolves to nothing (or to a row that is not theirs — reported
     /// identically to avoid an existence oracle) is a successful no-op, so a
     /// delete queued offline lands cleanly however late it replays. Deleting
     /// a draft that has since been sent fails with `MessageAlreadySent`.

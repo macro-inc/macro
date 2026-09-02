@@ -1,4 +1,4 @@
-use super::{message, thread};
+use super::{client_id_mapping, message, thread};
 use crate::domain::models::{ResolvedDraftInput, ThreadRow, UpsertedContacts};
 use chrono::Utc;
 use sqlx::PgPool;
@@ -61,6 +61,15 @@ pub(crate) async fn insert_message(
     thread::update_thread_metadata(&mut tx, thread_db_id, link_id).await?;
 
     thread::upsert_user_history(&mut tx, link_id, thread_db_id).await?;
+
+    // Bind client handles to the settled rows in the same transaction, so a
+    // replayed offline save resolves to this row instead of creating another.
+    if let Some(client_id) = input.draft_client_id {
+        client_id_mapping::bind_draft_client_id(&mut tx, client_id, link_id, message_db_id).await?;
+    }
+    if let Some(client_id) = input.thread_client_id {
+        client_id_mapping::bind_thread_client_id(&mut tx, client_id, link_id, thread_db_id).await?;
+    }
 
     tx.commit().await?;
     Ok(true)

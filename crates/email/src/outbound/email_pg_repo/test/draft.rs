@@ -561,6 +561,8 @@ async fn test_insert_draft_message_into_existing_thread(
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -646,6 +648,8 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -719,6 +723,8 @@ async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> 
         headers_json: None,
         send_time: Some(send_time),
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -777,6 +783,8 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -845,6 +853,8 @@ async fn test_insert_draft_message_updates_thread_metadata(
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -898,6 +908,8 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -922,20 +934,71 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
     Ok(())
 }
 
-// ── message_exists / owner-guarded upsert ───────────────────────────
+// ── client-handle mappings / owner-guarded upsert ───────────────────
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
-async fn test_message_exists_probe(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+async fn test_client_handle_bindings_resolve_scoped_and_cascade(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
 
-    let known = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
-    assert!(repo.message_exists(known).await?);
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let other_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let draft_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let draft_handle = Uuid::parse_str("c11e0001-0000-0000-0000-000000000001")?;
+    let thread_handle = Uuid::parse_str("c11e0002-0000-0000-0000-000000000002")?;
 
-    let unknown = Uuid::parse_str("dd0000ff-0000-0000-0000-0000000000ff")?;
-    assert!(!repo.message_exists(unknown).await?);
+    // A save carrying unbound client handles binds them to the settled rows
+    // inside the insert transaction.
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let mut input = attack_input(draft_id, thread_id);
+    input.subject = "Bound".to_string();
+    input.draft_client_id = Some(draft_handle);
+    input.thread_client_id = Some(thread_handle);
+    assert!(
+        repo.insert_message(&input, &contacts, link, None, true)
+            .await?
+    );
+
+    // Lookups are scoped to the caller's inboxes: the owner resolves, and an
+    // unrelated inbox sees nothing — identical handles never interact.
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &[link])
+            .await?,
+        Some(draft_id)
+    );
+    assert_eq!(
+        repo.thread_id_for_client_thread_id(thread_handle, &[link])
+            .await?,
+        Some(thread_id)
+    );
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &[other_link])
+            .await?,
+        None
+    );
+    assert_eq!(
+        repo.thread_id_for_client_thread_id(thread_handle, &[other_link])
+            .await?,
+        None
+    );
+
+    // Deleting the draft cascades its binding away.
+    repo.delete_draft_message(draft_id, thread_id, &[link])
+        .await?
+        .expect("the draft should be deleted");
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &[link])
+            .await?,
+        None
+    );
 
     Ok(())
 }
@@ -957,6 +1020,8 @@ fn attack_input(db_id: Uuid, thread_db_id: Uuid) -> ResolvedDraftInput {
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     }
 }
 
