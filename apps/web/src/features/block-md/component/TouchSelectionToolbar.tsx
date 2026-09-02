@@ -255,7 +255,7 @@ export function TouchSelectionToolbar(props: {
     const widths = optionWidths();
     if (all.length === 0) return [];
     if (widths.length !== all.length) return [];
- 
+
     const totalBudget = Math.max(120, window.innerWidth - PAGE_MARGIN);
     const totalWidth = widths.reduce(
       (sum, width, index) => sum + width + (index > 0 ? DIVIDER_SPACE : 0),

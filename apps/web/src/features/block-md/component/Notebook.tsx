@@ -194,8 +194,13 @@ export function Notebook(props: {
     observe(notebookRef);
   });
 
+  // Component scope on purpose: the hook registers an onCleanup that ends
+  // its pending wait-for-mark. Called inside the createEffect below, that
+  // cleanup would belong to the effect's computation and run on every
+  // re-run — tying the deep-link scroll's lifetime to re-run ordering.
+  const goToTempRedirect = useGoToTempRedirect();
+
   createEffect(() => {
-    const goToTempRedirect = useGoToTempRedirect();
     const recentState = tempRedirectLocation();
     if (!recentState) return;
 
