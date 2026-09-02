@@ -67,13 +67,13 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
       <div class="@container macro-message-width macro-message-padding w-full">
         <div
           class={cn(
-            'relative macro-thread-collapsed-row p-4 min-w-0 border border-edge-muted rounded-lg bg-message',
+            'relative macro-thread-collapsed-row p-4 min-w-0 rounded-lg bg-message',
             props.isFocused
-              ? 'z-1 outline outline-1 outline-edge-active light-mode:shadow-md light-mode:shadow-drop-shadow'
+              ? 'z-1 border border-transparent outline-none ring-2 ring-accent/40'
               : cn(
-                  'outline-none',
+                  'border border-edge-muted outline-none',
                   props.allowHover &&
-                    'hover:z-1 hover:outline hover:outline-1 hover:outline-edge-active light-mode:hover:shadow-md light-mode:hover:shadow-drop-shadow'
+                    'hover:z-1 light-mode:hover:shadow-md light-mode:hover:shadow-drop-shadow'
                 )
           )}
           style={{
