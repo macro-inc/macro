@@ -23,12 +23,6 @@ pub fn append_path(mut base: Url, path: &str) -> Url {
 }
 
 /// Rebuild the public URL the client requested.
-///
-/// HMAC covers the full URL string, including host. Use the request `Host`
-/// and original path-and-query so a link signed for the legacy hostname
-/// still verifies after the configured service URL moves to the gateway.
-/// `scheme` comes from the configured service URL because TLS terminates
-/// at the ALB and the hop into the task is HTTP.
 pub fn public_request_url(
     scheme: &str,
     host: &str,

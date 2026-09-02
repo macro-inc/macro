@@ -18,10 +18,6 @@ const serverHostLocal: Servers = {
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
 
-// The shared gateway ALB fronts DSS (`/dss`), unfurl (`/unfurl`), and
-// notifications (`/notification`). Unlike the other services it is named
-// with a `dev-` prefix rather than a `-dev` suffix, so it cannot reuse
-// `devServerSuffix`.
 const gatewayHost =
   import.meta.env.MODE === 'development'
     ? 'https://dev-gateway.macro.com'

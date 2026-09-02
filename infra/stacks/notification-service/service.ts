@@ -286,9 +286,7 @@ export class NotificationService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
-        // Register tasks in both the legacy ALB's target group and the gateway
-        // target group while we migrate to the gateway. An explicit
-        // `loadBalancers` replaces the list awsx derives from
+        // An explicit `loadBalancers` replaces the list awsx derives from
         // `portMappings.targetGroup`, so the legacy entry must be listed here
         // too.
         loadBalancers: [

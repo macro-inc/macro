@@ -686,8 +686,6 @@ impl NotificationReader for PresignedTestService {
 
 const HMAC_KEY: &[u8] = b"test-key";
 
-/// Legacy public host used to prove in-flight unsubscribe links still verify
-/// after the configured service URL moves to the gateway.
 const NOTIFICATION_BASE_URL: &str = "https://notifications.macro.com";
 
 fn presigned_router() -> Router {
@@ -711,10 +709,6 @@ fn presigned_router() -> Router {
         .nest("/notification", inner)
 }
 
-/// Build a presigned disable URL path+query for use as a request URI.
-///
-/// Signs the full absolute URL at `origin` and returns only the path+query
-/// portion (e.g. `/user_notifications/preferences/...?id=...&sig=...`).
 fn signed_disable_uri_at(origin: &str, notification_type: &str, user_id: &str) -> String {
     let hmac_key = Hmac::<Sha256>::new_from_slice(HMAC_KEY).unwrap();
     let mut unsigned = crate::domain::models::signing::append_path(
