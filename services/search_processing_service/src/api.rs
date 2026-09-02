@@ -42,8 +42,8 @@ async fn serve(state: ApiContext, shutdown_token: CancellationToken) -> anyhow::
     let health = health::router().layer(cors);
     let app = mount_at_root_and_prefix(traced_api.merge(health))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
-        .merge(SwaggerUi::new("/search-processing/docs").url(
-            "/search-processing/api-doc/openapi.json",
+        .merge(SwaggerUi::new(format!("{GATEWAY_PATH_PREFIX}/docs")).url(
+            format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"),
             swagger::ApiDoc::openapi(),
         ));
 
