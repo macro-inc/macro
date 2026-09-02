@@ -1,4 +1,4 @@
-# macrod configuration. Credentials are stored in a separate state file.
+# macrod configuration. Pairing adds a bearer token here; keep this file private.
 
 [macro]
 api_url = "https://agent-harness.macro.com"

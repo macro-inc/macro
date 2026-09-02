@@ -12,8 +12,7 @@ use reqwest::StatusCode;
 use rootcause::prelude::ResultExt as _;
 use uuid::Uuid;
 
-use crate::config::Config;
-use crate::outbound::credentials::{HarnessCredentials, HarnessScope};
+use crate::config::{Config, HarnessCredentials, HarnessScope};
 
 /// One claim poll's answer.
 #[derive(Debug)]

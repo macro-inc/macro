@@ -37,14 +37,25 @@ impl LaunchSpec {
 /// A supported agent whose complete launch requirements are installed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetectedAgent {
-    /// Stable identifier used by the UI.
-    pub id: &'static str,
+    /// Typed preset identity used by the UI.
+    pub kind: AgentKind,
     /// Human-readable agent name.
     pub name: &'static str,
     /// Launch configuration to persist when selected.
     pub launch: LaunchSpec,
     /// Short explanation for adapter-backed launchers.
     pub note: Option<&'static str>,
+}
+
+/// Agent identity after converting executable discovery into UI state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentKind {
+    Hermes,
+    ClaudeCode,
+    Codex,
+    OpenClaw,
+    OpenCode,
+    Custom,
 }
 
 /// Result of checking one preset against the local machine.
@@ -129,10 +140,10 @@ impl CommandLookup for PathCommands {
     }
 }
 
-/// One known way to expose an installed coding agent over ACP.
+/// One known way to expose an installed agent harness over ACP.
 pub trait AgentPreset: Sync {
-    /// Stable preset identifier.
-    fn id(&self) -> &'static str;
+    /// Typed preset identity.
+    fn kind(&self) -> AgentKind;
     /// Human-readable name.
     fn name(&self) -> &'static str;
     /// Resolve prerequisites and the corresponding launch specification.
@@ -167,7 +178,7 @@ fn direct(
         };
     }
     Availability::Available(DetectedAgent {
-        id: preset.id(),
+        kind: preset.kind(),
         name: preset.name(),
         launch: LaunchSpec::new(command, args),
         note: None,
@@ -188,7 +199,7 @@ fn npm_adapter(
         return Availability::Unavailable { missing };
     }
     Availability::Available(DetectedAgent {
-        id: preset.id(),
+        kind: preset.kind(),
         name: preset.name(),
         launch: LaunchSpec::new("npx", ["-y", package]),
         note: Some("via npm ACP adapter"),
@@ -205,8 +216,8 @@ fn is_launch(harness: &Harness, command: &str, args: &[&str]) -> bool {
 }
 
 impl AgentPreset for Hermes {
-    fn id(&self) -> &'static str {
-        "hermes"
+    fn kind(&self) -> AgentKind {
+        AgentKind::Hermes
     }
 
     fn name(&self) -> &'static str {
@@ -227,8 +238,8 @@ impl AgentPreset for Hermes {
 }
 
 impl AgentPreset for ClaudeCode {
-    fn id(&self) -> &'static str {
-        "claude"
+    fn kind(&self) -> AgentKind {
+        AgentKind::ClaudeCode
     }
 
     fn name(&self) -> &'static str {
@@ -245,8 +256,8 @@ impl AgentPreset for ClaudeCode {
 }
 
 impl AgentPreset for Codex {
-    fn id(&self) -> &'static str {
-        "codex"
+    fn kind(&self) -> AgentKind {
+        AgentKind::Codex
     }
 
     fn name(&self) -> &'static str {
@@ -263,8 +274,8 @@ impl AgentPreset for Codex {
 }
 
 impl AgentPreset for OpenClaw {
-    fn id(&self) -> &'static str {
-        "openclaw"
+    fn kind(&self) -> AgentKind {
+        AgentKind::OpenClaw
     }
 
     fn name(&self) -> &'static str {
@@ -281,8 +292,8 @@ impl AgentPreset for OpenClaw {
 }
 
 impl AgentPreset for OpenCode {
-    fn id(&self) -> &'static str {
-        "opencode"
+    fn kind(&self) -> AgentKind {
+        AgentKind::OpenCode
     }
 
     fn name(&self) -> &'static str {
@@ -315,4 +326,24 @@ pub fn name_for(harness: &Harness) -> Option<&'static str> {
         .iter()
         .find(|preset| preset.recognizes(harness))
         .map(|preset| preset.name())
+}
+
+/// Parse a custom command line into an ACP launch specification.
+pub fn custom(command_line: &str) -> Result<DetectedAgent, String> {
+    let mut parts = shell_words::split(command_line)
+        .map_err(|error| format!("Could not parse the command: {error}"))?
+        .into_iter();
+    let command = parts
+        .next()
+        .filter(|command| !command.is_empty())
+        .ok_or_else(|| "Command must not be empty".to_owned())?;
+    Ok(DetectedAgent {
+        kind: AgentKind::Custom,
+        name: "Custom command",
+        launch: LaunchSpec {
+            command,
+            args: parts.collect(),
+        },
+        note: None,
+    })
 }

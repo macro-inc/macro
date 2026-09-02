@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use rootcause::prelude::ResultExt as _;
 
 use crate::config::Config;
-use crate::outbound::credentials::HarnessCredentials;
+use crate::config::HarnessCredentials;
 
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 

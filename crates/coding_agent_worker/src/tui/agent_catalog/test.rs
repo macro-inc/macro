@@ -27,8 +27,8 @@ fn direct_agents_need_only_their_command() {
     let agents = discover(&Commands::new(&["hermes", "openclaw", "opencode"]));
 
     assert_eq!(
-        agents.iter().map(|agent| agent.id).collect::<Vec<_>>(),
-        ["hermes", "openclaw", "opencode"]
+        agents.iter().map(|agent| agent.kind).collect::<Vec<_>>(),
+        [AgentKind::Hermes, AgentKind::OpenClaw, AgentKind::OpenCode]
     );
     assert_eq!(agents[0].launch, LaunchSpec::new("hermes", ["acp"]));
 }
@@ -47,8 +47,8 @@ fn adapter_agents_require_the_cli_and_npm_tooling() {
 
     let agents = discover(&Commands::new(&["claude", "codex", "npm", "npx"]));
     assert_eq!(
-        agents.iter().map(|agent| agent.id).collect::<Vec<_>>(),
-        ["claude", "codex"]
+        agents.iter().map(|agent| agent.kind).collect::<Vec<_>>(),
+        [AgentKind::ClaudeCode, AgentKind::Codex]
     );
     assert_eq!(agents[0].launch.command, "npx");
     assert_eq!(agents[0].note, Some("via npm ACP adapter"));
@@ -67,4 +67,15 @@ fn existing_launch_specs_are_recognized() {
         args: Vec::new(),
     };
     assert_eq!(name_for(&custom), None);
+}
+
+#[test]
+fn custom_commands_preserve_quoted_arguments() {
+    let agent = custom(r#"my-agent --mode acp --name "Macro Agent""#).expect("custom command");
+
+    assert_eq!(agent.launch.command, "my-agent");
+    assert_eq!(
+        agent.launch.args,
+        ["--mode", "acp", "--name", "Macro Agent"]
+    );
 }

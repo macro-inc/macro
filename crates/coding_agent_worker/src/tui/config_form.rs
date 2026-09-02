@@ -6,7 +6,7 @@ use rootcause::prelude::ResultExt as _;
 use toml_edit::{DocumentMut, Item, value};
 
 use super::agent_catalog::{DetectedAgent, name_for};
-use crate::config::Config;
+use crate::config::{Config, HarnessCredentials, IdentityScope};
 
 #[cfg(test)]
 mod test;
@@ -21,6 +21,12 @@ const DEFAULT_CONFIG: &str = include_str!("../../default.macrod.toml");
 const DEV_API_URL: &str = "https://agent-harness-dev.macro.com";
 const DEV_STORAGE_URL: &str = "https://dev-gateway.macro.com/dss";
 const DEV_WEB_URL: &str = "https://dev.macro.com/app";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Deployment {
+    Production,
+    Development,
+}
 
 /// User-facing settings shown by the Config tab and Quickstart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,19 +83,19 @@ impl ConfigForm {
 
     /// Create a config from embedded defaults, selecting dev when `DEV_MODE` is present.
     pub fn create(path: &Path, agent: &DetectedAgent, workspace: &Path) -> rootcause::Result<()> {
-        Self::create_for_mode(
-            path,
-            agent,
-            workspace,
-            environment::DevMode::new().is_some(),
-        )
+        let deployment = if environment::DevMode::new().is_some() {
+            Deployment::Development
+        } else {
+            Deployment::Production
+        };
+        Self::create_for_deployment(path, agent, workspace, deployment)
     }
 
-    fn create_for_mode(
+    fn create_for_deployment(
         path: &Path,
         agent: &DetectedAgent,
         workspace: &Path,
-        dev_mode: bool,
+        deployment: Deployment,
     ) -> rootcause::Result<()> {
         if !workspace.is_absolute() || !workspace.is_dir() {
             rootcause::bail!("the Quickstart workspace must be an existing absolute directory");
@@ -103,7 +109,7 @@ impl ConfigForm {
         };
         form.apply_agent(agent);
         form.set_string("workspace", "path", &workspace.to_string_lossy());
-        if dev_mode {
+        if deployment == Deployment::Development {
             form.set_string("macro", "api_url", DEV_API_URL);
             form.set_string("macro", "storage_url", DEV_STORAGE_URL);
             form.set_string("macro", "web_url", DEV_WEB_URL);
@@ -180,6 +186,18 @@ impl ConfigForm {
         section["args"] = value(args);
     }
 
+    /// Apply Quickstart values to this document without replacing other settings.
+    pub fn apply_quickstart(
+        &mut self,
+        agent: &DetectedAgent,
+        workspace: &Path,
+        scope: IdentityScope,
+    ) {
+        self.apply_agent(agent);
+        self.set_string("workspace", "path", &workspace.to_string_lossy());
+        self.set_scope(scope);
+    }
+
     /// Toggle between private and team pairing scope.
     pub fn toggle_scope(&mut self, config: &Config) {
         let next = match config.identity.scope {
@@ -189,12 +207,46 @@ impl ConfigForm {
         self.set_string("identity", "scope", next);
     }
 
+    /// Set the requested scope without changing any approved credential scope.
+    pub fn set_scope(&mut self, scope: IdentityScope) {
+        let scope = match scope {
+            IdentityScope::Private => "private",
+            IdentityScope::Team => "team",
+        };
+        self.set_string("identity", "scope", scope);
+    }
+
+    /// Persist the credential minted by pairing in this config document.
+    pub fn persist_credentials(
+        &mut self,
+        credentials: &HarnessCredentials,
+    ) -> rootcause::Result<()> {
+        self.set_string(
+            "credentials",
+            "harness_id",
+            &credentials.harness_id.to_string(),
+        );
+        self.set_string("credentials", "token", &credentials.token);
+        let scope = match credentials.scope {
+            crate::config::HarnessScope::User => "user",
+            crate::config::HarnessScope::Team => "team",
+        };
+        self.set_string("credentials", "scope", scope);
+        self.save()
+    }
+
+    /// Remove the embedded credential while preserving the rest of the file.
+    pub fn clear_credentials(&mut self) -> rootcause::Result<()> {
+        self.doc.remove("credentials");
+        self.save()
+    }
+
     /// Validate the complete document and write it out.
     pub fn save(&self) -> rootcause::Result<()> {
         let rendered = self.doc.to_string();
         toml::from_str::<Config>(&rendered)
             .context("the edited config would not load; the value was rejected before writing")?;
-        std::fs::write(&self.path, rendered)
+        write_sensitive(&self.path, rendered.as_bytes())
             .context(format!("failed to write config at {}", self.path.display()))?;
         Ok(())
     }
@@ -217,4 +269,21 @@ impl ConfigForm {
             table.remove(key);
         }
     }
+}
+
+fn write_sensitive(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+        options.mode(0o600);
+        if path.exists() {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        }
+    }
+    let mut file = options.open(path)?;
+    file.write_all(contents)
 }

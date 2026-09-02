@@ -20,9 +20,8 @@ use tokio_retry::RetryIf;
 use tokio_retry::strategy::{ExponentialBackoff, FixedInterval};
 use tokio_tungstenite::tungstenite;
 
-use crate::config::{Harness, MacroApi};
+use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness;
-use crate::outbound::credentials::HarnessCredentials;
 use crate::outbound::link;
 
 /// A dial races the delivery that asked for it, so it retries quickly and
