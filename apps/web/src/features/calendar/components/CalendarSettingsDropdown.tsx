@@ -9,6 +9,7 @@ import GearIcon from '@phosphor/gear.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Checkbox, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   type CalendarAccount,
   useCalendarAccounts,
@@ -93,14 +94,17 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
   // turn off opens the confirmation, which lives outside the closing menu.
   const runAccountAction = (account: CalendarAccount) => {
     calendarView.closeEventDetails();
-    if (account.action === 'enable') {
-      startAddInbox({ scopes: 'calendar' });
-      return;
-    }
-    setTurnOffTarget({
-      linkId: account.linkId,
-      emailAddress: account.emailAddress,
-    });
+    match(account.action)
+      .with('enable', () => {
+        startAddInbox({ scopes: 'calendar' });
+      })
+      .with('turnOff', () => {
+        setTurnOffTarget({
+          linkId: account.linkId,
+          emailAddress: account.emailAddress,
+        });
+      })
+      .exhaustive();
   };
 
   // A brand-new account needs the mailbox scopes alongside calendar.
