@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent,\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.default_model,\n                a.channel_scope,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.kind = 'owned'\n              AND b.deleted_at IS NULL\n              AND (\n                b.owner_user_id = $1\n                OR b.team_id IN (\n                    SELECT team_id FROM team_user WHERE user_id = $1\n                )\n              )\n            ORDER BY b.created_at ASC, b.id ASC\n            ",
+  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                TRUE AS \"has_agent!\",\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.default_model,\n                a.channel_scope,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.kind = 'owned'\n              AND b.deleted_at IS NULL\n              AND (\n                b.owner_user_id = $1\n                OR b.team_id IN (\n                    SELECT team_id FROM team_user WHERE user_id = $1\n                )\n              )\n            ORDER BY b.created_at ASC, b.id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -65,7 +65,7 @@
       },
       {
         "ordinal": 12,
-        "name": "has_agent",
+        "name": "has_agent!",
         "type_info": "Bool"
       },
       {
@@ -117,7 +117,7 @@
       false,
       false,
       true,
-      false,
+      null,
       false,
       false,
       true,
@@ -126,5 +126,5 @@
       null
     ]
   },
-  "hash": "0057301723d11cedc003eab4fb1355b7352cd9a137f0e8807c802e88f538c7ee"
+  "hash": "b789bdf04a41655328774b2b1fcc0646f97195cef0db6c9dba7ea62f0d69ecb9"
 }

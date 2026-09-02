@@ -57,12 +57,6 @@ pub struct ConfigureBot {
     )]
     #[serde(default)]
     pub avatar_url: Option<String>,
-    /// Optional coding-agent session flag.
-    #[schemars(
-        description = "Set true if mentioning this bot should open a sandboxed coding-agent session. Omit to leave unchanged."
-    )]
-    #[serde(default)]
-    pub has_agent: Option<bool>,
 }
 
 impl ToolAnnotated for ConfigureBot {
@@ -98,7 +92,6 @@ where
                         handle: self.handle.clone(),
                         description: self.description.clone(),
                         avatar_url: self.avatar_url.clone(),
-                        has_agent: self.has_agent,
                     },
                 )
                 .await

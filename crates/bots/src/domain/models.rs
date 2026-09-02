@@ -148,7 +148,10 @@ pub struct Bot {
     pub updated_at: DateTime<Utc>,
     /// Soft-delete timestamp.
     pub deleted_at: Option<DateTime<Utc>>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session.
+    /// Whether mentioning this bot opens an agent session.
+    ///
+    /// Derived: owned bots are agents when they have an `agent_configs` row;
+    /// first-party bots use [`bot_id::SystemBot::has_agent`].
     pub has_agent: bool,
 }
 
@@ -367,8 +370,6 @@ pub struct CreateBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
-    pub has_agent: Option<bool>,
 }
 
 /// Request to patch a bot.
@@ -383,8 +384,6 @@ pub struct PatchBotRequest {
     pub description: Option<String>,
     /// Optional avatar URL.
     pub avatar_url: Option<String>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Omit to leave unchanged.
-    pub has_agent: Option<bool>,
 }
 
 /// Request to create a bot token.
@@ -423,8 +422,6 @@ pub struct CreateChannelScopedBotRequest {
     pub token_label: Option<String>,
     /// Optional token expiration timestamp.
     pub token_expires_at: Option<DateTime<Utc>>,
-    /// Whether mentioning this bot opens a sandboxed coding-agent session. Defaults to false.
-    pub has_agent: Option<bool>,
 }
 
 /// Response containing a newly minted token.

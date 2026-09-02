@@ -455,7 +455,6 @@ impl HarnessRepo for PgHarnessRepo {
             JOIN bots b ON b.id = ac.bot_id
             WHERE ac.harness_id = $1
               AND b.deleted_at IS NULL
-              AND b.has_agent
             ORDER BY b.created_at
             "#,
             harness_id.as_uuid(),

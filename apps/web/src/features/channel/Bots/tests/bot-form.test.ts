@@ -13,7 +13,6 @@ describe('bot form', () => {
       handle: ' release-bot ',
       description: '  Posts releases  ',
       avatarUrl: '  https://example.com/avatar.png  ',
-      hasAgent: true,
     });
 
     expect(result).toEqual({
@@ -23,7 +22,6 @@ describe('bot form', () => {
         handle: 'release-bot',
         description: 'Posts releases',
         avatarUrl: 'https://example.com/avatar.png',
-        hasAgent: true,
       },
     });
   });
@@ -34,7 +32,6 @@ describe('bot form', () => {
       handle: 'Invalid Handle',
       description: '',
       avatarUrl: '',
-      hasAgent: false,
     });
 
     expect(result.success).toBe(false);

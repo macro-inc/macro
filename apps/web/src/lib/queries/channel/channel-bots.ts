@@ -25,7 +25,6 @@ type SyncBotChannelsParams = {
 
 type CreateChannelScopedBotParams = CreateChannelScopedBotRequest & {
   channelId: string;
-  has_agent?: boolean;
 };
 
 export function useChannelBotsQuery(channelId: () => string) {

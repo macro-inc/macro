@@ -172,8 +172,8 @@ where
     /// Whether `posted` may address `bot_id` under the bot's current scope.
     ///
     /// System agents are global. Persisted all-channel agents are private to
-    /// their owner or shared with their owning team. Selected agents and
-    /// legacy agent-backed bots use explicit channel participation.
+    /// their owner or shared with their owning team. Selected agents use
+    /// explicit channel participation.
     async fn agent_is_available(
         &self,
         posted: &ChannelMessagePostedMetadata,

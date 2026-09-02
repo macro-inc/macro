@@ -14,7 +14,6 @@ import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
 import { Button } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { BotAgentSection } from './BotAgentSection';
 import { BotAvatar } from './BotAvatar';
 import { BotDeleteDialog } from './BotDeleteDialog';
 import { BotDetailActions } from './BotDetailActions';
@@ -98,8 +97,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
       form.name === original.name &&
       form.handle === original.handle &&
       form.description === original.description &&
-      form.avatarUrl === original.avatarUrl &&
-      form.hasAgent === original.hasAgent;
+      form.avatarUrl === original.avatarUrl;
     return (
       !sameForm || !sameChannelSelection(initialChannelIds(), channelIds())
     );
@@ -140,7 +138,6 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
         handle: parsed.data.handle,
         description: parsed.data.description ?? '',
         avatarUrl: parsed.data.avatarUrl ?? '',
-        hasAgent: parsed.data.hasAgent,
       });
       const channelResult = await syncChannelsMutation.mutateAsync({
         botId: props.botId,
@@ -268,12 +265,6 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                     }
                   />
                 </BotFormSection>
-
-                <BotAgentSection
-                  checked={form.hasAgent}
-                  disabled={saving()}
-                  onChange={(checked) => setForm('hasAgent', checked)}
-                />
 
                 <BotFormSection
                   title="Channels"

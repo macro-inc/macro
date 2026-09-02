@@ -332,8 +332,8 @@ async fn bound_agents_lists_only_live_agents_of_this_harness(pool: PgPool) {
     let bot_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
-        VALUES ($1, 'owned', $2, 'Bound agent', $3, true)
+        INSERT INTO bots (id, kind, owner_user_id, name, handle)
+        VALUES ($1, 'owned', $2, 'Bound agent', $3)
         "#,
         bot_id,
         OWNER_ID,
@@ -358,8 +358,8 @@ async fn bound_agents_lists_only_live_agents_of_this_harness(pool: PgPool) {
     let other_bot = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
-        VALUES ($1, 'owned', $2, 'Unbound agent', $3, true)
+        INSERT INTO bots (id, kind, owner_user_id, name, handle)
+        VALUES ($1, 'owned', $2, 'Unbound agent', $3)
         "#,
         other_bot,
         OWNER_ID,
@@ -409,8 +409,8 @@ async fn sessions_list_only_this_harness_newest_first(pool: PgPool) {
     let bot_id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
-        VALUES ($1, 'owned', $2, 'Bound agent', $3, true)
+        INSERT INTO bots (id, kind, owner_user_id, name, handle)
+        VALUES ($1, 'owned', $2, 'Bound agent', $3)
         "#,
         bot_id,
         OWNER_ID,
@@ -459,8 +459,8 @@ async fn sessions_list_only_this_harness_newest_first(pool: PgPool) {
     let other_bot = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO bots (id, kind, owner_user_id, name, handle, has_agent)
-        VALUES ($1, 'owned', $2, 'Other agent', $3, true)
+        INSERT INTO bots (id, kind, owner_user_id, name, handle)
+        VALUES ($1, 'owned', $2, 'Other agent', $3)
         "#,
         other_bot,
         OWNER_ID,

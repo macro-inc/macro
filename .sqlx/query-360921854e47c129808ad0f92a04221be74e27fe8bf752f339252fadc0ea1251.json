@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO bots (\n                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,\n                created_by, has_agent\n            )\n            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, true)\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            ",
+  "query": "\n            SELECT\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                EXISTS (SELECT 1 FROM agent_configs ac WHERE ac.bot_id = id) AS \"has_agent!\"\n            FROM bots\n            WHERE id = $1\n              AND deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -65,20 +65,13 @@
       },
       {
         "ordinal": 12,
-        "name": "has_agent",
+        "name": "has_agent!",
         "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -94,8 +87,8 @@
       false,
       false,
       true,
-      false
+      null
     ]
   },
-  "hash": "bc6d0e554098cd09c94063bd6d85f90ced539d0c65f2ebf3b4a252aaa76d5493"
+  "hash": "360921854e47c129808ad0f92a04221be74e27fe8bf752f339252fadc0ea1251"
 }

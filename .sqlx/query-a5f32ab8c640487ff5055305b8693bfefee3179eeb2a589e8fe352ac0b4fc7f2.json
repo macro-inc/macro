@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent,\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.default_model,\n                a.channel_scope,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.id = $1\n              AND b.kind = 'owned'\n              AND b.deleted_at IS NULL\n            ",
+  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                TRUE AS \"has_agent!\",\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.default_model,\n                a.channel_scope,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.id = $1\n              AND b.kind = 'owned'\n              AND b.deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -65,7 +65,7 @@
       },
       {
         "ordinal": 12,
-        "name": "has_agent",
+        "name": "has_agent!",
         "type_info": "Bool"
       },
       {
@@ -117,7 +117,7 @@
       false,
       false,
       true,
-      false,
+      null,
       false,
       false,
       true,
@@ -126,5 +126,5 @@
       null
     ]
   },
-  "hash": "39d74321afaaed143e3462074610e033ce0c07edbb1744bf012fc6ca9534b209"
+  "hash": "a5f32ab8c640487ff5055305b8693bfefee3179eeb2a589e8fe352ac0b4fc7f2"
 }

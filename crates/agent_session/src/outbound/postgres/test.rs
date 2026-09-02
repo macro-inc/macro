@@ -69,7 +69,6 @@ async fn create_test_bot(pool: &PgPool) -> BotId {
                 handle: format!("test-agent-{}", macro_uuid::generate_uuid_v7()),
                 description: None,
                 avatar_url: None,
-                has_agent: None,
             },
         )
         .await

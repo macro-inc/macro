@@ -78,12 +78,6 @@ pub struct CreateBot {
     )]
     #[serde(default)]
     pub credential_expires_at: Option<DateTime<Utc>>,
-    /// Optional coding-agent session flag.
-    #[schemars(
-        description = "Set true if mentioning this bot should open a sandboxed coding-agent session. Defaults to false."
-    )]
-    #[serde(default)]
-    pub has_agent: Option<bool>,
 }
 
 impl ToolAnnotated for CreateBot {
@@ -146,7 +140,6 @@ impl CreateBot {
                     handle: self.handle.clone(),
                     description: self.description.clone(),
                     avatar_url: self.avatar_url.clone(),
-                    has_agent: self.has_agent,
                 },
             )
             .await
@@ -185,7 +178,6 @@ impl CreateBot {
                     handle: self.handle.clone(),
                     description: self.description.clone(),
                     avatar_url: self.avatar_url.clone(),
-                    has_agent: self.has_agent,
                 },
             )
             .await

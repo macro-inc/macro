@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            FROM bots\n            WHERE kind = 'owned'\n              AND deleted_at IS NULL\n              AND (\n                owner_user_id = $1\n                OR team_id IN (\n                    SELECT team_id FROM team_user WHERE user_id = $1\n                )\n              )\n            ORDER BY created_at ASC, id ASC\n            ",
+  "query": "\n            SELECT\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                EXISTS (SELECT 1 FROM agent_configs ac WHERE ac.bot_id = id) AS \"has_agent!\"\n            FROM bots\n            WHERE kind = 'owned'\n              AND deleted_at IS NULL\n              AND (\n                owner_user_id = $1\n                OR team_id IN (\n                    SELECT team_id FROM team_user WHERE user_id = $1\n                )\n              )\n            ORDER BY created_at ASC, id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -65,7 +65,7 @@
       },
       {
         "ordinal": 12,
-        "name": "has_agent",
+        "name": "has_agent!",
         "type_info": "Bool"
       }
     ],
@@ -87,8 +87,8 @@
       false,
       false,
       true,
-      false
+      null
     ]
   },
-  "hash": "35a1bfd7631ce44c23b91df23b1e9d753745efc83a94a5a0b5f771d91e07b4f2"
+  "hash": "8b138dfbcb8c0d02d8012fb32c545407387f81259894709a7fe2ca81996da9d9"
 }

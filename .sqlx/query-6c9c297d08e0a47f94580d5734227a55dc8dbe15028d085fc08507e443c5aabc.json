@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE bots\n            SET owner_user_id = $2,\n                team_id = $3,\n                name = $4,\n                handle = $5,\n                description = $6,\n                avatar_url = $7,\n                updated_at = now()\n            WHERE id = $1\n              AND deleted_at IS NULL\n              AND EXISTS (SELECT 1 FROM agent_configs WHERE bot_id = $1)\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            ",
+  "query": "\n            INSERT INTO bots (\n                id, kind, owner_user_id, team_id, name, handle, description, avatar_url,\n                created_by\n            )\n            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                FALSE AS \"has_agent!\"\n            ",
   "describe": {
     "columns": [
       {
@@ -65,7 +65,7 @@
       },
       {
         "ordinal": 12,
-        "name": "has_agent",
+        "name": "has_agent!",
         "type_info": "Bool"
       }
     ],
@@ -74,6 +74,7 @@
         "Uuid",
         "Text",
         "Uuid",
+        "Text",
         "Text",
         "Text",
         "Text",
@@ -93,8 +94,8 @@
       false,
       false,
       true,
-      false
+      null
     ]
   },
-  "hash": "afb7e1ae4a7f9978085299a9473a9f8ddf77e2177d937fe6d18dd4ae0e3a1b6d"
+  "hash": "6c9c297d08e0a47f94580d5734227a55dc8dbe15028d085fc08507e443c5aabc"
 }

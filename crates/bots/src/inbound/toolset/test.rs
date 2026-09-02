@@ -448,7 +448,6 @@ async fn create_bot_without_channel_does_not_mint_a_credential() {
         channel_id: None,
         credential_label: None,
         credential_expires_at: None,
-        has_agent: None,
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
@@ -477,7 +476,6 @@ async fn create_bot_rejects_credential_fields_without_channel() {
         channel_id: None,
         credential_label: Some("github-webhook".to_string()),
         credential_expires_at: None,
-        has_agent: None,
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
@@ -506,7 +504,6 @@ async fn create_bot_for_channel_returns_webhook_and_credential_proposal() {
         channel_id: Some(channel_id),
         credential_label: Some("github-webhook".to_string()),
         credential_expires_at: None,
-        has_agent: None,
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
@@ -567,7 +564,6 @@ async fn create_bot_for_channel_requires_membership() {
         channel_id: Some(Uuid::new_v4()),
         credential_label: None,
         credential_expires_at: None,
-        has_agent: None,
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
@@ -599,7 +595,6 @@ async fn create_bot_for_channel_deletes_bot_when_grant_fails() {
         channel_id: Some(Uuid::new_v4()),
         credential_label: None,
         credential_expires_at: None,
-        has_agent: None,
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await

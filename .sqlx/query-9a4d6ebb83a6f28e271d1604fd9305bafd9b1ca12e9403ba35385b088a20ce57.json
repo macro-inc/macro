@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                has_agent\n            FROM bots\n            WHERE id = $1\n              AND deleted_at IS NULL\n            ",
+  "query": "\n            UPDATE bots\n            SET owner_user_id = $2,\n                team_id = $3,\n                name = $4,\n                handle = $5,\n                description = $6,\n                avatar_url = $7,\n                updated_at = now()\n            WHERE id = $1\n              AND deleted_at IS NULL\n              AND EXISTS (SELECT 1 FROM agent_configs WHERE bot_id = $1)\n            RETURNING\n                id,\n                kind,\n                owner_user_id,\n                team_id,\n                name,\n                handle,\n                description,\n                avatar_url,\n                created_by,\n                created_at,\n                updated_at,\n                deleted_at,\n                TRUE AS \"has_agent!\"\n            ",
   "describe": {
     "columns": [
       {
@@ -65,13 +65,19 @@
       },
       {
         "ordinal": 12,
-        "name": "has_agent",
+        "name": "has_agent!",
         "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -87,8 +93,8 @@
       false,
       false,
       true,
-      false
+      null
     ]
   },
-  "hash": "dcde973d20403f9e973627c68601e7c4f05d271c0864a04f7c7a4508a379b927"
+  "hash": "9a4d6ebb83a6f28e271d1604fd9305bafd9b1ca12e9403ba35385b088a20ce57"
 }

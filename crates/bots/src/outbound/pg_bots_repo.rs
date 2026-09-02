@@ -246,6 +246,13 @@ fn map_bot_row(row: BotRow) -> anyhow::Result<Bot> {
     row.try_into()
 }
 
+/// `create_agent` inserts the bot row before `agent_configs`, so the
+/// RETURNING `EXISTS` would be false. The config row is the agent.
+fn agent_bot(mut bot: Bot) -> Bot {
+    bot.has_agent = true;
+    bot
+}
+
 fn map_bot_channel_row(row: BotChannelRow) -> anyhow::Result<BotChannel> {
     row.try_into()
 }
@@ -276,9 +283,9 @@ impl BotRepo for PgBotsRepo {
             r#"
             INSERT INTO bots (
                 id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
-                created_by, has_agent
+                created_by
             )
-            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, true)
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
             RETURNING
                 id,
                 kind,
@@ -292,7 +299,7 @@ impl BotRepo for PgBotsRepo {
                 created_at,
                 updated_at,
                 deleted_at,
-                has_agent
+                FALSE AS "has_agent!"
             "#,
             bot_id.as_uuid(),
             owner_user_id,
@@ -346,7 +353,7 @@ impl BotRepo for PgBotsRepo {
             .context("failed to commit agent creation transaction")?;
 
         Ok(Agent {
-            bot: map_bot_row(bot_row)?,
+            bot: agent_bot(map_bot_row(bot_row)?),
             instructions: req.instructions,
             harness: req.harness,
             harness_id: req.harness_id,
@@ -396,7 +403,7 @@ impl BotRepo for PgBotsRepo {
                 created_at,
                 updated_at,
                 deleted_at,
-                has_agent
+                TRUE AS "has_agent!"
             "#,
             bot_id.as_uuid(),
             owner_user_id,
@@ -504,7 +511,7 @@ impl BotRepo for PgBotsRepo {
                 b.created_at,
                 b.updated_at,
                 b.deleted_at,
-                b.has_agent,
+                TRUE AS "has_agent!",
                 a.instructions,
                 a.harness,
                 a.harness_id,
@@ -572,9 +579,9 @@ impl BotRepo for PgBotsRepo {
             r#"
             INSERT INTO bots (
                 id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
-                created_by, has_agent
+                created_by
             )
-            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
             RETURNING
                 id,
                 kind,
@@ -588,7 +595,7 @@ impl BotRepo for PgBotsRepo {
                 created_at,
                 updated_at,
                 deleted_at,
-                has_agent
+                FALSE AS "has_agent!"
             "#,
             bot_id.as_uuid(),
             owner_user_id,
@@ -598,7 +605,6 @@ impl BotRepo for PgBotsRepo {
             req.description,
             req.avatar_url,
             created_by.as_ref(),
-            req.has_agent,
         )
         .fetch_one(&self.pool)
         .await
@@ -629,9 +635,9 @@ impl BotRepo for PgBotsRepo {
             r#"
             INSERT INTO bots (
                 id, kind, owner_user_id, team_id, name, handle, description, avatar_url,
-                created_by, has_agent
+                created_by
             )
-            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8, COALESCE($9, false))
+            VALUES ($1, 'owned', $2, $3, $4, $5, $6, $7, $8)
             RETURNING
                 id,
                 kind,
@@ -645,7 +651,7 @@ impl BotRepo for PgBotsRepo {
                 created_at,
                 updated_at,
                 deleted_at,
-                has_agent
+                FALSE AS "has_agent!"
             "#,
             bot_id.as_uuid(),
             owner_user_id,
@@ -655,7 +661,6 @@ impl BotRepo for PgBotsRepo {
             req.description,
             req.avatar_url,
             created_by.as_ref(),
-            req.has_agent,
         )
         .fetch_one(&mut *tx)
         .await
@@ -722,7 +727,7 @@ impl BotRepo for PgBotsRepo {
                 created_at,
                 updated_at,
                 deleted_at,
-                has_agent
+                EXISTS (SELECT 1 FROM agent_configs ac WHERE ac.bot_id = id) AS "has_agent!"
             FROM bots
             WHERE kind = 'owned'
               AND deleted_at IS NULL
@@ -764,7 +769,7 @@ impl BotRepo for PgBotsRepo {
                 created_at,
                 updated_at,
                 deleted_at,
-                has_agent
+                EXISTS (SELECT 1 FROM agent_configs ac WHERE ac.bot_id = id) AS "has_agent!"
             FROM bots
             WHERE id = $1
               AND deleted_at IS NULL
@@ -794,7 +799,7 @@ impl BotRepo for PgBotsRepo {
                 b.created_at,
                 b.updated_at,
                 b.deleted_at,
-                b.has_agent,
+                TRUE AS "has_agent!",
                 a.instructions,
                 a.harness,
                 a.harness_id,
@@ -955,7 +960,6 @@ impl BotRepo for PgBotsRepo {
                 handle = COALESCE($3, handle),
                 description = COALESCE($4, description),
                 avatar_url = COALESCE($5, avatar_url),
-                has_agent = COALESCE($6, has_agent),
                 updated_at = now()
             WHERE id = $1
               AND deleted_at IS NULL
@@ -972,14 +976,13 @@ impl BotRepo for PgBotsRepo {
                 created_at,
                 updated_at,
                 deleted_at,
-                has_agent
+                EXISTS (SELECT 1 FROM agent_configs ac WHERE ac.bot_id = id) AS "has_agent!"
             "#,
             bot_id.as_uuid(),
             req.name,
             req.handle,
             req.description,
             req.avatar_url,
-            req.has_agent,
         )
         .fetch_optional(&self.pool)
         .await
@@ -1102,7 +1105,7 @@ impl BotRepo for PgBotsRepo {
                 b.created_at,
                 b.updated_at,
                 b.deleted_at,
-                b.has_agent
+                EXISTS (SELECT 1 FROM agent_configs ac WHERE ac.bot_id = b.id) AS "has_agent!"
             FROM bots b
             JOIN comms_channel_participants cp
               ON cp.user_id = ('bot|' || b.id::text)

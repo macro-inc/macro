@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent\n            FROM bots b\n            JOIN comms_channel_participants cp\n              ON cp.user_id = ('bot|' || b.id::text)\n            WHERE cp.channel_id = $1\n              AND cp.left_at IS NULL\n              AND b.deleted_at IS NULL\n            ORDER BY b.created_at ASC, b.id ASC\n            ",
+  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                EXISTS (SELECT 1 FROM agent_configs ac WHERE ac.bot_id = b.id) AS \"has_agent!\"\n            FROM bots b\n            JOIN comms_channel_participants cp\n              ON cp.user_id = ('bot|' || b.id::text)\n            WHERE cp.channel_id = $1\n              AND cp.left_at IS NULL\n              AND b.deleted_at IS NULL\n            ORDER BY b.created_at ASC, b.id ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -65,7 +65,7 @@
       },
       {
         "ordinal": 12,
-        "name": "has_agent",
+        "name": "has_agent!",
         "type_info": "Bool"
       }
     ],
@@ -87,8 +87,8 @@
       false,
       false,
       true,
-      false
+      null
     ]
   },
-  "hash": "0a781080885d4b6d57dbbfcc296d56f5dcdc4603277f3c9f2fdf9b359f349a84"
+  "hash": "f91ca753a32a4cd9de3b2d7084bcf2578daa7596c50f9d8c9f41dbd0cf98516b"
 }
