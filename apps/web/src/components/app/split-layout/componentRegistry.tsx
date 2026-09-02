@@ -39,6 +39,7 @@ import {
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
@@ -48,8 +49,10 @@ import {
   createRenderEffect,
   type JSXElement,
   lazy,
+  Match,
   onMount,
   Show,
+  Switch,
 } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
@@ -455,8 +458,7 @@ function LegacyChannelsView() {
   );
 }
 
-function RegisteredChannelsView() {
-  usePageViewTracking('channels');
+function FeatureGatedChannelsView() {
   const newAppViews = useNewAppViews();
 
   return (
@@ -465,6 +467,21 @@ function RegisteredChannelsView() {
         <ChannelsView />
       </Show>
     </Show>
+  );
+}
+
+function RegisteredChannelsView() {
+  usePageViewTracking('channels');
+
+  return (
+    <Switch>
+      <Match when={isTouchDevice()}>
+        <LegacyChannelsView />
+      </Match>
+      <Match when={!isTouchDevice()}>
+        <FeatureGatedChannelsView />
+      </Match>
+    </Switch>
   );
 }
 
