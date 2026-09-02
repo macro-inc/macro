@@ -19,6 +19,7 @@ import {
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
+import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { tryMacroId, useDisplayName } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import { compareDateDesc, type DateValue } from '@core/util/date';
@@ -34,7 +35,13 @@ import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Scroll, Tooltip } from '@ui';
-import { createMemo, createUniqueId, type JSX, Show } from 'solid-js';
+import {
+  createMemo,
+  createUniqueId,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { useChannelsView } from '../channels-view-context';
 import type { ChannelsGroup, ChannelsTab } from '../types';
 
@@ -58,6 +65,7 @@ const CHANNEL_TABS = [
   },
 ];
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
+const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
 
 type ChannelRailRow =
   | {
@@ -631,6 +639,52 @@ export function ChannelsRail(props: {
       },
     })
   );
+
+  const jumpToSection = (offset: 1 | -1) => {
+    const currentGroup = list.focus.item()?.group;
+    const currentIndex = currentGroup
+      ? CHANNEL_GROUPS.indexOf(currentGroup)
+      : -1;
+    const origin = currentIndex === -1 ? (offset === 1 ? -1 : 0) : currentIndex;
+
+    const nextIndex =
+      (origin + offset + CHANNEL_GROUPS.length) % CHANNEL_GROUPS.length;
+    const nextGroup = CHANNEL_GROUPS[nextIndex];
+    if (!nextGroup) return false;
+
+    const result = list.focus.set(rowKeyForSection(nextGroup), {
+      reason: 'keyboard',
+    });
+    if (!result) return false;
+
+    listRoot?.focus({ preventScroll: true });
+    scrollHandle.scrollToIndex(result.index);
+    return true;
+  };
+
+  withSplitPanelOwner(listOwnedSlotName('section-hotkeys'), () => {
+    const group = createHotkeyGroup();
+    const enabled = () => panel.isPanelActive() && state.tab === 'browse';
+
+    registerHotkey({
+      hotkey: ']',
+      scopeId: panel.splitHotkeyScope,
+      description: 'Next channel section',
+      condition: enabled,
+      keyDownHandler: () => jumpToSection(1),
+    }).withGroup(group);
+
+    registerHotkey({
+      hotkey: '[',
+      scopeId: panel.splitHotkeyScope,
+      description: 'Previous channel section',
+      condition: enabled,
+      keyDownHandler: () => jumpToSection(-1),
+    }).withGroup(group);
+
+    onCleanup(() => group.dispose());
+    return group;
+  });
 
   const mentionsCurrentUser = (channel: ChannelEntity) => {
     const userId = currentUserId()?.toLocaleLowerCase();
