@@ -34,7 +34,6 @@ function SectionScrollArea(props: {
 
 function CollapsibleSectionRoot(props: {
   open: boolean;
-  constrained: boolean;
   class?: string;
   children: JSX.Element;
 }) {
@@ -44,8 +43,7 @@ function CollapsibleSectionRoot(props: {
         'flex min-h-0 flex-col gap-1',
         props.open && 'shrink',
         !props.open && 'shrink-0',
-        props.open && props.constrained && 'max-h-[calc(50%_-_0.375rem)]',
-        props.open && !props.constrained && 'max-h-full',
+        props.open && 'max-h-[calc(50%_-_0.375rem)]',
         props.class
       )}
     >

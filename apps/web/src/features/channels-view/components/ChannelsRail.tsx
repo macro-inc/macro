@@ -406,13 +406,7 @@ export function ChannelsRail(props: {
             <Switch>
               <Match when={state.tab === 'browse'}>
                 <div class="flex h-full min-h-0 flex-col gap-3 px-4">
-                  <CollapsibleSection.Root
-                    open={state.expandedGroups.channels}
-                    constrained={
-                      state.expandedGroups.channels &&
-                      state.expandedGroups.direct_messages
-                    }
-                  >
+                  <CollapsibleSection.Root open={state.expandedGroups.channels}>
                     <CollapsibleSection.Header
                       focused={
                         list.focus.key() === rowKeyForSection('channels')
@@ -489,10 +483,6 @@ export function ChannelsRail(props: {
 
                   <CollapsibleSection.Root
                     open={state.expandedGroups.direct_messages}
-                    constrained={
-                      state.expandedGroups.channels &&
-                      state.expandedGroups.direct_messages
-                    }
                   >
                     <CollapsibleSection.Header
                       focused={
@@ -651,10 +641,6 @@ export function ChannelsRail(props: {
                 <div class="flex h-full min-h-0 flex-col gap-3 px-2">
                   <CollapsibleSection.Root
                     open={state.expandedGroups.channels}
-                    constrained={
-                      state.expandedGroups.channels &&
-                      state.expandedGroups.direct_messages
-                    }
                     class="items-center"
                   >
                     <CollapsibleSection.Header
@@ -728,10 +714,6 @@ export function ChannelsRail(props: {
 
                   <CollapsibleSection.Root
                     open={state.expandedGroups.direct_messages}
-                    constrained={
-                      state.expandedGroups.channels &&
-                      state.expandedGroups.direct_messages
-                    }
                     class="items-center"
                   >
                     <CollapsibleSection.Header
