@@ -17,30 +17,33 @@ import EnvelopeFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@phosphor-fill/folder-simple-fill.svg';
 import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
 import SparkleFillIcon from '@phosphor-fill/sparkle-fill.svg';
+import type { NavIcon } from './nav-glyph';
 
 /**
- * A SidebarNext nav row's definition: a `SidebarItem` plus the filled icon the
- * row cross-fades to while its view is active.
+ * A SidebarRail nav button's definition: a `SidebarItem` plus the filled icon
+ * the button cross-fades to while its view is active. Both are required here,
+ * unlike `SidebarItem['icon']` — a rail button is nothing but its glyph.
  */
 export type SidebarNextNavItem = SidebarItem & {
-  /** Phosphor `fill` weight of `icon`, shown while the row is active. */
-  iconActive: SidebarItem['icon'];
+  icon: NavIcon;
+  /** Phosphor `fill` weight of `icon`, shown while the view is active. */
+  iconActive: NavIcon;
 };
 
 /**
- * SidebarNext's nav rows, in render order.
+ * SidebarRail's nav buttons, in render order.
  *
  * Phosphor icons rather than the animated `wide-*` set the old sidebar uses:
- * they are plain `fill="currentColor"` SVGs, so the active row's `text-accent`
- * colours the glyph along with the label.
+ * they are plain `fill="currentColor"` SVGs, so the active button's
+ * `text-accent` colours the glyph.
  *
  * The labels are new but every destination is an existing view id, so the
  * `hotkeyToken`s are the ones `GoToHotkeys` already registers — `g i` still
  * reaches Activity, `g f` still reaches Drive. `GoToHotkeys` is mounted from
  * `Layout` off `buildSidebarLinks` and is independent of which sidebar renders,
- * so the shortcuts work unchanged; these tokens only drive the hover hints.
+ * so the shortcuts work unchanged; these tokens only label the tooltips.
  */
-export const SIDEBAR_NEXT_NAV_ITEMS = [
+const SIDEBAR_NEXT_NAV_ITEMS = [
   {
     id: 'inbox',
     label: 'Activity',
@@ -122,7 +125,7 @@ export type NavItemGates = {
 };
 
 /**
- * The nav rows on offer right now.
+ * The nav buttons on offer right now.
  *
  * Gates are passed in rather than read here: both are PostHog-backed, and the
  * imperative `ENABLE_CRM()` / `ENABLE_CALENDAR_UI()` readers call

@@ -41,8 +41,6 @@ import {
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
-import { SIDEBAR_NEXT_LAYOUT } from '@components/app/sidebar-next/layout-mode';
-import { SidebarNext } from '@components/app/sidebar-next/sidebar-next';
 import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
 import { useSidebarNextFlag } from '@components/app/sidebar-next/use-sidebar-next-flag';
 import {
@@ -355,8 +353,8 @@ function LayoutInner(props: RouteSectionProps) {
   const callCtx = useCallContextOptional();
   const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
   const sidebarNextEnabled = useSidebarNextFlag();
-  // SidebarNext is expanded-only: no slim rail, so nothing should arm the
-  // hover-peek overlay strip or the slim-mode call widget under it.
+  // SidebarRail is already narrow and has no slim mode, so nothing should arm
+  // the hover-peek overlay strip or the slim-mode call widget under it.
   const sidebarCollapsed = createMemo(
     () =>
       !sidebarNextEnabled() && isSidebarVisible() && sidebarState() === 'slim'
@@ -517,25 +515,13 @@ function LayoutInner(props: RouteSectionProps) {
                 />
               }
             >
-              <Show
-                when={SIDEBAR_NEXT_LAYOUT === 'rail'}
-                fallback={
-                  <SidebarNext
-                    sidebarState={sidebarState()}
-                    onOpenChange={(open) =>
-                      // No slim rail here, so `cmd+.` hides it outright.
-                      setSidebarState(open ? 'expanded' : 'hidden')
-                    }
-                  />
+              <SidebarRail
+                sidebarState={sidebarState()}
+                onOpenChange={(open) =>
+                  // The rail has no slim mode, so `cmd+.` hides it outright.
+                  setSidebarState(open ? 'expanded' : 'hidden')
                 }
-              >
-                <SidebarRail
-                  sidebarState={sidebarState()}
-                  onOpenChange={(open) =>
-                    setSidebarState(open ? 'expanded' : 'hidden')
-                  }
-                />
-              </Show>
+              />
             </Show>
           </Show>
           <Show when={sidebarCollapsed()}>

@@ -2,41 +2,34 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   navigateToSidebarView,
-  type SidebarItem,
   SidebarOpenInSplitMenu,
   sidebarContent,
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useLocation } from '@solidjs/router';
-import { Hotkey } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { Button, cn } from '@ui';
+import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
-import { SidebarItemNext } from './sidebar-item-next';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
-  /**
-   * `'rail'` drops the label and the hotkey hint — there is no room for either
-   * in a 36px square — and moves the label into a tooltip.
-   */
-  variant?: 'nav' | 'rail';
-  /** Suppresses the hover hotkey hint while the `g` leader overlay is up. */
-  hotkeyVisible?: boolean;
   onContextMenuOpenChange?: (open: boolean) => void;
 };
 
 /**
- * A SidebarNext nav row: all of the behaviour (active detection, navigation,
- * shift-click into a new split, the open-in-split context menu), none of the
- * styling — that lives in {@link SidebarItemNext}.
+ * A SidebarRail nav button: an icon-only `@ui` Button, plus the behaviour
+ * behind it — active detection, navigation, shift-click into a new split, the
+ * open-in-split context menu.
+ *
+ * There is no room for a label or a `g`-leader hint in a 36px square, so both
+ * live in the tooltip instead.
  *
  * Named for the shape it grows into: each nav is expected to expand into a list
  * of its own live items (Email accounts, Chat channels, Drive files). The slot
  * for that is deliberately absent until there is a data source to fill it.
  */
 export const ListNav = (props: ListNavProps) => {
-  const [hovering, setHovering] = createSignal(false);
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const location = useLocation();
@@ -87,64 +80,55 @@ export const ListNav = (props: ListNavProps) => {
     globalSplitManager()?.returnFocus();
   };
 
-  const isRail = () => props.variant === 'rail';
-  const showHotkeyHint = () => !isRail() && hovering() && !props.hotkeyVisible;
-
   return (
     <SidebarOpenInSplitMenu
       content={content}
       onOpenChange={props.onContextMenuOpenChange}
-      // The trigger defaults to `w-full h-7`, which clips both shapes.
-      triggerClass={isRail() ? 'size-9' : 'h-9'}
+      // The trigger defaults to `w-full h-7`, which clips the square button.
+      triggerClass="size-9"
     >
-      <SidebarItemNext
-        variant={isRail() ? 'rail' : 'nav'}
-        tooltip={isRail() ? `Go to ${props.item.label}` : undefined}
+      <Button
+        variant="ghost"
+        size="icon-md"
+        class="cursor-default rounded-xl"
+        label={props.item.label}
+        tooltip={`Go to ${props.item.label}`}
         tooltipPlacement="right"
         hotkey={[TOKENS.sidebar.goToLeader, props.item.hotkeyToken]}
-        label={props.item.label}
-        icon={props.item.icon}
-        iconActive={props.item.iconActive}
-        active={isActive()}
+        draggable={false}
+        aria-current={isActive() ? 'page' : undefined}
+        // An attribute rather than a class-only state, so the styling can be
+        // retargeted from CSS and the `data-active` selectors the old sidebar's
+        // tests use keep working.
+        data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
         onMouseDown={navigate}
-        onHoverChange={setHovering}
-        trailing={
-          !isRail() && (showHotkeyHint() || props.hotkeyVisible) ? (
-            <ListNavHotkeyHint
-              item={props.item}
-              highlighted={props.hotkeyVisible === true}
-            />
-          ) : undefined
-        }
-      />
+      >
+        {/* Flush to the screen edge: the button sits inside the rail's own
+            `px-3`, so -12px lands the bar's outer edge at x=0. Absolutely
+            positioned, so activating a button never shifts its glyph, and grown
+            on the Y axis only — scaling X too would pull the bar off the edge
+            mid-transition. Faded rather than mounted so it arrives on the same
+            curve as the glyph's outline-to-fill swap. */}
+        <span
+          aria-hidden="true"
+          class={cn(
+            'absolute -left-3 top-1/2 h-3/4 w-1 -translate-y-1/2 rounded-r-full bg-accent',
+            'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
+            isActive() ? 'scale-y-100 opacity-100' : 'scale-y-90 opacity-0'
+          )}
+        />
+
+        {/* The accent sits on the glyph rather than the button: `ghost`
+            brightens its own text on hover, which would otherwise pull an
+            active button back to `text-ink` under the cursor. */}
+        <NavGlyph
+          icon={props.item.icon}
+          iconActive={props.item.iconActive}
+          filled={isActive()}
+          class={cn('size-5.5', isActive() && 'text-accent')}
+        />
+      </Button>
     </SidebarOpenInSplitMenu>
   );
 };
-
-/**
- * The `g`-leader hint at a row's right edge. Highlighted while the leader key
- * is armed, muted on plain hover.
- */
-const ListNavHotkeyHint = (props: {
-  item: SidebarItem;
-  highlighted: boolean;
-}) => (
-  <Show
-    when={props.highlighted}
-    fallback={
-      <div class="flex items-center gap-1 text-xxs font-normal text-ink-extra-muted">
-        <span class="rounded-sm border border-ink/5 px-1.5 py-0.5">
-          <Hotkey token={TOKENS.sidebar.goToLeader} />
-        </span>
-        <span class="rounded-sm border border-ink/5 px-1.5 py-0.5">
-          <Hotkey token={props.item.hotkeyToken} />
-        </span>
-      </div>
-    }
-  >
-    <div class="flex size-4 items-center justify-center overflow-hidden rounded-xs border border-accent/30 bg-accent/10 text-xs text-accent">
-      <Hotkey token={props.item.hotkeyToken} />
-    </div>
-  </Show>
-);

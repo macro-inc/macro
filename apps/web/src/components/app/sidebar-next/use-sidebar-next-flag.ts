@@ -6,9 +6,9 @@ import {
 import type { Accessor } from 'solid-js';
 
 /**
- * Whether `SidebarNext` renders in place of `AppSidebar`. On in dev by default;
- * elsewhere it needs the `enable-sidebar-next` PostHog flag. Set
- * VITE_ENABLE_SIDEBAR_NEXT=false to fall back to `AppSidebar` locally.
+ * Whether `SidebarRail` renders in place of `AppSidebar`. Needs the
+ * `enable-sidebar-next` PostHog flag, in dev as much as anywhere else. Set
+ * VITE_ENABLE_SIDEBAR_NEXT=true to force it on locally without PostHog.
  */
 export function useSidebarNextFlag(): Accessor<boolean> {
   const flag = useFeatureFlag(ENABLE_SIDEBAR_NEXT_FLAG, {

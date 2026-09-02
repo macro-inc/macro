@@ -5,20 +5,25 @@ import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import { Hotkey } from '@ui';
-import { SidebarItemNext } from './sidebar-item-next';
+import { Button } from '@ui';
 
 /**
+ * The rail's search button: the magnifier alone, its label in the tooltip.
+ *
+ * An `@ui` Button on the same geometry as the create CTA beside it — same size,
+ * rounding and lift — so the pair reads as one row of actions and either can be
+ * restyled through `variant` and `class` alone.
+ *
  * Takes the active split to the search view and focuses its input — the same
  * behaviour as the old sidebar's magnifier (`SidebarHeaderSearchButton`), not
  * the command menu. Already on search, it just refocuses the input rather than
  * pushing a second entry.
  */
-function useOpenSearch() {
+export const SearchRailButton = () => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
 
-  return (event: MouseEvent) => {
+  const openSearch = (event: MouseEvent) => {
     analytics.track('sidebar_click', { view: 'search' });
 
     let split = globalSplitManager()?.activeSplit();
@@ -40,44 +45,19 @@ function useOpenSearch() {
     if (split) requestSearchFocus(split.id);
     globalSplitManager()?.returnFocus();
   };
-}
-
-/** The full-width bar under the header, styled as a search input. */
-export const SearchBarButton = () => {
-  const openSearch = useOpenSearch();
 
   return (
-    <SidebarItemNext
-      variant="search"
+    <Button
+      size="icon-md"
+      variant="ghost"
+      // class="rounded-full shadow-md shadow-drop-shadow bg-surface-2"
       label="Search"
-      icon={MagnifyingGlassIcon}
-      data-sidebar-next-search=""
-      onClick={openSearch}
-      trailing={
-        <span class="rounded-sm text-xs border border-ink/5 px-1.5 py-0.5 font-normal text-ink-extra-muted">
-          <Hotkey token={TOKENS.sidebar.goTo.search} />
-        </span>
-      }
-    >
-      <span class="truncate text-ink-extra-muted">Search</span>
-    </SidebarItemNext>
-  );
-};
-
-/** The rail's search button: the same action, reduced to the icon. */
-export const SearchRailButton = () => {
-  const openSearch = useOpenSearch();
-
-  return (
-    <SidebarItemNext
-      variant="railBoxed"
-      label="Search"
-      icon={MagnifyingGlassIcon}
-      tooltip="Search"
       tooltipPlacement="right"
       hotkey={TOKENS.sidebar.goTo.search}
       data-sidebar-next-search=""
       onClick={openSearch}
-    />
+    >
+      <MagnifyingGlassIcon class="size-5" />
+    </Button>
   );
 };

@@ -124,7 +124,7 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { CalendarSidebarPreview } from './calendar-sidebar-preview';
 
-// TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarNext ships.
+// TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarRail ships.
 export interface SidebarItem {
   id: ListView | (string & {});
   label: string;
@@ -293,9 +293,7 @@ type SidebarHotkeyDeps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export type OpenWithSplitFn = ReturnType<
-  typeof useSplitLayout
->['openWithSplit'];
+type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
 const isMarkdownDocumentsParams = (
   params: SidebarItem['params'] | undefined
@@ -385,8 +383,7 @@ export const registerSidebarHotkeys = ({
  * icons even though the registration below is owned by `GoToHotkeys`, which
  * stays mounted regardless of whether the sidebar itself is visible.
  */
-// TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarNext ships.
-export const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
+const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
 
 const resetGoToHotkeysState = () => {
   setGoToHotkeyVisible(false);
@@ -818,8 +815,7 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
   );
 };
 
-// TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarNext ships.
-export type SidebarSettingsWidgetProps = {
+type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
   onMenuOpenChange?: (open: boolean) => void;
@@ -832,7 +828,7 @@ export type SidebarSettingsWidgetProps = {
   /**
    * Icon-only: drops the trigger's leading padding and start alignment so the
    * avatar centres in its square, and grows the avatar to nearly fill it. For
-   * SidebarNext's narrow rail, where the name and caret are hidden anyway.
+   * `SidebarRail`, where the name and caret are hidden anyway.
    */
   compact?: boolean;
 };
@@ -1748,9 +1744,9 @@ interface SidebarOpenInSplitMenuProps {
   onOpened?: (split: SplitHandle, action: SidebarOpenAction) => void;
   onOpenChange?: (open: boolean) => void;
   /**
-   * Overrides the trigger's default `h-7`, which otherwise clips rows of a
-   * different height (SidebarNext's are taller). Merged with `cn`, so a height
-   * utility here wins.
+   * Overrides the trigger's default `h-7`, which otherwise clips triggers of a
+   * different shape (`SidebarRail`'s are 36px squares). Merged with `cn`, so a
+   * size utility here wins.
    */
   triggerClass?: string;
   children: JSX.Element;

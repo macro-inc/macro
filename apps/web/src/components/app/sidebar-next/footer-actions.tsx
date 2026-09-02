@@ -11,21 +11,18 @@ import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { TOKENS } from '@core/hotkey/tokens';
 import CalendarPlusIcon from '@phosphor/calendar-plus.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import { Button, cn } from '@ui';
+import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { MoreAppsPopover } from './more-apps-popover';
 import { useNavItemGates } from './use-nav-item-gates';
 
 /**
- * The bottom actions: new AI chat, calendar in a new split, and the More Apps
- * grid — a row in the wide sidebar, stacked in the narrow rail — with the
- * account card below a divider. Settings is reached from that card's menu
- * rather than its own button.
+ * The rail's bottom actions, stacked: new AI chat, calendar in a new split, and
+ * the More Apps grid, with the account card below a divider. Settings is
+ * reached from that card's menu rather than its own button.
  */
 export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;
-  /** The narrow rail stacks these; the wide sidebar lays them out in a row. */
-  orientation?: 'row' | 'column';
 }) => {
   const { openSettings, selectTab, settingsOpen } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
@@ -55,16 +52,9 @@ export const FooterActions = (props: {
     });
   };
 
-  const isColumn = () => props.orientation === 'column';
-
   return (
     <div class="flex w-full shrink-0 flex-col gap-2">
-      <div
-        class={cn(
-          'flex w-full items-center',
-          isColumn() ? 'flex-col gap-1' : 'justify-around'
-        )}
-      >
+      <div class="flex w-full flex-col items-center gap-1">
         <Button
           size="icon-md"
           variant="ghost"
@@ -111,16 +101,10 @@ export const FooterActions = (props: {
         group is scoped to this wrapper — setting `data-slim` on the rail root
         would expose every descendant to those selectors.
       */}
-      <div
-        class={cn(
-          'group/sidebar flex w-full',
-          isColumn() ? 'justify-center' : 'justify-start'
-        )}
-        data-slim={isColumn() ? 'true' : undefined}
-      >
+      <div class="group/sidebar flex w-full justify-center" data-slim="true">
         <SidebarSettingsWidget
-          compact={isColumn()}
-          isSlim={isColumn}
+          compact
+          isSlim={() => true}
           onSelect={openSettingsTab}
           onMenuOpenChange={props.onMenuOpenChange}
         />
