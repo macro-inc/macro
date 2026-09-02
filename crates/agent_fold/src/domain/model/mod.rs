@@ -32,7 +32,7 @@ mod plan;
 mod tool;
 
 pub use event::{FoldEvent, OwnedFoldEvent};
-pub use metadata::{AvailableCommand, ModelOption, SessionMetadata};
+pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};

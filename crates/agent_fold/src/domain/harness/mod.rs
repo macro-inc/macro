@@ -1,4 +1,5 @@
-//! Harness-specific `_meta` and raw-input extraction.
+//! Harness-specific conventions: who produced the log, and how to read what
+//! they wrote beyond the ACP schema.
 //!
 //! ACP reserves `_meta` for implementation-defined data and tells clients to
 //! make no assumptions about it. A faithful fold nevertheless has to read it,
@@ -13,37 +14,142 @@
 //!   created itself. A fold reading a historical log never created one, so the
 //!   only output it will ever see is the copy in `_meta`.
 //!
-//! Everything that depends on a specific harness lives in this module, so
-//! supporting a second one means adding a sibling reader rather than editing
-//! the fold. Every function here treats a missing or misshapen key as "no
-//! information" and returns `None`.
+//! Each harness writes these differently, so each gets a [`HarnessReader`]
+//! in its own file, and the fold reads `_meta` through
+//! [`Harness::reader`] and nowhere else. Every method has a harness-neutral
+//! default in [`generic`], so an unknown harness still folds; a known one
+//! overrides only what it can answer from its own conventions. Every reader
+//! treats a missing or misshapen key as "no information".
+//!
+//! Supporting a new harness is one file here, one arm in
+//! [`Harness::reader`], and one row in [`Harness::from_agent_info`].
 
-/// The `_meta` keys written by the Claude Code harness.
+/// The Claude Code harness (`claude-agent-acp`).
 pub mod claude_code;
+/// Harness-neutral defaults.
+pub mod generic;
+/// Macro's own in-process agent (`agent_inmem`).
+pub mod macro_inmem;
 
-use crate::domain::model::ToolName;
+use crate::domain::model::{Harness, ToolName};
 use agent_client_protocol::schema::v1::Meta;
+use lazy_regex::regex_is_match;
+
+/// What a harness's conventions let the fold read off a tool frame.
+///
+/// Every method has a default a harness can leave alone. Defaults are the
+/// neutral readings in [`generic`], never `None`-for-everything: a frame
+/// from an unrecognized harness still folds to the same vocabulary as one
+/// from a known harness, only with less filled in.
+pub trait HarnessReader: Sync {
+    /// The `_meta` namespace this harness writes its own keys under, when it
+    /// has one - `claudeCode`, `macro`. Used to recognize a harness from a
+    /// tool frame when the log has no `initialize` to read.
+    fn meta_namespace(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// The tool's own name, when the harness wrote one to `_meta`.
+    ///
+    /// Outranks the ACP title, which is human-readable copy and may change
+    /// over a call's life.
+    fn meta_tool_name(&self, meta: Option<&Meta>) -> Option<ToolName> {
+        let _ = meta;
+        None
+    }
+
+    /// Terminal output accumulated so far, from `_meta`.
+    fn terminal_output(&self, meta: Option<&Meta>) -> Option<String> {
+        generic::terminal_output(meta)
+    }
+
+    /// The exit code a terminal-backed call finished with, from `_meta`.
+    fn terminal_exit_code(&self, meta: Option<&Meta>) -> Option<i32> {
+        generic::terminal_exit_code(meta)
+    }
+}
+
+impl Harness {
+    /// Recognize a harness from the `agentInfo.name` it announced in its
+    /// `initialize` response.
+    ///
+    /// Matching is loose on purpose: a harness's package name, title and
+    /// version format all change more often than the word that identifies
+    /// it, so each row matches that word.
+    #[must_use]
+    pub fn from_agent_info(name: &str) -> Self {
+        if regex_is_match!(r"(?i)claude", name) {
+            Self::ClaudeCode
+        } else if regex_is_match!(r"(?i)^opencode", name) {
+            Self::OpenCode
+        } else if regex_is_match!(r"(?i)codex", name) {
+            Self::Codex
+        } else if regex_is_match!(r"(?i)cursor", name) {
+            Self::Cursor
+        } else if regex_is_match!(r"(?i)^macro", name) {
+            Self::Macro
+        } else if regex_is_match!(r"(?i)hermes", name) {
+            Self::Hermes
+        } else if regex_is_match!(r"(?i)openclaw", name) {
+            Self::OpenClaw
+        } else {
+            Self::Unknown
+        }
+    }
+
+    /// Recognize a harness from the `_meta` namespaces on a tool frame, for
+    /// a log with no `initialize` to read - a session that was resumed, or a
+    /// recording that starts mid-turn. `None` when nothing on the frame
+    /// names one.
+    #[must_use]
+    pub fn sniff_meta(meta: Option<&Meta>) -> Option<Self> {
+        let meta = meta?;
+        Self::KNOWN.iter().copied().find(|harness| {
+            harness
+                .reader()
+                .meta_namespace()
+                .is_some_and(|namespace| meta.contains_key(namespace))
+        })
+    }
+
+    /// Every harness with a reader of its own, in the order they are tried.
+    const KNOWN: &'static [Self] = &[Self::ClaudeCode, Self::Macro];
+
+    /// How to read this harness's frames.
+    #[must_use]
+    pub fn reader(self) -> &'static dyn HarnessReader {
+        match self {
+            Self::ClaudeCode => &claude_code::ClaudeCode,
+            Self::Macro => &macro_inmem::MacroInmem,
+            Self::OpenCode
+            | Self::Codex
+            | Self::Cursor
+            | Self::Hermes
+            | Self::OpenClaw
+            | Self::Unknown => &generic::Generic,
+        }
+    }
+}
 
 /// The name of the tool behind a `tool_call`'s opening frame: the harness's
 /// own name when it wrote one to `_meta`, else the ACP title.
 #[must_use]
-pub fn tool_name(meta: Option<&Meta>, title: &str) -> ToolName {
-    let name = claude_code::tool_name(meta);
-    name.as_deref()
-        .unwrap_or(title)
-        .parse()
-        .unwrap_or_else(|never| match never {})
+pub fn tool_name(reader: &dyn HarnessReader, meta: Option<&Meta>, title: &str) -> ToolName {
+    reader
+        .meta_tool_name(meta)
+        .unwrap_or_else(|| title.parse().unwrap_or_else(|never| match never {}))
 }
 
-/// The name a `tool_call_update` carries, if it carries one at all: the
-/// harness's `_meta` name outranks a title, and an update with neither
-/// names nothing.
+/// The value at `_meta.<namespace>`, when it is an object.
+///
+/// The shape every namespaced harness shares: its keys live under one
+/// top-level object named for the harness.
 #[must_use]
-pub fn patched_tool_name(meta: Option<&Meta>, title: Option<&str>) -> Option<ToolName> {
-    claude_code::tool_name(meta)
-        .as_deref()
-        .or(title)
-        .map(|name| name.parse().unwrap_or_else(|never| match never {}))
+pub(crate) fn namespace<'meta>(
+    meta: Option<&'meta Meta>,
+    namespace: &str,
+) -> Option<&'meta serde_json::Map<String, serde_json::Value>> {
+    meta?.get(namespace)?.as_object()
 }
 
 /// The command line behind an `execute` tool call.

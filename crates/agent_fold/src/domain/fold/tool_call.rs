@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 
 use crate::domain::error::FoldError;
-use crate::domain::harness::{self, claude_code, command_from_raw_input, file_edit_from_raw_input};
+use crate::domain::harness::{
+    self, HarnessReader, command_from_raw_input, file_edit_from_raw_input,
+};
 use crate::domain::model::{AnsiText, FileDiff, MessagePart, ToolDetail, ToolUseId};
 use agent_client_protocol::schema::v1::{
     Content, Meta, ToolCall, ToolCallContent, ToolCallLocation, ToolCallUpdate, ToolKind,
@@ -16,13 +18,15 @@ impl FoldState {
     /// Handle a `tool_call`: add a new tool part.
     pub(super) fn open_tool_call(&mut self, call: ToolCall) -> Option<Changed> {
         let id = ToolUseId(call.tool_call_id.0.to_string());
-        let name = harness::tool_name(call.meta.as_ref(), &call.title);
+        let reader = self.reader();
+        let name = harness::tool_name(reader, call.meta.as_ref(), &call.title);
 
         let tool = MessagePart::ToolUse {
             id: id.clone(),
             name,
             status: tool_status(call.status),
             detail: tool_detail(
+                reader,
                 call.kind,
                 call.raw_input.as_ref(),
                 &call.content,
@@ -62,6 +66,7 @@ impl FoldState {
     /// call.
     pub(super) fn patch_tool_call(&mut self, update: ToolCallUpdate) -> Option<Changed> {
         let id = ToolUseId(update.tool_call_id.0.to_string());
+        let reader = self.reader();
 
         let Some(&position) = self.turn.as_ref()?.tool_positions.get(&id) else {
             self.warn(FoldError::PatchBeforeOpen { tool_call: id });
@@ -85,18 +90,18 @@ impl FoldState {
         if let Some(new_status) = fields.status {
             *status = tool_status(new_status);
         }
-        if let Some(found) =
-            harness::patched_tool_name(update.meta.as_ref(), fields.title.as_deref())
+        // A harness-supplied name outranks any ACP title, so a title alone
+        // only fills a name nothing better has set.
+        if let Some(found) = reader.meta_tool_name(update.meta.as_ref()) {
+            *name = found;
+        } else if let Some(title) = fields.title
+            && name.is_empty()
         {
-            // A harness-supplied name outranks any ACP title, so a title
-            // alone only fills a name nothing better has set.
-            let from_meta = claude_code::tool_name(update.meta.as_ref()).is_some();
-            if from_meta || name.is_empty() {
-                *name = found;
-            }
+            *name = title.parse().unwrap_or_else(|never| match never {});
         }
 
         patch_detail(
+            reader,
             detail,
             fields.raw_input.as_ref(),
             fields.content.as_deref(),
@@ -117,6 +122,7 @@ impl FoldState {
 
 /// Build a [`ToolDetail`] from a tool call's opening frame.
 pub(super) fn tool_detail(
+    reader: &dyn HarnessReader,
     kind: ToolKind,
     raw_input: Option<&serde_json::Value>,
     content: &[ToolCallContent],
@@ -126,8 +132,8 @@ pub(super) fn tool_detail(
     match kind {
         ToolKind::Execute => ToolDetail::Terminal {
             command: command_from_raw_input(raw_input),
-            output: claude_code::terminal_output(meta).map(AnsiText),
-            exit_code: claude_code::terminal_exit_code(meta),
+            output: reader.terminal_output(meta).map(AnsiText),
+            exit_code: reader.terminal_exit_code(meta),
         },
         ToolKind::Edit => ToolDetail::Edit {
             diffs: edit_diffs(content, raw_input),
@@ -162,6 +168,7 @@ pub(super) fn tool_detail(
 /// Write an update's fields into an existing detail, leaving what it does not
 /// carry untouched.
 pub(super) fn patch_detail(
+    reader: &dyn HarnessReader,
     detail: &mut ToolDetail,
     raw_input: Option<&serde_json::Value>,
     content: Option<&[ToolCallContent]>,
@@ -178,10 +185,10 @@ pub(super) fn patch_detail(
                 *command = Some(found);
             }
             // Each update carries the output accumulated so far, so replace.
-            if let Some(found) = claude_code::terminal_output(meta) {
+            if let Some(found) = reader.terminal_output(meta) {
                 *output = Some(AnsiText(found));
             }
-            if let Some(found) = claude_code::terminal_exit_code(meta) {
+            if let Some(found) = reader.terminal_exit_code(meta) {
                 *exit_code = Some(found);
             }
         }

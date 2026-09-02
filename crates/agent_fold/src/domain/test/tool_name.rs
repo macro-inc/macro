@@ -1,5 +1,5 @@
 use crate::domain::harness;
-use crate::domain::model::ToolName;
+use crate::domain::model::{Harness, ToolName};
 use agent_client_protocol::schema::v1::Meta;
 use serde_json::json;
 
@@ -63,26 +63,24 @@ fn a_harness_name_in_meta_outranks_the_title() {
         serde_json::Value::Object(map) => map,
         _ => unreachable!(),
     };
+    let claude = Harness::ClaudeCode.reader();
     assert_eq!(
-        harness::tool_name(Some(&meta), "ls examples"),
+        harness::tool_name(claude, Some(&meta), "ls examples"),
         ToolName::native("Bash")
     );
     assert_eq!(
-        harness::tool_name(None, "ls examples"),
+        harness::tool_name(claude, None, "ls examples"),
         parse("ls examples")
     );
     assert_eq!(
-        harness::tool_name(None, "mcp__macro__ReadContent"),
+        harness::tool_name(claude, None, "mcp__macro__ReadContent"),
         mcp("macro", "ReadContent")
     );
-}
-
-#[test]
-fn a_patch_names_the_tool_only_when_it_carries_a_name() {
-    assert_eq!(harness::patched_tool_name(None, None), None);
+    // A harness that does not write that namespace reads only the title.
+    let unknown = Harness::Unknown.reader();
     assert_eq!(
-        harness::patched_tool_name(None, Some("Add 5+5")),
-        Some(ToolName::native("Add 5+5"))
+        harness::tool_name(unknown, Some(&meta), "ls examples"),
+        parse("ls examples")
     );
 }
 

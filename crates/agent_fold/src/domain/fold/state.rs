@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::domain::error::FoldError;
+use crate::domain::harness::HarnessReader;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::model::{Control, FoldedMessage, SessionMetadata, ToolUseId, TurnId};
 use agent_client_protocol::schema::v1::{
@@ -90,6 +91,8 @@ pub(super) struct FoldState {
     /// Session-level state derived so far. Handlers mutate it freely; the
     /// machine diffs it against what it last reported.
     pub(super) metadata: SessionMetadata,
+    /// The `initialize` request whose response will name the harness.
+    pub(super) pending_initialize: Option<RequestId>,
     /// Requests whose responses carry config options. The response body is
     /// authoritative - a rejected change answers with an error and moves
     /// nothing.
@@ -154,6 +157,7 @@ impl FoldState {
                 // Before the control dispatch, which returns early for the
                 // set-model request whose response this correlates.
                 self.note_config_request(&acp.0);
+                self.note_initialize_request(&acp.0);
                 if let Some(action) = AgentAction::control_from_runtime(message) {
                     return StepChange::message(match action {
                         AgentAction::SetModel(action) => {
@@ -222,6 +226,10 @@ impl FoldState {
                 // response resolves its outcome. Set-model is both of the
                 // latter at once.
                 RawJsonRpcMessage::Response(Response::Result { id, result }) => {
+                    if self.pending_initialize.as_ref() == Some(id) {
+                        self.pending_initialize = None;
+                        return StepChange::metadata(self.apply_initialize_response(result));
+                    }
                     let control = self.resolve_control(id, None);
                     if self.pending_config_requests.remove(id) {
                         let mut changes = StepChange::message(control);
@@ -253,6 +261,7 @@ impl FoldState {
             // misattribute a new connection's reused id.
             Message::ToServer(ToServerMessage::Event { event }) => {
                 if matches!(event, SystemEvent::AcpReady) {
+                    self.pending_initialize = None;
                     self.pending_config_requests.clear();
                     self.pending_permissions.clear();
                     self.pending_controls.clear();
@@ -312,9 +321,15 @@ impl FoldState {
             // The agent replaying the user's own message. The prompt frame is
             // the authoritative copy, so this is dropped.
             SessionUpdate::UserMessageChunk(_) => Vec::new(),
-            SessionUpdate::ToolCall(call) => StepChange::message(self.open_tool_call(call)),
+            SessionUpdate::ToolCall(call) => {
+                let mut changes = StepChange::metadata(self.sniff_harness(call.meta.as_ref()));
+                changes.extend(StepChange::message(self.open_tool_call(call)));
+                changes
+            }
             SessionUpdate::ToolCallUpdate(update) => {
-                StepChange::message(self.patch_tool_call(update))
+                let mut changes = StepChange::metadata(self.sniff_harness(update.meta.as_ref()));
+                changes.extend(StepChange::message(self.patch_tool_call(update)));
+                changes
             }
             SessionUpdate::SessionInfoUpdate(update) => {
                 StepChange::metadata(self.apply_session_info(&update))
@@ -336,6 +351,11 @@ impl FoldState {
                 Vec::new()
             }
         }
+    }
+
+    /// How to read the frames of whichever harness produced this log.
+    pub(super) fn reader(&self) -> &'static dyn HarnessReader {
+        self.metadata.harness.reader()
     }
 
     /// The open turn, for the handlers that have already established there is

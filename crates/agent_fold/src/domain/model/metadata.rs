@@ -3,11 +3,48 @@
 use serde::Serialize;
 use specta::Type;
 
+/// Which ACP agent produced a session's log.
+///
+/// ACP names none of a harness's conventions - which `_meta` keys it writes,
+/// what it calls its tools, how it reports a subagent - so the fold has to
+/// know who it is reading in order to read those. The agent announces itself
+/// in the `initialize` response's `agentInfo.name`; a log that starts
+/// mid-session (a resume) is recognized from the `_meta` namespaces its
+/// first tool frames carry instead. Carried on the metadata so a reader can
+/// show it and never has to infer it.
+///
+/// [`Self::Unknown`] is a real state, not a failure: every reader falls back
+/// to the harness-neutral conventions, and a harness this fold has not met
+/// still folds to the generic vocabulary.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum Harness {
+    /// `@agentclientprotocol/claude-agent-acp`.
+    ClaudeCode,
+    /// `OpenCode`, whose ACP server is built in.
+    OpenCode,
+    /// OpenAI Codex, through `codex-acp`.
+    Codex,
+    /// Cursor cloud agents, through this repository's `cursor_cloud_agents`.
+    Cursor,
+    /// Macro's own in-process agent, `agent_inmem`.
+    Macro,
+    /// Nous Research's Hermes agent.
+    Hermes,
+    /// OpenClaw.
+    OpenClaw,
+    /// Not announced, or an agent this fold does not know.
+    #[default]
+    Unknown,
+}
+
 /// Session-level state derived from the log, latest-wins and carried whole.
 /// Fields start absent and fill in as the log reveals them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMetadata {
+    /// The agent that produced the log. See [`Harness`].
+    pub harness: Harness,
     /// Current model per the runtime's own `configOptions` responses, so a
     /// rejected model change never moves it.
     pub model: Option<String>,
