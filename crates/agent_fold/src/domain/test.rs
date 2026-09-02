@@ -3,6 +3,7 @@
 
 mod fold;
 mod harness;
+mod harness_readers;
 mod machine;
 mod macro_tools;
 mod metadata;

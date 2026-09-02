@@ -126,7 +126,9 @@ impl FoldState {
         }
         // A harness-supplied name outranks any ACP title, so a title alone
         // only fills a name nothing better has set.
-        if let Some(found) = reader.meta_tool_name(update.meta.as_ref()) {
+        if let Some(found) =
+            reader.harness_tool_name(update.meta.as_ref(), fields.title.as_deref().unwrap_or(""))
+        {
             *name = found;
         } else if let Some(title) = fields.title.as_deref()
             && name.is_empty()

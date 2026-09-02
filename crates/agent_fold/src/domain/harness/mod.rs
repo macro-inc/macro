@@ -26,12 +26,20 @@
 
 /// The Claude Code harness (`claude-agent-acp`).
 pub mod claude_code;
+/// OpenAI Codex through `codex-acp`.
+pub mod codex;
+/// Cursor cloud agents through `cursor_cloud_agents`.
+pub mod cursor;
 /// Harness-neutral defaults.
 pub mod generic;
+/// Nous Research's Hermes agent.
+pub mod hermes;
 /// Macro's own in-process agent (`agent_inmem`).
 pub mod macro_inmem;
 /// MCP's result and user-tool response shapes.
 pub mod mcp;
+/// OpenClaw's ACP gateway.
+pub mod openclaw;
 /// OpenCode's built-in ACP server.
 pub mod opencode;
 
@@ -53,12 +61,13 @@ pub trait HarnessReader: Sync {
         None
     }
 
-    /// The tool's own name, when the harness wrote one to `_meta`.
+    /// The tool's own name, when the harness reported one beyond the bare
+    /// ACP title - in `_meta`, or by a naming convention in the title.
     ///
-    /// Outranks the ACP title, which is human-readable copy and may change
-    /// over a call's life.
-    fn meta_tool_name(&self, meta: Option<&Meta>) -> Option<ToolName> {
-        let _ = meta;
+    /// Outranks the plain title, which is human-readable copy and may change
+    /// over a call's life. `None` means the title is all there is.
+    fn harness_tool_name(&self, meta: Option<&Meta>, title: &str) -> Option<ToolName> {
+        let _ = (meta, title);
         None
     }
 
@@ -186,8 +195,19 @@ impl Harness {
         })
     }
 
-    /// Every harness with a reader of its own, in the order they are tried.
-    const KNOWN: &'static [Self] = &[Self::ClaudeCode, Self::Macro, Self::OpenCode];
+    /// Every harness with a reader of its own, in the order a sniff tries
+    /// them. Harnesses that write no `_meta` namespace on tool frames
+    /// (OpenCode, Cursor, Hermes, OpenClaw) can only be recognized from
+    /// `initialize`.
+    const KNOWN: &'static [Self] = &[
+        Self::ClaudeCode,
+        Self::Macro,
+        Self::Codex,
+        Self::OpenCode,
+        Self::Cursor,
+        Self::Hermes,
+        Self::OpenClaw,
+    ];
 
     /// How to read this harness's frames.
     #[must_use]
@@ -196,9 +216,11 @@ impl Harness {
             Self::ClaudeCode => &claude_code::ClaudeCode,
             Self::Macro => &macro_inmem::MacroInmem,
             Self::OpenCode => &opencode::OpenCode,
-            Self::Codex | Self::Cursor | Self::Hermes | Self::OpenClaw | Self::Unknown => {
-                &generic::Generic
-            }
+            Self::Codex => &codex::Codex,
+            Self::Cursor => &cursor::Cursor,
+            Self::Hermes => &hermes::Hermes,
+            Self::OpenClaw => &openclaw::OpenClaw,
+            Self::Unknown => &generic::Generic,
         }
     }
 }
@@ -208,7 +230,7 @@ impl Harness {
 #[must_use]
 pub fn tool_name(reader: &dyn HarnessReader, meta: Option<&Meta>, title: &str) -> ToolName {
     reader
-        .meta_tool_name(meta)
+        .harness_tool_name(meta, title)
         .unwrap_or_else(|| title.parse().unwrap_or_else(|never| match never {}))
 }
 

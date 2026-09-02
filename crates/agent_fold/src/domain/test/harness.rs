@@ -15,13 +15,13 @@ fn claude_code_reads_its_namespaced_tool_name() {
     let meta = meta_of(json!({"claudeCode": {"toolName": "Bash"}}));
     assert_eq!(claude_code::tool_name(Some(&meta)), Some("Bash".to_owned()));
     assert_eq!(
-        claude_code::ClaudeCode.meta_tool_name(Some(&meta)),
+        claude_code::ClaudeCode.harness_tool_name(Some(&meta), ""),
         Some(ToolName::native("Bash"))
     );
 
     let mcp = meta_of(json!({"claudeCode": {"toolName": "mcp__macro__ReadContent"}}));
     assert_eq!(
-        claude_code::ClaudeCode.meta_tool_name(Some(&mcp)),
+        claude_code::ClaudeCode.harness_tool_name(Some(&mcp), ""),
         Some(ToolName::Mcp {
             server: "macro".to_owned(),
             tool: "ReadContent".to_owned(),
@@ -33,12 +33,15 @@ fn claude_code_reads_its_namespaced_tool_name() {
 fn macro_inmem_reads_its_namespaced_tool_name() {
     let meta = meta_of(json!({"macro": {"toolName": "ReadContent"}}));
     assert_eq!(
-        Harness::Macro.reader().meta_tool_name(Some(&meta)),
+        Harness::Macro.reader().harness_tool_name(Some(&meta), ""),
         Some(ToolName::native("ReadContent"))
     );
     // Another harness's namespace is not this one's.
     let other = meta_of(json!({"claudeCode": {"toolName": "Bash"}}));
-    assert_eq!(Harness::Macro.reader().meta_tool_name(Some(&other)), None);
+    assert_eq!(
+        Harness::Macro.reader().harness_tool_name(Some(&other), ""),
+        None
+    );
 }
 
 /// Terminal output is a client extension every harness writes the same way,
@@ -68,7 +71,7 @@ fn terminal_output_and_exit_are_read_for_any_harness() {
 #[test]
 fn tolerates_absence_and_noise() {
     let reader = Harness::ClaudeCode.reader();
-    assert_eq!(reader.meta_tool_name(None), None);
+    assert_eq!(reader.harness_tool_name(None, ""), None);
     assert_eq!(generic::terminal_output(None), None);
     assert_eq!(generic::terminal_exit_code(None), None);
 
@@ -77,7 +80,7 @@ fn tolerates_absence_and_noise() {
         "terminal_output": {"data": 7},
         "terminal_exit": {"exit_code": "zero"},
     }));
-    assert_eq!(reader.meta_tool_name(Some(&noise)), None);
+    assert_eq!(reader.harness_tool_name(Some(&noise), ""), None);
     assert_eq!(generic::terminal_output(Some(&noise)), None);
     assert_eq!(generic::terminal_exit_code(Some(&noise)), None);
 }

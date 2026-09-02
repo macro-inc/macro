@@ -4,10 +4,12 @@
 //! frames rather than leaving the fold to guess from titles. It mirrors
 //! Claude Code's key layout under its own namespace, `_meta.macro`:
 //!
-//! - `toolName` - the Macro tool's name (`ReadContent`, `SendEmail`).
+//! - `toolName` - the Macro tool's name (`ReadContent`, `SendEmail`), or
+//!   `mcp__<server>__<tool>` for a connected app's tool it reached over MCP.
+//! - `subagent: true` - on its `Subagent` delegation.
 //!
-//! Its tools run in-process, not over MCP, so names are native and tool
-//! output is the tool's own JSON with no MCP envelope around it.
+//! Its own tools run in-process, not over MCP, so their output is the tool's
+//! own JSON with no envelope around it.
 
 use agent_client_protocol::schema::v1::Meta;
 
@@ -25,11 +27,11 @@ impl HarnessReader for MacroInmem {
         Some(NAMESPACE)
     }
 
-    fn meta_tool_name(&self, meta: Option<&Meta>) -> Option<ToolName> {
+    fn harness_tool_name(&self, meta: Option<&Meta>, _title: &str) -> Option<ToolName> {
         namespace(meta, NAMESPACE)?
             .get("toolName")?
             .as_str()
-            .map(ToolName::native)
+            .map(|name| name.parse().unwrap_or_else(|never| match never {}))
     }
 
     /// Every native tool this agent calls is a Macro tool; the ones it

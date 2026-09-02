@@ -28,7 +28,7 @@ impl HarnessReader for ClaudeCode {
         Some(NAMESPACE)
     }
 
-    fn meta_tool_name(&self, meta: Option<&Meta>) -> Option<ToolName> {
+    fn harness_tool_name(&self, meta: Option<&Meta>, _title: &str) -> Option<ToolName> {
         tool_name(meta).map(|name| name.parse().unwrap_or_else(|never| match never {}))
     }
 
