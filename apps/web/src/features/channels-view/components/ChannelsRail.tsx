@@ -13,7 +13,6 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { compareDateDesc } from '@core/util/date';
@@ -25,7 +24,7 @@ import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn } from '@ui';
+import { cn, Tabs } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -379,12 +378,8 @@ export function ChannelsRail(props: {
           </div>
 
           <div class="shrink-0 px-4 pt-3">
-            <TabsInset
+            <Tabs
               aria-label="Chat sidebar views"
-              class="h-9"
-              trackClass="h-full"
-              itemClass="h-full"
-              labelClass="h-full py-0"
               fullWidth
               list={CHANNEL_TABS}
               value={state.tab}
@@ -623,10 +618,9 @@ export function ChannelsRail(props: {
         </Match>
         <Match when={props.mode === 'slim'}>
           <div class="shrink-0 px-3">
-            <TabsInset
+            <Tabs
               aria-label="Chat sidebar views"
-              class="h-[76px]"
-              trackClass="h-full flex-col"
+              class="h-[76px] flex-col"
               itemClass="h-auto min-h-0 w-full"
               labelClass="size-full p-0"
               fullWidth
