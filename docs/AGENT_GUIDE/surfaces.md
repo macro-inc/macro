@@ -5,8 +5,10 @@
 Unified triage list (emails, channel messages, task assignments, doc mentions, agent
 results). Filter radios: `Signal` (default, AI-filtered "needs attention") / `Noise` / `All`
 / `Reminders`; plus `Filter` menu and `Preview` toggle (split list + preview pane; the empty
-preview shows "No content selected"). Keyboard: `j`/`k` move, `space` preview, `enter` open,
-`e` mark done. Rows are buttons named `<channel> <sender>:<snippet> <time>`.
+preview shows "No content selected"). `Signal` and `Noise` order rows (and their date
+headers) by when you were last notified about the item, so a fresh comment on an old task
+sits under "Today". `All` and `Reminders` order by recency. Keyboard: `j`/`k` move, `space` preview, `enter` open, `e` mark done.
+Rows are buttons named `<channel> <sender>:<snippet> <time>`.
 
 ## Email — `/app/component/mail`
 
@@ -30,7 +32,10 @@ tags, updated time. Clicking a row opens the doc.
 
 Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
 `Calendar settings`, and a mini month picker in the side panel. Events require connecting a
-Google account (`Connect calendar`).
+Google account (`Connect calendar`). The `Calendar settings` (gear) menu has an `Accounts`
+section listing each connected account with a per-account `Enable` (grant calendar) or
+`Turn off` action, plus `Connect another account` to connect a new Google account
+(email + calendar).
 
 ## Calls — `/app/component/calls`
 

@@ -7235,6 +7235,12 @@ export type SoupApiItem = SoupItem & {
      */
     is_favorited: boolean;
     /**
+     * When the caller was last notified about this entity, present only
+     * when the page was ordered by `notified_at`. Clients keep the notified
+     * feed ordered and date-bucketed on this value.
+     */
+    notified_at?: string | null;
+    /**
      * The caller's latest own mutation of this entity, present only when the
      * page was ordered by `touched_by_me`. Clients keep the touched feed
      * ordered on this value, so it can be bumped optimistically.
@@ -7245,7 +7251,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -8955,7 +8961,8 @@ export type WebhookFilter = {
 /**
  * Scope that owns a newly-created webhook.
  *
- * Clients serialize this, so both derives are used.
+ * Clients serialize this, so both derives are used. `Display`/`FromStr`
+ * spell the same names as serde, for query strings and config values.
  */
 export type WebhookScope = 'user' | 'team';
 
@@ -12886,7 +12893,8 @@ export type GetItemsSoupData = {
         limit?: number;
         /**
          * Sort method. Options are viewed_at, created_at, updated_at,
-         * viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
+         * viewed_updated, frecency, touched_by_me, notified_at. Defaults to
+         * viewed_at.
          */
         sort_method?: SoupApiSort;
         /**
@@ -14009,6 +14017,49 @@ export type EditProjectV2Responses = {
 };
 
 export type EditProjectV2Response = EditProjectV2Responses[keyof EditProjectV2Responses];
+
+export type StreamEventsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Personal or team workspace whose webhook lifecycle events are delivered.
+         */
+        scope: WebhookScope;
+        /**
+         * URL-encoded JSON array of webhook filters, identical to the persisted
+         * webhook `filters` field.
+         */
+        filters?: string;
+    };
+    url: '/webhook/events/stream';
+};
+
+export type StreamEventsErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type StreamEventsError = StreamEventsErrors[keyof StreamEventsErrors];
+
+export type StreamEventsResponses = {
+    /**
+     * Server-Sent Events stream of matching broker events
+     */
+    200: string;
+};
+
+export type StreamEventsResponse = StreamEventsResponses[keyof StreamEventsResponses];
 
 export type ListWebhooksData = {
     body?: never;

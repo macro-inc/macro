@@ -41,4 +41,14 @@ stream over the app's websocket, not the HTTP response.
 
 ## In channels
 
-Mention `@Macro` in any channel message to invoke the agent there.
+Mention `@Macro` in any channel message for the classic in-channel reply. Mention
+`@macro-new` (or `@coder` / `@cursor`) to open an **agent session** — a dedicated
+transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+
+## Agent sessions
+
+An agent session is `/app/agent/<uuid>`. The composer placeholder is
+**`Message the agent, @mention anything`**. Type `@` to insert the same mention chips
+used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
+the agent sees. Agent replies that emit those tags render as clickable chips in the
+transcript (and in the originating channel thread).

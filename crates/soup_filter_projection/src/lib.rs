@@ -19,13 +19,17 @@ use thiserror::Error;
 mod profile;
 mod wire;
 
-pub use profile::{ProfileValidationError, validate_soup_flat_v2};
+pub use profile::{ProfileValidationError, validate_soup_flat_v2, validate_soup_flat_v3};
 pub use wire::{
     MAX_SOUP_CACHE_PROJECTION_BYTES, MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES,
-    SOUP_CACHE_PROJECTION_WIRE_VERSION, SoupCacheProjectionCapsuleV1,
-    SoupCacheProjectionSupplement, SoupCacheProjectionWireError,
+    SOUP_CACHE_PROJECTION_WIRE_VERSION, SOUP_CACHE_PROJECTION_WIRE_VERSION_V1,
+    SOUP_CACHE_PROJECTION_WIRE_VERSION_V2, SoupCacheProjectionCapsuleV1,
+    SoupCacheProjectionCapsuleV2, SoupCacheProjectionSupplement, SoupCacheProjectionWireError,
     decode_cache_projection_supplement, encode_cache_projection_supplement,
 };
+
+/// Maximum authoritative task Status options accepted in one complete projection.
+pub const MAX_TASK_STATUS_OPTION_IDS: usize = 64;
 
 #[cfg(test)]
 mod test;
@@ -72,6 +76,41 @@ pub enum SoupFlatV2CompositionError {
     #[error(transparent)]
     Validation(#[from] ValidationError),
     /// The final composed document violated the complete v2 profile.
+    #[error(transparent)]
+    Profile(#[from] ProfileValidationError),
+}
+
+/// Failure to compose one complete `soup-flat-v3` projection.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum SoupFlatV3CompositionError {
+    /// A Document did not carry authoritative server state.
+    #[error("missing authoritative Document projection supplement")]
+    MissingDocumentSupplement,
+    /// A direct-only Project or Chat unexpectedly received a supplement.
+    #[error("unexpected projection supplement for direct-only Soup entity")]
+    UnexpectedSupplement,
+    /// A non-Document projection was supplied a Document subtype.
+    #[error("unexpected Document subtype for Soup entity partition")]
+    UnexpectedDocumentSubType,
+    /// The supplement belongs to another normalized record.
+    #[error("projection supplement record key does not match the GraphQL entity")]
+    SupplementRecordKeyMismatch,
+    /// The supplement targets another complete projection profile.
+    #[error("projection supplement target profile does not match soup-flat-v3")]
+    SupplementTargetProfileMismatch,
+    /// The supplement belongs to another entity partition.
+    #[error("projection supplement partition does not match the GraphQL entity")]
+    SupplementPartitionMismatch,
+    /// The supplement omitted viewer-relative facts required by v3.
+    #[error("projection supplement omitted required soup-flat-v3 facts")]
+    MissingViewerRelativeFacts,
+    /// Direct GraphQL fields could not be projected canonically.
+    #[error(transparent)]
+    Direct(#[from] ProjectionError),
+    /// A composed canonical fact violated generic IR bounds.
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
+    /// The final composed document violated the complete v3 profile.
     #[error(transparent)]
     Profile(#[from] ProfileValidationError),
 }
@@ -163,35 +202,35 @@ pub fn project_direct_fields(
     )
 }
 
-/// Compose direct GraphQL facts and an optional server-only supplement into one
-/// canonical, validated `soup-flat-v2` projection.
+/// Compose direct GraphQL facts and a server-only supplement into one
+/// canonical, validated `soup-flat-v3` projection.
 ///
-/// Documents require exactly one supplement and obtain only their authoritative
-/// email-attachment fact from it. Projects and Chats are complete from direct
-/// fields alone and reject supplements.
-pub fn compose_soup_flat_v2(
+/// Documents require exactly one v3 supplement and obtain authoritative
+/// attachment, viewer-relative importance, and complete task Status facts from
+/// it. Projects and Chats remain complete from direct fields alone.
+pub fn compose_soup_flat_v3(
     input: DirectProjectionInput,
     document_sub_type: Option<DocumentSubType>,
     supplement: Option<&SoupCacheProjectionSupplement>,
-) -> Result<IndexDocument, SoupFlatV2CompositionError> {
+) -> Result<IndexDocument, SoupFlatV3CompositionError> {
     let kind = input.kind;
     let expected_record_key = input.record_key.clone();
     let expected_partition = kind.partition();
     let mut document = project_direct_fields(input)?;
-    document.profile = vocabulary::profile_v2();
+    document.profile = vocabulary::profile_v3();
 
     match kind {
         SoupFlatEntityKind::Document => {
             let supplement =
-                supplement.ok_or(SoupFlatV2CompositionError::MissingDocumentSupplement)?;
+                supplement.ok_or(SoupFlatV3CompositionError::MissingDocumentSupplement)?;
             if supplement.record_key() != &expected_record_key {
-                return Err(SoupFlatV2CompositionError::SupplementRecordKeyMismatch);
+                return Err(SoupFlatV3CompositionError::SupplementRecordKeyMismatch);
             }
-            if supplement.target_profile() != &vocabulary::profile_v2() {
-                return Err(SoupFlatV2CompositionError::SupplementTargetProfileMismatch);
+            if supplement.target_profile() != &vocabulary::profile_v3() {
+                return Err(SoupFlatV3CompositionError::SupplementTargetProfileMismatch);
             }
             if supplement.partition() != &expected_partition {
-                return Err(SoupFlatV2CompositionError::SupplementPartitionMismatch);
+                return Err(SoupFlatV3CompositionError::SupplementPartitionMismatch);
             }
             if let Some(sub_type) = document_sub_type {
                 document.exact_facts.push(utf8_fact(
@@ -203,19 +242,35 @@ pub fn compose_soup_flat_v2(
                 attribute: vocabulary::email_attachment(),
                 value: ExactValue::new([u8::from(supplement.is_email_attachment())])?,
             });
+            let is_important = supplement
+                .is_important()
+                .ok_or(SoupFlatV3CompositionError::MissingViewerRelativeFacts)?;
+            document.exact_facts.push(ExactFact {
+                attribute: vocabulary::importance(),
+                value: ExactValue::new([u8::from(is_important)])?,
+            });
+            let status_option_ids = supplement
+                .status_option_ids()
+                .ok_or(SoupFlatV3CompositionError::MissingViewerRelativeFacts)?;
+            for status_option_id in status_option_ids {
+                document.exact_facts.push(uuid_fact(
+                    vocabulary::task_status_option(),
+                    *status_option_id,
+                )?);
+            }
         }
         SoupFlatEntityKind::Project | SoupFlatEntityKind::Chat => {
             if supplement.is_some() {
-                return Err(SoupFlatV2CompositionError::UnexpectedSupplement);
+                return Err(SoupFlatV3CompositionError::UnexpectedSupplement);
             }
             if document_sub_type.is_some() {
-                return Err(SoupFlatV2CompositionError::UnexpectedDocumentSubType);
+                return Err(SoupFlatV3CompositionError::UnexpectedDocumentSubType);
             }
         }
     }
 
     document.canonicalize();
-    validate_soup_flat_v2(&document)?;
+    validate_soup_flat_v3(&document)?;
     Ok(document)
 }
 
@@ -384,7 +439,7 @@ pub fn project_soup_cache_supplement(
     record_key: RecordKey,
     hydration: &SoupProjectionHydration,
 ) -> Result<Option<SoupCacheProjectionSupplement>, ProjectionError> {
-    let Some(server_facts) = hydration.document_server_facts else {
+    let Some(server_facts) = hydration.document_server_facts.as_ref() else {
         return Ok(None);
     };
     if !matches!(&hydration.item, SoupItem::Document(_)) {
@@ -393,6 +448,8 @@ pub fn project_soup_cache_supplement(
     Ok(Some(SoupCacheProjectionSupplement::document(
         record_key,
         server_facts.is_email_attachment,
+        server_facts.is_important,
+        server_facts.status_option_ids.clone(),
     )))
 }
 

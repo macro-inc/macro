@@ -6,10 +6,9 @@ use macro_event_broker::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::{NotifEvent, TaskAssignedMetadata};
 use uuid::Uuid;
 
-use super::{DeclaredMacroEvent, decode_typed_event};
+use super::DeclaredMacroEvent;
 use crate::domain::models::websocket_notification_event::{
     NotificationTopicEvent, WebSocketNotificationMetadata,
 };
@@ -81,47 +80,6 @@ fn row() -> UserNotificationRow<serde_json::Value> {
 }
 
 #[test]
-fn status_patch_decodes_tagged_notification_metadata() {
-    let mut row = row();
-    let user = row.owner_id.clone();
-    let assigned_by = MacroUserIdStr::try_from("macro|assigner@example.com".to_string())
-        .expect("valid assigner ID");
-    row.notification_event_type = "task_assigned".to_string();
-    row.notification_metadata = serde_json::json!({
-        "taskId": "task-1",
-        "taskName": "Test task",
-        "assignedBy": assigned_by.as_ref(),
-    });
-    let event = NotificationTopicEvent::NotificationStatusesUpdatedForUser {
-        user,
-        updates: vec![PatchDelete::Patch {
-            diff: Cow::Owned(row),
-        }],
-    };
-
-    let NotificationTopicEvent::NotificationStatusesUpdatedForUser { updates, .. } =
-        decode_typed_event::<NotifEvent>(event).expect("tagged status patch metadata decodes")
-    else {
-        panic!("expected user notification statuses event");
-    };
-    let PatchDelete::Patch { diff } = &updates[0] else {
-        panic!("expected status patch");
-    };
-    let NotifEvent::TaskAssigned(TaskAssignedMetadata {
-        task_id,
-        task_name,
-        assigned_by: decoded_assigned_by,
-        ..
-    }) = &diff.notification_metadata
-    else {
-        panic!("expected task assigned metadata");
-    };
-    assert_eq!(task_id, "task-1");
-    assert_eq!(task_name.as_deref(), Some("Test task"));
-    assert_eq!(decoded_assigned_by, &assigned_by);
-}
-
-#[test]
 fn typed_decoder_returns_every_variant_with_notification_rows() {
     let row = row();
     let user = row.owner_id.clone();
@@ -145,7 +103,7 @@ fn typed_decoder_returns_every_variant_with_notification_rows() {
 
     let decoded = events
         .into_iter()
-        .map(decode_typed_event::<serde_json::Value>)
+        .map(|event| event.deserialize_metadata::<serde_json::Value>())
         .collect::<Result<Vec<_>, _>>()
         .expect("all variants decode as notification rows");
 

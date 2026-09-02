@@ -7,12 +7,14 @@ use item_filters::ast::{
     calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
+    chat::ChatLiteral,
     crm_company::CrmCompanyLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
     email::EmailLiteral,
     foreign_entity::ForeignEntityLiteral,
-    properties::{PropertiesLiteral, PropertyMatchValue},
+    project::ProjectLiteral,
+    properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
 use predicate_index::{PredicateExpr, RangeBound};
 
@@ -41,6 +43,13 @@ fn excluded_deferred_partitions() -> EntityFilterAst {
     };
     ast.email_filter.tree = Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil()))));
     ast
+}
+
+fn excluded_non_document_local_partitions(ast: &mut EntityFilterAst) {
+    ast.project_filter = Some(Arc::new(Expr::val(ProjectLiteral::ProjectIdSelf(
+        Uuid::nil(),
+    ))));
+    ast.chat_filter = Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))));
 }
 
 #[test]
@@ -150,6 +159,86 @@ fn v2_subtype_and_attachment_preserve_direct_and_or_not_shapes() {
             attribute: vocabulary::email_attachment(),
             value: ExactValue::new([0]).unwrap(),
         }
+    );
+}
+
+#[test]
+fn v3_compiles_my_tasks_importance_and_status_membership() {
+    assert_eq!(
+        STATUS_PROPERTY_DEFINITION_ID,
+        system_properties::SystemPropertyKey::STATUS_UUID
+    );
+
+    let not_started = Uuid::from_u128(11);
+    let in_progress = Uuid::from_u128(12);
+    let mut ast = excluded_deferred_partitions();
+    excluded_non_document_local_partitions(&mut ast);
+    ast.document_filter = Some(Arc::new(Expr::and(
+        Expr::val(DocumentLiteral::SubType(DocumentSubType::Task)),
+        Expr::val(DocumentLiteral::Importance(true)),
+    )));
+    ast.properties_filter = Some(Arc::new(Expr::or(
+        Expr::val(PropertiesLiteral {
+            property_definition_id: STATUS_PROPERTY_DEFINITION_ID,
+            entity_type: None,
+            value: PropertyMatchValue::SelectOption(not_started),
+        }),
+        Expr::val(PropertiesLiteral {
+            property_definition_id: STATUS_PROPERTY_DEFINITION_ID,
+            entity_type: Some(PropertyEntityType::Task),
+            value: PropertyMatchValue::SelectOption(in_progress),
+        }),
+    )));
+
+    assert_eq!(
+        compile_soup_flat_v2(&ast, request()).unwrap(),
+        LocalCompileOutcome::Unsupported(UnsupportedReason::GlobalProperties)
+    );
+    let LocalCompileOutcome::Supported(query) = compile_soup_flat_v3(&ast, request()).unwrap()
+    else {
+        panic!("My Tasks v3 request fell back");
+    };
+    assert_eq!(query.as_query().profile, vocabulary::profile_v3());
+    let document = &query.as_query().partitions[0].predicate;
+    assert!(format!("{document:?}").contains("importance"));
+    assert!(format!("{document:?}").contains("task-status-option"));
+}
+
+#[test]
+fn v3_rejects_non_status_properties_and_unrestricted_local_partitions() {
+    for importance in [
+        Expr::val(DocumentLiteral::Importance(false)),
+        Expr::is_not(Expr::val(DocumentLiteral::Importance(true))),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.document_filter = Some(Arc::new(importance));
+        assert_eq!(
+            check_soup_flat_v3(&ast, request()),
+            Eligibility::Unsupported(UnsupportedReason::Literal("document"))
+        );
+    }
+
+    let mut ast = excluded_deferred_partitions();
+    ast.properties_filter = Some(Arc::new(Expr::val(PropertiesLiteral {
+        property_definition_id: Uuid::from_u128(99),
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::from_u128(1)),
+    })));
+    excluded_non_document_local_partitions(&mut ast);
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::GlobalProperties)
+    );
+
+    ast.properties_filter = Some(Arc::new(Expr::val(PropertiesLiteral {
+        property_definition_id: STATUS_PROPERTY_DEFINITION_ID,
+        entity_type: None,
+        value: PropertyMatchValue::SelectOption(Uuid::from_u128(1)),
+    })));
+    ast.project_filter = None;
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::GlobalProperties)
     );
 }
 

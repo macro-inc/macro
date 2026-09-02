@@ -298,6 +298,32 @@ describe('recent view preset', () => {
   it('forces the touched-by-me server sort', () => {
     expect(getViewPreset('recent')?.sortMethod).toBe('touched_by_me');
   });
+});
+
+describe('inbox view presets', () => {
+  // `getViewPreset` falls back to the first compatible tab when the requested
+  // one does not resolve, so each check also pins the tab's own predicate.
+  it('orders the notification tabs by latest notification', () => {
+    // The sort is also a filter (rows without a notification are absent),
+    // which matches what Signal and Noise already mean.
+    const signal = getViewPreset('inbox', 'signal');
+    expect(signal?.clientFilters).toEqual({ and: ['inbox'] });
+    expect(signal?.sortMethod).toBe('notified_at');
+    const noise = getViewPreset('inbox', 'noise');
+    expect(noise?.clientFilters).toEqual({ and: ['noise'] });
+    expect(noise?.sortMethod).toBe('notified_at');
+  });
+
+  it('keeps recency ordering on the other tabs', () => {
+    // The inbox client sort id is not an API sort method, so these must name
+    // their server sort or the API would fall back to created_at.
+    const all = getViewPreset('inbox', 'all');
+    expect(all?.clientFilters).toEqual({ and: ['explicit-noise'] });
+    expect(all?.sortMethod).toBe('updated_at');
+    const reminders = getViewPreset('inbox', 'reminders');
+    expect(reminders?.clientFilters).toEqual({ and: ['reminders-not-done'] });
+    expect(reminders?.sortMethod).toBe('updated_at');
+  });
 
   it('never compiles channel or email filter trees', () => {
     // The touched-by-me query rejects channel/email trees with a 400, so

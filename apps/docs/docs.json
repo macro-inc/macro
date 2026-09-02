@@ -46,6 +46,7 @@
           "product/snippets",
           "product/channels",
           "product/calls",
+          "product/calendar",
           "product/folders",
           "product/crm"
         ]

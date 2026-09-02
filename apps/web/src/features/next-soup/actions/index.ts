@@ -31,6 +31,7 @@ export {
   makeMarkUnreadAction,
 } from './make-mark-unread-action';
 export { makeMoveToProjectAction } from './make-move-to-project-action';
+export { makeMuteAction } from './make-mute-action';
 export { makeRemoveFromProjectAction } from './make-remove-from-project-action';
 export { makeRenameAction } from './make-rename-action';
 export { makeSetCompanyPropertyAction } from './make-set-company-property-action';

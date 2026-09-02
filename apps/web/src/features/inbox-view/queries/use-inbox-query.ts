@@ -247,7 +247,9 @@ export function useInboxDataSource(
   const items = createMemo<InboxDataSourceItem[]>(() => {
     let result: InboxDataSourceItem[];
     if (state.groupBy === 'date' && !search.isSearching()) {
-      result = buildGroupedSoupRows(groupInboxEntitiesByDate(entities().items));
+      result = buildGroupedSoupRows(
+        groupInboxEntitiesByDate(entities().items, state.tab)
+      );
     } else {
       result = buildFlatSoupRows(entities().items);
     }

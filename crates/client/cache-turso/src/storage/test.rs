@@ -23,6 +23,7 @@ fn record(value: &str) -> Record {
 
 fn queued(label: &str) -> NewQueuedMutation {
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation::new(
             MutationRequest {
                 query: format!("mutation {label} {{ update {{ id }} }}"),
@@ -312,7 +313,7 @@ fn queue_diagnostics_use_the_created_at_covering_index_at_scale() {
         let storage = TursoStorage::open_in_memory("queue-diagnostics-plan").unwrap();
         raw_execute(
             &storage,
-            "WITH RECURSIVE values_to_insert(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM values_to_insert WHERE value < 10000) INSERT INTO mutation_queue (query, variables_json, created_at_ms) SELECT 'mutation Scale { scale }', '{}', 10001 - value FROM values_to_insert",
+            "WITH RECURSIVE values_to_insert(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM values_to_insert WHERE value < 10000) INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) SELECT printf('00000000-0000-4000-8000-%012d', value), 'mutation Scale { scale }', '{}', 10001 - value FROM values_to_insert",
             Vec::new(),
         );
         let plan = driver::query(
@@ -408,6 +409,44 @@ fn fresh_schema_metadata_foreign_keys_quick_check_and_cascade_are_real() {
         assert_eq!(
             raw_scalar(&storage, "SELECT COUNT(*) FROM optimistic_layers"),
             0
+        );
+    });
+}
+
+#[test]
+fn partial_uuid_index_rejects_two_current_rows_but_allows_superseded_history() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("partial-current-uuid-index").unwrap();
+        let uuid = uuid::Uuid::new_v4();
+        let mut first = queued("First");
+        first.uuid = uuid;
+        let first_id = storage.enqueue_mutation(first).await.unwrap();
+
+        assert!(
+            driver::execute(
+                &storage.connection(),
+                "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                vec![text(&uuid.to_string()), text("mutation Duplicate { x }"), text("{}"), Value::from_i64(2)],
+            )
+            .is_err()
+        );
+        raw_execute(
+            &storage,
+            "UPDATE mutation_queue SET superseded = 1 WHERE id = ?1",
+            vec![Value::from_i64(mutation_id_to_sql(first_id).unwrap())],
+        );
+        assert_eq!(
+            raw_execute(
+                &storage,
+                "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                vec![
+                    text(&uuid.to_string()),
+                    text("mutation Current { x }"),
+                    text("{}"),
+                    Value::from_i64(3)
+                ],
+            ),
+            1
         );
     });
 }
@@ -816,6 +855,10 @@ fn every_metadata_mismatch_and_missing_schema_requests_physical_reset() {
                 "queue-diagnostics-index",
                 "DROP INDEX mutation_queue_created_at_ms_idx",
             ),
+            (
+                "queue-current-uuid-index",
+                "DROP INDEX mutation_queue_current_uuid_idx",
+            ),
             ("search-table", "DROP TABLE search_documents"),
             ("search-index", "DROP INDEX search_documents_browse_idx"),
         ] {
@@ -872,6 +915,8 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
         )"#,
         r#"create table 'mutation_queue' (
             'id' integer /* AUTOINCREMENT UNIQUE CHECK COLLATE */ primary key autoincrement,
+            "uuid" text not null,
+            [superseded] integer default ((0)) not null,
             "query" text not null,
             [operation_name] text,
             `variables_json` text not null,
@@ -885,6 +930,7 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
             "created_at_ms" integer not null
         )"#,
         "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
+        "CREATE UNIQUE INDEX mutation_queue_current_uuid_idx ON mutation_queue(uuid) WHERE superseded = 0",
         r#"create table `optimistic_layers` (
             `mutation_id` integer primary key,
             [optimistic_data_json] text not null,
@@ -1175,8 +1221,9 @@ fn corrupt_keys_blobs_queue_relationships_and_numerics_request_reset() {
         let storage = TursoStorage::open_in_memory("missing-layer").unwrap();
         raw_execute(
             &storage,
-            "INSERT INTO mutation_queue (query, variables_json, created_at_ms) VALUES (?1, ?2, ?3)",
+            "INSERT INTO mutation_queue (uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
             vec![
+                text("00000000-0000-4000-8000-000000000001"),
                 text("mutation Missing { x }"),
                 text("{}"),
                 Value::from_i64(0),
@@ -1257,14 +1304,36 @@ fn corrupt_keys_blobs_queue_relationships_and_numerics_request_reset() {
             );
         }
 
+        for (name, assignment) in [
+            ("invalid-uuid", "uuid = 'not-a-uuid'"),
+            ("invalid-superseded", "superseded = 2"),
+        ] {
+            let mut storage = TursoStorage::open_in_memory(name).unwrap();
+            let id = storage.enqueue_mutation(queued(name)).await.unwrap();
+            raw_execute(
+                &storage,
+                &format!("UPDATE mutation_queue SET {assignment} WHERE id = ?1"),
+                vec![Value::from_i64(mutation_id_to_sql(id).unwrap())],
+            );
+            assert_eq!(
+                storage
+                    .load_mutation_queue()
+                    .await
+                    .unwrap_err()
+                    .physical_reset_reason(),
+                Some(PhysicalResetReason::Invariant)
+            );
+        }
+
         for invalid_id in [0, -1] {
             let storage =
                 TursoStorage::open_in_memory(&format!("invalid-id-{invalid_id}")).unwrap();
             raw_execute(
                 &storage,
-                "INSERT INTO mutation_queue (id, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4)",
+                "INSERT INTO mutation_queue (id, uuid, query, variables_json, created_at_ms) VALUES (?1, ?2, ?3, ?4, ?5)",
                 vec![
                     Value::from_i64(invalid_id),
+                    text("00000000-0000-4000-8000-000000000002"),
                     text("mutation Invalid { x }"),
                     text("{}"),
                     Value::from_i64(0),
@@ -1587,6 +1656,54 @@ fn record_and_projection_patch_roll_back_together_on_storage_fault() {
             fact.attribute == Token::new("server-relation").unwrap()
                 && fact.value == predicate_index::ExactValue::new([1]).unwrap()
         }));
+    });
+}
+
+#[test]
+fn every_uuid_upsert_fault_rolls_back_queue_layer_and_shadow_changes() {
+    block_on(async {
+        for fault_index in 0..=3 {
+            let mut storage =
+                TursoStorage::open_in_memory(&format!("uuid-upsert-fault-{fault_index}")).unwrap();
+            let uuid = uuid::Uuid::new_v4();
+            let mut first = queued("First");
+            first.uuid = uuid;
+            storage
+                .enqueue_mutation_with_shadow(
+                    first,
+                    vec![pending_projection("Thing:1", "user-1", 10)],
+                )
+                .await
+                .unwrap();
+            let queue_before = storage.load_mutation_queue().await.unwrap();
+            let shadow_before = storage
+                .load_optimistic_projections(&[PredicateRecordKey::new("Thing:1").unwrap()])
+                .await
+                .unwrap();
+
+            let mut replacement = queued("Replacement");
+            replacement.uuid = uuid;
+            storage.arm_fault(TestFault::After {
+                site: TestFaultSite::Enqueue,
+                index: fault_index,
+            });
+            storage
+                .enqueue_mutation_with_shadow(
+                    replacement,
+                    vec![pending_projection("Thing:1", "user-2", 20)],
+                )
+                .await
+                .unwrap_err();
+
+            assert_eq!(storage.load_mutation_queue().await.unwrap(), queue_before);
+            assert_eq!(
+                storage
+                    .load_optimistic_projections(&[PredicateRecordKey::new("Thing:1").unwrap()])
+                    .await
+                    .unwrap(),
+                shadow_before
+            );
+        }
     });
 }
 

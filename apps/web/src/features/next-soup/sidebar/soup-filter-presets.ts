@@ -34,12 +34,12 @@ type SoupFiltersPreset = {
    */
   sortDirection?: 'asc' | 'desc';
   /**
-   * Server sort this tab's meaning requires (e.g. `touched_by_me`), taking
-   * precedence over the client sort state. Tabs that force one usually also
-   * clear the client sort (`SoupView`'s `initialClientSort={[]}`) so the
-   * server's ordering survives to the rendered rows. Frecency is excluded:
-   * it is a different query flavor with its own client handling, not a
-   * per-tab ordering.
+   * Server sort this tab's meaning requires (e.g. `touched_by_me`,
+   * `notified_at`), taking precedence over the client sort state. Tabs that
+   * force one usually also pin the client sort (`SoupView`'s
+   * `initialClientSort`) so the server's ordering survives to the rendered
+   * rows. Frecency is excluded: it is a different query flavor with its own
+   * client handling, not a per-tab ordering.
    */
   sortMethod?: Exclude<NonNullable<Params['sort_method']>, 'frecency'>;
 };
@@ -183,16 +183,27 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   inbox: {
     default: 'signal',
     tabs: {
+      // Signal and Noise order by when the viewer was last notified about
+      // each row, not by the row's own recency: a comment on a week-old
+      // task is today's news. The sort is also a filter (rows without a
+      // notification are absent), which is what these tabs mean anyway.
+      // The inbox's client sort (`notified_at`, see `SoupView`) keeps the
+      // server order and buckets the date headers on the same timestamp.
       signal: () => ({
         filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
         groupBy: 'date',
+        sortMethod: 'notified_at',
       }),
       noise: () => ({
         filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
         groupBy: 'date',
+        sortMethod: 'notified_at',
       }),
+      // All and Reminders keep their recency ordering. Named explicitly
+      // because the inbox's client sort id is not an API sort method, so
+      // without a preset value the API would fall back to created_at.
       all: () => ({
         filters: {
           // Calendar events are not rendered by Soup, and CRM companies are
@@ -219,6 +230,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         },
         clientFilters: { and: ['explicit-noise'] },
         groupBy: 'date',
+        sortMethod: 'updated_at',
       }),
       // Every reminder still on the hook: the ones coming up and the ones that
       // have fired and are waiting to be dealt with (fired ones also surface in
@@ -233,6 +245,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
         clientFilters: { and: ['reminders-not-done'] },
         sortDirection: 'asc',
+        sortMethod: 'updated_at',
       }),
     },
   },

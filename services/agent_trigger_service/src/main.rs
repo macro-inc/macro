@@ -6,7 +6,7 @@ use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::processing::process_channel_event;
 use agent_trigger::domain::service::AgentTriggerService;
 use agent_trigger::outbound::{
-    BotRepoAgentLookup, ChannelThreadHistory, FastModelTriggerJudge, LexicalReplyDetector,
+    BotRepoAgentLookup, ChannelThreadHistory, FastModelTriggerJudge, LexicalExplicitReplyExtractor,
 };
 use anyhow::Context as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
@@ -70,7 +70,7 @@ async fn run() -> anyhow::Result<()> {
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
-        LexicalReplyDetector::new(lexical),
+        LexicalExplicitReplyExtractor::new(lexical),
         FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
         ChannelThreadHistory::new(PgChannelsRepo::new(pool)),
     );

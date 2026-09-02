@@ -19,6 +19,7 @@ use item_filters::{
     EntityFilters,
     ast::{
         EntityFilterAst, ExpandErr,
+        calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         crm_company::CrmCompanyLiteral,
         email::EmailLiteral,
@@ -33,11 +34,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_grouping::GroupingConfig;
 use models_pagination::{
-    Cursor, CursorWithValAndFilter, Frecency, Query, SimpleSortMethod, TouchedByMe,
+    Cursor, CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
 };
 use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
+use recursion::CollapsibleExt;
 use reminders::domain::models::SoupOrder;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -166,6 +168,9 @@ pub enum SoupQuery<T> {
     /// Query filtered and sorted by the user's own latest mutation per
     /// entity (the activity log's touched-by-me surface).
     Touched(TouchedQueryInner<T>),
+    /// Query filtered and sorted by the user's latest notification per
+    /// entity (the inbox's notified-at surface).
+    Notified(NotifiedQueryInner<T>),
 }
 
 impl<T> SoupQuery<T> {
@@ -182,6 +187,9 @@ impl<T> SoupQuery<T> {
             }
             SoupQuery::Touched(TouchedQueryInner(i)) => {
                 SoupQuery::Touched(TouchedQueryInner(i.map_filter(f)))
+            }
+            SoupQuery::Notified(NotifiedQueryInner(i)) => {
+                SoupQuery::Notified(NotifiedQueryInner(i.map_filter(f)))
             }
         }
     }
@@ -203,6 +211,14 @@ pub struct FrecencyQueryInner<T>(pub(crate) Query<Uuid, Frecency, T>);
 /// [`TouchedPagePosition::entity_id`]).
 #[derive(Debug)]
 pub struct TouchedQueryInner<T>(pub(crate) Query<String, TouchedByMe, T>);
+
+/// the inner private type for [SoupQuery::Notified]
+///
+/// The id is a [String] for the same reason as [`TouchedQueryInner`]: the
+/// keyset compares it byte-for-byte against `notification.event_item_id`,
+/// an unconstrained TEXT column.
+#[derive(Debug)]
+pub struct NotifiedQueryInner<T>(pub(crate) Query<String, NotifiedAt, T>);
 
 impl<T> SoupQuery<T> {
     /// create a new instance of a [SimpleSortMethod] with [T] this is used to
@@ -252,12 +268,29 @@ impl<T> SoupQuery<T> {
         SoupQuery::Touched(TouchedQueryInner(models_pagination::Query::Cursor(cursor)))
     }
 
+    /// create a new instance of a [NotifiedAt] query with [T]. This is used
+    /// to construct the initial page request. To paginate an existing cursor
+    /// see [Self::new_cursor_notified]
+    pub fn new_sort_notified(filters: T) -> Self {
+        SoupQuery::Notified(NotifiedQueryInner(models_pagination::Query::Sort(
+            NotifiedAt, filters,
+        )))
+    }
+
+    /// create a new instance of a [NotifiedAt] query with an existing cursor
+    /// on [T]. This is used to continue paginating on an existing cursor.
+    /// To create a new initial page see [Self::new_sort_notified]
+    pub fn new_cursor_notified(cursor: CursorWithValAndFilter<String, NotifiedAt, T>) -> Self {
+        SoupQuery::Notified(NotifiedQueryInner(models_pagination::Query::Cursor(cursor)))
+    }
+
     /// Returns the filter payload embedded in this query.
     pub fn filter(&self) -> &T {
         match self {
             SoupQuery::Simple(SimpleQueryInner(query)) => query.filter(),
             SoupQuery::Frecency(FrecencyQueryInner(query)) => query.filter(),
             SoupQuery::Touched(TouchedQueryInner(query)) => query.filter(),
+            SoupQuery::Notified(NotifiedQueryInner(query)) => query.filter(),
         }
     }
 }
@@ -274,6 +307,9 @@ impl SoupQuery<EntityFilters> {
             )),
             SoupQuery::Touched(TouchedQueryInner(query)) => Ok(SoupQuery::Touched(
                 TouchedQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
+            )),
+            SoupQuery::Notified(NotifiedQueryInner(query)) => Ok(SoupQuery::Notified(
+                NotifiedQueryInner(query.try_map_filter(EntityFilterAst::new_from_filters)?),
             )),
         }
     }
@@ -433,6 +469,19 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 SoupQuery::Frecency(_) => None,
                 // touched-by-me hydrates emails by thread id, not via this leg
                 SoupQuery::Touched(_) => None,
+                // notified-at hydrates its email candidates through this leg
+                // with the request's own tree, so the view and every email
+                // literal keep applying: the handler ANDs the thread ids in.
+                SoupQuery::Notified(NotifiedQueryInner(query)) => Some(Query::Sort(
+                    SimpleSortMethod::UpdatedAt,
+                    with_properties_filter(
+                        query
+                            .filter()
+                            .as_ref()
+                            .and_then(|f| f.email_filter.tree.clone()),
+                        properties_filter,
+                    ),
+                )),
             }?,
             include_frecency: false,
             team_receipt,
@@ -450,6 +499,7 @@ impl SoupRequest<Option<EntityFilterAst>> {
             }))) => filter.as_ref(),
             SoupQuery::Frecency(_) => None,
             SoupQuery::Touched(TouchedQueryInner(query)) => query.filter().as_ref(),
+            SoupQuery::Notified(NotifiedQueryInner(query)) => query.filter().as_ref(),
         }
     }
 
@@ -506,6 +556,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 // call records carry no activity of their own (calls land on
                 // the channel), so the touched feed never includes them
                 SoupQuery::Touched(_) => None,
+                // call notifications are not rolled into the notified feed
+                SoupQuery::Notified(_) => None,
             }?,
         })
     }
@@ -557,6 +609,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
             SoupQuery::Frecency(_) => return None,
             // CRM has no mutation activity (deferred from touched-by-me)
             SoupQuery::Touched(_) => return None,
+            // CRM companies receive no notifications
+            SoupQuery::Notified(_) => return None,
         };
 
         let sort = match sort_method {
@@ -608,6 +662,8 @@ impl SoupRequest<Option<EntityFilterAst>> {
         // Reminders sort on `next_run_at` regardless of the requested method,
         // so there is nothing to translate — but frecency has no reminder
         // scoring and reminders record no activity, so both paths skip them.
+        // Notified-at keeps the leg: a fired reminder notifies its owner, and
+        // the handler narrows `reminder_ids` to the page's candidates.
         if matches!(self.cursor, SoupQuery::Frecency(_) | SoupQuery::Touched(_)) {
             return None;
         }
@@ -666,6 +722,15 @@ impl SoupRequest<Option<EntityFilterAst>> {
                 SoupQuery::Frecency(_) => None,
                 // touched-by-me hydrates channels by id, not via this leg
                 SoupQuery::Touched(_) => None,
+                // notified-at hydrates its channel candidates through this
+                // leg with the request's own tree; the handler ANDs the ids in
+                SoupQuery::Notified(NotifiedQueryInner(query)) => Some(Query::Sort(
+                    SimpleSortMethod::UpdatedAt,
+                    query
+                        .filter()
+                        .as_ref()
+                        .and_then(|f| f.channel_filter.clone()),
+                )),
             }?,
         })
     }
@@ -697,6 +762,16 @@ impl SoupRequest<Option<EntityFilterAst>> {
             // channel-thread rows carry no activity (messages attribute to
             // the channel), so the touched feed never includes them
             SoupQuery::Touched(_) => None,
+            // notified-at hydrates thread-scoped channel notifications through
+            // this leg with the request's own tree; the handler ANDs the
+            // thread ids in
+            SoupQuery::Notified(NotifiedQueryInner(query)) => Some(Query::Sort(
+                SimpleSortMethod::UpdatedAt,
+                query
+                    .filter()
+                    .as_ref()
+                    .and_then(|f| f.channel_thread_filter.clone()),
+            )),
         }?;
 
         Some(GetThreadReplyRowsRequest {
@@ -734,6 +809,15 @@ impl SoupRequest<Option<EntityFilterAst>> {
             // foreign entities record no activity, so the touched feed never
             // includes them
             SoupQuery::Touched(_) => None,
+            // notified-at hydrates its foreign-entity candidates through this
+            // leg with the request's own tree; the handler ANDs the ids in
+            SoupQuery::Notified(NotifiedQueryInner(query)) => Some(Query::Sort(
+                SimpleSortMethod::UpdatedAt,
+                query
+                    .filter()
+                    .as_ref()
+                    .and_then(|filter| filter.foreign_entity_filter.clone()),
+            )),
         }
     }
 
@@ -788,6 +872,97 @@ pub struct TouchedEntity {
     pub entity: Entity<'static>,
     /// The user's latest mutation of it.
     pub touched_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Keyset position for a notified-at page: the notification timestamp and
+/// event item id of the previous page's last candidate.
+///
+/// Like [`TouchedPagePosition`], the id stays the raw stored string: the SQL
+/// keyset compares it byte-for-byte against `notification.event_item_id`.
+#[derive(Debug, Clone)]
+pub struct NotifiedPagePosition {
+    /// When the last candidate's latest notification was created for the user.
+    pub notified_at: chrono::DateTime<chrono::Utc>,
+    /// The last candidate's event item id — the tiebreaker when two
+    /// candidates share a notification timestamp.
+    pub entity_id: String,
+}
+
+/// Parameters for one page of notified-at candidates.
+#[derive(Debug)]
+pub struct NotifiedSoupRequest<'a> {
+    /// User whose notifications are listed; also the access-check subject.
+    pub user_id: MacroUserIdStr<'a>,
+    /// Maximum candidates to return.
+    pub limit: u16,
+    /// Resume after this position; `None` for the first page.
+    pub after: Option<NotifiedPagePosition>,
+    /// Entity filters folded into the candidate query where soup owns the
+    /// fold (documents, chats, projects, calendar events, properties).
+    pub filter: Option<&'a EntityFilterAst>,
+    /// Every inbox the caller can read; gates email-thread candidates.
+    pub link_ids: &'a [Uuid],
+    /// Sources (the caller and their team) whose stored foreign entities the
+    /// caller may see; gates foreign-entity candidates.
+    pub foreign_entity_sources: &'a [SourceId],
+    /// Entity types whose candidates the domain can hydrate for this request.
+    /// Types outside this set are never returned, whatever the notifications
+    /// table holds.
+    pub hydratable: NotifiedHydratableTypes,
+}
+
+/// Which domain-hydrated entity types a notified-at request can surface.
+///
+/// The repository gates documents, chats, projects and calendar events on
+/// the filter tree itself; these four are hydrated through other domains'
+/// legs, so whether that leg is active for the request is decided by the
+/// service and passed down here.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NotifiedHydratableTypes {
+    /// The channel leg is active.
+    pub channels: bool,
+    /// The channel-thread leg is active. Thread-scoped channel notifications
+    /// (mentions and replies, which name their thread root as the secondary
+    /// event item) surface as thread rows, the way the client attributes them.
+    pub channel_threads: bool,
+    /// The email leg is active.
+    pub email_threads: bool,
+    /// The foreign-entity leg is active.
+    pub foreign_entities: bool,
+    /// The reminder leg is active (the request opted into reminders).
+    pub reminders: bool,
+}
+
+/// One notified entity: what it is and when the user was last notified.
+#[derive(Debug, Clone)]
+pub struct NotifiedEntity {
+    /// The entity the notification is about.
+    pub entity: Entity<'static>,
+    /// When the user's latest notification about it was created.
+    pub notified_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Whether the notified-at candidate query can fold this calendar filter.
+///
+/// Only id and notification-state literals have a soup-owned fold; the rest
+/// (status, time bounds, attendee, organizer) live in the calendar leg's
+/// query builder, which the candidate query cannot reach. Rejecting up front
+/// beats silently returning a feed with those events unfiltered.
+pub(crate) fn calendar_filter_supported_by_notified(
+    tree: Option<&Expr<CalendarEventLiteral>>,
+) -> bool {
+    tree.is_none_or(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(a) => a,
+            filter_ast::ExprFrame::Literal(
+                CalendarEventLiteral::Id(_)
+                | CalendarEventLiteral::NotificationDone(_)
+                | CalendarEventLiteral::NotificationSeen(_),
+            ) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
 }
 
 /// ANDs a properties filter into the email filter tree as thread-level
@@ -1034,10 +1209,19 @@ fn reminder_or_is_sets_only(expr: &Expr<ReminderLiteral>, out: &mut ReminderFilt
 /// This value is internal hydration state. It is deliberately separate from
 /// public Soup entity models so relation-backed facts do not become business
 /// fields on [`models_soup::document::SoupDocument`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoupDocumentServerFacts {
     /// Whether `document_email` contains a row for the document.
     pub is_email_attachment: bool,
+    /// Whether the document is important to the requesting viewer.
+    ///
+    /// Non-task documents are important. Tasks are important when the viewer
+    /// appears in the authoritative Assignees system property.
+    pub is_important: bool,
+    /// Complete authoritative Status select-option IDs for a task.
+    ///
+    /// Non-task documents and tasks without a Status value carry an empty set.
+    pub status_option_ids: Vec<uuid::Uuid>,
 }
 
 /// An authorized Soup item and any server-only facts read by the same
@@ -1083,6 +1267,10 @@ pub struct EnrichedSoupItem {
     /// the page was ordered by `touched_by_me`. Clients sort and optimistic-
     /// reorder the touched feed on this value.
     pub touched_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When the caller was last notified about this entity, populated only
+    /// when the page was ordered by `notified_at`. Clients sort and bucket
+    /// the notified feed on this value.
+    pub notified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// A soup request with optional grouping configuration.
@@ -1123,6 +1311,10 @@ pub enum SoupErr {
     /// Rejecting beats silently returning a feed with that type missing.
     #[error("sort_method=touched_by_me does not support {0} filters")]
     TouchedUnsupportedFilter(&'static str),
+    /// A notified-at query carried a filter kind this mode cannot evaluate
+    /// (the fold lives in another domain's query builder).
+    #[error("sort_method=notified_at does not support {0} filters")]
+    NotifiedUnsupportedFilter(&'static str),
     /// The filter requested CRM-scoped data but the caller has no
     /// qualifying team membership.
     #[error("CRM-scoped queries require team membership")]

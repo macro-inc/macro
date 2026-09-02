@@ -6,6 +6,7 @@ import {
   makeCreateReminderAction,
   makeFavoriteAction,
   makeMarkDoneAction,
+  makeMuteAction,
   markReminderTargetDone,
 } from '@app/features/next-soup/actions';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -29,6 +30,7 @@ import { buildEntityData, type EntityData } from '@entity';
 import DotsThree from '@icon/dots-three-large.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import BellSimple from '@phosphor/bell-simple.svg';
+import BellSlash from '@phosphor/bell-slash.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import Check from '@phosphor/check.svg';
@@ -38,7 +40,7 @@ import Rename from '@phosphor/pencil-line.svg';
 import Star from '@phosphor/star.svg';
 import Tag from '@phosphor/tag.svg';
 import Trash from '@phosphor/trash-simple.svg';
-import { blockNameToItemType, type ItemType } from '@service-storage/client';
+import { blockNameToItemType, type ItemType } from '@service-storage/itemType';
 import { cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
@@ -372,6 +374,9 @@ export function SplitFileMenu(props: {
   const favoriteAction = makeFavoriteAction();
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
     notificationSource: () => notificationSource,
@@ -417,6 +422,21 @@ export function SplitFileMenu(props: {
         void favoriteAction.execute([entity]);
       },
       hotkeyToken: blockHotkeyToken(TOKENS.entity.action.favorite),
+      group: 'macro' as const,
+    };
+  };
+
+  const muteOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    if (!entity || !muteAction.canExecute(entity)) return undefined;
+    const muted = muteAction.isMuted(entity);
+    return {
+      label: muted ? 'Unmute notifications' : 'Mute notifications',
+      icon: muted ? BellSimple : BellSlash,
+      action: () => {
+        void muteAction.execute([entity]);
+      },
+      hotkeyToken: blockHotkeyToken(TOKENS.entity.action.mute),
       group: 'macro' as const,
     };
   };
@@ -622,6 +642,7 @@ export function SplitFileMenu(props: {
       .filter((op) => !!op);
     return [
       favoriteOp(),
+      muteOp(),
       reminderOp(),
       addTagOp(),
       copyLinkOp(),

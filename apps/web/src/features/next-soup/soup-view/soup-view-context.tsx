@@ -9,6 +9,7 @@ import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
   createSoupState,
   type GroupMeta,
+  type SortConfig,
   type SoupEntity,
   type SoupRow,
   type SoupState,
@@ -39,6 +40,7 @@ import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
+import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
 import { deduplicateEntities } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -179,6 +181,9 @@ interface SoupViewContextValues {
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  /** The sort the rows are rendered in: the active tab's forced sort when
+   * it has one the client can reproduce, else the sort state. */
+  clientSort: Accessor<SortConfig<SoupEntity>[]>;
   getPersistedActiveTab: (view: ListView) => string | undefined;
   viewMode: Accessor<SoupViewMode>;
   setViewMode: Setter<SoupViewMode>;
@@ -275,7 +280,7 @@ const persistedPredicatesFor = (
 
 type ApiSortMethod = Exclude<
   NonNullable<SoupParams['sort_method']>,
-  'frecency' | 'touched_by_me'
+  'frecency' | 'touched_by_me' | 'notified_at'
 >;
 const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'viewed_at',
@@ -666,6 +671,16 @@ export const SoupViewContextProvider: FlowComponent<
 
   // Sits below `activeTab`/`userId` because the page direction comes from the
   // active tab's preset, which some views resolve against user context.
+  const activePreset = createMemo(() => {
+    const view = activeListView();
+    return view
+      ? getViewPreset(view, activeTab(), {
+          userId: userId(),
+          isTeamAdmin: isTeamAdmin(),
+        })
+      : undefined;
+  });
+
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
 
@@ -680,12 +695,7 @@ export const SoupViewContextProvider: FlowComponent<
     // user's own touches — not to the sort method state, so the preset owns
     // them. Omitted when absent so the server default (desc) applies and
     // the query keys of every existing view stay byte-identical.
-    const preset = view
-      ? getViewPreset(view, activeTab(), {
-          userId: userId(),
-          isTeamAdmin: isTeamAdmin(),
-        })
-      : undefined;
+    const preset = activePreset();
     const sortDirection = preset?.sortDirection;
 
     return {
@@ -695,6 +705,17 @@ export const SoupViewContextProvider: FlowComponent<
       ...(sortDirection ? { sort_direction: sortDirection } : {}),
     };
   });
+
+  // A tab whose preset forces the notified server sort pins the client sort
+  // to match, so the rows keep the page's order and the date headers bucket
+  // on the same stamp; every other tab sorts by the sort state, so the
+  // inbox's All and Reminders tabs stay on update recency even when a row
+  // carries a notification stamp from a Signal page or a live delivery.
+  const clientSort = createMemo((): SortConfig<SoupEntity>[] =>
+    activePreset()?.sortMethod === 'notified_at'
+      ? [SORT_CONFIGS.notified_at]
+      : soup.sort.active()
+  );
 
   // Active deal-stage set (team-customized when present). Drives the
   // Customers view's stage grouping, stage filter and group labels.
@@ -1101,7 +1122,7 @@ export const SoupViewContextProvider: FlowComponent<
 
     transformed = deduplicateEntities(next);
 
-    const sorts = soup.sort.active();
+    const sorts = clientSort();
     if (sorts.length > 0 && !search.isSearching()) {
       transformed.sort((a, b) => {
         for (const sort of sorts) {
@@ -1331,9 +1352,19 @@ export const SoupViewContextProvider: FlowComponent<
       >();
       const order: string[] = [];
       const now = new Date();
+      // Under the inbox's notified sort a row belongs to the day it was last
+      // notified about, not the day its content last changed — otherwise a
+      // fresh comment on a stale task sits under "Yesterday" while sorting
+      // as today's.
+      const bucketOnNotification =
+        clientSort()[0]?.id === SORT_CONFIGS.notified_at.id;
 
       for (const entity of all) {
-        const ts = entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
+        const ts =
+          (bucketOnNotification ? entity.notifiedAt : undefined) ??
+          entity.sortTs ??
+          entity.updatedAt ??
+          entity.createdAt;
         const bucket = dateBucket(ts, now);
         let group = buckets.get(bucket.key);
 
@@ -1547,6 +1578,7 @@ export const SoupViewContextProvider: FlowComponent<
     setInboxFilter,
     activeTab,
     setActiveTab,
+    clientSort,
     getPersistedActiveTab,
     viewMode,
     setViewMode,

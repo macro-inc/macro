@@ -1,15 +1,16 @@
+import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
 import { scrubActiveContent } from '@core/email';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
 import { $dfsIterator } from '@lexical/utils';
+import type { DocumentMentionInfo } from '@macro-inc/lexical-core';
 import {
   $createClassedBlockNode,
   $createDocumentMentionNode,
   $createHtmlRenderNode,
   $isClassedBlockNode,
   type ClassedBlockNode,
-  type DocumentMentionInfo,
 } from '@macro-inc/lexical-core';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import {
@@ -375,58 +376,6 @@ function getAppendedReplyElement(
   return wrapper;
 }
 
-function convertMentionsToLinks(root: ParentNode) {
-  const mentionElements = root.querySelectorAll<HTMLElement>(
-    '[data-document-mention="true"]'
-  );
-  let mentions: DocumentMentionInfo[] = [];
-  mentionElements.forEach((el) => {
-    const mention: DocumentMentionInfo = {
-      documentId: el.getAttribute('data-document-id') || '',
-      documentName: el.getAttribute('data-document-name') || '',
-      blockName: el.getAttribute('data-block-name') || '',
-      blockParams: el.getAttribute('data-block-params')
-        ? JSON.parse(el.getAttribute('data-block-params') || '{}')
-        : undefined,
-      mentionUuid: el.getAttribute('data-mention-uuid') || undefined,
-      collapsed: el.getAttribute('data-collapsed')
-        ? Boolean(el.getAttribute('data-collapsed'))
-        : undefined,
-      channelType: el.getAttribute('data-channel-type') || undefined,
-    };
-    if (!mention.documentId || !mention.documentName || !mention.blockName)
-      return;
-    const href =
-      window.location.origin +
-      '/app/' +
-      mention.blockName +
-      '/' +
-      mention.documentId;
-    const link = document.createElement('a');
-    link.href = href;
-    link.textContent = mention.documentName;
-    // Preserve mention data attributes so importDOM() can recreate Lexical nodes
-    link.setAttribute('data-document-mention', 'true');
-    link.setAttribute('data-document-id', mention.documentId);
-    link.setAttribute('data-document-name', mention.documentName);
-    link.setAttribute('data-block-name', mention.blockName);
-    if (mention.blockParams)
-      link.setAttribute(
-        'data-block-params',
-        JSON.stringify(mention.blockParams)
-      );
-    if (mention.mentionUuid)
-      link.setAttribute('data-mention-uuid', mention.mentionUuid);
-    if (mention.collapsed)
-      link.setAttribute('data-collapsed', mention.collapsed.toString());
-    if (mention.channelType)
-      link.setAttribute('data-channel-type', mention.channelType);
-    el.replaceWith(link);
-    mentions.push(mention);
-  });
-  return mentions;
-}
-
 function applyMediaScale(container: Element) {
   const mediaElements = container.querySelectorAll<HTMLElement>(
     'img[data-scale], video[data-scale]'
@@ -487,7 +436,7 @@ export function prepareEmailBodyFromHtml(
   applyMediaScale(parsed.body);
 
   // Convert Macro document mentions to HTML links in the parsed DOM
-  const mentions = convertMentionsToLinks(parsed.body);
+  const mentions = convertDocumentMentionsToLinks(parsed.body);
 
   // HtmlRenderNode exports as declarative shadow DOM; email clients and the
   // backend sanitizer drop template content, so inline it

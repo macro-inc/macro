@@ -1,10 +1,12 @@
 use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
-        GetRemindersRequest, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner, SimpleSortQuery,
-        SimpleSortRequest, SoupDocumentServerFacts, SoupErr, SoupProjectionHydration,
-        SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
-        TouchedPagePosition, TouchedQueryInner, TouchedSoupRequest, grouping::ItemGroupingInfo,
+        GetRemindersRequest, GroupedSortRequest, IntoSoupReqAst, NotifiedEntity,
+        NotifiedHydratableTypes, NotifiedPagePosition, NotifiedQueryInner, NotifiedSoupRequest,
+        SimpleQueryInner, SimpleSortQuery, SimpleSortRequest, SoupDocumentServerFacts, SoupErr,
+        SoupProjectionHydration, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection,
+        SoupType, TouchedPagePosition, TouchedQueryInner, TouchedSoupRequest,
+        calendar_filter_supported_by_notified, grouping::ItemGroupingInfo,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
@@ -33,12 +35,17 @@ use frecency::domain::{
     },
     ports::FrecencyQueryService,
 };
-use item_filters::ast::{EntityFilterAst, channel::ChannelLiteral, email::EmailLiteral};
+use item_filters::ast::{
+    EntityFilterAst,
+    channel::{ChannelLiteral, ChannelThreadLiteral},
+    email::EmailLiteral,
+    foreign_entity::ForeignEntityLiteral,
+};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
+use model_entity::{Entity, EntityType};
 use models_pagination::{
-    Base64Str, Cursor, CursorVal, Frecency, FrecencyValue, Identify, PaginateOn, Paginated, Query,
-    SimpleSortMethod, SortOn, TouchedByMe,
+    Base64Str, Cursor, CursorVal, Frecency, FrecencyValue, Identify, NotifiedAt, PaginateOn,
+    Paginated, Query, SimpleSortMethod, SortOn, TouchedByMe,
 };
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{
@@ -69,16 +76,18 @@ struct SoupCandidate {
     document_server_facts: Option<SoupDocumentServerFacts>,
     frecency_score: Option<AggregateFrecency>,
     touched_at: Option<chrono::DateTime<chrono::Utc>>,
+    notified_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl SoupCandidate {
-    /// A candidate with no frecency or touch timestamp loaded yet.
+    /// A candidate with no frecency, touch or notification timestamp loaded yet.
     fn plain(item: SoupItem<()>) -> Self {
         SoupCandidate {
             item,
             document_server_facts: None,
             frecency_score: None,
             touched_at: None,
+            notified_at: None,
         }
     }
 
@@ -89,6 +98,45 @@ impl SoupCandidate {
             document_server_facts: hydration.document_server_facts,
             frecency_score: None,
             touched_at: None,
+            notified_at: None,
+        }
+    }
+}
+
+/// Upper bound on candidate pages one notified-at page may consume while
+/// refilling after hydration drops (see `handle_notified_request`).
+const MAX_NOTIFIED_FILL_ROUNDS: usize = 4;
+
+/// The per-domain hydration legs a notified-at page can draw on, built from
+/// the request the same way the simple path builds its sub-requests. A `None`
+/// leg is off for this request, and its entity type never enters the
+/// candidate query.
+struct NotifiedHydrationLegs {
+    /// Every inbox the caller can read; gates email-thread candidates.
+    link_ids: Vec<Uuid>,
+    email: Option<GetEmailsRequest>,
+    comms: Option<GetChannelsRequest>,
+    comms_threads: Option<GetThreadReplyRowsRequest>,
+    foreign_entities: Option<(Vec<SourceId>, ForeignEntityListQuery)>,
+    reminders: Option<GetRemindersRequest<'static>>,
+}
+
+/// ANDs a leg's request-level filter tree onto the page's id tree, so the
+/// leg returns exactly the candidates that also satisfy the request.
+fn with_id_tree<T: Clone>(ids: Arc<Expr<T>>, tree: Option<&Arc<Expr<T>>>) -> Arc<Expr<T>> {
+    match tree {
+        Some(tree) => Arc::new(Expr::and(Arc::unwrap_or_clone(ids), (**tree).clone())),
+        None => ids,
+    }
+}
+
+/// Parses a candidate's id for a leg keyed by uuid, logging and skipping the
+/// row when the unconstrained TEXT column holds something else.
+fn push_candidate_uuid(ids: &mut Vec<Uuid>, entity: &Entity<'_>, leg: &'static str) {
+    match Uuid::parse_str(&entity.entity_id) {
+        Ok(id) => ids.push(id),
+        Err(error) => {
+            tracing::warn!(error = ?error, leg, "notified entity id is not a uuid; skipping")
         }
     }
 }
@@ -647,6 +695,350 @@ where
         Ok((candidates, next))
     }
 
+    /// Runs one page of the notified-at feed: fetches (entity, notified_at)
+    /// candidates from the user's notifications, hydrates each entity type by
+    /// id, and reassembles the page in notification order.
+    ///
+    /// Channel, channel-thread, email, foreign-entity and reminder candidates
+    /// hydrate through their own domains' legs with the request's filter tree
+    /// for that type ANDed in, so those filters apply at hydration rather
+    /// than in the candidate query. A candidate the leg does not return is dropped and
+    /// the page refills from the next candidate page, bounded by
+    /// [`MAX_NOTIFIED_FILL_ROUNDS`] so a run of filtered-out candidates still
+    /// answers promptly — with a cursor to continue from, since the feed is
+    /// only exhausted once the candidate query itself runs dry.
+    #[tracing::instrument(err, skip(self, cursor, legs))]
+    async fn handle_notified_request(
+        &self,
+        cursor: Query<String, NotifiedAt, Option<EntityFilterAst>>,
+        soup_type: SoupType,
+        user: MacroUserIdStr<'static>,
+        limit: u16,
+        legs: NotifiedHydrationLegs,
+        include_projection: bool,
+    ) -> Result<(Vec<SoupCandidate>, Option<NotifiedPagePosition>), SoupErr> {
+        let filter = cursor.filter().as_ref();
+        // Calendar events hydrate by id through the main query, which takes
+        // no filter, so the candidate query must fold the calendar tree
+        // itself — and it only knows the id and notification literals.
+        if !calendar_filter_supported_by_notified(
+            filter.and_then(|f| f.calendar_event_filter.as_deref()),
+        ) {
+            return Err(SoupErr::NotifiedUnsupportedFilter("calendar_event"));
+        }
+
+        let mut after = match &cursor {
+            Query::Sort(_, _) => None,
+            Query::Cursor(c) => Some(NotifiedPagePosition {
+                notified_at: c.val.last_val,
+                entity_id: c.id.clone(),
+            }),
+        };
+        let foreign_entity_sources: Vec<SourceId> = legs
+            .foreign_entities
+            .as_ref()
+            .map(|(sources, _)| sources.clone())
+            .unwrap_or_default();
+        let hydratable = NotifiedHydratableTypes {
+            channels: legs.comms.is_some(),
+            channel_threads: legs.comms_threads.is_some(),
+            email_threads: legs.email.is_some(),
+            foreign_entities: legs.foreign_entities.is_some(),
+            reminders: legs.reminders.is_some(),
+        };
+        let page_len = usize::from(limit);
+
+        let mut page: Vec<SoupCandidate> = Vec::with_capacity(page_len);
+        let mut next = None;
+        for _ in 0..MAX_NOTIFIED_FILL_ROUNDS {
+            let candidates = self
+                .soup_storage
+                .notified_soup_page(NotifiedSoupRequest {
+                    user_id: user.copied(),
+                    limit,
+                    after: after.clone(),
+                    filter,
+                    link_ids: &legs.link_ids,
+                    foreign_entity_sources: &foreign_entity_sources,
+                    hydratable,
+                })
+                .await
+                .map_err(anyhow::Error::from)?;
+            let candidate_page_full = candidates.len() == page_len;
+            let mut hydrated = self
+                .hydrate_notified_candidates(
+                    &candidates,
+                    soup_type,
+                    &user,
+                    &legs,
+                    include_projection,
+                )
+                .await?;
+
+            // Walk candidates in feed order until the page is full. The
+            // cursor is the last candidate walked, kept or dropped: anything
+            // after it is re-fetched by the next page.
+            let mut walked = None;
+            let mut consumed = 0;
+            for candidate in &candidates {
+                if page.len() == page_len {
+                    break;
+                }
+                consumed += 1;
+                walked = Some(NotifiedPagePosition {
+                    notified_at: candidate.notified_at,
+                    entity_id: candidate.entity.entity_id.to_string(),
+                });
+                let key = (
+                    candidate.entity.entity_type,
+                    candidate.entity.entity_id.to_string(),
+                );
+                if let Some(mut item) = hydrated.remove(&key) {
+                    item.notified_at = Some(candidate.notified_at);
+                    page.push(item);
+                }
+            }
+
+            let exhausted = !candidate_page_full && consumed == candidates.len();
+            if page.len() == page_len {
+                next = if exhausted { None } else { walked };
+                break;
+            }
+            if exhausted {
+                next = None;
+                break;
+            }
+            next = walked.clone();
+            after = walked;
+        }
+
+        Ok((page, next))
+    }
+
+    /// Hydrates one candidate page's entities through the by-id queries and
+    /// the domain legs, keyed by entity for reassembly in candidate order.
+    async fn hydrate_notified_candidates(
+        &self,
+        candidates: &[NotifiedEntity],
+        soup_type: SoupType,
+        user: &MacroUserIdStr<'static>,
+        legs: &NotifiedHydrationLegs,
+        include_projection: bool,
+    ) -> Result<HashMap<(EntityType, String), SoupCandidate>, SoupErr> {
+        let mut main_entities = Vec::new();
+        let mut project_entities = Vec::new();
+        let mut channel_ids = Vec::new();
+        let mut thread_ids = Vec::new();
+        let mut email_ids = Vec::new();
+        let mut foreign_entity_ids = Vec::new();
+        let mut reminder_ids = Vec::new();
+        for candidate in candidates {
+            match candidate.entity.entity_type {
+                // Calendar events ride the main by-ids query in both soup types.
+                EntityType::Document | EntityType::Chat | EntityType::CalendarEvent => {
+                    main_entities.push(candidate.entity.copied())
+                }
+                // Same split as the touched feed: the expanded by-ids query
+                // omits project rows, so they hydrate unexpanded separately.
+                EntityType::Project => match soup_type {
+                    SoupType::Expanded => project_entities.push(candidate.entity.copied()),
+                    SoupType::UnExpanded => main_entities.push(candidate.entity.copied()),
+                },
+                EntityType::Channel => {
+                    push_candidate_uuid(&mut channel_ids, &candidate.entity, "channel")
+                }
+                // Thread-scoped channel notifications are keyed on their
+                // thread root, which is the thread row's id.
+                EntityType::ChannelMessage => {
+                    push_candidate_uuid(&mut thread_ids, &candidate.entity, "channel thread")
+                }
+                EntityType::EmailThread => {
+                    push_candidate_uuid(&mut email_ids, &candidate.entity, "email")
+                }
+                EntityType::ForeignEntity => {
+                    push_candidate_uuid(&mut foreign_entity_ids, &candidate.entity, "foreign")
+                }
+                EntityType::Reminder => {
+                    push_candidate_uuid(&mut reminder_ids, &candidate.entity, "reminder")
+                }
+                // The candidate query only returns the types above.
+                _ => {}
+            }
+        }
+
+        let comms_request = legs.comms.as_ref().and_then(|template| {
+            let ids = balanced_or_tree(
+                channel_ids
+                    .iter()
+                    .map(|id| Expr::val(ChannelLiteral::ChannelId(*id)))
+                    .collect(),
+            )?;
+            Some(GetChannelsRequest {
+                macro_id: user.clone(),
+                limit: Some(channel_ids.len() as u32),
+                include_frecency: false,
+                query: Query::Sort(
+                    SimpleSortMethod::UpdatedAt,
+                    Some(with_id_tree(ids, template.query.filter().as_ref())),
+                ),
+            })
+        });
+        let comms_thread_request = legs.comms_threads.as_ref().and_then(|template| {
+            let ids = balanced_or_tree(
+                thread_ids
+                    .iter()
+                    .map(|id| Expr::val(ChannelThreadLiteral::ThreadId(*id)))
+                    .collect(),
+            )?;
+            Some(GetThreadReplyRowsRequest {
+                macro_id: user.clone(),
+                limit: Some(thread_ids.len() as u32),
+                query: Query::Sort(
+                    SimpleSortMethod::UpdatedAt,
+                    Some(with_id_tree(ids, template.query.filter().as_ref())),
+                ),
+            })
+        });
+        let email_request = legs.email.as_ref().and_then(|template| {
+            let ids = balanced_or_tree(
+                email_ids
+                    .iter()
+                    .map(|id| Expr::val(EmailLiteral::ThreadId(*id)))
+                    .collect(),
+            )?;
+            Some(GetEmailsRequest {
+                view: template.view.clone(),
+                link_ids: template.link_ids.clone(),
+                macro_id: user.clone(),
+                limit: Some(email_ids.len() as u32),
+                query: Query::Sort(
+                    SimpleSortMethod::UpdatedAt,
+                    Some(with_id_tree(ids, template.query.filter().as_ref())),
+                ),
+                include_frecency: false,
+                team_receipt: template.team_receipt.clone(),
+                crm_scope: template.crm_scope.clone(),
+            })
+        });
+        let (foreign_entity_sources, foreign_entity_query) = legs
+            .foreign_entities
+            .as_ref()
+            .and_then(|(sources, template)| {
+                let ids = balanced_or_tree(
+                    foreign_entity_ids
+                        .iter()
+                        .map(|id| Expr::val(ForeignEntityLiteral::Id(*id)))
+                        .collect(),
+                )?;
+                Some((
+                    sources.clone(),
+                    Query::Sort(
+                        SimpleSortMethod::UpdatedAt,
+                        Some(with_id_tree(ids, template.filter().as_ref())),
+                    ),
+                ))
+            })
+            .map_or((Vec::new(), None), |(sources, query)| {
+                (sources, Some(query))
+            });
+        let reminder_request = legs.reminders.as_ref().and_then(|template| {
+            // A request naming specific reminders keeps that constraint;
+            // otherwise the page's candidates are the id set. An empty
+            // intersection skips the leg: an empty id list means every
+            // reminder to the reminders service.
+            let ids: Vec<Uuid> = if template.reminder_ids.is_empty() {
+                reminder_ids.clone()
+            } else {
+                reminder_ids
+                    .iter()
+                    .copied()
+                    .filter(|id| template.reminder_ids.contains(id))
+                    .collect()
+            };
+            if ids.is_empty() {
+                return None;
+            }
+            Some(GetRemindersRequest {
+                user_id: template.user_id.clone(),
+                limit: ids.len() as i64,
+                reminder_ids: ids,
+                entities: template.entities.clone(),
+                completed: template.completed,
+                fired: template.fired,
+                order: template.order,
+            })
+        });
+
+        // The repo error type is not Send, so it cannot ride through
+        // tokio::join!; convert inside the future instead.
+        let main_items_fut = async {
+            self.handle_soup_by_ids(
+                soup_type,
+                AdvancedSortParams {
+                    entities: &main_entities,
+                    user_id: user.copied(),
+                },
+                include_projection,
+            )
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(SoupErr::from)
+        };
+        let project_items_fut = async {
+            if project_entities.is_empty() {
+                return Ok(Vec::new());
+            }
+            self.soup_storage
+                .unexpanded_soup_by_ids(AdvancedSortParams {
+                    entities: &project_entities,
+                    user_id: user.copied(),
+                })
+                .await
+                .map_err(anyhow::Error::from)
+                .map_err(SoupErr::from)
+        };
+        let (
+            main_items,
+            project_items,
+            channel_candidates,
+            thread_candidates,
+            email_candidates,
+            foreign_entity_candidates,
+            reminder_candidates,
+        ) = tokio::join!(
+            main_items_fut,
+            project_items_fut,
+            self.handle_comms_request(comms_request),
+            self.handle_comms_thread_request(comms_thread_request),
+            self.handle_email_request(email_request),
+            self.handle_foreign_entity_request(
+                Some(user.to_string()),
+                foreign_entity_sources,
+                foreign_entity_ids.len() as u32,
+                foreign_entity_query,
+            ),
+            self.handle_reminder_request(reminder_request),
+        );
+
+        let mut candidates_by_entity = HashMap::new();
+        for candidate in main_items?
+            .into_iter()
+            .chain(project_items?.into_iter().map(SoupCandidate::plain))
+            .chain(channel_candidates?)
+            .chain(thread_candidates?)
+            .chain(email_candidates?)
+            .chain(foreign_entity_candidates?)
+            .chain(reminder_candidates?)
+        {
+            let key = {
+                let entity = candidate.item.entity();
+                (entity.entity_type, entity.entity_id.to_string())
+            };
+            candidates_by_entity.insert(key, candidate);
+        }
+        Ok(candidates_by_entity)
+    }
+
     #[tracing::instrument(err, skip(self, req))]
     async fn handle_email_request(
         &self,
@@ -693,6 +1085,7 @@ where
                 document_server_facts: None,
                 frecency_score,
                 touched_at: None,
+                notified_at: None,
             },
         )))
     }
@@ -720,6 +1113,7 @@ where
                             document_server_facts: None,
                             frecency_score,
                             touched_at: None,
+                            notified_at: None,
                         }
                     })
                 })?,
@@ -892,7 +1286,12 @@ where
 
         let (items, enrichments): (Vec<_>, Vec<_>) = items
             .into_iter()
-            .map(|item| (item.item, (item.frecency_score, item.touched_at)))
+            .map(|item| {
+                (
+                    item.item,
+                    (item.frecency_score, item.touched_at, item.notified_at),
+                )
+            })
             .unzip();
         let items = self
             .soup_storage
@@ -908,11 +1307,14 @@ where
         Ok(items
             .into_iter()
             .zip(enrichments)
-            .map(|(item, (frecency_score, touched_at))| EnrichedSoupItem {
-                item,
-                frecency_score,
-                touched_at,
-            })
+            .map(
+                |(item, (frecency_score, touched_at, notified_at))| EnrichedSoupItem {
+                    item,
+                    frecency_score,
+                    touched_at,
+                    notified_at,
+                },
+            )
             .collect())
     }
 
@@ -939,6 +1341,9 @@ where
                 self.populate_properties_page(user_id, page).await?,
             )),
             SoupOutput::Touched(page) => Ok(SoupOutput::Touched(
+                self.populate_properties_page(user_id, page).await?,
+            )),
+            SoupOutput::Notified(page) => Ok(SoupOutput::Notified(
                 self.populate_properties_page(user_id, page).await?,
             )),
         }
@@ -994,6 +1399,10 @@ where
             SoupOutput::Touched(page) => Ok(SoupOutput::Touched(
                 self.populate_frecency_page(user_id, page).await?,
             )),
+            // Likewise for notified sorting, which orders on notifications.
+            SoupOutput::Notified(page) => Ok(SoupOutput::Notified(
+                self.populate_frecency_page(user_id, page).await?,
+            )),
         }
     }
 
@@ -1010,6 +1419,7 @@ where
                 .map_extra(|()| SoupPropertiesField::default()),
             frecency_score: candidate.frecency_score,
             touched_at: candidate.touched_at,
+            notified_at: candidate.notified_at,
         })
     }
 
@@ -1032,6 +1442,7 @@ where
                     .map_extra(|()| SoupPropertiesField::default()),
                 frecency_score: candidate.frecency_score,
                 touched_at: candidate.touched_at,
+                notified_at: candidate.notified_at,
             },
             document_server_facts: candidate.document_server_facts,
         })
@@ -1229,6 +1640,42 @@ where
                     })
                 });
                 Ok(SoupOutput::Touched(Paginated::from_parts(
+                    candidates,
+                    next_cursor,
+                )))
+            }
+            SoupQuery::Notified(NotifiedQueryInner(cursor)) => {
+                let legs = NotifiedHydrationLegs {
+                    link_ids: req.link_ids,
+                    email: email_request,
+                    comms: comms_request,
+                    comms_threads: comms_thread_request,
+                    foreign_entities: foreign_entity_query
+                        .map(|query| (foreign_entity_source_ids, query)),
+                    reminders: reminder_request,
+                };
+                let (candidates, next) = self
+                    .handle_notified_request(
+                        cursor,
+                        req.soup_type,
+                        req.user,
+                        limit,
+                        legs,
+                        include_projection,
+                    )
+                    .await?;
+                let next_cursor = next.map(|position| {
+                    Base64Str::encode_json(Cursor {
+                        id: position.entity_id,
+                        limit: limit.into(),
+                        val: CursorVal {
+                            sort_type: NotifiedAt,
+                            last_val: position.notified_at,
+                        },
+                        filter: entity_filter,
+                    })
+                });
+                Ok(SoupOutput::Notified(Paginated::from_parts(
                     candidates,
                     next_cursor,
                 )))

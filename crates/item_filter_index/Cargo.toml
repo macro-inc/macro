@@ -17,3 +17,4 @@ uuid = { workspace = true, features = ["js"] }
 [dev-dependencies]
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type", default-features = false }
+system_properties = { path = "../system_properties" }

@@ -39,6 +39,7 @@ import {
 import { CombinedError, type OperationResult } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
+import { v5 as uuidv5 } from 'uuid';
 import {
   buildOptimisticGroupedPropertyUpdates,
   groupedPropertyKeys,
@@ -335,6 +336,26 @@ function mutationDisposition(
   return { kind: 'committed', property: result.data.setEntityProperty };
 }
 
+const ENTITY_PROPERTY_OPTIMISTIC_UUID_NAMESPACE =
+  '1697e6bc-0d9a-4dd2-bc3f-bd33bcb6f607';
+
+/** Stable coalescing UUID for one absolute entity-property value slot. */
+export function entityPropertyOptimisticMutationUuid(args: {
+  entityType: GraphqlPropertyTargetEntityType;
+  entityId: string;
+  propertyDefinitionId: string;
+}): string {
+  return uuidv5(
+    JSON.stringify([
+      'setEntityProperty',
+      args.entityType,
+      args.entityId,
+      args.propertyDefinitionId,
+    ]),
+    ENTITY_PROPERTY_OPTIMISTIC_UUID_NAMESPACE
+  );
+}
+
 const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
   SetEntityPropertyMutation,
   SetEntityPropertyMutationVariables,
@@ -356,10 +377,24 @@ const executeGraphqlEntityPropertyMutation: UrqlMutationExecutor<
         mutation,
         variables,
         { setEntityProperty: args.optimisticProperty },
-        args.optimisticCache
+        {
+          ...args.optimisticCache,
+          uuid: entityPropertyOptimisticMutationUuid(args),
+        }
       ).toPromise()
     : client.mutation(mutation, variables, context).toPromise());
   const disposition = mutationDisposition(mutationResult);
+  if (
+    disposition.kind === 'queued' &&
+    mutationResult.data == null &&
+    args.optimisticProperty
+  ) {
+    return {
+      ...mutationResult,
+      data: { setEntityProperty: args.optimisticProperty },
+      error: undefined,
+    };
+  }
   if (disposition.kind !== 'permanently-failed' || mutationResult.error) {
     return mutationResult;
   }

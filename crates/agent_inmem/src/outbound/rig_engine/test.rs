@@ -8,8 +8,14 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     let prompt = system_prompt(&TOOLS, Some("be terse"), None);
 
     assert!(
-        prompt.starts_with(&format!("{TOOLS}\n{}", prompt::agent_session::PROMPT)),
-        "the standing prompt comes first, unchanged"
+        prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
+        "the session preamble comes first"
+    );
+    assert!(
+        prompt.contains(&format!(
+            "{TOOLS}\n<session_instructions>\nbe terse\n</session_instructions>"
+        )),
+        "the static Macro prompt sits immediately before session instructions"
     );
     assert!(prompt.ends_with("\n<session_instructions>\nbe terse\n</session_instructions>"));
 }

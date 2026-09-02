@@ -287,6 +287,7 @@ where
                 bot_id: session.bot_id,
                 origin_channel_id: prompt.origin.channel_id,
                 origin_thread_id: prompt.origin.thread_id,
+                origin_message_id: prompt.origin.message_id,
                 prompted_message_id: self
                     .inner
                     .sessions
@@ -474,6 +475,7 @@ where
                 bot_id: request.bot_id,
                 origin_channel_id: thread.channel_id,
                 origin_thread_id: thread.thread_id,
+                origin_message_id: thread.message_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
                 prompted_content: thread.content,
                 triggered_by: request.owner,
@@ -899,6 +901,7 @@ where
                 bot_id,
                 origin_channel_id: origin.channel_id,
                 origin_thread_id: origin.thread_id,
+                origin_message_id: origin.message_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
                 prompted_content: origin.content.clone(),
                 triggered_by: origin.sender.clone(),
@@ -1103,6 +1106,7 @@ where
             bot_id: session.bot_id,
             origin_channel_id: origin.channel_id,
             origin_thread_id: origin.thread_id,
+            origin_message_id: origin.message_id,
             prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,
             prompted_content: prompt.prompt.clone(),
             triggered_by: triggered_by.clone(),

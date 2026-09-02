@@ -7,14 +7,15 @@ fn the_example_config_parses() {
     let config: Config = toml::from_str(EXAMPLE).expect("example config parses");
     assert_eq!(config.harness.command, "opencode");
     assert_eq!(config.harness.args, vec!["acp"]);
-    assert_eq!(config.server.port, 8790);
     assert_eq!(config.identity.name.as_deref(), Some("erics-macbook"));
     assert_eq!(config.identity.scope, IdentityScope::Private);
-    assert_eq!(config.server.signing_secret, None);
-    assert_eq!(
-        config.server.public_url,
-        "http://sdk-webhook-relay:8787/macro-events"
-    );
+}
+
+#[test]
+fn leftover_server_section_is_ignored() {
+    let with_server =
+        format!("{EXAMPLE}\n[server]\nport = 8790\npublic_url = \"http://example/macro-events\"\n");
+    toml::from_str::<Config>(&with_server).expect("legacy server section still parses");
 }
 
 #[test]
