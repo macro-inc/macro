@@ -21,7 +21,6 @@ import {
   getKafkaClusterPolicy,
   stack,
   getGatewayAlb,
-  GATEWAY_PRIORITIES,
   GatewayService,
 } from '../../packages/shared';
 
@@ -317,7 +316,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
         listenerArn: gatewayLoadBalancer.httpsListenerArn,
         vpcId: vpc.vpcId,
         containerPort: serviceContainerPort,
-        priority: GATEWAY_PRIORITIES[GatewayService.DOCUMENT_STORAGE_SERVICE],
+        service: GatewayService.DOCUMENT_STORAGE_SERVICE,
         healthCheckPath,
         pathPatterns: ['/dss', '/dss/*'],
         serviceSecurityGroupId: this.serviceSg.id,
