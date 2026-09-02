@@ -55,7 +55,7 @@ export function MessageCard(props: MessageCardProps) {
 
   return (
     <div class="shrink-0 flex justify-center w-full">
-      <div class="@container macro-message-width macro-message-padding w-full">
+      <div class="@container/message macro-message-width macro-message-padding w-full">
         <div
           class={cn(
             'relative p-4 rounded-lg bg-message border border-edge-muted outline-none',
