@@ -1,3 +1,4 @@
+import type { PropertyDefinitionDomain } from '@property/types';
 import { Show } from 'solid-js';
 import { describeAction } from '../core/describe-action';
 import type { ActivityEvent } from '../core/event';
@@ -14,6 +15,7 @@ function capitalize(value: string): string {
  */
 export function ActionPhrase(props: {
   event: ActivityEvent;
+  propertyDefinition?: PropertyDefinitionDomain;
   capitalize?: boolean;
 }) {
   return (
@@ -30,7 +32,11 @@ export function ActionPhrase(props: {
       }
     >
       {(change) => (
-        <PropertyChangeText action={change()} capitalize={props.capitalize} />
+        <PropertyChangeText
+          action={change()}
+          definition={props.propertyDefinition}
+          capitalize={props.capitalize}
+        />
       )}
     </Show>
   );

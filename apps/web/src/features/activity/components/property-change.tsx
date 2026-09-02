@@ -1,5 +1,4 @@
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
-import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { TagDot } from '@property/tags/TagDot';
 import type { PropertyDefinitionDomain } from '@property/types';
 import { For, Show } from 'solid-js';
@@ -25,11 +24,10 @@ type PropertyChangedAction = Extract<
  */
 export function PropertyChangeText(props: {
   action: PropertyChangedAction;
+  definition: PropertyDefinitionDomain | undefined;
   capitalize?: boolean;
 }) {
-  const definitions = useAllProperties();
-  const definition = () =>
-    definitions().find((def) => def.id === props.action.property);
+  const definition = () => props.definition;
   const name = () => definition()?.displayName ?? 'a property';
   const cleared = () =>
     props.action.to === null || props.action.to === undefined;

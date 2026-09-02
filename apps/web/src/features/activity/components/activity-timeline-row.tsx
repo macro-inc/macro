@@ -1,4 +1,5 @@
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
+import type { PropertyDefinitionDomain } from '@property/types';
 import { type JSX, Show } from 'solid-js';
 import { describeActionForEntity } from '../core/describe-action';
 import type { ActivityEvent } from '../core/event';
@@ -35,6 +36,7 @@ export function ActivityTimelineRow(props: {
   actorName?: string;
   showActor?: boolean;
   display?: EntityDisplay;
+  propertyDefinition?: PropertyDefinitionDomain;
   rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
 }) {
   const showActor = () => props.showActor !== false;
@@ -65,7 +67,11 @@ export function ActivityTimelineRow(props: {
               </span>
             </Show>
             <span class="min-w-0 truncate text-ink-muted">
-              <ActionPhrase event={props.event} capitalize={!showActor()} />
+              <ActionPhrase
+                event={props.event}
+                propertyDefinition={props.propertyDefinition}
+                capitalize={!showActor()}
+              />
             </span>
             <Timestamp event={props.event} />
           </RowBody>
@@ -77,6 +83,7 @@ export function ActivityTimelineRow(props: {
             display={display()}
             showActor={showActor()}
             actorName={actorName()}
+            propertyDefinition={props.propertyDefinition}
             rowProps={props.rowProps}
           />
         )}
@@ -99,6 +106,7 @@ function EntityRow(props: {
   display: EntityDisplay;
   showActor: boolean;
   actorName: string;
+  propertyDefinition?: PropertyDefinitionDomain;
   rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
 }) {
   const parts = () => describeActionForEntity(props.event.action);
@@ -122,6 +130,7 @@ function EntityRow(props: {
           {(change) => (
             <PropertyChangeText
               action={change()}
+              definition={props.propertyDefinition}
               capitalize={!props.showActor}
             />
           )}

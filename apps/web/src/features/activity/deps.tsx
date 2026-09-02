@@ -1,3 +1,4 @@
+import type { PropertyDefinitionDomain } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Client } from '@urql/core';
 import {
@@ -47,6 +48,10 @@ export type ActivityDeps = {
   ) => EntityDisplay;
   /** Open an entity in the split layout. */
   openEntity: (target: OpenEntityTarget) => void;
+  /** The property definition behind a property-changed row, when known. */
+  propertyDefinition: (
+    propertyId: Accessor<string | undefined>
+  ) => Accessor<PropertyDefinitionDomain | undefined>;
   /** IANA time zone used to bucket the overview heatmap. */
   timeZone: () => string;
 };

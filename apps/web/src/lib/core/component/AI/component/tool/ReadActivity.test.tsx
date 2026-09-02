@@ -29,10 +29,6 @@ const definitions = [
   } as unknown as PropertyDefinitionDomain,
 ];
 
-vi.mock('@property/editor/hooks/useAllProperties', () => ({
-  useAllProperties: () => () => definitions,
-}));
-
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
@@ -42,6 +38,8 @@ vi.mock(
 );
 
 const deps = createFakeActivityDeps({
+  propertyDefinition: (id) => () =>
+    definitions.find((definition) => definition.id === id()),
   entityDisplay: () => ({
     name: () => 'Launch plan',
     icon: () => null,

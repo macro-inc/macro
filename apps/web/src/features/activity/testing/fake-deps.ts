@@ -38,6 +38,7 @@ export function createFakeActivityDeps(
     openEntity: (target) => {
       opened.push(target);
     },
+    propertyDefinition: () => () => undefined,
     timeZone: () => 'UTC',
     ...overrides,
     graphqlFake,

@@ -4,11 +4,11 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
 import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
-import { AppActivityDeps } from '../app-deps';
 import { ActionPhrase } from '../components/action-phrase';
 import { ActorName } from '../components/actor-name';
+import { changedPropertyId } from '../core/action-property';
 import type { ActivityEvent } from '../core/event';
-import { ActivityDepsProvider, useActivityDeps } from '../deps';
+import { useActivityDeps } from '../deps';
 import { createActorName } from '../state/actor-name';
 import { createEntityActivityState } from '../state/entity-activity';
 import { useEntityActivityFlag } from '../use-entity-activity-flag';
@@ -23,9 +23,8 @@ export interface EntityActivitySectionProps {
 }
 
 /**
- * Composition root for the side-panel Activity section: flag gate, then the
- * app wiring, then the section. Nothing mounts (and no query is issued)
- * while the rollout is off.
+ * The side-panel Activity section behind its flag. Nothing mounts (and no
+ * query is issued) while the rollout is off.
  */
 export function EntityActivitySectionConditional(
   props: EntityActivitySectionProps
@@ -33,14 +32,12 @@ export function EntityActivitySectionConditional(
   const enabled = useEntityActivityFlag();
   return (
     <Show when={enabled()}>
-      <AppActivityDeps>
-        <EntityActivitySection {...props} />
-      </AppActivityDeps>
+      <EntityActivitySection {...props} />
     </Show>
   );
 }
 
-/** The section itself. Mount under `ActivityDepsProvider`. */
+/** The section itself. Needs `ActivityDeps` in context. */
 export function EntityActivitySection(props: EntityActivitySectionProps) {
   const deps = useActivityDeps();
   const state = createEntityActivityState(deps, {
@@ -52,29 +49,25 @@ export function EntityActivitySection(props: EntityActivitySectionProps) {
     return current.t === 'ready' ? current : undefined;
   };
 
-  // Section children render inside the side panel host, outside this
-  // component's owner tree, so the deps context has to be re-provided.
   return (
     <Show when={state.isEnabled()}>
       <SidePanel.Section id="activity" title="Activity" order={props.order}>
-        <ActivityDepsProvider deps={deps}>
-          <Suspense fallback={<SidePanel.Loading />}>
-            <Switch>
-              <Match when={state.view().t === 'loading'}>
-                <SidePanel.Loading />
-              </Match>
-              <Match when={state.view().t === 'error'}>
-                <SidePanel.EmptyPill label="Activity is unavailable" />
-              </Match>
-              <Match when={state.view().t === 'empty'}>
-                <SidePanel.EmptyPill label="No activity yet" />
-              </Match>
-              <Match when={ready()}>
-                {(current) => <ReadyActivityList events={current().events} />}
-              </Match>
-            </Switch>
-          </Suspense>
-        </ActivityDepsProvider>
+        <Suspense fallback={<SidePanel.Loading />}>
+          <Switch>
+            <Match when={state.view().t === 'loading'}>
+              <SidePanel.Loading />
+            </Match>
+            <Match when={state.view().t === 'error'}>
+              <SidePanel.EmptyPill label="Activity is unavailable" />
+            </Match>
+            <Match when={state.view().t === 'empty'}>
+              <SidePanel.EmptyPill label="No activity yet" />
+            </Match>
+            <Match when={ready()}>
+              {(current) => <ReadyActivityList events={current().events} />}
+            </Match>
+          </Switch>
+        </Suspense>
       </SidePanel.Section>
     </Show>
   );
@@ -118,6 +111,9 @@ function ReadyActivityList(props: { events: ActivityEvent[] }) {
 function ActivityRow(props: { event: ActivityEvent }) {
   const deps = useActivityDeps();
   const name = createActorName(deps, () => props.event.actorId);
+  const definition = deps.propertyDefinition(() =>
+    changedPropertyId(props.event.action)
+  );
   return (
     <div
       class="flex min-h-7 min-w-0 items-center gap-2 px-2 py-1"
@@ -129,7 +125,7 @@ function ActivityRow(props: { event: ActivityEvent }) {
           <ActorName name={name()} />
         </span>
         <span class="min-w-0 text-ink-muted">
-          <ActionPhrase event={props.event} />
+          <ActionPhrase event={props.event} propertyDefinition={definition()} />
         </span>
       </span>
       <span class="ml-auto shrink-0 text-ink-extra-muted">

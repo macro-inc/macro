@@ -1,5 +1,6 @@
 import { Show } from 'solid-js';
 import { ActivityTimelineRow as ActivityTimelineRowView } from '../components/activity-timeline-row';
+import { changedPropertyId } from '../core/action-property';
 import { type ActivityEvent, toPropertyEntityType } from '../core/event';
 import { useActivityDeps } from '../deps';
 import { createEntityOpener } from '../state/entity-opener';
@@ -12,6 +13,9 @@ export function ActivityTimelineRow(props: {
 }) {
   const deps = useActivityDeps();
   const entityType = () => toPropertyEntityType(props.event.entityType);
+  const definition = deps.propertyDefinition(() =>
+    changedPropertyId(props.event.action)
+  );
 
   return (
     <Show
@@ -21,6 +25,7 @@ export function ActivityTimelineRow(props: {
           event={props.event}
           actorName={props.actorName}
           showActor={props.showActor}
+          propertyDefinition={definition()}
         />
       }
     >
@@ -36,6 +41,7 @@ export function ActivityTimelineRow(props: {
             actorName={props.actorName}
             showActor={props.showActor}
             display={opener.display}
+            propertyDefinition={definition()}
             rowProps={opener.handlers}
           />
         );

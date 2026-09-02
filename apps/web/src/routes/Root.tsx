@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { AppActivityDeps } from '@app/features/activity/app-deps';
 import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
 import { Login } from '@app/features/auth/Login';
 import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
@@ -597,20 +598,24 @@ export function Root() {
                                 <ChatAttachmentsInit />
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
-                                <Suspense>
-                                  <IsomorphicRouter
-                                    transformUrl={transformShortIdInUrlPathname}
-                                    root={Layout}
-                                    rootPreload={rootPreload}
-                                    base={ROUTER_BASE}
-                                  >
-                                    {{
-                                      path: '/',
-                                      component: TauriRouteListener,
-                                      children: ROUTES,
-                                    }}
-                                  </IsomorphicRouter>
-                                </Suspense>
+                                <AppActivityDeps>
+                                  <Suspense>
+                                    <IsomorphicRouter
+                                      transformUrl={
+                                        transformShortIdInUrlPathname
+                                      }
+                                      root={Layout}
+                                      rootPreload={rootPreload}
+                                      base={ROUTER_BASE}
+                                    >
+                                      {{
+                                        path: '/',
+                                        component: TauriRouteListener,
+                                        children: ROUTES,
+                                      }}
+                                    </IsomorphicRouter>
+                                  </Suspense>
+                                </AppActivityDeps>
                                 <InitialInteractiveOnboardingModal />
                                 <ToastRegion />
                               </SearchProvider>

@@ -1,16 +1,13 @@
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
+import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { ParentProps } from 'solid-js';
-import {
-  type ActivityDeps,
-  ActivityDepsProvider,
-  useOptionalActivityDeps,
-} from './deps';
+import { type ActivityDeps, ActivityDepsProvider } from './deps';
 
-/** The production wiring. Call inside the app's user and split contexts. */
+/** The production wiring. Call inside the app's user context. */
 export function createAppActivityDeps(): ActivityDeps {
   const userId = useUserId();
   return {
@@ -26,18 +23,25 @@ export function createAppActivityDeps(): ActivityDeps {
       usePropertyEntityDisplay(entityId, entityType),
     openEntity: ({ block, id, params, newSplit }) =>
       openDocument(block, id, params, newSplit),
+    propertyDefinition: (propertyId) => {
+      const definitions = useAllProperties();
+      return () => {
+        const id = propertyId();
+        return id ? definitions().find((def) => def.id === id) : undefined;
+      };
+    },
     timeZone: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   };
 }
 
 /**
- * Mounts the app wiring at a composition root. Reuses an enclosing provider
- * when one exists, so a test can wrap a root in fakes.
+ * Mounts the app wiring once, at the app root, so every activity surface
+ * (feed view, side-panel sections, AI tool rows) shares it. Tests never
+ * render this; they provide fakes through `ActivityDepsProvider`.
  */
 export function AppActivityDeps(props: ParentProps) {
-  const existing = useOptionalActivityDeps();
   return (
-    <ActivityDepsProvider deps={existing ?? createAppActivityDeps()}>
+    <ActivityDepsProvider deps={createAppActivityDeps()}>
       {props.children}
     </ActivityDepsProvider>
   );

@@ -1,4 +1,3 @@
-import { AppActivityDeps } from '@app/features/activity/app-deps';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -237,11 +236,7 @@ const MyActivityView = lazy(() =>
 
 function TrackedMyActivityView() {
   usePageViewTracking('activity');
-  return (
-    <AppActivityDeps>
-      <MyActivityView />
-    </AppActivityDeps>
-  );
+  return <MyActivityView />;
 }
 
 function MyActivityViewWrapper() {
