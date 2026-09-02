@@ -1,4 +1,4 @@
-use crate::domain::meta::{claude_code, command_from_raw_input};
+use crate::domain::harness::{claude_code, command_from_raw_input};
 use agent_client_protocol::schema::v1::Meta;
 use serde_json::json;
 

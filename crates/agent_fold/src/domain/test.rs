@@ -2,8 +2,8 @@
 //! [`util`] for what they share.
 
 mod fold;
+mod harness;
 mod machine;
-mod meta;
 mod metadata;
 mod real_recordings;
 mod service;
