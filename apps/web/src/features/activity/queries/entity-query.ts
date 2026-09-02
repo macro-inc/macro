@@ -6,8 +6,8 @@ import {
   type EntityActivityQuery,
   type EntityActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createMemo } from 'solid-js';
+import type { ActivityDeps } from '../deps';
 import {
   type EntityActivityResult,
   selectEntityActivity,
@@ -32,7 +32,10 @@ type EntityActivityQueryOptions = {
  * properties query, so the same entity types are supported (everything but
  * `USER`) and the query pauses (`isEnabled` false) for the rest.
  */
-export function createEntityActivityQuery(options: EntityActivityQueryOptions) {
+export function createEntityActivityQuery(
+  deps: Pick<ActivityDeps, 'graphql'>,
+  options: EntityActivityQueryOptions
+) {
   const input = createMemo(() => {
     const entityId = options.entityId();
     if (!options.enabled() || entityId.length === 0) return undefined;
@@ -49,7 +52,7 @@ export function createEntityActivityQuery(options: EntityActivityQueryOptions) {
 
     return {
       query: EntityActivityDocument,
-      client: getGraphqlSoupClient(),
+      client: deps.graphql(),
       variables: {
         input: currentInput!,
         limit: options.limit ?? ENTITY_ACTIVITY_PREVIEW_LIMIT,

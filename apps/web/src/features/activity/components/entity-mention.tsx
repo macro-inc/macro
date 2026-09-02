@@ -1,10 +1,7 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import type { usePropertyEntityDisplay } from '@property/hooks';
 import { Show } from 'solid-js';
-
-/** The resolved display accessors for one entity, from the shared resolver. */
-export type EntityDisplay = ReturnType<typeof usePropertyEntityDisplay>;
+import type { EntityDisplay } from '../deps';
 
 /**
  * An activity row's entity reference rendered as a real document mention —

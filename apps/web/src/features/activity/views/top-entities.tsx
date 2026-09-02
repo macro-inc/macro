@@ -4,22 +4,25 @@ import {
   TopEntityBody,
 } from '../components/top-entities';
 import type { ActivityTopEntity } from '../core/event';
-import { OpenEntity } from './open-entity';
+import { useActivityDeps } from '../deps';
+import { createEntityOpener } from '../state/entity-opener';
 
 function MappedTopEntityRow(props: {
   entity: ActivityTopEntity;
   entityType: EntityType;
 }) {
+  const deps = useActivityDeps();
+  const opener = createEntityOpener(
+    deps,
+    () => props.entity.entityId,
+    () => props.entityType
+  );
   return (
-    <OpenEntity entityId={props.entity.entityId} entityType={props.entityType}>
-      {({ display, handlers }) => (
-        <TopEntityBody
-          entity={props.entity}
-          display={display}
-          rowProps={handlers}
-        />
-      )}
-    </OpenEntity>
+    <TopEntityBody
+      entity={props.entity}
+      display={opener.display}
+      rowProps={opener.handlers}
+    />
   );
 }
 

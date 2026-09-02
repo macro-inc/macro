@@ -2,29 +2,15 @@ import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-hea
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Button } from '@ui';
-import {
-  type Component,
-  createMemo,
-  For,
-  type JSX,
-  Match,
-  Show,
-  Switch,
-} from 'solid-js';
+import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { ActionGraph } from '../components/action-graph';
 import type { ActivityEvent } from '../core/event';
-import { type FeedGroup, groupEventsByDay } from '../core/group-events';
-import { createMyActivityQuery } from '../queries/feed-query';
-import { createMyActivityOverviewQuery } from '../queries/overview-query';
+import type { FeedGroup } from '../core/group-events';
+import { useActivityDeps } from '../deps';
+import { createActorName } from '../state/actor-name';
+import { createMyActivityState, type OverviewView } from '../state/my-activity';
 import { ActivityTimelineRow } from './activity-timeline-row';
-import { useActorDisplayName } from './resolve-actor-name';
 import { TopEntities } from './top-entities';
-
-type FeedView =
-  | { t: 'loading' }
-  | { t: 'error' }
-  | { t: 'empty' }
-  | { t: 'ready'; groups: FeedGroup[] };
 
 function OverviewInset(props: { children: JSX.Element }) {
   return (
@@ -42,17 +28,14 @@ function FeedStatus(props: { children: JSX.Element }) {
   );
 }
 
-/** The user's own activity, newest first, behind the activity-feed flag. */
+/** The user's own activity, newest first. Mount under `ActivityDepsProvider`. */
 export function MyActivityView() {
-  const overview = createMyActivityOverviewQuery({ enabled: () => true });
-  const feed = createMyActivityQuery({ enabled: () => true });
-  const groups = createMemo(() => groupEventsByDay(feed.data ?? []));
-  const feedView = createMemo<FeedView>(() => {
-    if (groups().length > 0) return { t: 'ready', groups: groups() };
-    if (feed.isLoading) return { t: 'loading' };
-    if (feed.isError) return { t: 'error' };
-    return { t: 'empty' };
-  });
+  const deps = useActivityDeps();
+  const state = createMyActivityState(deps);
+  const ready = () => {
+    const current = state.feed();
+    return current.t === 'ready' ? current : undefined;
+  };
 
   return (
     <div class="@container/u-list flex size-full flex-col">
@@ -63,58 +46,53 @@ export function MyActivityView() {
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
           <div class="mx-auto w-full max-w-[1000px]">
             <OverviewInset>
-              <Show
-                when={overview.data}
-                fallback={
+              <Switch>
+                <Match when={state.overview().t === 'loading'}>
                   <p class="px-2 py-1 text-ink-extra-muted text-xs">
-                    {overview.isError
-                      ? 'Activity overview is unavailable right now.'
-                      : 'Loading activity overview…'}
+                    Loading activity overview…
                   </p>
-                }
-              >
-                {(data) => <ActionGraph overview={data()} />}
-              </Show>
+                </Match>
+                <Match when={state.overview().t === 'error'}>
+                  <p class="px-2 py-1 text-ink-extra-muted text-xs">
+                    Activity overview is unavailable right now.
+                  </p>
+                </Match>
+                <Match when={readyOverview(state.overview())}>
+                  {(overview) => <ActionGraph overview={overview()} />}
+                </Match>
+              </Switch>
             </OverviewInset>
-            <Show when={overview.data}>
-              {(data) => <TopEntities entities={data().topEntities} />}
+            <Show when={readyOverview(state.overview())}>
+              {(overview) => <TopEntities entities={overview().topEntities} />}
             </Show>
             <Switch>
-              <Match
-                when={(() => {
-                  const current = feedView();
-                  return current.t === 'ready' ? current : undefined;
-                })()}
-              >
-                {(ready) => (
+              <Match when={ready()}>
+                {(feed) => (
                   <>
-                    <FeedGroups
-                      groups={ready().groups}
-                      row={NamedActivityRow}
-                    />
-                    <Show when={feed.hasNextPage}>
+                    <FeedGroups groups={feed().groups} />
+                    <Show when={feed().hasMore}>
                       <div class="flex justify-center py-2">
                         <Button
                           variant="ghost"
-                          onClick={() => void feed.fetchNextPage()}
-                          disabled={feed.isFetchingNextPage}
+                          onClick={state.loadMore}
+                          disabled={feed().loadingMore}
                         >
-                          {feed.isFetchingNextPage ? 'Loading…' : 'Show more'}
+                          {feed().loadingMore ? 'Loading…' : 'Show more'}
                         </Button>
                       </div>
                     </Show>
                   </>
                 )}
               </Match>
-              <Match when={feedView().t === 'loading'}>
+              <Match when={state.feed().t === 'loading'}>
                 <FeedStatus>Loading…</FeedStatus>
               </Match>
-              <Match when={feedView().t === 'error'}>
+              <Match when={state.feed().t === 'error'}>
                 <FeedStatus>
                   Activity is unavailable right now. Try again in a moment.
                 </FeedStatus>
               </Match>
-              <Match when={feedView().t === 'empty'}>
+              <Match when={state.feed().t === 'empty'}>
                 <FeedStatus>No activity yet.</FeedStatus>
               </Match>
             </Switch>
@@ -125,22 +103,24 @@ export function MyActivityView() {
   );
 }
 
+function readyOverview(view: OverviewView) {
+  return view.t === 'ready' ? view.overview : undefined;
+}
+
 function NamedActivityRow(props: { event: ActivityEvent }) {
-  const name = useActorDisplayName(() => props.event.actorId);
+  const deps = useActivityDeps();
+  const name = createActorName(deps, () => props.event.actorId);
   return <ActivityTimelineRow event={props.event} actorName={name()} />;
 }
 
-function FeedGroups(props: {
-  groups: FeedGroup[];
-  row: Component<{ event: ActivityEvent }>;
-}) {
+function FeedGroups(props: { groups: FeedGroup[] }) {
   return (
     <For each={props.groups}>
       {(group) => (
         <>
           <SoupSectionHeader>{group.label}</SoupSectionHeader>
           <For each={group.events}>
-            {(event) => <props.row event={event} />}
+            {(event) => <NamedActivityRow event={event} />}
           </For>
         </>
       )}

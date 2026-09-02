@@ -1,7 +1,8 @@
 import { Show } from 'solid-js';
 import { ActivityTimelineRow as ActivityTimelineRowView } from '../components/activity-timeline-row';
 import { type ActivityEvent, toPropertyEntityType } from '../core/event';
-import { OpenEntity } from './open-entity';
+import { useActivityDeps } from '../deps';
+import { createEntityOpener } from '../state/entity-opener';
 
 /** Feed and tool row: presentational chrome plus click-to-open. */
 export function ActivityTimelineRow(props: {
@@ -9,6 +10,7 @@ export function ActivityTimelineRow(props: {
   actorName?: string;
   showActor?: boolean;
 }) {
+  const deps = useActivityDeps();
   const entityType = () => toPropertyEntityType(props.event.entityType);
 
   return (
@@ -22,19 +24,22 @@ export function ActivityTimelineRow(props: {
         />
       }
     >
-      {(type) => (
-        <OpenEntity entityId={props.event.entityId} entityType={type()}>
-          {({ display, handlers }) => (
-            <ActivityTimelineRowView
-              event={props.event}
-              actorName={props.actorName}
-              showActor={props.showActor}
-              display={display}
-              rowProps={handlers}
-            />
-          )}
-        </OpenEntity>
-      )}
+      {(type) => {
+        const opener = createEntityOpener(
+          deps,
+          () => props.event.entityId,
+          type
+        );
+        return (
+          <ActivityTimelineRowView
+            event={props.event}
+            actorName={props.actorName}
+            showActor={props.showActor}
+            display={opener.display}
+            rowProps={opener.handlers}
+          />
+        );
+      }}
     </Show>
   );
 }

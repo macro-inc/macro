@@ -1,3 +1,4 @@
+import { AppActivityDeps } from '@app/features/activity/app-deps';
 import type {
   ActivityAction,
   ActivityEntityType,
@@ -116,15 +117,17 @@ const handler = createToolRenderer({
         type="call"
         response={
           hasResults() && isExpanded() ? (
-            <StaticMarkdownContext>
-              <div class="max-h-120 overflow-y-auto rounded-md border border-edge-muted/60 py-1">
-                <For each={events()}>
-                  {(event) => (
-                    <ActivityTimelineRow event={event} showActor={false} />
-                  )}
-                </For>
-              </div>
-            </StaticMarkdownContext>
+            <AppActivityDeps>
+              <StaticMarkdownContext>
+                <div class="max-h-120 overflow-y-auto rounded-md border border-edge-muted/60 py-1">
+                  <For each={events()}>
+                    {(event) => (
+                      <ActivityTimelineRow event={event} showActor={false} />
+                    )}
+                  </For>
+                </div>
+              </StaticMarkdownContext>
+            </AppActivityDeps>
           ) : undefined
         }
       >

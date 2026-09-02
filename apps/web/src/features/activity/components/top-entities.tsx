@@ -3,7 +3,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { type Component, For, type JSX, Show } from 'solid-js';
 import type { ActivityTopEntity } from '../core/event';
 import { toPropertyEntityType } from '../core/event';
-import type { EntityDisplay } from './entity-mention';
+import type { EntityDisplay } from '../deps';
 import { EntityMention } from './entity-mention';
 
 function Row(props: { children: JSX.Element }) {

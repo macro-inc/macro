@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 
+import { ActivityDepsProvider } from '@app/features/activity/deps';
+import { createFakeActivityDeps } from '@app/features/activity/testing/fake-deps';
 import type { PropertyDefinitionDomain } from '@property/types';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { cleanup, render, screen } from '@solidjs/testing-library';
@@ -31,10 +33,6 @@ vi.mock('@property/editor/hooks/useAllProperties', () => ({
   useAllProperties: () => () => definitions,
 }));
 
-vi.mock('@core/component/LexicalMarkdown/component/core/BlockLink', () => ({
-  openDocument: vi.fn(),
-}));
-
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
@@ -43,15 +41,15 @@ vi.mock(
   })
 );
 
-vi.mock('@property/hooks', () => ({
-  usePropertyEntityDisplay: () => ({
+const deps = createFakeActivityDeps({
+  entityDisplay: () => ({
     name: () => 'Launch plan',
     icon: () => null,
     isLoading: () => false,
     blockOrFileType: () => null,
     linkParams: () => undefined,
   }),
-}));
+});
 
 function renderTool(
   activities: NamedTool<'ReadActivity', 'response'>['data']['activities']
@@ -71,18 +69,20 @@ function renderTool(
   };
 
   return render(() => (
-    <Dynamic
-      component={
-        readActivityHandler.render as Component<Record<string, unknown>>
-      }
-      tool={tool}
-      response={response}
-      chat_id="chat-1"
-      message_id="message-1"
-      part_index={0}
-      isComplete
-      renderContext={{ isStreaming: false, grouped: false }}
-    />
+    <ActivityDepsProvider deps={deps}>
+      <Dynamic
+        component={
+          readActivityHandler.render as Component<Record<string, unknown>>
+        }
+        tool={tool}
+        response={response}
+        chat_id="chat-1"
+        message_id="message-1"
+        part_index={0}
+        isComplete
+        renderContext={{ isStreaming: false, grouped: false }}
+      />
+    </ActivityDepsProvider>
   ));
 }
 

@@ -3,30 +3,18 @@ import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
-import {
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  Show,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
+import { AppActivityDeps } from '../app-deps';
 import { ActionPhrase } from '../components/action-phrase';
 import { ActorName } from '../components/actor-name';
 import type { ActivityEvent } from '../core/event';
-import { createEntityActivityQuery } from '../queries/entity-query';
+import { ActivityDepsProvider, useActivityDeps } from '../deps';
+import { createActorName } from '../state/actor-name';
+import { createEntityActivityState } from '../state/entity-activity';
 import { useEntityActivityFlag } from '../use-entity-activity-flag';
-import { useActorDisplayName } from './resolve-actor-name';
 
 /** Rows shown before the section collapses behind a "Show all" toggle. */
 const COLLAPSED_ROW_LIMIT = 10;
-
-type EntityActivityView =
-  | { t: 'loading' }
-  | { t: 'error' }
-  | { t: 'empty' }
-  | { t: 'ready'; events: ActivityEvent[] };
 
 export interface EntityActivitySectionProps {
   entityId: string;
@@ -35,8 +23,9 @@ export interface EntityActivitySectionProps {
 }
 
 /**
- * The side-panel Activity section, mounted only when the feature flag is on
- * so the activity query is never issued while the rollout is off.
+ * Composition root for the side-panel Activity section: flag gate, then the
+ * app wiring, then the section. Nothing mounts (and no query is issued)
+ * while the rollout is off.
  */
 export function EntityActivitySectionConditional(
   props: EntityActivitySectionProps
@@ -44,50 +33,48 @@ export function EntityActivitySectionConditional(
   const enabled = useEntityActivityFlag();
   return (
     <Show when={enabled()}>
-      <EntityActivitySection {...props} />
+      <AppActivityDeps>
+        <EntityActivitySection {...props} />
+      </AppActivityDeps>
     </Show>
   );
 }
 
-function EntityActivitySection(props: EntityActivitySectionProps) {
-  const query = createEntityActivityQuery({
+/** The section itself. Mount under `ActivityDepsProvider`. */
+export function EntityActivitySection(props: EntityActivitySectionProps) {
+  const deps = useActivityDeps();
+  const state = createEntityActivityState(deps, {
     entityType: () => props.entityType,
     entityId: () => props.entityId,
-    enabled: () => true,
   });
-  const view = createMemo<EntityActivityView>(() => {
-    if (query.result.isLoading) return { t: 'loading' };
-    if (query.result.isError) return { t: 'error' };
-    const data = query.result.data;
-    if (!data || data.kind === 'entity-missing') return { t: 'error' };
-    if (data.events.length === 0) return { t: 'empty' };
-    return { t: 'ready', events: data.events };
-  });
+  const ready = () => {
+    const current = state.view();
+    return current.t === 'ready' ? current : undefined;
+  };
 
+  // Section children render inside the side panel host, outside this
+  // component's owner tree, so the deps context has to be re-provided.
   return (
-    <Show when={query.isEnabled()}>
+    <Show when={state.isEnabled()}>
       <SidePanel.Section id="activity" title="Activity" order={props.order}>
-        <Suspense fallback={<SidePanel.Loading />}>
-          <Switch>
-            <Match when={view().t === 'loading'}>
-              <SidePanel.Loading />
-            </Match>
-            <Match when={view().t === 'error'}>
-              <SidePanel.EmptyPill label="Activity is unavailable" />
-            </Match>
-            <Match when={view().t === 'empty'}>
-              <SidePanel.EmptyPill label="No activity yet" />
-            </Match>
-            <Match
-              when={(() => {
-                const current = view();
-                return current.t === 'ready' ? current : undefined;
-              })()}
-            >
-              {(ready) => <ReadyActivityList events={ready().events} />}
-            </Match>
-          </Switch>
-        </Suspense>
+        <ActivityDepsProvider deps={deps}>
+          <Suspense fallback={<SidePanel.Loading />}>
+            <Switch>
+              <Match when={state.view().t === 'loading'}>
+                <SidePanel.Loading />
+              </Match>
+              <Match when={state.view().t === 'error'}>
+                <SidePanel.EmptyPill label="Activity is unavailable" />
+              </Match>
+              <Match when={state.view().t === 'empty'}>
+                <SidePanel.EmptyPill label="No activity yet" />
+              </Match>
+              <Match when={ready()}>
+                {(current) => <ReadyActivityList events={current().events} />}
+              </Match>
+            </Switch>
+          </Suspense>
+        </ActivityDepsProvider>
       </SidePanel.Section>
     </Show>
   );
@@ -129,7 +116,8 @@ function ReadyActivityList(props: { events: ActivityEvent[] }) {
 }
 
 function ActivityRow(props: { event: ActivityEvent }) {
-  const name = useActorDisplayName(() => props.event.actorId);
+  const deps = useActivityDeps();
+  const name = createActorName(deps, () => props.event.actorId);
   return (
     <div
       class="flex min-h-7 min-w-0 items-center gap-2 px-2 py-1"

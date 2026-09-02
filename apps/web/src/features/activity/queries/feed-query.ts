@@ -4,9 +4,9 @@ import {
   type MyActivityQuery,
   type MyActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Accessor } from 'solid-js';
 import type { ActivityEvent } from '../core/event';
+import type { ActivityDeps } from '../deps';
 import { decodeActivityEvent } from './decode';
 
 /** Rows fetched per feed page. */
@@ -16,7 +16,10 @@ export const ACTIVITY_FEED_PAGE_LIMIT = 50;
  * Infinite query over the authenticated user's own activity, newest first.
  * Pages chase the server's opaque keyset cursor until it comes back null.
  */
-export function createMyActivityQuery(options: { enabled: Accessor<boolean> }) {
+export function createMyActivityQuery(
+  deps: Pick<ActivityDeps, 'graphql'>,
+  options: { enabled: Accessor<boolean> }
+) {
   return createUrqlInfiniteQuery<
     MyActivityQuery,
     MyActivityQueryVariables,
@@ -24,7 +27,7 @@ export function createMyActivityQuery(options: { enabled: Accessor<boolean> }) {
     ActivityEvent[]
   >(() => ({
     query: MyActivityDocument,
-    client: getGraphqlSoupClient(),
+    client: deps.graphql(),
     initialPageParam: null,
     variables: (cursor) => ({
       input: { limit: ACTIVITY_FEED_PAGE_LIMIT, cursor },
