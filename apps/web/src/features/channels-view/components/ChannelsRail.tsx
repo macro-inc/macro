@@ -18,6 +18,7 @@ import {
 } from '@app/components/list';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { TabsInset } from '@core/component/TabsInset';
+import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { tryMacroId, useDisplayName } from '@core/user';
@@ -37,6 +38,7 @@ import { Key } from '@solid-primitives/keyed';
 import { cn, Scroll, Tooltip } from '@ui';
 import {
   createMemo,
+  createSignal,
   createUniqueId,
   type JSX,
   onCleanup,
@@ -379,6 +381,7 @@ type CollapsibleSectionProps = {
   narrowIcon: JSX.Element;
   unreadCount: number;
   focused: boolean;
+  focusWithin: boolean;
   onActivate: () => void;
   contentRef: (element: HTMLDivElement) => void;
   action: () => JSX.Element;
@@ -387,6 +390,7 @@ type CollapsibleSectionProps = {
 
 function CollapsibleSection(props: CollapsibleSectionProps) {
   const { state } = useChannelsView();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const open = () => state.expandedGroups[props.group];
   const bothSectionsOpen = () =>
     state.expandedGroups.channels && state.expandedGroups.direct_messages;
@@ -394,10 +398,11 @@ function CollapsibleSection(props: CollapsibleSectionProps) {
   return (
     <section
       class={cn(
-        'flex min-h-0 flex-col gap-1 channels-slim:items-center',
+        'flex min-h-0 flex-col gap-1 border border-transparent channels-slim:items-center',
         open() ? 'shrink' : 'shrink-0',
         open() &&
-          (bothSectionsOpen() ? 'max-h-[calc(50%_-_0.375rem)]' : 'max-h-full')
+          (bothSectionsOpen() ? 'max-h-[calc(50%_-_0.375rem)]' : 'max-h-full'),
+        props.focusWithin && 'rounded-xl border-edge'
       )}
     >
       <div
@@ -450,20 +455,29 @@ function CollapsibleSection(props: CollapsibleSectionProps) {
         <div class="border-t border-edge-muted" />
       </div>
       <Show when={open()}>
-        <Scroll
-          scrollRef={props.contentRef}
-          class="min-h-0 flex-1 channels-slim:w-full"
-        >
-          <div
-            role="group"
-            class="flex min-h-0 flex-col gap-0.5 channels-slim:w-full channels-slim:items-center"
+        <div class="relative min-h-0 flex-1 channels-slim:w-full">
+          <Scroll
+            scrollRef={(element) => {
+              setScrollRoot(element);
+              props.contentRef(element);
+            }}
           >
-            <div class="hidden justify-center channels-slim:flex">
-              {props.action()}
+            <div
+              role="group"
+              class="flex min-h-0 flex-col gap-0.5 channels-slim:w-full channels-slim:items-center"
+            >
+              <div class="hidden justify-center channels-slim:flex">
+                {props.action()}
+              </div>
+              {props.children}
             </div>
-            {props.children}
-          </div>
-        </Scroll>
+          </Scroll>
+          <ScrollIndicators
+            scrollRef={scrollRoot}
+            appearance="gradient"
+            gradientColor="inset"
+          />
+        </div>
       </Show>
     </section>
   );
@@ -832,6 +846,7 @@ export function ChannelsRail(props: {
               narrowIcon={<ChannelIcon />}
               unreadCount={unreadTeamChannelCount()}
               focused={list.focus.key() === rowKeyForSection('channels')}
+              focusWithin={list.focus.item()?.group === 'channels'}
               onActivate={() => activateRow(rowKeyForSection('channels'))}
               contentRef={setSectionScrollRoot('channels')}
               action={createChannelAction}
@@ -870,6 +885,7 @@ export function ChannelsRail(props: {
               narrowIcon={<ChatTeardropIcon />}
               unreadCount={unreadDirectMessageCount()}
               focused={list.focus.key() === rowKeyForSection('direct_messages')}
+              focusWithin={list.focus.item()?.group === 'direct_messages'}
               onActivate={() =>
                 activateRow(rowKeyForSection('direct_messages'))
               }

@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "./features/channels-view/channels-rail.css";
 
 @source inline("{data-highlighted:}text-{comment,note,canvas,html,folder,email,code,pdf,image,write,chat,video,rss,calendar,contact,default},{tauri-ios:}{hidden}");
 @source inline("z-{popup-viewer,viewer-definition-lookup}");
@@ -477,6 +476,8 @@ body.tauri-ios {
 
 @custom-variant light-mode (&:where(html[data-theme-light="true"] *));
 @custom-variant dark-mode (&:where(html[data-theme-light="false"] *));
+@custom-variant channels-slim
+  (&:where([data-channels-rail="slim"] *));
 
 /* Dark surfaces need a larger ink step for the thread path to remain visible.
    Both inputs stay opaque, so overlapping rail segments still render evenly. */
