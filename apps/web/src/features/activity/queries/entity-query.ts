@@ -13,9 +13,6 @@ import {
   selectEntityActivity,
 } from './select-entity-activity';
 
-export type { EntityActivityResult };
-export { selectEntityActivity };
-
 /** Rows requested for a side-panel activity preview. */
 export const ENTITY_ACTIVITY_PREVIEW_LIMIT = 20;
 

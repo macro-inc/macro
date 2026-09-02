@@ -1,32 +1,40 @@
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { Accessor, JSX } from 'solid-js';
+import { type Accessor, createMemo, type JSX } from 'solid-js';
+import { type ActivityEntityType, toPropertyEntityType } from '../core/event';
 import type { ActivityDeps, EntityDisplay } from '../deps';
 
-export type EntityOpenHandlers = {
-  onMouseDown: JSX.EventHandler<HTMLDivElement, MouseEvent>;
-  onClick: JSX.EventHandler<HTMLDivElement, MouseEvent>;
+export type EntityOpener = {
+  display: EntityDisplay;
+  handlers: {
+    onMouseDown: JSX.EventHandler<HTMLDivElement, MouseEvent>;
+    onClick: JSX.EventHandler<HTMLDivElement, MouseEvent>;
+  };
 };
 
 /**
  * Resolves an entity's display and the split-aware handlers that open it.
- * Shift-click asks for a new split.
+ * Undefined for entity kinds the app cannot link to. Shift-click asks for
+ * a new split.
  */
 export function createEntityOpener(
   deps: Pick<ActivityDeps, 'entityDisplay' | 'openEntity'>,
   entityId: Accessor<string>,
-  entityType: Accessor<EntityType>
-): { display: EntityDisplay; handlers: EntityOpenHandlers } {
-  const display = deps.entityDisplay(entityId, entityType);
-  const handlers = useSplitNavigationHandler<HTMLDivElement>((event) => {
-    const block = display.blockOrFileType();
-    if (!block) return;
-    deps.openEntity({
-      block,
-      id: entityId(),
-      params: display.linkParams(),
-      newSplit: event.shiftKey,
+  entityType: Accessor<ActivityEntityType>
+): Accessor<EntityOpener | undefined> {
+  return createMemo(() => {
+    const type = toPropertyEntityType(entityType());
+    if (!type) return undefined;
+    const display = deps.entityDisplay(entityId, () => type);
+    const handlers = useSplitNavigationHandler<HTMLDivElement>((event) => {
+      const block = display.blockOrFileType();
+      if (!block) return;
+      deps.openEntity({
+        block,
+        id: entityId(),
+        params: display.linkParams(),
+        newSplit: event.shiftKey,
+      });
     });
+    return { display, handlers };
   });
-  return { display, handlers };
 }

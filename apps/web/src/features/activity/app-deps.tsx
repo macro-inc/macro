@@ -7,8 +7,7 @@ import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { ParentProps } from 'solid-js';
 import { type ActivityDeps, ActivityDepsProvider } from './deps';
 
-/** The production wiring. Call inside the app's user context. */
-export function createAppActivityDeps(): ActivityDeps {
+function createAppActivityDeps(): ActivityDeps {
   const userId = useUserId();
   return {
     graphql: () => getGraphqlSoupClient(),

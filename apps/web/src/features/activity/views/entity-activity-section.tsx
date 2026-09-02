@@ -6,7 +6,6 @@ import { cn } from '@ui';
 import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 import { ActionPhrase } from '../components/action-phrase';
 import { ActorName } from '../components/actor-name';
-import { changedPropertyId } from '../core/action-property';
 import type { ActivityEvent } from '../core/event';
 import { useActivityDeps } from '../deps';
 import { createActorName } from '../state/actor-name';
@@ -111,9 +110,10 @@ function ReadyActivityList(props: { events: ActivityEvent[] }) {
 function ActivityRow(props: { event: ActivityEvent }) {
   const deps = useActivityDeps();
   const name = createActorName(deps, () => props.event.actorId);
-  const definition = deps.propertyDefinition(() =>
-    changedPropertyId(props.event.action)
-  );
+  const definition = deps.propertyDefinition(() => {
+    const action = props.event.action;
+    return action.kind === 'property-changed' ? action.property : undefined;
+  });
   return (
     <div
       class="flex min-h-7 min-w-0 items-center gap-2 px-2 py-1"

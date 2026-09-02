@@ -4,13 +4,13 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { Button } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { ActionGraph } from '../components/action-graph';
-import type { ActivityEvent } from '../core/event';
-import type { FeedGroup } from '../core/group-events';
+import { TopEntitiesSection, TopEntityRow } from '../components/top-entities';
+import type { ActivityEvent, ActivityTopEntity } from '../core/event';
 import { useActivityDeps } from '../deps';
 import { createActorName } from '../state/actor-name';
-import { createMyActivityState, type OverviewView } from '../state/my-activity';
+import { createEntityOpener } from '../state/entity-opener';
+import { createMyActivityState } from '../state/my-activity';
 import { ActivityTimelineRow } from './activity-timeline-row';
-import { TopEntities } from './top-entities';
 
 function OverviewInset(props: { children: JSX.Element }) {
   return (
@@ -28,11 +28,15 @@ function FeedStatus(props: { children: JSX.Element }) {
   );
 }
 
-/** The user's own activity, newest first. Mount under `ActivityDepsProvider`. */
+/** The user's own activity, newest first. Needs `ActivityDeps` in context. */
 export function MyActivityView() {
   const deps = useActivityDeps();
   const state = createMyActivityState(deps);
-  const ready = () => {
+  const overview = () => {
+    const current = state.overview();
+    return current.t === 'ready' ? current.overview : undefined;
+  };
+  const feed = () => {
     const current = state.feed();
     return current.t === 'ready' ? current : undefined;
   };
@@ -45,31 +49,47 @@ export function MyActivityView() {
       <StaticMarkdownContext>
         <div class="min-h-0 flex-1 overflow-y-auto py-1">
           <div class="mx-auto w-full max-w-[1000px]">
-            <OverviewInset>
-              <Switch>
-                <Match when={state.overview().t === 'loading'}>
+            <Show
+              when={overview()}
+              fallback={
+                <OverviewInset>
                   <p class="px-2 py-1 text-ink-extra-muted text-xs">
-                    Loading activity overview…
+                    {state.overview().t === 'error'
+                      ? 'Activity overview is unavailable right now.'
+                      : 'Loading activity overview…'}
                   </p>
-                </Match>
-                <Match when={state.overview().t === 'error'}>
-                  <p class="px-2 py-1 text-ink-extra-muted text-xs">
-                    Activity overview is unavailable right now.
-                  </p>
-                </Match>
-                <Match when={readyOverview(state.overview())}>
-                  {(overview) => <ActionGraph overview={overview()} />}
-                </Match>
-              </Switch>
-            </OverviewInset>
-            <Show when={readyOverview(state.overview())}>
-              {(overview) => <TopEntities entities={overview().topEntities} />}
+                </OverviewInset>
+              }
+            >
+              {(overview) => (
+                <>
+                  <OverviewInset>
+                    <ActionGraph overview={overview()} />
+                  </OverviewInset>
+                  <TopEntitiesSection
+                    empty={overview().topEntities.length === 0}
+                  >
+                    <For each={overview().topEntities}>
+                      {(entity) => <OpenableTopEntityRow entity={entity} />}
+                    </For>
+                  </TopEntitiesSection>
+                </>
+              )}
             </Show>
             <Switch>
-              <Match when={ready()}>
+              <Match when={feed()}>
                 {(feed) => (
                   <>
-                    <FeedGroups groups={feed().groups} />
+                    <For each={feed().groups}>
+                      {(group) => (
+                        <>
+                          <SoupSectionHeader>{group.label}</SoupSectionHeader>
+                          <For each={group.events}>
+                            {(event) => <NamedActivityRow event={event} />}
+                          </For>
+                        </>
+                      )}
+                    </For>
                     <Show when={feed().hasMore}>
                       <div class="flex justify-center py-2">
                         <Button
@@ -103,27 +123,24 @@ export function MyActivityView() {
   );
 }
 
-function readyOverview(view: OverviewView) {
-  return view.t === 'ready' ? view.overview : undefined;
-}
-
 function NamedActivityRow(props: { event: ActivityEvent }) {
   const deps = useActivityDeps();
   const name = createActorName(deps, () => props.event.actorId);
   return <ActivityTimelineRow event={props.event} actorName={name()} />;
 }
 
-function FeedGroups(props: { groups: FeedGroup[] }) {
+function OpenableTopEntityRow(props: { entity: ActivityTopEntity }) {
+  const deps = useActivityDeps();
+  const opener = createEntityOpener(
+    deps,
+    () => props.entity.entityId,
+    () => props.entity.entityType
+  );
   return (
-    <For each={props.groups}>
-      {(group) => (
-        <>
-          <SoupSectionHeader>{group.label}</SoupSectionHeader>
-          <For each={group.events}>
-            {(event) => <NamedActivityRow event={event} />}
-          </For>
-        </>
-      )}
-    </For>
+    <TopEntityRow
+      entity={props.entity}
+      display={opener()?.display}
+      rowProps={opener()?.handlers}
+    />
   );
 }

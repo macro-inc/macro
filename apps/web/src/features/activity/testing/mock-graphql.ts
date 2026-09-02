@@ -7,7 +7,7 @@ import {
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
-import { makeSubject, onEnd, pipe } from 'wonka';
+import { makeSubject } from 'wonka';
 
 /** One in-flight GraphQL operation the test can answer or fail. */
 export type PendingOperation = {
@@ -15,7 +15,6 @@ export type PendingOperation = {
   variables: Record<string, unknown>;
   resolve(data: unknown): void;
   fail(message: string): void;
-  readonly unsubscribed: boolean;
 };
 
 export type MockGraphql = {
@@ -45,8 +44,7 @@ export function createMockGraphql(): MockGraphql {
   ) => {
     const subject = makeSubject<OperationResult<D, V>>();
     const operation = { kind: 'query', context } as Operation<D, V>;
-    let unsubscribed = false;
-    const entry: PendingOperation = {
+    pending.push({
       name: operationName(request.query),
       variables: (request.variables ?? {}) as Record<string, unknown>,
       resolve: (data) =>
@@ -56,17 +54,8 @@ export function createMockGraphql(): MockGraphql {
           operation,
           error: new CombinedError({ graphQLErrors: [message] }),
         } as OperationResult<D, V>),
-      get unsubscribed() {
-        return unsubscribed;
-      },
-    };
-    pending.push(entry);
-    return pipe(
-      subject.source,
-      onEnd(() => {
-        unsubscribed = true;
-      })
-    );
+    });
+    return subject.source;
   };
   const client = { executeQuery } as unknown as Client;
   return {

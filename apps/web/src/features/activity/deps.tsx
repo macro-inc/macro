@@ -68,12 +68,8 @@ export function ActivityDepsProvider(
   );
 }
 
-export function useOptionalActivityDeps(): ActivityDeps | undefined {
-  return useContext(ActivityDepsContext);
-}
-
 export function useActivityDeps(): ActivityDeps {
-  const deps = useOptionalActivityDeps();
+  const deps = useContext(ActivityDepsContext);
   if (!deps) {
     throw new Error(
       'useActivityDeps must be used within an ActivityDepsProvider'

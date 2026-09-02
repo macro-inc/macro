@@ -1,7 +1,5 @@
-import { Show } from 'solid-js';
 import { ActivityTimelineRow as ActivityTimelineRowView } from '../components/activity-timeline-row';
-import { changedPropertyId } from '../core/action-property';
-import { type ActivityEvent, toPropertyEntityType } from '../core/event';
+import type { ActivityEvent } from '../core/event';
 import { useActivityDeps } from '../deps';
 import { createEntityOpener } from '../state/entity-opener';
 
@@ -12,40 +10,24 @@ export function ActivityTimelineRow(props: {
   showActor?: boolean;
 }) {
   const deps = useActivityDeps();
-  const entityType = () => toPropertyEntityType(props.event.entityType);
-  const definition = deps.propertyDefinition(() =>
-    changedPropertyId(props.event.action)
+  const opener = createEntityOpener(
+    deps,
+    () => props.event.entityId,
+    () => props.event.entityType
   );
+  const definition = deps.propertyDefinition(() => {
+    const action = props.event.action;
+    return action.kind === 'property-changed' ? action.property : undefined;
+  });
 
   return (
-    <Show
-      when={entityType()}
-      fallback={
-        <ActivityTimelineRowView
-          event={props.event}
-          actorName={props.actorName}
-          showActor={props.showActor}
-          propertyDefinition={definition()}
-        />
-      }
-    >
-      {(type) => {
-        const opener = createEntityOpener(
-          deps,
-          () => props.event.entityId,
-          type
-        );
-        return (
-          <ActivityTimelineRowView
-            event={props.event}
-            actorName={props.actorName}
-            showActor={props.showActor}
-            display={opener.display}
-            propertyDefinition={definition()}
-            rowProps={opener.handlers}
-          />
-        );
-      }}
-    </Show>
+    <ActivityTimelineRowView
+      event={props.event}
+      actorName={props.actorName}
+      showActor={props.showActor}
+      display={opener()?.display}
+      rowProps={opener()?.handlers}
+      propertyDefinition={definition()}
+    />
   );
 }
