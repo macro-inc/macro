@@ -23,7 +23,10 @@ type ServiceTargetGroupArgs = {
   // whole hostname on a shared listener.
   hostHeaders?: string[];
   // Shared-gateway tenant. Priority comes from GATEWAY_PRIORITIES.
-  service: GatewayService;
+  // Exactly one of service and priority must be set.
+  service?: GatewayService;
+  // Dedicated-ALB rule priority. Do not use on the shared gateway.
+  priority?: number;
   // Health check
   healthCheck?: Partial<aws.types.input.lb.TargetGroupHealthCheck>;
   // Deregistration delay
@@ -56,6 +59,16 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
       );
     }
 
+    if (!args.service === !args.priority) {
+      throw new Error(
+        `${name}: exactly one of service and priority must be set`
+      );
+    }
+
+    const priority = args.service
+      ? GATEWAY_PRIORITIES[args.service]
+      : args.priority;
+
     this.target_group = new aws.lb.TargetGroup(
       `${name}-target-group`,
       {
@@ -86,7 +99,7 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
       `${name}-listener-rule`,
       {
         listenerArn: args.listenerArn,
-        priority: GATEWAY_PRIORITIES[args.service],
+        priority,
 
         conditions: [
           args.pathPatterns
