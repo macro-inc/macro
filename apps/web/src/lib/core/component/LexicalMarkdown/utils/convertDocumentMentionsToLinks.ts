@@ -10,6 +10,7 @@ export function convertDocumentMentionsToLinks(
   const mentions: DocumentMentionInfo[] = [];
 
   mentionElements.forEach((element) => {
+    const collapsed = element.getAttribute('data-collapsed');
     const mention: DocumentMentionInfo = {
       documentId: element.getAttribute('data-document-id') || '',
       documentName: element.getAttribute('data-document-name') || '',
@@ -18,9 +19,7 @@ export function convertDocumentMentionsToLinks(
         ? JSON.parse(element.getAttribute('data-block-params') || '{}')
         : undefined,
       mentionUuid: element.getAttribute('data-mention-uuid') || undefined,
-      collapsed: element.getAttribute('data-collapsed')
-        ? Boolean(element.getAttribute('data-collapsed'))
-        : undefined,
+      collapsed: collapsed === null ? undefined : collapsed === 'true',
       channelType: element.getAttribute('data-channel-type') || undefined,
     };
     if (!mention.documentId || !mention.documentName || !mention.blockName) {
@@ -46,8 +45,8 @@ export function convertDocumentMentionsToLinks(
     if (mention.mentionUuid) {
       link.setAttribute('data-mention-uuid', mention.mentionUuid);
     }
-    if (mention.collapsed) {
-      link.setAttribute('data-collapsed', mention.collapsed.toString());
+    if (mention.collapsed !== undefined) {
+      link.setAttribute('data-collapsed', String(mention.collapsed));
     }
     if (mention.channelType) {
       link.setAttribute('data-channel-type', mention.channelType);

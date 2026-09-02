@@ -2,13 +2,26 @@
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils';
 import { HtmlRenderNode, RegisteredNodesByType } from '@macro-inc/lexical-core';
 import { createEditor } from 'lexical';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   calendarDescriptionToEditorHtml,
   exportCalendarDescription,
   parseMacroAppLink,
   sanitizeCalendarDescription,
 } from './calendar-description';
+
+// The editor utilities pull in the plugin barrel, whose leaves open the
+// storage and connection-gateway sockets on import.
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
 
 const DOCUMENT_ID = '60617ec4-4c58-4e8b-90c6-445aa3172713';
 
@@ -30,6 +43,23 @@ describe('sanitizeCalendarDescription', () => {
       '<p>line one<br>line two</p>'
     );
     expect(sanitizeCalendarDescription('   ')).toBe('');
+  });
+
+  it('keeps angle brackets in plain text as text', () => {
+    const safe = sanitizeCalendarDescription(
+      'Send the agenda to <bob@example.com>\nOwner: <TBD>'
+    );
+    expect(safe).toBe(
+      '<p>Send the agenda to &lt;bob@example.com&gt;<br>Owner: &lt;TBD&gt;</p>'
+    );
+    // Already-safe output must not change on the next pass.
+    expect(sanitizeCalendarDescription(safe)).toBe(safe);
+  });
+
+  it('decodes provider-escaped entities in plain text', () => {
+    expect(sanitizeCalendarDescription('Tom &amp; Jerry &lt;3')).toBe(
+      '<p>Tom &amp; Jerry &lt;3</p>'
+    );
   });
 
   it('reduces provider html to the portable subset', () => {

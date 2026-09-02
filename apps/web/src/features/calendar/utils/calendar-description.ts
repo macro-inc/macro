@@ -84,10 +84,24 @@ const DROPPED_TAGS = new Set([
 ]);
 const LINK_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 
-const HTML_TAG_PATTERN = /<[a-z!/]/i;
+/**
+ * A tag a description would only contain if it were authored as HTML. Plain
+ * text legitimately holds angle brackets — `<bob@example.com>`, `<TBD>` — so
+ * "looks like a tag" is not enough to treat the whole string as markup.
+ */
+const HTML_TAG_PATTERN =
+  /<(?:!--|\/?(?:a|abbr|b|big|blockquote|body|br|center|cite|code|dd|del|details|div|dl|dt|em|figure|font|h[1-6]|head|hr|html|i|iframe|img|ins|li|link|meta|ol|p|pre|s|script|section|small|span|strike|strong|style|sub|summary|sup|table|tbody|td|template|tfoot|th|thead|title|tr|tt|u|ul)(?=[\s/>]))/i;
 
 function parseHtml(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
+}
+
+/**
+ * Plain text is still parsed as HTML so provider-escaped entities decode, but
+ * its angle brackets are literal characters, never tags.
+ */
+function parsePlainText(text: string): Document {
+  return parseHtml(text.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
 }
 
 function safeHref(value: string | null): string | undefined {
@@ -275,15 +289,17 @@ function sanitizeDocument(doc: Document, plainText: boolean) {
 /**
  * Reduce a stored description — provider text, provider HTML, or this
  * editor's own output — to the portable subset. A description without any
- * markup is plain text, so its line breaks become `<br>`.
+ * HTML tag is plain text: its angle brackets are kept as text and its line
+ * breaks become `<br>`.
  *
  * Safe to render with `innerHTML`: active elements, event handlers, and
  * non-http(s)/mailto/tel links never survive.
  */
 export function sanitizeCalendarDescription(raw: string): string {
   if (raw.trim() === '') return '';
-  const doc = parseHtml(raw);
-  sanitizeDocument(doc, !HTML_TAG_PATTERN.test(raw));
+  const plainText = !HTML_TAG_PATTERN.test(raw);
+  const doc = plainText ? parsePlainText(raw) : parseHtml(raw);
+  sanitizeDocument(doc, plainText);
   return doc.body.innerHTML;
 }
 
