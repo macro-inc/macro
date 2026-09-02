@@ -31,6 +31,33 @@
 use anyhow::Result;
 use gh_workflow::{Concurrency, Event, Expression, Job, Push, Workflow};
 
+/// Prepended to the generated YAML, under the "do not edit" header. The
+/// no-gating decision is the single most likely thing for someone to try to
+/// "optimize" while reading the workflow file rather than this module, so the
+/// reasoning has to live in the generated output too.
+pub const NOTICE: &str = indoc::indoc! {"
+    #
+    # Every stage here deploys on every push — deliberately NOT path-gated.
+    # Do not add `if:` change filters to these jobs.
+    #
+    # This pipeline serializes on one concurrency group, and GitHub keeps only
+    # ONE pending run per group: a newly queued run cancels the run already
+    # waiting. `cancel-in-progress: false` does not prevent that — it only
+    # protects the run that is actively executing.
+    #
+    # So with change filters, pushes get silently dropped. Push A (backend) is
+    # queued behind a running deploy; push B (frontend-only) arrives and
+    # cancels A before its deploy job ever starts; B runs and its filter skips
+    # the backend stage. A's commit is on main and was never deployed.
+    #
+    # Deploying everything unconditionally makes the coalescing lossless: the
+    # surviving run always deploys a superset of the runs it displaced. The
+    # called workflows already avoid redundant work internally (Nix-cached
+    # builds, Pulumi no-ops on unchanged stacks), so the cost is small next to
+    # an undeployed commit.
+    #
+"};
+
 /// Build the workflow. The caller jobs' `with:`/`secrets:` are filled in by
 /// [`patch`].
 pub fn deploy_on_push() -> Workflow {
