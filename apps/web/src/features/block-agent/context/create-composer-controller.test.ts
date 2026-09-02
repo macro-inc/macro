@@ -24,9 +24,13 @@ vi.mock('@service-agent-harness/client', () => ({
       if (control.outcome === 'reject') throw new Error('network');
       return {
         isErr: () => control.outcome === 'err',
-        // The action id the endpoint returns — the fold's `requestId` for
-        // the folded message this action derives. One per call, in order.
-        value: `action-${control.calls.length - 1}`,
+        // The control response — the action id is the fold's `requestId`
+        // for the folded message this action derives. One per call, in
+        // order; always `sent` here, queueing is the server's business.
+        value: {
+          actionId: `action-${control.calls.length - 1}`,
+          status: 'sent',
+        },
       };
     }),
   },

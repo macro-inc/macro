@@ -39,6 +39,15 @@ fn command_with_id(text: &str, action_id: AgentActionId, token: u32) -> Input<u3
     }
 }
 
+fn set_model_with_id(model: &str, action_id: AgentActionId, token: u32) -> Input<u32> {
+    Input::Command {
+        from: None,
+        action: AgentAction::set_model(model),
+        action_id,
+        token,
+    }
+}
+
 fn acp_ready() -> Input<u32> {
     Input::Inbound(ToServerMessage::Event {
         event: SystemEvent::AcpReady,
@@ -201,8 +210,11 @@ fn a_second_acp_ready_only_logs() {
 #[test]
 fn session_new_success_flushes_the_queue() {
     let mut machine = machine();
+    // One prompt and one model change: at most one turn-occupying action is
+    // ever pending, because the harness dispatches its queue one turn at a
+    // time - the machine asserts that contract rather than managing it.
     machine.handle(command("first", 1));
-    machine.handle(command("second", 2));
+    machine.handle(set_model_with_id("opus", AgentActionId::mint(), 2));
     begin_opening(&mut machine);
 
     let effects = machine.handle(session_opened("acp-42"));
@@ -579,11 +591,13 @@ fn actions_go_out_under_the_ids_they_were_accepted_with() {
     let live_id = AgentActionId::mint();
 
     let mut machine = machine();
-    machine.handle(command_with_id("queued", queued_id.clone(), 1));
+    machine.handle(command_with_id("queued", queued_id, 1));
     let initialize = machine.handle(acp_ready());
     let open = machine.handle(initialized());
     let flushed = machine.handle(session_opened("acp-42"));
-    let live = machine.handle(command_with_id("live", live_id.clone(), 2));
+    // A model change, because the queued prompt's turn is still in flight and
+    // only non-turn actions may go out beside it.
+    let live = machine.handle(set_model_with_id("opus", live_id, 2));
 
     let mut ids = Vec::new();
     for effects in [&initialize, &open, &flushed, &live] {
@@ -613,56 +627,121 @@ fn stop(token: u32) -> Input<u32> {
 }
 
 #[test]
-fn a_stop_while_booting_drops_the_queued_prompts_instead_of_sending_them() {
+fn a_stop_while_booting_leaves_the_queued_prompt_to_run() {
     let mut machine = machine();
 
     // Queued, because nothing can be sent before the handshake finishes.
     assert!(machine.handle(command("start the work", 1)).is_empty());
     assert_eq!(machine.pending_count(), 1);
 
+    // A stop cancels only the turn that is running - here, none. The queued
+    // prompt stays: it will open the next turn, which its caller can stop in
+    // turn if they meant that too.
     let effects = machine.handle(stop(2));
-
-    // The queued prompt resolves as accepted rather than failed: it was
-    // superseded, and a `Disconnected` here would have the harness resume and
-    // resend the very prompt this stop dropped.
-    assert!(
-        matches!(
-            effects[0],
-            Effect::Complete {
-                token: 1,
-                result: Ok(())
-            }
-        ),
-        "the queued prompt is completed, got {effects:?}"
-    );
-    // Only the stop is left to send once the session opens.
-    assert_eq!(machine.pending_count(), 1);
+    assert!(effects.is_empty(), "nothing completes early: {effects:?}");
+    assert_eq!(machine.pending_count(), 2);
 
     begin_opening(&mut machine);
     let effects = machine.handle(session_opened("acp-1"));
 
-    let methods: Vec<_> = effects
-        .iter()
-        .filter_map(|effect| match effect {
-            Effect::Send {
-                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Notification(n))),
-                ..
-            } => Some(n.method.to_string()),
-            Effect::Send {
-                message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(r))),
-                ..
-            } => Some(r.method.to_string()),
-            _ => None,
-        })
-        .collect();
-    assert!(
-        !methods.iter().any(|method| method == "session/prompt"),
-        "the dropped prompt must never reach the agent, sent {methods:?}"
+    assert_eq!(
+        sent_methods(&effects),
+        ["session/prompt", "session/cancel"],
+        "the prompt still runs, in the order the actions were accepted"
     );
+}
+
+/// The response answering the in-flight prompt's request id, however the
+/// turn ended.
+fn turn_answered(request_id: RequestId) -> Input<u32> {
+    frame(RawJsonRpcMessage::response(
+        request_id,
+        Ok(serde_json::json!({ "stopReason": "end_turn" })),
+    ))
+}
+
+/// A live machine with `action_id`'s prompt in flight.
+fn machine_with_turn_in_flight(action_id: AgentActionId) -> SessionMachine<u32> {
+    let mut machine = machine();
+    machine.handle(command_with_id("work", action_id, 1));
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-42"));
+    machine
+}
+
+#[test]
+fn the_prompts_response_ends_its_turn() {
+    let action_id = AgentActionId::mint();
+    let mut machine = machine_with_turn_in_flight(action_id);
+
+    let effects = machine.handle(turn_answered(action_id.to_request_id()));
+
     assert!(
-        methods.iter().any(|method| method == "session/cancel"),
-        "the stop itself is still delivered, sent {methods:?}"
+        matches!(
+            effects[..],
+            [Effect::Log { .. }, Effect::TurnEnded { action_id: ended }] if ended == action_id
+        ),
+        "the answer is logged and the turn ends: {effects:?}"
     );
+}
+
+#[test]
+fn a_refused_prompt_ends_its_turn_too() {
+    let action_id = AgentActionId::mint();
+    let mut machine = machine_with_turn_in_flight(action_id);
+
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        action_id.to_request_id(),
+        Err(agent_client_protocol::Error::internal_error()),
+    )));
+
+    assert!(
+        matches!(
+            effects[..],
+            [Effect::Log { .. }, Effect::TurnEnded { action_id: ended }] if ended == action_id
+        ),
+        "a refusal ends the turn the same way: {effects:?}"
+    );
+}
+
+#[test]
+fn another_requests_response_does_not_end_the_turn() {
+    let action_id = AgentActionId::mint();
+    let mut machine = machine_with_turn_in_flight(action_id);
+
+    // A model change answered while the prompt's turn is still running.
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        AgentActionId::mint().to_request_id(),
+        Ok(serde_json::json!({})),
+    )));
+    assert!(
+        matches!(effects[..], [Effect::Log { .. }]),
+        "only logged: {effects:?}"
+    );
+
+    // The turn is still in flight: its own answer still ends it.
+    let effects = machine.handle(turn_answered(action_id.to_request_id()));
+    assert!(matches!(effects[..], [
+        Effect::Log { .. },
+        Effect::TurnEnded { action_id: ended }
+    ] if ended == action_id));
+}
+
+#[test]
+fn a_death_mid_turn_is_not_a_turn_end() {
+    let action_id = AgentActionId::mint();
+    let mut machine = machine_with_turn_in_flight(action_id);
+
+    let effects = machine.handle(Input::Closed(CloseReason::TransportClosed));
+
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::TurnEnded { .. })),
+        "the session stopped; the turn did not end: {effects:?}"
+    );
+    assert!(matches!(effects[..], [Effect::Stop { .. }]));
+    assert_eq!(machine.status(), RuntimeStatus::Dead);
 }
 
 #[test]

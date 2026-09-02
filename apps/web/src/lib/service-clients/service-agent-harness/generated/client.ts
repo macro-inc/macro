@@ -5,12 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
-  AgentActionId,
   AgentSessionLogResponse,
+  AgentSessionQueueResponse,
   AgentSessionResponse,
   ControlRequest,
+  ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  EditQueuedActionRequest,
   RenameAgentSessionRequest,
   SandboxSizeBody,
 } from './schemas';
@@ -337,10 +339,12 @@ export const deleteAgentSession = async (
 };
 
 /**
+ * Edit access suffices: whoever can prompt the bot through its thread can
+prompt it here.
  * @summary Perform a control operation on a live agent session.
  */
 export type controlAgentSessionResponse200 = {
-  data: AgentActionId;
+  data: ControlResponse;
   status: 200;
 };
 
@@ -352,6 +356,11 @@ export type controlAgentSessionResponse401 = {
 export type controlAgentSessionResponse403 = {
   data: string;
   status: 403;
+};
+
+export type controlAgentSessionResponse422 = {
+  data: string;
+  status: 422;
 };
 
 export type controlAgentSessionResponse500 = {
@@ -366,6 +375,7 @@ export type controlAgentSessionResponseSuccess =
 export type controlAgentSessionResponseError = (
   | controlAgentSessionResponse401
   | controlAgentSessionResponse403
+  | controlAgentSessionResponse422
   | controlAgentSessionResponse500
 ) & {
   headers: Headers;
@@ -540,6 +550,220 @@ export const renameAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as renameAgentSessionResponse;
+};
+
+/**
+ * @summary The actions waiting to dispatch in this session, oldest first.
+ */
+export type getAgentSessionQueueResponse200 = {
+  data: AgentSessionQueueResponse;
+  status: 200;
+};
+
+export type getAgentSessionQueueResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentSessionQueueResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type getAgentSessionQueueResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentSessionQueueResponseSuccess =
+  getAgentSessionQueueResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionQueueResponseError = (
+  | getAgentSessionQueueResponse401
+  | getAgentSessionQueueResponse403
+  | getAgentSessionQueueResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionQueueResponse =
+  | getAgentSessionQueueResponseSuccess
+  | getAgentSessionQueueResponseError;
+
+export const getGetAgentSessionQueueUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/queue`;
+};
+
+export const getAgentSessionQueue = async (
+  sessionId: string,
+  options?: RequestInit
+): Promise<getAgentSessionQueueResponse> => {
+  const res = await fetch(getGetAgentSessionQueueUrl(sessionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionQueueResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionQueueResponse;
+};
+
+/**
+ * @summary Replace a queued prompt's text before it dispatches.
+ */
+export type editQueuedActionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type editQueuedActionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type editQueuedActionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type editQueuedActionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type editQueuedActionResponse422 = {
+  data: string;
+  status: 422;
+};
+
+export type editQueuedActionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type editQueuedActionResponseSuccess = editQueuedActionResponse204 & {
+  headers: Headers;
+};
+export type editQueuedActionResponseError = (
+  | editQueuedActionResponse401
+  | editQueuedActionResponse403
+  | editQueuedActionResponse404
+  | editQueuedActionResponse422
+  | editQueuedActionResponse500
+) & {
+  headers: Headers;
+};
+
+export type editQueuedActionResponse =
+  | editQueuedActionResponseSuccess
+  | editQueuedActionResponseError;
+
+export const getEditQueuedActionUrl = (sessionId: string, actionId: string) => {
+  return `/agent-sessions/${sessionId}/queue/${actionId}`;
+};
+
+export const editQueuedAction = async (
+  sessionId: string,
+  actionId: string,
+  editQueuedActionRequest: EditQueuedActionRequest,
+  options?: RequestInit
+): Promise<editQueuedActionResponse> => {
+  const res = await fetch(getEditQueuedActionUrl(sessionId, actionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(editQueuedActionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: editQueuedActionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as editQueuedActionResponse;
+};
+
+/**
+ * @summary Remove a queued action before it dispatches. There is no un-sending: an
+action that already went out answers 404.
+ */
+export type removeQueuedActionResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type removeQueuedActionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type removeQueuedActionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type removeQueuedActionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type removeQueuedActionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type removeQueuedActionResponseSuccess =
+  removeQueuedActionResponse204 & {
+    headers: Headers;
+  };
+export type removeQueuedActionResponseError = (
+  | removeQueuedActionResponse401
+  | removeQueuedActionResponse403
+  | removeQueuedActionResponse404
+  | removeQueuedActionResponse500
+) & {
+  headers: Headers;
+};
+
+export type removeQueuedActionResponse =
+  | removeQueuedActionResponseSuccess
+  | removeQueuedActionResponseError;
+
+export const getRemoveQueuedActionUrl = (
+  sessionId: string,
+  actionId: string
+) => {
+  return `/agent-sessions/${sessionId}/queue/${actionId}`;
+};
+
+export const removeQueuedAction = async (
+  sessionId: string,
+  actionId: string,
+  options?: RequestInit
+): Promise<removeQueuedActionResponse> => {
+  const res = await fetch(getRemoveQueuedActionUrl(sessionId, actionId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeQueuedActionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeQueuedActionResponse;
 };
 
 /**

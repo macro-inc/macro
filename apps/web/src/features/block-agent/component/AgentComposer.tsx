@@ -4,9 +4,17 @@
  * block-level state stays on this side of the boundary.
  */
 
+import { useUserId } from '@core/context/user';
+import { idToDisplayName } from '@core/user/util';
 import { Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import { AgentInput, AgentModelSelector, ComposerNotice } from '../ui';
+import {
+  AgentInput,
+  AgentModelSelector,
+  ComposerNotice,
+  type QueuedPromptItem,
+  QueuedPrompts,
+} from '../ui';
 
 export function AgentComposer() {
   const {
@@ -14,9 +22,32 @@ export function AgentComposer() {
     loadFailed,
     metadata,
     pending,
+    queue,
     resuming,
     registerQuoteInsert,
   } = useAgentSession();
+  const userId = useUserId();
+
+  // Focus plumbing between the input and the queue list above it: Up at the
+  // start of the input lands on the bottom (next-to-dispatch) queue row, and
+  // Down past that row comes back. Plain variables, read only at call time.
+  let focusQueueBottom: (() => void) | undefined;
+  let focusInput: (() => void) | undefined;
+
+  // The server queue's entries, shaped for display: prompt text as-is, and
+  // attribution only when somebody other than the current user queued it —
+  // one's own waiting prompts need no byline.
+  const queuedItems = (): QueuedPromptItem[] =>
+    queue.entries().map((entry) => {
+      const actor = entry.actorUserId ?? undefined;
+      return {
+        actionId: entry.actionId,
+        kind: entry.kind,
+        prompt: entry.prompt ?? undefined,
+        queuedBy:
+          actor && actor !== userId() ? idToDisplayName(actor) : undefined,
+      };
+    });
 
   // A session still being created was created by this user, one action ago,
   // and has an empty transcript: the only thing to do with it is type. The
@@ -25,6 +56,19 @@ export function AgentComposer() {
 
   return (
     <>
+      <Show when={queuedItems().length > 0}>
+        <div class="pb-1.5">
+          <QueuedPrompts
+            items={queuedItems()}
+            onEdit={(actionId, prompt) => void queue.edit(actionId, prompt)}
+            onRemove={(actionId) => void queue.remove(actionId)}
+            onNavigateBelow={() => focusInput?.()}
+            registerFocusFromBelow={(focus) => {
+              focusQueueBottom = focus;
+            }}
+          />
+        </div>
+      </Show>
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>
@@ -39,6 +83,10 @@ export function AgentComposer() {
         commands={() => metadata()?.availableCommands ?? []}
         onSend={composer.send}
         onStop={composer.stop}
+        onNavigateUp={() => focusQueueBottom?.()}
+        registerFocus={(focus) => {
+          focusInput = focus;
+        }}
         registerQuoteInsert={registerQuoteInsert}
         modelControl={
           <AgentModelSelector

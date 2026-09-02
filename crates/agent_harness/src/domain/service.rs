@@ -10,7 +10,10 @@ use agent_session::domain::model::SessionManagement;
 use agent_session::domain::model::{
     AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId, SandboxSize,
 };
-use agent_session::domain::ports::{AgentSessionNotificationRecipient, ControlEvent};
+use agent_session::domain::ports::{
+    AcceptedControl, AgentSessionNotificationRecipient, AgentSessionQueueChanged,
+    ControlDisposition, ControlEvent, QueuedControl,
+};
 use agent_session::domain::service::AgentSessionService;
 use bot_id::BotId;
 use dashmap::DashMap;
@@ -22,20 +25,21 @@ use tracing::instrument::WithSubscriber as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    AgentKind, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand, HarnessDefaults,
-    OpenSession, SessionAnnouncement, SpawnContainer,
+    AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeliverAction, HarnessCommand,
+    HarnessDefaults, OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
     RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
+use crate::domain::queue::{QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
 
 type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
 struct QueuedCommand {
     command: HarnessCommand,
-    completed: oneshot::Sender<Result<()>>,
+    completed: oneshot::Sender<Result<CommandOutcome>>,
     /// The caller's span, carried across the queue so the work the worker does
     /// on its own task still hangs off whatever triggered it.
     span: tracing::Span,
@@ -58,7 +62,7 @@ trait ErasedForwarder: Send + Sync + 'static {
         target: &'a agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>>;
 }
 
 impl<F: CommandForwarder> ErasedForwarder for F {
@@ -67,7 +71,7 @@ impl<F: CommandForwarder> ErasedForwarder for F {
         target: &'a agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>> {
         Box::pin(CommandForwarder::forward(self, target, session, command))
     }
 }
@@ -90,6 +94,14 @@ struct AgentHarnessInner<
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
     defaults: HarnessDefaults,
+    /// Turn-occupying actions waiting for their session's running turn to
+    /// end. In-memory beside the live actors this replica manages.
+    queues: SessionQueues,
+    /// The sessions with a turn in flight. Marked when a turn-occupying
+    /// action reaches the runtime, cleared by `TurnEnded`/`SessionStopped`.
+    /// Only ever touched from the session's own command worker, which is
+    /// what serializes it against dispatch.
+    busy: DashMap<AgentSessionId, ()>,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
@@ -114,6 +126,29 @@ pub struct AgentHarnessService<
         >,
     >,
     workers: Arc<SessionWorkers>,
+}
+
+// Manual Clone impl so the port types don't need to be Clone (both fields
+// are behind Arcs). A clone is another handle on the same workers and queues,
+// which is what lets the service be bound as its own session services' turn
+// observer.
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress> Clone
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+    >
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            workers: Arc::clone(&self.workers),
+        }
+    }
 }
 
 impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
@@ -162,6 +197,8 @@ where
                 egress,
                 forwarder: Box::new(forwarder),
                 defaults: defaults.into(),
+                queues: SessionQueues::new(),
+                busy: DashMap::new(),
             }),
             workers: Arc::new(DashMap::new()),
         }
@@ -177,7 +214,7 @@ where
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
-    ) -> impl Future<Output = Result<()>> + Send + 'static {
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
         self.enqueue(session_id, command, true)
     }
 
@@ -193,7 +230,7 @@ where
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
-    ) -> impl Future<Output = Result<()>> + Send + 'static {
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
         self.enqueue(session_id, command, false)
     }
 
@@ -202,7 +239,7 @@ where
         session_id: AgentSessionId,
         mut command: HarnessCommand,
         route: bool,
-    ) -> impl Future<Output = Result<()>> + Send + 'static {
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
         let caller = tracing::Span::current();
         let result = loop {
             let commands = self.commands(session_id);
@@ -308,7 +345,7 @@ pub trait ForwardedCommands: Send + Sync + 'static {
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
-    ) -> impl Future<Output = Result<()>> + Send;
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
 impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
@@ -335,7 +372,7 @@ where
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
-    ) -> Result<()> {
+    ) -> Result<CommandOutcome> {
         self.execute_here(session_id, command).await
     }
 }
@@ -370,6 +407,7 @@ where
     ) -> agent_session::domain::error::Result<()> {
         self.execute(id, HarnessCommand::Delete)
             .await
+            .map(drop)
             .map_err(into_session_error)
     }
 
@@ -377,15 +415,55 @@ where
         &self,
         id: AgentSessionId,
         event: ControlEvent,
-    ) -> agent_session::domain::error::Result<AgentActionId> {
+    ) -> agent_session::domain::error::Result<AcceptedControl> {
         let action_id = AgentActionId::mint();
-        self.execute(
-            id,
-            HarnessCommand::Deliver(DeliverAction::control(action_id.clone(), event)),
-        )
-        .await
-        .map_err(into_session_error)?;
-        Ok(action_id)
+        let outcome = self
+            .execute(
+                id,
+                HarnessCommand::Deliver(DeliverAction::control(action_id, event)),
+            )
+            .await
+            .map_err(into_session_error)?;
+        Ok(AcceptedControl {
+            action_id,
+            disposition: match outcome {
+                CommandOutcome::Completed => ControlDisposition::Sent,
+                CommandOutcome::Queued => ControlDisposition::Queued,
+            },
+        })
+    }
+
+    /// A local read on purpose: the queue lives beside the session's live
+    /// actor, and this replica answers for what it holds. A reader landing on
+    /// a non-managing replica sees an empty queue rather than an error.
+    async fn queued_controls(
+        &self,
+        id: AgentSessionId,
+    ) -> agent_session::domain::error::Result<Vec<QueuedControl>> {
+        Ok(self.inner.queues.list(id))
+    }
+
+    async fn edit_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        prompt: String,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::EditQueued { action_id, prompt })
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
+    async fn remove_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::RemoveQueued { action_id })
+            .await
+            .map(drop)
+            .map_err(into_session_error)
     }
 
     async fn set_sandbox_size(
@@ -395,6 +473,7 @@ where
     ) -> agent_session::domain::error::Result<()> {
         self.execute(id, HarnessCommand::SetSandboxSize(size))
             .await
+            .map(drop)
             .map_err(into_session_error)
     }
 
@@ -411,6 +490,39 @@ where
             .bound_harness(session.bot_id)
             .await
             .map_err(AgentSessionError::Unknown)
+    }
+}
+
+/// The queue drains on the session's own command worker, so both signals
+/// only admit an internal command there and return. Admission is synchronous
+/// inside [`AgentHarnessService::execute_here`]; the returned future only
+/// awaits the completion, which nothing here needs.
+impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+    agent_session::domain::ports::SessionTurnObserver
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: ChannelPromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+{
+    fn turn_ended(&self, id: AgentSessionId) {
+        drop(self.execute_here(id, HarnessCommand::TurnEnded));
+    }
+
+    fn session_stopped(&self, id: AgentSessionId) {
+        drop(self.execute_here(id, HarnessCommand::SessionStopped));
     }
 }
 
@@ -504,22 +616,6 @@ where
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
         let defaults = self.inner.defaults.managed();
-        let initial_prompt = if let Some(raw_prompt) = request.prompt.as_deref() {
-            let composed_prompt = self
-                .inner
-                .prompt_composer
-                .compose(raw_prompt, None)
-                .await
-                .map_err(into_session_error)?;
-            let mut action = AgentAction::prompt(composed_prompt);
-            let AgentAction::Prompt(prompt) = &mut action else {
-                unreachable!("a prompt constructor always returns a prompt action");
-            };
-            prompt.set_name_source(raw_prompt.to_owned());
-            Some(action)
-        } else {
-            None
-        };
         let sandbox_size = self
             .inner
             .sessions
@@ -595,16 +691,21 @@ where
             )
             .await?;
 
-        if let Some(prompt) = initial_prompt {
-            self.inner
-                .sessions
-                .send_action(
-                    session.id,
-                    Some(request.owner),
-                    prompt,
-                    AgentActionId::mint(),
-                )
-                .await?;
+        // Raw, through the session's own command worker: dispatch is where a
+        // prompt is composed, and the worker is what serializes this first
+        // prompt against any control prompt racing the session's birth.
+        if let Some(raw_prompt) = request.prompt {
+            self.execute_here(
+                session.id,
+                HarnessCommand::Deliver(DeliverAction {
+                    id: AgentActionId::mint(),
+                    action: AgentAction::prompt(raw_prompt),
+                    actor: Some(request.owner),
+                    announce: None,
+                }),
+            )
+            .await
+            .map_err(into_session_error)?;
         }
 
         Ok(session)
@@ -627,6 +728,21 @@ where
             agent_session::domain::model::ChannelSession::None => Ok(None),
         }
     }
+}
+
+/// Map a queue refusal into the session vocabulary, which is where the
+/// control surface's callers read their errors from.
+fn queue_result<T>(
+    result: std::result::Result<T, QueueError>,
+    session_id: AgentSessionId,
+) -> Result<T> {
+    result.map_err(|error| {
+        HarnessError::Session(match error {
+            QueueError::NotFound => AgentSessionError::QueuedControlNotFound,
+            QueueError::NotEditable => AgentSessionError::QueuedControlNotEditable,
+            QueueError::Full => AgentSessionError::ControlQueueFull(session_id),
+        })
+    })
 }
 
 /// Collapse a harness failure back into the session vocabulary the port speaks.
@@ -686,7 +802,7 @@ where
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
-    ) -> Result<()> {
+    ) -> Result<CommandOutcome> {
         let span = tracing::Span::current();
         // Open never routes: it is what creates the session row this routing
         // would read, and a fresh id has no manager to defer to.
@@ -726,7 +842,7 @@ where
             .forward(&address, session_id, command.clone())
             .await
         {
-            Ok(()) => Ok(()),
+            Ok(outcome) => Ok(outcome),
             Err(forward_error) => match self.sessions.management(session_id).await? {
                 SessionManagement::Unmanaged | SessionManagement::Ours => {
                     // Worth aggregating rather than only logging: routine
@@ -745,12 +861,179 @@ where
         }
     }
 
-    async fn execute(&self, session_id: AgentSessionId, command: HarnessCommand) -> Result<()> {
+    async fn execute(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+    ) -> Result<CommandOutcome> {
+        match &command {
+            HarnessCommand::Open(open)
+                if AgentKind::of(open.bot_id) == AgentKind::Cursor
+                    && !is_macro_staff(&open.origin.sender) =>
+            {
+                return Err(AgentSessionError::Forbidden.into());
+            }
+            HarnessCommand::Deliver(deliver) => {
+                let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::of(session.bot_id) == AgentKind::Cursor
+                    && !deliver.actor.as_ref().is_some_and(is_macro_staff)
+                {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
+            HarnessCommand::Open(_)
+            | HarnessCommand::EditQueued { .. }
+            | HarnessCommand::RemoveQueued { .. }
+            | HarnessCommand::TurnEnded
+            | HarnessCommand::SessionStopped
+            | HarnessCommand::SetSandboxSize(_)
+            | HarnessCommand::Delete => {}
+        }
+
         match command {
-            HarnessCommand::Open(command) => self.open(session_id, command).await,
-            HarnessCommand::Deliver(command) => self.deliver(session_id, command).await,
-            HarnessCommand::SetSandboxSize(size) => self.apply_sandbox_size(session_id, size).await,
-            HarnessCommand::Delete => self.delete(session_id).await,
+            HarnessCommand::Open(command) => {
+                self.open(session_id, command).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            // Turn-occupying actions go through the queue - the running
+            // turn's end is what dispatches them. Everything else delivers
+            // now: a stop rides alongside the turn it cancels, and that
+            // turn's cancelled answer is an ordinary turn end.
+            HarnessCommand::Deliver(command) if command.action.occupies_turn() => {
+                self.enqueue_then_dispatch(session_id, command).await
+            }
+            HarnessCommand::Deliver(command) => {
+                self.deliver(session_id, command).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::EditQueued { action_id, prompt } => {
+                queue_result(
+                    self.queues.edit_prompt(session_id, action_id, prompt),
+                    session_id,
+                )?;
+                self.publish_queue(session_id).await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::RemoveQueued { action_id } => {
+                queue_result(self.queues.remove(session_id, action_id), session_id)?;
+                self.publish_queue(session_id).await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::TurnEnded => {
+                self.busy.remove(&session_id);
+                let dispatched = self.dispatch_next(session_id).await;
+                // Published whatever dispatching did: a claim, a requeued
+                // failure, and an emptied queue are all changes a viewer is
+                // watching for.
+                self.publish_queue(session_id).await;
+                dispatched?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::SessionStopped => {
+                self.busy.remove(&session_id);
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::SetSandboxSize(size) => {
+                self.apply_sandbox_size(session_id, size).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Delete => {
+                self.delete(session_id).await?;
+                Ok(CommandOutcome::Completed)
+            }
+        }
+    }
+
+    /// Queue a turn-occupying action, and dispatch the head of the queue
+    /// right away when no turn is running.
+    ///
+    /// The dispatched entry is usually the one just queued, but not
+    /// necessarily: entries can linger from a drain that failed, and FIFO
+    /// order holds regardless. The outcome reports what happened to *this*
+    /// action - still waiting, or on the wire.
+    async fn enqueue_then_dispatch(
+        &self,
+        session_id: AgentSessionId,
+        command: DeliverAction,
+    ) -> Result<CommandOutcome> {
+        let action_id = command.id;
+        queue_result(
+            self.queues.enqueue(
+                session_id,
+                QueuedEntry {
+                    action_id,
+                    action: command.action,
+                    actor: command.actor,
+                    announce: command.announce,
+                    created_at: chrono::Utc::now(),
+                },
+            ),
+            session_id,
+        )?;
+
+        let dispatched = if self.busy.contains_key(&session_id) {
+            Ok(())
+        } else {
+            self.dispatch_next(session_id).await
+        };
+        self.publish_queue(session_id).await;
+        dispatched?;
+
+        Ok(if self.queues.contains(session_id, action_id) {
+            CommandOutcome::Queued
+        } else {
+            CommandOutcome::Completed
+        })
+    }
+
+    /// Push the queue as it now stands to the session's viewers.
+    ///
+    /// Best-effort, like every realtime publish: a dropped snapshot costs a
+    /// viewer liveness until the next change, and the queue itself is intact -
+    /// so this logs and never fails the command it rides on.
+    async fn publish_queue(&self, session_id: AgentSessionId) {
+        let _ = self
+            .sessions
+            .publish_queue_changed(AgentSessionQueueChanged {
+                agent_session_id: session_id,
+                entries: self.queues.list(session_id),
+            })
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    error = ?error,
+                    %session_id,
+                    "failed to publish an agent session queue change"
+                );
+            });
+    }
+
+    /// Deliver the oldest queued action, marking the session busy on success.
+    ///
+    /// A failed dispatch puts the entry back at the front: it stays next in
+    /// line for the next turn end or the next prompt, and stays visible in
+    /// the queue meanwhile. The error still propagates, so a caller whose
+    /// own action triggered this dispatch hears about it.
+    #[tracing::instrument(err, skip(self), fields(%session_id))]
+    async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<()> {
+        let Some(entry) = self.queues.claim_next(session_id) else {
+            return Ok(());
+        };
+        let command = DeliverAction {
+            id: entry.action_id,
+            action: entry.action.clone(),
+            actor: entry.actor.clone(),
+            announce: entry.announce.clone(),
+        };
+        match self.deliver(session_id, command).await {
+            Ok(()) => {
+                self.busy.insert(session_id, ());
+                Ok(())
+            }
+            Err(error) => {
+                self.queues.requeue_front(session_id, entry);
+                Err(error)
+            }
         }
     }
 
@@ -855,13 +1138,6 @@ where
         let defaults = self.defaults.for_bot(bot_id);
         let repo_url = defaults.repo_url.clone();
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
-        let prior_messages = self
-            .load_prompt_context(origin.channel_id, origin.message_id, Some(&origin.sender))
-            .await;
-        let composed_prompt = self
-            .prompt_composer
-            .compose(&origin.content, Some(&prior_messages))
-            .await?;
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.
@@ -892,19 +1168,6 @@ where
                 instructions: None,
                 egress_token_hash: Some(egress.session_token_hash),
                 // This open came from the trigger pipeline seeing the mention.
-            })
-            .await?;
-
-        self.announcer
-            .announce(SessionAnnouncement {
-                session_id,
-                bot_id,
-                origin_channel_id: origin.channel_id,
-                origin_thread_id: origin.thread_id,
-                origin_message_id: origin.message_id,
-                prompted_message_id: MessageId::first(AuthorKind::User),
-                prompted_content: origin.content.clone(),
-                triggered_by: origin.sender.clone(),
             })
             .await?;
 
@@ -941,19 +1204,25 @@ where
                 RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
             )
             .await?;
-        let mut action = AgentAction::prompt(composed_prompt);
-        let AgentAction::Prompt(prompt) = &mut action else {
-            unreachable!("a prompt constructor always returns a prompt action");
-        };
-        prompt.set_name_source(origin.content);
-        self.sessions
-            .send_action(
-                session_id,
-                Some(origin.sender),
-                action,
-                AgentActionId::mint(),
-            )
-            .await?;
+        // The first prompt goes through the same door as every later one:
+        // queued raw, then dispatched - which is where it is composed with
+        // channel context and announced as the chip the replies render into.
+        // One door is what holds the one-turn-in-flight invariant from the
+        // session's very first action.
+        self.enqueue_then_dispatch(
+            session_id,
+            DeliverAction {
+                id: AgentActionId::mint(),
+                action: AgentAction::prompt(origin.content),
+                actor: Some(origin.sender),
+                announce: Some(AnnounceOrigin {
+                    channel_id: origin.channel_id,
+                    thread_id: origin.thread_id,
+                    message_id: origin.message_id,
+                }),
+            },
+        )
+        .await?;
         Ok(())
     }
 
@@ -1003,7 +1272,7 @@ where
 
         match self
             .sessions
-            .send_action(session_id, actor.clone(), action.clone(), id.clone())
+            .send_action(session_id, actor.clone(), action.clone(), id)
             .await
         {
             Ok(()) => {}

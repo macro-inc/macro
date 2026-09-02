@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
 ---
@@ -12,7 +11,11 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
         author: User {
             user_id: None,
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                826d1392-b8c8-4208-8f79-856aa3c17b0b,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Control {
@@ -34,7 +37,11 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                415b0c72-3eb8-43bd-b58c-ca2a40ad1ec1,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {

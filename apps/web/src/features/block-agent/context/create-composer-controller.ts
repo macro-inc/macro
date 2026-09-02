@@ -90,6 +90,9 @@ export function createComposerController(options: {
     if (result === undefined || result.isErr()) {
       toast.failure('Message could not be sent');
     }
+    // A 200 with status `queued` means the prompt waits in the session's
+    // server-side queue; the gateway publishes the queue, so nothing more
+    // to do here.
   };
 
   const postSetModel = async (sessionId: string, model: string) => {
@@ -111,7 +114,7 @@ export function createComposerController(options: {
     // `model`, a rejected one resolves this id's control outcome, and the
     // effects below watch for whichever comes.
     if (state.requestedModel === model) {
-      setState('requestedActionId', result.value);
+      setState('requestedActionId', result.value.actionId);
     }
   };
 
