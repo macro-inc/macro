@@ -213,7 +213,7 @@ export function MessageList(props: MessageListProps) {
                 >
                   <div class="shrink-0 w-full flex justify-center">
                     <div class="macro-message-width macro-message-padding w-full">
-                      <div class="grid h-6 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                      <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
                         <span
                           aria-hidden="true"
                           class="border-t border-edge-muted"

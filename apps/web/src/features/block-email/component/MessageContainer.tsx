@@ -20,6 +20,7 @@ import { emailClient } from '@service-email/client';
 import type { ApiMessage, Attachment } from '@service-email/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import { cn } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { BottomReplyButtons } from './BottomReplyButtons';
 
@@ -248,17 +249,17 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="shrink-0 flex justify-center w-full">
         <div class="macro-message-width macro-message-padding w-full">
           <div
-            class="relative p-4 border rounded-lg"
+            class={cn(
+              'relative p-4 border border-edge-muted rounded-lg bg-message',
+              props.isFocused
+                ? 'z-1 outline outline-1 outline-edge-active light-mode:shadow-md light-mode:shadow-drop-shadow'
+                : cn(
+                    'outline-none',
+                    props.allowHover &&
+                      'hover:z-1 hover:outline hover:outline-1 hover:outline-edge-active light-mode:hover:shadow-md light-mode:hover:shadow-drop-shadow'
+                  )
+            )}
             style={{ '--user-icon-width': '1rem' }}
-            classList={{
-              'bg-message': !props.isFocused,
-              'bg-hover': props.isFocused,
-              'dark-mode:bg-active': props.isFocused,
-              'border-edge': props.isFocused,
-              'border-edge-muted': !props.isFocused,
-              'hover:bg-hover': props.allowHover && !props.isFocused,
-              'dark-mode:hover:bg-active': props.allowHover && !props.isFocused,
-            }}
             data-message-body-id={props.message.db_id}
             tabIndex={0}
             onPointerEnter={hoverThisRow}
