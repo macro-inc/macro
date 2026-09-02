@@ -66,7 +66,7 @@ const cloudStorageClusterName: pulumi.Output<string> = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((arn) => arn as string);
 
-const contactsService = new ContactsService('contacts-service', {
+new ContactsService('contacts-service', {
   contactsQueueArn,
   vpc: coparse_api_vpc,
   tags,
