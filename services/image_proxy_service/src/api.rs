@@ -14,8 +14,7 @@ pub(crate) mod swagger;
 #[cfg(test)]
 mod test;
 
-/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
-/// alongside `/` so the dedicated ALB keeps working during cutover.
+/// Path prefix the shared gateway ALB forwards unmodified.
 const GATEWAY_PATH_PREFIX: &str = "/image-proxy";
 
 fn mount_at_root_and_prefix(inner: Router) -> Router {
