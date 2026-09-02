@@ -1,6 +1,7 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { ChannelsView } from '@app/features/channels-view/channels-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { InboxView } from '@app/features/inbox-view/inbox-view';
@@ -441,21 +442,33 @@ registerComponent(
   })
 );
 
-registerComponent(
-  'channels',
-  withAuth(() => {
-    usePageViewTracking('channels');
-    const preset = getViewPreset('channels');
-    return (
-      <SoupView
-        viewName="Channels"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
+function LegacyChannelsView() {
+  const preset = getViewPreset('channels');
+
+  return (
+    <SoupView
+      viewName="Channels"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+    />
+  );
+}
+
+function RegisteredChannelsView() {
+  usePageViewTracking('channels');
+  const newAppViews = useNewAppViews();
+
+  return (
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show when={newAppViews.enabled()} fallback={<LegacyChannelsView />}>
+        <ChannelsView />
+      </Show>
+    </Show>
+  );
+}
+
+registerComponent('channels', withAuth(RegisteredChannelsView));
 
 registerComponent(
   'calls',

@@ -47,8 +47,8 @@ export function resolveFeatureFlag(
 export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
 
 /**
- * Switches Inbox and Tasks from the current SoupView implementations to the
- * new composable view implementations. Override locally with
+ * Switches Inbox, Tasks, and Channels from the current SoupView implementations
+ * to the new composable view implementations. Override locally with
  * VITE_ENABLE_NEW_APP_VIEWS.
  */
 export const ENABLE_NEW_APP_VIEWS_FLAG = 'enable-new-app-views';
