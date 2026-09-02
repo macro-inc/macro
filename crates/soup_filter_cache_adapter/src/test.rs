@@ -291,6 +291,89 @@ fn partial_queries_preserve_v3_authority_and_mark_missing_v3() {
     ));
 }
 
+#[test]
+fn empty_query_patch_does_not_overwrite_an_earlier_field_patch() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let query = r#"query RepeatedSoupEntity {
+        user {
+            rich: soup(input: { limit: 1 }) {
+                items {
+                    __typename
+                    id
+                    ... on GraphqlSoupDocument {
+                        ownerId
+                        projectId
+                        fileType
+                        createdAt
+                        updatedAt
+                        subType { __typename }
+                    }
+                }
+            }
+            partial: soup(input: { limit: 1 }) {
+                items {
+                    __typename
+                    id
+                    notifications { id }
+                }
+            }
+        }
+    }"#;
+    let mutations = authoritative_projection_mutations(
+        query,
+        Some("RepeatedSoupEntity"),
+        &serde_json::json!({
+            "user": {
+                "rich": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "ownerId": "macro|owner@example.com",
+                        "projectId": null,
+                        "fileType": "md",
+                        "createdAt": "2025-01-01T00:00:00.000001Z",
+                        "updatedAt": "2025-01-02T00:00:00.000001Z",
+                        "subType": null
+                    }]
+                },
+                "partial": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "notifications": []
+                    }]
+                }
+            }
+        }),
+    )
+    .unwrap();
+    let [
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ] = mutations.as_slice()
+    else {
+        panic!("the richer appearance must retain its field patch");
+    };
+    assert!(exact.iter().any(|patch| {
+        patch.attribute == vocabulary::owner()
+            && patch.values == vec![ExactValue::utf8("macro|owner@example.com").unwrap()]
+    }));
+    assert!(
+        integers
+            .iter()
+            .any(|patch| patch.attribute == vocabulary::updated_at())
+    );
+    assert!(
+        sorts
+            .iter()
+            .any(|fact| fact.attribute == vocabulary::updated_at())
+    );
+}
+
 const SUPPLEMENT_SUBSCRIPTION: &str = r#"subscription Supplement {
     soupUpdates {
         __typename

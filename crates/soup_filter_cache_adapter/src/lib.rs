@@ -333,6 +333,19 @@ fn insert_authoritative_mutation(
     key: String,
     mutation: ProjectionMutation,
 ) {
+    let mutation_is_empty_patch = matches!(
+        &mutation,
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        } if exact.is_empty() && integers.is_empty() && sorts.is_empty()
+    );
+    if mutation_is_empty_patch && mutations.contains_key(&key) {
+        return;
+    }
+
     let existing_is_replace = matches!(mutations.get(&key), Some(ProjectionMutation::Replace(_)));
     if matches!(mutation, ProjectionMutation::Replace(_)) || !existing_is_replace {
         mutations.insert(key, mutation);
