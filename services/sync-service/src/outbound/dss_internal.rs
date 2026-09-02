@@ -3,6 +3,7 @@ use tracing::error;
 use worker::{Env, Fetch, Method, Request, RequestInit};
 
 use crate::constants::header_names::MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY;
+use crate::domain::document_id::DocumentId;
 
 /// Why a document interaction was reported to DSS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -26,7 +27,7 @@ pub trait DssInternal {
     /// `document.edited` event.
     async fn publish_shallow_snapshot(
         &self,
-        document_id: &str,
+        document_id: &DocumentId,
         snapshot: &[u8],
     ) -> worker::Result<()>;
 
@@ -66,13 +67,13 @@ impl<'a> DssInternalClient<'a> {
 impl DssInternal for DssInternalClient<'_> {
     async fn publish_shallow_snapshot(
         &self,
-        document_id: &str,
+        document_id: &DocumentId,
         snapshot: &[u8],
     ) -> worker::Result<()> {
         let url = format!(
             "{}/internal/documents/{}/snapshot",
             self.dss_url()?,
-            document_id
+            document_id.as_str()
         );
         let auth_key = self.internal_auth_key()?;
 
@@ -90,7 +91,7 @@ impl DssInternal for DssInternalClient<'_> {
         let resp = Fetch::Request(req).send().await?;
         if resp.status_code() != 200 {
             error!(
-                document_id = document_id,
+                document_id = document_id.as_str(),
                 status = resp.status_code(),
                 "DSS snapshot upload failed"
             );

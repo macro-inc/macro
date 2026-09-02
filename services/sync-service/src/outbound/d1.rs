@@ -1,3 +1,5 @@
+use crate::domain::document_id::DocumentId;
+use crate::domain::models::{BlameRow, PeerWithUserId};
 use crate::timeit;
 use tracing::{error, trace};
 use worker::D1Database;
@@ -5,14 +7,14 @@ pub async fn insert_user_mapping(
     db: D1Database,
     user_id: &str,
     peer_id: u64,
-    document_id: &str,
+    document_id: &DocumentId,
 ) -> worker::Result<()> {
     let elapsed = timeit!({
         let dbres = db.prepare(
             "INSERT OR REPLACE INTO peer_user_map (document_id, peer_id, user_id) VALUES (?, ?, ?);",
         )
         .bind(&[
-            document_id.into(),
+            document_id.as_str().into(),
             peer_id.to_string().into(),
             user_id.into(),
         ])?
@@ -23,7 +25,7 @@ pub async fn insert_user_mapping(
                 error = e,
                 user_id = user_id,
                 user_id = user_id,
-                document_id = document_id,
+                document_id = document_id.as_str(),
                 "Error within D1"
             );
             return Err(worker::Error::from(e));
@@ -34,7 +36,7 @@ pub async fn insert_user_mapping(
     trace!(
         user_id = user_id,
         user_id = user_id,
-        document_id = document_id,
+        document_id = document_id.as_str(),
         duration_ms = elapsed.as_millis(),
         "insert_peer_user_document_mapping"
     );
@@ -43,7 +45,7 @@ pub async fn insert_user_mapping(
 
 pub async fn get_user_id_from_peer_id(
     db: D1Database,
-    document_id: &str,
+    document_id: &DocumentId,
     peer_id: &u64,
 ) -> worker::Result<String> {
     let statement = db.prepare(
@@ -54,7 +56,7 @@ pub async fn get_user_id_from_peer_id(
         ",
     );
     let Some(user_id) = statement
-        .bind(&[document_id.into(), (*peer_id).to_string().into()])?
+        .bind(&[document_id.as_str().into(), (*peer_id).to_string().into()])?
         .first(Some("user_id"))
         .await?
     else {
@@ -64,15 +66,9 @@ pub async fn get_user_id_from_peer_id(
     Ok(user_id)
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct PeerWithUserId {
-    pub peer_id: String,
-    pub user_id: String,
-}
-
 pub async fn get_peers_for_document_id(
     db: D1Database,
-    document_id: &str,
+    document_id: &DocumentId,
 ) -> worker::Result<Vec<PeerWithUserId>> {
     let statement = db.prepare(
         "
@@ -82,7 +78,10 @@ pub async fn get_peers_for_document_id(
         ",
     );
 
-    let result = statement.bind(&[document_id.into()])?.all().await?;
+    let result = statement
+        .bind(&[document_id.as_str().into()])?
+        .all()
+        .await?;
 
     let peers = result.results::<PeerWithUserId>()?;
 
@@ -135,13 +134,6 @@ pub async fn insert_blame_many(env: &worker::Env, events: &[BlameEvent]) -> work
         db.batch(stmts).await?;
     }
     Ok(())
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct BlameRow {
-    pub peer_id: String,
-    pub user_id: Option<String>,
-    pub timestamp_ms: i64,
 }
 
 /// JOIN blame with peer_user_map to get last-edit info plus resolved user_id.

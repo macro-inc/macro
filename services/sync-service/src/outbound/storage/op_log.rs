@@ -27,7 +27,7 @@ mod kv_ops {
 
     use bebop::{Record, SubRecord};
 
-    use crate::storage::backends::durable_kv::DurableKVStorage;
+    use crate::outbound::storage::backends::durable_kv::DurableKVStorage;
 
     use super::*;
     impl OperationIndexStorage for DurableKVStorage {
@@ -98,7 +98,7 @@ mod r2 {
 
     use bebop::{Record, SubRecord};
 
-    use crate::storage::backends::r2::R2Storage;
+    use crate::outbound::storage::backends::r2::R2Storage;
 
     use super::*;
     impl OperationLogStorage for R2Storage {

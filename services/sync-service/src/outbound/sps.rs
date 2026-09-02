@@ -1,9 +1,10 @@
 use crate::constants::header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY;
+use crate::domain::document_id::DocumentId;
 use serde_json::json;
 use tracing::{debug, error};
 use worker::{Fetch, Method, Request, RequestInit};
 
-pub async fn update(document_id: &str, env: &worker::Env) -> worker::Result<()> {
+pub async fn update(document_id: &DocumentId, env: &worker::Env) -> worker::Result<()> {
     let internal_auth_key = env
         .secret("SPS_API_SECRET_KEY")
         .inspect_err(|e| error!(error=%e, "Could not find API SPS key binding"))?
@@ -16,7 +17,7 @@ pub async fn update(document_id: &str, env: &worker::Env) -> worker::Result<()> 
     let url = format!("{url}/internal/extract_sync");
     let json_body = json!({
         "documents": [{
-            "document_id": document_id,
+            "document_id": document_id.as_str(),
             "file_type": "md",
         }]
     });

@@ -186,6 +186,21 @@ export default defineConfig({
       },
     },
   },
+  syncService: {
+    output: {
+      client: 'fetch',
+      // Kept under `generated/http` so it doesn't collide with the bebop
+      // websocket schema in `generated/schema.ts`.
+      target: './service-sync/generated/http/client.ts',
+      schemas: './service-sync/generated/http/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-sync/openapi.json',
+    },
+  },
   unfurlService: {
     output: {
       client: 'fetch',

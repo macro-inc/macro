@@ -60,6 +60,7 @@ impl DocumentState {
     pub fn get_json(&self) -> String {
         self.loro_doc.get_deep_value().to_json()
     }
+
     pub fn should_save(&self) -> bool {
         let Some(up) = *self
             .last_update

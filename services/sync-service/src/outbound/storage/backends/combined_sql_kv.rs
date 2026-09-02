@@ -1,6 +1,7 @@
 use worker::Env;
 
-use crate::storage::snapshot::SnapshotStorage;
+use crate::domain::document_id::DocumentId;
+use crate::outbound::storage::snapshot::SnapshotStorage;
 
 use super::{durable_sql::DurableSQLStorage, kv::Kv};
 
@@ -10,9 +11,13 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn new(env: &Env, storage: worker::Storage, document_id: String) -> worker::Result<Self> {
+    pub fn new(
+        env: &Env,
+        storage: worker::Storage,
+        document_id: &DocumentId,
+    ) -> worker::Result<Self> {
         Ok(Self {
-            sql: DurableSQLStorage::new(storage, document_id.clone())?,
+            sql: DurableSQLStorage::new(storage, document_id.as_str().to_string())?,
             kv: Kv::from_env(env, document_id)?,
         })
     }

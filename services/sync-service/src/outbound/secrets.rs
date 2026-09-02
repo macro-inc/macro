@@ -6,6 +6,16 @@ pub struct Secrets {
     pub document_permissions_secret: String,
 }
 
+impl Secrets {
+    /// Build directly from values (e.g. for tests) without an [`Env`].
+    pub fn new(internal_api_secret: String, document_permissions_secret: String) -> Self {
+        Self {
+            internal_api_secret,
+            document_permissions_secret,
+        }
+    }
+}
+
 impl From<&Env> for Secrets {
     fn from(env: &Env) -> Self {
         // NOTE: "INTERNAL_API_SECRET_KEY" actually points to the name of the secret binding that we want to use,
@@ -30,9 +40,6 @@ impl From<&Env> for Secrets {
             })
             .unwrap_or_else(|e| panic!("Couldn't get DOCUMENT_PERMISSIONS_SECRET: {e}"));
 
-        Self {
-            internal_api_secret,
-            document_permissions_secret,
-        }
+        Self::new(internal_api_secret, document_permissions_secret)
     }
 }

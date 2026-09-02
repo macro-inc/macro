@@ -1,0 +1,447 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Sync Service",
+    "description": "Document sync service JSON control plane",
+    "contact": {
+      "name": "Macro"
+    },
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/document/{document_id}/active_peers": {
+      "get": {
+        "tags": ["sync_service"],
+        "operationId": "document_active_peers",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "include_ai",
+            "in": "query",
+            "description": "Set to `false` or `0` to filter out AI editors",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Active peer ids"
+          },
+          "401": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/document/{document_id}/blame/{node_id}": {
+      "get": {
+        "tags": ["sync_service"],
+        "operationId": "document_blame",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlameRow"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/document/{document_id}/copy": {
+      "post": {
+        "tags": ["sync_service"],
+        "summary": "Copy a document: fetch the source snapshot, then initialize a new document\nwith it. Orchestrated here because it spans two durable objects.",
+        "operationId": "copy_document",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Source document to copy from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Copy succeeded; the new document was initialized"
+          },
+          "404": {
+            "description": "Source snapshot not found"
+          }
+        }
+      }
+    },
+    "/document/{document_id}/exists": {
+      "get": {
+        "tags": ["sync_service"],
+        "operationId": "document_exists",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document exists"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/document/{document_id}/initialize": {
+      "post": {
+        "tags": ["sync_service"],
+        "operationId": "document_initialize",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Initialized"
+          },
+          "401": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/document/{document_id}/metadata": {
+      "get": {
+        "tags": ["sync_service"],
+        "operationId": "document_metadata",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMetadata"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/document/{document_id}/peer/{peer_id}": {
+      "get": {
+        "tags": ["sync_service"],
+        "operationId": "document_peer",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "peer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeerResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/document/{document_id}/raw": {
+      "get": {
+        "tags": ["sync_service"],
+        "operationId": "document_raw",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Raw document JSON"
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/document/{document_id}/snapshot": {
+      "post": {
+        "tags": ["sync_service"],
+        "operationId": "document_snapshot",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetSnapshotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Loro snapshot bytes"
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/document/{document_id}/wakeup": {
+      "post": {
+        "tags": ["sync_service"],
+        "operationId": "document_wakeup",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Keepalive scheduled"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BlameRow": {
+        "type": "object",
+        "description": "Last-edit info for a single Lexical node: the peer that touched it, the\nuser behind that peer (if the mapping is known), and when.",
+        "required": ["peer_id", "timestamp_ms"],
+        "properties": {
+          "peer_id": {
+            "type": "string"
+          },
+          "timestamp_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user_id": {
+            "type": ["string", "null"]
+          }
+        }
+      },
+      "CopyDocumentRequest": {
+        "type": "object",
+        "required": ["target_document_id"],
+        "properties": {
+          "target_document_id": {
+            "type": "string"
+          },
+          "version_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VersionIndicator"
+              }
+            ]
+          }
+        }
+      },
+      "DocumentMetadata": {
+        "type": "object",
+        "required": ["id", "peers", "version_id"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "peers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PeerWithUserId"
+            }
+          },
+          "version_id": {
+            "type": "string"
+          }
+        }
+      },
+      "GetSnapshotRequest": {
+        "type": "object",
+        "properties": {
+          "version_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VersionIndicator"
+              }
+            ]
+          }
+        }
+      },
+      "PeerResponse": {
+        "type": "object",
+        "required": ["peer_id", "user_id"],
+        "properties": {
+          "peer_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        }
+      },
+      "PeerWithUserId": {
+        "type": "object",
+        "required": ["peer_id", "user_id"],
+        "properties": {
+          "peer_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          }
+        }
+      },
+      "VersionIndicator": {
+        "type": "object",
+        "required": ["peer", "counter"],
+        "properties": {
+          "counter": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "peer": {
+            "type": "string",
+            "description": "Json has trouble with peer id bigints, so we need to serialize from a string"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "sync_service",
+      "description": "Sync service"
+    }
+  ]
+}

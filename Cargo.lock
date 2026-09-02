@@ -6210,6 +6210,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum-map"
+version = "2.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6866f3bfdf8207509a033af1a75a7b08abda06bbaaeae6669323fd5a097df2e9"
+dependencies = [
+ "enum-map-derive",
+]
+
+[[package]]
+name = "enum-map-derive"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f282cfdfe92516eb26c2af8589c274c7c17681f5ecc03c18255fe741c6aa64eb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "enum_dispatch"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15945,18 +15965,25 @@ dependencies = [
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "bebop",
+ "constant_time_eq",
+ "derive_more 2.1.1",
+ "enum-map",
  "getrandom 0.3.4",
  "loro",
  "macro_sync_service_jwt",
- "matchit 0.8.4",
  "serde",
  "serde_json",
  "sync_service_bebop_schema",
+ "thiserror 2.0.18",
  "time",
+ "tower-http",
+ "tower-service",
  "tracing",
  "tracing-subscriber",
  "tracing-web",
+ "utoipa",
  "uuid",
  "wasm-bindgen",
  "web-time",
@@ -18347,6 +18374,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4afd7ae4f7fcc11e0e5e64b964890b3dda90f1290b0612f7cd821b381cc18826"
 dependencies = [
  "async-trait",
+ "axum",
  "bytes",
  "chrono",
  "futures-channel",

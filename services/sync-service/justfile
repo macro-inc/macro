@@ -16,6 +16,9 @@ test-no-alarm: setup worker_build_setup
 setup:
     npm install && cd bebop/ && npx bebopc build
 
+openapi:
+    cargo run --quiet --bin sync_service_openapi --features openapi > ../../apps/web/src/lib/service-clients/service-sync/openapi.json
+
 worker_build_setup:
     cargo install worker-build@0.8.4
 

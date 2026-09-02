@@ -16,9 +16,16 @@ search-service = []
 bebop-owned-all = ["sync_service_bebop_schema/bebop-owned-all"]
 create-default-state = []
 alarm-keep-alive = []
+# Enables the utoipa OpenAPI spec + the `sync_service_openapi` generator bin. Kept out of the wasm build.
+openapi = ["dep:utoipa"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "sync_service_openapi"
+path = "src/bins/openapi.rs"
+required-features = ["openapi"]
 
 [package.metadata.release]
 release = false
@@ -28,7 +35,9 @@ release = false
 wasm-opt = true
 
 [dependencies]
-worker = { workspace = true, features = ['d1'] }
+worker = { workspace = true, features = ['d1', 'http', 'axum'] }
+tower-service = "0.3"
+enum-map = "2"
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = [
   'time',
@@ -41,9 +50,28 @@ sync_service_bebop_schema = { path = "bebop-schema" }
 serde_json.workspace = true
 serde.workspace = true
 getrandom = { workspace = true, features = ["wasm_js"] }
+constant_time_eq.workspace = true
+derive_more = { workspace = true, features = ["display", "as_ref", "from"] }
 wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
 loro = "1.13"
 macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
-matchit =  "0.8.4"
 worker-rs-otel = { path = "../../crates/worker-rs-otel" }
+thiserror.workspace = true
+
+# The wasm build needs axum/tower-http with default features off — the
+# workspace declarations enable native-only features (tokio, compression-gzip)
+# that don't compile for wasm32, and cargo can't subtract workspace features
+# per-member.
+[target.'cfg(target_family = "wasm")'.dependencies]
+axum = { version = "0.8", default-features = false, features = ['json', 'query'] }
+tower-http = { version = "0.6", default-features = false, features = ["cors"] }
+
+# Native builds only exist for the `sync_service_openapi` generator bin.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+axum = { workspace = true }
+tower-http = { workspace = true, features = ["cors"] }
+# Deliberately not the workspace utoipa: its `axum_extras` feature changes how
+# `#[utoipa::path]` reads handler signatures (requires `ToSchema` on raw
+# `Bytes` bodies) and would change the generated spec.
+utoipa = { version = "5.4.0", optional = true }

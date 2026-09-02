@@ -14,7 +14,7 @@ use worker::{
     wasm_bindgen::JsCast,
 };
 
-use crate::{error::ResultExt, state::DocumentState};
+use crate::{domain::state::DocumentState, error::ResultExt};
 
 /// When saving snapshot, we also write the version vector to durable object KV
 /// When we read a snapshot from Worker KV, we check it's version vector is >= version vector in LAST_VERSION_VECTOR.
@@ -54,11 +54,11 @@ impl DurableKVStorage {
         }
     }
 
-    pub(in crate::storage) async fn get_key(&self, key: &str) -> Result<Option<Vec<u8>>> {
+    pub(in crate::outbound::storage) async fn get_key(&self, key: &str) -> Result<Option<Vec<u8>>> {
         do_kv_result_to_result_opt(self.inner.get(key).await)
     }
 
-    pub(in crate::storage) async fn list_do_kv(
+    pub(in crate::outbound::storage) async fn list_do_kv(
         &self,
         prefix: &str,
     ) -> Result<Vec<Result<(String, Vec<u8>)>>> {

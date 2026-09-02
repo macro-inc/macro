@@ -3,6 +3,7 @@ use tracing::trace;
 use crate::timeit;
 
 use super::super::snapshot::SnapshotStorage;
+use crate::domain::document_id::DocumentId;
 use worker::Bucket;
 
 pub struct R2Storage {
@@ -11,8 +12,11 @@ pub struct R2Storage {
 }
 
 impl R2Storage {
-    pub fn new(inner: Bucket, document_id: String) -> Self {
-        Self { inner, document_id }
+    pub fn new(inner: Bucket, document_id: &DocumentId) -> Self {
+        Self {
+            inner,
+            document_id: document_id.as_str().to_string(),
+        }
     }
 
     pub async fn get<T>(&self, key: &str) -> worker::Result<T>

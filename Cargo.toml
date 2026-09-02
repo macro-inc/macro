@@ -346,6 +346,9 @@ bzip2 = { version = "0.5.1", default-features = false, features = [
   "libbz2-rs-sys",
 ] }
 derive_builder = "0.20.2"
+# No features here — derive_more's derives are all opt-in, so each member
+# enables exactly the ones it uses.
+derive_more = "2"
 doppleganger = "0.5"
 doppler-config = "0.1.2"
 js-sys = "0.3"

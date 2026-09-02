@@ -1,7 +1,7 @@
 use tracing::trace;
 use worker::{Error, Result, SqlStorage, SqlStorageValue, Storage};
 
-use crate::{storage::snapshot::SnapshotStorage, timeit};
+use crate::{outbound::storage::snapshot::SnapshotStorage, timeit};
 
 /// Chunked key-value storage backend using Durable Object SQL storage.
 /// Automatically chunks values larger than CHUNK_SIZE to work within SQLite limits.
