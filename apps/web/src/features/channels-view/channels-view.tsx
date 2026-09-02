@@ -20,9 +20,9 @@ import type { ChannelsViewStateOptions } from './types';
 
 const SIDEBAR_CHANNEL_LIMIT = 100;
 const NARROW_RAIL_WIDTH = 64;
-const DEFAULT_RAIL_WIDTH = 320;
+const DEFAULT_RAIL_WIDTH = 360;
 const MIN_RAIL_WIDTH = 224;
-const MAX_RAIL_WIDTH = 360;
+const MAX_RAIL_WIDTH = 420;
 
 export type ChannelsViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -97,7 +97,10 @@ function ChannelsViewRoot() {
                 resizable={!breakpoints.narrow()}
               >
                 <ViewShell.Aside>
-                  <ChannelsRail channels={channels()} />
+                  <ChannelsRail
+                    channels={channels()}
+                    narrow={breakpoints.narrow()}
+                  />
                 </ViewShell.Aside>
                 <ViewShell.Main class="overflow-hidden">
                   <Show

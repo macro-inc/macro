@@ -111,7 +111,11 @@ type ChannelOptionProps = {
 
 function ChannelOption(props: ChannelOptionProps) {
   return (
-    <Tooltip label={props.channel.name} placement="right" class="w-full">
+    <Tooltip
+      label={props.channel.name}
+      placement="right"
+      class="w-full @max-[720px]/channels-view:size-10"
+    >
       <button
         type="button"
         class={cn(
@@ -151,6 +155,7 @@ type ConversationCardProps = {
   mentionedCurrentUser: boolean;
   unread: boolean;
   selected: boolean;
+  showTooltip: boolean;
   onSelect: () => void;
 };
 
@@ -198,96 +203,103 @@ function ConversationCard(props: ConversationCardProps) {
   const latestRootMessage = () => props.channel.latestRootMessage;
 
   return (
-    <button
-      type="button"
-      class={cn(
-        'w-full min-w-0 px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-        '@max-[720px]/channels-view:flex @max-[720px]/channels-view:size-10 @max-[720px]/channels-view:self-center @max-[720px]/channels-view:items-center @max-[720px]/channels-view:justify-center @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:px-0 @max-[720px]/channels-view:py-0',
-        props.selected ? 'bg-active' : 'bg-transparent hover:bg-hover'
-      )}
-      aria-current={props.selected ? 'page' : undefined}
-      onClick={props.onSelect}
+    <Tooltip
+      label={props.channel.name}
+      placement="right"
+      disabled={!props.showTooltip}
+      class="w-full @max-[720px]/channels-view:size-10 @max-[720px]/channels-view:self-center"
     >
-      <div class="flex min-w-0 items-start gap-3 @max-[720px]/channels-view:justify-center">
-        <div class="relative shrink-0">
-          <ChannelAvatar channel={props.channel} size="md" />
-          <Show when={props.unread}>
-            <span
-              aria-label="Unread"
-              class="absolute -right-0.5 -top-0.5 hidden size-2 rounded-full bg-accent ring-2 ring-surface @max-[720px]/channels-view:block"
-            />
-          </Show>
-        </div>
-        <div class="min-w-0 flex-1 @max-[720px]/channels-view:hidden">
-          <span class="flex min-w-0 items-center gap-2">
-            <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
-              {props.channel.name}
-            </span>
+      <button
+        type="button"
+        class={cn(
+          'w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+          '@max-[720px]/channels-view:flex @max-[720px]/channels-view:size-10 @max-[720px]/channels-view:items-center @max-[720px]/channels-view:justify-center @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:px-0 @max-[720px]/channels-view:py-0',
+          props.selected ? 'bg-active' : 'bg-transparent hover:bg-hover'
+        )}
+        aria-current={props.selected ? 'page' : undefined}
+        onClick={props.onSelect}
+      >
+        <div class="flex min-w-0 items-start gap-3 overflow-hidden @max-[720px]/channels-view:justify-center">
+          <div class="relative shrink-0">
+            <ChannelAvatar channel={props.channel} size="md" />
             <Show when={props.unread}>
               <span
                 aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
+                class="absolute -right-0.5 -top-0.5 hidden size-2 rounded-full bg-accent ring-2 ring-surface @max-[720px]/channels-view:block"
               />
             </Show>
-            <Show when={latestRootMessage()?.createdAt}>
-              {(createdAt) => (
-                <Tooltip
-                  label={formatDetailedTimestamp(createdAt())}
-                  placement="top"
-                >
-                  <span class="shrink-0 text-xxs text-ink-extra-muted">
-                    <Entity.Timestamp
-                      entity={props.channel}
-                      overrideTimeStamp={createdAt()}
-                    />
-                  </span>
-                </Tooltip>
-              )}
-            </Show>
-          </span>
-          <Show
-            when={latestRootMessage()?.threadId || props.mentionedCurrentUser}
-          >
-            <span class="flex min-w-0 items-center gap-2 text-xxs leading-4 text-ink-extra-muted">
-              <Show when={latestRootMessage()?.threadId}>
+          </div>
+          <div class="min-w-0 flex-1 overflow-hidden @max-[720px]/channels-view:hidden">
+            <span class="flex min-w-0 items-center gap-2">
+              <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+                {props.channel.name}
+              </span>
+              <Show when={props.unread}>
                 <span
-                  class="flex shrink-0 items-center gap-1"
-                  title="Reply in thread"
-                >
-                  <ReplyIcon class="size-3" />
-                  <span>Reply</span>
-                </span>
+                  aria-label="Unread"
+                  class="size-2 shrink-0 rounded-full bg-accent"
+                />
               </Show>
-              <Show when={props.mentionedCurrentUser}>
-                <span class="flex shrink-0 items-center gap-1 text-accent">
-                  <AtIcon class="size-3" />
-                  <span>Mentioned you</span>
-                </span>
+              <Show when={latestRootMessage()?.createdAt}>
+                {(createdAt) => (
+                  <Tooltip
+                    label={formatDetailedTimestamp(createdAt())}
+                    placement="top"
+                  >
+                    <span class="shrink-0 text-xxs text-ink-extra-muted">
+                      <Entity.Timestamp
+                        entity={props.channel}
+                        overrideTimeStamp={createdAt()}
+                      />
+                    </span>
+                  </Tooltip>
+                )}
               </Show>
-            </span>
-          </Show>
-          <div class="flex min-w-0 items-start gap-1 text-xs leading-4">
-            <span class="shrink-0 font-medium text-ink-muted">
-              <MessageSenderName id={props.senderId} />:
             </span>
             <Show
-              when={latestRootMessage()?.content.trim()}
-              fallback={
-                <span class="min-w-0 flex-1 text-ink-extra-muted">
-                  No messages yet
-                </span>
-              }
+              when={latestRootMessage()?.threadId || props.mentionedCurrentUser}
             >
-              {(content) => (
-                <div class="min-w-0 flex-1 text-ink-muted [&_*]:my-0">
-                  <StaticMarkdown markdown={content()} singleLine />
-                </div>
-              )}
+              <span class="flex min-w-0 items-center gap-2 text-xxs leading-4 text-ink-extra-muted">
+                <Show when={latestRootMessage()?.threadId}>
+                  <span
+                    class="flex shrink-0 items-center gap-1"
+                    title="Reply in thread"
+                  >
+                    <ReplyIcon class="size-3" />
+                    <span>Reply</span>
+                  </span>
+                </Show>
+                <Show when={props.mentionedCurrentUser}>
+                  <span class="flex shrink-0 items-center gap-1 text-accent">
+                    <AtIcon class="size-3" />
+                    <span>Mentioned you</span>
+                  </span>
+                </Show>
+              </span>
             </Show>
+            <div class="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-xs leading-4">
+              <span class="shrink-0 font-medium text-ink-muted">
+                <MessageSenderName id={props.senderId} />:
+              </span>
+              <Show
+                when={latestRootMessage()?.content.trim()}
+                fallback={
+                  <span class="min-w-0 flex-1 text-ink-extra-muted">
+                    No messages yet
+                  </span>
+                }
+              >
+                {(content) => (
+                  <div class="min-w-0 flex-1 truncate text-ink-muted [&_*]:my-0 [&_*]:truncate">
+                    <StaticMarkdown markdown={content()} singleLine />
+                  </div>
+                )}
+              </Show>
+            </div>
           </div>
         </div>
-      </div>
-    </button>
+      </button>
+    </Tooltip>
   );
 }
 
@@ -306,7 +318,7 @@ function CollapsibleSection(props: CollapsibleSectionProps) {
   const toggle = () => setGroupOpen(props.group, !open());
 
   return (
-    <section class="flex flex-col gap-1">
+    <section class="flex flex-col gap-1 @max-[720px]/channels-view:items-center">
       <div
         class={cn(
           'flex h-9 w-full items-center rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent',
@@ -352,17 +364,12 @@ function CollapsibleSection(props: CollapsibleSectionProps) {
           {props.action()}
         </div>
       </div>
-      <div class="hidden px-2 @max-[720px]/channels-view:block">
+      <div class="hidden w-full px-2 @max-[720px]/channels-view:block">
         <div class="border-t border-edge-muted" />
       </div>
       <Show when={open()}>
-        <div class="flex flex-col gap-0.5">
-          <div
-            class={cn(
-              'hidden justify-center',
-              '@max-[720px]/channels-view:flex [&_button]:size-8! [&_button]:rounded-full! [&_button]:border [&_button]:border-edge-muted [&_button]:bg-transparent!'
-            )}
-          >
+        <div class="flex flex-col gap-0.5 @max-[720px]/channels-view:w-full @max-[720px]/channels-view:items-center">
+          <div class="hidden justify-center @max-[720px]/channels-view:flex">
             {props.action()}
           </div>
           {props.children}
@@ -373,7 +380,10 @@ function CollapsibleSection(props: CollapsibleSectionProps) {
 }
 
 /** V2 Chat navigation rail with Browse and Recents destinations. */
-export function ChannelsRail(props: { channels: ChannelEntity[] }) {
+export function ChannelsRail(props: {
+  channels: ChannelEntity[];
+  narrow: boolean;
+}) {
   const { state, setSelectedChannelId, setTab } = useChannelsView();
   const currentUserId = useUserId();
   const notificationSource = useGlobalNotificationSource();
@@ -433,7 +443,10 @@ export function ChannelsRail(props: { channels: ChannelEntity[] }) {
   const createChannelAction = () => (
     <button
       type="button"
-      class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+      class={cn(
+        'flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent',
+        '@max-[720px]/channels-view:size-10 @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:border @max-[720px]/channels-view:border-edge-muted @max-[720px]/channels-view:bg-transparent'
+      )}
       aria-label="Create channel"
       onClick={() => openNewChannelModal()}
     >
@@ -443,7 +456,10 @@ export function ChannelsRail(props: { channels: ChannelEntity[] }) {
   const createDirectMessageAction = () => (
     <button
       type="button"
-      class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+      class={cn(
+        'flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent',
+        '@max-[720px]/channels-view:size-10 @max-[720px]/channels-view:rounded-full @max-[720px]/channels-view:border @max-[720px]/channels-view:border-edge-muted @max-[720px]/channels-view:bg-transparent'
+      )}
       aria-label="Start direct message"
       onClick={() => {
         CommandState.clearQuery();
@@ -483,6 +499,8 @@ export function ChannelsRail(props: { channels: ChannelEntity[] }) {
           aria-label="Chat sidebar views"
           class="h-9 @max-[720px]/channels-view:h-[76px]"
           trackClass="h-full @max-[720px]/channels-view:flex-col"
+          itemClass="h-full @max-[720px]/channels-view:h-auto @max-[720px]/channels-view:min-h-0 @max-[720px]/channels-view:w-full"
+          labelClass="h-full py-0 @max-[720px]/channels-view:size-full @max-[720px]/channels-view:p-0"
           fullWidth
           list={CHANNEL_TABS}
           value={state.tab}
@@ -515,6 +533,7 @@ export function ChannelsRail(props: { channels: ChannelEntity[] }) {
                       mentionedCurrentUser={mentionsCurrentUser(channel())}
                       unread={unreadChannelIds().has(channel().id)}
                       selected={state.selectedChannelId === channel().id}
+                      showTooltip={props.narrow}
                       onSelect={() => setSelectedChannelId(channel().id)}
                     />
                   )}
