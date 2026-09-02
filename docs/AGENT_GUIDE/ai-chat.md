@@ -11,7 +11,7 @@
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Coding Agent A`, or keyboard `c` then `a`.
+`Create` → `Agents A`, or keyboard `c` then `a`.
 
 ## Start a doc-scoped chat
 

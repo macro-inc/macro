@@ -62,7 +62,7 @@ function botDetails(bot: BotSummary): Detail[] {
     { label: 'Owner', value: ownerLabel(bot.owner) },
     { label: 'Description', value: bot.description },
     { label: 'Profile picture', value: bot.avatarUrl },
-    { label: 'Coding agent', value: bot.hasAgent ? 'Yes' : 'No' },
+    { label: 'Agent', value: bot.hasAgent ? 'Yes' : 'No' },
   ];
 }
 

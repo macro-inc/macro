@@ -4,7 +4,7 @@ import { useChatV3AgentsFlag } from '../use-chat-v3-agents-flag';
 import { BotFormSection } from './BotFormSection';
 
 /**
- * The "Coding agent" toggle. Hidden entirely unless the chat v3 agents flag is
+ * The Agent toggle. Hidden entirely unless the chat v3 agents flag is
  * on, so bots stay plain webhook bots for everyone else.
  */
 export function BotAgentSection(props: {
@@ -18,7 +18,7 @@ export function BotAgentSection(props: {
     <Show when={agentsEnabled()}>
       <BotFormSection
         title="Agent"
-        description="Turn this bot into a coding agent instead of a webhook responder."
+        description="Turn this bot into an agent instead of a webhook responder."
       >
         <div class="flex items-center justify-between gap-4">
           <div class="min-w-0">
@@ -32,7 +32,7 @@ export function BotAgentSection(props: {
             checked={props.checked}
             disabled={props.disabled}
             onChange={props.onChange}
-            label={<span>Make this bot a coding agent</span>}
+            label={<span>Make this bot an agent</span>}
             labelClass="sr-only"
           />
         </div>

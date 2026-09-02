@@ -38,7 +38,7 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 
 ## Create menu
 
-`Create` button (top-left) opens a menu of: Email E, Automation U, Coding Agent A, Skill K,
+`Create` button (top-left) opens a menu of: Email E, Automation U, Agents A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
 
