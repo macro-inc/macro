@@ -28,11 +28,14 @@ use connection::domain::ports::ConnectionService;
 use connection_gateway_client::ConnectionGatewayClient;
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use crm::inbound::toolset::CrmToolContext;
-use documents::{domain::ports::TaskPropertiesPort, inbound::toolset::DocumentToolContext};
+use documents::{
+    domain::ports::{TaskPropertiesPort, task_property_edit_receipt},
+    inbound::toolset::DocumentToolContext,
+};
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
-use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
+use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService as _;
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
@@ -377,40 +380,6 @@ pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
 }
 
 /// No-op task properties service for tests and contexts that do not create tasks.
-async fn task_property_edit_receipt<A: entity_access::domain::ports::EntityAccessService>(
-    entity_access: &A,
-    user_id: &MacroUserIdStr<'_>,
-    attribution: &activity::Attribution,
-    entity_id: &str,
-) -> anyhow::Result<entity_access::domain::models::EntityAccessReceipt<EditAccessLevel>> {
-    if let activity::Attribution::Delegated { actor, subject } = attribution
-        && let Some(bot) = actor.as_bot()
-    {
-        return entity_access
-            .generate_bot_entity_access_receipt::<EditAccessLevel>(
-                bot.bot_id(),
-                BotAccessScope::User {
-                    user_id: subject.clone(),
-                    user_org_id: None,
-                },
-                entity_id,
-                model_entity::EntityType::Document,
-            )
-            .await
-            .map_err(Into::into);
-    }
-
-    entity_access
-        .generate_entity_access_receipt::<EditAccessLevel>(
-            user_id,
-            None,
-            entity_id,
-            model_entity::EntityType::Document,
-        )
-        .await
-        .map_err(Into::into)
-}
-
 #[derive(Clone)]
 pub struct NoOpTaskProperties;
 

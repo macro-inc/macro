@@ -667,11 +667,12 @@ pub trait ChannelService: Send + Sync + 'static {
         }
     }
 
-    /// Create a channel owned by `owner` and attributed to the system principal.
+    /// Create a channel owned by `owner` on the platform's initiative (e.g.
+    /// signup). The activity is attributed to the system bot acting for
+    /// `owner`; ownership and permissions are unchanged.
     fn create_system_channel(
         &self,
         _owner: MacroUserIdStr<'static>,
-        _actor_org_id: Option<i64>,
         _req: CreateChannelRequest,
     ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
         async move {

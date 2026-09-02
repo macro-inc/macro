@@ -1878,7 +1878,6 @@ where
     async fn create_system_channel(
         &self,
         owner: MacroUserIdStr<'static>,
-        _actor_org_id: Option<i64>,
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         ChannelServiceImpl::create_system_channel(self, owner, req).await

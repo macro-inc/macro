@@ -41,7 +41,7 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
-use documents_hex::domain::ports::TaskPropertiesPort;
+use documents_hex::domain::ports::{TaskPropertiesPort, task_property_edit_receipt};
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
@@ -51,14 +51,7 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
-use entity_access::{
-    domain::{
-        models::{BotAccessScope, EditAccessLevel},
-        ports::EntityAccessService as _,
-        service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
-};
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use favorites::{
     domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
     outbound::pg_favorites_repo::PgFavoritesRepo,
@@ -234,40 +227,6 @@ pub(crate) type DssCalendarService = CalendarService<PgCalendarRepository>;
 
 /// Calendar occurrence router state.
 pub(crate) type DssCalendarState = CalendarRouterState<DssCalendarService, AuthorizationService>;
-
-async fn task_property_edit_receipt(
-    entity_access: &EntityAccessService,
-    user_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    attribution: &activity::Attribution,
-    entity_id: &str,
-) -> anyhow::Result<entity_access::domain::models::EntityAccessReceipt<EditAccessLevel>> {
-    if let activity::Attribution::Delegated { actor, subject } = attribution
-        && let Some(bot) = actor.as_bot()
-    {
-        return entity_access
-            .generate_bot_entity_access_receipt::<EditAccessLevel>(
-                bot.bot_id(),
-                BotAccessScope::User {
-                    user_id: subject.clone(),
-                    user_org_id: None,
-                },
-                entity_id,
-                model_entity::EntityType::Document,
-            )
-            .await
-            .map_err(Into::into);
-    }
-
-    entity_access
-        .generate_entity_access_receipt::<EditAccessLevel>(
-            user_id,
-            None,
-            entity_id,
-            model_entity::EntityType::Document,
-        )
-        .await
-        .map_err(Into::into)
-}
 
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
 pub(crate) struct TaskPropertiesAdapter {

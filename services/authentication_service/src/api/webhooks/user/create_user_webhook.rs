@@ -443,7 +443,6 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
             let channel = match channel_service
                 .create_system_channel(
                     owner_id.clone(),
-                    None,
                     CreateChannelRequest {
                         name: Some(support_channel_name),
                         channel_type: ChannelType::Private,
