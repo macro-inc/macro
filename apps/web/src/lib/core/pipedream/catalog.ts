@@ -1,4 +1,3 @@
-import { pipedreamAppAvailableInEnv } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
 import {
   connectPipedreamApp,
@@ -37,14 +36,12 @@ export function createPipedreamCatalogSearch(
 
   const query = usePipedreamCatalogQuery(search);
 
-  const entries = (): PipedreamCatalogEntryResponse[] =>
-    (query.data?.pages ?? [])
+  const entries = (): PipedreamCatalogEntryResponse[] => {
+    if (!query.isSuccess) return [];
+    return (query.data?.pages ?? [])
       .flatMap((page) => page.servers)
-      .filter(
-        (entry) =>
-          pipedreamAppAvailableInEnv(entry.app_slug) &&
-          !exclude().has(entry.app_slug)
-      );
+      .filter((entry) => !exclude().has(entry.app_slug));
+  };
 
   return { searchInput, onSearchInput, search, query, entries };
 }
@@ -56,8 +53,12 @@ export function createPipedreamCatalogSearch(
  * `onConnected`.
  */
 export function createPipedreamCatalogConnect(options: {
-  entry: Accessor<PipedreamCatalogEntryResponse>;
-  onConnected?: (entry: PipedreamCatalogEntryResponse) => void;
+  entry: Accessor<
+    Pick<PipedreamCatalogEntryResponse, 'app_slug' | 'display_name'>
+  >;
+  onConnected?: (
+    entry: Pick<PipedreamCatalogEntryResponse, 'app_slug' | 'display_name'>
+  ) => void;
 }) {
   const [busy, setBusy] = createSignal(false);
 

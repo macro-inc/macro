@@ -1,3 +1,4 @@
+import CaretLeftIcon from '@phosphor/caret-left.svg';
 import { cn, Layer } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
@@ -27,6 +28,8 @@ export function SettingsPage(props: {
   description?: JSX.Element;
   /** Right-aligned controls beside the title (e.g. a global toggle). */
   actions?: JSX.Element;
+  onBack?: () => void;
+  backLabel?: string;
   children: JSX.Element;
 }) {
   return (
@@ -35,6 +38,16 @@ export function SettingsPage(props: {
           scroll content (plus the usual breathing room) so pages scroll under
           the floating header and bottom rows like every other block. */}
       <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+        <Show when={props.onBack}>
+          <button
+            type="button"
+            class="mb-5 inline-flex items-center gap-1.5 rounded-md px-6 py-1 text-sm text-ink-muted outline-none hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+            onClick={props.onBack}
+          >
+            <CaretLeftIcon class="size-4" />
+            {props.backLabel ?? 'Connections'}
+          </button>
+        </Show>
         {/* Headers are inset by the card's inner padding so the title and
             section labels line up with the leftmost content inside the cards,
             while the cards themselves stay full-width. */}
@@ -90,9 +103,10 @@ export function SettingsSection(props: {
 }
 
 /**
- * A quiet outlined card. Direct children are treated as rows and get a hairline
- * divider between them (via `settings-row-dividers`); a single-child card draws
+ * A quiet outlined card. Direct children are treated as rows and get a divider
+ * between them (via `settings-row-dividers`); a single-child card draws
  * no divider, so it doubles as a plain container.
+ * `border-1` is 1px. The default `border` utility is a 0.5px hairline.
  */
 export function SettingsCard(props: { class?: string; children: JSX.Element }) {
   // Raised a level above the content panel so the card reads as a subtly
@@ -102,7 +116,7 @@ export function SettingsCard(props: { class?: string; children: JSX.Element }) {
     <Layer depth={2}>
       <div
         class={cn(
-          'rounded-xl border border-ink/[0.05] bg-surface overflow-hidden settings-row-dividers',
+          'rounded-xl border-1 border-ink/[0.05] bg-surface overflow-hidden settings-row-dividers',
           props.class
         )}
       >

@@ -1,0 +1,135 @@
+import CaretRightIcon from '@phosphor/caret-right.svg';
+import { Button } from '@ui';
+import { For, Show } from 'solid-js';
+import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
+import type { ConnectionsModel } from './model';
+import { isConnectionsEmpty } from './model';
+import { EMPTY_STARTERS, providerIcon } from './provider-meta';
+import { openConnectionsProvider, showConnectionsDiscover } from './view-state';
+
+export function ConnectedView(props: { model: ConnectionsModel }) {
+  return (
+    <Show when={!isConnectionsEmpty(props.model)} fallback={<EmptyConnected />}>
+      <SettingsSection>
+        <SettingsCard>
+          <For each={props.model.providers}>
+            {(provider) => (
+              <button
+                type="button"
+                class="w-full text-left outline-none hover:bg-ink/[0.02] focus-visible:bg-ink/4"
+                onClick={() => openConnectionsProvider(provider.id)}
+              >
+                <IntegrationRow
+                  icon={providerIcon(provider.id)}
+                  title={provider.name}
+                  description={
+                    <>
+                      {provider.summary}
+                      <Show when={provider.accounts}>
+                        <span class="mt-1 block text-xs text-ink-extra-muted">
+                          {provider.accounts}
+                        </span>
+                      </Show>
+                    </>
+                  }
+                >
+                  <span class="text-xs text-ink-extra-muted">
+                    {provider.ready} of {provider.total}{' '}
+                    {provider.total === 1 ? 'capability' : 'capabilities'} ready
+                  </span>
+                  <CaretRightIcon class="size-4 text-ink-extra-muted" />
+                </IntegrationRow>
+              </button>
+            )}
+          </For>
+        </SettingsCard>
+      </SettingsSection>
+
+      <button
+        type="button"
+        class="flex w-full items-center justify-between rounded-xl border-1 border-dashed border-ink/15 bg-transparent px-6 py-3.5 text-left text-sm text-ink-muted outline-none hover:border-ink/25 hover:bg-surface focus-visible:bg-surface"
+        onClick={showConnectionsDiscover}
+      >
+        Add a connection
+        <CaretRightIcon class="size-4 text-ink-extra-muted" />
+      </button>
+
+      <Show when={props.model.leftovers.length > 0}>
+        <SettingsSection title="Other connections">
+          <button
+            type="button"
+            class="w-full text-left outline-none hover:bg-ink/[0.02] focus-visible:bg-ink/4 rounded-xl"
+            onClick={() => openConnectionsProvider('other')}
+          >
+            <SettingsCard>
+              <IntegrationRow
+                icon={<span class="text-xs font-medium text-ink-muted">?</span>}
+                title={`${props.model.leftovers.length} record${
+                  props.model.leftovers.length === 1 ? '' : 's'
+                } Macro cannot map yet`}
+                description="Shown with the facts Macro can prove. Nothing is hidden."
+              >
+                <CaretRightIcon class="size-4 text-ink-extra-muted" />
+              </IntegrationRow>
+            </SettingsCard>
+          </button>
+        </SettingsSection>
+      </Show>
+    </Show>
+  );
+}
+
+function EmptyConnected() {
+  return (
+    <>
+      <SettingsCard>
+        <IntegrationRow
+          icon={providerIcon('google')}
+          title="Start with Google"
+          description="Optional. Brings mail and calendar into Macro. Docs are not a connection."
+        >
+          <Button
+            type="button"
+            variant="accent"
+            size="sm"
+            depth={3}
+            onClick={() => openConnectionsProvider('google')}
+          >
+            Connect Google
+          </Button>
+        </IntegrationRow>
+      </SettingsCard>
+
+      <SettingsSection title="Or start with one of these">
+        <SettingsCard>
+          <For each={EMPTY_STARTERS.filter((item) => item.id !== 'google')}>
+            {(item) => (
+              <button
+                type="button"
+                class="w-full text-left outline-none hover:bg-ink/[0.02] focus-visible:bg-ink/4"
+                onClick={() => openConnectionsProvider(item.id)}
+              >
+                <IntegrationRow
+                  icon={providerIcon(item.id)}
+                  title={item.name}
+                  description={item.note}
+                >
+                  <CaretRightIcon class="size-4 text-ink-extra-muted" />
+                </IntegrationRow>
+              </button>
+            )}
+          </For>
+        </SettingsCard>
+      </SettingsSection>
+
+      <button
+        type="button"
+        class="flex w-full items-center justify-between rounded-xl border-1 border-dashed border-ink/15 bg-transparent px-6 py-3.5 text-left text-sm text-ink-muted outline-none hover:border-ink/25 hover:bg-surface focus-visible:bg-surface"
+        onClick={showConnectionsDiscover}
+      >
+        Browse all connections
+        <CaretRightIcon class="size-4 text-ink-extra-muted" />
+      </button>
+    </>
+  );
+}

@@ -9,7 +9,7 @@ import { Show } from 'solid-js';
  * comes from the settings primitives (SettingsCard / IntegrationRow).
  */
 
-export type ConnectionState = 'connected' | 'attention' | 'disconnected';
+export type ConnectionState = 'connected' | 'attention' | 'disconnected' | 'off';
 
 /**
  * The trailing action on an integration row. Defaults to a quiet text+arrow
@@ -65,6 +65,7 @@ export function StatusDot(props: { state: ConnectionState; label?: string }) {
         'inline-block size-2 shrink-0 rounded-full',
         props.state === 'connected' && 'bg-success',
         props.state === 'attention' && 'bg-failure',
+        props.state === 'off' && 'bg-ink-extra-muted',
         props.state === 'disconnected' && 'bg-ink-muted'
       )}
     />

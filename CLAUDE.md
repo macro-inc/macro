@@ -342,3 +342,17 @@ After backend edits, run `bash .cursor/rebuild.sh`. That nix-builds the stack bi
 No seeding or OTP is needed to log in: passwordless login auto-creates a user for any email, and the stack's auth service is built with `return_passwordless_code`, so the login API returns the code in its response (codes are also visible in Mailpit at http://localhost:8025). `just seed-scenario apply --file seed/scenarios/team-perms.json` is optional, for multi-user team/permission fixtures. The `agent_harness_service` restart loop is expected when AI provider keys are missing; with `DOPPLER_TOKEN` those keys come from `local`/`lcl_preview`.
 
 Leave `SQLX_OFFLINE` unset for `cargo test`. If SQLx reports missing cached query data, run `just prepare_db` instead of enabling offline mode. Run crate tests from the repository root with `cargo test -p <crate>`.
+
+## Learned User Preferences
+
+- When commenting on GitHub PRs, say you are Cursor sent on behalf of Cam. Put agent-only notes in a `<details>` collapsible. Do not reply on review threads unless asked.
+- Do not poll Kody memories on every turn.
+- Cam visually tests UI himself. Do not keep driving the Cursor browser for visual QA unless he asks.
+- Do not commit PR screenshots into the repo. Attach them in the PR description instead.
+
+## Learned Workspace Facts
+
+- PRs from personal forks fail credentialed CI. Open PRs from a branch on `macro-inc/macro`.
+- Gmail OAuth on localhost against hosted `*-dev` is not authorized. Seed inbox mail on the full local stack to test email.
+- Macro's existing web components are the design-system source of truth. MagicPath is not the source yet. Prefer the Macro MagicPath library over ad-hoc components.
+- MagicPath work from Cursor as an external agent is not credit-limited. Do not ration MagicPath sessions around credit counts.

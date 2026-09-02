@@ -1,0 +1,188 @@
+import { toast } from '@core/component/Toast/Toast';
+import { ThrownResultError } from '@core/util/result';
+import {
+  useCursorApiKeyStatusQuery,
+  useCursorModelsQuery,
+  useDisconnectCursorApiKey,
+  useSaveCursorApiKey,
+  useSetCursorDefaultModel,
+} from '@queries/auth/cursor-api-key';
+import { Button } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
+import { StatusDot } from '../integration-ui';
+import {
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from '../primitives';
+import { showConnectionsOverview } from './view-state';
+
+const CURSOR_KEY_PREFIX = 'crsr_';
+
+function failureMessage(error: unknown, fallback: string): string {
+  return (error instanceof ThrownResultError && error.message) || fallback;
+}
+
+export function CursorProvider() {
+  const [cursorApiKey, setCursorApiKey] = createSignal('');
+  const cursorStatus = useCursorApiKeyStatusQuery();
+  const saveCursorApiKey = useSaveCursorApiKey();
+  const disconnectCursor = useDisconnectCursorApiKey();
+  const cursorRegistered = () => cursorStatus.data?.registered ?? false;
+  const cursorModels = useCursorModelsQuery(cursorRegistered);
+  const setCursorDefaultModel = useSetCursorDefaultModel();
+
+  const handleCursorModelChange = async (modelId: string) => {
+    try {
+      await setCursorDefaultModel.mutateAsync(modelId);
+      toast.success('Default model updated');
+    } catch (error) {
+      toast.failure(failureMessage(error, 'Failed to set your default model'));
+    }
+  };
+
+  const handleSaveCursorApiKey = async () => {
+    const apiKey = cursorApiKey().trim();
+    if (!apiKey.startsWith(CURSOR_KEY_PREFIX)) {
+      toast.failure(`Cursor API keys start with ${CURSOR_KEY_PREFIX}`);
+      return;
+    }
+
+    try {
+      await saveCursorApiKey.mutateAsync(apiKey);
+      setCursorApiKey('');
+      toast.success('Cursor connected');
+    } catch (error) {
+      toast.failure(
+        failureMessage(error, 'Failed to save your Cursor API key')
+      );
+    }
+  };
+
+  const handleDisconnectCursor = async () => {
+    try {
+      await disconnectCursor.mutateAsync();
+      setCursorApiKey('');
+      toast.success('Cursor disconnected');
+    } catch (error) {
+      toast.failure(failureMessage(error, 'Failed to disconnect Cursor'));
+    }
+  };
+
+  return (
+    <SettingsPage
+      title="Cursor"
+      description={
+        cursorRegistered()
+          ? '1 of 1 capability ready'
+          : '0 of 1 capabilities ready'
+      }
+      onBack={showConnectionsOverview}
+    >
+      <SettingsSection title="Your connections">
+        <SettingsCard>
+          <SettingsRow
+            align="start"
+            label={
+              <span class="flex items-center gap-2">
+                Run @cursor sessions on your Cursor account
+                <Show
+                  when={!cursorStatus.isPlaceholderData && cursorRegistered()}
+                >
+                  <StatusDot state="connected" label="Connected" />
+                </Show>
+              </span>
+            }
+            description="Macro AI can start Cursor Cloud Agents for @cursor. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
+          />
+          <Show
+            when={!cursorStatus.isPlaceholderData}
+            fallback={
+              <div class="px-6 py-3 text-xs text-ink-muted">Loading…</div>
+            }
+          >
+            <Show
+              when={cursorRegistered()}
+              fallback={
+                <div class="flex flex-col gap-1.5 px-6 py-3.5">
+                  <label
+                    for="cursor-connections-api-key"
+                    class="text-xs text-ink"
+                  >
+                    API key
+                  </label>
+                  <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
+                    <input
+                      id="cursor-connections-api-key"
+                      type="password"
+                      autocomplete="off"
+                      spellcheck={false}
+                      class="settings-input ph-no-capture min-w-0 flex-1"
+                      placeholder={`${CURSOR_KEY_PREFIX}…`}
+                      value={cursorApiKey()}
+                      onInput={(event) =>
+                        setCursorApiKey(event.currentTarget.value)
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          void handleSaveCursorApiKey();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      depth={3}
+                      disabled={
+                        cursorApiKey().trim().length === 0 ||
+                        saveCursorApiKey.isPending
+                      }
+                      onClick={() => void handleSaveCursorApiKey()}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              }
+            >
+              <SettingsRow
+                label={<label for="cursor-default-model">Default model</label>}
+                description="The model new @cursor sessions start on. You can still switch it per session."
+              >
+                <select
+                  id="cursor-default-model"
+                  class="settings-input w-56"
+                  value={cursorStatus.data?.defaultModelId ?? ''}
+                  disabled={setCursorDefaultModel.isPending}
+                  onChange={(event) =>
+                    void handleCursorModelChange(event.currentTarget.value)
+                  }
+                >
+                  <For each={cursorModels.data?.models ?? []}>
+                    {(model) => (
+                      <option value={model.id}>{model.displayName}</option>
+                    )}
+                  </For>
+                </select>
+              </SettingsRow>
+              <SettingsRow label="Disconnect from Macro">
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  depth={3}
+                  disabled={disconnectCursor.isPending}
+                  onClick={() => void handleDisconnectCursor()}
+                >
+                  Disconnect from Macro
+                </Button>
+              </SettingsRow>
+            </Show>
+          </Show>
+        </SettingsCard>
+      </SettingsSection>
+    </SettingsPage>
+  );
+}

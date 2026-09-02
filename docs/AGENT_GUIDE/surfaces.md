@@ -61,9 +61,21 @@ Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
+Workspace → `Team`, `Tags`, `CRM`, `Connections` (Connected / Discover), `MCP server`
 (setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; `Log out`.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+
+## Settings — Connections — `/app/settings/connections`
+
+`Connected` lists mapped providers (ready-of-total) plus leftover records under
+Other connections. Empty state offers Google first, then GitHub, Linear, Notion,
+Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
+Google, GitHub, Linear, Slack, Cursor. Click a provider for its page: Google
+(Gmail + Calendar per inbox, no Docs), GitHub (account, team install, AI),
+Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
++ default model). Mode and provider are local page state, not extra Settings
+tabs or `/settings/connections/github` routes. Harness only signposts Cursor
+here.
 
 ## Notifications
 

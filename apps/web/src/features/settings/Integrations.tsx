@@ -35,7 +35,7 @@ function hostFromUrl(url: string): string {
   }
 }
 
-function AddServerForm(props: {
+export function AddCustomMcpDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -451,7 +451,7 @@ export function IntegrationsSection() {
         </SettingsCard>
       </Show>
 
-      <AddServerForm open={showAddDialog()} onOpenChange={setShowAddDialog} />
+      <AddCustomMcpDialog open={showAddDialog()} onOpenChange={setShowAddDialog} />
     </SettingsSection>
   );
 }

@@ -21,14 +21,7 @@ const mocks = vi.hoisted(() => ({
     },
     isPlaceholderData: false,
   },
-  models: {
-    data: {
-      models: [{ id: 'default-model', displayName: 'Default Model' }],
-    },
-  },
-  save: vi.fn(),
-  disconnect: vi.fn(),
-  setDefaultModel: vi.fn(),
+  selectTab: vi.fn(),
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
 }));
@@ -57,18 +50,11 @@ const harnessMocks = vi.hoisted(() => ({
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
   useCursorApiKeyStatusQuery: () => mocks.status,
-  useSaveCursorApiKey: () => ({
-    mutateAsync: mocks.save,
-    isPending: false,
-  }),
-  useDisconnectCursorApiKey: () => ({
-    mutateAsync: mocks.disconnect,
-    isPending: false,
-  }),
-  useCursorModelsQuery: () => mocks.models,
-  useSetCursorDefaultModel: () => ({
-    mutateAsync: mocks.setDefaultModel,
-    isPending: false,
+}));
+
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: () => ({
+    selectTab: mocks.selectTab,
   }),
 }));
 
@@ -140,8 +126,6 @@ beforeEach(() => {
     updatedAt: null,
   };
   mocks.status.isPlaceholderData = false;
-  mocks.save.mockResolvedValue(undefined);
-  mocks.disconnect.mockResolvedValue(undefined);
   harnessMocks.query.data = [];
   harnessMocks.query.isError = false;
   harnessMocks.pairing.isError = false;
@@ -162,34 +146,7 @@ describe('Harness', () => {
     expect(screen.getByText(/This is not a coding harness/)).toBeTruthy();
   });
 
-  it('validates and saves a Cursor API key', async () => {
-    render(() => <Harness />);
-
-    const apiKeyInput = screen.getByLabelText('API key');
-    const saveButton = screen.getByRole('button', { name: 'Save' });
-
-    expect(apiKeyInput).toHaveProperty('type', 'password');
-    expect(saveButton).toHaveProperty('disabled', true);
-
-    fireEvent.input(apiKeyInput, { target: { value: 'not-a-cursor-key' } });
-    fireEvent.click(saveButton);
-
-    expect(mocks.save).not.toHaveBeenCalled();
-    expect(mocks.toastFailure).toHaveBeenCalledWith(
-      'Cursor API keys start with crsr_'
-    );
-
-    fireEvent.input(apiKeyInput, { target: { value: '  crsr_example  ' } });
-    fireEvent.click(saveButton);
-
-    await waitFor(() => {
-      expect(mocks.save).toHaveBeenCalledWith('crsr_example');
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Cursor connected');
-      expect(apiKeyInput).toHaveProperty('value', '');
-    });
-  });
-
-  it('shows connection status, the default model picker, and disconnect for connected Cursor', async () => {
+  it('signposts Cursor key and model management to Connections', () => {
     mocks.status.data = {
       registered: true,
       defaultModelId: null,
@@ -200,31 +157,12 @@ describe('Harness', () => {
 
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
-    expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
+    expect(screen.getByText(/live in Connections/)).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText('Default model'), {
-      target: { value: 'default-model' },
-    });
-    await waitFor(() => {
-      expect(mocks.setDefaultModel).toHaveBeenCalledWith('default-model');
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
-
-    await waitFor(() => {
-      expect(mocks.disconnect).toHaveBeenCalledOnce();
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Cursor disconnected');
-    });
-  });
-
-  it('does not flash the API key form while connection status loads', () => {
-    mocks.status.isPlaceholderData = true;
-
-    render(() => <Harness />);
-
-    expect(screen.getByText('Loading…')).toBeTruthy();
-    expect(screen.queryByLabelText('API key')).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Manage in Connections' })
+    );
+    expect(mocks.selectTab).toHaveBeenCalledWith('Connected');
   });
 
   it('links the empty BYOA list to the setup documentation', () => {
