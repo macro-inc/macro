@@ -1145,7 +1145,9 @@ pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
     })
 }
 
-fn calendar_event_filter_is_impossible(ast: Option<&Expr<CalendarEventLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn calendar_event_filter_is_impossible(
+    ast: Option<&Expr<CalendarEventLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,

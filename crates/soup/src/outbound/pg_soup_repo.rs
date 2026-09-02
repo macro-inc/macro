@@ -1,9 +1,9 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, GroupedSortRequest, SimpleSortQuery, SimpleSortRequest,
-            SoupProjectionHydration, SoupPropertiesField, TouchedEntity, TouchedSoupRequest,
-            grouping::ItemGroupingInfo,
+            AdvancedSortParams, GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest,
+            SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField,
+            TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -19,8 +19,10 @@ use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
 mod calendar_event;
+mod candidate_gates;
 mod expanded;
 pub mod grouping;
+mod notified;
 mod touched;
 mod unexpanded;
 
@@ -240,6 +242,13 @@ impl SoupRepo for PgSoupRepo {
         req: TouchedSoupRequest<'a>,
     ) -> Result<Vec<TouchedEntity>, Self::Err> {
         touched::touched_soup_page(&self.pool.0, req).await
+    }
+
+    async fn notified_soup_page<'a>(
+        &self,
+        req: NotifiedSoupRequest<'a>,
+    ) -> Result<Vec<NotifiedEntity>, Self::Err> {
+        notified::notified_soup_page(&self.pool.0, req).await
     }
 }
 

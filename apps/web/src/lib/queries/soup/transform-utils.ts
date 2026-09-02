@@ -1020,8 +1020,13 @@ export const mapApiSoupItemToEntity = (
   // activity consumer can't move a freshly-touched row back down.
   const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
   const touched = touchedAt ? { ...entity, touchedAt } : entity;
+  // Likewise only notified_at pages carry this one; the inbox sorts and
+  // date-buckets on it.
+  const notified = item.notified_at
+    ? { ...touched, notifiedAt: item.notified_at }
+    : touched;
 
-  return withRawNotifications(touched, item);
+  return withRawNotifications(notified, item);
 };
 
 const toCalendarEventTime = (

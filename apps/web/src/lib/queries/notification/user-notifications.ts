@@ -4,6 +4,7 @@ import { throwOnErr } from '@core/util/result';
 import type { UnifiedNotification } from '@notifications/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
+  bumpSoupEntityNotifiedAt,
   hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
@@ -1064,6 +1065,12 @@ export function optimisticInsertNotification(
         optimisticUpdateSoupItemUpdatedAt(
           notification.entity_id,
           soupTag,
+          notification.created_at
+        );
+        // The inbox's notified_at order moves the row up right away rather
+        // than on the next refetch of the page.
+        bumpSoupEntityNotifiedAt(
+          notification.entity_id,
           notification.created_at
         );
       }

@@ -175,6 +175,47 @@ export function bumpSoupEntityTouchedAt(
 }
 
 /**
+ * Stamp a freshly delivered notification's time on its cached entity so the
+ * inbox's notified_at order moves the row up (and re-buckets its date header)
+ * without waiting for a refetch. Newest wins: an out-of-order delivery never
+ * moves a row back down. Non-notified responses omit the field, so the
+ * field-merge never clears the stamp either.
+ */
+export function bumpSoupEntityNotifiedAt(
+  entityId: string,
+  notifiedAt: string
+): SoupTransaction | undefined {
+  const current = getSoupEntityById(entityId);
+  if (!current) return undefined;
+  const existing = current.notified_at ?? undefined;
+  if (!shouldUpdateOptimisticTimestamp(existing, notifiedAt)) return undefined;
+  const frecency_score = current.frecency_score;
+
+  if (current.tag === 'channel') {
+    return optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: current.data.channel.id } },
+      frecency_score,
+      notified_at: notifiedAt,
+    });
+  }
+  if (current.tag === 'call') {
+    return optimisticUpdateSoupEntity({
+      tag: 'call',
+      data: { callId: current.data.callId },
+      frecency_score,
+      notified_at: notifiedAt,
+    });
+  }
+  return optimisticUpdateSoupEntity({
+    tag: current.tag,
+    data: { id: current.data.id },
+    frecency_score,
+    notified_at: notifiedAt,
+  } as SoupEntityPartial);
+}
+
+/**
  * Mark stale only the soup queries containing a specific entity.
  * Prefer this over `invalidateAllSoup` when you know the affected entity ID.
  */

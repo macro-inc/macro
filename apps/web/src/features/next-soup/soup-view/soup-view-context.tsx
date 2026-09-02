@@ -39,6 +39,7 @@ import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
+import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
 import { deduplicateEntities } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -275,7 +276,7 @@ const persistedPredicatesFor = (
 
 type ApiSortMethod = Exclude<
   NonNullable<SoupParams['sort_method']>,
-  'frecency' | 'touched_by_me'
+  'frecency' | 'touched_by_me' | 'notified_at'
 >;
 const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'viewed_at',
@@ -1331,9 +1332,19 @@ export const SoupViewContextProvider: FlowComponent<
       >();
       const order: string[] = [];
       const now = new Date();
+      // Under the inbox's notified sort a row belongs to the day it was last
+      // notified about, not the day its content last changed — otherwise a
+      // fresh comment on a stale task sits under "Yesterday" while sorting
+      // as today's.
+      const bucketOnNotification =
+        soup.sort.active()[0]?.id === SORT_CONFIGS.notified_at.id;
 
       for (const entity of all) {
-        const ts = entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
+        const ts =
+          (bucketOnNotification ? entity.notifiedAt : undefined) ??
+          entity.sortTs ??
+          entity.updatedAt ??
+          entity.createdAt;
         const bucket = dateBucket(ts, now);
         let group = buckets.get(bucket.key);
 

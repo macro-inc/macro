@@ -1027,6 +1027,7 @@ export * from './shortIdResponse';
 export * from './simpleMention';
 export * from './soupApiItem';
 export * from './soupApiItemAllOf';
+export * from './soupApiItemAllOfNotifiedAt';
 export * from './soupApiItemAllOfTouchedAt';
 export * from './soupApiSort';
 export * from './soupApiSortDirection';
